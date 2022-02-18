@@ -96,6 +96,8 @@ pub enum AccountError {
     NonceOverflow,
     #[error("can't find script for account {account_id}")]
     ScriptNotFound { account_id: u32 },
+    #[error("can't find registry address")]
+    RegistryAddressNotFound,
 }
 
 impl From<AccountError> for Error {
@@ -216,6 +218,8 @@ pub enum BlockError {
     },
     #[error("Can't find checkpoint at index {index}")]
     CheckpointNotFound { index: usize },
+    #[error("Can't find block producer")]
+    BlockProducerNotExists,
 }
 
 impl From<BlockError> for Error {

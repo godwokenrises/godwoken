@@ -12,7 +12,7 @@ use ckb_types::core::hardfork::HardForkSwitch;
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainMockContextBuildArgs};
 use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH, GLOBAL_VM_VERSION};
-use gw_common::{blake2b::new_blake2b, H256};
+use gw_common::{blake2b::new_blake2b, registry_address::RegistryAddress, H256};
 use gw_config::{BackendType, BlockProducerConfig, Config, NodeMode};
 use gw_db::migrate::open_or_create_db;
 use gw_dynamic_config::manager::DynamicConfigManager;
@@ -636,8 +636,16 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     None => None,
                 };
                 let mem_pool = {
+                    let block_producer = RegistryAddress::new(
+                        block_producer_config.block_producer.registry_id,
+                        block_producer_config
+                            .block_producer
+                            .address
+                            .as_bytes()
+                            .to_vec(),
+                    );
                     let args = MemPoolCreateArgs {
-                        block_producer_id: block_producer_config.account_id,
+                        block_producer,
                         store: base.store.clone(),
                         generator: base.generator.clone(),
                         provider: Box::new(mem_pool_provider),

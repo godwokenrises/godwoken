@@ -12,6 +12,7 @@ use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     h256_ext::H256Ext,
     merkle_utils::{calculate_ckb_merkle_root, ckb_merkle_leaf_hash},
+    registry_address::RegistryAddress,
     smt::Blake2bHasher,
     state::{to_short_script_hash, State},
     H256,

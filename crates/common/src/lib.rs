@@ -4,8 +4,11 @@ pub mod builtins;
 pub mod error;
 pub mod h256_ext;
 pub mod merkle_utils;
+pub mod registry_address;
 pub mod smt;
 pub mod state;
+#[cfg(test)]
+pub mod test_traits;
 
 // re-exports
 

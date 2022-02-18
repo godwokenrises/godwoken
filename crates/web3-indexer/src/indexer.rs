@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, convert::TryInto};
 
 use crate::{
     helper::{
@@ -13,8 +13,8 @@ use crate::{
 use anyhow::{anyhow, Result};
 use ckb_hash::blake2b_256;
 use ckb_types::H256;
-use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
 use gw_common::state::State;
+use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, registry_address::RegistryAddress};
 use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore, Store};
 use gw_traits::CodeStore;
 use gw_types::packed::{
@@ -138,7 +138,7 @@ impl Web3Indexer {
             .filter_web3_transactions(store.clone(), l2_block.clone())
             .await?;
         let web3_block = self
-            .build_web3_block(store.clone(), &l2_block, &web3_tx_with_logs_vec)
+            .build_web3_block(&l2_block, &web3_tx_with_logs_vec)
             .await?;
         let mut tx = self.pool.begin().await?;
         sqlx::query("INSERT INTO blocks (number, hash, parent_hash, logs_bloom, gas_limit, gas_used, timestamp, miner, size) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
@@ -498,7 +498,6 @@ impl Web3Indexer {
 
     async fn build_web3_block(
         &self,
-        store: Store,
         l2_block: &L2Block,
         web3_tx_with_logs_vec: &[Web3TransactionWithLogs],
     ) -> Result<Web3Block> {
@@ -511,9 +510,13 @@ impl Web3Indexer {
             gas_limit += web3_tx_with_logs.tx.gas_limit;
             gas_used += web3_tx_with_logs.tx.gas_used;
         }
-        let block_producer_id: u32 = l2_block.raw().block_producer_id().unpack();
-        let block_producer_script_hash = get_script_hash(store.clone(), block_producer_id).await?;
-        let miner_address = account_script_hash_to_eth_address(block_producer_script_hash);
+        let miner_address = {
+            let block_producer: Bytes = l2_block.raw().block_producer().unpack();
+            match RegistryAddress::from_slice(&block_producer) {
+                Some(address) => address.address.try_into().expect("valid eth miner address"),
+                None => Default::default(),
+            }
+        };
         let epoch_time_as_millis: u64 = l2_block.raw().timestamp().unpack();
         let timestamp =
             NaiveDateTime::from_timestamp((epoch_time_as_millis / MILLIS_PER_SEC) as i64, 0);

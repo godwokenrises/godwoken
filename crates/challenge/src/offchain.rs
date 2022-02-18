@@ -4,6 +4,7 @@ use crate::cancel_challenge::LoadDataStrategy;
 
 use anyhow::{anyhow, bail, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
+use gw_common::registry_address::RegistryAddress;
 use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig, OffChainValidatorConfig};
 use gw_rpc_client::contract::ContractsCellDepManager;
@@ -13,8 +14,7 @@ use gw_store::transaction::StoreTransaction;
 use gw_types::core::DepType;
 use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext, RunResult};
 use gw_types::packed::{
-    CellDep, CellInput, L2Block, L2Transaction, OutPoint, OutPointVec, Uint32,
-    WithdrawalRequestExtra,
+    CellDep, CellInput, L2Block, L2Transaction, OutPoint, OutPointVec, WithdrawalRequestExtra,
 };
 use gw_types::prelude::{Builder, Entity, Unpack};
 use gw_utils::wallet::Wallet;
@@ -203,14 +203,14 @@ pub struct OffChainCancelChallengeValidator {
 impl OffChainCancelChallengeValidator {
     pub fn new(
         ctx: OffChainValidatorContext,
-        block_producer_id: Uint32,
+        block_producer: RegistryAddress,
         parent_block: &L2Block,
         timestamp: u64,
         reverted_block_root: H256,
     ) -> Self {
         let block_param = MockBlockParam::new(
             ctx.mock_rollup.rollup_context.to_owned(),
-            block_producer_id,
+            block_producer,
             parent_block,
             timestamp,
             reverted_block_root,

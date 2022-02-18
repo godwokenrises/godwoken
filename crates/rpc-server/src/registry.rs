@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
-use gw_common::{blake2b::new_blake2b, state::State, H256};
+use gw_common::{blake2b::new_blake2b, registry_address::RegistryAddress, state::State, H256};
 use gw_config::{FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig};
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, ArcSwap, Generator};
@@ -752,7 +752,7 @@ async fn execute_l2transaction(
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
 
     let raw_block = ctx.store.get_snapshot().get_last_valid_tip_block()?.raw();
-    let block_producer_id = raw_block.block_producer_id();
+    let block_producer = raw_block.block_producer();
     let timestamp = raw_block.timestamp();
     let number = {
         let number: u64 = raw_block.number().unpack();
@@ -760,7 +760,7 @@ async fn execute_l2transaction(
     };
 
     let block_info = BlockInfo::new_builder()
-        .block_producer_id(block_producer_id)
+        .block_producer(block_producer)
         .timestamp(timestamp)
         .number(number.pack())
         .build();
@@ -845,12 +845,12 @@ async fn execute_raw_l2transaction(
                 Some(block) => block.raw(),
                 None => return Err(header_not_found_err()),
             };
-            let block_producer_id = raw_block.block_producer_id();
+            let block_producer = raw_block.block_producer();
             let timestamp = raw_block.timestamp();
             let number: u64 = raw_block.number().unpack();
 
             BlockInfo::new_builder()
-                .block_producer_id(block_producer_id)
+                .block_producer(block_producer)
                 .timestamp(timestamp)
                 .number(number.pack())
                 .build()
@@ -1149,21 +1149,24 @@ async fn get_balance(
     store: Data<Store>,
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<Uint128, RpcError> {
-    let (short_script_hash, sudt_id, block_number) = match params {
+    let (registry_address, sudt_id, block_number) = match params {
         GetBalanceParams::Tip(p) => (p.0, p.1, None),
         GetBalanceParams::Number(p) => p,
     };
+
+    let address = RegistryAddress::from_slice(registry_address.as_bytes())
+        .ok_or(invalid_param_err("invalid registry address"))?;
 
     let balance = match block_number {
         Some(block_number) => {
             let db = store.begin_transaction();
             let tree = db.state_tree(StateContext::ReadOnlyHistory(block_number.into()))?;
-            tree.get_sudt_balance(sudt_id.into(), short_script_hash.as_bytes())?
+            tree.get_sudt_balance(sudt_id.into(), &address)?
         }
         None => {
             let snap = mem_pool_state.load();
             let tree = snap.state()?;
-            tree.get_sudt_balance(sudt_id.into(), short_script_hash.as_bytes())?
+            tree.get_sudt_balance(sudt_id.into(), &address)?
         }
     };
     Ok(balance.into())
@@ -1192,13 +1195,13 @@ async fn get_storage_at(
             let db = store.begin_transaction();
             let tree = db.state_tree(StateContext::ReadOnlyHistory(block_number.into()))?;
             let key: H256 = to_h256(key);
-            tree.get_value(account_id.into(), &key)?
+            tree.get_value(account_id.into(), key.as_slice())?
         }
         None => {
             let snap = mem_pool_state.load();
             let tree = snap.state()?;
             let key: H256 = to_h256(key);
-            tree.get_value(account_id.into(), &key)?
+            tree.get_value(account_id.into(), key.as_slice())?
         }
     };
 

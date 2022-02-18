@@ -1,6 +1,7 @@
 use ckb_fixed_hash::{H160, H256};
 use gw_jsonrpc_types::{
     blockchain::{CellDep, Script},
+    ckb_jsonrpc_types::JsonBytes,
     godwoken::{ChallengeTargetType, L2BlockCommittedInfo, RollupConfig},
 };
 use serde::{Deserialize, Serialize};
@@ -155,8 +156,13 @@ pub struct ConsensusConfig {
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RegistryAddressConfig {
+    pub registry_id: u32,
+    pub address: JsonBytes,
+}
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BlockProducerConfig {
-    pub account_id: u32,
+    pub block_producer: RegistryAddressConfig,
     #[serde(default = "default_check_mem_block_before_submit")]
     pub check_mem_block_before_submit: bool,
     pub rollup_config_cell_dep: CellDep,

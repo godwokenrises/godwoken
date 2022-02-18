@@ -368,7 +368,7 @@ pub async fn setup_chain_with_account_lock_manage(
     ));
     let provider = opt_mem_pool_provider.unwrap_or_default();
     let args = MemPoolCreateArgs {
-        block_producer_id: 0,
+        block_producer: Default::default(),
         store: store.clone(),
         generator: Arc::clone(&generator),
         provider: Box::new(provider),

@@ -186,6 +186,7 @@ mod tests {
     use std::fs::write;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+    use gw_common::registry_address::RegistryAddress;
     use gw_types::packed;
     use gw_types::prelude::Entity;
 
@@ -199,7 +200,7 @@ mod tests {
         let restore_manager = RestoreManager::build(&tmp_dir).unwrap();
 
         // Should able to save and restore packed mem block
-        let mem_block = MemBlock::with_block_producer(666);
+        let mem_block = MemBlock::with_block_producer(RegistryAddress::new(0, vec![6, 6, 6]));
         let expected_packed = mem_block.pack_compact();
         restore_manager.save(&mem_block).unwrap();
         let (restored_packed, _) = restore_manager
@@ -209,7 +210,8 @@ mod tests {
         assert_eq!(expected_packed.as_slice(), restored_packed.as_slice());
 
         // Should restore latest mem block
-        let earlier_mem_block = MemBlock::with_block_producer(999);
+        let earlier_mem_block =
+            MemBlock::with_block_producer(RegistryAddress::new(0, vec![9, 9, 9]));
         let earlier_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -240,7 +242,8 @@ mod tests {
         assert!(opt_restored.is_none());
 
         // Should able to restore from compatible mem block
-        let full_mem_block = MemBlock::with_block_producer(77777).pack();
+        let full_mem_block =
+            MemBlock::with_block_producer(RegistryAddress::new(0, vec![7, 7, 7, 7, 7])).pack();
 
         let latest_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)

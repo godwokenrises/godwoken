@@ -10,9 +10,7 @@
 
 use anyhow::{anyhow, Result};
 use gw_common::{
-    builtins::CKB_SUDT_ACCOUNT_ID,
-    state::{to_short_script_hash, State},
-    H256,
+    builtins::CKB_SUDT_ACCOUNT_ID, registry_address::RegistryAddress, state::State, H256,
 };
 use gw_config::{MemPoolConfig, NodeMode};
 use gw_dynamic_config::manager::DynamicConfigManager;
@@ -102,7 +100,7 @@ pub struct MemPool {
 }
 
 pub struct MemPoolCreateArgs {
-    pub block_producer_id: u32,
+    pub block_producer: RegistryAddress,
     pub store: Store,
     pub generator: Arc<Generator>,
     pub provider: Box<dyn MemPoolProvider + Send + Sync>,
@@ -127,7 +125,7 @@ impl Drop for MemPool {
 impl MemPool {
     pub async fn create(args: MemPoolCreateArgs) -> Result<Self> {
         let MemPoolCreateArgs {
-            block_producer_id,
+            block_producer,
             store,
             generator,
             provider,
@@ -146,7 +144,7 @@ impl MemPool {
         };
         let tip = (tip_block.hash().into(), tip_block.raw().number().unpack());
 
-        let mut mem_block = MemBlock::with_block_producer(block_producer_id);
+        let mut mem_block = MemBlock::with_block_producer(block_producer);
         let mut pending_deposits = vec![];
         let mut pending_restored_tx_hashes = VecDeque::new();
 
@@ -686,12 +684,20 @@ impl MemPool {
             }
             // Drop all withdrawals that are have no enough balance
             let script_hash = state.get_script_hash(account_id)?;
-            let capacity =
-                state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&script_hash))?;
-            let deprecated_withdrawals = list.remove_lower_nonce_withdrawals(nonce, capacity);
-            for withdrawal in deprecated_withdrawals {
-                let withdrawal_hash: H256 = withdrawal.hash().into();
-                db.remove_mem_pool_withdrawal(&withdrawal_hash)?;
+            if let Some(registry_id) = list
+                .withdrawals
+                .first()
+                .map(|first| first.request().raw().registry_id().unpack())
+            {
+                let address = state
+                    .get_registry_address_by_script_hash(registry_id, &script_hash)?
+                    .expect("must exist");
+                let capacity = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &address)?;
+                let deprecated_withdrawals = list.remove_lower_nonce_withdrawals(nonce, capacity);
+                for withdrawal in deprecated_withdrawals {
+                    let withdrawal_hash: H256 = withdrawal.hash().into();
+                    db.remove_mem_pool_withdrawal(&withdrawal_hash)?;
+                }
             }
             // Delete empty entry
             if list.is_empty() {
@@ -1010,7 +1016,7 @@ impl MemPool {
             // update the state
             match state.apply_withdrawal_request(
                 self.generator.rollup_context(),
-                self.mem_block.block_producer_id(),
+                self.mem_block.block_producer(),
                 &withdrawal.request(),
             ) {
                 Ok(_) => {
@@ -1299,6 +1305,7 @@ mod test {
     use std::ops::Shr;
 
     use gw_common::merkle_utils::calculate_state_checkpoint;
+    use gw_common::registry_address::RegistryAddress;
     use gw_common::H256;
     use gw_types::offchain::{CollectedCustodianCells, DepositInfo};
     use gw_types::packed::{AccountMerkleState, BlockInfo, DepositRequest};
@@ -1309,9 +1316,12 @@ mod test {
 
     #[test]
     fn test_package_mem_block() {
-        let block_info = BlockInfo::new_builder()
-            .block_producer_id(1u32.pack())
-            .build();
+        let block_info = {
+            let address = RegistryAddress::default();
+            BlockInfo::new_builder()
+                .block_producer(address.to_bytes().pack())
+                .build()
+        };
         let prev_merkle_state = AccountMerkleState::new_builder().count(3u32.pack()).build();
 
         // Random withdrawals

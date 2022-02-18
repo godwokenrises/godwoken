@@ -1,6 +1,8 @@
 use anyhow::{anyhow, bail, Result};
+use ckb_types::bytes::Bytes;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::merkle_utils::calculate_state_checkpoint;
+use gw_common::registry_address::RegistryAddress;
 use gw_common::state::State;
 use gw_common::H256;
 use gw_generator::constants::L2TX_MAX_CYCLES;
@@ -46,7 +48,11 @@ impl ReplayBlock {
         };
 
         // apply withdrawal to state
-        let block_producer_id: u32 = block_info.block_producer_id().unpack();
+        let block_producer = {
+            let block_producer: Bytes = block_info.block_producer().unpack();
+            RegistryAddress::from_slice(&block_producer)
+                .ok_or_else(|| anyhow!("Invalid block producer address"))?
+        };
         let state_checkpoint_list: Vec<H256> = raw_block.state_checkpoint_list().unpack();
 
         for (wth_idx, withdrawal) in withdrawals.iter().enumerate() {
@@ -54,7 +60,7 @@ impl ReplayBlock {
 
             state.apply_withdrawal_request(
                 generator.rollup_context(),
-                block_producer_id,
+                &block_producer,
                 &withdrawal.request(),
             )?;
 
@@ -142,7 +148,7 @@ impl ReplayBlock {
 
 fn get_block_info(l2block: &RawL2Block) -> BlockInfo {
     BlockInfo::new_builder()
-        .block_producer_id(l2block.block_producer_id())
+        .block_producer(l2block.block_producer())
         .number(l2block.number())
         .timestamp(l2block.timestamp())
         .build()
