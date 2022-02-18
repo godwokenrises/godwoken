@@ -1444,6 +1444,22 @@ impl RPCClient {
         Ok(block)
     }
 
+    pub async fn get_header_by_number(
+        &self,
+        number: u64,
+    ) -> Result<Option<ckb_jsonrpc_types::HeaderView>> {
+        let block_number = BlockNumber::from(number);
+        let header: Option<ckb_jsonrpc_types::HeaderView> = self
+            .ckb
+            .request(
+                "get_header_by_number",
+                Some(ClientParams::Array(vec![json!(block_number)])),
+            )
+            .await?;
+
+        Ok(header)
+    }
+
     pub async fn get_transaction_block_hash(&self, tx_hash: H256) -> Result<Option<[u8; 32]>> {
         let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = self
             .ckb

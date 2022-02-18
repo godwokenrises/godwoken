@@ -1,9 +1,9 @@
 use std::time::Duration;
 
-use anyhow::{anyhow, Result};
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_store::Store;
+use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
     offchain::{CellWithStatus, CollectedCustodianCells, DepositInfo, RollupContext},
     packed::{OutPoint, WithdrawalRequest},
@@ -30,15 +30,42 @@ impl DefaultMemPoolProvider {
 
 #[async_trait]
 impl MemPoolProvider for DefaultMemPoolProvider {
+    // estimate next l2block timestamp
     async fn estimate_next_blocktime(&self) -> Result<Duration> {
-        // estimate next l2block timestamp
-        const ONE_SECOND: Duration = Duration::from_secs(1);
-        let rpc_client = &self.rpc_client;
-        let tip_block_hash = rpc_client.get_tip().await?.block_hash().unpack();
-        let opt_time = rpc_client.get_block_median_time(tip_block_hash).await?;
         // Minus one second for first empty block
-        let minus_one_second = opt_time.map(|d| d - ONE_SECOND);
-        minus_one_second.ok_or_else(|| anyhow!("tip block median time not found"))
+        const ONE_SECOND: Duration = Duration::from_secs(1);
+
+        let rpc_client = &self.rpc_client;
+        let tip_l1_block_hash_number = rpc_client.get_tip().await?;
+        let tip_l1_block_hash = tip_l1_block_hash_number.block_hash().unpack();
+        if let Some(median_time) = rpc_client.get_block_median_time(tip_l1_block_hash).await? {
+            return Ok(median_time - ONE_SECOND);
+        }
+
+        // tip l1 block hash is not on the current canonical chain, try parent block hash
+        // NOTE: Header doesn't include block hash
+        let mut l1_block_number = tip_l1_block_hash_number.number().unpack() + 1;
+        loop {
+            l1_block_number = l1_block_number.saturating_sub(1);
+            let parent_block_hash = match rpc_client.get_header_by_number(l1_block_number).await? {
+                Some(header) => header.inner.parent_hash.0.into(),
+                None => continue,
+            };
+            match rpc_client.get_block_median_time(parent_block_hash).await? {
+                Some(median_time) => {
+                    let median_time = median_time - ONE_SECOND;
+                    let tip_block_timestamp = {
+                        let block = self.store.get_last_valid_tip_block()?;
+                        Duration::from_millis(block.raw().timestamp().unpack())
+                    };
+                    if median_time <= tip_block_timestamp {
+                        bail!("no valid block median time for next block");
+                    }
+                    return Ok(median_time);
+                }
+                None => continue,
+            }
+        }
     }
 
     async fn collect_deposit_cells(&self) -> Result<Vec<DepositInfo>> {
