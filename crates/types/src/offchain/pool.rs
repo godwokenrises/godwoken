@@ -1,3 +1,4 @@
+use ckb_types::bytes::Bytes;
 use sparse_merkle_tree::H256;
 
 use crate::packed::{AccountMerkleState, L2Block, L2Transaction, WithdrawalRequestExtra};
@@ -6,7 +7,7 @@ use super::DepositInfo;
 
 pub struct BlockParam {
     pub number: u64,
-    pub block_producer_id: u32,
+    pub block_producer: Bytes,
     pub timestamp: u64,
     pub txs: Vec<L2Transaction>,
     pub deposits: Vec<DepositInfo>,

@@ -59,7 +59,7 @@ pub fn produce_block(
         block_param:
             BlockParam {
                 number,
-                block_producer_id,
+                block_producer,
                 timestamp,
                 txs,
                 deposits: _,
@@ -118,7 +118,7 @@ pub fn produce_block(
     );
     let raw_block = RawL2Block::new_builder()
         .number(number.pack())
-        .block_producer_id(block_producer_id.pack())
+        .block_producer(block_producer.pack())
         .stake_cell_owner_lock_hash(stake_cell_owner_lock_hash.pack())
         .timestamp(timestamp.pack())
         .parent_block_hash(parent_block_hash.pack())
@@ -304,7 +304,7 @@ pub fn generate_produce_block_param(
     let block_info = mem_block.block_info();
     let param = BlockParam {
         number: block_info.number().unpack(),
-        block_producer_id: block_info.block_producer_id().unpack(),
+        block_producer: block_info.block_producer().unpack(),
         timestamp: block_info.timestamp().unpack(),
         txs,
         deposits,

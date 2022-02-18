@@ -328,16 +328,17 @@ impl ::core::fmt::Display for DepositInfo {
 impl ::core::default::Default for DepositInfo {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            18, 1, 0, 0, 12, 0, 0, 0, 141, 0, 0, 0, 129, 0, 0, 0, 20, 0, 0, 0, 28, 0, 0, 0, 44, 0,
-            0, 0, 76, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            26, 1, 0, 0, 12, 0, 0, 0, 149, 0, 0, 0, 137, 0, 0, 0, 24, 0, 0, 0, 32, 0, 0, 0, 48, 0,
+            0, 0, 80, 0, 0, 0, 133, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            133, 0, 0, 0, 16, 0, 0, 0, 52, 0, 0, 0, 129, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 77, 0, 0, 0,
-            16, 0, 0, 0, 24, 0, 0, 0, 77, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0,
-            0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 133, 0, 0, 0, 16, 0, 0, 0, 52, 0, 0, 0, 129, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 77, 0, 0, 0, 16, 0, 0, 0, 24, 0, 0, 0, 77, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0,
         ];
         DepositInfo::new_unchecked(v.into())
     }
@@ -3065,7 +3066,7 @@ impl ::core::fmt::Debug for MemBlock {
 impl ::core::fmt::Display for MemBlock {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "block_producer_id", self.block_producer_id())?;
+        write!(f, "{}: {}", "block_producer", self.block_producer())?;
         write!(f, ", {}: {}", "txs", self.txs())?;
         write!(f, ", {}: {}", "withdrawals", self.withdrawals())?;
         write!(
@@ -3095,11 +3096,12 @@ impl ::core::fmt::Display for MemBlock {
 impl ::core::default::Default for MemBlock {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            124, 0, 0, 0, 44, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 56, 0, 0, 0, 60, 0,
-            0, 0, 64, 0, 0, 0, 64, 0, 0, 0, 84, 0, 0, 0, 120, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            140, 0, 0, 0, 44, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 56, 0, 0, 0, 60, 0,
+            0, 0, 64, 0, 0, 0, 64, 0, 0, 0, 100, 0, 0, 0, 136, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 36, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 28, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0,
         ];
         MemBlock::new_unchecked(v.into())
     }
@@ -3122,11 +3124,11 @@ impl MemBlock {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn block_producer_id(&self) -> Uint32 {
+    pub fn block_producer(&self) -> Bytes {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        Uint32::new_unchecked(self.0.slice(start..end))
+        Bytes::new_unchecked(self.0.slice(start..end))
     }
     pub fn txs(&self) -> Byte32Vec {
         let slice = self.as_slice();
@@ -3213,7 +3215,7 @@ impl molecule::prelude::Entity for MemBlock {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
-            .block_producer_id(self.block_producer_id())
+            .block_producer(self.block_producer())
             .txs(self.txs())
             .withdrawals(self.withdrawals())
             .finalized_custodians(self.finalized_custodians())
@@ -3244,7 +3246,7 @@ impl<'r> ::core::fmt::Debug for MemBlockReader<'r> {
 impl<'r> ::core::fmt::Display for MemBlockReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "block_producer_id", self.block_producer_id())?;
+        write!(f, "{}: {}", "block_producer", self.block_producer())?;
         write!(f, ", {}: {}", "txs", self.txs())?;
         write!(f, ", {}: {}", "withdrawals", self.withdrawals())?;
         write!(
@@ -3289,11 +3291,11 @@ impl<'r> MemBlockReader<'r> {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn block_producer_id(&self) -> Uint32Reader<'r> {
+    pub fn block_producer(&self) -> BytesReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        Uint32Reader::new_unchecked(&self.as_slice()[start..end])
+        BytesReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn txs(&self) -> Byte32VecReader<'r> {
         let slice = self.as_slice();
@@ -3403,7 +3405,7 @@ impl<'r> molecule::prelude::Reader<'r> for MemBlockReader<'r> {
         if offsets.windows(2).any(|i| i[0] > i[1]) {
             return ve!(Self, OffsetsNotMatch);
         }
-        Uint32Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        BytesReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         Byte32VecReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         Byte32VecReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         CollectedCustodianCellsOptReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
@@ -3418,7 +3420,7 @@ impl<'r> molecule::prelude::Reader<'r> for MemBlockReader<'r> {
 }
 #[derive(Debug, Default)]
 pub struct MemBlockBuilder {
-    pub(crate) block_producer_id: Uint32,
+    pub(crate) block_producer: Bytes,
     pub(crate) txs: Byte32Vec,
     pub(crate) withdrawals: Byte32Vec,
     pub(crate) finalized_custodians: CollectedCustodianCellsOpt,
@@ -3431,8 +3433,8 @@ pub struct MemBlockBuilder {
 }
 impl MemBlockBuilder {
     pub const FIELD_COUNT: usize = 10;
-    pub fn block_producer_id(mut self, v: Uint32) -> Self {
-        self.block_producer_id = v;
+    pub fn block_producer(mut self, v: Bytes) -> Self {
+        self.block_producer = v;
         self
     }
     pub fn txs(mut self, v: Byte32Vec) -> Self {
@@ -3477,7 +3479,7 @@ impl molecule::prelude::Builder for MemBlockBuilder {
     const NAME: &'static str = "MemBlockBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.block_producer_id.as_slice().len()
+            + self.block_producer.as_slice().len()
             + self.txs.as_slice().len()
             + self.withdrawals.as_slice().len()
             + self.finalized_custodians.as_slice().len()
@@ -3492,7 +3494,7 @@ impl molecule::prelude::Builder for MemBlockBuilder {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
         let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
         offsets.push(total_size);
-        total_size += self.block_producer_id.as_slice().len();
+        total_size += self.block_producer.as_slice().len();
         offsets.push(total_size);
         total_size += self.txs.as_slice().len();
         offsets.push(total_size);
@@ -3515,7 +3517,7 @@ impl molecule::prelude::Builder for MemBlockBuilder {
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
-        writer.write_all(self.block_producer_id.as_slice())?;
+        writer.write_all(self.block_producer.as_slice())?;
         writer.write_all(self.txs.as_slice())?;
         writer.write_all(self.withdrawals.as_slice())?;
         writer.write_all(self.finalized_custodians.as_slice())?;
@@ -3566,8 +3568,9 @@ impl ::core::fmt::Display for NextMemBlock {
 impl ::core::default::Default for NextMemBlock {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            44, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            60, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 36, 0, 0,
+            0, 16, 0, 0, 0, 20, 0, 0, 0, 28, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0,
         ];
         NextMemBlock::new_unchecked(v.into())
     }

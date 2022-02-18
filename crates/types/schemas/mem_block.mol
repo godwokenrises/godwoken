@@ -41,7 +41,7 @@ table CompactMemBlock {
 }
 
 table MemBlock {
-    block_producer_id: Uint32,
+    block_producer: Bytes,
     txs: Byte32Vec,
     withdrawals: Byte32Vec,
     finalized_custodians: CollectedCustodianCellsOpt,

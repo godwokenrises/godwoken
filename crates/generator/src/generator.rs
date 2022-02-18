@@ -26,7 +26,8 @@ use gw_common::{
     error::Error as StateError,
     h256_ext::H256Ext,
     merkle_utils::calculate_state_checkpoint,
-    state::{build_account_field_key, to_short_script_hash, State, GW_ACCOUNT_NONCE_TYPE},
+    registry_address::RegistryAddress,
+    state::{build_account_field_key, State, GW_ACCOUNT_NONCE_TYPE},
     H256,
 };
 use gw_dynamic_config::manager::DynamicConfigManager;
@@ -199,7 +200,9 @@ impl Generator {
         let amount: u128 = raw.amount().unpack();
         let capacity: u64 = raw.capacity().unpack();
         let fee: u64 = raw.fee().unpack();
-        let account_short_script_hash = to_short_script_hash(&account_script_hash);
+        let registry_address = state
+            .get_registry_address_by_script_hash(raw.registry_id().unpack(), &account_script_hash)?
+            .ok_or(Error::Account(AccountError::UnknownAccount))?;
 
         // check capacity (use dummy block hash and number)
         let rollup_context = self.rollup_context();
@@ -228,7 +231,7 @@ impl Generator {
         }
 
         // check CKB balance
-        let ckb_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, account_short_script_hash)?;
+        let ckb_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &registry_address)?;
         let required_ckb_capacity: u128 = capacity.saturating_add(fee).into();
         if required_ckb_capacity > ckb_balance {
             return Err(WithdrawalError::Overdraft.into());
@@ -245,7 +248,7 @@ impl Generator {
             if amount == 0 {
                 return Err(WithdrawalError::NonPositiveSUDTAmount.into());
             }
-            let balance = state.get_sudt_balance(sudt_id, account_short_script_hash)?;
+            let balance = state.get_sudt_balance(sudt_id, &registry_address)?;
             if amount > balance {
                 return Err(WithdrawalError::Overdraft.into());
             }
@@ -392,7 +395,17 @@ impl Generator {
 
         // apply withdrawal to state
         let block_hash = raw_block.hash();
-        let block_producer_id: u32 = block_info.block_producer_id().unpack();
+        let block_producer_address = {
+            let block_producer: Bytes = block_info.block_producer().unpack();
+            match RegistryAddress::from_slice(&block_producer) {
+                Some(address) => address,
+                None => {
+                    return ApplyBlockResult::Error(Error::Block(
+                        BlockError::BlockProducerNotExists,
+                    ));
+                }
+            }
+        };
         let state_checkpoint_list: Vec<H256> = raw_block.state_checkpoint_list().unpack();
 
         let mut check_signature_total_ms = 0;
@@ -425,7 +438,7 @@ impl Generator {
 
             let withdrawal_receipt = match state.apply_withdrawal_request(
                 &self.rollup_context,
-                block_producer_id,
+                &block_producer_address,
                 &request.request(),
             ) {
                 Ok(receipt) => receipt,
@@ -852,7 +865,7 @@ impl Generator {
 
 fn get_block_info(l2block: &RawL2Block) -> BlockInfo {
     BlockInfo::new_builder()
-        .block_producer_id(l2block.block_producer_id())
+        .block_producer(l2block.block_producer())
         .number(l2block.number())
         .timestamp(l2block.timestamp())
         .build()

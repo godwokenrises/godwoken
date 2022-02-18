@@ -65,7 +65,10 @@ impl CodeStore for DummyState {
 #[cfg(test)]
 mod tests {
     use ckb_vm::Bytes;
-    use gw_common::{blake2b::new_blake2b, h256_ext::H256Ext, state::State, H256};
+    use gw_common::{
+        blake2b::new_blake2b, h256_ext::H256Ext, registry_address::RegistryAddress, state::State,
+        H256,
+    };
     use gw_traits::CodeStore;
     use gw_types::{
         packed::Script,
@@ -155,8 +158,8 @@ mod tests {
         for i in 1..15 {
             let key = H256::from_u32(i as u32);
             let value = H256::from_u32(i as u32);
-            tree.update_value(id, &key, value).unwrap();
-            assert_eq!(tree.get_value(id, &key).unwrap(), value);
+            tree.update_value(id, key.as_slice(), value).unwrap();
+            assert_eq!(tree.get_value(id, key.as_slice()).unwrap(), value);
         }
     }
 
@@ -176,8 +179,8 @@ mod tests {
         let sudt_id = tree.create_account_from_script(script).unwrap();
         assert_eq!(sudt_id, 1);
         // mint sudt
-        let user_a = [1u8; 20];
-        let user_b = [2u8; 20];
+        let user_a = RegistryAddress::new(0, vec![1u8; 20]);
+        let user_b = RegistryAddress::new(0, vec![2u8; 20]);
         tree.mint_sudt(sudt_id, &user_a, 100).unwrap();
         assert_eq!(tree.get_sudt_total_supply(sudt_id).unwrap(), 100.into());
         tree.mint_sudt(sudt_id, &user_a, 230).unwrap();

@@ -94,7 +94,8 @@ struct SubmitWithdrawals {
 
 table RawL2Block {
     number: Uint64,
-    block_producer_id: Uint32,
+    // In registry address format: registry_id (4 bytes) | address len (4 bytes) | address (n bytes)
+    block_producer: Bytes,
     parent_block_hash: Byte32,
     stake_cell_owner_lock_hash: Byte32,
     timestamp: Uint64,
@@ -124,6 +125,8 @@ table DepositRequest {
     amount: Uint128,
     sudt_script_hash: Byte32,
     script: Script,
+    // Deposit to a Godwoken registry
+    registry_id: Uint32,
 }
 
 vector DepositRequestVec <DepositRequest>;
@@ -139,6 +142,8 @@ struct RawWithdrawalRequest {
     sudt_script_hash: Byte32,
     // layer2 account_script_hash
     account_script_hash: Byte32,
+    // withdrawal registry ID
+    registry_id: Uint32,
     // layer1 lock to withdraw after challenge period
     owner_lock_hash: Byte32,
     // withdrawal fee, paid to block producer
@@ -157,8 +162,8 @@ table WithdrawalRequest {
 struct KVPair { k: Byte32, v: Byte32, }
 vector KVPairVec <KVPair>;
 
-struct BlockInfo {
-    block_producer_id: Uint32,
+table BlockInfo {
+    block_producer: Bytes,
     number: Uint64,
     timestamp: Uint64,
 }

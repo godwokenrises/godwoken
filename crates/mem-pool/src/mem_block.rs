@@ -1,7 +1,10 @@
 use std::{collections::HashSet, time::Duration};
 
-use gw_common::{merkle_utils::calculate_state_checkpoint, H256};
+use gw_common::{
+    merkle_utils::calculate_state_checkpoint, registry_address::RegistryAddress, H256,
+};
 use gw_types::{
+    bytes::Bytes,
     offchain::{CollectedCustodianCells, DepositInfo},
     packed::{self, AccountMerkleState, BlockInfo, L2Block},
     prelude::*,
@@ -14,7 +17,7 @@ pub struct MemBlockContent {
 
 #[derive(Debug, Default, Clone)]
 pub struct MemBlock {
-    block_producer_id: u32,
+    block_producer: RegistryAddress,
     /// Finalized txs
     txs: Vec<H256>,
     /// Txs set
@@ -48,8 +51,11 @@ pub struct MemBlock {
 
 impl MemBlock {
     pub(crate) fn new(block_info: BlockInfo, prev_merkle_state: AccountMerkleState) -> Self {
+        let block_producer: Bytes = block_info.block_producer().unpack();
+        let block_producer =
+            RegistryAddress::from_slice(&block_producer).expect("invalid block producer registry");
         MemBlock {
-            block_producer_id: block_info.block_producer_id().unpack(),
+            block_producer,
             block_info,
             prev_merkle_state,
             ..Default::default()
@@ -57,9 +63,9 @@ impl MemBlock {
     }
 
     /// Initialize MemBlock with block producer
-    pub(crate) fn with_block_producer(block_producer_id: u32) -> Self {
+    pub(crate) fn with_block_producer(block_producer: RegistryAddress) -> Self {
         MemBlock {
-            block_producer_id,
+            block_producer,
             ..Default::default()
         }
     }
@@ -78,7 +84,7 @@ impl MemBlock {
         let tip_number: u64 = tip.raw().number().unpack();
         let number = tip_number + 1;
         self.block_info = BlockInfo::new_builder()
-            .block_producer_id(self.block_producer_id.pack())
+            .block_producer(self.block_producer.to_bytes().pack())
             .timestamp((estimated_timestamp.as_millis() as u64).pack())
             .number(number.pack())
             .build();
@@ -252,8 +258,8 @@ impl MemBlock {
         &self.state_checkpoints
     }
 
-    pub fn block_producer_id(&self) -> u32 {
-        self.block_producer_id
+    pub fn block_producer(&self) -> &RegistryAddress {
+        &self.block_producer
     }
 
     pub fn touched_keys(&self) -> &HashSet<H256> {
@@ -333,7 +339,7 @@ impl MemBlock {
 
         let mut packaged_states = vec![self.prev_merkle_state()];
         let mut new_mem_block = MemBlock {
-            block_producer_id: self.block_producer_id,
+            block_producer: self.block_producer.clone(),
             block_info: self.block_info.clone(),
             prev_merkle_state: self.prev_merkle_state.clone(),
             ..Default::default()
@@ -407,7 +413,7 @@ impl MemBlock {
         let touched_keys = self.touched_keys().iter().cloned().collect::<Vec<_>>();
 
         packed::MemBlock::new_builder()
-            .block_producer_id(self.block_producer_id.pack())
+            .block_producer(self.block_producer.to_bytes().pack())
             .txs(self.txs.pack())
             .withdrawals(self.withdrawals.pack())
             .finalized_custodians(self.finalized_custodians.pack())
@@ -425,8 +431,8 @@ impl MemBlock {
     pub(crate) fn cmp(&self, other: &MemBlock) -> MemBlockCmp {
         use MemBlockCmp::*;
 
-        if self.block_producer_id != other.block_producer_id {
-            return Diff("block producer id");
+        if self.block_producer != other.block_producer {
+            return Diff("block producer");
         }
 
         if self.txs != other.txs {
@@ -515,6 +521,7 @@ pub enum MemBlockCmp {
 #[cfg(test)]
 mod test {
     use gw_common::merkle_utils::calculate_state_checkpoint;
+    use gw_common::registry_address::RegistryAddress;
     use gw_common::H256;
     use gw_types::packed::{AccountMerkleState, BlockInfo};
     use gw_types::prelude::{Builder, Entity, Pack, Unpack};
@@ -524,9 +531,12 @@ mod test {
     #[test]
     #[should_panic]
     fn test_push_deposit_withdrawal_wrong_txs_prev_state_checkpoint() {
-        let block_info = BlockInfo::new_builder()
-            .block_producer_id(1u32.pack())
-            .build();
+        let block_info = {
+            let address = RegistryAddress::default();
+            BlockInfo::new_builder()
+                .block_producer(address.to_bytes().pack())
+                .build()
+        };
         let prev_merkle_state = AccountMerkleState::new_builder().count(3u32.pack()).build();
 
         let mut mem_block = MemBlock::new(block_info, prev_merkle_state);

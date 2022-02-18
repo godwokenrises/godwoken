@@ -18,6 +18,7 @@
 
 use crate::error::Error;
 use crate::h256_ext::{H256Ext, H256, U256};
+use crate::registry_address::RegistryAddress;
 use crate::vec::Vec;
 use crate::{blake2b::new_blake2b, merkle_utils::calculate_state_checkpoint};
 use core::mem::size_of;
@@ -32,11 +33,17 @@ pub const GW_SCRIPT_HASH_TO_ID_TYPE: u8 = 3;
 pub const GW_DATA_HASH_TYPE: u8 = 4;
 pub const GW_SHORT_SCRIPT_HASH_TO_SCRIPT_HASH_TYPE: u8 = 5;
 
+/* Simple UDT key flag */
 pub const SUDT_KEY_FLAG_BALANCE: u32 = 1;
-pub const SUDT_KEY_FLAG_TOTAL_SUPPLY: u32 = 2;
+pub const SUDT_TOTAL_SUPPLY_KEY: [u8; 32] = [0xff; 32];
 
-// 20 Bytes
+// 20 bytes
 pub const DEFAULT_SHORT_SCRIPT_HASH_LEN: usize = 20;
+
+/* Registry key flag */
+pub const REGISTRY_KEY_PREFIX: &[u8; 3] = b"reg";
+pub const REGISTRY_KEY_FLAG_SCRIPT_HASH_TO_NATIVE: u8 = 1;
+pub const REGISTRY_KEY_FLAG_NATIVE_TO_SCRIPT_HASH: u8 = 2;
 
 /* Generate a SMT key
  * raw_key: blake2b(id | type | key)
@@ -53,11 +60,32 @@ pub fn build_account_key(id: u32, key: &[u8]) -> H256 {
     raw_key.into()
 }
 
-pub fn build_sudt_key(key_flag: u32, short_script_hash: &[u8]) -> Vec<u8> {
-    let mut key = Vec::with_capacity(short_script_hash.len() + 8);
-    key.extend(&key_flag.to_le_bytes());
-    key.extend(&(short_script_hash.len() as u32).to_le_bytes());
-    key.extend(short_script_hash);
+pub fn build_sudt_key(key_flag: u32, address: &RegistryAddress) -> Vec<u8> {
+    let mut key = Vec::default();
+    key.resize(address.len() + 4, 0);
+    key[..4].copy_from_slice(&key_flag.to_le_bytes());
+    address.write_to_slice(&mut key[4..]).unwrap();
+    key
+}
+
+/// format: "reg" | flag(1 bytes) | script_hash(32 bytes)
+pub fn build_script_hash_to_registry_address_key(script_hash: &H256) -> Vec<u8> {
+    let mut key = Vec::default();
+    key.resize(36, 0);
+    key[..3].copy_from_slice(REGISTRY_KEY_PREFIX);
+    key[3] = REGISTRY_KEY_FLAG_SCRIPT_HASH_TO_NATIVE;
+    key[4..].copy_from_slice(script_hash.as_slice());
+    key
+}
+
+/// format: "reg" | flag(1 byte) | registry_address
+/// registry_address: registry_id(4 bytes) | address_len(4 bytes) | address(n bytes)
+pub fn build_registry_address_to_script_hash_key(address: &RegistryAddress) -> Vec<u8> {
+    let mut key = Vec::default();
+    key.resize(4 + address.len(), 0);
+    key[..3].copy_from_slice(REGISTRY_KEY_PREFIX);
+    key[3] = REGISTRY_KEY_FLAG_NATIVE_TO_SCRIPT_HASH;
+    address.write_to_slice(&mut key[4..]).unwrap();
     key
 }
 
@@ -124,12 +152,14 @@ pub trait State {
     fn calculate_root(&self) -> Result<H256, Error>;
 
     // implementations
-    fn get_value(&self, id: u32, key: &H256) -> Result<H256, Error> {
-        let raw_key = build_account_key(id, key.as_slice());
+    fn get_value(&self, id: u32, key: &[u8]) -> Result<H256, Error> {
+        assert!(!key.is_empty());
+        let raw_key = build_account_key(id, key);
         self.get_raw(&raw_key)
     }
-    fn update_value(&mut self, id: u32, key: &H256, value: H256) -> Result<(), Error> {
-        let raw_key = build_account_key(id, key.as_slice());
+    fn update_value(&mut self, id: u32, key: &[u8], value: H256) -> Result<(), Error> {
+        assert!(!key.is_empty());
+        let raw_key = build_account_key(id, key);
         self.update_raw(raw_key, value)?;
         Ok(())
     }
@@ -197,20 +227,15 @@ pub trait State {
         Ok(Some(id))
     }
 
-    fn get_sudt_balance(&self, sudt_id: u32, short_script_hash: &[u8]) -> Result<u128, Error> {
-        if short_script_hash.len() != 20 {
-            return Err(Error::InvalidShortScriptHash);
-        }
+    fn get_sudt_balance(&self, sudt_id: u32, address: &RegistryAddress) -> Result<u128, Error> {
         // get balance
-        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_script_hash);
-        let balance = self.get_raw(&build_account_key(sudt_id, &sudt_key))?;
+        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, address);
+        let balance = self.get_value(sudt_id, &sudt_key)?;
         Ok(balance.to_u128())
     }
 
     fn get_sudt_total_supply(&self, sudt_id: u32) -> Result<U256, Error> {
-        let sudt_script_hash: [u8; 32] = self.get_script_hash(sudt_id)?.into();
-        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_TOTAL_SUPPLY, &sudt_script_hash);
-        let total_supoly = self.get_raw(&build_account_key(sudt_id, &sudt_key))?;
+        let total_supoly = self.get_value(sudt_id, &SUDT_TOTAL_SUPPLY_KEY)?;
         Ok(total_supoly.to_u256())
     }
 
@@ -230,13 +255,10 @@ pub trait State {
     fn mint_sudt(
         &mut self,
         sudt_id: u32,
-        short_script_hash: &[u8],
+        address: &RegistryAddress,
         amount: u128,
     ) -> Result<(), Error> {
-        if short_script_hash.len() != 20 {
-            return Err(Error::InvalidShortScriptHash);
-        }
-        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_script_hash);
+        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, address);
         let raw_key = build_account_key(sudt_id, &sudt_key);
         // calculate balance
         let mut balance = self.get_raw(&raw_key)?.to_u128();
@@ -244,9 +266,7 @@ pub trait State {
         self.update_raw(raw_key, H256::from_u128(balance))?;
 
         // update total supply
-        let sudt_script_hash: [u8; 32] = self.get_script_hash(sudt_id)?.into();
-        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_TOTAL_SUPPLY, &sudt_script_hash);
-        let raw_key = build_account_key(sudt_id, &sudt_key);
+        let raw_key = build_account_key(sudt_id, &SUDT_TOTAL_SUPPLY_KEY);
         let mut total_supply = self.get_raw(&raw_key)?.to_u256();
         total_supply = total_supply
             .checked_add(U256::from(amount))
@@ -260,13 +280,10 @@ pub trait State {
     fn burn_sudt(
         &mut self,
         sudt_id: u32,
-        short_script_hash: &[u8],
+        address: &RegistryAddress,
         amount: u128,
     ) -> Result<(), Error> {
-        if short_script_hash.len() != 20 {
-            return Err(Error::InvalidShortScriptHash);
-        }
-        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_script_hash);
+        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, address);
         let raw_key = build_account_key(sudt_id, &sudt_key);
         // calculate balance
         let mut balance = self.get_raw(&raw_key)?.to_u128();
@@ -274,9 +291,7 @@ pub trait State {
         self.update_raw(raw_key, H256::from_u128(balance))?;
 
         // update total supply
-        let sudt_script_hash: [u8; 32] = self.get_script_hash(sudt_id)?.into();
-        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_TOTAL_SUPPLY, &sudt_script_hash);
-        let raw_key = build_account_key(sudt_id, &sudt_key);
+        let raw_key = build_account_key(sudt_id, &SUDT_TOTAL_SUPPLY_KEY);
         let mut total_supply = self.get_raw(&raw_key)?.to_u256();
         total_supply = total_supply
             .checked_sub(U256::from(amount))
@@ -291,5 +306,26 @@ pub trait State {
         let account_root = self.calculate_root()?;
         let account_count = self.get_account_count()?;
         Ok(calculate_state_checkpoint(&account_root, account_count))
+    }
+
+    fn get_script_hash_by_registry_address(
+        &self,
+        address: &RegistryAddress,
+    ) -> Result<H256, Error> {
+        let key = build_registry_address_to_script_hash_key(&address);
+        self.get_value(address.registry_id, &key)
+    }
+
+    fn get_registry_address_by_script_hash(
+        &self,
+        registry_id: u32,
+        script_hash: &H256,
+    ) -> Result<Option<RegistryAddress>, Error> {
+        let key = build_script_hash_to_registry_address_key(script_hash);
+        let value = self.get_value(registry_id, &key)?;
+        if value.is_zero() {
+            return Ok(None);
+        }
+        Ok(Some(RegistryAddress::from_slice(value.as_slice()).unwrap()))
     }
 }

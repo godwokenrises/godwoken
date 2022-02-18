@@ -6,6 +6,7 @@ use gw_common::h256_ext::H256Ext;
 use gw_common::merkle_utils::{
     calculate_ckb_merkle_root, calculate_state_checkpoint, ckb_merkle_leaf_hash, CBMT,
 };
+use gw_common::registry_address::RegistryAddress;
 use gw_common::smt::{Blake2bHasher, SMT};
 use gw_common::sparse_merkle_tree::default_store::DefaultStore;
 use gw_common::state::{
@@ -22,7 +23,7 @@ use gw_types::packed::{
     AccountMerkleState, BlockMerkleState, Byte32, Bytes, CCTransactionSignatureWitness,
     CCTransactionWitness, CCWithdrawalWitness, CKBMerkleProof, ChallengeTarget, GlobalState,
     L2Block, L2Transaction, RawL2Block, Script, ScriptReader, ScriptVec, SubmitTransactions,
-    SubmitWithdrawals, Uint32, Uint64, WithdrawalRequestExtra,
+    SubmitWithdrawals, Uint64, WithdrawalRequestExtra,
 };
 use gw_types::prelude::*;
 
@@ -39,7 +40,7 @@ pub struct MockBlockParam {
     finality_blocks: u64,
     number: u64,
     rollup_config_hash: Byte32,
-    block_producer_id: Uint32,
+    block_producer: RegistryAddress,
     parent_block_hash: Byte32,
     stake_cell_owner_lock_hash: Byte32,
     timestamp: Uint64,
@@ -60,7 +61,7 @@ pub struct MockChallengeOutput {
 impl MockBlockParam {
     pub fn new(
         rollup_context: RollupContext,
-        block_producer_id: Uint32,
+        block_producer: RegistryAddress,
         parent_block: &L2Block,
         timestamp: u64,
         reverted_block_root: H256,
@@ -69,7 +70,7 @@ impl MockBlockParam {
             finality_blocks: rollup_context.rollup_config.finality_blocks().unpack(),
             rollup_config_hash: rollup_context.rollup_config.hash().pack(),
             rollup_context,
-            block_producer_id,
+            block_producer,
             number: parent_block.raw().number().unpack() + 1,
             parent_block_hash: parent_block.hash().pack(),
             // NOTE: cancel challenge don't check stake cell owner lock hash, so we can
@@ -106,7 +107,7 @@ impl MockBlockParam {
 
         mem_tree.apply_withdrawal_request(
             &self.rollup_context,
-            self.block_producer_id.unpack(),
+            &self.block_producer,
             &req.request(),
         )?;
         let post_account = mem_tree.merkle_state()?;
@@ -283,7 +284,7 @@ impl MockBlockParam {
 
         let raw_block = RawL2Block::new_builder()
             .number(self.number.pack())
-            .block_producer_id(self.block_producer_id.clone())
+            .block_producer(self.block_producer.to_bytes().pack())
             .stake_cell_owner_lock_hash(self.stake_cell_owner_lock_hash.clone())
             .timestamp(self.timestamp.clone())
             .parent_block_hash(self.parent_block_hash.clone())

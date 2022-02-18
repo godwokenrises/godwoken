@@ -368,7 +368,7 @@ impl From<packed::L2Block> for L2Block {
 pub struct RawL2Block {
     pub number: Uint64,
     pub parent_block_hash: H256,
-    pub block_producer_id: Uint32,
+    pub block_producer: Bytes,
     pub stake_cell_owner_lock_hash: H256,
     pub timestamp: Uint64,
     pub prev_account: AccountMerkleState,
@@ -384,7 +384,7 @@ impl From<RawL2Block> for packed::RawL2Block {
         let RawL2Block {
             number,
             parent_block_hash,
-            block_producer_id,
+            block_producer,
             stake_cell_owner_lock_hash,
             timestamp,
             prev_account,
@@ -401,7 +401,7 @@ impl From<RawL2Block> for packed::RawL2Block {
         packed::RawL2Block::new_builder()
             .number(u64::from(number).pack())
             .parent_block_hash(parent_block_hash.pack())
-            .block_producer_id(u32::from(block_producer_id).pack())
+            .block_producer(block_producer.pack())
             .stake_cell_owner_lock_hash(stake_cell_owner_lock_hash.pack())
             .timestamp(u64::from(timestamp).pack())
             .prev_account(prev_account.into())
@@ -416,7 +416,7 @@ impl From<RawL2Block> for packed::RawL2Block {
 impl From<packed::RawL2Block> for RawL2Block {
     fn from(raw_l2_block: packed::RawL2Block) -> RawL2Block {
         let number: u64 = raw_l2_block.number().unpack();
-        let block_producer_id: u32 = raw_l2_block.block_producer_id().unpack();
+        let block_producer: Bytes = raw_l2_block.block_producer().unpack();
         let timestamp: u64 = raw_l2_block.timestamp().unpack();
         let state_checkpoint_list = raw_l2_block
             .state_checkpoint_list()
@@ -426,7 +426,7 @@ impl From<packed::RawL2Block> for RawL2Block {
         Self {
             number: number.into(),
             parent_block_hash: raw_l2_block.parent_block_hash().unpack(),
-            block_producer_id: block_producer_id.into(),
+            block_producer: block_producer.into(),
             stake_cell_owner_lock_hash: raw_l2_block.stake_cell_owner_lock_hash().unpack(),
             timestamp: timestamp.into(),
             prev_account: raw_l2_block.prev_account().into(),
@@ -824,6 +824,7 @@ pub struct RawWithdrawalRequest {
     pub amount: Uint128,
     pub sudt_script_hash: H256,
     pub account_script_hash: H256,
+    pub registry_id: Uint32,
     // layer1 lock to withdraw after challenge period
     pub owner_lock_hash: H256,
     pub chain_id: Uint64,
@@ -838,6 +839,7 @@ impl From<RawWithdrawalRequest> for packed::RawWithdrawalRequest {
             amount,
             sudt_script_hash,
             account_script_hash,
+            registry_id,
             owner_lock_hash,
             fee,
             chain_id,
@@ -848,6 +850,7 @@ impl From<RawWithdrawalRequest> for packed::RawWithdrawalRequest {
             .amount(u128::from(amount).pack())
             .sudt_script_hash(sudt_script_hash.pack())
             .account_script_hash(account_script_hash.pack())
+            .registry_id(registry_id.value().pack())
             .owner_lock_hash(owner_lock_hash.pack())
             .chain_id(chain_id.value().pack())
             .fee(fee.value().pack())
@@ -862,12 +865,14 @@ impl From<packed::RawWithdrawalRequest> for RawWithdrawalRequest {
         let amount: u128 = raw_withdrawal_request.amount().unpack();
         let fee: u64 = raw_withdrawal_request.fee().unpack();
         let chain_id: u64 = raw_withdrawal_request.chain_id().unpack();
+        let registry_id: u32 = raw_withdrawal_request.registry_id().unpack();
         Self {
             nonce: nonce.into(),
             capacity: capacity.into(),
             amount: amount.into(),
             sudt_script_hash: raw_withdrawal_request.sudt_script_hash().unpack(),
             account_script_hash: raw_withdrawal_request.account_script_hash().unpack(),
+            registry_id: registry_id.into(),
             owner_lock_hash: raw_withdrawal_request.owner_lock_hash().unpack(),
             fee: fee.into(),
             chain_id: chain_id.into(),
