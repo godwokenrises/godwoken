@@ -295,28 +295,26 @@ impl BlockProducer {
             return Ok(());
         }
 
-        let median_time = match self.rpc_client.get_block_median_time(tip_hash).await? {
-            Some(time) => time,
+        let rollup_input_since = match self.rpc_client.get_block_median_time(tip_hash).await? {
+            Some(median_time) => input_since_from(median_time),
             None => return Ok(()),
         };
-
-        let mem_block_timestamp = {
-            let mem_pool = self.mem_pool.lock().await;
-            mem_pool.mem_block().block_info().timestamp().unpack()
-        };
-        if (median_time.as_millis() as u64) < mem_block_timestamp {
-            // Wait next l1 tip block median time
-            return Ok(());
-        }
 
         // try issue next block
         let mut retry_count = 0;
         while retry_count <= MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT {
             let (block_number, tx) = match self
-                .compose_next_block_submit_tx(median_time, rollup_cell.clone(), retry_count)
+                .compose_next_block_submit_tx(rollup_input_since, rollup_cell.clone(), retry_count)
                 .await
             {
                 Ok((block_number, tx)) => (block_number, tx),
+                Err(err) if err.downcast_ref::<GreaterBlockTimestampError>().is_some() => {
+                    // Wait next l1 tip block median time
+                    log::debug!(
+                        "[produce block] block timestamp is greater than rollup input since, wait next median time"
+                    );
+                    return Ok(());
+                }
                 Err(err) => {
                     retry_count += 1;
                     log::warn!(
@@ -366,7 +364,7 @@ impl BlockProducer {
 
     async fn compose_next_block_submit_tx(
         &mut self,
-        median_time: Duration,
+        rollup_input_since: u64,
         rollup_cell: CellInfo,
         retry_count: usize,
     ) -> Result<(u64, Transaction)> {
@@ -395,6 +393,10 @@ impl BlockProducer {
             let tip_block_number = mem_block.block_info().number().unpack().saturating_sub(1);
             let (finalized_custodians, produce_block_param) =
                 generate_produce_block_param(&self.store, mem_block, post_block_state)?;
+            if rollup_input_since < produce_block_param.timestamp {
+                bail!(GreaterBlockTimestampError);
+            }
+
             let finalized_custodians = {
                 let last_finalized_block_number = {
                     let context = self.generator.rollup_context();
@@ -490,7 +492,7 @@ impl BlockProducer {
             finalized_custodians,
             block,
             global_state,
-            median_time,
+            rollup_input_since,
             rollup_cell: rollup_cell.clone(),
             withdrawal_extras,
         };
@@ -655,7 +657,7 @@ impl BlockProducer {
             finalized_custodians,
             block,
             global_state,
-            median_time,
+            rollup_input_since,
             rollup_cell,
             withdrawal_extras,
         } = args;
@@ -666,7 +668,7 @@ impl BlockProducer {
         tx_skeleton.inputs_mut().push(InputCellInfo {
             input: CellInput::new_builder()
                 .previous_output(rollup_cell.out_point.clone())
-                .since(input_since_from(median_time).pack())
+                .since(rollup_input_since.pack())
                 .build(),
             cell: rollup_cell.clone(),
         });
@@ -958,7 +960,11 @@ struct CompleteTxArgs {
     finalized_custodians: CollectedCustodianCells,
     block: L2Block,
     global_state: GlobalState,
-    median_time: Duration,
+    rollup_input_since: u64,
     rollup_cell: CellInfo,
     withdrawal_extras: Vec<WithdrawalRequestExtra>,
 }
+
+#[derive(Debug, thiserror::Error)]
+#[error("block timestamp is greater than input since")]
+struct GreaterBlockTimestampError;
