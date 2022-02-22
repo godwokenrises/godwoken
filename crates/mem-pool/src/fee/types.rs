@@ -179,7 +179,7 @@ fn parse_l2tx_fee_rate(
         BackendType::Meta => {
             let meta_args = MetaContractArgs::from_slice(raw_l2tx_args.as_ref())?;
             let fee: u64 = match meta_args.to_enum() {
-                MetaContractArgsUnion::CreateAccount(args) => args.fee().unpack(),
+                MetaContractArgsUnion::CreateAccount(args) => args.fee().amount().unpack(),
             };
             let cycles_limit: u64 = fee_config.meta_cycles_limit;
 
@@ -189,8 +189,8 @@ fn parse_l2tx_fee_rate(
             let eth_addr_reg_args = ETHAddrRegArgs::from_slice(raw_l2tx_args.as_ref())?;
             let fee: u64 = match eth_addr_reg_args.to_enum() {
                 ETHAddrRegArgsUnion::EthToGw(_) | ETHAddrRegArgsUnion::GwToEth(_) => 0,
-                ETHAddrRegArgsUnion::SetMapping(args) => args.fee().unpack(),
-                ETHAddrRegArgsUnion::BatchSetMapping(args) => args.fee().unpack(),
+                ETHAddrRegArgsUnion::SetMapping(args) => args.fee().amount().unpack(),
+                ETHAddrRegArgsUnion::BatchSetMapping(args) => args.fee().amount().unpack(),
             };
             Ok(L2Fee {
                 fee,
@@ -204,7 +204,7 @@ fn parse_l2tx_fee_rate(
                     // SUDTQuery fee rate is 0
                     0
                 }
-                SUDTArgsUnion::SUDTTransfer(args) => args.fee().unpack(),
+                SUDTArgsUnion::SUDTTransfer(args) => args.fee().amount().unpack(),
             };
             let cycles_limit: u64 = fee_config.sudt_cycles_limit;
 

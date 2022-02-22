@@ -5,7 +5,7 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_config::Config;
 use gw_types::{
     core::ScriptHashType,
-    packed::{CreateAccount, L2Transaction, MetaContractArgs, RawL2Transaction, Script},
+    packed::{CreateAccount, Fee, L2Transaction, MetaContractArgs, RawL2Transaction, Script},
 };
 
 use crate::{
@@ -66,6 +66,7 @@ pub async fn create_sudt_account(
     fee: u64,
     config: &Config,
     deployment: &ScriptsDeploymentResult,
+    registry_id: u32,
     quiet: bool,
 ) -> Result<u32> {
     let rollup_type_hash = &config.genesis.rollup_type_hash;
@@ -99,7 +100,12 @@ pub async fn create_sudt_account(
 
     let create_account = CreateAccount::new_builder()
         .script(l2_script)
-        .fee(fee.pack())
+        .fee(
+            Fee::new_builder()
+                .amount(fee.pack())
+                .registry_id(registry_id.pack())
+                .build(),
+        )
         .build();
 
     let args = MetaContractArgs::new_builder().set(create_account).build();

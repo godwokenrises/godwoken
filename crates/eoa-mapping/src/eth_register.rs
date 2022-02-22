@@ -5,7 +5,8 @@ use gw_common::H256;
 use gw_traits::CodeStore;
 use gw_types::core::ScriptHashType;
 use gw_types::packed::{
-    BatchSetMapping, ETHAddrRegArgs, ETHAddrRegArgsUnion, L2Transaction, RawL2Transaction, Script,
+    BatchSetMapping, ETHAddrRegArgs, ETHAddrRegArgsUnion, Fee, L2Transaction, RawL2Transaction,
+    Script,
 };
 use gw_types::prelude::{Builder, Entity, Pack};
 use gw_utils::wallet::Wallet;
@@ -114,7 +115,7 @@ impl EthEoaMappingRegister {
         let nonce = state.get_nonce(account_id)?;
 
         let batch_set_mapping = BatchSetMapping::new_builder()
-            .fee(0u64.pack())
+            .fee(Fee::default())
             .gw_script_hashes(script_hashes.pack())
             .build();
 

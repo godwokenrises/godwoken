@@ -8985,9 +8985,9 @@ impl ::core::fmt::Display for MetaContractArgs {
 impl ::core::default::Default for MetaContractArgs {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            0, 0, 0, 0, 73, 0, 0, 0, 12, 0, 0, 0, 65, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0,
+            0, 0, 0, 0, 77, 0, 0, 0, 12, 0, 0, 0, 65, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0,
             0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         MetaContractArgs::new_unchecked(v.into())
     }
@@ -9227,6 +9227,169 @@ impl<'r> MetaContractArgsUnionReader<'r> {
     }
 }
 #[derive(Clone)]
+pub struct Fee(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for Fee {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for Fee {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for Fee {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "registry_id", self.registry_id())?;
+        write!(f, ", {}: {}", "amount", self.amount())?;
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for Fee {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        Fee::new_unchecked(v.into())
+    }
+}
+impl Fee {
+    pub const TOTAL_SIZE: usize = 12;
+    pub const FIELD_SIZES: [usize; 2] = [4, 8];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn registry_id(&self) -> Uint32 {
+        Uint32::new_unchecked(self.0.slice(0..4))
+    }
+    pub fn amount(&self) -> Uint64 {
+        Uint64::new_unchecked(self.0.slice(4..12))
+    }
+    pub fn as_reader<'r>(&'r self) -> FeeReader<'r> {
+        FeeReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for Fee {
+    type Builder = FeeBuilder;
+    const NAME: &'static str = "Fee";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        Fee(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        FeeReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        FeeReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .registry_id(self.registry_id())
+            .amount(self.amount())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct FeeReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for FeeReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for FeeReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for FeeReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "registry_id", self.registry_id())?;
+        write!(f, ", {}: {}", "amount", self.amount())?;
+        write!(f, " }}")
+    }
+}
+impl<'r> FeeReader<'r> {
+    pub const TOTAL_SIZE: usize = 12;
+    pub const FIELD_SIZES: [usize; 2] = [4, 8];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn registry_id(&self) -> Uint32Reader<'r> {
+        Uint32Reader::new_unchecked(&self.as_slice()[0..4])
+    }
+    pub fn amount(&self) -> Uint64Reader<'r> {
+        Uint64Reader::new_unchecked(&self.as_slice()[4..12])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for FeeReader<'r> {
+    type Entity = Fee;
+    const NAME: &'static str = "FeeReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        FeeReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct FeeBuilder {
+    pub(crate) registry_id: Uint32,
+    pub(crate) amount: Uint64,
+}
+impl FeeBuilder {
+    pub const TOTAL_SIZE: usize = 12;
+    pub const FIELD_SIZES: [usize; 2] = [4, 8];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn registry_id(mut self, v: Uint32) -> Self {
+        self.registry_id = v;
+        self
+    }
+    pub fn amount(mut self, v: Uint64) -> Self {
+        self.amount = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for FeeBuilder {
+    type Entity = Fee;
+    const NAME: &'static str = "FeeBuilder";
+    fn expected_length(&self) -> usize {
+        Self::TOTAL_SIZE
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        writer.write_all(self.registry_id.as_slice())?;
+        writer.write_all(self.amount.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        Fee::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
 pub struct CreateAccount(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for CreateAccount {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -9257,9 +9420,9 @@ impl ::core::fmt::Display for CreateAccount {
 impl ::core::default::Default for CreateAccount {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            73, 0, 0, 0, 12, 0, 0, 0, 65, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0,
+            77, 0, 0, 0, 12, 0, 0, 0, 65, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         CreateAccount::new_unchecked(v.into())
     }
@@ -9288,14 +9451,14 @@ impl CreateAccount {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         Script::new_unchecked(self.0.slice(start..end))
     }
-    pub fn fee(&self) -> Uint64 {
+    pub fn fee(&self) -> Fee {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[12..]) as usize;
-            Uint64::new_unchecked(self.0.slice(start..end))
+            Fee::new_unchecked(self.0.slice(start..end))
         } else {
-            Uint64::new_unchecked(self.0.slice(start..))
+            Fee::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> CreateAccountReader<'r> {
@@ -9379,14 +9542,14 @@ impl<'r> CreateAccountReader<'r> {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         ScriptReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn fee(&self) -> Uint64Reader<'r> {
+    pub fn fee(&self) -> FeeReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[12..]) as usize;
-            Uint64Reader::new_unchecked(&self.as_slice()[start..end])
+            FeeReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            Uint64Reader::new_unchecked(&self.as_slice()[start..])
+            FeeReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -9440,14 +9603,14 @@ impl<'r> molecule::prelude::Reader<'r> for CreateAccountReader<'r> {
             return ve!(Self, OffsetsNotMatch);
         }
         ScriptReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        Uint64Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        FeeReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct CreateAccountBuilder {
     pub(crate) script: Script,
-    pub(crate) fee: Uint64,
+    pub(crate) fee: Fee,
 }
 impl CreateAccountBuilder {
     pub const FIELD_COUNT: usize = 2;
@@ -9455,7 +9618,7 @@ impl CreateAccountBuilder {
         self.script = v;
         self
     }
-    pub fn fee(mut self, v: Uint64) -> Self {
+    pub fn fee(mut self, v: Fee) -> Self {
         self.fee = v;
         self
     }
@@ -9803,7 +9966,7 @@ impl ::core::fmt::Debug for SUDTQuery {
 impl ::core::fmt::Display for SUDTQuery {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "short_script_hash", self.short_script_hash())?;
+        write!(f, "{}: {}", "address", self.address())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -9835,7 +9998,7 @@ impl SUDTQuery {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn short_script_hash(&self) -> Bytes {
+    pub fn address(&self) -> Bytes {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         if self.has_extra_fields() {
@@ -9871,7 +10034,7 @@ impl molecule::prelude::Entity for SUDTQuery {
         ::core::default::Default::default()
     }
     fn as_builder(self) -> Self::Builder {
-        Self::new_builder().short_script_hash(self.short_script_hash())
+        Self::new_builder().address(self.address())
     }
 }
 #[derive(Clone, Copy)]
@@ -9893,7 +10056,7 @@ impl<'r> ::core::fmt::Debug for SUDTQueryReader<'r> {
 impl<'r> ::core::fmt::Display for SUDTQueryReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "short_script_hash", self.short_script_hash())?;
+        write!(f, "{}: {}", "address", self.address())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -9919,7 +10082,7 @@ impl<'r> SUDTQueryReader<'r> {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn short_script_hash(&self) -> BytesReader<'r> {
+    pub fn address(&self) -> BytesReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         if self.has_extra_fields() {
@@ -9985,12 +10148,12 @@ impl<'r> molecule::prelude::Reader<'r> for SUDTQueryReader<'r> {
 }
 #[derive(Debug, Default)]
 pub struct SUDTQueryBuilder {
-    pub(crate) short_script_hash: Bytes,
+    pub(crate) address: Bytes,
 }
 impl SUDTQueryBuilder {
     pub const FIELD_COUNT: usize = 1;
-    pub fn short_script_hash(mut self, v: Bytes) -> Self {
-        self.short_script_hash = v;
+    pub fn address(mut self, v: Bytes) -> Self {
+        self.address = v;
         self
     }
 }
@@ -9998,18 +10161,18 @@ impl molecule::prelude::Builder for SUDTQueryBuilder {
     type Entity = SUDTQuery;
     const NAME: &'static str = "SUDTQueryBuilder";
     fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1) + self.short_script_hash.as_slice().len()
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1) + self.address.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
         let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
         offsets.push(total_size);
-        total_size += self.short_script_hash.as_slice().len();
+        total_size += self.address.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
-        writer.write_all(self.short_script_hash.as_slice())?;
+        writer.write_all(self.address.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -10038,7 +10201,7 @@ impl ::core::fmt::Debug for SUDTTransfer {
 impl ::core::fmt::Display for SUDTTransfer {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "to", self.to())?;
+        write!(f, "{}: {}", "to_address", self.to_address())?;
         write!(f, ", {}: {}", "amount", self.amount())?;
         write!(f, ", {}: {}", "fee", self.fee())?;
         let extra_count = self.count_extra_fields();
@@ -10051,8 +10214,8 @@ impl ::core::fmt::Display for SUDTTransfer {
 impl ::core::default::Default for SUDTTransfer {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            44, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 36, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            48, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 36, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         SUDTTransfer::new_unchecked(v.into())
     }
@@ -10075,7 +10238,7 @@ impl SUDTTransfer {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn to(&self) -> Bytes {
+    pub fn to_address(&self) -> Bytes {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
@@ -10087,14 +10250,14 @@ impl SUDTTransfer {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         Uint128::new_unchecked(self.0.slice(start..end))
     }
-    pub fn fee(&self) -> Uint64 {
+    pub fn fee(&self) -> Fee {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[16..]) as usize;
-            Uint64::new_unchecked(self.0.slice(start..end))
+            Fee::new_unchecked(self.0.slice(start..end))
         } else {
-            Uint64::new_unchecked(self.0.slice(start..))
+            Fee::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> SUDTTransferReader<'r> {
@@ -10124,7 +10287,7 @@ impl molecule::prelude::Entity for SUDTTransfer {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
-            .to(self.to())
+            .to_address(self.to_address())
             .amount(self.amount())
             .fee(self.fee())
     }
@@ -10148,7 +10311,7 @@ impl<'r> ::core::fmt::Debug for SUDTTransferReader<'r> {
 impl<'r> ::core::fmt::Display for SUDTTransferReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "to", self.to())?;
+        write!(f, "{}: {}", "to_address", self.to_address())?;
         write!(f, ", {}: {}", "amount", self.amount())?;
         write!(f, ", {}: {}", "fee", self.fee())?;
         let extra_count = self.count_extra_fields();
@@ -10176,7 +10339,7 @@ impl<'r> SUDTTransferReader<'r> {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn to(&self) -> BytesReader<'r> {
+    pub fn to_address(&self) -> BytesReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
@@ -10188,14 +10351,14 @@ impl<'r> SUDTTransferReader<'r> {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         Uint128Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn fee(&self) -> Uint64Reader<'r> {
+    pub fn fee(&self) -> FeeReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[16..]) as usize;
-            Uint64Reader::new_unchecked(&self.as_slice()[start..end])
+            FeeReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            Uint64Reader::new_unchecked(&self.as_slice()[start..])
+            FeeReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -10250,27 +10413,27 @@ impl<'r> molecule::prelude::Reader<'r> for SUDTTransferReader<'r> {
         }
         BytesReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         Uint128Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        Uint64Reader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        FeeReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct SUDTTransferBuilder {
-    pub(crate) to: Bytes,
+    pub(crate) to_address: Bytes,
     pub(crate) amount: Uint128,
-    pub(crate) fee: Uint64,
+    pub(crate) fee: Fee,
 }
 impl SUDTTransferBuilder {
     pub const FIELD_COUNT: usize = 3;
-    pub fn to(mut self, v: Bytes) -> Self {
-        self.to = v;
+    pub fn to_address(mut self, v: Bytes) -> Self {
+        self.to_address = v;
         self
     }
     pub fn amount(mut self, v: Uint128) -> Self {
         self.amount = v;
         self
     }
-    pub fn fee(mut self, v: Uint64) -> Self {
+    pub fn fee(mut self, v: Fee) -> Self {
         self.fee = v;
         self
     }
@@ -10280,7 +10443,7 @@ impl molecule::prelude::Builder for SUDTTransferBuilder {
     const NAME: &'static str = "SUDTTransferBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.to.as_slice().len()
+            + self.to_address.as_slice().len()
             + self.amount.as_slice().len()
             + self.fee.as_slice().len()
     }
@@ -10288,7 +10451,7 @@ impl molecule::prelude::Builder for SUDTTransferBuilder {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
         let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
         offsets.push(total_size);
-        total_size += self.to.as_slice().len();
+        total_size += self.to_address.as_slice().len();
         offsets.push(total_size);
         total_size += self.amount.as_slice().len();
         offsets.push(total_size);
@@ -10297,7 +10460,7 @@ impl molecule::prelude::Builder for SUDTTransferBuilder {
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
-        writer.write_all(self.to.as_slice())?;
+        writer.write_all(self.to_address.as_slice())?;
         writer.write_all(self.amount.as_slice())?;
         writer.write_all(self.fee.as_slice())?;
         Ok(())
@@ -15954,20 +16117,20 @@ impl ::core::default::Default for SetMapping {
     fn default() -> Self {
         let v: Vec<u8> = vec![
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         SetMapping::new_unchecked(v.into())
     }
 }
 impl SetMapping {
-    pub const TOTAL_SIZE: usize = 40;
-    pub const FIELD_SIZES: [usize; 2] = [32, 8];
+    pub const TOTAL_SIZE: usize = 44;
+    pub const FIELD_SIZES: [usize; 2] = [32, 12];
     pub const FIELD_COUNT: usize = 2;
     pub fn gw_script_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
-    pub fn fee(&self) -> Uint64 {
-        Uint64::new_unchecked(self.0.slice(32..40))
+    pub fn fee(&self) -> Fee {
+        Fee::new_unchecked(self.0.slice(32..44))
     }
     pub fn as_reader<'r>(&'r self) -> SetMappingReader<'r> {
         SetMappingReader::new_unchecked(self.as_slice())
@@ -16025,14 +16188,14 @@ impl<'r> ::core::fmt::Display for SetMappingReader<'r> {
     }
 }
 impl<'r> SetMappingReader<'r> {
-    pub const TOTAL_SIZE: usize = 40;
-    pub const FIELD_SIZES: [usize; 2] = [32, 8];
+    pub const TOTAL_SIZE: usize = 44;
+    pub const FIELD_SIZES: [usize; 2] = [32, 12];
     pub const FIELD_COUNT: usize = 2;
     pub fn gw_script_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
-    pub fn fee(&self) -> Uint64Reader<'r> {
-        Uint64Reader::new_unchecked(&self.as_slice()[32..40])
+    pub fn fee(&self) -> FeeReader<'r> {
+        FeeReader::new_unchecked(&self.as_slice()[32..44])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for SetMappingReader<'r> {
@@ -16059,17 +16222,17 @@ impl<'r> molecule::prelude::Reader<'r> for SetMappingReader<'r> {
 #[derive(Debug, Default)]
 pub struct SetMappingBuilder {
     pub(crate) gw_script_hash: Byte32,
-    pub(crate) fee: Uint64,
+    pub(crate) fee: Fee,
 }
 impl SetMappingBuilder {
-    pub const TOTAL_SIZE: usize = 40;
-    pub const FIELD_SIZES: [usize; 2] = [32, 8];
+    pub const TOTAL_SIZE: usize = 44;
+    pub const FIELD_SIZES: [usize; 2] = [32, 12];
     pub const FIELD_COUNT: usize = 2;
     pub fn gw_script_hash(mut self, v: Byte32) -> Self {
         self.gw_script_hash = v;
         self
     }
-    pub fn fee(mut self, v: Uint64) -> Self {
+    pub fn fee(mut self, v: Fee) -> Self {
         self.fee = v;
         self
     }
@@ -16123,7 +16286,7 @@ impl ::core::fmt::Display for BatchSetMapping {
 impl ::core::default::Default for BatchSetMapping {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            24, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            28, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         BatchSetMapping::new_unchecked(v.into())
     }
@@ -16152,14 +16315,14 @@ impl BatchSetMapping {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         Byte32Vec::new_unchecked(self.0.slice(start..end))
     }
-    pub fn fee(&self) -> Uint64 {
+    pub fn fee(&self) -> Fee {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[12..]) as usize;
-            Uint64::new_unchecked(self.0.slice(start..end))
+            Fee::new_unchecked(self.0.slice(start..end))
         } else {
-            Uint64::new_unchecked(self.0.slice(start..))
+            Fee::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> BatchSetMappingReader<'r> {
@@ -16245,14 +16408,14 @@ impl<'r> BatchSetMappingReader<'r> {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn fee(&self) -> Uint64Reader<'r> {
+    pub fn fee(&self) -> FeeReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[12..]) as usize;
-            Uint64Reader::new_unchecked(&self.as_slice()[start..end])
+            FeeReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            Uint64Reader::new_unchecked(&self.as_slice()[start..])
+            FeeReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -16306,14 +16469,14 @@ impl<'r> molecule::prelude::Reader<'r> for BatchSetMappingReader<'r> {
             return ve!(Self, OffsetsNotMatch);
         }
         Byte32VecReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        Uint64Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        FeeReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct BatchSetMappingBuilder {
     pub(crate) gw_script_hashes: Byte32Vec,
-    pub(crate) fee: Uint64,
+    pub(crate) fee: Fee,
 }
 impl BatchSetMappingBuilder {
     pub const FIELD_COUNT: usize = 2;
@@ -16321,7 +16484,7 @@ impl BatchSetMappingBuilder {
         self.gw_script_hashes = v;
         self
     }
-    pub fn fee(mut self, v: Uint64) -> Self {
+    pub fn fee(mut self, v: Fee) -> Self {
         self.fee = v;
         self
     }
