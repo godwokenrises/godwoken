@@ -12,9 +12,7 @@ use sha3::{Digest, Keccak256};
 
 pub struct EthEoaMappingRegister {
     rollup_script_hash: H256,
-    account_id: u32,
     account_script_hash: H256,
-    registry_account_id: u32,
     registry_script_hash: H256,
     eth_lock_code_hash: H256,
     wallet: Wallet,
@@ -22,7 +20,6 @@ pub struct EthEoaMappingRegister {
 
 impl EthEoaMappingRegister {
     pub fn create(
-        state: &impl State,
         rollup_script_hash: H256,
         eth_registry_code_hash: H256,
         eth_lock_code_hash: H256,
@@ -33,23 +30,15 @@ impl EthEoaMappingRegister {
             let script = wallet.eth_lock_script(&rollup_script_hash, &eth_lock_code_hash)?;
             script.hash().into()
         };
-        let account_id = state
-            .get_account_id_by_script_hash(&account_script_hash)?
-            .ok_or_else(|| anyhow!("[eoa mapping] eth register(tx builder) account not found"))?;
 
         let registry_script_hash = {
             let script = build_registry_script(rollup_script_hash, eth_registry_code_hash);
             script.hash().into()
         };
-        let registry_account_id = state
-            .get_account_id_by_script_hash(&registry_script_hash)?
-            .ok_or_else(|| anyhow!("[eoa mapping] eth registry(contract) account not found"))?;
 
         let register = EthEoaMappingRegister {
             rollup_script_hash,
-            account_id,
             account_script_hash,
-            registry_account_id,
             registry_script_hash,
             eth_lock_code_hash,
             wallet,
@@ -58,8 +47,12 @@ impl EthEoaMappingRegister {
         Ok(register)
     }
 
-    pub fn registry_account_id(&self) -> u32 {
-        self.registry_account_id
+    pub fn registry_script_hash(&self) -> H256 {
+        self.registry_script_hash
+    }
+
+    pub fn register_account_script_hash(&self) -> H256 {
+        self.account_script_hash
     }
 
     pub fn lock_code_hash(&self) -> &H256 {
@@ -94,7 +87,15 @@ impl EthEoaMappingRegister {
         state: &impl State,
         script_hashes: Vec<H256>,
     ) -> Result<L2Transaction> {
-        let nonce = state.get_nonce(self.account_id)?;
+        let account_id = state
+            .get_account_id_by_script_hash(&self.account_script_hash)?
+            .ok_or_else(|| anyhow!("[eoa mapping] eth register(tx builder) account not found"))?;
+
+        let registry_account_id = state
+            .get_account_id_by_script_hash(&self.registry_script_hash)?
+            .ok_or_else(|| anyhow!("[eoa mapping] eth registry(contract) account not found"))?;
+
+        let nonce = state.get_nonce(account_id)?;
 
         let batch_set_mapping = BatchSetMapping::new_builder()
             .fee(0u64.pack())
@@ -106,8 +107,8 @@ impl EthEoaMappingRegister {
             .build();
 
         let raw_l2tx = RawL2Transaction::new_builder()
-            .from_id(self.account_id.pack())
-            .to_id(self.registry_account_id.pack())
+            .from_id(account_id.pack())
+            .to_id(registry_account_id.pack())
             .nonce(nonce.pack())
             .args(args.as_bytes().pack())
             .build();

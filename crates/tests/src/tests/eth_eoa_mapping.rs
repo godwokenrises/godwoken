@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use ckb_crypto::secp::Privkey;
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
@@ -78,7 +78,6 @@ async fn test_eth_eoa_mapping_register() -> Result<()> {
     let register_wallet = Wallet::new(register_privkey, register_account_script);
 
     let mapping_register = EthEoaMappingRegister::create(
-        &state,
         rollup_script_hash,
         (*ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH).into(),
         (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
@@ -111,6 +110,9 @@ async fn test_eth_eoa_mapping_register() -> Result<()> {
     }
 
     // Verify mapping register
+    let registry_account_id = state
+        .get_account_id_by_script_hash(&mapping_register.registry_script_hash())?
+        .ok_or_else(|| anyhow!("eth registry(contract) account not found"))?;
     let tip_block_hash = chain.store().get_tip_block_hash()?;
     let db = chain.store().begin_transaction();
     let block_info = BlockInfo::new_builder()
@@ -135,7 +137,7 @@ async fn test_eth_eoa_mapping_register() -> Result<()> {
         };
         let raw_l2tx = RawL2Transaction::new_builder()
             .from_id(register_account_id.pack())
-            .to_id(mapping_register.registry_account_id().pack())
+            .to_id(registry_account_id.pack())
             .args(args.as_bytes().pack())
             .build();
         let run_result = generator
@@ -161,7 +163,7 @@ async fn test_eth_eoa_mapping_register() -> Result<()> {
         };
         let raw_l2tx = RawL2Transaction::new_builder()
             .from_id(register_account_id.pack())
-            .to_id(mapping_register.registry_account_id().pack())
+            .to_id(registry_account_id.pack())
             .args(args.as_bytes().pack())
             .build();
         let run_result = generator
@@ -340,13 +342,14 @@ async fn test_mem_pool_eth_eoa_mapping_deposit_scan_and_register() -> Result<()>
     };
 
     let mapping_register = EthEoaMappingRegister::create(
-        &state,
         rollup_script_hash,
         (*ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH).into(),
         (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
         register_wallet,
     )?;
-    let registry_account_id = mapping_register.registry_account_id();
+    let registry_account_id = state
+        .get_account_id_by_script_hash(&mapping_register.registry_script_hash())?
+        .ok_or_else(|| anyhow!("eth registry(contract) account not found"))?;
 
     {
         let mut mem_pool = chain.mem_pool().as_ref().unwrap().lock().await;

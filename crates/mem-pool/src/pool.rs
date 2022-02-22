@@ -1098,6 +1098,22 @@ impl MemPool {
             None => return Ok(()),
         };
 
+        let snap = self.mem_pool_state.load();
+        let state = snap.state()?;
+        {
+            let script_hash = eth_eoa_mapping_register.registry_script_hash();
+            if state.get_account_id_by_script_hash(&script_hash)?.is_none() {
+                log::error!("[eoa mapping] eth registry(contract) account not found");
+                return Ok(());
+            }
+
+            let script_hash = eth_eoa_mapping_register.register_account_script_hash();
+            if state.get_account_id_by_script_hash(&script_hash)?.is_none() {
+                log::error!("[eoa mapping] eth register(tx_builder) account not found");
+                return Ok(());
+            }
+        }
+
         let mut from_id = None;
         let mut to_id = None;
 
@@ -1149,8 +1165,6 @@ impl MemPool {
         }
 
         if let (Some(from_id), Some(to_id)) = (from_id, to_id) {
-            let snap = self.mem_pool_state.load();
-            let state = snap.state()?;
             let unregistered_account_hashes =
                 eth_eoa_mapping_register.filter_accounts(&state, from_id, to_id)?;
             let tx =
