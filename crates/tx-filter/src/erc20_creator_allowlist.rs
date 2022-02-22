@@ -2,7 +2,7 @@ use gw_common::H256;
 use gw_types::offchain::RunResult;
 use log::debug;
 
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct SUDTProxyAccountAllowlist {
     allowed_sudt_proxy_creator_account_id: Vec<u32>,
     sudt_proxy_code_hashes: Vec<H256>,
@@ -51,14 +51,5 @@ impl SUDTProxyAccountAllowlist {
             }
         }
         true
-    }
-}
-
-impl Default for SUDTProxyAccountAllowlist {
-    fn default() -> Self {
-        Self {
-            allowed_sudt_proxy_creator_account_id: vec![],
-            sudt_proxy_code_hashes: vec![],
-        }
     }
 }

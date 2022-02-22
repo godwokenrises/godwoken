@@ -137,10 +137,7 @@ impl<'a> DeployContext<'a> {
         } else {
             "62.0"
         };
-        let outputs_data: Vec<ckb_packed::Bytes> = outputs_data
-            .iter()
-            .map(|data| CKBPack::pack(data))
-            .collect();
+        let outputs_data: Vec<ckb_packed::Bytes> = outputs_data.iter().map(CKBPack::pack).collect();
         deps.extend_from_slice(&[
             self.deployment_result
                 .state_validator
