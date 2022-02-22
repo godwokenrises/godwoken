@@ -9,7 +9,7 @@ use crate::utils::transaction::{read_config, wait_for_l2_tx};
 use anyhow::Result;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_types::{prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity};
-use gw_types::packed::{L2Transaction, RawL2Transaction, SUDTArgs, SUDTTransfer};
+use gw_types::packed::{Fee, L2Transaction, RawL2Transaction, SUDTArgs, SUDTTransfer};
 use gw_types::prelude::Pack as GwPack;
 use std::path::Path;
 use std::u128;
@@ -22,6 +22,7 @@ pub async fn transfer(
     sudt_id: u32,
     amount: &str,
     fee: &str,
+    registry_id: u32,
     config_path: &Path,
     scripts_deployment_path: &Path,
 ) -> Result<()> {
@@ -50,9 +51,14 @@ pub async fn transfer(
     let nonce = godwoken_rpc_client.get_nonce(from_id).await?;
 
     let sudt_transfer = SUDTTransfer::new_builder()
-        .to(GwPack::pack(&to_address))
+        .to_address(GwPack::pack(&to_address))
         .amount(GwPack::pack(&amount))
-        .fee(GwPack::pack(&fee))
+        .fee(
+            Fee::new_builder()
+                .registry_id(GwPack::pack(&registry_id))
+                .amount(GwPack::pack(&fee))
+                .build(),
+        )
         .build();
 
     let sudt_args = SUDTArgs::new_builder().set(sudt_transfer).build();

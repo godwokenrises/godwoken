@@ -230,9 +230,16 @@ union MetaContractArgs {
     CreateAccount,
 }
 
+struct Fee {
+    // registry id
+    registry_id: Uint32,
+    // amount in CKB
+    amount: Uint64,
+}
+
 table CreateAccount {
     script: Script,
-    fee: Uint64,
+    fee: Fee,
 }
 // --- end of Meta contract
 
@@ -243,16 +250,16 @@ union SUDTArgs {
 }
 
 table SUDTQuery {
-    // godwoken short script hash (script_hash[0..n])
-    short_script_hash: Bytes,
+    // Godwoken registry address: (registry_id (4 bytes) | address len(4 bytes) | address)
+    address: Bytes,
 }
 
 table SUDTTransfer {
-    // godwoken short script hash (script_hash[0..n])
-    to: Bytes,
+    // Godwoken registry address: (registry_id (4 bytes) | address len(4 bytes) | address)
+    to_address: Bytes,
     amount: Uint128,
     // paid fee(ckb)
-    fee: Uint64,
+    fee: Fee,
 }
 // --- end of layer2 SUDT ---
 
@@ -381,12 +388,12 @@ struct GwToEth {
 
 struct SetMapping {
     gw_script_hash: Byte32,
-    fee: Uint64,
+    fee: Fee,
 }
 
 table BatchSetMapping {
     gw_script_hashes: Byte32Vec,
-    fee: Uint64,
+    fee: Fee,
 }
 
 // --- end of ETH Address Registry ---

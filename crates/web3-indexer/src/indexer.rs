@@ -441,15 +441,21 @@ impl Web3Indexer {
                 match sudt_args.to_enum() {
                     SUDTArgsUnion::SUDTTransfer(sudt_transfer) => {
                         // Since we can transfer to any non-exists account, we can not check the script.code_hash.
-                        let to_address_data: Bytes = sudt_transfer.to().unpack();
-                        if to_address_data.len() != 20 {
+                        let to_address_data: Bytes = sudt_transfer.to_address().unpack();
+                        let address = match RegistryAddress::from_slice(&to_address_data) {
+                            Some(address) => address,
+                            None => {
+                                continue;
+                            }
+                        };
+                        if address.address.len() != 20 {
                             continue;
                         }
                         let mut to_address = [0u8; 20];
                         to_address.copy_from_slice(to_address_data.as_ref());
 
                         let amount: u128 = sudt_transfer.amount().unpack();
-                        let fee: u64 = sudt_transfer.fee().unpack();
+                        let fee: u64 = sudt_transfer.fee().amount().unpack();
                         let value = amount;
 
                         // Represent SUDTTransfer fee in web3 style, set gas_price as 1 temporary.
