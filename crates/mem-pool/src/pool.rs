@@ -1042,6 +1042,7 @@ impl MemPool {
                 block_number,
                 return_data: run_result.return_data,
                 last_log: run_result.logs.last().cloned(),
+                exit_code: run_result.exit_code,
             };
             if let Some(ref mut error_tx_handler) = self.error_tx_handler {
                 let t = Instant::now();

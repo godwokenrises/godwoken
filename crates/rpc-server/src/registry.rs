@@ -796,6 +796,7 @@ async fn execute_l2transaction(
             block_number: number,
             return_data: run_result.return_data,
             last_log: run_result.logs.pop(),
+            exit_code: run_result.exit_code,
         };
 
         return Err(RpcError::Full {
@@ -906,6 +907,7 @@ async fn execute_raw_l2transaction(
             block_number,
             return_data: run_result.return_data,
             last_log: run_result.logs.pop(),
+            exit_code: run_result.exit_code,
         };
 
         return Err(RpcError::Full {
