@@ -1186,15 +1186,19 @@ pub struct ErrorTxReceipt {
     pub block_number: Uint64,
     pub return_data: JsonBytes,
     pub last_log: Option<LogItem>,
+    // i8 -> u32, actual u8
+    pub exit_code: Uint32,
 }
 
 impl From<offchain::ErrorTxReceipt> for ErrorTxReceipt {
     fn from(receipt: offchain::ErrorTxReceipt) -> Self {
+        let exit_code = receipt.exit_code as u8;
         ErrorTxReceipt {
             tx_hash: H256::from(Into::<[u8; 32]>::into(receipt.tx_hash)),
             block_number: receipt.block_number.into(),
             return_data: JsonBytes::from_vec(receipt.return_data),
             last_log: receipt.last_log.map(Into::into),
+            exit_code: (exit_code as u32).into(),
         }
     }
 }
