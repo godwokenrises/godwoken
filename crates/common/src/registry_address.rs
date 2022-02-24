@@ -1,4 +1,5 @@
-use std::convert::TryInto;
+use core::convert::TryInto;
+use crate::vec::Vec;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct RegistryAddress {
