@@ -48,7 +48,7 @@ use gw_types::{
     packed::{Byte32, CellDep, NumberHash, RollupConfig, Script},
     prelude::*,
 };
-use gw_utils::{genesis_info::CKBGenesisInfo, wallet::Wallet};
+use gw_utils::{genesis_info::CKBGenesisInfo, since::EpochNumberWithFraction, wallet::Wallet};
 use gw_web3_indexer::{ErrorReceiptIndexer, Web3Indexer};
 use semver::Version;
 use sqlx::{
@@ -239,7 +239,10 @@ impl ChainTask {
                 }
 
                 // update global current epoch number
-                let current_epoch_number = self.rpc_client.get_current_epoch_number().await?;
+                let current_epoch_number = {
+                    let tip_epoch: u64 = block.header().raw().epoch().unpack();
+                    EpochNumberWithFraction::from_full_value(tip_epoch).number()
+                };
                 let global_epoch_number = GLOBAL_CURRENT_EPOCH_NUMBER.load(Ordering::SeqCst);
                 if global_epoch_number != current_epoch_number {
                     GLOBAL_CURRENT_EPOCH_NUMBER.store(current_epoch_number, Ordering::SeqCst);
