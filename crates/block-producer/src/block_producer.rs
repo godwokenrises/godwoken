@@ -296,7 +296,7 @@ impl BlockProducer {
         }
 
         let rollup_input_since = match self.rpc_client.get_block_median_time(tip_hash).await? {
-            Some(median_time) => input_since_from(median_time),
+            Some(median_time) => InputSince::from_median_time(median_time),
             None => return Ok(()),
         };
 
@@ -364,7 +364,7 @@ impl BlockProducer {
 
     async fn compose_next_block_submit_tx(
         &mut self,
-        rollup_input_since: u64,
+        rollup_input_since: InputSince,
         rollup_cell: CellInfo,
         retry_count: usize,
     ) -> Result<(u64, Transaction)> {
@@ -393,9 +393,7 @@ impl BlockProducer {
             let tip_block_number = mem_block.block_info().number().unpack().saturating_sub(1);
             let (finalized_custodians, produce_block_param) =
                 generate_produce_block_param(&self.store, mem_block, post_block_state)?;
-            if rollup_input_since < produce_block_param.timestamp {
-                bail!(GreaterBlockTimestampError);
-            }
+            rollup_input_since.verify_block_timestamp(produce_block_param.timestamp)?;
 
             let finalized_custodians = {
                 let last_finalized_block_number = {
@@ -668,7 +666,7 @@ impl BlockProducer {
         tx_skeleton.inputs_mut().push(InputCellInfo {
             input: CellInput::new_builder()
                 .previous_output(rollup_cell.out_point.clone())
-                .since(rollup_input_since.pack())
+                .since(rollup_input_since.value().pack())
                 .build(),
             cell: rollup_cell.clone(),
         });
@@ -949,22 +947,72 @@ impl BlockProducer {
     }
 }
 
-fn input_since_from(median_time: Duration) -> u64 {
-    /// Transaction since flag
-    const SINCE_BLOCK_TIMESTAMP_FLAG: u64 = 0x4000_0000_0000_0000;
-    SINCE_BLOCK_TIMESTAMP_FLAG | median_time.as_secs()
-}
-
 struct CompleteTxArgs {
     deposit_cells: Vec<DepositInfo>,
     finalized_custodians: CollectedCustodianCells,
     block: L2Block,
     global_state: GlobalState,
-    rollup_input_since: u64,
+    rollup_input_since: InputSince,
     rollup_cell: CellInfo,
     withdrawal_extras: Vec<WithdrawalRequestExtra>,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
 #[error("block timestamp is greater than input since")]
 struct GreaterBlockTimestampError;
+
+#[derive(Debug, Clone, Copy)]
+struct InputSince {
+    timestamp: u64,
+    since: u64,
+}
+
+impl InputSince {
+    /// Transaction since flag
+    const SINCE_BLOCK_TIMESTAMP_FLAG: u64 = 0x4000_0000_0000_0000;
+
+    fn from_median_time(median_time: Duration) -> Self {
+        let timestamp = median_time.as_secs();
+        let since = Self::SINCE_BLOCK_TIMESTAMP_FLAG | timestamp;
+
+        InputSince { timestamp, since }
+    }
+
+    fn verify_block_timestamp(
+        &self,
+        block_timestamp: u64,
+    ) -> Result<(), GreaterBlockTimestampError> {
+        if block_timestamp > self.timestamp {
+            Err(GreaterBlockTimestampError)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn value(&self) -> u64 {
+        self.since
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::time::Duration;
+
+    use super::{GreaterBlockTimestampError, InputSince};
+
+    #[test]
+    fn test_input_since() {
+        let input_since = InputSince::from_median_time(Duration::from_secs(1645670634000));
+        let block_timestamp: u64 = 1645670638000;
+
+        assert_eq!(input_since.timestamp, 1645670634000u64);
+        assert!(input_since.since >= block_timestamp); // Encoded timestamp is bigger than block timestamp
+        assert_eq!(
+            input_since.verify_block_timestamp(block_timestamp),
+            Err(GreaterBlockTimestampError)
+        );
+
+        let block_timestamp: u64 = 1645670633000;
+        assert_eq!(input_since.verify_block_timestamp(block_timestamp), Ok(()));
+    }
+}
