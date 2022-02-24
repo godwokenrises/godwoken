@@ -432,7 +432,7 @@ fn try_assemble_polyjuice_args(
         // 3 for EVMC_CREATE
         // In case of deploying a polyjuice contract, to id(creator account id)
         // is directly used as chain id
-        (vec![0u8; 0], raw_tx.to_id().unpack())
+        (vec![0u8; 20], raw_tx.to_id().unpack())
     } else {
         // For contract calling, chain id is read from scrpit args of
         // receiver_script, see the following link for more details:
@@ -626,7 +626,7 @@ mod tests {
             .args(Bytes::from(polyjuice_args).pack())
             .build();
         let mut signature = [0u8; 65];
-        signature.copy_from_slice(&hex::decode("5289a4c910f143a97ce6d8ce55a970863c115bb95b404518a183ec470734ce0c10594e911d54d8894d05381fbc0f052b7397cd25217f6f102d297387a4cb15d700").expect("hex decode"));
+        signature.copy_from_slice(&hex::decode("60dd879b14e6807c73d3fc09db1926d7a572a7b29e6a4f65607d60fec4c1aaa808197129e5e8552e4539969d2203584ab3f192b691def34f60f8f515753051df00").expect("hex decode"));
         let tx = L2Transaction::new_builder()
             .raw(raw_tx)
             .signature(signature.to_vec().pack())
@@ -638,7 +638,7 @@ mod tests {
         let mut sender_args = vec![];
         sender_args.extend(&rollup_type_hash);
         sender_args
-            .extend(&hex::decode("9d8A62f656a8d1615C1294fd71e9CFb3E4855A4F").expect("hex decode"));
+            .extend(&hex::decode("165676aaf9fb95dae183459f771d64f2a02beba5").expect("hex decode"));
         let sender_script = Script::new_builder()
             .args(Bytes::from(sender_args).pack())
             .build();
