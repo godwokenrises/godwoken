@@ -972,8 +972,9 @@ impl InputSince {
     const SINCE_BLOCK_TIMESTAMP_FLAG: u64 = 0x4000_0000_0000_0000;
 
     fn from_median_time(median_time: Duration) -> Self {
-        let timestamp = median_time.as_secs();
-        let since = Self::SINCE_BLOCK_TIMESTAMP_FLAG | timestamp;
+        // Ensure ms precision
+        let timestamp = Duration::from_secs(median_time.as_secs()).as_millis() as u64;
+        let since = Self::SINCE_BLOCK_TIMESTAMP_FLAG | median_time.as_secs();
 
         InputSince { timestamp, since }
     }
@@ -983,6 +984,11 @@ impl InputSince {
         block_timestamp: u64,
     ) -> Result<(), GreaterBlockTimestampError> {
         if block_timestamp > self.timestamp {
+            log::debug!(
+                "block timestamp {}, input since timestamp {}",
+                block_timestamp,
+                self.timestamp,
+            );
             Err(GreaterBlockTimestampError)
         } else {
             Ok(())
@@ -1002,7 +1008,7 @@ mod test {
 
     #[test]
     fn test_input_since() {
-        let input_since = InputSince::from_median_time(Duration::from_secs(1645670634000));
+        let input_since = InputSince::from_median_time(Duration::from_secs(1645670634));
         let block_timestamp: u64 = 1645670638000;
 
         assert_eq!(input_since.timestamp, 1645670634000u64);
@@ -1013,6 +1019,11 @@ mod test {
         );
 
         let block_timestamp: u64 = 1645670633000;
+        assert_eq!(input_since.verify_block_timestamp(block_timestamp), Ok(()));
+
+        // Second
+        let input_since = InputSince::from_median_time(Duration::from_secs(11));
+        let block_timestamp: u64 = Duration::from_millis(10534).as_millis() as u64;
         assert_eq!(input_since.verify_block_timestamp(block_timestamp), Ok(()));
     }
 }
