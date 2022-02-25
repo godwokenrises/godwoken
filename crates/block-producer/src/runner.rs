@@ -571,14 +571,19 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     };
 
     // Set up runtim monitor.
-    let runtime_monitor = tokio_metrics::RuntimeMonitor::new(&tokio::runtime::Handle::current());
+    #[cfg(tokio_unstable)]
     {
-        tokio::spawn(async move {
-            for interval in runtime_monitor.intervals() {
-                log::info!("runtime monitor: {:#?}", interval);
-                tokio::time::sleep(Duration::from_secs(10)).await;
-            }
-        });
+        let runtime_monitor =
+            tokio_metrics::RuntimeMonitor::new(&tokio::runtime::Handle::current());
+        {
+            tokio::spawn(async move {
+                log::info!("Tokio runtime monitor is set up!");
+                for interval in runtime_monitor.intervals() {
+                    log::info!("runtime monitor: {:#?}", interval);
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                }
+            });
+        }
     }
     let base = BaseInitComponents::init(&config, skip_config_check).await?;
     let (mem_pool, wallet, poa, offchain_mock_context, pg_pool, err_receipt_notify_ctrl) =
