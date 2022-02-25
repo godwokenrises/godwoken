@@ -77,6 +77,7 @@ fn parse_deposit_request(
         .capacity(capacity)
         .amount(amount.pack())
         .sudt_script_hash(sudt_script_hash.pack())
+        .registry_id(deposit_lock_args.registry_id())
         .build();
     Some(request)
 }
