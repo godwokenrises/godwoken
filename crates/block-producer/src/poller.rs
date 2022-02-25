@@ -636,6 +636,7 @@ fn try_parse_deposit_request(
         .amount(amount.pack())
         .sudt_script_hash(sudt_script_hash.pack())
         .script(lock_args.layer2_lock())
+        .registry_id(lock_args.registry_id())
         .build();
     Some(deposit_request)
 }

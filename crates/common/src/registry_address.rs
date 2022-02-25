@@ -1,5 +1,5 @@
-use core::convert::TryInto;
 use crate::vec::Vec;
+use core::convert::TryInto;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct RegistryAddress {
