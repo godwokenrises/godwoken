@@ -303,11 +303,11 @@ impl BlockProducer {
         // try issue next block
         let mut retry_count = 0;
         while retry_count <= MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT {
-            let (block_number, tx) = match self
+            let (block_number, tx, next_global_state) = match self
                 .compose_next_block_submit_tx(rollup_input_since, rollup_cell.clone(), retry_count)
                 .await
             {
-                Ok((block_number, tx)) => (block_number, tx),
+                Ok((block_number, tx, next_global_state)) => (block_number, tx, next_global_state),
                 Err(err) if err.downcast_ref::<GreaterBlockTimestampError>().is_some() => {
                     // Wait next l1 tip block median time
                     log::debug!(
@@ -330,6 +330,9 @@ impl BlockProducer {
             if expected_next_block_number != block_number {
                 log::warn!("produce unexpected next block, expect {} produce {}, wait until chain is synced to latest block", expected_next_block_number, block_number);
                 return Ok(());
+            }
+            if global_state.rollup_config_hash() != next_global_state.rollup_config_hash() {
+                bail!("different rollup config hash, please check config.toml");
             }
 
             let submitted_tx_hash = tx.hash();
@@ -367,7 +370,7 @@ impl BlockProducer {
         rollup_input_since: InputSince,
         rollup_cell: CellInfo,
         retry_count: usize,
-    ) -> Result<(u64, Transaction)> {
+    ) -> Result<(u64, Transaction, GlobalState)> {
         if let Some(ref tests_control) = self.tests_control {
             match tests_control.payload().await {
                 Some(TestModePayload::None) => tests_control.clear_none().await?,
@@ -489,7 +492,7 @@ impl BlockProducer {
             deposit_cells,
             finalized_custodians,
             block,
-            global_state,
+            global_state: global_state.clone(),
             rollup_input_since,
             rollup_cell: rollup_cell.clone(),
             withdrawal_extras,
@@ -517,7 +520,7 @@ impl BlockProducer {
                 .len()
                 <= MAX_ROLLUP_WITNESS_SIZE
         {
-            Ok((number, tx))
+            Ok((number, tx, global_state))
         } else {
             utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx)
                 .await;
