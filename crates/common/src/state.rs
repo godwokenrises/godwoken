@@ -311,9 +311,13 @@ pub trait State {
     fn get_script_hash_by_registry_address(
         &self,
         address: &RegistryAddress,
-    ) -> Result<H256, Error> {
+    ) -> Result<Option<H256>, Error> {
         let key = build_registry_address_to_script_hash_key(&address);
-        self.get_value(address.registry_id, &key)
+        let value = self.get_value(address.registry_id, &key)?;
+        if value.is_zero() {
+            return Ok(None);
+        }
+        Ok(Some(value))
     }
 
     fn get_registry_address_by_script_hash(
@@ -327,5 +331,41 @@ pub trait State {
             return Ok(None);
         }
         Ok(Some(RegistryAddress::from_slice(value.as_slice()).unwrap()))
+    }
+
+    /// This function create a bi-direction mapping between registry address & script_hash
+    fn mapping_registry_address_to_script_hash(
+        &mut self,
+        addr: RegistryAddress,
+        script_hash: H256,
+    ) -> Result<(), Error> {
+        // Only support addr len == 20 for now, we can revisit the condition in later version
+        if addr.len() != 20 {
+            return Err(Error::InvalidArgs);
+        }
+        // Check duplication
+        if self
+            .get_registry_address_by_script_hash(addr.registry_id, &script_hash)?
+            .is_some()
+        {
+            return Err(Error::DuplicatedRegistryAddress);
+        }
+        if self.get_script_hash_by_registry_address(&addr)?.is_some() {
+            return Err(Error::DuplicatedRegistryAddress);
+        }
+        // script hash -> registry address
+        {
+            let key = build_script_hash_to_registry_address_key(&script_hash);
+            let mut addr_buf = [0u8; 32];
+            addr.write_to_slice(&mut addr_buf)
+                .expect("write addr to buf");
+            self.update_value(addr.registry_id, &key, addr_buf.into())?;
+        }
+        // registry address -> script hash
+        {
+            let key = build_registry_address_to_script_hash_key(&addr);
+            self.update_value(addr.registry_id, &key, script_hash)?;
+        }
+        Ok(())
     }
 }

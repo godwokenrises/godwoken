@@ -19,6 +19,12 @@ cfg_if::cfg_if! {
             InvalidShortScriptHash,
             #[error("Duplicated script hash")]
             DuplicatedScriptHash,
+            #[error("Duplicated registry address")]
+            DuplicatedRegistryAddress,
+            #[error("Invalid args")]
+            InvalidArgs,
+            #[error("Unknown EOA Code hash")]
+            UnknownEoaCodeHash,
         }
     } else {
         #[derive(Debug, Eq, PartialEq, Clone)]
@@ -30,6 +36,9 @@ cfg_if::cfg_if! {
             Store,
             InvalidShortScriptHash,
             DuplicatedScriptHash,
+            DuplicatedRegistryAddress,
+            InvalidArgs,
+            UnknownEoaCodeHash,
         }
     }
 }

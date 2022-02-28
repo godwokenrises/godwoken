@@ -883,11 +883,11 @@ impl MemPool {
         let mut state = snap.state()?;
         state.tracker_mut().enable();
         // update deposits
-        let deposits: Vec<_> = deposit_cells.iter().map(|c| [c.request.clone()]).collect();
+        let deposits: Vec<_> = deposit_cells.iter().map(|c| c.request.clone()).collect();
         let mut post_states = Vec::with_capacity(deposits.len());
         let mut touched_keys_vec = Vec::with_capacity(deposits.len());
         for deposit in deposits {
-            state.apply_deposit_requests(self.generator.rollup_context(), &deposit)?;
+            state.apply_deposit_request(self.generator.rollup_context(), &deposit)?;
 
             post_states.push(state.get_merkle_state());
             let touched_keys = state.tracker_mut().touched_keys().expect("touched keys");
