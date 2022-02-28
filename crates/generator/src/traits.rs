@@ -1,5 +1,6 @@
 use crate::error::{AccountError, DepositError, Error, WithdrawalError};
 use crate::sudt::build_l2_sudt_script;
+use gw_common::registry::context::RegistryContext;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_traits::CodeStore;
@@ -135,25 +136,41 @@ impl<S: State + CodeStore> StateExt for S {
         let account_script_hash: H256 = request.script().hash().into();
         // mint CKB
         let capacity: u64 = request.capacity().unpack();
-        if self
-            .get_account_id_by_script_hash(&account_script_hash)?
-            .is_none()
-        {
-            self.insert_script(account_script_hash, request.script());
-            let new_id = self.create_account(account_script_hash)?;
-            log::debug!(
-                "[generator] create new account: {} id: {}",
-                hex::encode(account_script_hash.as_slice()),
-                new_id
-            );
-        }
-        // NOTE: the length `20` is a hard-coded value, may be `16` for some LockAlgorithm.
-        let address = self
-            .get_registry_address_by_script_hash(
-                request.registry_id().unpack(),
-                &account_script_hash,
-            )?
-            .ok_or(Error::Account(AccountError::RegistryAddressNotFound))?;
+        // NOTE: the address length `20` is a hard-coded value, we may re-visit here to extend more address format
+        let address = match self.get_account_id_by_script_hash(&account_script_hash)? {
+            Some(_id) => {
+                // account is exist, query registry address
+                self.get_registry_address_by_script_hash(
+                    request.registry_id().unpack(),
+                    &account_script_hash,
+                )?
+                .ok_or(Error::Account(AccountError::RegistryAddressNotFound))?
+            }
+            None => {
+                // account isn't exist
+                self.insert_script(account_script_hash, request.script());
+                let new_id = self.create_account(account_script_hash)?;
+                log::debug!(
+                    "[generator] create new account: {} id: {}",
+                    hex::encode(account_script_hash.as_slice()),
+                    new_id
+                );
+                let registry_ctx = RegistryContext::new(
+                    ctx.rollup_config
+                        .allowed_eoa_type_hashes()
+                        .into_iter()
+                        .collect(),
+                );
+                let addr = registry_ctx.extract_registry_address_from_deposit(
+                    request.registry_id().unpack(),
+                    &request.script().code_hash(),
+                    &request.script().args().raw_data(),
+                )?;
+                // mapping addr to script hash
+                self.mapping_registry_address_to_script_hash(addr.clone(), account_script_hash)?;
+                addr
+            }
+        };
         self.mint_sudt(CKB_SUDT_ACCOUNT_ID, &address, capacity.into())?;
         log::debug!(
             "[generator] mint {} shannons CKB to account {}",

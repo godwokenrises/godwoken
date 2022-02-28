@@ -1865,6 +1865,7 @@ version = "0.1.0"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
+ "gw-types",
  "merkle-cbt",
  "primitive-types",
  "sparse-merkle-tree",

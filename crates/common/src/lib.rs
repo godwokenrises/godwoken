@@ -4,6 +4,7 @@ pub mod builtins;
 pub mod error;
 pub mod h256_ext;
 pub mod merkle_utils;
+pub mod registry;
 pub mod registry_address;
 pub mod smt;
 pub mod state;
