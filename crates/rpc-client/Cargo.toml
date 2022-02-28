@@ -33,3 +33,4 @@ rand = "0.8"
 arc-swap = "1.5"
 thiserror = "1.0"
 tracing = { version = "0.1", features = ["attributes"] }
+tokio-metrics = "0.1.0"

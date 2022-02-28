@@ -44,6 +44,10 @@ pub fn init(trace: Option<Trace>) -> Result<ShutdownGuard> {
 
             registry.with(jaeger_layer).try_init()?
         }
+        Some(Trace::TokioConsole) => {
+            // Set up tokio console
+            console_subscriber::init();
+        }
         None => registry.try_init()?,
     }
 
