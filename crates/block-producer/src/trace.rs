@@ -45,8 +45,12 @@ pub fn init(trace: Option<Trace>) -> Result<ShutdownGuard> {
             registry.with(jaeger_layer).try_init()?
         }
         Some(Trace::TokioConsole) => {
-            // Set up tokio console
-            console_subscriber::init();
+            // Set up tokio console-subscriber. This should be used in **dev env** only.
+            #[cfg(tokio_unstable)]
+            {
+                console_subscriber::init();
+                log::info!("Tokio console_subscriber is enabled.");
+            }
         }
         None => registry.try_init()?,
     }
