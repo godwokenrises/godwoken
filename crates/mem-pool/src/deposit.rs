@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use gw_common::{h256_ext::H256Ext, H256};
+use gw_common::{h256_ext::H256Ext, registry::context::RegistryContext, H256};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -144,17 +144,6 @@ fn check_deposit_cell(ctx: &RollupContext, cell: &DepositInfo) -> Result<()> {
                 "Invalid deposit account script: unexpected hash_type: Data"
             ));
         }
-        if ctx
-            .rollup_config
-            .allowed_eoa_type_hashes()
-            .into_iter()
-            .all(|type_hash| script.code_hash() != type_hash.hash())
-        {
-            return Err(anyhow!(
-                "Invalid deposit account script: unknown code_hash: {:?}",
-                hex::encode(script.code_hash().as_slice())
-            ));
-        }
         let args: Bytes = script.args().unpack();
         if args.len() < 32 {
             return Err(anyhow!(
@@ -169,6 +158,20 @@ fn check_deposit_cell(ctx: &RollupContext, cell: &DepositInfo) -> Result<()> {
                 hex::encode(&args[..32])
             ));
         }
+
+        // try extract address from deposit
+        let registry_ctx = RegistryContext::new(
+            ctx.rollup_config
+                .allowed_eoa_type_hashes()
+                .into_iter()
+                .collect(),
+        );
+
+        registry_ctx.extract_registry_address_from_deposit(
+            cell.request.registry_id().unpack(),
+            &script.code_hash(),
+            &script.args().raw_data(),
+        )?;
     }
 
     // check capacity (use dummy block hash and number)
