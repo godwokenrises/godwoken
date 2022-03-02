@@ -340,7 +340,7 @@ pub trait State {
         script_hash: H256,
     ) -> Result<(), Error> {
         // Only support addr len == 20 for now, we can revisit the condition in later version
-        if addr.len() != 20 {
+        if addr.address.len() != 20 {
             return Err(Error::InvalidArgs);
         }
         // Check duplication
