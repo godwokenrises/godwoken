@@ -222,11 +222,18 @@ impl Challenger {
         tx_skeleton.cell_deps_mut().extend(rollup_deps);
         tx_skeleton.inputs_mut().push(rollup_state.rollup_input());
         tx_skeleton.outputs_mut().push(rollup_output);
-        tx_skeleton.witnesses_mut().push(rollup_witness);
+        tx_skeleton.witnesses_mut().push(WitnessArgs::default());
 
         // Challenge
         let challenge_cell = challenge_output.challenge_cell;
         tx_skeleton.outputs_mut().push(challenge_cell);
+
+        // Rollup action witness
+        let inputs_len = tx_skeleton.inputs().len();
+        tx_skeleton
+            .witnesses_mut()
+            .resize(inputs_len, Default::default());
+        tx_skeleton.witnesses_mut().push(rollup_witness);
 
         let challenger_lock_dep = self.ckb_genesis_info.sighash_dep();
         let challenger_lock = self.wallet.lock_script().to_owned();
@@ -437,7 +444,7 @@ impl Challenger {
         tx_skeleton.cell_deps_mut().extend(rollup_deps);
         tx_skeleton.inputs_mut().push(rollup_state.rollup_input());
         tx_skeleton.outputs_mut().push(rollup_output);
-        tx_skeleton.witnesses_mut().push(rollup_witness);
+        tx_skeleton.witnesses_mut().push(WitnessArgs::default());
 
         // Challenge
         let challenge_input = to_input_cell_info_with_since(challenge_cell, since);
@@ -456,6 +463,13 @@ impl Challenger {
 
         // Burn
         tx_skeleton.outputs_mut().extend(revert_output.burn_cells);
+
+        // Rollup action witness
+        let inputs_len = tx_skeleton.inputs().len();
+        tx_skeleton
+            .witnesses_mut()
+            .resize(inputs_len, Default::default());
+        tx_skeleton.witnesses_mut().push(rollup_witness);
 
         let challenger_lock_dep = self.ckb_genesis_info.sighash_dep();
         let challenger_lock = self.wallet.lock_script().to_owned();
@@ -522,7 +536,8 @@ impl Challenger {
         tx_skeleton.cell_deps_mut().extend(rollup_deps);
         tx_skeleton.inputs_mut().push(rollup_state.rollup_input());
         tx_skeleton.outputs_mut().push(rollup_output);
-        tx_skeleton.witnesses_mut().push(rollup_witness);
+        // NOTE: temporary workaround secp256k1 lock witness max size limit
+        tx_skeleton.witnesses_mut().push(WitnessArgs::default());
 
         // Challenge
         let challenge_dep = contracts_dep.challenge_cell_lock.clone().into();
@@ -593,8 +608,16 @@ impl Challenger {
             *tx_skeleton.cell_deps_mut() = deps.into_iter().cloned().collect();
         }
 
+        // Rollup action witness
+        let inputs_len = tx_skeleton.inputs().len();
+        tx_skeleton
+            .witnesses_mut()
+            .resize(inputs_len, Default::default());
+        tx_skeleton.witnesses_mut().push(rollup_witness);
+
         let owner_lock = self.wallet.lock_script().to_owned();
         fill_tx_fee(&mut tx_skeleton, &self.rpc_client.indexer, owner_lock).await?;
+
         self.wallet.sign_tx_skeleton(tx_skeleton)
     }
 

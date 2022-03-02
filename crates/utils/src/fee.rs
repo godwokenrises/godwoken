@@ -75,6 +75,13 @@ pub async fn fill_tx_fee(
             .await?;
         assert!(!cells.is_empty(), "need cells to pay fee");
 
+        let inputs_len = tx_skeleton.inputs().len();
+        let extra_witnesses = if tx_skeleton.witnesses().len() > inputs_len {
+            tx_skeleton.witnesses_mut().split_off(inputs_len)
+        } else {
+            vec![]
+        };
+
         // put cells in tx skeleton
         tx_skeleton
             .inputs_mut()
@@ -84,6 +91,12 @@ pub async fn fill_tx_fee(
                     .build();
                 InputCellInfo { input, cell }
             }));
+
+        let inputs_len = tx_skeleton.inputs().len();
+        tx_skeleton
+            .witnesses_mut()
+            .resize(inputs_len, Default::default());
+        tx_skeleton.witnesses_mut().extend(extra_witnesses);
 
         let tx_size = estimate_tx_size_with_change(tx_skeleton)?;
         let tx_fee = calculate_required_tx_fee(tx_size);

@@ -741,11 +741,12 @@ impl BlockProducer {
         };
 
         // witnesses
-        tx_skeleton.witnesses_mut().push(
-            WitnessArgs::new_builder()
-                .output_type(Some(rollup_action.as_bytes()).pack())
-                .build(),
-        );
+        // NOTE: ckb system script secp256k1 lock limit witness size to 32KB.
+        // As temporary workaround, We have to pass rollup action witness after all inputs.
+        let rollup_action_witness = WitnessArgs::new_builder()
+            .output_type(Some(rollup_action.as_bytes()).pack())
+            .build();
+        tx_skeleton.witnesses_mut().push(WitnessArgs::default());
 
         // output
         let output_data = global_state.as_bytes();
@@ -931,6 +932,13 @@ impl BlockProducer {
             *tx_skeleton.cell_deps_mut() = deps.into_iter().cloned().collect();
         }
 
+        // Pass rollup action witness
+        let inputs_len = tx_skeleton.inputs().len();
+        tx_skeleton
+            .witnesses_mut()
+            .resize(inputs_len, Default::default());
+        tx_skeleton.witnesses_mut().push(rollup_action_witness);
+
         // tx fee cell
         fill_tx_fee(
             &mut tx_skeleton,
@@ -943,6 +951,7 @@ impl BlockProducer {
             tx_skeleton.inputs().len(),
             "check duplicated inputs"
         );
+
         // sign
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
         log::debug!("final tx size: {}", tx.as_slice().len());

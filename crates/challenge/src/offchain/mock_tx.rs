@@ -100,7 +100,7 @@ pub fn mock_cancel_challenge_tx(
     tx_skeleton.cell_deps_mut().extend(rollup_deps);
     tx_skeleton.inputs_mut().push(rollup_input);
     tx_skeleton.outputs_mut().push(rollup_output);
-    tx_skeleton.witnesses_mut().push(rollup_witness);
+    tx_skeleton.witnesses_mut().push(Default::default());
 
     // Challenge
     inputs.push(challenge_input.clone());
@@ -172,6 +172,13 @@ pub fn mock_cancel_challenge_tx(
         let deps: HashSet<_> = tx_skeleton.cell_deps_mut().iter().collect();
         *tx_skeleton.cell_deps_mut() = deps.into_iter().cloned().collect();
     }
+
+    // Rollup action witness
+    let inputs_len = tx_skeleton.inputs().len();
+    tx_skeleton
+        .witnesses_mut()
+        .resize(inputs_len, Default::default());
+    tx_skeleton.witnesses_mut().push(rollup_witness);
 
     let owner_lock = mock_rollup.wallet.lock_script().to_owned();
     mock_rollup.fill_tx_fee(&mut tx_skeleton, owner_lock)?;
@@ -377,6 +384,14 @@ impl MockRollup {
         while required_fee > 0 {
             // to filter used input cells
             tx_skeleton.inputs_mut().push(self.mock_owner_cell());
+
+            let witness_len = tx_skeleton.witnesses().len();
+            // Extra witness found, insert witness before it.
+            if witness_len == tx_skeleton.inputs().len() {
+                tx_skeleton
+                    .witnesses_mut()
+                    .insert(witness_len.saturating_sub(1), Default::default());
+            }
 
             let tx_size = estimate_tx_size_with_change(tx_skeleton)?;
             let tx_fee = tx_size as u64;
