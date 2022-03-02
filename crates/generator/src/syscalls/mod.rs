@@ -7,6 +7,7 @@ use ckb_vm::{
 use gw_common::{
     blake2b::new_blake2b,
     h256_ext::H256Ext,
+    registry_address::RegistryAddress,
     state::{
         build_account_field_key, build_data_hash_key, build_script_hash_to_account_id_key,
         build_short_script_hash_to_script_hash_key, State, DEFAULT_SHORT_SCRIPT_HASH_LEN,
@@ -458,22 +459,23 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
                 // then called this syscal to record the fee only after the success of the transfer.
 
                 // fetch short script hash
-                let short_script_hash = {
-                    let short_script_hash_addr = machine.registers()[A0].to_u64();
-                    let short_script_hash_len = machine.registers()[A1].to_u64();
-                    // check short script hash len
-                    if short_script_hash_len != DEFAULT_SHORT_SCRIPT_HASH_LEN as u64 {
-                        log::error!(
-                            "unexpected script hash short length: {}",
-                            short_script_hash_len
-                        );
+                let payer_addr = {
+                    let payer_addr = machine.registers()[A0].to_u64();
+                    let payer_addr_len = machine.registers()[A1].to_u64();
+                    // addr len: 4 registry id + 4 addr len + 20 addr
+                    if payer_addr_len != 28 as u64 {
+                        log::error!("unexpected payer address length: {}", payer_addr_len);
                         return Err(VMError::Unexpected);
                     }
-                    load_bytes(
-                        machine,
-                        short_script_hash_addr,
-                        short_script_hash_len as usize,
-                    )?
+                    let payer_addr_bytes =
+                        load_bytes(machine, payer_addr, payer_addr_len as usize)?;
+                    match RegistryAddress::from_slice(&payer_addr_bytes) {
+                        Some(addr) => addr,
+                        None => {
+                            log::error!("invalid payer address");
+                            return Err(VMError::Unexpected);
+                        }
+                    }
                 };
                 let sudt_id = machine.registers()[A2].to_u8();
                 let amount = {
@@ -483,8 +485,9 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
 
                 // TODO record fee payment in the generator context
                 log::debug!(
-                    "[contract syscall: SYS_PAY_FEE] payer: {}, sudt_id: {}, amount: {}",
-                    hex::encode(&short_script_hash),
+                    "[contract syscall: SYS_PAY_FEE] payer: {}, registry_id: {}, sudt_id: {}, amount: {}",
+                    hex::encode(&payer_addr.address),
+                    payer_addr.registry_id,
                     sudt_id,
                     amount
                 );
