@@ -36,12 +36,12 @@ impl RegistryAddress {
     }
 
     pub fn write_to_slice(&self, buf: &mut [u8]) -> Result<usize, usize> {
-        if self.len() < buf.len() {
+        if self.len() > buf.len() {
             return Err(self.len());
         }
         buf[..4].copy_from_slice(&self.registry_id.to_le_bytes());
         buf[4..8].copy_from_slice(&(self.address.len() as u32).to_le_bytes());
-        buf[8..].copy_from_slice(&self.address);
+        buf[8..(8 + self.address.len())].copy_from_slice(&self.address);
         Ok(self.len())
     }
 
