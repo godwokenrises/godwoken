@@ -219,9 +219,10 @@ impl Web3Indexer {
     }
 
     fn extract_l2_block(&self, l1_transaction: &Transaction) -> Result<Option<L2Block>> {
+        let last_idx = l1_transaction.witnesses().len().saturating_sub(1);
         let witness = l1_transaction
             .witnesses()
-            .get(0)
+            .get(last_idx)
             .ok_or_else(|| anyhow!("Witness missing for L2 block!"))?;
         let witness_args = WitnessArgs::from_slice(&witness.raw_data())?;
         let rollup_action_bytes: Bytes = witness_args
