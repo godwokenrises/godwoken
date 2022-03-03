@@ -13,8 +13,7 @@ pub struct SetupConfig {
     pub cells_lock: Script,
     pub burn_lock: Script,
     pub reward_lock: Script,
-    #[serde(default)]
-    pub rollup_cell_address: Option<String>,
+    pub omni_lock_config: OmniLockConfig,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
@@ -65,6 +64,13 @@ pub struct ScriptsDeploymentResult {
     pub tron_account_lock: DeployItem,
     pub polyjuice_validator: DeployItem,
     pub eth_addr_reg_validator: DeployItem,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+pub struct OmniLockConfig {
+    pub cell_dep: CellDep,
+    pub script_type_hash: H256,
+    pub args_pubkey: Option<Vec<u8>>,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]

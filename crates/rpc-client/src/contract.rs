@@ -5,7 +5,7 @@ use std::time::Instant;
 use anyhow::{anyhow, bail, Result};
 use arc_swap::ArcSwap;
 use async_jsonrpc_client::Params as ClientParams;
-use gw_config::{BlockProducerConfig, ContractTypeScriptConfig, ContractsCellDep};
+use gw_config::{ContractTypeScriptConfig, ContractsCellDep};
 use gw_jsonrpc_types::blockchain::{CellDep, Script};
 use gw_types::packed::RollupConfig;
 use gw_types::prelude::Pack;
@@ -119,6 +119,7 @@ pub async fn query_cell_deps(
     let withdrawal_cell_lock = query("withdraw", script_config.withdrawal_lock.clone()).await?;
     let challenge_cell_lock = query("challenge", script_config.challenge_lock.clone()).await?;
     let l1_sudt_type = query("l1 sudt", script_config.l1_sudt.clone()).await?;
+    let omni_lock = query("omni", script_config.omni_lock.clone()).await?;
 
     let mut allowed_eoa_locks = HashMap::with_capacity(script_config.allowed_eoa_scripts.len());
     for (eoa_hash, eoa_script) in script_config.allowed_eoa_scripts.iter() {
@@ -141,52 +142,9 @@ pub async fn query_cell_deps(
         withdrawal_cell_lock,
         challenge_cell_lock,
         l1_sudt_type,
+        omni_lock,
         allowed_eoa_locks,
         allowed_contract_types,
-    })
-}
-
-// For old config compatibility
-#[allow(deprecated)]
-#[deprecated]
-pub async fn query_type_script_from_old_config(
-    rpc_client: &RPCClient,
-    config: &BlockProducerConfig,
-) -> Result<ContractTypeScriptConfig> {
-    let query = |contract: &'static str, cell_dep: CellDep| -> _ {
-        rpc_client.ckb.query_type_script(contract, cell_dep)
-    };
-
-    let state_validator = query("state validator", config.rollup_cell_type_dep.clone()).await?;
-    let deposit_lock = query("deposit lock", config.deposit_cell_lock_dep.clone()).await?;
-    let stake_lock = query("stake lock", config.stake_cell_lock_dep.clone()).await?;
-    let custodian_lock = query("custodian lock", config.custodian_cell_lock_dep.clone()).await?;
-    let withdrawal_lock = query("withdrawal lock", config.withdrawal_cell_lock_dep.clone()).await?;
-    let challenge_lock = query("challenge lock", config.challenge_cell_lock_dep.clone()).await?;
-    let l1_sudt = query("l1 sudt", config.l1_sudt_type_dep.clone()).await?;
-
-    let mut allowed_eoa_scripts = HashMap::with_capacity(config.allowed_eoa_deps.len());
-    for (type_hash, cell_dep) in config.allowed_eoa_deps.iter() {
-        let eoa_type_script = query("eoa", cell_dep.clone()).await?;
-        allowed_eoa_scripts.insert(type_hash.to_owned(), eoa_type_script);
-    }
-
-    let mut allowed_contract_scripts = HashMap::with_capacity(config.allowed_contract_deps.len());
-    for (type_hash, cell_dep) in config.allowed_contract_deps.iter() {
-        let contract_type_script = query("contract", cell_dep.clone()).await?;
-        allowed_contract_scripts.insert(type_hash.to_owned(), contract_type_script);
-    }
-
-    Ok(ContractTypeScriptConfig {
-        state_validator,
-        deposit_lock,
-        stake_lock,
-        custodian_lock,
-        withdrawal_lock,
-        challenge_lock,
-        l1_sudt,
-        allowed_eoa_scripts,
-        allowed_contract_scripts,
     })
 }
 

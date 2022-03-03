@@ -45,6 +45,8 @@ use utils::{cli_args, transaction::read_config};
 
 use crate::{setup::SetupArgs, sudt::account::build_l1_sudt_type_script};
 
+use self::types::OmniLockConfig;
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
@@ -135,10 +137,12 @@ async fn run_cli() -> Result<()> {
                         .help("The user rollup config json file path"),
                 )
                 .arg(
-                    Arg::with_name("rollup-cell-address")
-                        .long("rollup-cell-address")
+                    Arg::with_name("omni-lock-config-path")
+                        .long("omni-lock-config-path")
+                        .short("l")
                         .takes_value(true)
-                        .help("The rollup cell address, use address from privkey-path if not provide"),
+                        .required(true)
+                        .help("The omni lock config json file path"),
                 )
                 .arg(
                     Arg::with_name("output-path")
@@ -177,6 +181,14 @@ async fn run_cli() -> Result<()> {
                         .takes_value(true)
                         .required(true)
                         .help("The user rollup config json file path"),
+                )
+                .arg(
+                    Arg::with_name("omni-lock-config-path")
+                        .long("omni-lock-config-path")
+                        .short("l")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The omni lock config json file path"),
                 )
                 .arg(arg_privkey_path.clone())
                 .arg(
@@ -847,7 +859,7 @@ async fn run_cli() -> Result<()> {
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let user_rollup_path = Path::new(m.value_of("user-rollup-config-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
-            let rollup_cell_address = m.value_of("rollup-cell-address");
+            let omni_lock_config_path = Path::new(m.value_of("omni-lock-config-path").unwrap());
             let timestamp = m
                 .value_of("genesis-timestamp")
                 .map(|s| s.parse().expect("timestamp in milliseconds"));
@@ -861,14 +873,19 @@ async fn run_cli() -> Result<()> {
                 let content = std::fs::read(user_rollup_path)?;
                 serde_json::from_slice(&content)?
             };
+            let omni_lock_config: OmniLockConfig = {
+                let content = std::fs::read(omni_lock_config_path)?;
+                let json: serde_json::Value = serde_json::from_slice(&content)?;
+                serde_json::from_value(json["omni_lock"].clone())?
+            };
 
             let args = DeployRollupCellArgs {
                 skip_config_check,
                 privkey_path,
                 ckb_rpc_url,
-                rollup_cell_address,
                 scripts_result: &script_results,
                 user_rollup_config: &user_rollup_config,
+                omni_lock_config: &omni_lock_config,
                 timestamp,
             };
 
@@ -894,6 +911,7 @@ async fn run_cli() -> Result<()> {
             let scripts_config_path =
                 Path::new(m.value_of("scripts-deployment-config-path").unwrap());
             let server_url = m.value_of("rpc-server-url").unwrap().to_string();
+            let omni_lock_config_path = Path::new(m.value_of("omni-lock-config-path").unwrap());
 
             let rollup_result: RollupDeploymentResult = {
                 let content = std::fs::read(genesis_path)?;
@@ -911,6 +929,11 @@ async fn run_cli() -> Result<()> {
                 let content = std::fs::read(user_rollup_config_path)?;
                 serde_json::from_slice(&content)?
             };
+            let omni_lock_config: OmniLockConfig = {
+                let content = std::fs::read(omni_lock_config_path)?;
+                let json: serde_json::Value = serde_json::from_slice(&content)?;
+                serde_json::from_value(json["omni_lock"].clone())?
+            };
 
             let args = GenerateNodeConfigArgs {
                 rollup_result: &rollup_result,
@@ -922,6 +945,7 @@ async fn run_cli() -> Result<()> {
                 database_url,
                 server_url,
                 user_rollup_config: &user_rollup_config,
+                omni_lock_config: &omni_lock_config,
                 node_mode: gw_config::NodeMode::ReadOnly,
             };
 
