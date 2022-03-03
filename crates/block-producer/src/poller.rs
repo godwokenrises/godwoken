@@ -411,21 +411,8 @@ impl ChainUpdater {
     }
 
     fn extract_rollup_action(&self, tx: &Transaction) -> Result<RollupAction> {
-        let rollup_type_hash: [u8; 32] = {
-            let hash = self.rollup_type_script.calc_script_hash();
-            ckb_types::prelude::Unpack::unpack(&hash)
-        };
-
-        // find rollup state cell from outputs
-        let (i, _) = {
-            let outputs = tx.raw().outputs().into_iter();
-            let find_rollup = outputs.enumerate().find(|(_i, output)| {
-                output.type_().to_opt().map(|type_| type_.hash()) == Some(rollup_type_hash)
-            });
-            find_rollup.ok_or_else(|| anyhow!("no rollup cell found"))?
-        };
-
         let witness: Bytes = {
+            let i = tx.witnesses().len().saturating_sub(1);
             let rollup_witness = tx.witnesses().get(i).ok_or_else(|| anyhow!("no witness"))?;
             rollup_witness.unpack()
         };
