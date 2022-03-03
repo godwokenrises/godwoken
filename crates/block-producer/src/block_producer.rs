@@ -934,9 +934,7 @@ impl BlockProducer {
 
         // Pass rollup action witness
         let inputs_len = tx_skeleton.inputs().len();
-        tx_skeleton
-            .witnesses_mut()
-            .resize(inputs_len, Default::default());
+        tx_skeleton.witnesses_resize_default(inputs_len);
         tx_skeleton.witnesses_mut().push(rollup_action_witness);
 
         // tx fee cell

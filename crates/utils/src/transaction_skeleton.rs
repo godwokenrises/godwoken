@@ -74,6 +74,10 @@ impl TransactionSkeleton {
         &mut self.witnesses
     }
 
+    pub fn witnesses_resize_default(&mut self, new_len: usize) {
+        self.witnesses.resize(new_len, Default::default())
+    }
+
     pub fn add_owner_cell(&mut self, owner_cell: CellInfo) {
         self.inputs_mut().push({
             InputCellInfo {

@@ -175,9 +175,7 @@ pub fn mock_cancel_challenge_tx(
 
     // Rollup action witness
     let inputs_len = tx_skeleton.inputs().len();
-    tx_skeleton
-        .witnesses_mut()
-        .resize(inputs_len, Default::default());
+    tx_skeleton.witnesses_resize_default(inputs_len);
     tx_skeleton.witnesses_mut().push(rollup_witness);
 
     let owner_lock = mock_rollup.wallet.lock_script().to_owned();

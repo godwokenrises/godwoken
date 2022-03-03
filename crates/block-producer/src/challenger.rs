@@ -230,9 +230,7 @@ impl Challenger {
 
         // Rollup action witness
         let inputs_len = tx_skeleton.inputs().len();
-        tx_skeleton
-            .witnesses_mut()
-            .resize(inputs_len, Default::default());
+        tx_skeleton.witnesses_resize_default(inputs_len);
         tx_skeleton.witnesses_mut().push(rollup_witness);
 
         let challenger_lock_dep = self.ckb_genesis_info.sighash_dep();
@@ -466,9 +464,7 @@ impl Challenger {
 
         // Rollup action witness
         let inputs_len = tx_skeleton.inputs().len();
-        tx_skeleton
-            .witnesses_mut()
-            .resize(inputs_len, Default::default());
+        tx_skeleton.witnesses_resize_default(inputs_len);
         tx_skeleton.witnesses_mut().push(rollup_witness);
 
         let challenger_lock_dep = self.ckb_genesis_info.sighash_dep();
@@ -610,9 +606,7 @@ impl Challenger {
 
         // Rollup action witness
         let inputs_len = tx_skeleton.inputs().len();
-        tx_skeleton
-            .witnesses_mut()
-            .resize(inputs_len, Default::default());
+        tx_skeleton.witnesses_resize_default(inputs_len);
         tx_skeleton.witnesses_mut().push(rollup_witness);
 
         let owner_lock = self.wallet.lock_script().to_owned();

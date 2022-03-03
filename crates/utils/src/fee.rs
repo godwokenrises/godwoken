@@ -93,9 +93,7 @@ pub async fn fill_tx_fee(
             }));
 
         let inputs_len = tx_skeleton.inputs().len();
-        tx_skeleton
-            .witnesses_mut()
-            .resize(inputs_len, Default::default());
+        tx_skeleton.witnesses_resize_default(inputs_len);
         tx_skeleton.witnesses_mut().extend(extra_witnesses);
 
         let tx_size = estimate_tx_size_with_change(tx_skeleton)?;
