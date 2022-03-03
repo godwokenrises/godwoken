@@ -432,14 +432,16 @@ async fn test_build_unlock_to_owner_tx() {
         into_input_cell(input_stake_cell.clone()),
         into_input_cell(input_custodian_cell),
     ];
+    let witnesses = vec![Default::default(); inputs.len()];
     let mut outputs = vec![output_rollup_cell, output_stake];
     outputs.extend(generated_withdrawals.outputs.clone());
 
     let mut tx_skeleton = TransactionSkeleton::default();
     tx_skeleton.cell_deps_mut().extend(cell_deps);
     tx_skeleton.inputs_mut().extend(inputs.clone());
-    tx_skeleton.witnesses_mut().push(witness);
     tx_skeleton.outputs_mut().extend(outputs);
+    tx_skeleton.witnesses_mut().extend(witnesses);
+    tx_skeleton.witnesses_mut().push(witness);
     let tx = tx_skeleton.seal(&[], vec![]).unwrap().transaction;
 
     let tx_with_context = TxWithContext {
@@ -672,13 +674,14 @@ async fn test_build_unlock_to_owner_tx() {
             .output_type(Some(rollup_action.as_bytes()).pack())
             .build()
     };
-    let mut witnesses = vec![rollup_witness, Default::default()]; // One default for input stake cell
+    let mut witnesses = vec![Default::default(), Default::default()]; // One default for input stake cell
     witnesses.extend(reverted_withdrawals.witness_args);
 
     let mut tx_skeleton = TransactionSkeleton::default();
     tx_skeleton.cell_deps_mut().extend(cell_deps);
     tx_skeleton.inputs_mut().extend(inputs.clone());
     tx_skeleton.witnesses_mut().extend(witnesses);
+    tx_skeleton.witnesses_mut().push(rollup_witness);
     tx_skeleton.outputs_mut().extend(outputs);
     let tx = tx_skeleton.seal(&[], vec![]).unwrap().transaction;
 
