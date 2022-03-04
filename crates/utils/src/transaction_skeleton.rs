@@ -4,15 +4,57 @@ use anyhow::{anyhow, Result};
 use gw_types::{
     bytes::Bytes,
     offchain::{CellInfo, InputCellInfo},
-    packed::{CellDep, CellInput, CellOutput, OutPoint, RawTransaction, Transaction, WitnessArgs},
+    packed::{
+        CellDep, CellInput, CellOutput, OmniLockWitnessLock, OutPoint, RawTransaction, Transaction,
+        WitnessArgs,
+    },
     prelude::*,
 };
 use std::collections::{HashMap, HashSet};
+
+#[derive(Debug, Clone, Copy)]
+pub enum SignatureKind {
+    OmniLockSecp256k1,
+    GenesisSecp256k1,
+}
 
 #[derive(Clone)]
 pub struct SignatureEntry {
     pub indexes: Vec<usize>,
     pub lock_hash: [u8; 32],
+    pub kind: SignatureKind,
+}
+
+#[derive(Debug)]
+pub enum Signature {
+    OmniLockSecp256k1([u8; 65]),
+    GenesisSecp256k1([u8; 65]),
+}
+
+impl Signature {
+    pub fn new(kind: SignatureKind, sig: [u8; 65]) -> Self {
+        match kind {
+            SignatureKind::OmniLockSecp256k1 => Signature::OmniLockSecp256k1(sig),
+            SignatureKind::GenesisSecp256k1 => Signature::GenesisSecp256k1(sig),
+        }
+    }
+
+    pub fn zero_bytes_from_entry(entry: &SignatureEntry) -> Bytes {
+        let len = Self::new(entry.kind, [0u8; 65]).as_bytes().len();
+        let mut buf = Vec::new();
+        buf.resize(len, 0);
+        Bytes::from(buf)
+    }
+
+    pub fn as_bytes(&self) -> Bytes {
+        match self {
+            Signature::OmniLockSecp256k1(sig) => OmniLockWitnessLock::new_builder()
+                .signature(Some(Bytes::from(sig.to_vec())).pack())
+                .build()
+                .as_bytes(),
+            Signature::GenesisSecp256k1(sig) => Bytes::from(sig.to_vec()),
+        }
+    }
 }
 
 pub struct SealedTransaction {
@@ -43,9 +85,17 @@ pub struct TransactionSkeleton {
     cell_deps: Vec<CellDep>,
     witnesses: Vec<WitnessArgs>,
     cell_outputs: Vec<(CellOutput, Bytes)>,
+    omni_lock_code_hash: Option<[u8; 32]>,
 }
 
 impl TransactionSkeleton {
+    pub fn new(omni_lock_code_hash: [u8; 32]) -> Self {
+        TransactionSkeleton {
+            omni_lock_code_hash: Some(omni_lock_code_hash),
+            ..Default::default()
+        }
+    }
+
     pub fn inputs(&self) -> &Vec<InputCellInfo> {
         &self.inputs
     }
@@ -74,6 +124,10 @@ impl TransactionSkeleton {
         &mut self.witnesses
     }
 
+    pub fn omni_lock_code_hash(&self) -> Option<&[u8; 32]> {
+        self.omni_lock_code_hash.as_ref()
+    }
+
     pub fn add_owner_cell(&mut self, owner_cell: CellInfo) {
         self.inputs_mut().push({
             InputCellInfo {
@@ -97,10 +151,17 @@ impl TransactionSkeleton {
                 }
             }
 
-            let lock_hash = input.cell.output.lock().hash();
+            let lock = input.cell.output.lock();
+            let lock_hash = lock.hash();
+            let kind = if Some(lock.code_hash().unpack()) == self.omni_lock_code_hash {
+                SignatureKind::OmniLockSecp256k1
+            } else {
+                SignatureKind::GenesisSecp256k1
+            };
             let entry = entries.entry(lock_hash).or_insert_with(|| SignatureEntry {
                 lock_hash,
                 indexes: Vec::new(),
+                kind,
             });
             entry.indexes.push(index);
         }
@@ -111,7 +172,7 @@ impl TransactionSkeleton {
     pub fn seal(
         &self,
         entries: &[SignatureEntry],
-        signatures: Vec<[u8; 65]>,
+        signatures: Vec<Bytes>,
     ) -> Result<SealedTransaction> {
         assert_eq!(entries.len(), signatures.len());
         // build raw tx
@@ -153,10 +214,11 @@ impl TransactionSkeleton {
                     entry.indexes[0]
                 ));
             }
+
             *witness_args = witness_args
                 .to_owned()
                 .as_builder()
-                .lock(Some(Bytes::from(signature.to_vec())).pack())
+                .lock(Some(signature).pack())
                 .build();
         }
 
@@ -199,10 +261,9 @@ impl TransactionSkeleton {
 
     pub fn tx_in_block_size(&self) -> Result<usize> {
         let entries = self.signature_entries();
-        let dummy_signatures = {
-            let mut dummy_signatures = Vec::with_capacity(entries.len());
-            dummy_signatures.resize(entries.len(), [0u8; 65]);
-            dummy_signatures
+        let dummy_signatures: Vec<_> = {
+            let entries = entries.iter();
+            entries.map(Signature::zero_bytes_from_entry).collect()
         };
         let sealed_tx = self.seal(&entries, dummy_signatures)?;
         // tx size + 4 in block serialization cost

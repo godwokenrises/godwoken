@@ -422,6 +422,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
 
     // 2. build rollup cell (with type id)
     const OMNI_LOCK_IDENTITY_FLAGS_PUBKEY_HASH: u8 = 0;
+    const OMNI_LOCK_FLAG_OWNER_PUBKEY_HASH_ONLY: u8 = 0;
     let (rollup_output, rollup_data): (ckb_packed::CellOutput, Bytes) = {
         let data = genesis_with_global_state.global_state.as_bytes();
         let omni_lock = {
@@ -436,6 +437,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
                 let mut buf = BytesMut::new();
                 buf.put_u8(OMNI_LOCK_IDENTITY_FLAGS_PUBKEY_HASH);
                 buf.put(args_pubkey.as_ref());
+                buf.put_u8(OMNI_LOCK_FLAG_OWNER_PUBKEY_HASH_ONLY);
                 CKBPack::pack(&buf.freeze())
             };
             ckb_packed::Script::new_builder()

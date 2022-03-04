@@ -664,7 +664,9 @@ impl BlockProducer {
         } = args;
 
         let rollup_context = self.generator.rollup_context();
-        let mut tx_skeleton = TransactionSkeleton::default();
+        let omni_lock_code_hash = self.contracts_dep_manager.load_scripts().omni_lock.hash();
+        let mut tx_skeleton = TransactionSkeleton::new(omni_lock_code_hash.0);
+
         // rollup cell
         tx_skeleton.inputs_mut().push(InputCellInfo {
             input: CellInput::new_builder()
@@ -693,6 +695,10 @@ impl BlockProducer {
         tx_skeleton
             .cell_deps_mut()
             .push(self.ckb_genesis_info.sighash_dep());
+        // omni lock
+        tx_skeleton
+            .cell_deps_mut()
+            .push(contracts_dep.omni_lock.clone().into());
 
         // Package pending revert withdrawals and custodians
         let db = { self.chain.lock().await.store().begin_transaction() };

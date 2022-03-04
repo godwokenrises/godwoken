@@ -41,6 +41,10 @@ impl ContractsCellDepManager {
         self.deps.load()
     }
 
+    pub fn load_scripts(&self) -> &ContractTypeScriptConfig {
+        &self.scripts
+    }
+
     pub async fn refresh(&self) -> Result<()> {
         log::info!("[contracts dep] refresh");
 
