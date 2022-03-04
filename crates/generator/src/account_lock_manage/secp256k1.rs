@@ -517,7 +517,7 @@ mod tests {
             .args(Bytes::from(polyjuice_args).pack())
             .build();
         let mut signature = [0u8; 65];
-        signature.copy_from_slice(&hex::decode("239ff31262bb6664d1857ea3bc5eecf3a4f74e32537c81de9fa1df2a2a48ef63115ffd8d6f5b4cc60b0fd4b02ab641106d024e49a9c0a9657c99361b39ce31ec00").expect("hex decode"));
+        signature.copy_from_slice(&hex::decode("87365fe2442f7773ebfe74963e7e09cd928cec7e9bc373d3dac901ca9fef16431c0ad18738a75de8c2844493c2b18d112146cebb3a2106f2edb41c4ec5f31d0c00").expect("hex decode"));
         let tx = L2Transaction::new_builder()
             .raw(raw_tx)
             .signature(signature.to_vec().pack())
@@ -529,7 +529,7 @@ mod tests {
         let mut sender_args = vec![];
         sender_args.extend(&rollup_type_hash);
         sender_args
-            .extend(&hex::decode("9d8A62f656a8d1615C1294fd71e9CFb3E4855A4F").expect("hex decode"));
+            .extend(&hex::decode("0000a7ce68e7328ecf2c83b103b50c68cf60ae3a").expect("hex decode"));
         let sender_script = Script::new_builder()
             .args(Bytes::from(sender_args).pack())
             .build();
@@ -537,6 +537,7 @@ mod tests {
         let mut receiver_args = vec![];
         receiver_args.extend(&rollup_type_hash);
         receiver_args.extend(&23u32.to_le_bytes());
+        receiver_args.extend(&[42u8; 20]);
         let receiver_script = Script::new_builder()
             .args(Bytes::from(receiver_args).pack())
             .build();
@@ -568,7 +569,7 @@ mod tests {
             .args(Bytes::from(polyjuice_args).pack())
             .build();
         let mut signature = [0u8; 65];
-        signature.copy_from_slice(&hex::decode("c49f65d9aad3b417f7d04a5e9c458b3308556bdff5a625bf65bfdadd11a18bb004bdb522991ae8648d6a1332a09576c90c93e6f9ea101bf8b5b3a7523958b50800").expect("hex decode"));
+        signature.copy_from_slice(&hex::decode("3861489cb072a86a97a745f225dddef4885349169da8feb24a6439279c62da2862edb554be68bfeb1381b37392a2ae42df8591950c9a678f675c598c33a1ec3b00").expect("hex decode"));
         let tx = L2Transaction::new_builder()
             .raw(raw_tx)
             .signature(signature.to_vec().pack())
@@ -595,6 +596,7 @@ mod tests {
         let mut receiver_args = vec![];
         receiver_args.extend(&rollup_type_hash);
         receiver_args.extend(&23u32.to_le_bytes());
+        receiver_args.extend(&[11u8; 20]);
         let receiver_script = Script::new_builder()
             .args(Bytes::from(receiver_args).pack())
             .build();
@@ -602,6 +604,7 @@ mod tests {
             rollup_script_hash: Default::default(),
             rollup_config: Default::default(),
         };
+
         eth.verify_tx(&ctx, sender_script, receiver_script, tx)
             .expect("verify signature");
     }
