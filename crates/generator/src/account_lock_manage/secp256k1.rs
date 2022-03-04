@@ -437,19 +437,20 @@ fn try_assemble_polyjuice_args(
         // For contract calling, chain id is read from scrpit args of
         // receiver_script, see the following link for more details:
         // https://github.com/nervosnetwork/godwoken-polyjuice#normal-contract-account-script
-        if receiver_script.args().len() < 36 {
+
+        // NOTICE: this is a tempory solution, we should query it from state
+        let args: Bytes = receiver_script.args().unpack();
+        if args.len() != 56 {
+            log::error!("invalid ETH contract script args len: {}", args.len());
             return None;
         }
         let polyjuice_chain_id = {
             let mut data = [0u8; 4];
-            data.copy_from_slice(&receiver_script.args().raw_data()[32..36]);
+            data.copy_from_slice(&args[32..36]);
             u32::from_le_bytes(data)
         };
-        let mut to = vec![0u8; 20];
-        let receiver_hash = receiver_script.hash();
-        to[0..16].copy_from_slice(&receiver_hash[0..16]);
-        let to_id: u32 = raw_tx.to_id().unpack();
-        to[16..20].copy_from_slice(&to_id.to_le_bytes());
+        let to = args[36..].to_vec();
+        assert_eq!(to.len(), 20, "eth address");
         (to, polyjuice_chain_id)
     };
     stream.append(&to);
