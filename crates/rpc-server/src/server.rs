@@ -46,8 +46,10 @@ pub async fn start_jsonrpc_server(
     log::info!("JSONRPC server listening on {}", url);
 
     // Start a hyper server.
-    let server =
-        Server::builder(AddrIncoming::from_listener(listener)?).serve(make_service_fn(move |_| {
+    let server = Server::builder(AddrIncoming::from_listener(listener)?)
+        //Make sure the connection from web3 client could be keep-alive for 2 hours.
+        .tcp_keepalive(Some(Duration::from_secs(7200)))
+        .serve(make_service_fn(move |_| {
             let rpc_server = Arc::clone(&rpc_server);
             async { Ok::<_, Error>(service_fn(move |req| serve(Arc::clone(&rpc_server), req))) }
         }));
