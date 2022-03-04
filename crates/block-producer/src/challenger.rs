@@ -205,7 +205,8 @@ impl Challenger {
         let challenge_output = enter_challenge.build_output();
 
         // Build challenge transaction
-        let mut tx_skeleton = TransactionSkeleton::default();
+        let omni_lock_code_hash = self.contracts_dep_manager.load_scripts().omni_lock.hash();
+        let mut tx_skeleton = TransactionSkeleton::new(omni_lock_code_hash.0);
         let contracts_dep = self.contracts_dep_manager.load();
 
         // Rollup
@@ -420,7 +421,8 @@ impl Challenger {
         let revert_output = revert.build_output()?;
 
         // Build revert transaction
-        let mut tx_skeleton = TransactionSkeleton::default();
+        let omni_lock_code_hash = self.contracts_dep_manager.load_scripts().omni_lock.hash();
+        let mut tx_skeleton = TransactionSkeleton::new(omni_lock_code_hash.0);
         let contracts_dep = self.contracts_dep_manager.load();
 
         // Rollup
@@ -505,7 +507,8 @@ impl Challenger {
         challenge_input: InputCellInfo,
         verifier_context: VerifierContext,
     ) -> Result<Transaction> {
-        let mut tx_skeleton = TransactionSkeleton::default();
+        let omni_lock_code_hash = self.contracts_dep_manager.load_scripts().omni_lock.hash();
+        let mut tx_skeleton = TransactionSkeleton::new(omni_lock_code_hash.0);
         let contracts_dep = self.contracts_dep_manager.load();
 
         // Rollup
