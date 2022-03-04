@@ -74,7 +74,11 @@ pub fn mock_cancel_challenge_tx(
     let verifier_context = VerifierContext::mock_from(&mut cancel_output, &contracts_dep)?;
     let contracts_dep = mock_rollup.contracts_dep_manager.load();
 
-    let mut tx_skeleton = TransactionSkeleton::default();
+    let omni_lock_code_hash = {
+        let scripts = mock_rollup.contracts_dep_manager.load_scripts();
+        scripts.omni_lock.hash()
+    };
+    let mut tx_skeleton = TransactionSkeleton::new(omni_lock_code_hash.0);
     let mut cell_deps = Vec::new();
     let mut inputs = Vec::new();
 
@@ -90,6 +94,7 @@ pub fn mock_cancel_challenge_tx(
     let rollup_deps = vec![
         contracts_dep.rollup_cell_type.clone().into(),
         mock_rollup.config.rollup_config_cell_dep.clone().into(),
+        contracts_dep.omni_lock.clone().into(),
     ];
     let rollup_output = (
         rollup_input.cell.output.clone(),
