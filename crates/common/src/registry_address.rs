@@ -21,12 +21,12 @@ impl RegistryAddress {
         }
         let registry_id = u32::from_le_bytes(slice[..4].try_into().unwrap());
         let address_len = u32::from_le_bytes(slice[4..8].try_into().unwrap());
-        if slice.len() != (8 + address_len) as usize {
+        if slice.len() < (8 + address_len) as usize {
             return None;
         }
         let reg_addr = RegistryAddress {
             registry_id,
-            address: slice[8..].to_vec(),
+            address: slice[8..(8 + address_len as usize)].to_vec(),
         };
         Some(reg_addr)
     }
