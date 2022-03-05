@@ -426,8 +426,8 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
     let (rollup_output, rollup_data): (ckb_packed::CellOutput, Bytes) = {
         let data = genesis_with_global_state.global_state.as_bytes();
         let omni_lock = {
-            let args_pubkey = match omni_lock_config.args_pubkey.clone() {
-                Some(args) => args,
+            let pubkey_h160 = match omni_lock_config.pubkey_h160 {
+                Some(h160) => Bytes::copy_from_slice(&h160),
                 // Use pubkey from deploy privkey
                 None => ckb_packed::Script::from(&owner_address_payload)
                     .args()
@@ -436,7 +436,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
             let args = {
                 let mut buf = BytesMut::new();
                 buf.put_u8(OMNI_LOCK_IDENTITY_FLAGS_PUBKEY_HASH);
-                buf.put(args_pubkey.as_ref());
+                buf.put(pubkey_h160.as_ref());
                 buf.put_u8(OMNI_LOCK_FLAG_OWNER_PUBKEY_HASH_ONLY);
                 CKBPack::pack(&buf.freeze())
             };

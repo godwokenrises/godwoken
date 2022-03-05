@@ -70,7 +70,7 @@ pub struct ScriptsDeploymentResult {
 pub struct OmniLockConfig {
     pub cell_dep: CellDep,
     pub script_type_hash: H256,
-    pub args_pubkey: Option<Vec<u8>>,
+    pub pubkey_h160: Option<[u8; 20]>,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
