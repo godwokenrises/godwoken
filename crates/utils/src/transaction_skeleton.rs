@@ -27,14 +27,18 @@ pub struct SignatureEntry {
 
 #[derive(Debug)]
 pub enum Signature {
-    OmniLockSecp256k1([u8; 65]),
+    OmniLockSecp256k1(OmniLockWitnessLock),
     GenesisSecp256k1([u8; 65]),
 }
 
 impl Signature {
     pub fn new(kind: SignatureKind, sig: [u8; 65]) -> Self {
         match kind {
-            SignatureKind::OmniLockSecp256k1 => Signature::OmniLockSecp256k1(sig),
+            SignatureKind::OmniLockSecp256k1 => Signature::OmniLockSecp256k1(
+                OmniLockWitnessLock::new_builder()
+                    .signature(Some(Bytes::from(sig.to_vec())).pack())
+                    .build(),
+            ),
             SignatureKind::GenesisSecp256k1 => Signature::GenesisSecp256k1(sig),
         }
     }
@@ -48,10 +52,7 @@ impl Signature {
 
     pub fn as_bytes(&self) -> Bytes {
         match self {
-            Signature::OmniLockSecp256k1(sig) => OmniLockWitnessLock::new_builder()
-                .signature(Some(Bytes::from(sig.to_vec())).pack())
-                .build()
-                .as_bytes(),
+            Signature::OmniLockSecp256k1(sig) => sig.as_bytes(),
             Signature::GenesisSecp256k1(sig) => Bytes::from(sig.to_vec()),
         }
     }
