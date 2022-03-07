@@ -178,11 +178,11 @@ table DepositLockArgs {
 // --- custodian lock ---
 // a rollup_type_hash exists before this args, to make args friendly to prefix search
 table CustodianLockArgs {
+    deposit_block_hash: Byte32,
+    deposit_block_number: Uint64,
     // used for revert this cell to deposit request cell
     // after finalize, this lock is meaningless
     deposit_lock_args: DepositLockArgs,
-    deposit_block_hash: Byte32,
-    deposit_block_number: Uint64,
 }
 
 struct UnlockCustodianViaRevertWitness {
