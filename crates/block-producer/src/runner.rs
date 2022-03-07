@@ -277,7 +277,6 @@ pub struct BaseInitComponents {
 }
 
 impl BaseInitComponents {
-    #[allow(deprecated)]
     pub async fn init(config: &Config, skip_config_check: bool) -> Result<Self> {
         let rollup_config: RollupConfig = config.genesis.rollup_config.clone().into();
         let rollup_context = RollupContext {
@@ -303,20 +302,12 @@ impl BaseInitComponents {
 
         let opt_block_producer_config = config.block_producer.as_ref();
         let mut contracts_dep_manager = None;
-        if let Some(block_producer_config) = opt_block_producer_config {
-            use gw_rpc_client::contract::{check_script, query_type_script_from_old_config};
-            let mut script_config = config.consensus.contract_type_scripts.clone();
+        if opt_block_producer_config.is_some() {
+            use gw_rpc_client::contract::check_script;
+            let script_config = config.consensus.contract_type_scripts.clone();
             let rollup_type_script = &config.chain.rollup_type_script;
 
-            if check_script(&script_config, &rollup_config, rollup_type_script).is_err() {
-                let now = Instant::now();
-                script_config =
-                    query_type_script_from_old_config(&rpc_client, block_producer_config).await?;
-                log::trace!("[contracts dep] old config {}ms", now.elapsed().as_millis());
-
-                check_script(&script_config, &rollup_config, rollup_type_script)?;
-            }
-
+            check_script(&script_config, &rollup_config, rollup_type_script)?;
             contracts_dep_manager =
                 Some(ContractsCellDepManager::build(rpc_client.clone(), script_config).await?);
         }

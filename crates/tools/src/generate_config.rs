@@ -1,9 +1,11 @@
 use crate::deploy_genesis::get_secp_data;
 use crate::setup::get_wallet_info;
 use crate::types::{
-    BuildScriptsResult, RollupDeploymentResult, ScriptsDeploymentResult, UserRollupConfig,
+    BuildScriptsResult, OmniLockConfig, RollupDeploymentResult, ScriptsDeploymentResult,
+    UserRollupConfig,
 };
 use anyhow::{anyhow, Result};
+use ckb_jsonrpc_types::CellDep;
 use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::{Builder, Entity};
 use gw_config::{
@@ -28,6 +30,7 @@ pub struct GenerateNodeConfigArgs<'a> {
     pub build_scripts_result: &'a BuildScriptsResult,
     pub server_url: String,
     pub user_rollup_config: &'a UserRollupConfig,
+    pub omni_lock_config: &'a OmniLockConfig,
     pub node_mode: NodeMode,
 }
 
@@ -42,6 +45,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         build_scripts_result,
         server_url,
         user_rollup_config,
+        omni_lock_config,
         node_mode,
     } = args;
 
@@ -103,10 +107,14 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         get_secp_data(&mut rpc_client).map_err(|err| anyhow!("get secp data {}", err))?;
 
     let ckb_client = CKBClient::with_url(&ckb_url)?;
-    let contract_type_scripts =
-        query_contracts_script(&ckb_client, scripts_deployment, user_rollup_config)
-            .await
-            .map_err(|err| anyhow!("query contracts script {}", err))?;
+    let contract_type_scripts = query_contracts_script(
+        &ckb_client,
+        scripts_deployment,
+        user_rollup_config,
+        omni_lock_config,
+    )
+    .await
+    .map_err(|err| anyhow!("query contracts script {}", err))?;
 
     let challenger_config = ChallengerConfig {
         rewards_receiver_lock: {
@@ -200,7 +208,6 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         wallet_config,
         check_mem_block_before_submit: false,
         withdrawal_unlocker_wallet_config: None,
-        ..Default::default()
     });
     let genesis: GenesisConfig = GenesisConfig {
         timestamp: rollup_result.timestamp,
@@ -256,9 +263,8 @@ async fn query_contracts_script(
     ckb_client: &CKBClient,
     deployment: &ScriptsDeploymentResult,
     user_rollup_config: &UserRollupConfig,
+    omni_lock_config: &OmniLockConfig,
 ) -> Result<ContractTypeScriptConfig> {
-    use ckb_jsonrpc_types::CellDep;
-
     let query = |contract: &'static str, cell_dep: CellDep| -> _ {
         ckb_client.query_type_script(contract, cell_dep.into())
     };
@@ -362,6 +368,9 @@ async fn query_contracts_script(
         (eth_addr_reg_validator.hash(), eth_addr_reg_validator),
     ]);
 
+    let omni_lock = query("omni lock", omni_lock_config.cell_dep.clone()).await?;
+    assert_eq!(omni_lock.hash(), omni_lock_config.script_type_hash);
+
     Ok(ContractTypeScriptConfig {
         state_validator,
         deposit_lock,
@@ -370,6 +379,7 @@ async fn query_contracts_script(
         withdrawal_lock,
         challenge_lock,
         l1_sudt,
+        omni_lock,
         allowed_eoa_scripts,
         allowed_contract_scripts,
     })

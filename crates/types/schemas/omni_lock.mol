@@ -1,0 +1,17 @@
+import blockchain;
+import xudt_rce;
+
+array Auth[byte; 21];
+
+table Identity {
+    identity: Auth,
+    proofs: SmtProofEntryVec,
+}
+option IdentityOpt (Identity);
+
+// the data structure used in lock field of witness
+table OmniLockWitnessLock {
+    signature: BytesOpt,
+    omni_identity: IdentityOpt,
+    preimage: BytesOpt,
+}

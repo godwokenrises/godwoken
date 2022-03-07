@@ -50,6 +50,13 @@ fn main() {
     #[cfg(feature = "std")]
     {
         build::check_molecule_version();
-        build::generate_molecule(&["blockchain", "godwoken", "store", "mem_block"]);
+        build::generate_molecule(&[
+            "blockchain",
+            "godwoken",
+            "store",
+            "mem_block",
+            "omni_lock",
+            "xudt_rce",
+        ]);
     }
 }

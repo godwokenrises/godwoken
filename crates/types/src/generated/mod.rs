@@ -14,6 +14,14 @@ mod store;
 #[allow(clippy::all)]
 mod mem_block;
 
+#[cfg(feature = "std")]
+#[allow(clippy::all)]
+mod omni_lock;
+
+#[cfg(feature = "std")]
+#[allow(clippy::all)]
+mod xudt_rce;
+
 pub mod packed {
     pub use molecule::prelude::{Byte, ByteReader};
 
@@ -21,6 +29,8 @@ pub mod packed {
     pub use super::godwoken::*;
     #[cfg(feature = "std")]
     pub use super::mem_block::*;
+    #[cfg(feature = "std")]
+    pub use super::omni_lock::*;
     #[cfg(feature = "std")]
     pub use super::store::*;
 }

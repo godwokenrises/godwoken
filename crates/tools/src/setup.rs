@@ -137,7 +137,7 @@ pub async fn setup(args: SetupArgs<'_>) {
             ckb_rpc_url,
             scripts_result: &deploy_scripts_result,
             user_rollup_config: &rollup_config,
-            rollup_cell_address: setup_config.rollup_cell_address.as_deref(),
+            omni_lock_config: &setup_config.omni_lock_config,
             timestamp: None,
             skip_config_check: false,
         };
@@ -170,6 +170,7 @@ pub async fn setup(args: SetupArgs<'_>) {
             build_scripts_result: &build_scripts_result,
             server_url: server_url.to_string(),
             user_rollup_config: &rollup_config,
+            omni_lock_config: &setup_config.omni_lock_config,
             node_mode,
         };
         let config = generate_node_config(args).await.expect("generate_config");

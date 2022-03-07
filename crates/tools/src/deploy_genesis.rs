@@ -3,6 +3,7 @@ use std::str::FromStr;
 use std::{collections::HashSet, path::Path};
 
 use anyhow::{anyhow, Result};
+use ckb_types::bytes::{BufMut, BytesMut};
 use tempfile::NamedTempFile;
 
 use ckb_fixed_hash::H256;
@@ -36,7 +37,9 @@ use gw_types::{
     prelude::PackVec as GwPackVec,
 };
 
-use crate::types::{RollupDeploymentResult, ScriptsDeploymentResult, UserRollupConfig};
+use crate::types::{
+    OmniLockConfig, RollupDeploymentResult, ScriptsDeploymentResult, UserRollupConfig,
+};
 use crate::utils::transaction::{get_network_type, run_cmd, wait_for_tx};
 
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -171,7 +174,7 @@ pub struct DeployRollupCellArgs<'a> {
     pub ckb_rpc_url: &'a str,
     pub scripts_result: &'a ScriptsDeploymentResult,
     pub user_rollup_config: &'a UserRollupConfig,
-    pub rollup_cell_address: Option<&'a str>,
+    pub omni_lock_config: &'a OmniLockConfig,
     pub timestamp: Option<u64>,
     pub skip_config_check: bool,
 }
@@ -182,7 +185,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
         ckb_rpc_url,
         scripts_result,
         user_rollup_config,
-        rollup_cell_address,
+        omni_lock_config,
         timestamp,
         skip_config_check,
     } = args;
@@ -221,7 +224,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
         .map_err(|err| anyhow!("Invalid secp256k1 secret key format, error: {}", err))?;
     let pubkey = secp256k1::PublicKey::from_secret_key(&SECP256K1, &privkey);
     let owner_address_payload = AddressPayload::from_pubkey(&pubkey);
-    let owner_address = Address::new(network_type, owner_address_payload);
+    let owner_address = Address::new(network_type, owner_address_payload.clone());
     let owner_address_string = owner_address.to_string();
     let max_mature_number = get_max_mature_number(&mut rpc_client)?;
     let genesis_block: BlockView = rpc_client
@@ -418,16 +421,33 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
     let genesis_with_global_state = build_genesis(&genesis_config, secp_data)?;
 
     // 2. build rollup cell (with type id)
+    const OMNI_LOCK_IDENTITY_FLAGS_PUBKEY_HASH: u8 = 0;
+    const OMNI_LOCK_FLAG_OWNER_PUBKEY_HASH_ONLY: u8 = 0;
     let (rollup_output, rollup_data): (ckb_packed::CellOutput, Bytes) = {
         let data = genesis_with_global_state.global_state.as_bytes();
-        let lock_script = {
-            let rollup_cell_address = rollup_cell_address.unwrap_or(&owner_address_string);
-            let address = Address::from_str(rollup_cell_address).map_err(|err| anyhow!(err))?;
-            let payload = address.payload();
-            ckb_types::packed::Script::from(payload)
+        let omni_lock = {
+            let pubkey_h160 = match omni_lock_config.pubkey_h160 {
+                Some(h160) => Bytes::copy_from_slice(&h160),
+                // Use pubkey from deploy privkey
+                None => ckb_packed::Script::from(&owner_address_payload)
+                    .args()
+                    .unpack(),
+            };
+            let args = {
+                let mut buf = BytesMut::new();
+                buf.put_u8(OMNI_LOCK_IDENTITY_FLAGS_PUBKEY_HASH);
+                buf.put(pubkey_h160.as_ref());
+                buf.put_u8(OMNI_LOCK_FLAG_OWNER_PUBKEY_HASH_ONLY);
+                CKBPack::pack(&buf.freeze())
+            };
+            ckb_packed::Script::new_builder()
+                .code_hash(CKBPack::pack(&omni_lock_config.script_type_hash))
+                .hash_type(ScriptHashType::Type.into())
+                .args(args)
+                .build()
         };
         let output = ckb_packed::CellOutput::new_builder()
-            .lock(lock_script)
+            .lock(omni_lock)
             .type_(CKBPack::pack(&Some(rollup_type_script.clone())))
             .build();
         let output = fit_output_capacity(output, data.len());

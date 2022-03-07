@@ -11,7 +11,7 @@ use gw_types::{
 };
 use sha3::{Digest, Keccak256};
 
-use crate::transaction_skeleton::TransactionSkeleton;
+use crate::transaction_skeleton::{Signature, TransactionSkeleton};
 
 pub struct Wallet {
     privkey: Privkey,
@@ -67,11 +67,11 @@ impl Wallet {
 
     pub fn sign_tx_skeleton(&self, tx_skeleton: TransactionSkeleton) -> Result<Transaction> {
         let signature_entries = tx_skeleton.signature_entries();
-        let dummy_signatures = {
-            let mut sigs = Vec::new();
-            sigs.resize(signature_entries.len(), [0u8; 65]);
-            sigs
+        let dummy_signatures: Vec<_> = {
+            let entries = signature_entries.iter();
+            entries.map(Signature::zero_bytes_from_entry).collect()
         };
+
         // seal a dummy tx for calculation
         let tx = tx_skeleton
             .seal(&signature_entries, dummy_signatures)?
@@ -111,8 +111,8 @@ impl Wallet {
             let mut message = [0u8; 32];
             hasher.finalize(&mut message);
             // sign tx
-            let signature = self.sign_message(message)?;
-            signatures.push(signature);
+            let signature = Signature::new(entry.kind, self.sign_message(message)?);
+            signatures.push(signature.as_bytes());
         }
         // seal
         let sealed_tx = tx_skeleton.seal(&signature_entries, signatures)?;
