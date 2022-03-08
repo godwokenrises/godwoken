@@ -309,6 +309,7 @@ fn generate_script_deploy_config(
         withdrawal_lock: get_path("withdrawal_lock"),
         challenge_lock: get_path("challenge_lock"),
         stake_lock: get_path("stake_lock"),
+        omni_lock: get_path("omni_lock"),
         state_validator: get_path("state_validator"),
         l2_sudt_validator: get_path("l2_sudt_validator"),
         eth_account_lock: get_path("eth_account_lock"),

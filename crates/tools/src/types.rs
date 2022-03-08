@@ -57,6 +57,7 @@ pub struct ScriptsDeploymentResult {
     pub withdrawal_lock: DeployItem,
     pub challenge_lock: DeployItem,
     pub stake_lock: DeployItem,
+    pub omni_lock: DeployItem,
     pub state_validator: DeployItem,
     pub meta_contract_validator: DeployItem,
     pub l2_sudt_validator: DeployItem,
@@ -92,6 +93,8 @@ pub struct Programs {
     pub challenge_lock: PathBuf,
     // path: godwoken-scripts/build/release/stake-lock
     pub stake_lock: PathBuf,
+    // path: godwoken-scripts/build/release/omni_lock
+    pub omni_lock: PathBuf,
     // path: godwoken-scripts/build/release/state-validator
     pub state_validator: PathBuf,
     // path: godwoken-scripts/c/build/sudt-validator
