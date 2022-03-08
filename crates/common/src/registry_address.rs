@@ -35,6 +35,10 @@ impl RegistryAddress {
         8 + self.address.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.address.len() == 0
+    }
+
     pub fn write_to_slice(&self, buf: &mut [u8]) -> Result<usize, usize> {
         if self.len() > buf.len() {
             return Err(self.len());

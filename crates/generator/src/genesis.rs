@@ -2,7 +2,7 @@ use crate::traits::StateExt;
 use anyhow::Result;
 use gw_common::{
     blake2b::new_blake2b,
-    builtins::{CKB_SUDT_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
+    builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
     smt::H256,
     state::State,
     CKB_SUDT_SCRIPT_ARGS,
@@ -90,6 +90,26 @@ pub fn build_genesis_from_store(
     assert_eq!(
         ckb_sudt_id, CKB_SUDT_ACCOUNT_ID,
         "ckb simple UDT account id"
+    );
+
+    // setup ETH registry contract
+    let eth_registry_id = tree.create_account_from_script(
+        Script::new_builder()
+            .code_hash({
+                let code_hash: [u8; 32] = config.eth_registry_validator_type_hash.clone().into();
+                code_hash.pack()
+            })
+            .hash_type(ScriptHashType::Type.into())
+            .args({
+                let rollup_script_hash: [u8; 32] = rollup_context.rollup_script_hash.into();
+                Bytes::from(rollup_script_hash.to_vec()).pack()
+            })
+            .build(),
+    )?;
+    assert_eq!(
+        eth_registry_id, ETH_REGISTRY_ACCOUNT_ID,
+        "eth registry id must be {}",
+        ETH_REGISTRY_ACCOUNT_ID
     );
 
     // insert secp256k1 data

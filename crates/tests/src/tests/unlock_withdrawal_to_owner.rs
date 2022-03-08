@@ -24,7 +24,7 @@ use gw_common::sparse_merkle_tree::default_store::DefaultStore;
 use gw_common::H256;
 use gw_config::ContractsCellDep;
 use gw_types::bytes::Bytes;
-use gw_types::core::{DepType, ScriptHashType};
+use gw_types::core::{AllowedEoaType, DepType, ScriptHashType};
 use gw_types::offchain::{CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext};
 use gw_types::packed::{
     AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositRequest,
@@ -106,7 +106,11 @@ async fn test_build_unlock_to_owner_tx() {
         .deposit_script_type_hash(deposit_lock_type.hash().pack())
         .l1_sudt_script_type_hash(always_type.hash().pack())
         .allowed_eoa_type_hashes(
-            vec![AllowedTypeHash::from_unknown(*ALWAYS_SUCCESS_CODE_HASH)].pack(),
+            vec![AllowedTypeHash::new(
+                AllowedEoaType::Eth,
+                *ALWAYS_SUCCESS_CODE_HASH,
+            )]
+            .pack(),
         )
         .finality_blocks(1u64.pack())
         .build();
@@ -196,6 +200,7 @@ async fn test_build_unlock_to_owner_tx() {
             .sudt_script_hash(sudt_script.hash().pack())
             .amount(DEPOSIT_AMOUNT.pack())
             .script(account_script.to_owned())
+            .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
             .build()
     });
 
@@ -247,6 +252,7 @@ async fn test_build_unlock_to_owner_tx() {
                 .account_script_hash(account_script.hash().pack())
                 .owner_lock_hash(account_script.hash().pack())
                 .sudt_script_hash(sudt_script.hash().pack())
+                .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
                 .build();
             let req = WithdrawalRequest::new_builder().raw(raw).build();
             WithdrawalRequestExtra::new_builder()
@@ -747,7 +753,7 @@ fn into_input_cell_since(cell: CellInfo, since: u64) -> InputCellInfo {
 }
 
 fn random_always_success_script(opt_rollup_script_hash: Option<&H256>) -> Script {
-    let random_bytes: [u8; 32] = rand::random();
+    let random_bytes: [u8; 20] = rand::random();
     Script::new_builder()
         .code_hash(ALWAYS_SUCCESS_CODE_HASH.clone().pack())
         .hash_type(ScriptHashType::Data.into())

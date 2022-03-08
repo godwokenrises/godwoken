@@ -59,6 +59,7 @@ async fn pk_to_account_id(
     Ok(from_id.expect("Account id of provided privkey not found!"))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn create_sudt_account(
     rpc_client: &mut GodwokenRpcClient,
     pk: &H256,

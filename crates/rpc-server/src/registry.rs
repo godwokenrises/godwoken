@@ -1155,7 +1155,7 @@ async fn get_balance(
     };
 
     let address = RegistryAddress::from_slice(registry_address.as_bytes())
-        .ok_or(invalid_param_err("invalid registry address"))?;
+        .ok_or_else(|| invalid_param_err("invalid registry address"))?;
 
     let balance = match block_number {
         Some(block_number) => {

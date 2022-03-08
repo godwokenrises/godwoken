@@ -8,8 +8,11 @@ use crate::testing_tool::common::random_always_success_script;
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 
 use ckb_types::prelude::{Builder, Entity};
+use ckb_vm::Bytes;
 use gw_block_producer::test_mode_control::TestModeControl;
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
+use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
+use gw_common::registry_address::RegistryAddress;
 use gw_common::{
     state::{to_short_script_hash, State},
     H256,
@@ -25,9 +28,9 @@ use gw_store::state::state_db::StateContext;
 use gw_types::core::ScriptHashType;
 use gw_types::offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupContext};
 use gw_types::packed::{
-    CellOutput, DepositLockArgs, DepositRequest, L2BlockCommittedInfo, L2Transaction, OutPoint,
-    RawL2Transaction, RawWithdrawalRequest, SUDTArgs, SUDTTransfer, Script, WithdrawalRequest,
-    WithdrawalRequestExtra,
+    CellOutput, DepositLockArgs, DepositRequest, Fee, L2BlockCommittedInfo, L2Transaction,
+    OutPoint, RawL2Transaction, RawWithdrawalRequest, SUDTArgs, SUDTTransfer, Script,
+    WithdrawalRequest, WithdrawalRequestExtra,
 };
 use gw_types::prelude::Pack;
 
@@ -55,6 +58,7 @@ async fn test_restore_mem_block() {
             .sudt_script_hash(H256::zero().pack())
             .amount(0.pack())
             .script(account_script.to_owned())
+            .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
             .build()
     });
 
@@ -97,6 +101,7 @@ async fn test_restore_mem_block() {
                     .account_script_hash(account_script.hash().pack())
                     .sudt_script_hash(H256::zero().pack())
                     .owner_lock_hash(owner_lock.hash().pack())
+                    .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
                     .build();
                 let withdrawal = WithdrawalRequest::new_builder().raw(raw).build();
                 WithdrawalRequestExtra::new_builder()
@@ -116,6 +121,7 @@ async fn test_restore_mem_block() {
                 .sudt_script_hash(H256::zero().pack())
                 .amount(0.pack())
                 .script(user_script)
+                .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
                 .build()
         });
 
@@ -135,9 +141,18 @@ async fn test_restore_mem_block() {
                     .get_account_id_by_script_hash(&account_script.hash().into())
                     .unwrap();
                 let to_script = random_always_success_script(&rollup_script_hash);
+                let to_addr = RegistryAddress::new(
+                    ETH_REGISTRY_ACCOUNT_ID,
+                    to_short_script_hash(&to_script.hash().into()).to_vec(),
+                );
                 let transfer = SUDTTransfer::new_builder()
                     .amount((DEPOSIT_CAPACITY as u128 / 2).pack())
-                    .to(to_short_script_hash(&to_script.hash().into()).pack())
+                    .to_address(Bytes::from(to_addr.to_bytes()).pack())
+                    .fee(
+                        Fee::new_builder()
+                            .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
+                            .build(),
+                    )
                     .build();
                 let args = SUDTArgs::new_builder().set(transfer).build();
                 let raw = RawL2Transaction::new_builder()

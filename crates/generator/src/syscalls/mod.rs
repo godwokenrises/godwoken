@@ -463,7 +463,7 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
                     let payer_addr = machine.registers()[A0].to_u64();
                     let payer_addr_len = machine.registers()[A1].to_u64();
                     // addr len: 4 registry id + 4 addr len + 20 addr
-                    if payer_addr_len != 28 as u64 {
+                    if payer_addr_len != 28u64 {
                         log::error!("unexpected payer address length: {}", payer_addr_len);
                         return Err(VMError::Unexpected);
                     }

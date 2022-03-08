@@ -148,7 +148,7 @@ lazy_static! {
     pub static ref ETH_EOA_MAPPING_REGISTRY_VALIDATOR_PROGRAM: Bytes = {
         let mut buf = Vec::new();
         let mut path = PathBuf::new();
-        path.push(&ETH_EOA_MAPPING_REGISTRY_VALIDATOR_PATH);
+        path.push(&ETH_REGISTRY_VALIDATOR_PATH);
         let mut f = fs::File::open(&path).expect("load eth eoa mapping registry program");
         f.read_to_end(&mut buf)
             .expect("read eth eoa mapping registry program");
@@ -169,16 +169,17 @@ pub const META_VALIDATOR_PATH: &str =
 pub const META_GENERATOR_PATH: &str =
     "../../.tmp/binaries/godwoken-scripts/meta-contract-generator";
 pub const META_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [1u8; 32];
+pub const ETH_REGISTRY_SCRIPT_TYPE_HASH: [u8; 32] = [2u8; 32];
 
 // simple UDT
 pub const SUDT_VALIDATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/sudt-validator";
 pub const SUDT_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/sudt-generator";
 
 // eth eoa mapping registry
-pub const ETH_EOA_MAPPING_REGISTRY_VALIDATOR_PATH: &str =
-    "../../.tmp/binaries/godwoken-polyjuice/eth_addr_reg_validator";
-pub const ETH_EOA_MAPPING_REGISTRY_GENERATOR_PATH: &str =
-    "../../.tmp/binaries/godwoken-polyjuice/eth_addr_reg_generator";
+pub const ETH_REGISTRY_VALIDATOR_PATH: &str =
+    "../../.tmp/binaries/godwoken-scripts/eth-addr-reg-generator";
+pub const ETH_REGISTRY_GENERATOR_PATH: &str =
+    "../../.tmp/binaries/godwoken-scripts/eth-addr-reg-validator";
 
 pub const DEFAULT_FINALITY_BLOCKS: u64 = 6;
 
@@ -199,8 +200,8 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
             backend_type: gw_config::BackendType::Sudt,
         },
         BackendConfig {
-            validator_path: ETH_EOA_MAPPING_REGISTRY_VALIDATOR_PATH.into(),
-            generator_path: ETH_EOA_MAPPING_REGISTRY_GENERATOR_PATH.into(),
+            validator_path: ETH_REGISTRY_VALIDATOR_PATH.into(),
+            generator_path: ETH_REGISTRY_GENERATOR_PATH.into(),
             validator_script_type_hash: (*ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH).into(),
             backend_type: gw_config::BackendType::EthAddrReg,
         },
@@ -214,7 +215,7 @@ pub async fn setup_chain(rollup_type_script: Script) -> Chain {
         .allowed_eoa_type_hashes(
             vec![
                 AllowedTypeHash::new(AllowedEoaType::Eth, *ETH_ACCOUNT_LOCK_CODE_HASH),
-                AllowedTypeHash::new(AllowedEoaType::Unknown, *ALWAYS_SUCCESS_CODE_HASH),
+                AllowedTypeHash::new(AllowedEoaType::Eth, *ALWAYS_SUCCESS_CODE_HASH),
             ]
             .pack(),
         )
@@ -344,6 +345,7 @@ pub async fn setup_chain_with_account_lock_manage(
     let genesis_config = GenesisConfig {
         timestamp: 0,
         meta_contract_validator_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
+        eth_registry_validator_type_hash: ETH_REGISTRY_SCRIPT_TYPE_HASH.into(),
         rollup_config: rollup_config.clone().into(),
         rollup_type_hash: rollup_script_hash.into(),
         secp_data_dep: Default::default(),

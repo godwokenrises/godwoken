@@ -101,6 +101,7 @@ pub struct GenesisConfig {
     pub timestamp: u64,
     pub rollup_type_hash: H256,
     pub meta_contract_validator_type_hash: H256,
+    pub eth_registry_validator_type_hash: H256,
     pub rollup_config: RollupConfig,
     // For load secp data and use in challenge transaction
     pub secp_data_dep: CellDep,

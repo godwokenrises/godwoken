@@ -167,11 +167,16 @@ fn check_deposit_cell(ctx: &RollupContext, cell: &DepositInfo) -> Result<()> {
                 .collect(),
         );
 
-        registry_ctx.extract_registry_address_from_deposit(
+        if let Err(err) = registry_ctx.extract_registry_address_from_deposit(
             cell.request.registry_id().unpack(),
             &script.code_hash(),
             &script.args().raw_data(),
-        )?;
+        ) {
+            return Err(anyhow!(
+                "Failed to extract registry address from deposit, err: {}",
+                err
+            ));
+        }
     }
 
     // check capacity (use dummy block hash and number)

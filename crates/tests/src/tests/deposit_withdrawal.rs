@@ -8,8 +8,8 @@ use crate::testing_tool::chain::{
 use anyhow::Result;
 use gw_chain::chain::Chain;
 use gw_common::{
-    builtins::CKB_SUDT_ACCOUNT_ID,
-    state::{to_short_script_hash, State},
+    builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
+    state::State,
     H256, U256,
 };
 use gw_generator::{
@@ -56,6 +56,7 @@ async fn deposite_to_chain(
         .sudt_script_hash(sudt_script_hash.pack())
         .amount(amount.pack())
         .script(user_script)
+        .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build()];
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
@@ -96,6 +97,7 @@ async fn withdrawal_from_chain(
             .sudt_script_hash(sudt_script_hash.pack())
             .amount(amount.pack())
             .owner_lock_hash(owner_lock.hash().pack())
+            .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
             .build();
         let withdrawal = WithdrawalRequest::new_builder().raw(raw).build();
         WithdrawalRequestExtra::new_builder()
@@ -128,7 +130,7 @@ async fn test_deposit_and_withdrawal() {
         .hash_type(ScriptHashType::Type.into())
         .args({
             let mut args = rollup_script_hash.to_vec();
-            args.push(42);
+            args.extend(&[42u8; 20]);
             args.pack()
         })
         .build();
@@ -148,15 +150,15 @@ async fn test_deposit_and_withdrawal() {
     )
     .await
     .unwrap();
-    let (user_id, user_script_hash, ckb_balance, ckb_total_supply) = {
+    let (user_id, user_script_hash, user_addr, ckb_balance, ckb_total_supply) = {
         let mem_pool = chain.mem_pool().as_ref().unwrap().lock().await;
         let snap = mem_pool.mem_pool_state().load();
         let tree = snap.state().unwrap();
         // check user account
         assert_eq!(
             tree.get_account_count().unwrap(),
-            3,
-            "2 builtin accounts plus 1 deposit"
+            4,
+            "3 builtin accounts plus 1 deposit"
         );
         let user_id = tree
             .get_account_id_by_script_hash(&user_script_hash.into())
@@ -164,13 +166,23 @@ async fn test_deposit_and_withdrawal() {
             .expect("account exists");
         assert_ne!(user_id, 0);
         let user_script_hash = tree.get_script_hash(user_id).unwrap();
+        let user_addr = tree
+            .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &user_script_hash)
+            .unwrap()
+            .unwrap();
         let ckb_balance = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&user_script_hash))
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_addr)
             .unwrap();
         assert_eq!(ckb_balance, capacity as u128);
         let ckb_total_supply = tree.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID).unwrap();
         assert_eq!(ckb_total_supply, U256::from(capacity));
-        (user_id, user_script_hash, ckb_balance, ckb_total_supply)
+        (
+            user_id,
+            user_script_hash,
+            user_addr,
+            ckb_balance,
+            ckb_total_supply,
+        )
     };
 
     // wait for deposit finalize
@@ -193,7 +205,7 @@ async fn test_deposit_and_withdrawal() {
         );
         assert_eq!(
             state
-                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&user_script_hash))
+                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_addr)
                 .unwrap(),
             capacity as u128
         );
@@ -218,7 +230,7 @@ async fn test_deposit_and_withdrawal() {
     let db = chain.store().begin_transaction();
     let tree = db.state_tree(StateContext::ReadOnly).unwrap();
     let ckb_balance2 = tree
-        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&user_script_hash))
+        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_addr)
         .unwrap();
     assert_eq!(ckb_balance, ckb_balance2 + withdraw_capacity as u128);
     let ckb_total_supply2 = tree.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID).unwrap();
@@ -243,7 +255,7 @@ async fn test_deposit_and_withdrawal() {
         );
         assert_eq!(
             state
-                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&user_script_hash))
+                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_addr)
                 .unwrap(),
             ckb_balance2
         );
@@ -281,7 +293,7 @@ async fn test_deposit_u128_overflow() {
         .hash_type(ScriptHashType::Type.into())
         .args({
             let mut args = rollup_script_hash.to_vec();
-            args.push(42);
+            args.extend(&[42u8; 20]);
             args.pack()
         })
         .build();
@@ -304,7 +316,7 @@ async fn test_deposit_u128_overflow() {
         .hash_type(ScriptHashType::Type.into())
         .args({
             let mut args = rollup_script_hash.to_vec();
-            args.push(43);
+            args.extend([43u8; 20]);
             args.pack()
         })
         .build();
@@ -326,11 +338,20 @@ async fn test_deposit_u128_overflow() {
     let snap = mem_pool.mem_pool_state().load();
     let tree = snap.state().unwrap();
 
+    let alice_addr = tree
+        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &alice_script_hash)
+        .unwrap()
+        .unwrap();
+    let bob_addr = tree
+        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &bob_script_hash)
+        .unwrap()
+        .unwrap();
+
     // check user account
     assert_eq!(
         tree.get_account_count().unwrap(),
-        5,
-        "2 builtin accounts plus 2 deposit and 1 sudt"
+        6,
+        "3 builtin accounts plus 2 deposit and 1 sudt"
     );
 
     let alice_id = tree
@@ -339,12 +360,8 @@ async fn test_deposit_u128_overflow() {
         .expect("account exists");
     assert_ne!(alice_id, 0);
 
-    let alice_script_hash = tree.get_script_hash(alice_id).unwrap();
     let ckb_balance = tree
-        .get_sudt_balance(
-            CKB_SUDT_ACCOUNT_ID,
-            to_short_script_hash(&alice_script_hash),
-        )
+        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &alice_addr)
         .unwrap();
     assert_eq!(ckb_balance, capacity as u128);
 
@@ -354,9 +371,8 @@ async fn test_deposit_u128_overflow() {
         .expect("account exists");
     assert_ne!(bob_id, 0);
 
-    let bob_script_hash = tree.get_script_hash(bob_id).unwrap();
     let ckb_balance = tree
-        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&bob_script_hash))
+        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &bob_addr)
         .unwrap();
     assert_eq!(ckb_balance, capacity as u128);
 
@@ -370,14 +386,10 @@ async fn test_deposit_u128_overflow() {
         .unwrap()
         .expect("sudt exists");
 
-    let alice_sudt_balance = tree
-        .get_sudt_balance(sudt_id, to_short_script_hash(&alice_script_hash))
-        .unwrap();
+    let alice_sudt_balance = tree.get_sudt_balance(sudt_id, &alice_addr).unwrap();
     assert_eq!(alice_sudt_balance, u128::MAX);
 
-    let bob_sudt_balance = tree
-        .get_sudt_balance(sudt_id, to_short_script_hash(&bob_script_hash))
-        .unwrap();
+    let bob_sudt_balance = tree.get_sudt_balance(sudt_id, &bob_addr).unwrap();
     assert_eq!(bob_sudt_balance, u128::MAX);
 
     let sudt_total_supply = tree.get_sudt_total_supply(sudt_id).unwrap();
@@ -398,7 +410,7 @@ async fn test_overdraft() {
         .hash_type(ScriptHashType::Type.into())
         .args({
             let mut args = rollup_script_hash.to_vec();
-            args.push(42);
+            args.extend(&[42u8; 20]);
             args.pack()
         })
         .build();
@@ -441,12 +453,15 @@ async fn test_overdraft() {
         let mem_pool = mem_pool.lock().await;
         let snap = mem_pool.mem_pool_state().load();
         let state = snap.state().unwrap();
+
+        let user_addr = state
+            .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &user_script_hash.into())
+            .unwrap()
+            .unwrap();
+
         assert_eq!(
             state
-                .get_sudt_balance(
-                    CKB_SUDT_ACCOUNT_ID,
-                    to_short_script_hash(&user_script_hash.into())
-                )
+                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_addr)
                 .unwrap(),
             capacity as u128
         );
@@ -464,7 +479,7 @@ async fn test_deposit_faked_ckb() {
         .hash_type(ScriptHashType::Type.into())
         .args({
             let mut args = rollup_script_hash.to_vec();
-            args.push(42);
+            args.extend(&[42u8; 20]);
             args.pack()
         })
         .build();

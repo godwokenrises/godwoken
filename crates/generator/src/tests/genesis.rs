@@ -12,17 +12,19 @@ use gw_types::{
 use std::convert::TryInto;
 
 const GENESIS_BLOCK_HASH: [u8; 32] = [
-    94, 83, 29, 180, 82, 217, 94, 221, 63, 109, 203, 213, 156, 53, 4, 51, 52, 91, 55, 199, 176,
-    219, 8, 124, 60, 225, 26, 186, 218, 122, 200, 78,
+    160, 1, 233, 191, 128, 31, 9, 95, 248, 4, 210, 249, 107, 56, 205, 33, 132, 57, 126, 20, 111,
+    88, 246, 8, 200, 24, 186, 18, 219, 152, 151, 251,
 ];
 
 #[test]
 fn test_init_genesis() {
     let meta_contract_code_hash = [1u8; 32];
+    let eth_registry_contract_code_hash = [2u8; 32];
     let rollup_script_hash: [u8; 32] = [42u8; 32];
     let config = GenesisConfig {
         timestamp: 42,
         meta_contract_validator_type_hash: meta_contract_code_hash.into(),
+        eth_registry_validator_type_hash: eth_registry_contract_code_hash.into(),
         rollup_config: RollupConfig::default().into(),
         rollup_type_hash: rollup_script_hash.into(),
         secp_data_dep: Default::default(),

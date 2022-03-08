@@ -7,7 +7,7 @@ use gw_types::prelude::Pack;
 use super::chain::ALWAYS_SUCCESS_CODE_HASH;
 
 pub fn random_always_success_script(rollup_script_hash: &H256) -> Script {
-    let random_bytes: [u8; 32] = rand::random();
+    let random_bytes: [u8; 20] = rand::random();
     Script::new_builder()
         .code_hash(ALWAYS_SUCCESS_CODE_HASH.clone().pack())
         .hash_type(ScriptHashType::Type.into())
