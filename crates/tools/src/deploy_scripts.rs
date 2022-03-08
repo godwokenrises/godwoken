@@ -129,6 +129,7 @@ pub fn deploy_scripts(
         &scripts_result.programs.withdrawal_lock,
         &scripts_result.programs.challenge_lock,
         &scripts_result.programs.stake_lock,
+        &scripts_result.programs.omni_lock,
         &scripts_result.programs.state_validator,
         &scripts_result.programs.l2_sudt_validator,
         &scripts_result.programs.eth_account_lock,
@@ -184,6 +185,13 @@ pub fn deploy_scripts(
         privkey_path,
         &mut rpc_client,
         &scripts_result.programs.stake_lock,
+        &target_lock,
+        &target_address,
+    )?;
+    let omni_lock = deploy_program(
+        privkey_path,
+        &mut rpc_client,
+        &scripts_result.programs.omni_lock,
         &target_lock,
         &target_address,
     )?;
@@ -243,6 +251,7 @@ pub fn deploy_scripts(
         withdrawal_lock,
         challenge_lock,
         stake_lock,
+        omni_lock,
         state_validator,
         l2_sudt_validator,
         meta_contract_validator,
