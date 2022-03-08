@@ -16,6 +16,7 @@
 //
 // Thus, the first 5 bytes keeps uniqueness for different type of keys.
 
+use crate::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use crate::error::Error;
 use crate::h256_ext::{H256Ext, H256, U256};
 use crate::registry_address::RegistryAddress;
@@ -312,7 +313,7 @@ pub trait State {
         &self,
         address: &RegistryAddress,
     ) -> Result<Option<H256>, Error> {
-        let key = build_registry_address_to_script_hash_key(&address);
+        let key = build_registry_address_to_script_hash_key(address);
         let value = self.get_value(address.registry_id, &key)?;
         if value.is_zero() {
             return Ok(None);
@@ -341,6 +342,12 @@ pub trait State {
     ) -> Result<(), Error> {
         // Only support addr len == 20 for now, we can revisit the condition in later version
         if addr.address.len() != 20 {
+            return Err(Error::InvalidArgs);
+        }
+        if script_hash.is_zero() {
+            return Err(Error::InvalidArgs);
+        }
+        if addr.registry_id != ETH_REGISTRY_ACCOUNT_ID {
             return Err(Error::InvalidArgs);
         }
         // Check duplication

@@ -416,6 +416,10 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
             .meta_contract_validator
             .script_type_hash
             .clone(),
+        eth_registry_validator_type_hash: scripts_result
+            .eth_addr_reg_validator
+            .script_type_hash
+            .clone(),
         rollup_type_hash: rollup_script_hash.clone(),
         rollup_config: rollup_config.clone().into(),
         secp_data_dep,

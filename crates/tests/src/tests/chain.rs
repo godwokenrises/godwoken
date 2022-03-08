@@ -12,9 +12,8 @@ use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     h256_ext::H256Ext,
     merkle_utils::{calculate_ckb_merkle_root, ckb_merkle_leaf_hash},
-    registry_address::RegistryAddress,
     smt::Blake2bHasher,
-    state::{to_short_script_hash, State},
+    state::State,
     H256,
 };
 use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore};
@@ -99,13 +98,14 @@ async fn test_produce_blocks() {
         .hash_type(ScriptHashType::Type.into())
         .args({
             let mut args = rollup_script_hash.to_vec();
-            args.push(42);
+            args.extend(&[42u8; 20]);
             args.pack()
         })
         .build();
     let deposit = DepositRequest::new_builder()
         .capacity((290u64 * CKB).pack())
         .script(user_script_a.clone())
+        .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
     produce_a_block(&mut chain, deposit, rollup_cell.clone(), 1).await;
 
@@ -113,6 +113,7 @@ async fn test_produce_blocks() {
     let deposit = DepositRequest::new_builder()
         .capacity((400u64 * CKB).pack())
         .script(user_script_a.clone())
+        .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
     produce_a_block(&mut chain, deposit, rollup_cell.clone(), 2).await;
 
@@ -122,13 +123,14 @@ async fn test_produce_blocks() {
         .hash_type(ScriptHashType::Type.into())
         .args({
             let mut args = rollup_script_hash.to_vec();
-            args.push(50);
+            args.extend(&[50u8; 20]);
             args.pack()
         })
         .build();
     let deposit = DepositRequest::new_builder()
         .capacity((500u64 * CKB).pack())
         .script(user_script_b.clone())
+        .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
     produce_a_block(&mut chain, deposit, rollup_cell, 3).await;
 
@@ -146,15 +148,25 @@ async fn test_produce_blocks() {
             .get_account_id_by_script_hash(&script_hash_b)
             .unwrap()
             .unwrap();
-        // 0 is meta contract, 1 is ckb sudt, so the user id start from 2
-        assert_eq!(id_a, 2);
-        assert_eq!(id_b, 3);
-        let balance_a = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&script_hash_a))
+        // 0 is meta contract, 1 is ckb sudt 2 is eth reg, so the user id start from 3
+        assert_eq!(id_a, 3);
+        assert_eq!(id_b, 4);
+        let a_addr = tree
+            .get_registry_address_by_script_hash(
+                gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID,
+                &script_hash_a,
+            )
+            .unwrap()
             .unwrap();
-        let balance_b = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&script_hash_b))
+        let b_addr = tree
+            .get_registry_address_by_script_hash(
+                gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID,
+                &script_hash_b,
+            )
+            .unwrap()
             .unwrap();
+        let balance_a = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &a_addr).unwrap();
+        let balance_b = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &b_addr).unwrap();
         assert_eq!(balance_a, 690 * CKB as u128);
         assert_eq!(balance_b, 500 * CKB as u128);
     }
@@ -179,13 +191,14 @@ async fn test_layer1_fork() {
             .hash_type(ScriptHashType::Type.into())
             .args({
                 let mut args = rollup_script_hash.to_vec();
-                args.push(7);
+                args.extend(&[7u8; 20]);
                 args.pack()
             })
             .build();
         let deposit = DepositRequest::new_builder()
             .capacity((290u64 * CKB).pack())
             .script(charlie_script)
+            .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
             .build();
         let chain = setup_chain(rollup_type_script).await;
         let mem_pool = chain.mem_pool().as_ref().unwrap();
@@ -213,13 +226,14 @@ async fn test_layer1_fork() {
         .hash_type(ScriptHashType::Type.into())
         .args({
             let mut args = rollup_script_hash.to_vec();
-            args.push(42);
+            args.extend(&[42u8; 20]);
             args.pack()
         })
         .build();
     let deposit = DepositRequest::new_builder()
         .capacity((400u64 * CKB).pack())
         .script(alice_script)
+        .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
@@ -252,13 +266,14 @@ async fn test_layer1_fork() {
         .hash_type(ScriptHashType::Type.into())
         .args({
             let mut args = rollup_script_hash.to_vec();
-            args.push(43);
+            args.extend([43u8; 20]);
             args.pack()
         })
         .build();
     let deposit = DepositRequest::new_builder()
         .capacity((500u64 * CKB).pack())
         .script(bob_script)
+        .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
@@ -378,13 +393,14 @@ async fn test_layer1_revert() {
         .hash_type(ScriptHashType::Type.into())
         .args({
             let mut args = rollup_script_hash.to_vec();
-            args.push(42);
+            args.extend(&[42u8; 20]);
             args.pack()
         })
         .build();
     let deposit = DepositRequest::new_builder()
         .capacity((400u64 * CKB).pack())
         .script(alice_script.clone())
+        .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
@@ -417,13 +433,14 @@ async fn test_layer1_revert() {
         .hash_type(ScriptHashType::Type.into())
         .args({
             let mut args = rollup_script_hash.to_vec();
-            args.push(43);
+            args.extend(&[43u8; 20]);
             args.pack()
         })
         .build();
     let deposit = DepositRequest::new_builder()
         .capacity((500u64 * CKB).pack())
         .script(bob_script.clone())
+        .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
@@ -501,18 +518,22 @@ async fn test_layer1_revert() {
             "check account tree"
         );
 
-        assert_eq!(tree.get_account_count().unwrap(), 3);
+        assert_eq!(tree.get_account_count().unwrap(), 4);
         let alice_script_hash: H256 = alice_script.hash().into();
         let alice_id = tree
             .get_account_id_by_script_hash(&alice_script_hash)
             .unwrap()
             .unwrap();
-        assert_eq!(alice_id, 2);
-        let alice_balance = tree
-            .get_sudt_balance(
-                CKB_SUDT_ACCOUNT_ID,
-                to_short_script_hash(&alice_script_hash),
+        assert_eq!(alice_id, 3);
+        let alice_addr = tree
+            .get_registry_address_by_script_hash(
+                gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID,
+                &alice_script_hash,
             )
+            .unwrap()
+            .unwrap();
+        let alice_balance = tree
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &alice_addr)
             .unwrap();
         assert_eq!(alice_balance, 400 * CKB as u128);
 
@@ -547,18 +568,22 @@ async fn test_layer1_revert() {
             "check account tree"
         );
 
-        assert_eq!(tree.get_account_count().unwrap(), 4);
+        assert_eq!(tree.get_account_count().unwrap(), 5);
         let alice_script_hash: H256 = alice_script.hash().into();
         let alice_id = tree
             .get_account_id_by_script_hash(&alice_script_hash)
             .unwrap()
             .unwrap();
-        assert_eq!(alice_id, 2);
-        let alice_balance = tree
-            .get_sudt_balance(
-                CKB_SUDT_ACCOUNT_ID,
-                to_short_script_hash(&alice_script_hash),
+        assert_eq!(alice_id, 3);
+        let alice_addr = tree
+            .get_registry_address_by_script_hash(
+                gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID,
+                &alice_script_hash,
             )
+            .unwrap()
+            .unwrap();
+        let alice_balance = tree
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &alice_addr)
             .unwrap();
         assert_eq!(alice_balance, 400 * CKB as u128);
 
@@ -567,10 +592,17 @@ async fn test_layer1_revert() {
             .get_account_id_by_script_hash(&bob_script_hash)
             .unwrap()
             .unwrap();
-        assert_eq!(bob_id, 3);
+        assert_eq!(bob_id, 4);
+        let bob_addr = tree
+            .get_registry_address_by_script_hash(
+                gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID,
+                &bob_script_hash,
+            )
+            .unwrap()
+            .unwrap();
 
         let bob_balance = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&bob_script_hash))
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &bob_addr)
             .unwrap();
         assert_eq!(bob_balance, 500 * CKB as u128);
     }
@@ -593,7 +625,7 @@ async fn test_sync_blocks() {
         .hash_type(ScriptHashType::Type.into())
         .args({
             let mut args = rollup_script_hash.to_vec();
-            args.push(42);
+            args.extend(&[42u8; 20]);
             args.pack()
         })
         .build();
@@ -602,6 +634,7 @@ async fn test_sync_blocks() {
         .capacity((400u64 * CKB).pack())
         .script(user_script_a.clone())
         .sudt_script_hash(sudt_script_hash.pack())
+        .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
     let sync_1 = produce_a_block(&mut chain1, deposit, rollup_cell.clone(), 1).await;
 
@@ -609,6 +642,7 @@ async fn test_sync_blocks() {
     let deposit = DepositRequest::new_builder()
         .capacity((400u64 * CKB).pack())
         .script(user_script_a.clone())
+        .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
     let sync_2 = produce_a_block(&mut chain1, deposit, rollup_cell.clone(), 2).await;
 
@@ -618,7 +652,7 @@ async fn test_sync_blocks() {
         .hash_type(ScriptHashType::Type.into())
         .args({
             let mut args = rollup_script_hash.to_vec();
-            args.push(50);
+            args.extend(&[50u8; 20]);
             args.pack()
         })
         .build();
@@ -626,6 +660,7 @@ async fn test_sync_blocks() {
         .capacity((500u64 * CKB).pack())
         .script(user_script_b.clone())
         .sudt_script_hash(sudt_script_hash.pack())
+        .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
     let sync_3 = produce_a_block(&mut chain1, deposit, rollup_cell, 3).await;
 
@@ -660,15 +695,25 @@ async fn test_sync_blocks() {
             .get_account_id_by_script_hash(&script_hash_b)
             .unwrap()
             .unwrap();
-        // 0 is meta contract, 1 is ckb sudt, so the user id start from 2
-        assert_eq!(id_a, 2);
-        assert_eq!(id_b, 4);
-        let balance_a = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&script_hash_a))
+        // 0 is meta contract, 1 is ckb sudt, 2 is eth reg, so the user id start from 3
+        assert_eq!(id_a, 3);
+        assert_eq!(id_b, 5);
+        let a_addr = tree
+            .get_registry_address_by_script_hash(
+                gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID,
+                &script_hash_a,
+            )
+            .unwrap()
             .unwrap();
-        let balance_b = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&script_hash_b))
+        let b_addr = tree
+            .get_registry_address_by_script_hash(
+                gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID,
+                &script_hash_b,
+            )
+            .unwrap()
             .unwrap();
+        let balance_a = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &a_addr).unwrap();
+        let balance_b = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &b_addr).unwrap();
         assert_eq!(balance_a, 800 * CKB as u128);
         assert_eq!(balance_b, 500 * CKB as u128);
     }
@@ -691,13 +736,14 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         .hash_type(ScriptHashType::Type.into())
         .args({
             let mut args = rollup_script_hash.to_vec();
-            args.push(42);
+            args.extend(&[42u8; 20]);
             args.pack()
         })
         .build();
     let deposit = DepositRequest::new_builder()
         .capacity((4000u64 * CKB).pack())
         .script(alice_script.clone())
+        .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
@@ -738,6 +784,7 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             .account_script_hash(alice_script.hash().pack())
             .sudt_script_hash(H256::zero().pack())
             .owner_lock_hash(owner_lock.hash().pack())
+            .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
             .build();
         let withdrawal = WithdrawalRequest::new_builder().raw(raw).build();
         WithdrawalRequestExtra::new_builder()
@@ -942,13 +989,14 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         .hash_type(ScriptHashType::Type.into())
         .args({
             let mut args = rollup_script_hash.to_vec();
-            args.push(43);
+            args.extend(&[43u8; 20]);
             args.pack()
         })
         .build();
     let deposit = DepositRequest::new_builder()
         .capacity((500u64 * CKB).pack())
         .script(bob_script)
+        .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();

@@ -426,7 +426,7 @@ impl From<packed::RawL2Block> for RawL2Block {
         Self {
             number: number.into(),
             parent_block_hash: raw_l2_block.parent_block_hash().unpack(),
-            block_producer: block_producer.into(),
+            block_producer,
             stake_cell_owner_lock_hash: raw_l2_block.stake_cell_owner_lock_hash().unpack(),
             timestamp: timestamp.into(),
             prev_account: raw_l2_block.prev_account().into(),

@@ -1,4 +1,4 @@
-use crate::vec::Vec;
+use crate::{builtins::ETH_REGISTRY_ACCOUNT_ID, vec::Vec};
 use core::convert::TryInto;
 
 use gw_types::{
@@ -32,6 +32,10 @@ impl RegistryContext {
         code_hash: &Byte32,
         args: &[u8],
     ) -> Result<RegistryAddress, Error> {
+        // We only support ETH registry in current stage
+        if registry_id != ETH_REGISTRY_ACCOUNT_ID {
+            return Err(Error::InvalidArgs);
+        }
         // Check EOA code hash
         match self
             .find_eoa_type_by_hash(code_hash)
@@ -45,7 +49,7 @@ impl RegistryContext {
             Some(AllowedEoaType::Eth) => {
                 // extract ETH EOA
                 let address =
-                    { crate::registry::eth_registry::extract_eth_address_from_eoa(&args)? };
+                    { crate::registry::eth_registry::extract_eth_address_from_eoa(args)? };
                 let addr = RegistryAddress::new(registry_id, address);
                 Ok(addr)
             }

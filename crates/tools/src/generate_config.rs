@@ -93,6 +93,10 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         .meta_contract_validator
         .script_type_hash
         .clone();
+    let eth_registry_validator_type_hash = scripts_deployment
+        .eth_addr_reg_validator
+        .script_type_hash
+        .clone();
     let rollup_type_script = {
         let script: ckb_types::packed::Script = rollup_result.rollup_type_script.clone().into();
         gw_types::packed::Script::new_unchecked(script.as_bytes()).into()
@@ -212,6 +216,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         timestamp: rollup_result.timestamp,
         rollup_type_hash,
         meta_contract_validator_type_hash,
+        eth_registry_validator_type_hash,
         rollup_config,
         secp_data_dep,
     };

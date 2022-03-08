@@ -12,7 +12,7 @@ use gw_types::{
     packed::{
         BlockInfo, CellOutput, CreateAccount, DepositRequest, ETHAddrRegArgs, ETHAddrRegArgsUnion,
         EthToGw, GwToEth, L2BlockCommittedInfo, L2Transaction, MetaContractArgs, RawL2Transaction,
-        Script,
+        Script, Fee,
     },
     prelude::{Pack, Unpack},
 };
@@ -116,7 +116,7 @@ async fn test_eth_eoa_mapping_register() -> Result<()> {
     let tip_block_hash = chain.store().get_tip_block_hash()?;
     let db = chain.store().begin_transaction();
     let block_info = BlockInfo::new_builder()
-        .block_producer_id(register_account_id.pack())
+        .block_producer(Default::default())
         .number(1.pack())
         .build();
     let chain_view = ChainView::new(&db, tip_block_hash);
@@ -265,7 +265,12 @@ async fn test_mem_pool_eth_eoa_mapping_deposit_scan_and_register() -> Result<()>
         let fee = 0u64;
         let create_account = CreateAccount::new_builder()
             .script(eth_mapping_script.clone())
-            .fee(fee.pack())
+            .fee(
+                Fee::new_builder()
+                    .amount(fee.pack())
+                    .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
+                    .build(),
+            )
             .build();
         MetaContractArgs::new_builder().set(create_account).build()
     };
@@ -412,7 +417,7 @@ async fn test_mem_pool_eth_eoa_mapping_deposit_scan_and_register() -> Result<()>
     let tip_block_hash = chain.store().get_tip_block_hash()?;
     let db = chain.store().begin_transaction();
     let block_info = BlockInfo::new_builder()
-        .block_producer_id(register_account_id.pack())
+        .block_producer(Default::default())
         .number(4.pack())
         .build();
     let chain_view = ChainView::new(&db, tip_block_hash);

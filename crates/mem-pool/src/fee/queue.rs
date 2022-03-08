@@ -524,7 +524,8 @@ mod tests {
             .build();
         let genesis_config = GenesisConfig {
             timestamp: 0,
-            meta_contract_validator_type_hash: Default::default(),
+            meta_contract_validator_type_hash: [100u8; 32].into(),
+            eth_registry_validator_type_hash: [101u8; 32].into(),
             rollup_config: rollup_config.into(),
             rollup_type_hash: {
                 let h: [u8; 32] = rollup_type_hash.into();
