@@ -67,7 +67,12 @@ async fn create_eth_addr_reg_account(
     let nonce = godwoken_rpc_client.get_nonce(from_id).await?;
     let create_account = CreateAccount::new_builder()
         .script(eth_addr_reg_script)
-        .fee(fee_amount.pack())
+        .fee(
+            Fee::new_builder()
+                .amount(fee_amount.pack())
+                .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
+                .build(),
+        )
         .build();
     let l2tx_args = MetaContractArgs::new_builder().set(create_account).build();
     let raw_l2tx = RawL2Transaction::new_builder()
