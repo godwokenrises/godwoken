@@ -163,9 +163,9 @@ pub struct RegistryAddressConfig {
 }
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BlockProducerConfig {
-    pub block_producer: RegistryAddressConfig,
     #[serde(default = "default_check_mem_block_before_submit")]
     pub check_mem_block_before_submit: bool,
+    pub block_producer: RegistryAddressConfig,
     pub rollup_config_cell_dep: CellDep,
     pub challenger_config: ChallengerConfig,
     pub wallet_config: WalletConfig,
@@ -339,11 +339,11 @@ pub struct StoreConfig {
     #[serde(default)]
     pub path: PathBuf,
     #[serde(default)]
-    pub options: HashMap<String, String>,
+    pub cache_size: Option<usize>,
     #[serde(default)]
     pub options_file: Option<PathBuf>,
     #[serde(default)]
-    pub cache_size: Option<usize>,
+    pub options: HashMap<String, String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
