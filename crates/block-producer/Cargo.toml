@@ -1,6 +1,6 @@
 [package]
 name = "gw-block-producer"
-version = "0.8.0"
+version = "1.0.0-rc1"
 authors = ["Nervos Network"]
 edition = "2018"
 
@@ -61,6 +61,6 @@ thiserror = "1.0"
 tikv-jemallocator = { version = "0.4.0", features = ["unprefixed_malloc_on_supported_platforms"] }
 
 [features]
-default = []
+default = ["aot-vm"]
 profiling = ["tikv-jemallocator/profiling"]
 aot-vm = ["gw-generator/aot"]
