@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use jsonrpc_pubsub::Session;
+use tokio::sync::{broadcast, mpsc};
 
 use crate::notify_controller::NotifyController;
 use crate::subscription::{IoHandler, SubscriptionRpc, SubscriptionRpcImpl, SubscriptionSession};
@@ -8,6 +9,8 @@ use std::net::ToSocketAddrs;
 pub async fn start_jsonrpc_ws_server(
     ws_rpc_address: &str,
     notify_controller: NotifyController,
+    _shutdown_send: mpsc::Sender<()>,
+    mut sub_shutdown: broadcast::Receiver<()>,
 ) -> Result<()> {
     let ws_listen_address = ws_rpc_address
         .to_socket_addrs()?
@@ -29,11 +32,15 @@ pub async fn start_jsonrpc_ws_server(
             Some(SubscriptionSession::new(Session::new(context.sender())))
         },
     )
+    .event_loop_executor(tokio::runtime::Handle::current())
     .start(&ws_listen_address)
     .expect("Start Jsonrpc WebSocket service");
 
     log::info!("Listen WS RPCServer on address {}", ws_listen_address);
-    ws_server.wait()?;
+    let close_handle = ws_server.close_handle();
+    let _ = sub_shutdown.recv().await;
+    close_handle.close();
+    log::info!("ws server exited successfully");
 
     Ok(())
 }
