@@ -1,5 +1,5 @@
 use anyhow::Result;
-use ckb_jsonrpc_types::{JsonBytes, Serialize};
+use ckb_jsonrpc_types::Serialize;
 use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
 use std::path::Path;
 use tokio::task::JoinHandle;
@@ -29,8 +29,10 @@ async fn producer(client: GodwokenRpcClient, tx: tokio::sync::mpsc::Sender<Task>
                 .expect("must hash script");
             let code_hash = script.code_hash;
             // balance
-            let addr = JsonBytes::from_vec(script_hash.as_bytes()[..20].to_vec());
-            let ckb = client.get_balance(addr, CKB_SUDT_ACCOUNT_ID).await?;
+            let addr = client
+                .get_registry_address_by_script_hash(&script_hash)
+                .await?;
+            let ckb = client.get_balance(&addr, CKB_SUDT_ACCOUNT_ID).await?;
             let nonce = client.get_nonce(account_id).await?;
             Ok(Some(Account {
                 id: account_id,

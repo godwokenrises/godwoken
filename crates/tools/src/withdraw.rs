@@ -1,6 +1,4 @@
-use crate::account::{
-    eth_sign, privkey_to_short_script_hash, read_privkey, short_script_hash_to_account_id,
-};
+use crate::account::{eth_sign, privkey_to_l2_script_hash, read_privkey};
 use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::hasher::{CkbHasher, EthHasher};
 use crate::types::ScriptsDeploymentResult;
@@ -10,10 +8,10 @@ use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_sdk::{Address, HumanCapacity};
 use ckb_types::{prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity};
+use gw_common::registry_address::RegistryAddress;
 use gw_types::core::ScriptHashType;
 use gw_types::packed::{CellOutput, WithdrawalLockArgs, WithdrawalRequestExtra};
 use gw_types::{
-    bytes::Bytes as GwBytes,
     packed::{Byte32, RawWithdrawalRequest, WithdrawalRequest},
     prelude::Pack as GwPack,
 };
@@ -73,11 +71,13 @@ pub async fn withdraw(
 
     let privkey = read_privkey(privkey_path)?;
 
-    let from_address =
-        privkey_to_short_script_hash(&privkey, rollup_type_hash, &scripts_deployment)?;
+    let from_script_hash =
+        privkey_to_l2_script_hash(&privkey, rollup_type_hash, &scripts_deployment)?;
 
     // get from_id
-    let from_id = short_script_hash_to_account_id(&mut godwoken_rpc_client, &from_address).await?;
+    let from_id = godwoken_rpc_client
+        .get_account_id_by_script_hash(from_script_hash.clone())
+        .await?;
     let from_id = from_id.expect("from id not found!");
     let nonce =
         tokio::runtime::Handle::current().block_on(godwoken_rpc_client.get_nonce(from_id))?;
@@ -112,16 +112,17 @@ pub async fn withdraw(
 
     log::info!("withdrawal_request_extra: {}", withdrawal_request_extra);
 
-    let init_balance = tokio::runtime::Handle::current().block_on(
-        godwoken_rpc_client.get_balance(JsonBytes::from_bytes(from_address.clone()), 1),
-    )?;
+    let from_addr = godwoken_rpc_client
+        .get_registry_address_by_script_hash(&from_script_hash)
+        .await?;
+    let init_balance = godwoken_rpc_client.get_balance(&from_addr, 1).await?;
 
     let bytes = JsonBytes::from_bytes(withdrawal_request_extra.as_bytes());
     let withdrawal_hash = tokio::runtime::Handle::current()
         .block_on(godwoken_rpc_client.submit_withdrawal_request(bytes))?;
     log::info!("withdrawal_hash: {}", withdrawal_hash.pack());
 
-    wait_for_balance_change(&mut godwoken_rpc_client, from_address, init_balance, 180u64)?;
+    wait_for_balance_change(&mut godwoken_rpc_client, &from_addr, init_balance, 180u64).await?;
 
     Ok(())
 }
@@ -176,9 +177,9 @@ fn generate_withdrawal_message_to_sign(
     message
 }
 
-fn wait_for_balance_change(
+async fn wait_for_balance_change(
     godwoken_rpc_client: &mut GodwokenRpcClient,
-    from_address: GwBytes,
+    addr: &RegistryAddress,
     init_balance: u128,
     timeout_secs: u64,
 ) -> Result<()> {
@@ -187,9 +188,7 @@ fn wait_for_balance_change(
     while start_time.elapsed() < retry_timeout {
         std::thread::sleep(Duration::from_secs(2));
 
-        let balance = tokio::runtime::Handle::current().block_on(
-            godwoken_rpc_client.get_balance(JsonBytes::from_bytes(from_address.clone()), 1),
-        )?;
+        let balance = godwoken_rpc_client.get_balance(addr, 1).await?;
         log::info!(
             "current balance: {}, waiting for {} secs.",
             balance,

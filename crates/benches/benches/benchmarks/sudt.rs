@@ -1,7 +1,6 @@
 use criterion::*;
 use gw_common::{
-    state::{to_short_script_hash, State},
-    H256,
+    builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, state::State, H256,
 };
 use gw_config::BackendConfig;
 use gw_generator::{
@@ -12,9 +11,9 @@ use gw_generator::{
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
-    core::ScriptHashType,
+    core::{AllowedEoaType, ScriptHashType},
     offchain::{RollupContext, RunResult},
-    packed::BlockInfo,
+    packed::{AllowedTypeHash, BlockInfo, Fee},
     packed::{RawL2Transaction, RollupConfig, SUDTArgs, SUDTTransfer, Script},
     prelude::*,
 };
@@ -58,9 +57,9 @@ impl ChainView for DummyChainStore {
     }
 }
 
-fn new_block_info(block_producer_id: u32, number: u64, timestamp: u64) -> BlockInfo {
+fn new_block_info(block_producer: &RegistryAddress, number: u64, timestamp: u64) -> BlockInfo {
     BlockInfo::new_builder()
-        .block_producer_id(block_producer_id.pack())
+        .block_producer(Bytes::from(block_producer.to_bytes()).pack())
         .number(number.pack())
         .timestamp(timestamp.pack())
         .build()
@@ -120,9 +119,17 @@ pub fn bench(c: &mut Criterion) {
             || {
                 let mut tree = DummyState::default();
 
+                let always_success_lock_hash = [255u8; 32];
                 let rollup_config = RollupConfig::new_builder()
                     .l2_sudt_validator_script_type_hash(
                         DUMMY_SUDT_VALIDATOR_SCRIPT_TYPE_HASH.pack(),
+                    )
+                    .allowed_eoa_type_hashes(
+                        vec![AllowedTypeHash::new_builder()
+                            .hash(always_success_lock_hash.pack())
+                            .type_(AllowedEoaType::Eth.into())
+                            .build()]
+                        .pack(),
                     )
                     .build();
 
@@ -147,44 +154,60 @@ pub fn bench(c: &mut Criterion) {
                             .build(),
                     )
                     .expect("create account");
+                let a_script = {
+                    let mut args = vec![42u8; 32];
+                    args.extend([0u8; 20]);
+                    Script::new_builder()
+                        .code_hash(always_success_lock_hash.pack())
+                        .args(args.pack())
+                        .hash_type(ScriptHashType::Type.into())
+                        .build()
+                };
+                let a_addr = RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, vec![0u8; 20]);
                 let a_id = tree
-                    .create_account_from_script(
-                        Script::new_builder()
-                            .code_hash([0u8; 32].pack())
-                            .args([0u8; 20].to_vec().pack())
-                            .hash_type(ScriptHashType::Type.into())
-                            .build(),
-                    )
+                    .create_account_from_script(a_script)
                     .expect("create account");
+                let b_script = {
+                    let mut args = vec![42u8; 32];
+                    args.extend([1u8; 20]);
+                    Script::new_builder()
+                        .code_hash(always_success_lock_hash.pack())
+                        .args(args.pack())
+                        .hash_type(ScriptHashType::Type.into())
+                        .build()
+                };
+                let b_addr = RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, vec![1u8; 20]);
                 let b_id = tree
-                    .create_account_from_script(
-                        Script::new_builder()
-                            .code_hash([0u8; 32].pack())
-                            .args([1u8; 20].to_vec().pack())
-                            .hash_type(ScriptHashType::Type.into())
-                            .build(),
-                    )
+                    .create_account_from_script(b_script)
                     .expect("create account");
                 let a_script_hash = tree.get_script_hash(a_id).expect("get script hash");
                 let b_script_hash = tree.get_script_hash(b_id).expect("get script hash");
-                let block_producer_id = tree
-                    .create_account_from_script(
-                        Script::new_builder()
-                            .code_hash([0u8; 32].pack())
-                            .args([3u8; 20].to_vec().pack())
-                            .hash_type(ScriptHashType::Type.into())
-                            .build(),
-                    )
-                    .expect("create account");
-                let block_info = new_block_info(block_producer_id, 1, 0);
+                tree.mapping_registry_address_to_script_hash(a_addr.clone(), a_script_hash)
+                    .unwrap();
+                tree.mapping_registry_address_to_script_hash(b_addr.clone(), b_script_hash)
+                    .unwrap();
+
+                let block_producer_script = {
+                    let mut args = vec![42u8; 32];
+                    args.extend([3u8; 20]);
+                    Script::new_builder()
+                        .code_hash(always_success_lock_hash.pack())
+                        .args(args.pack())
+                        .hash_type(ScriptHashType::Type.into())
+                        .build()
+                };
+                let block_producer = RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, vec![3u8; 20]);
+                let block_producer_script_hash = block_producer_script.hash().into();
+                tree.mapping_registry_address_to_script_hash(
+                    block_producer.clone(),
+                    block_producer_script_hash,
+                )
+                .unwrap();
+                let block_info = new_block_info(&block_producer, 1, 0);
 
                 // init balance for a
-                tree.mint_sudt(
-                    sudt_id,
-                    to_short_script_hash(&a_script_hash),
-                    init_a_balance,
-                )
-                .expect("init balance");
+                tree.mint_sudt(sudt_id, &a_addr, init_a_balance)
+                    .expect("init balance");
                 (
                     tree,
                     rollup_config,
@@ -198,13 +221,21 @@ pub fn bench(c: &mut Criterion) {
                 // transfer from A to B
                 let value = 4000u128;
                 let fee = 42u64;
-                let b_address = to_short_script_hash(&b_script_hash).to_vec();
+                let b_addr = tree
+                    .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &b_script_hash)
+                    .expect("get script hash")
+                    .unwrap();
                 let args = SUDTArgs::new_builder()
                     .set(
                         SUDTTransfer::new_builder()
-                            .to(b_address.pack())
+                            .to_address(Bytes::from(b_addr.to_bytes()).pack())
                             .amount(value.pack())
-                            .fee(fee.pack())
+                            .fee(
+                                Fee::new_builder()
+                                    .amount(fee.pack())
+                                    .registry_id(ETH_REGISTRY_ACCOUNT_ID.pack())
+                                    .build(),
+                            )
                             .build(),
                     )
                     .build();

@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
-use gw_common::{blake2b::new_blake2b, registry_address::RegistryAddress, state::State, H256};
+use gw_common::{blake2b::new_blake2b, state::State, H256};
 use gw_config::{FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig};
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, ArcSwap, Generator};
@@ -11,7 +11,7 @@ use gw_jsonrpc_types::{
     godwoken::{
         BackendInfo, ErrorTxReceipt, GlobalState, L2BlockCommittedInfo, L2BlockStatus, L2BlockView,
         L2BlockWithStatus, L2TransactionStatus, L2TransactionWithStatus, LastL2BlockCommittedInfo,
-        NodeInfo, RunResult, TxReceipt, WithdrawalStatus, WithdrawalWithStatus,
+        NodeInfo, RegistryAddress, RunResult, TxReceipt, WithdrawalStatus, WithdrawalWithStatus,
     },
     test_mode::TestModePayload,
 };
@@ -266,8 +266,12 @@ impl Registry {
             .with_method("gw_get_script", get_script)
             .with_method("gw_get_script_hash", get_script_hash)
             .with_method(
-                "gw_get_script_hash_by_short_script_hash",
-                get_script_hash_by_short_script_hash,
+                "gw_get_script_hash_by_registry_address",
+                get_script_hash_by_registry_address,
+            )
+            .with_method(
+                "gw_get_registry_address_by_script_hash",
+                get_registry_address_by_script_hash,
             )
             .with_method("gw_get_data", get_data)
             .with_method("gw_get_transaction", get_transaction)
@@ -1136,7 +1140,7 @@ async fn get_withdrawal(
     }))
 }
 
-// short_script_hash, sudt_id, block_number
+// registry address, sudt_id, block_number
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 enum GetBalanceParams {
@@ -1149,14 +1153,14 @@ async fn get_balance(
     store: Data<Store>,
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<Uint128, RpcError> {
-    let (registry_address, sudt_id, block_number) = match params {
+    let (serialized_address, sudt_id, block_number) = match params {
         GetBalanceParams::Tip(p) => (p.0, p.1, None),
         GetBalanceParams::Number(p) => p,
     };
 
-    let address = RegistryAddress::from_slice(registry_address.as_bytes())
-        .ok_or_else(|| invalid_param_err("invalid registry address"))?;
-
+    let address =
+        gw_common::registry_address::RegistryAddress::from_slice(serialized_address.as_bytes())
+            .ok_or_else(|| invalid_param_err("Invalid registry address"))?;
     let balance = match block_number {
         Some(block_number) => {
             let db = store.begin_transaction();
@@ -1283,15 +1287,28 @@ async fn get_script_hash(
     Ok(to_jsonh256(script_hash))
 }
 
-async fn get_script_hash_by_short_script_hash(
-    Params((short_script_hash,)): Params<(JsonBytes,)>,
+async fn get_script_hash_by_registry_address(
+    Params((serialized_address,)): Params<(JsonBytes,)>,
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<Option<JsonH256>, RpcError> {
     let snap = mem_pool_state.load();
     let tree = snap.state()?;
-    let script_hash_opt =
-        tree.get_script_hash_by_short_script_hash(&short_script_hash.into_bytes());
+    let addr =
+        gw_common::registry_address::RegistryAddress::from_slice(serialized_address.as_bytes())
+            .ok_or_else(|| invalid_param_err("Invalid registry address"))?;
+    let script_hash_opt = tree.get_script_hash_by_registry_address(&addr)?;
     Ok(script_hash_opt.map(to_jsonh256))
+}
+
+async fn get_registry_address_by_script_hash(
+    Params((script_hash, registry_id)): Params<(JsonH256, Uint32)>,
+    mem_pool_state: Data<Arc<MemPoolState>>,
+) -> Result<Option<RegistryAddress>, RpcError> {
+    let snap = mem_pool_state.load();
+    let tree = snap.state()?;
+    let addr =
+        tree.get_registry_address_by_script_hash(registry_id.value(), &to_h256(script_hash))?;
+    Ok(addr.map(Into::into))
 }
 
 // data_hash, block_number

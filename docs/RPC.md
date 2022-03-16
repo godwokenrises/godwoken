@@ -284,7 +284,7 @@ Get balance.
 
 #### Params
 
-* Short script hash
+* Serialized registry address
 * Simple UDT account ID
 * (Optional) block number, default is tip
 #### Examples
@@ -296,7 +296,7 @@ Request
     "id": 42,
     "jsonrpc": "2.0",
     "method": "gw_get_balance",
-    "params": ["0xdfb94d6794165b96668b4308607afc05790dc211", "0x1"]
+    "params": ["0x0002dfb94d6794165b96668b4308607afc05790dc211", "0x1"]
 }
 ```
 
@@ -472,13 +472,13 @@ Response
 }
 ```
 
-### Method `gw_get_script_hash_by_short_script_hash`
+### Method `gw_get_script_hash_by_registry_address`
 
-Get script hash by short script hash.
+Get script hash by registry address.
 
 #### Params
 
-* Short script hash
+* Serialized registry address
 
 #### Examples
 
@@ -488,8 +488,40 @@ Request
 {
     "id": 42,
     "jsonrpc": "2.0",
-    "method": "gw_get_script_hash_by_short_script_hash",
-    "params": ["0xdfb94d6794165b96668b4308607afc05790dc211"]
+    "method": "gw_get_script_hash_by_registry_address",
+    "params": ["0x0002dfb94d6794165b96668b4308607afc05790dc211"]
+}
+```
+
+Response
+
+``` json
+{
+    "id": 42,
+    "jsonrpc": "2.0",
+    "result": "0xdfb94d6794165b96668b4308607afc05790dc2110867d3370ceb8a412902e7b4"
+}
+```
+
+### Method `gw_get_registry_address_by_script_hash`
+
+Get registry address by script hash.
+
+#### Params
+
+* Script hash
+* Registry ID (The builtin ID is 2 for Ethereum registry)
+
+#### Examples
+
+Request
+
+``` json
+{
+    "id": 42,
+    "jsonrpc": "2.0",
+    "method": "gw_get_registry_address_by_script_hash",
+    "params": ["0x0003dfb94d6794165b96668b4308607afc05790dc211", "0x2"]
 }
 ```
 

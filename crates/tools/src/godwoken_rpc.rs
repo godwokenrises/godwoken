@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use ckb_jsonrpc_types::Script;
 use ckb_types::H256;
+use gw_common::{builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress};
 use gw_jsonrpc_types::{
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
     debugger::{DumpChallengeTarget, ReprMockTransaction},
@@ -51,14 +52,43 @@ impl GodwokenRpcClient {
             .map(|opt| opt.map(Into::into))
     }
 
-    pub async fn get_balance(&self, short_script_hash: JsonBytes, sudt_id: u32) -> Result<u128> {
-        let params = serde_json::to_value((short_script_hash, AccountID::from(sudt_id)))?;
+    pub async fn get_balance(&self, addr: &RegistryAddress, sudt_id: u32) -> Result<u128> {
+        let params = serde_json::to_value((
+            JsonBytes::from_vec(addr.to_bytes()),
+            AccountID::from(sudt_id),
+        ))?;
         self.rpc::<Uint128>("get_balance", params)
             .await
             .map(Into::into)
     }
 
-    pub async fn get_account_id_by_script_hash(&self, script_hash: H256) -> Result<Option<u32>> {
+    pub async fn get_registry_address_by_script_hash(
+        &self,
+        script_hash: &H256,
+    ) -> Result<RegistryAddress> {
+        let params = serde_json::to_value((script_hash, AccountID::from(ETH_REGISTRY_ACCOUNT_ID)))?;
+        self.rpc::<gw_jsonrpc_types::godwoken::RegistryAddress>(
+            "get_registry_address_by_script_hash",
+            params,
+        )
+        .await
+        .map(Into::into)
+    }
+
+    pub async fn get_script_hash_by_registry_address(
+        &mut self,
+        addr: &RegistryAddress,
+    ) -> Result<H256> {
+        let params = serde_json::to_value((JsonBytes::from_vec(addr.to_bytes()),))?;
+        self.rpc::<H256>("get_script_hash_by_registry_address", params)
+            .await
+            .map(Into::into)
+    }
+
+    pub async fn get_account_id_by_script_hash(
+        &mut self,
+        script_hash: H256,
+    ) -> Result<Option<u32>> {
         let params = serde_json::to_value((script_hash,))?;
         self.rpc::<Option<Uint32>>("get_account_id_by_script_hash", params)
             .await
@@ -93,18 +123,7 @@ impl GodwokenRpcClient {
             .map(|opt| opt.map(Into::into))
     }
 
-    pub async fn get_script_hash_by_short_script_hash(
-        &self,
-        short_script_hash: JsonBytes,
-    ) -> Result<Option<H256>> {
-        let params = serde_json::to_value((short_script_hash,))?;
-
-        self.rpc::<Option<H256>>("get_script_hash_by_short_script_hash", params)
-            .await
-            .map(|opt| opt.map(Into::into))
-    }
-
-    pub async fn submit_l2transaction(&self, l2tx: JsonBytes) -> Result<H256> {
+    pub async fn submit_l2transaction(&mut self, l2tx: JsonBytes) -> Result<H256> {
         let params = serde_json::to_value((l2tx,))?;
         self.rpc::<H256>("submit_l2transaction", params)
             .await

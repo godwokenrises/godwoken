@@ -1261,3 +1261,36 @@ impl From<packed::WithdrawalLockArgs> for WithdrawalLockArgs {
         }
     }
 }
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct RegistryAddress {
+    pub registry_id: Uint32,
+    pub address: JsonBytes,
+}
+
+impl From<RegistryAddress> for gw_common::registry_address::RegistryAddress {
+    fn from(json: RegistryAddress) -> gw_common::registry_address::RegistryAddress {
+        let RegistryAddress {
+            registry_id,
+            address,
+        } = json;
+        gw_common::registry_address::RegistryAddress::new(
+            registry_id.value(),
+            address.as_bytes().to_vec(),
+        )
+    }
+}
+
+impl From<gw_common::registry_address::RegistryAddress> for RegistryAddress {
+    fn from(data: gw_common::registry_address::RegistryAddress) -> RegistryAddress {
+        let gw_common::registry_address::RegistryAddress {
+            registry_id,
+            address,
+        } = data;
+        RegistryAddress {
+            registry_id: registry_id.into(),
+            address: JsonBytes::from_vec(address),
+        }
+    }
+}

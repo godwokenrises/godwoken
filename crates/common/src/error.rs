@@ -15,8 +15,6 @@ cfg_if::cfg_if! {
             MissingKey,
             #[error("Store error")]
             Store,
-            #[error("Invalid short script hash error")]
-            InvalidShortScriptHash,
             #[error("Duplicated script hash")]
             DuplicatedScriptHash,
             #[error("Duplicated registry address")]
@@ -34,7 +32,6 @@ cfg_if::cfg_if! {
             MerkleProof,
             MissingKey,
             Store,
-            InvalidShortScriptHash,
             DuplicatedScriptHash,
             DuplicatedRegistryAddress,
             InvalidArgs,
