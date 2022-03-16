@@ -1,12 +1,10 @@
-name: Rust
+name: Build and Test
 
 on: [push, pull_request]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v1
     - name: Install Rust components
@@ -32,3 +30,10 @@ jobs:
       run: RUST_BACKTRACE=1 cargo test --all-targets
     - name: Test TOML serialization
       run: cargo run --bin godwoken -- generate-example-config -o test.toml
+
+  integration-test:
+    uses: nervosnetwork/godwoken-tests/.github/workflows/reusable-integration-test-v1.yml@develop
+    with:
+      # github.head_ref: The head_ref or source branch of the pull request in a workflow run. This property is only available when the event that triggers a workflow run is either pull_request or pull_request_target.
+      # github.ref: The branch or tag ref that triggered the workflow run. For branches this is the format refs/heads/<branch_name>, and for tags it is refs/tags/<tag_name>.
+      godwoken_ref: ${{ github.head_ref || github.ref }}
