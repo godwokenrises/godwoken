@@ -3,8 +3,9 @@ use std::sync::Arc;
 use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
 use gw_common::{
     blake2b::new_blake2b,
-    builtins::CKB_SUDT_ACCOUNT_ID,
-    state::{to_short_script_hash, State},
+    builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
+    registry_address::RegistryAddress,
+    state::State,
     H256,
 };
 use gw_config::{BackendConfig, GenesisConfig, StoreConfig};
@@ -25,11 +26,13 @@ use gw_store::{
 };
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
-    core::{ScriptHashType, Status},
+    bytes::Bytes,
+    core::{AllowedEoaType, ScriptHashType, Status},
     offchain::RollupContext,
     packed::{
-        AccountMerkleState, BlockInfo, BlockMerkleState, GlobalState, L2Block, RawL2Block,
-        RawL2Transaction, RollupConfig, SUDTArgs, SUDTTransfer, Script, SubmitTransactions,
+        AccountMerkleState, AllowedTypeHash, BlockInfo, BlockMerkleState, Fee, GlobalState,
+        L2Block, RawL2Block, RawL2Transaction, RollupConfig, SUDTArgs, SUDTTransfer, Script,
+        SubmitTransactions,
     },
     prelude::*,
 };
@@ -89,12 +92,18 @@ struct Account {
 }
 
 impl Account {
-    fn build_script(n: u32) -> Script {
-        Script::new_builder()
+    fn build_script(n: u32) -> (Script, RegistryAddress) {
+        let mut addr = [0u8; 20];
+        addr[..4].copy_from_slice(&n.to_le_bytes());
+        let mut args = vec![42u8; 32];
+        args.extend(&addr);
+        let script = Script::new_builder()
             .code_hash(ALWAYS_SUCCESS_LOCK_HASH.pack())
             .hash_type(ScriptHashType::Type.into())
-            .args(n.to_be_bytes().pack())
-            .build()
+            .args(args.pack())
+            .build();
+        let addr = RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, addr.to_vec());
+        (script, addr)
     }
 }
 
@@ -118,6 +127,13 @@ impl BenchExecutionEnvironment {
             rollup_type_hash: ROLLUP_TYPE_HASH.into(),
             rollup_config: RollupConfig::new_builder()
                 .l2_sudt_validator_script_type_hash(SUDT_VALIDATOR_SCRIPT_TYPE_HASH.pack())
+                .allowed_eoa_type_hashes(
+                    vec![AllowedTypeHash::new_builder()
+                        .hash(ALWAYS_SUCCESS_LOCK_HASH.pack())
+                        .type_(AllowedEoaType::Eth.into())
+                        .build()]
+                    .pack(),
+                )
                 .build()
                 .into(),
             ..Default::default()
@@ -169,35 +185,28 @@ impl BenchExecutionEnvironment {
         let snap = self.mem_pool_state.load();
         let mut state = snap.state().unwrap();
 
-        let block_producer_script = Account::build_script(0);
-        let block_producer_id = {
-            state
-                .get_account_id_by_script_hash(&block_producer_script.hash().into())
-                .unwrap()
-                .unwrap()
-        };
-
+        let (block_producer_script, block_producer) = Account::build_script(0);
         let block_info = BlockInfo::new_builder()
-            .block_producer_id(block_producer_id.pack())
+            .block_producer(Bytes::from(block_producer.to_bytes()).pack())
             .number(1.pack())
             .timestamp(1.pack())
             .build();
 
         let block_producer_balance = state
-            .get_sudt_balance(
-                CKB_SUDT_ACCOUNT_ID,
-                to_short_script_hash(&block_producer_script.hash().into()),
-            )
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &block_producer)
             .unwrap();
 
-        let short_script_hashes = (0..=accounts)
+        let addrs: Vec<_> = (0..=accounts)
             .map(Account::build_script)
-            .map(|s| to_short_script_hash(&s.hash().into()).to_vec())
-            .collect::<Vec<Vec<u8>>>();
+            .map(|(_s, addr)| addr)
+            .collect();
 
-        let address_offset = block_producer_id; // start from block producer
-        let start_account_id = block_producer_id + 1;
-        let end_account_id = block_producer_id + accounts;
+        let address_offset = state
+            .get_account_id_by_script_hash(&block_producer_script.hash().into())
+            .unwrap()
+            .unwrap(); // start from block producer
+        let start_account_id = address_offset + 1;
+        let end_account_id = address_offset + accounts;
 
         // Loop transfer from id to id + 1, until we reach target count
         let mut from_id = start_account_id;
@@ -208,17 +217,20 @@ impl BenchExecutionEnvironment {
                 if to_id > end_account_id {
                     to_id = start_account_id;
                 }
-                short_script_hashes
-                    .get((to_id - address_offset) as usize)
-                    .unwrap()
+                addrs.get((to_id - address_offset) as usize).unwrap()
             };
 
             let args = SUDTArgs::new_builder()
                 .set(
                     SUDTTransfer::new_builder()
-                        .to(to_address.pack())
+                        .to_address(Bytes::from(to_address.to_bytes()).pack())
                         .amount(1.pack())
-                        .fee(1.pack())
+                        .fee(
+                            Fee::new_builder()
+                                .registry_id(ETH_REGISTRY_ACCOUNT_ID.pack())
+                                .amount(1.pack())
+                                .build(),
+                        )
                         .build(),
                 )
                 .build();
@@ -253,10 +265,7 @@ impl BenchExecutionEnvironment {
         let snap = self.mem_pool_state.load();
         let state = snap.state().unwrap();
         let post_block_producer_balance = state
-            .get_sudt_balance(
-                CKB_SUDT_ACCOUNT_ID,
-                to_short_script_hash(&block_producer_script.hash().into()),
-            )
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &block_producer)
             .unwrap();
 
         assert_eq!(
@@ -270,14 +279,15 @@ impl BenchExecutionEnvironment {
         accounts: u32,
     ) -> Vec<Account> {
         let build_account = |idx: u32| -> Account {
-            let account_script = Account::build_script(idx);
+            let (account_script, addr) = Account::build_script(idx);
             let account_script_hash: H256 = account_script.hash().into();
-            let short_script_hash = to_short_script_hash(&account_script_hash);
-
             let account_id = state.create_account(account_script_hash).unwrap();
             state.insert_script(account_script_hash, account_script);
             state
-                .mint_sudt(CKB_SUDT_ACCOUNT_ID, short_script_hash, CKB_BALANCE)
+                .mapping_registry_address_to_script_hash(addr.clone(), account_script_hash)
+                .unwrap();
+            state
+                .mint_sudt(CKB_SUDT_ACCOUNT_ID, &addr, CKB_BALANCE)
                 .unwrap();
 
             Account { id: account_id }
@@ -327,7 +337,6 @@ impl BenchExecutionEnvironment {
 
             let raw_genesis = RawL2Block::new_builder()
                 .number(0u64.pack())
-                .block_producer_id(0u32.pack())
                 .parent_block_hash([0u8; 32].pack())
                 .timestamp(1.pack())
                 .post_account(post_account.clone())

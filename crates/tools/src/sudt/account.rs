@@ -9,7 +9,7 @@ use gw_types::{
 };
 
 use crate::{
-    account::{eth_sign, privkey_to_short_script_hash, short_script_hash_to_account_id},
+    account::{eth_sign, privkey_to_l2_script_hash},
     godwoken_rpc::GodwokenRpcClient,
     types::ScriptsDeploymentResult,
     utils::{message::generate_transaction_message_to_sign, transaction::wait_for_l2_tx},
@@ -51,9 +51,10 @@ async fn pk_to_account_id(
     deployment: &ScriptsDeploymentResult,
     pk: &H256,
 ) -> Result<u32> {
-    let from_address = privkey_to_short_script_hash(pk, rollup_type_hash, deployment)
+    let from_script_hash = privkey_to_l2_script_hash(pk, rollup_type_hash, deployment)
         .map_err(|err| anyhow!("{}", err))?;
-    let from_id = short_script_hash_to_account_id(rpc_client, &from_address)
+    let from_id = rpc_client
+        .get_account_id_by_script_hash(from_script_hash)
         .await
         .map_err(|err| anyhow!("{}", err))?;
     Ok(from_id.expect("Account id of provided privkey not found!"))

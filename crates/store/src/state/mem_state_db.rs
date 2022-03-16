@@ -5,7 +5,7 @@ use crate::traits::kv_store::KVStoreRead;
 use crate::{smt::smt_store::SMTStore, traits::kv_store::KVStoreWrite};
 use anyhow::Result;
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
-use gw_db::schema::{COLUMN_DATA, COLUMN_SCRIPT, COLUMN_SCRIPT_PREFIX};
+use gw_db::schema::{COLUMN_DATA, COLUMN_SCRIPT};
 use gw_traits::CodeStore;
 use gw_types::from_box_should_be_ok;
 use gw_types::{
@@ -95,15 +95,6 @@ impl<'a> CodeStore for MemStateTree<'a> {
         self.db()
             .insert_raw(COLUMN_SCRIPT, script_hash.as_slice(), script.as_slice())
             .expect("insert script");
-
-        // build script_hash prefix search index
-        self.db()
-            .insert_raw(
-                COLUMN_SCRIPT_PREFIX,
-                &script_hash.as_slice()[..20],
-                script_hash.as_slice(),
-            )
-            .expect("insert script prefix");
     }
 
     fn get_script(&self, script_hash: &H256) -> Option<packed::Script> {
@@ -111,21 +102,6 @@ impl<'a> CodeStore for MemStateTree<'a> {
             .get(COLUMN_SCRIPT, script_hash.as_slice())
             .or_else(|| self.db().get(COLUMN_SCRIPT, script_hash.as_slice()))
             .map(|slice| from_box_should_be_ok!(packed::ScriptReader, slice))
-    }
-
-    fn get_script_hash_by_short_script_hash(&self, script_hash_prefix: &[u8]) -> Option<H256> {
-        match self
-            .db()
-            .get(COLUMN_SCRIPT_PREFIX, script_hash_prefix)
-            .or_else(|| self.db().get(COLUMN_SCRIPT_PREFIX, script_hash_prefix))
-        {
-            Some(slice) => {
-                let mut hash = [0u8; 32];
-                hash.copy_from_slice(slice.as_ref());
-                Some(hash.into())
-            }
-            None => None,
-        }
     }
 
     fn insert_data(&mut self, data_hash: H256, code: Bytes) {

@@ -5,13 +5,13 @@ use crate::types::ScriptsDeploymentResult;
 use crate::utils::transaction::{get_network_type, read_config, run_cmd, wait_for_tx};
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
-use ckb_jsonrpc_types::JsonBytes;
 use ckb_sdk::{Address, AddressPayload, HttpRpcClient, HumanCapacity, SECP256K1};
 use ckb_types::{
     bytes::Bytes as CKBBytes, core::ScriptHashType, packed::Script as CKBScript,
     prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity, prelude::Pack as CKBPack,
     prelude::Unpack as CKBUnpack,
 };
+use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_types::packed::{CellOutput, CustodianLockArgs};
 use gw_types::{
     bytes::Bytes as GwBytes,
@@ -79,6 +79,7 @@ pub async fn deposit_ckb(
         .owner_lock_hash(owner_lock_hash)
         .cancel_timeout(GwPack::pack(&0xc0000000000004b0u64))
         .layer2_lock(l2_lock)
+        .registry_id(GwPack::pack(&ETH_REGISTRY_ACCOUNT_ID))
         .build();
 
     let minimal_capacity = minimal_deposit_capacity(&deposit_lock_args)?;
@@ -107,12 +108,9 @@ pub async fn deposit_ckb(
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
-    let short_script_hash = &l2_lock_hash.as_bytes()[..20];
-    log::info!("short script hash: 0x{}", hex::encode(short_script_hash));
+    log::info!("script hash: 0x{}", hex::encode(l2_lock_hash.as_bytes()));
 
-    let init_balance =
-        get_balance_by_short_script_hash(&mut godwoken_rpc_client, short_script_hash.to_vec())
-            .await?;
+    let init_balance = get_balance_by_script_hash(&mut godwoken_rpc_client, &l2_lock_hash).await?;
 
     let output = run_cmd(vec![
         "--url",
@@ -167,10 +165,7 @@ async fn wait_for_balance_change(
     while start_time.elapsed() < retry_timeout {
         std::thread::sleep(Duration::from_secs(2));
 
-        let short_script_hash = &from_script_hash.as_bytes()[..20];
-        let balance =
-            get_balance_by_short_script_hash(godwoken_rpc_client, short_script_hash.to_vec())
-                .await?;
+        let balance = get_balance_by_script_hash(godwoken_rpc_client, from_script_hash).await?;
         log::info!(
             "current balance: {}, waiting for {} secs.",
             balance,
@@ -190,12 +185,14 @@ async fn wait_for_balance_change(
     Err(anyhow!("Timeout: {:?}", retry_timeout))
 }
 
-async fn get_balance_by_short_script_hash(
+async fn get_balance_by_script_hash(
     godwoken_rpc_client: &mut GodwokenRpcClient,
-    short_script_hash: Vec<u8>,
+    script_hash: &H256,
 ) -> Result<u128> {
-    let bytes = JsonBytes::from_vec(short_script_hash);
-    let balance = godwoken_rpc_client.get_balance(bytes, 1).await?;
+    let addr = godwoken_rpc_client
+        .get_registry_address_by_script_hash(script_hash)
+        .await?;
+    let balance = godwoken_rpc_client.get_balance(&addr, 1).await?;
     Ok(balance)
 }
 

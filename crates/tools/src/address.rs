@@ -5,14 +5,14 @@ use crate::{
     utils::transaction::read_config,
 };
 use anyhow::{anyhow, Result};
-use ckb_jsonrpc_types::JsonBytes;
+use ckb_fixed_hash::H256;
 use ckb_types::{
     core::ScriptHashType,
     prelude::{Builder, Entity},
 };
 use gw_types::{bytes::Bytes as GwBytes, packed::Script, prelude::Pack as GwPack};
 
-pub fn to_godwoken_short_script_hash(
+pub fn to_godwoken_script_hash(
     eth_eoa_address: &str,
     config_path: &Path,
     scripts_deployment_path: &Path,
@@ -44,40 +44,26 @@ pub fn to_godwoken_short_script_hash(
         .build();
 
     let l2_lock_hash = l2_lock.hash();
-    let short_script_hash = &l2_lock_hash[..20];
 
-    log::info!(
-        "godwoken short script hash: 0x{}",
-        hex::encode(short_script_hash)
-    );
+    log::info!("godwoken script hash: 0x{}", hex::encode(l2_lock_hash));
 
     Ok(())
 }
 
-pub async fn to_eth_eoa_address(
-    godwoken_rpc_url: &str,
-    godwoken_short_script_hash: &str,
-) -> Result<()> {
-    if godwoken_short_script_hash.len() != 42 || !godwoken_short_script_hash.starts_with("0x") {
-        return Err(anyhow!("godwoken short script hash format error!"));
+pub async fn to_eth_eoa_address(godwoken_rpc_url: &str, script_hash: &str) -> Result<()> {
+    if script_hash.len() != 66 || !script_hash.starts_with("0x") {
+        return Err(anyhow!("godwoken script hash format error!"));
     }
 
     let godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
-    let short_script_hash = GwBytes::from(hex::decode(
-        godwoken_short_script_hash
-            .trim_start_matches("0x")
-            .as_bytes(),
+    let script_hash = GwBytes::from(hex::decode(
+        script_hash.trim_start_matches("0x").as_bytes(),
     )?);
 
-    let script_hash = godwoken_rpc_client
-        .get_script_hash_by_short_script_hash(JsonBytes::from_bytes(short_script_hash))
+    let script = godwoken_rpc_client
+        .get_script(H256::from_slice(&script_hash)?)
         .await?;
-
-    let script = match script_hash {
-        Some(h) => godwoken_rpc_client.get_script(h).await?,
-        None => return Err(anyhow!("script hash not found!")),
-    };
 
     let args = match script {
         Some(s) => s.args,

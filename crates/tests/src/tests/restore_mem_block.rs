@@ -13,10 +13,7 @@ use gw_block_producer::test_mode_control::TestModeControl;
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::registry_address::RegistryAddress;
-use gw_common::{
-    state::{to_short_script_hash, State},
-    H256,
-};
+use gw_common::{state::State, H256};
 use gw_config::RPCClientConfig;
 use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_generator::ArcSwap;
@@ -141,10 +138,8 @@ async fn test_restore_mem_block() {
                     .get_account_id_by_script_hash(&account_script.hash().into())
                     .unwrap();
                 let to_script = random_always_success_script(&rollup_script_hash);
-                let to_addr = RegistryAddress::new(
-                    ETH_REGISTRY_ACCOUNT_ID,
-                    to_short_script_hash(&to_script.hash().into()).to_vec(),
-                );
+                let to_addr =
+                    RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, to_script.hash()[0..20].to_vec());
                 let transfer = SUDTTransfer::new_builder()
                     .amount((DEPOSIT_CAPACITY as u128 / 2).pack())
                     .to_address(Bytes::from(to_addr.to_bytes()).pack())

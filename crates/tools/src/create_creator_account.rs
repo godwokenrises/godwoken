@@ -10,9 +10,7 @@ use gw_types::{
 use std::path::Path;
 
 use crate::{
-    account::{
-        eth_sign, privkey_to_short_script_hash, read_privkey, short_script_hash_to_account_id,
-    },
+    account::{eth_sign, privkey_to_l2_script_hash, read_privkey},
     godwoken_rpc::GodwokenRpcClient,
     types::ScriptsDeploymentResult,
     utils::{
@@ -31,9 +29,11 @@ async fn create_eth_addr_reg_account(
     scripts_deploy_result: &ScriptsDeploymentResult,
 ) -> Result<u32> {
     let rollup_type_hash = &config.genesis.rollup_type_hash;
-    let from_address =
-        privkey_to_short_script_hash(privkey, rollup_type_hash, scripts_deploy_result)?;
-    let from_id = short_script_hash_to_account_id(godwoken_rpc_client, &from_address).await?;
+    let from_script_hash =
+        privkey_to_l2_script_hash(privkey, rollup_type_hash, scripts_deploy_result)?;
+    let from_id = godwoken_rpc_client
+        .get_account_id_by_script_hash(from_script_hash)
+        .await?;
     let from_id = from_id.expect("Account id of provided privkey not found!");
 
     let eth_addr_reg_validator_script_hash = {
@@ -144,9 +144,11 @@ pub async fn create_creator_account(
     .await
     .expect("create_eth_addr_reg_account success");
 
-    let from_address =
-        privkey_to_short_script_hash(&privkey, rollup_type_hash, &scripts_deployment)?;
-    let from_id = short_script_hash_to_account_id(&mut godwoken_rpc_client, &from_address).await?;
+    let from_script_hash =
+        privkey_to_l2_script_hash(&privkey, rollup_type_hash, &scripts_deployment)?;
+    let from_id = godwoken_rpc_client
+        .get_account_id_by_script_hash(from_script_hash)
+        .await?;
     let from_id = from_id.expect("Account id of provided privkey not found!");
     log::info!("from id: {}", from_id);
 

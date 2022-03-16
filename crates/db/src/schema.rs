@@ -38,8 +38,6 @@ pub const COLUMN_BLOCK_DEPOSIT_REQUESTS: Col = 16;
 pub const COLUMN_MEM_POOL_TRANSACTION_RECEIPT: Col = 17;
 /// Column block state record
 pub const COLUMN_BLOCK_STATE_RECORD: Col = 18;
-/// Column script prefix
-pub const COLUMN_SCRIPT_PREFIX: Col = 19;
 /// Column block state reverse record
 pub const COLUMN_BLOCK_STATE_REVERSE_RECORD: Col = 20;
 /// Column reverted block SMT branch

@@ -1,14 +1,14 @@
-use crate::account::{
-    eth_sign, parse_account_short_script_hash, privkey_to_short_script_hash, read_privkey,
-    short_script_hash_to_account_id,
-};
+use crate::account::{eth_sign, privkey_to_l2_script_hash, read_privkey};
 use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::types::ScriptsDeploymentResult;
 use crate::utils::message::generate_transaction_message_to_sign;
 use crate::utils::transaction::{read_config, wait_for_l2_tx};
 use anyhow::Result;
 use ckb_jsonrpc_types::JsonBytes;
+use ckb_types::bytes::Bytes;
 use ckb_types::{prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity};
+use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
+use gw_common::registry_address::RegistryAddress;
 use gw_types::packed::{Fee, L2Transaction, RawL2Transaction, SUDTArgs, SUDTTransfer};
 use gw_types::prelude::Pack as GwPack;
 use std::path::Path;
@@ -35,23 +35,27 @@ pub async fn transfer(
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
-    let to_address = parse_account_short_script_hash(&mut godwoken_rpc_client, to).await?;
-
     let config = read_config(config_path)?;
     let rollup_type_hash = &config.genesis.rollup_type_hash;
 
     let privkey = read_privkey(privkey_path)?;
 
     // get from_id
-    let from_address =
-        privkey_to_short_script_hash(&privkey, rollup_type_hash, &scripts_deployment)?;
-    let from_id = short_script_hash_to_account_id(&mut godwoken_rpc_client, &from_address).await?;
+    let from_script_hash =
+        privkey_to_l2_script_hash(&privkey, rollup_type_hash, &scripts_deployment)?;
+    let from_id = godwoken_rpc_client
+        .get_account_id_by_script_hash(from_script_hash)
+        .await?;
     let from_id = from_id.expect("from id not found!");
 
     let nonce = godwoken_rpc_client.get_nonce(from_id).await?;
 
+    let to_addr = hex::decode(to.trim_start_matches("0x"))?;
+    assert_eq!(to_addr.len(), 20);
     let sudt_transfer = SUDTTransfer::new_builder()
-        .to_address(GwPack::pack(&to_address))
+        .to_address(GwPack::pack(&Bytes::from(
+            RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, to_addr).to_bytes(),
+        )))
         .amount(GwPack::pack(&amount))
         .fee(
             Fee::new_builder()

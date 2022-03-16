@@ -9,8 +9,7 @@ use gw_common::{
     h256_ext::H256Ext,
     registry_address::RegistryAddress,
     state::{
-        build_account_field_key, build_data_hash_key, build_script_hash_to_account_id_key,
-        build_short_script_hash_to_script_hash_key, State, DEFAULT_SHORT_SCRIPT_HASH_LEN,
+        build_account_field_key, build_data_hash_key, build_script_hash_to_account_id_key, State,
         GW_ACCOUNT_NONCE_TYPE, GW_ACCOUNT_SCRIPT_HASH_TYPE,
     },
     H256,
@@ -268,13 +267,6 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
                     build_script_hash_to_account_id_key(&script_hash[..]),
                     script_hash_to_id_value,
                 );
-                // short script hash to script_hash
-                self.result.write_values.insert(
-                    build_short_script_hash_to_script_hash_key(
-                        &script_hash[..DEFAULT_SHORT_SCRIPT_HASH_LEN],
-                    ),
-                    script_hash.into(),
-                );
                 // insert script
                 self.result
                     .new_scripts
@@ -458,7 +450,7 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
                 // the trusted script should do the transfer of fee first,
                 // then called this syscal to record the fee only after the success of the transfer.
 
-                // fetch short script hash
+                // fetch payer address
                 let payer_addr = {
                     let payer_addr = machine.registers()[A0].to_u64();
                     let payer_addr_len = machine.registers()[A1].to_u64();
