@@ -1150,8 +1150,18 @@ impl MemPool {
         }
 
         if let (Some(from_id), Some(to_id)) = (from_id, to_id) {
+            let t = Instant::now();
+
             let unregistered_account_hashes =
                 eth_eoa_mapping_register.filter_accounts(&state, from_id, to_id)?;
+
+            log::debug!(
+                "[eoa mapping] filter from {} to {}: {}ms",
+                from_id,
+                to_id,
+                t.elapsed().as_millis()
+            );
+
             let tx =
                 eth_eoa_mapping_register.build_register_tx(&state, unregistered_account_hashes)?;
             self.push_transaction(tx).await?;
