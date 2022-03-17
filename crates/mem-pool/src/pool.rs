@@ -494,6 +494,8 @@ impl MemPool {
         let new_tip = match new_tip {
             Some(block_hash) => block_hash,
             None => {
+                log::debug!("reset new tip to last valid tip block");
+
                 let db = self.store.begin_transaction();
                 db.get_last_valid_tip_block_hash()?
             }
@@ -596,7 +598,8 @@ impl MemPool {
         // reset mem block state
         {
             let snapshot = self.store.get_snapshot();
-            assert_eq!(snapshot.get_tip_block_hash()?, new_tip, "set new snapshot");
+            let snap_last_valid_tip = snapshot.get_last_valid_tip_block_hash()?;
+            assert_eq!(snap_last_valid_tip, new_tip, "set new snapshot");
             let mem_store = MemStore::new(snapshot);
             self.mem_pool_state.store(Arc::new(mem_store));
         }
