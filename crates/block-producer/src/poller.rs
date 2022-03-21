@@ -34,7 +34,6 @@ use std::{
 };
 use tokio::sync::Mutex;
 use tokio_metrics::TaskMonitor;
-use tracing::instrument;
 
 #[derive(thiserror::Error, Debug)]
 #[error("chain updater query l1 tx {tx_hash} error {source}")]

@@ -256,6 +256,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         reload_config_github_url: None,
         dynamic_config: Default::default(),
         eth_eoa_mapping_config: Default::default(),
+        trace: None,
     };
 
     Ok(config)
