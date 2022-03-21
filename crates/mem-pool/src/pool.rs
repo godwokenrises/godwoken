@@ -1132,44 +1132,36 @@ impl MemPool {
         }
 
         // Check parent block new accounts
-        const MAX_PARENT_BLOCKS: u64 = 5;
+        const MAX_PARENT_BLOCKS: u64 = 100;
         let last_valid_tip_block_hash = db.get_last_valid_tip_block_hash()?;
         if last_valid_tip_block_hash == self.current_tip.0 {
             let max_parent_block_number = self.current_tip.1.saturating_sub(MAX_PARENT_BLOCKS);
-            let mut parent_block_number = self.current_tip.1.saturating_sub(1);
 
-            while parent_block_number >= max_parent_block_number && parent_block_number != 0 {
-                let parent_block_hash = { db.get_block_hash_by_number(parent_block_number)? }
-                    .ok_or_else(|| anyhow!("{} block hash not found", parent_block_number))?;
-                let parent_block = { db.get_block(&parent_block_hash)? }
-                    .ok_or_else(|| anyhow!("{} block not found", parent_block_number))?;
+            let parent_block_hash = { db.get_block_hash_by_number(max_parent_block_number)? }
+                .ok_or_else(|| anyhow!("{} block hash not found", max_parent_block_number))?;
+            let parent_block = { db.get_block(&parent_block_hash)? }
+                .ok_or_else(|| anyhow!("{} block not found", max_parent_block_number))?;
+            let prev_account_count: u32 = parent_block.raw().prev_account().count().unpack();
 
-                let txs_count: u32 = parent_block.raw().submit_transactions().tx_count().unpack();
-                if txs_count != 0 {
-                    // Since register tx is always first one, all new eth accounts should be
-                    // registered
-                    break;
-                }
-
-                let prev_account_count: u32 = parent_block.raw().prev_account().count().unpack();
-                let post_account_count: u32 = parent_block.raw().post_account().count().unpack();
-                if prev_account_count == post_account_count {
-                    // No new accounts
-                    break;
-                }
-
-                from_id = Some(prev_account_count);
-                if to_id.is_none() {
-                    to_id = Some(post_account_count.saturating_sub(1));
-                }
-
-                parent_block_number = parent_block_number.saturating_sub(1);
+            from_id = Some(prev_account_count);
+            if to_id.is_none() {
+                to_id = Some(mem_block_prev_account_count.saturating_sub(1));
             }
         }
 
         if let (Some(from_id), Some(to_id)) = (from_id, to_id) {
+            let t = Instant::now();
+
             let unregistered_account_hashes =
                 eth_eoa_mapping_register.filter_accounts(&state, from_id, to_id)?;
+
+            log::debug!(
+                "[eoa mapping] filter from {} to {}: {}ms",
+                from_id,
+                to_id,
+                t.elapsed().as_millis()
+            );
+
             let tx =
                 eth_eoa_mapping_register.build_register_tx(&state, unregistered_account_hashes)?;
             self.push_transaction(tx).await?;

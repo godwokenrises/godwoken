@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use gw_common::blake2b::new_blake2b;
 use gw_common::state::State;
 use gw_common::H256;
 use gw_traits::CodeStore;
@@ -9,6 +10,9 @@ use gw_types::packed::{
 use gw_types::prelude::{Builder, Entity, Pack};
 use gw_utils::wallet::Wallet;
 use sha3::{Digest, Keccak256};
+
+pub const ACCOUNT_SCRIPT_HASH_TO_ETH_ADDR: u8 = 200;
+pub const MAX_ADDRESS_SIZE_PER_REGISTER_BATCH: usize = 50;
 
 pub struct EthEoaMappingRegister {
     rollup_script_hash: H256,
@@ -67,13 +71,25 @@ impl EthEoaMappingRegister {
     ) -> Result<Vec<H256>> {
         assert!(from_id <= to_id);
 
+        let registry_account_id = state
+            .get_account_id_by_script_hash(&self.registry_script_hash)?
+            .ok_or_else(|| anyhow!("[eoa mapping] eth registry(contract) account not found"))?;
+
         let eth_lock_code_hash = self.eth_lock_code_hash.pack();
         let mut script_hashes = Vec::with_capacity(to_id.saturating_sub(from_id) as usize + 1);
         for id in from_id..=to_id {
+            if script_hashes.len() >= MAX_ADDRESS_SIZE_PER_REGISTER_BATCH {
+                break;
+            }
+
             let script_hash = state.get_script_hash(id)?;
             match state.get_script(&script_hash) {
                 Some(script) if script.code_hash() == eth_lock_code_hash => {
-                    script_hashes.push(script_hash)
+                    let eth_addr_key =
+                        build_script_hash_to_eth_address_key(registry_account_id, &script_hash);
+                    if Ok(H256::zero()) == state.get_raw(&eth_addr_key) {
+                        script_hashes.push(script_hash)
+                    }
                 }
                 _ => continue,
             }
@@ -144,4 +160,16 @@ pub fn build_registry_script(rollup_script_hash: H256, eth_registry_code_hash: H
         .hash_type(ScriptHashType::Type.into())
         .args(rollup_script_hash.as_slice().to_vec().pack())
         .build()
+}
+
+pub fn build_script_hash_to_eth_address_key(registry_account_id: u32, script_hash: &H256) -> H256 {
+    let mut hash = [0u8; 32];
+
+    let mut hasher = new_blake2b();
+    hasher.update(&registry_account_id.to_le_bytes());
+    hasher.update(&[ACCOUNT_SCRIPT_HASH_TO_ETH_ADDR]);
+    hasher.update(script_hash.as_slice());
+    hasher.finalize(&mut hash);
+
+    hash.into()
 }
