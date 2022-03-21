@@ -431,6 +431,7 @@ impl RequestSubmitter {
                 if !mem_pool.is_mem_txs_full(Self::MAX_BATCH_SIZE) {
                     break;
                 }
+                drop(mem_pool);
                 // sleep and try again
                 tokio::time::sleep(Self::INTERVAL_MS).await;
             }
