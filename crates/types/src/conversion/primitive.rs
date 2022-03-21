@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use crate::{borrow::ToOwned, str, string::String, vec::Vec};
 use crate::{bytes::Bytes, packed, prelude::*};
 
@@ -32,37 +34,34 @@ impl Pack<packed::Uint32> for usize {
 }
 
 impl<'r> Unpack<u16> for packed::Uint16Reader<'r> {
-    #[allow(clippy::cast_ptr_alignment)]
+    #[inline]
     fn unpack(&self) -> u16 {
-        let le = self.as_slice().as_ptr() as *const u16;
-        u16::from_le(unsafe { *le })
+        // Unwrap is ok because slice should always be of the correct length, so try_into should not fail.
+        u16::from_le_bytes(self.as_slice().try_into().unwrap())
     }
 }
 impl_conversion_for_entity_unpack!(u16, Uint16);
 
 impl<'r> Unpack<u32> for packed::Uint32Reader<'r> {
-    #[allow(clippy::cast_ptr_alignment)]
+    #[inline]
     fn unpack(&self) -> u32 {
-        let le = self.as_slice().as_ptr() as *const u32;
-        u32::from_le(unsafe { *le })
+        u32::from_le_bytes(self.as_slice().try_into().unwrap())
     }
 }
 impl_conversion_for_entity_unpack!(u32, Uint32);
 
 impl<'r> Unpack<u64> for packed::Uint64Reader<'r> {
-    #[allow(clippy::cast_ptr_alignment)]
+    #[inline]
     fn unpack(&self) -> u64 {
-        let le = self.as_slice().as_ptr() as *const u64;
-        u64::from_le(unsafe { *le })
+        u64::from_le_bytes(self.as_slice().try_into().unwrap())
     }
 }
 impl_conversion_for_entity_unpack!(u64, Uint64);
 
 impl<'r> Unpack<u128> for packed::Uint128Reader<'r> {
-    #[allow(clippy::cast_ptr_alignment)]
+    #[inline]
     fn unpack(&self) -> u128 {
-        let le = self.as_slice().as_ptr() as *const u128;
-        u128::from_le(unsafe { *le })
+        u128::from_le_bytes(self.as_slice().try_into().unwrap())
     }
 }
 impl_conversion_for_entity_unpack!(u128, Uint128);
