@@ -1143,6 +1143,11 @@ impl MemPool {
                 .ok_or_else(|| anyhow!("{} block not found", max_parent_block_number))?;
             let prev_account_count: u32 = parent_block.raw().prev_account().count().unpack();
 
+            if to_id.is_none() && prev_account_count == mem_block_prev_account_count {
+                // No new account
+                return Ok(());
+            }
+
             from_id = Some(prev_account_count);
             if to_id.is_none() {
                 to_id = Some(mem_block_prev_account_count.saturating_sub(1));
