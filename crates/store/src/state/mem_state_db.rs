@@ -7,6 +7,7 @@ use anyhow::Result;
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
 use gw_db::schema::{COLUMN_DATA, COLUMN_SCRIPT, COLUMN_SCRIPT_PREFIX};
 use gw_traits::CodeStore;
+use gw_types::from_box_should_be_ok;
 use gw_types::{
     bytes::Bytes,
     packed::{self, AccountMerkleState},
@@ -109,7 +110,7 @@ impl<'a> CodeStore for MemStateTree<'a> {
         self.db()
             .get(COLUMN_SCRIPT, script_hash.as_slice())
             .or_else(|| self.db().get(COLUMN_SCRIPT, script_hash.as_slice()))
-            .map(|slice| packed::ScriptReader::from_slice_should_be_ok(slice.as_ref()).to_entity())
+            .map(|slice| from_box_should_be_ok!(packed::ScriptReader, slice))
     }
 
     fn get_script_hash_by_short_script_hash(&self, script_hash_prefix: &[u8]) -> Option<H256> {
