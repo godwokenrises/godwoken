@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::ops::{Deref, Sub};
 use std::path::Path;
 use std::str::FromStr;
 
@@ -360,9 +360,12 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
 
     // millisecond
     let timestamp = timestamp.unwrap_or_else(|| {
+        // New created CKB dev chain's may out of sync with real world time,
+        // So we using an earlier time to get around this issue.
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("timestamp")
+            .sub(core::time::Duration::from_secs(3600))
             .as_millis() as u64
     });
 

@@ -312,6 +312,18 @@ impl BlockProducer {
             Some(time) => time,
             None => return Ok(()),
         };
+        let tip_block_timestamp = Duration::from_millis(
+            self.store
+                .get_last_valid_tip_block()?
+                .raw()
+                .timestamp()
+                .unpack(),
+        );
+        if median_time < tip_block_timestamp {
+            log::warn!("[block producer] median time is less than tip block timestamp, skip produce new block");
+            return Ok(());
+        }
+
         let poa_cell_input = InputCellInfo {
             input: CellInput::new_builder()
                 .previous_output(rollup_cell.out_point.clone())
