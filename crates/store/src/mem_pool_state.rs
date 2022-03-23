@@ -14,8 +14,8 @@ use gw_db::{
     schema::{Col, COLUMNS, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_META},
 };
 use gw_types::{
-    packed,
-    prelude::{Entity, FromSliceShouldBeOk, Pack, Reader, Unpack},
+    from_box_should_be_ok, packed,
+    prelude::{Entity, FromSliceShouldBeOk, Pack, Unpack},
 };
 
 use crate::{
@@ -115,11 +115,9 @@ impl MemStore {
 
     pub fn get_mem_block_account_count(&self) -> Result<Option<u32>, Error> {
         match self.get(COLUMN_META, META_MEM_SMT_COUNT_KEY) {
-            Some(slice) => {
-                let count =
-                    packed::Uint32Reader::from_slice_should_be_ok(slice.as_ref()).to_entity();
-                Ok(Some(count.unpack()))
-            }
+            Some(slice) => Ok(Some(
+                packed::Uint32Reader::from_slice_should_be_ok(&slice).unpack(),
+            )),
             None => Ok(None),
         }
     }
@@ -144,9 +142,7 @@ impl MemStore {
 
     pub fn get_mem_pool_block_info(&self) -> Result<Option<packed::BlockInfo>, Error> {
         match self.get(COLUMN_META, META_MEM_BLOCK_INFO) {
-            Some(slice) => Ok(Some(
-                packed::BlockInfoReader::from_slice_should_be_ok(slice.as_ref()).to_entity(),
-            )),
+            Some(slice) => Ok(Some(from_box_should_be_ok!(packed::BlockInfoReader, slice))),
             None => Ok(None),
         }
     }

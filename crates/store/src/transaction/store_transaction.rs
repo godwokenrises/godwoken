@@ -240,10 +240,9 @@ impl StoreTransaction {
     // TODO: prune db state
     pub fn get_reverted_block_hashes(&self) -> Result<HashSet<H256>, Error> {
         let iter = self.get_iter(COLUMN_REVERTED_BLOCK_SMT_LEAF, IteratorMode::End);
-        let to_byte32 = iter.map(|(key, _value)| {
-            packed::Byte32Reader::from_slice_should_be_ok(key.as_ref()).to_entity()
+        let to_h256 = iter.map(|(key, _value)| {
+            packed::Byte32Reader::from_slice_should_be_ok(key.as_ref()).unpack()
         });
-        let to_h256 = to_byte32.map(|byte32| byte32.unpack());
 
         Ok(to_h256.collect())
     }

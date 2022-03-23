@@ -29,3 +29,11 @@ cfg_if::cfg_if! {
         use alloc::string;
     }
 }
+
+#[macro_export]
+macro_rules! from_box_should_be_ok {
+    ($r:ty, $b:ident) => {{
+        <$r>::from_slice_should_be_ok(&$b);
+        <$r as gw_types::prelude::Reader>::Entity::new_unchecked($b.into())
+    }};
+}

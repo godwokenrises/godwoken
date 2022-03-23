@@ -17,6 +17,7 @@ use gw_db::schema::{
 use gw_types::offchain::global_state_from_slice;
 use gw_types::packed::{Script, WithdrawalKey};
 use gw_types::{
+    from_box_should_be_ok,
     packed::{self, ChallengeTarget, TransactionKey},
     prelude::*,
 };
@@ -70,7 +71,7 @@ pub trait ChainStore: KVStoreRead {
             .get(COLUMN_META, META_LAST_VALID_TIP_BLOCK_HASH_KEY)
             .expect("get last valid tip block hash");
 
-        let byte32 = packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref()).to_entity();
+        let byte32 = packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref());
         Ok(byte32.unpack())
     }
 
@@ -78,11 +79,7 @@ pub trait ChainStore: KVStoreRead {
         let slice = self
             .get(COLUMN_META, META_TIP_BLOCK_HASH_KEY)
             .expect("get tip block hash");
-        Ok(
-            packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref())
-                .to_entity()
-                .unpack(),
-        )
+        Ok(packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref()).unpack())
     }
 
     fn get_tip_block(&self) -> Result<packed::L2Block, Error> {
@@ -94,9 +91,7 @@ pub trait ChainStore: KVStoreRead {
         let block_number: packed::Uint64 = number.pack();
         match self.get(COLUMN_INDEX, block_number.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref())
-                    .to_entity()
-                    .unpack(),
+                packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref()).unpack(),
             )),
             None => Ok(None),
         }
@@ -105,9 +100,7 @@ pub trait ChainStore: KVStoreRead {
     fn get_block_number(&self, block_hash: &H256) -> Result<Option<u64>, Error> {
         match self.get(COLUMN_INDEX, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::Uint64Reader::from_slice_should_be_ok(slice.as_ref())
-                    .to_entity()
-                    .unpack(),
+                packed::Uint64Reader::from_slice_should_be_ok(slice.as_ref()).unpack(),
             )),
             None => Ok(None),
         }
@@ -115,9 +108,7 @@ pub trait ChainStore: KVStoreRead {
 
     fn get_block(&self, block_hash: &H256) -> Result<Option<packed::L2Block>, Error> {
         match self.get(COLUMN_BLOCK, block_hash.as_slice()) {
-            Some(slice) => Ok(Some(
-                packed::L2BlockReader::from_slice_should_be_ok(slice.as_ref()).to_entity(),
-            )),
+            Some(slice) => Ok(Some(from_box_should_be_ok!(packed::L2BlockReader, slice))),
             None => Ok(None),
         }
     }
@@ -135,9 +126,7 @@ pub trait ChainStore: KVStoreRead {
     ) -> Result<Option<packed::TransactionInfo>, Error> {
         let tx_info_opt = self
             .get(COLUMN_TRANSACTION_INFO, tx_hash.as_slice())
-            .map(|slice| {
-                packed::TransactionInfoReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
-            });
+            .map(|slice| from_box_should_be_ok!(packed::TransactionInfoReader, slice));
         Ok(tx_info_opt)
     }
 
@@ -147,15 +136,12 @@ pub trait ChainStore: KVStoreRead {
     ) -> Result<Option<packed::L2Transaction>, Error> {
         Ok(self
             .get(COLUMN_TRANSACTION, tx_key.as_slice())
-            .map(|slice| {
-                packed::L2TransactionReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
-            }))
+            .map(|slice| from_box_should_be_ok!(packed::L2TransactionReader, slice)))
     }
 
     fn get_transaction_receipt(&self, tx_hash: &H256) -> Result<Option<packed::TxReceipt>, Error> {
         if let Some(slice) = self.get(COLUMN_TRANSACTION_INFO, tx_hash.as_slice()) {
-            let info =
-                packed::TransactionInfoReader::from_slice_should_be_ok(slice.as_ref()).to_entity();
+            let info = from_box_should_be_ok!(packed::TransactionInfoReader, slice);
             let tx_key = info.key();
             self.get_transaction_receipt_by_key(&tx_key)
         } else {
@@ -169,9 +155,7 @@ pub trait ChainStore: KVStoreRead {
     ) -> Result<Option<packed::TxReceipt>, Error> {
         Ok(self
             .get(COLUMN_TRANSACTION_RECEIPT, key.as_slice())
-            .map(|slice| {
-                packed::TxReceiptReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
-            }))
+            .map(|slice| from_box_should_be_ok!(packed::TxReceiptReader, slice)))
     }
 
     fn get_withdrawal(
@@ -190,9 +174,7 @@ pub trait ChainStore: KVStoreRead {
     ) -> Result<Option<packed::WithdrawalInfo>, Error> {
         let withdrawal_info_opt = self
             .get(COLUMN_WITHDRAWAL_INFO, withdrawal_hash.as_slice())
-            .map(|slice| {
-                packed::WithdrawalInfoReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
-            });
+            .map(|slice| from_box_should_be_ok!(packed::WithdrawalInfoReader, slice));
         Ok(withdrawal_info_opt)
     }
 
@@ -202,10 +184,7 @@ pub trait ChainStore: KVStoreRead {
     ) -> Result<Option<packed::WithdrawalRequestExtra>, Error> {
         Ok(self
             .get(COLUMN_WITHDRAWAL, withdrawal_key.as_slice())
-            .map(|slice| {
-                packed::WithdrawalRequestExtraReader::from_slice_should_be_ok(slice.as_ref())
-                    .to_entity()
-            }))
+            .map(|slice| from_box_should_be_ok!(packed::WithdrawalRequestExtraReader, slice)))
     }
 
     fn get_l2block_committed_info(
@@ -213,10 +192,10 @@ pub trait ChainStore: KVStoreRead {
         block_hash: &H256,
     ) -> Result<Option<packed::L2BlockCommittedInfo>, Error> {
         match self.get(COLUMN_L2BLOCK_COMMITTED_INFO, block_hash.as_slice()) {
-            Some(slice) => Ok(Some(
-                packed::L2BlockCommittedInfoReader::from_slice_should_be_ok(slice.as_ref())
-                    .to_entity(),
-            )),
+            Some(slice) => Ok(Some(from_box_should_be_ok!(
+                packed::L2BlockCommittedInfoReader,
+                slice
+            ))),
             None => Ok(None),
         }
     }
@@ -227,8 +206,7 @@ pub trait ChainStore: KVStoreRead {
     ) -> Result<Option<Vec<packed::DepositRequest>>, Error> {
         match self.get(COLUMN_BLOCK_DEPOSIT_REQUESTS, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::DepositRequestVecReader::from_slice_should_be_ok(slice.as_ref())
-                    .to_entity()
+                from_box_should_be_ok!(packed::DepositRequestVecReader, slice)
                     .into_iter()
                     .collect(),
             )),
@@ -271,7 +249,7 @@ pub trait ChainStore: KVStoreRead {
         ) {
             Some(slice) => {
                 let block_hash = packed::Byte32VecReader::from_slice_should_be_ok(slice.as_ref());
-                Ok(Some(block_hash.to_entity().unpack()))
+                Ok(Some(block_hash.unpack()))
             }
             None => Ok(None),
         }
@@ -279,9 +257,7 @@ pub trait ChainStore: KVStoreRead {
 
     fn get_asset_script(&self, script_hash: &H256) -> Result<Option<Script>, Error> {
         match self.get(COLUMN_ASSET_SCRIPT, script_hash.as_slice()) {
-            Some(slice) => Ok(Some(
-                packed::ScriptReader::from_slice_should_be_ok(slice.as_ref()).to_entity(),
-            )),
+            Some(slice) => Ok(Some(from_box_should_be_ok!(packed::ScriptReader, slice))),
             None => Ok(None),
         }
     }
@@ -292,9 +268,7 @@ pub trait ChainStore: KVStoreRead {
     ) -> Result<Option<packed::L2Transaction>, Error> {
         Ok(self
             .get(COLUMN_MEM_POOL_TRANSACTION, tx_hash.as_slice())
-            .map(|slice| {
-                packed::L2TransactionReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
-            }))
+            .map(|slice| from_box_should_be_ok!(packed::L2TransactionReader, slice)))
     }
 
     fn get_mem_pool_transaction_receipt(
@@ -303,9 +277,7 @@ pub trait ChainStore: KVStoreRead {
     ) -> Result<Option<packed::TxReceipt>, Error> {
         Ok(self
             .get(COLUMN_MEM_POOL_TRANSACTION_RECEIPT, tx_hash.as_slice())
-            .map(|slice| {
-                packed::TxReceiptReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
-            }))
+            .map(|slice| from_box_should_be_ok!(packed::TxReceiptReader, slice)))
     }
 
     fn get_mem_pool_withdrawal(
