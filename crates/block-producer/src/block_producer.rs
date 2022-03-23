@@ -296,7 +296,20 @@ impl BlockProducer {
         }
 
         let rollup_input_since = match self.rpc_client.get_block_median_time(tip_hash).await? {
-            Some(median_time) => InputSince::from_median_time(median_time),
+            Some(median_time) => {
+                let tip_block_timestamp = Duration::from_millis(
+                    self.store
+                        .get_last_valid_tip_block()?
+                        .raw()
+                        .timestamp()
+                        .unpack(),
+                );
+                if median_time < tip_block_timestamp {
+                    log::warn!("[block producer] median time is less than tip block timestamp, skip produce new block");
+                    return Ok(());
+                }
+                InputSince::from_median_time(median_time)
+            }
             None => return Ok(()),
         };
 
