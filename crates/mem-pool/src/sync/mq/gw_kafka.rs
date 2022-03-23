@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::Result;
 use async_trait::async_trait;
 use gw_types::{
-    packed::{RefreshMemBlockMessage, RefreshMemBlockMessageUnion},
+    packed::{RefreshMemBlockMessage, RefreshMemBlockMessageReader, RefreshMemBlockMessageUnion},
     prelude::{Builder, Entity, Reader},
 };
 use rdkafka::{
@@ -134,8 +134,7 @@ impl Consume for Consumer {
                     );
 
                     if let Some(payload) = payload {
-                        let refresh_msg = RefreshMemBlockMessage::from_slice(payload)?;
-                        let reader = refresh_msg.as_reader();
+                        let reader = RefreshMemBlockMessageReader::from_slice(payload)?;
                         let refresh_msg = reader.to_enum();
                         match &refresh_msg {
                             gw_types::packed::RefreshMemBlockMessageUnionReader::NextL2Transaction(
