@@ -4,6 +4,7 @@ use crate::account_lock_manage::eip712::traits::EIP712Encode;
 use crate::account_lock_manage::eip712::types::Withdrawal;
 use crate::error::LockAlgorithmError;
 use gw_common::blake2b::new_blake2b;
+use gw_common::registry_address::RegistryAddress;
 use gw_common::H256;
 use gw_types::offchain::RollupContext;
 use gw_types::packed::WithdrawalRequestExtra;
@@ -112,6 +113,7 @@ impl LockAlgorithm for Secp256k1 {
         &self,
         sender_script: Script,
         withdrawal: &WithdrawalRequestExtra,
+        _address: RegistryAddress,
     ) -> Result<(), LockAlgorithmError> {
         let lock_args: Bytes = sender_script.args().unpack();
         let message = withdrawal.raw().hash().into();
@@ -264,15 +266,16 @@ impl LockAlgorithm for Secp256k1Eth {
         &self,
         sender_script: Script,
         withdrawal: &WithdrawalRequestExtra,
+        address: RegistryAddress,
     ) -> Result<(), LockAlgorithmError> {
-        let typed_message =
-            Withdrawal::from_withdrawal_request(withdrawal.raw(), withdrawal.owner_lock())
-                .map_err(|err| {
-                    LockAlgorithmError::InvalidSignature(format!(
-                        "Invlid withdrawal format {}",
-                        err
-                    ))
-                })?;
+        let typed_message = Withdrawal::from_raw(
+            withdrawal.raw(),
+            withdrawal.owner_lock(),
+            address,
+        )
+        .map_err(|err| {
+            LockAlgorithmError::InvalidSignature(format!("Invlid withdrawal format {}", err))
+        })?;
         let message = typed_message.eip712_message(
             Self::domain_with_chain_id(withdrawal.raw().chain_id().unpack()).hash_struct(),
         );
@@ -376,6 +379,7 @@ impl LockAlgorithm for Secp256k1Tron {
         &self,
         sender_script: Script,
         withdrawal: &WithdrawalRequestExtra,
+        _address: RegistryAddress,
     ) -> Result<(), LockAlgorithmError> {
         let message = withdrawal.request().raw().hash();
         self.verify_message(
