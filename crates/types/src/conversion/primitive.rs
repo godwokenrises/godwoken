@@ -37,8 +37,7 @@ impl<'r> Unpack<u16> for packed::Uint16Reader<'r> {
     // Inline so that the panic branch can be optimized out.
     #[inline]
     fn unpack(&self) -> u16 {
-        // Unwrap is ok because slice should always be of the correct length, so try_into should not fail.
-        u16::from_le_bytes(self.as_slice().try_into().unwrap())
+        u16::from_le_bytes(self.as_slice().try_into().expect("unpack Uint16Reader"))
     }
 }
 impl_conversion_for_entity_unpack!(u16, Uint16);
@@ -46,7 +45,7 @@ impl_conversion_for_entity_unpack!(u16, Uint16);
 impl<'r> Unpack<u32> for packed::Uint32Reader<'r> {
     #[inline]
     fn unpack(&self) -> u32 {
-        u32::from_le_bytes(self.as_slice().try_into().unwrap())
+        u32::from_le_bytes(self.as_slice().try_into().expect("unpack Uint32Reader"))
     }
 }
 impl_conversion_for_entity_unpack!(u32, Uint32);
@@ -54,7 +53,7 @@ impl_conversion_for_entity_unpack!(u32, Uint32);
 impl<'r> Unpack<u64> for packed::Uint64Reader<'r> {
     #[inline]
     fn unpack(&self) -> u64 {
-        u64::from_le_bytes(self.as_slice().try_into().unwrap())
+        u64::from_le_bytes(self.as_slice().try_into().expect("unpack Uint64Reader"))
     }
 }
 impl_conversion_for_entity_unpack!(u64, Uint64);
@@ -62,7 +61,7 @@ impl_conversion_for_entity_unpack!(u64, Uint64);
 impl<'r> Unpack<u128> for packed::Uint128Reader<'r> {
     #[inline]
     fn unpack(&self) -> u128 {
-        u128::from_le_bytes(self.as_slice().try_into().unwrap())
+        u128::from_le_bytes(self.as_slice().try_into().expect("unpack Uint128Reader"))
     }
 }
 impl_conversion_for_entity_unpack!(u128, Uint128);

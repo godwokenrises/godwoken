@@ -28,7 +28,7 @@ impl Pack<packed::Byte20> for [u8; 20] {
 impl<'r> Unpack<[u8; 20]> for packed::Byte20Reader<'r> {
     #[inline]
     fn unpack(&self) -> [u8; 20] {
-        self.as_slice().try_into().unwrap()
+        self.as_slice().try_into().expect("unpack Byte20Reader")
     }
 }
 impl_conversion_for_entity_unpack!([u8; 20], Byte20);

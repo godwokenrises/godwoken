@@ -12,7 +12,7 @@ impl Pack<packed::Byte32> for [u8; 32] {
 impl<'r> Unpack<[u8; 32]> for packed::Byte32Reader<'r> {
     #[inline]
     fn unpack(&self) -> [u8; 32] {
-        self.as_slice().try_into().unwrap()
+        self.as_slice().try_into().expect("unpack Byte32Reader")
     }
 }
 impl_conversion_for_entity_unpack!([u8; 32], Byte32);
@@ -27,7 +27,9 @@ impl Pack<packed::ProposalShortId> for [u8; 10] {
 impl<'r> Unpack<[u8; 10]> for packed::ProposalShortIdReader<'r> {
     #[inline]
     fn unpack(&self) -> [u8; 10] {
-        self.as_slice().try_into().unwrap()
+        self.as_slice()
+            .try_into()
+            .expect("unpack ProposalShortIdReader")
     }
 }
 impl_conversion_for_entity_unpack!([u8; 10], ProposalShortId);

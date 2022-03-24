@@ -12,7 +12,7 @@ impl Pack<packed::Byte32> for H256 {
 impl<'r> Unpack<H256> for packed::Byte32Reader<'r> {
     #[inline]
     fn unpack(&self) -> H256 {
-        let r: [u8; 32] = self.as_slice().try_into().unwrap();
+        let r: [u8; 32] = self.as_slice().try_into().expect("unpack Byte32Reader");
         r.into()
     }
 }
