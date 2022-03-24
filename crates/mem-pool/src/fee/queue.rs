@@ -272,7 +272,7 @@ mod tests {
 
         let entry1 = FeeEntry {
             item: FeeItem::Tx(Default::default()),
-            fee_rate: 0,
+            fee: 10 * 1000,
             cycles_limit: 1000,
             sender: 2,
             order: queue.len(),
@@ -282,7 +282,7 @@ mod tests {
 
         let entry2 = FeeEntry {
             item: FeeItem::Tx(Default::default()),
-            fee_rate: 0,
+            fee: 1000,
             cycles_limit: 100,
             sender: 3,
             order: queue.len(),
@@ -292,7 +292,7 @@ mod tests {
 
         let entry3 = FeeEntry {
             item: FeeItem::Tx(Default::default()),
-            fee_rate: 0,
+            fee: 1000,
             cycles_limit: 500,
             sender: 4,
             order: queue.len(),
@@ -302,7 +302,7 @@ mod tests {
 
         let entry4 = FeeEntry {
             item: FeeItem::Withdrawal(Default::default()),
-            fee_rate: 1,
+            fee: 101 * 1000,
             cycles_limit: 1001,
             sender: 5,
             order: queue.len(),

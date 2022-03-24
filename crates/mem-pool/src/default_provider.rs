@@ -9,7 +9,6 @@ use gw_types::{
     packed::{OutPoint, WithdrawalRequest},
     prelude::*,
 };
-use tokio::sync::Mutex;
 use tracing::instrument;
 
 use crate::{
