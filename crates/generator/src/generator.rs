@@ -22,7 +22,7 @@ use crate::{error::LockAlgorithmError, traits::StateExt};
 use arc_swap::ArcSwap;
 use gw_ckb_hardfork::GLOBAL_VM_VERSION;
 use gw_common::{
-    builtins::CKB_SUDT_ACCOUNT_ID,
+    builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     error::Error as StateError,
     h256_ext::H256Ext,
     merkle_utils::calculate_state_checkpoint,
@@ -260,6 +260,24 @@ impl Generator {
         Ok(())
     }
 
+    /// check the first 32 bits is equals to the compatible_chain_id
+    /// In Godwoken level we only check the first 32 bits, the last 32 bits is supposed used by backends
+    fn check_chain_id(&self, chain_id: u64) -> Result<(), LockAlgorithmError> {
+        let compatible_chain_id = (chain_id >> 32) as u32;
+        let expected_rollup_chain_id: u32 = self
+            .rollup_context()
+            .rollup_config
+            .compatible_chain_id()
+            .unpack();
+        // check the first 32 bits, should be equals to compatible_chain_id
+        if expected_rollup_chain_id != compatible_chain_id {
+            return Err(LockAlgorithmError::InvalidSignature(
+                "Wrong compatible rollup_chain_id".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Check withdrawal request signature
     #[instrument(skip_all)]
     pub fn check_withdrawal_signature<S: State + CodeStore>(
@@ -272,17 +290,7 @@ impl Generator {
 
         // check chain_id
         let chain_id: u64 = raw.chain_id().unpack();
-        let rollup_chain_id = (chain_id >> 32) as u32;
-        let expected_rollup_chain_id: u32 = self
-            .rollup_context()
-            .rollup_config
-            .compatible_chain_id()
-            .unpack();
-        if expected_rollup_chain_id != rollup_chain_id {
-            return Err(
-                LockAlgorithmError::InvalidSignature("Wrong rollup_chain_id".to_string()).into(),
-            );
-        }
+        self.check_chain_id(chain_id)?;
 
         // check signature
         let account_script = state
@@ -343,6 +351,10 @@ impl Generator {
         let sender_id: u32 = raw_tx.from_id().unpack();
         let receiver_id: u32 = raw_tx.to_id().unpack();
 
+        // check chain_id
+        let chain_id: u64 = raw_tx.chain_id().unpack();
+        self.check_chain_id(chain_id)?;
+
         // verify signature
         let script_hash = state.get_script_hash(sender_id)?;
         if script_hash.is_zero() {
@@ -370,7 +382,17 @@ impl Generator {
             .get_lock_algorithm(&lock_code_hash.into())
             .ok_or(LockAlgorithmError::UnknownAccountLock)?;
 
-        lock_algo.verify_tx(&self.rollup_context, script, receiver_script, tx.to_owned())?;
+        let sender_address = state
+            .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &script_hash)?
+            .ok_or(AccountError::RegistryAddressNotFound)?;
+
+        lock_algo.verify_tx(
+            &self.rollup_context,
+            sender_address,
+            script,
+            receiver_script,
+            tx.to_owned(),
+        )?;
         Ok(())
     }
 

@@ -1,8 +1,12 @@
 use std::convert::{TryFrom, TryInto};
 
 use anyhow::{anyhow, bail, Result};
-use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
-use gw_types::{core::ScriptHashType, packed::RawWithdrawalRequest, prelude::Unpack};
+use gw_common::{builtins::ETH_REGISTRY_ACCOUNT_ID, H256};
+use gw_types::{
+    core::ScriptHashType,
+    packed::{RawL2Transaction, RawWithdrawalRequest},
+    prelude::Unpack,
+};
 use sha3::{Digest, Keccak256};
 
 use super::traits::EIP712Encode;
@@ -126,7 +130,61 @@ impl EIP712Encode for RegistryAddress {
     }
 }
 
-// RawWithdrawalRequest
+/// L2Transaction
+pub struct L2Transaction {
+    chain_id: u64,
+    from: RegistryAddress,
+    to: [u8; 32],
+    nonce: u32,
+    args: Vec<u8>,
+}
+
+impl EIP712Encode for L2Transaction {
+    fn type_name() -> String {
+        "L2Transaction".to_string()
+    }
+
+    fn encode_type(&self, buf: &mut Vec<u8>) {
+        buf.extend(b"L2Transaction(uint256 chainId,RegistryAddress from,bytes32 to,uint256 nonce,bytes args)");
+        self.from.encode_type(buf);
+    }
+
+    fn encode_data(&self, buf: &mut Vec<u8>) {
+        use ethabi::Token;
+        buf.extend(ethabi::encode(&[Token::Uint(self.chain_id.into())]));
+        buf.extend(ethabi::encode(&[Token::Uint(
+            self.from.hash_struct().into(),
+        )]));
+        buf.extend(ethabi::encode(&[Token::Uint(self.to.into())]));
+        buf.extend(ethabi::encode(&[Token::Uint(self.nonce.into())]));
+        let args: [u8; 32] = {
+            let mut hasher = Keccak256::new();
+            hasher.update(&self.args);
+            hasher.finalize().into()
+        };
+        buf.extend(ethabi::encode(&[Token::Uint(args.into())]));
+    }
+}
+
+impl L2Transaction {
+    pub fn from_raw(
+        data: RawL2Transaction,
+        sender_address: gw_common::registry_address::RegistryAddress,
+        to_script_hash: H256,
+    ) -> Result<Self> {
+        let sender_address = RegistryAddress::from_address(sender_address)?;
+        let tx = L2Transaction {
+            chain_id: data.chain_id().unpack(),
+            nonce: data.nonce().unpack(),
+            from: sender_address,
+            to: to_script_hash.into(),
+            args: data.args().unpack(),
+        };
+        Ok(tx)
+    }
+}
+
+/// RawWithdrawalRequest
 pub struct Withdrawal {
     address: RegistryAddress,
     nonce: u32,
@@ -260,7 +318,10 @@ mod tests {
     use crate::account_lock_manage::{
         eip712::{
             traits::EIP712Encode,
-            types::{AddressRegistry, RegistryAddress, Script, Withdrawal, WithdrawalAsset},
+            types::{
+                AddressRegistry, L2Transaction, RegistryAddress, Script, Withdrawal,
+                WithdrawalAsset,
+            },
         },
         secp256k1::Secp256k1Eth,
         LockAlgorithm,
@@ -448,6 +509,44 @@ mod tests {
         };
         let message = withdrawal.eip712_message(domain_seperator.hash_struct());
         let signature: [u8; 65] = hex::decode("edcae58907b6e218b1bc4513afeefb30aad433bcd4a9c937fa53a24bb9abc12a6bc4bfa29ef3f1ee0e58464b1f97ad6bcebd434dbbc2c29539b02539843675681b").unwrap().try_into().unwrap();
+        let pubkey_hash = Secp256k1Eth::default()
+            .recover(message.into(), &signature)
+            .unwrap();
+        assert_eq!(
+            "e8ae579256c3b84efb76bbb69cb6bcbef1375f00".to_string(),
+            hex::encode(pubkey_hash)
+        );
+    }
+
+    #[test]
+    fn test_l2_transaction() {
+        let tx = L2Transaction {
+            chain_id: 1,
+            from: RegistryAddress {
+                registry: AddressRegistry::ETH,
+                address: hex::decode("e8ae579256c3b84efb76bbb69cb6bcbef1375f00")
+                    .unwrap()
+                    .try_into()
+                    .expect("address"),
+            },
+            to: hex::decode("ae39eea37dfa6b41004c50efddeb6747f72bb25ea174b2a68bd4eafc641e7c3e")
+                .unwrap()
+                .try_into()
+                .expect("script hash"),
+            nonce: 9,
+            args: Default::default(),
+        };
+
+        // verify EIP 712 signature
+        let domain_seperator = EIP712Domain {
+            name: "Godwoken".to_string(),
+            version: "1".to_string(),
+            chain_id: 1,
+            verifying_contract: None,
+            salt: None,
+        };
+        let message = tx.eip712_message(domain_seperator.hash_struct());
+        let signature: [u8; 65] = hex::decode("64b164f5303000c283119974d7ba8f050cc7429984af904134d5cda6d3ce045934cc6b6f513ec939c2ae4cfb9cbee249ba8ae86f6274e4035c150f9c8e634a3a1b").unwrap().try_into().unwrap();
         let pubkey_hash = Secp256k1Eth::default()
             .recover(message.into(), &signature)
             .unwrap();

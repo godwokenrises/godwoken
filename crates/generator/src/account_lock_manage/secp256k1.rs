@@ -91,6 +91,7 @@ impl LockAlgorithm for Secp256k1 {
     fn verify_tx(
         &self,
         ctx: &RollupContext,
+        _sender: RegistryAddress,
         sender_script: Script,
         receiver_script: Script,
         tx: L2Transaction,
@@ -156,30 +157,6 @@ impl Secp256k1Eth {
         }
         Ok(())
     }
-
-    // NOTE: verify_tx in this module is using standard Ethereum transaction
-    // signing scheme, but verify_message here is using Ethereum's
-    // personal sign(with "\x19Ethereum Signed Message:\n32" appended),
-    // this is because verify_tx is designed to provide seamless compatibility
-    // with Ethereum, but withdrawal request is a godwoken thing, which
-    // do not exist in Ethereum. Personal sign is thus used here.
-    fn verify_message(
-        &self,
-        lock_args: Bytes,
-        signature: Bytes,
-        message: H256,
-    ) -> Result<(), LockAlgorithmError> {
-        let mut hasher = Keccak256::new();
-        hasher.update("\x19Ethereum Signed Message:\n32");
-        hasher.update(message.as_slice());
-        let buf = hasher.finalize();
-        let mut signing_message = [0u8; 32];
-        signing_message.copy_from_slice(&buf[..]);
-        let signing_message = H256::from(signing_message);
-
-        self.verify_alone(lock_args, signature, signing_message)?;
-        Ok(())
-    }
 }
 
 // extract rec_id
@@ -225,6 +202,7 @@ impl LockAlgorithm for Secp256k1Eth {
     fn verify_tx(
         &self,
         ctx: &RollupContext,
+        sender_address: RegistryAddress,
         sender_script: Script,
         receiver_script: Script,
         tx: L2Transaction,
@@ -248,18 +226,26 @@ impl LockAlgorithm for Secp256k1Eth {
             return Ok(());
         }
 
-        // verify non-ethereum tx
-        let message = calc_godwoken_signing_message(
-            &ctx.rollup_script_hash,
-            &sender_script,
-            &receiver_script,
-            &tx,
-        );
-        self.verify_message(
+        let raw_tx = tx.raw();
+        let chain_id = raw_tx.chain_id().unpack();
+
+        let to_script_hash = receiver_script.hash().into();
+
+        let typed_tx = crate::account_lock_manage::eip712::types::L2Transaction::from_raw(
+            raw_tx,
+            sender_address,
+            to_script_hash,
+        )
+        .map_err(|err| {
+            LockAlgorithmError::InvalidSignature(format!("Invlid l2 transaction format {}", err))
+        })?;
+        let message = typed_tx.eip712_message(Self::domain_with_chain_id(chain_id).hash_struct());
+        self.verify_alone(
             sender_script.args().unpack(),
             tx.signature().unpack(),
-            message,
-        )
+            message.into(),
+        )?;
+        Ok(())
     }
 
     fn verify_withdrawal(
@@ -357,6 +343,7 @@ impl LockAlgorithm for Secp256k1Tron {
     fn verify_tx(
         &self,
         ctx: &RollupContext,
+        _sender: RegistryAddress,
         sender_script: Script,
         receiver_script: Script,
         tx: L2Transaction,
@@ -485,21 +472,7 @@ fn try_assemble_polyjuice_args(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_secp256k1_eth_withdrawal_signature() {
-        let message = H256::from([0u8; 32]);
-        let test_signature = Bytes::from(
-        hex::decode("c2ae67217b65b785b1add7db1e9deb1df2ae2c7f57b9c29de0dfc40c59ab8d47341a863876660e3d0142b71248338ed71d2d4eb7ca078455565733095ac25a5800").expect("hex decode"));
-        let address = Bytes::from(
-            hex::decode("ffafb3db9377769f5b59bfff6cd2cf942a34ab17").expect("hex decode"),
-        );
-        let mut lock_args = vec![0u8; 32];
-        lock_args.extend(address);
-        let eth = Secp256k1Eth::default();
-        eth.verify_message(lock_args.into(), test_signature, message)
-            .expect("verify signature");
-    }
+    use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 
     #[test]
     fn test_secp256k1_eth_polyjuice_call() {
@@ -530,10 +503,13 @@ mod tests {
 
         let rollup_type_hash = vec![0u8; 32];
 
+        let sender_address = RegistryAddress::new(
+            ETH_REGISTRY_ACCOUNT_ID,
+            hex::decode("0000a7ce68e7328ecf2c83b103b50c68cf60ae3a").expect("hex decode"),
+        );
         let mut sender_args = vec![];
         sender_args.extend(&rollup_type_hash);
-        sender_args
-            .extend(&hex::decode("0000a7ce68e7328ecf2c83b103b50c68cf60ae3a").expect("hex decode"));
+        sender_args.extend(&sender_address.address);
         let sender_script = Script::new_builder()
             .args(Bytes::from(sender_args).pack())
             .build();
@@ -549,7 +525,7 @@ mod tests {
             rollup_script_hash: Default::default(),
             rollup_config: Default::default(),
         };
-        eth.verify_tx(&ctx, sender_script, receiver_script, tx)
+        eth.verify_tx(&ctx, sender_address, sender_script, receiver_script, tx)
             .expect("verify signature");
     }
 
@@ -587,12 +563,15 @@ mod tests {
             hex::decode("cfdefce91f70f53167971f74bf1074b6b889be270306aabd34e67404b75dacab")
                 .expect("hex decode");
 
+        let sender_address = RegistryAddress::new(
+            ETH_REGISTRY_ACCOUNT_ID,
+            hex::decode("0000A7CE68e7328eCF2C83b103b50C68CF60Ae3a").expect("hex decode"),
+        );
         let mut sender_args = vec![];
         sender_args.extend(&rollup_type_hash);
         // Private key: dc88f509cab7f30ea36fd1aeb203403ce284e587bedecba73ba2fadf688acd19
         // Please do not use this private key elsewhere!
-        sender_args
-            .extend(&hex::decode("0000A7CE68e7328eCF2C83b103b50C68CF60Ae3a").expect("hex decode"));
+        sender_args.extend(&sender_address.address);
         let sender_script = Script::new_builder()
             .args(Bytes::from(sender_args).pack())
             .build();
@@ -609,7 +588,7 @@ mod tests {
             rollup_config: Default::default(),
         };
 
-        eth.verify_tx(&ctx, sender_script, receiver_script, tx)
+        eth.verify_tx(&ctx, sender_address, sender_script, receiver_script, tx)
             .expect("verify signature");
     }
 
@@ -643,10 +622,13 @@ mod tests {
 
         let rollup_type_hash = vec![0u8; 32];
 
+        let sender_address = RegistryAddress::new(
+            ETH_REGISTRY_ACCOUNT_ID,
+            hex::decode("9d8A62f656a8d1615C1294fd71e9CFb3E4855A4F").expect("hex decode"),
+        );
         let mut sender_args = vec![];
         sender_args.extend(&rollup_type_hash);
-        sender_args
-            .extend(&hex::decode("9d8A62f656a8d1615C1294fd71e9CFb3E4855A4F").expect("hex decode"));
+        sender_args.extend(&sender_address.address);
         let sender_script = Script::new_builder()
             .args(Bytes::from(sender_args).pack())
             .build();
@@ -661,7 +643,7 @@ mod tests {
             rollup_script_hash: Default::default(),
             rollup_config: Default::default(),
         };
-        eth.verify_tx(&ctx, sender_script, receiver_script, tx)
+        eth.verify_tx(&ctx, sender_address, sender_script, receiver_script, tx)
             .expect("verify signature");
     }
 
@@ -670,9 +652,10 @@ mod tests {
         let raw_tx = RawL2Transaction::new_builder()
             .nonce(9u32.pack())
             .to_id(1234u32.pack())
+            .chain_id(1u64.pack())
             .build();
         let mut signature = [0u8; 65];
-        signature.copy_from_slice(&hex::decode("680e9afc606f3555d75fedb41f201ade6a5f270c3a2223730e25d93e764acc6a49ee917f9e3af4727286ae4bf3ce19a5b15f71ae359cf8c0c3fabc212cccca1e00").expect("hex decode"));
+        signature.copy_from_slice(&hex::decode("64b164f5303000c283119974d7ba8f050cc7429984af904134d5cda6d3ce045934cc6b6f513ec939c2ae4cfb9cbee249ba8ae86f6274e4035c150f9c8e634a3a1b").expect("hex decode"));
         let tx = L2Transaction::new_builder()
             .raw(raw_tx)
             .signature(signature.to_vec().pack())
@@ -681,10 +664,13 @@ mod tests {
 
         let rollup_type_hash = vec![0u8; 32];
 
+        let sender_address = RegistryAddress::new(
+            ETH_REGISTRY_ACCOUNT_ID,
+            hex::decode("e8ae579256c3b84efb76bbb69cb6bcbef1375f00").expect("hex decode"),
+        );
         let mut sender_args = vec![];
         sender_args.extend(&rollup_type_hash);
-        sender_args
-            .extend(&hex::decode("9d8A62f656a8d1615C1294fd71e9CFb3E4855A4F").expect("hex decode"));
+        sender_args.extend(&sender_address.address);
         let sender_script = Script::new_builder()
             .args(Bytes::from(sender_args).pack())
             .build();
@@ -699,7 +685,7 @@ mod tests {
             rollup_script_hash: Default::default(),
             rollup_config: Default::default(),
         };
-        eth.verify_tx(&ctx, sender_script, receiver_script, tx)
+        eth.verify_tx(&ctx, sender_address, sender_script, receiver_script, tx)
             .expect("verify signature");
     }
 

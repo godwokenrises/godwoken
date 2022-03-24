@@ -24,6 +24,7 @@ impl LockAlgorithm for AlwaysSuccess {
     fn verify_tx(
         &self,
         _ctx: &RollupContext,
+        _sender_address: RegistryAddress,
         _sender_script: Script,
         _receiver_script: Script,
         _tx: L2Transaction,
