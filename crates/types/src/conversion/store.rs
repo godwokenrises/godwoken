@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use crate::{packed, prelude::*};
 use molecule::prelude::Byte;
 use sparse_merkle_tree::merge::MergeValue;
@@ -10,9 +12,9 @@ impl Pack<packed::TransactionKey> for [u8; 36] {
 }
 
 impl<'r> Unpack<[u8; 36]> for packed::TransactionKeyReader<'r> {
+    #[inline]
     fn unpack(&self) -> [u8; 36] {
-        let ptr = self.as_slice().as_ptr() as *const [u8; 36];
-        unsafe { *ptr }
+        self.as_slice().try_into().unwrap()
     }
 }
 impl_conversion_for_entity_unpack!([u8; 36], TransactionKey);
@@ -24,9 +26,9 @@ impl Pack<packed::WithdrawalKey> for [u8; 36] {
 }
 
 impl<'r> Unpack<[u8; 36]> for packed::WithdrawalKeyReader<'r> {
+    #[inline]
     fn unpack(&self) -> [u8; 36] {
-        let ptr = self.as_slice().as_ptr() as *const [u8; 36];
-        unsafe { *ptr }
+        self.as_slice().try_into().unwrap()
     }
 }
 impl_conversion_for_entity_unpack!([u8; 36], WithdrawalKey);

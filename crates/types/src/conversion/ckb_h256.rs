@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use crate::{packed, prelude::*};
 use ckb_fixed_hash::H256;
 
@@ -8,9 +10,9 @@ impl Pack<packed::Byte32> for H256 {
 }
 
 impl<'r> Unpack<H256> for packed::Byte32Reader<'r> {
+    #[inline]
     fn unpack(&self) -> H256 {
-        let ptr = self.as_slice().as_ptr() as *const [u8; 32];
-        let r = unsafe { *ptr };
+        let r: [u8; 32] = self.as_slice().try_into().unwrap();
         r.into()
     }
 }

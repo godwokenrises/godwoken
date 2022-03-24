@@ -34,6 +34,7 @@ impl Pack<packed::Uint32> for usize {
 }
 
 impl<'r> Unpack<u16> for packed::Uint16Reader<'r> {
+    // Inline so that the panic branch can be optimized out.
     #[inline]
     fn unpack(&self) -> u16 {
         // Unwrap is ok because slice should always be of the correct length, so try_into should not fail.

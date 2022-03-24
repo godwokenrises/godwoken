@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use crate::vec::Vec;
 use crate::{bytes::Bytes, packed, prelude::*};
 
@@ -8,9 +10,9 @@ impl Pack<packed::Byte32> for [u8; 32] {
 }
 
 impl<'r> Unpack<[u8; 32]> for packed::Byte32Reader<'r> {
+    #[inline]
     fn unpack(&self) -> [u8; 32] {
-        let ptr = self.as_slice().as_ptr() as *const [u8; 32];
-        unsafe { *ptr }
+        self.as_slice().try_into().unwrap()
     }
 }
 impl_conversion_for_entity_unpack!([u8; 32], Byte32);
@@ -23,9 +25,9 @@ impl Pack<packed::ProposalShortId> for [u8; 10] {
 }
 
 impl<'r> Unpack<[u8; 10]> for packed::ProposalShortIdReader<'r> {
+    #[inline]
     fn unpack(&self) -> [u8; 10] {
-        let ptr = self.as_slice().as_ptr() as *const [u8; 10];
-        unsafe { *ptr }
+        self.as_slice().try_into().unwrap()
     }
 }
 impl_conversion_for_entity_unpack!([u8; 10], ProposalShortId);
