@@ -1,6 +1,7 @@
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
+use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_types::{core::ScriptHashType, packed::RawWithdrawalRequest, prelude::Unpack};
 use sha3::{Digest, Keccak256};
 
@@ -64,9 +65,70 @@ impl EIP712Encode for WithdrawalAsset {
     }
 }
 
+pub enum AddressRegistry {
+    ETH,
+}
+
+impl AddressRegistry {
+    fn to_string(&self) -> &str {
+        "ETH"
+    }
+
+    pub fn from_registry_id(registry_id: u32) -> Result<Self> {
+        match registry_id {
+            ETH_REGISTRY_ACCOUNT_ID => Ok(Self::ETH),
+            _ => {
+                bail!("Unsupported registry id : {}", registry_id)
+            }
+        }
+    }
+}
+
+pub struct RegistryAddress {
+    registry: AddressRegistry,
+    address: [u8; 20],
+}
+
+impl RegistryAddress {
+    fn from_address(address: gw_common::registry_address::RegistryAddress) -> Result<Self> {
+        let registry = AddressRegistry::from_registry_id(address.registry_id)?;
+        if address.address.len() != 20 {
+            bail!(
+                "Invalid ETH address len, expected 20, got {}",
+                address.address.len()
+            );
+        }
+        Ok(RegistryAddress {
+            registry,
+            address: address.address.try_into().expect("eth address"),
+        })
+    }
+}
+
+impl EIP712Encode for RegistryAddress {
+    fn type_name() -> String {
+        "RegistryAddress".to_string()
+    }
+
+    fn encode_type(&self, buf: &mut Vec<u8>) {
+        buf.extend(b"RegistryAddress(string registry,address address)");
+    }
+
+    fn encode_data(&self, buf: &mut Vec<u8>) {
+        use ethabi::Token;
+        let registry: [u8; 32] = {
+            let mut hasher = Keccak256::new();
+            hasher.update(self.registry.to_string().as_bytes());
+            hasher.finalize().into()
+        };
+        buf.extend(ethabi::encode(&[Token::Uint(registry.into())]));
+        buf.extend(ethabi::encode(&[Token::Address(self.address.into())]));
+    }
+}
+
 // RawWithdrawalRequest
 pub struct Withdrawal {
-    account_script_hash: [u8; 32],
+    address: RegistryAddress,
     nonce: u32,
     chain_id: u64,
     // withdrawal fee, paid to block producer
@@ -83,7 +145,8 @@ impl EIP712Encode for Withdrawal {
     }
 
     fn encode_type(&self, buf: &mut Vec<u8>) {
-        buf.extend(b"Withdrawal(bytes32 accountScriptHash,uint256 nonce,uint256 chainId,uint256 fee,Script layer1OwnerLock,WithdrawalAsset withdraw)");
+        buf.extend(b"Withdrawal(RegistryAddress address,uint256 nonce,uint256 chainId,uint256 fee,Script layer1OwnerLock,WithdrawalAsset withdraw)");
+        self.address.encode_type(buf);
         self.layer1_owner_lock.encode_type(buf);
         self.withdraw.encode_type(buf);
     }
@@ -91,7 +154,7 @@ impl EIP712Encode for Withdrawal {
     fn encode_data(&self, buf: &mut Vec<u8>) {
         use ethabi::Token;
         buf.extend(ethabi::encode(&[Token::Uint(
-            self.account_script_hash.into(),
+            self.address.hash_struct().into(),
         )]));
         buf.extend(ethabi::encode(&[Token::Uint(self.nonce.into())]));
         buf.extend(ethabi::encode(&[Token::Uint(self.chain_id.into())]));
@@ -106,9 +169,10 @@ impl EIP712Encode for Withdrawal {
 }
 
 impl Withdrawal {
-    pub fn from_withdrawal_request(
+    pub fn from_raw(
         data: RawWithdrawalRequest,
         owner_lock: gw_types::packed::Script,
+        address: gw_common::registry_address::RegistryAddress,
     ) -> Result<Self> {
         let hash_type = match ScriptHashType::try_from(owner_lock.hash_type())
             .map_err(|hash_type| anyhow!("Invalid hash type: {}", hash_type))?
@@ -116,9 +180,10 @@ impl Withdrawal {
             ScriptHashType::Data => "data",
             ScriptHashType::Type => "type",
         };
+        let address = RegistryAddress::from_address(address)?;
         let withdrawal = Withdrawal {
             nonce: data.nonce().unpack(),
-            account_script_hash: data.account_script_hash().unpack(),
+            address,
             withdraw: WithdrawalAsset {
                 ckb_capacity: data.capacity().unpack(),
                 udt_amount: data.amount().unpack(),
@@ -195,7 +260,7 @@ mod tests {
     use crate::account_lock_manage::{
         eip712::{
             traits::EIP712Encode,
-            types::{Script, Withdrawal, WithdrawalAsset},
+            types::{AddressRegistry, RegistryAddress, Script, Withdrawal, WithdrawalAsset},
         },
         secp256k1::Secp256k1Eth,
         LockAlgorithm,
@@ -341,12 +406,13 @@ mod tests {
     #[test]
     fn test_sign_withdrawal_message() {
         let withdrawal = Withdrawal {
-            account_script_hash: hex::decode(
-                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-            )
-            .unwrap()
-            .try_into()
-            .unwrap(),
+            address: RegistryAddress {
+                registry: AddressRegistry::ETH,
+                address: hex::decode("dddddddddddddddddddddddddddddddddddddddd")
+                    .unwrap()
+                    .try_into()
+                    .expect("address"),
+            },
             nonce: 1,
             chain_id: 1,
             fee: 1000,
@@ -381,12 +447,12 @@ mod tests {
             salt: None,
         };
         let message = withdrawal.eip712_message(domain_seperator.hash_struct());
-        let signature: [u8; 65] = hex::decode("233f0a5e17b60d71d2bb45fde96b785b77db3e17fd388cfd44e3d7b1d75c5b101c34c8d28a1c265d0dccb772bc738309c95cdc49481a8715777af5f54ac049731c").unwrap().try_into().unwrap();
+        let signature: [u8; 65] = hex::decode("edcae58907b6e218b1bc4513afeefb30aad433bcd4a9c937fa53a24bb9abc12a6bc4bfa29ef3f1ee0e58464b1f97ad6bcebd434dbbc2c29539b02539843675681b").unwrap().try_into().unwrap();
         let pubkey_hash = Secp256k1Eth::default()
             .recover(message.into(), &signature)
             .unwrap();
         assert_eq!(
-            "898136badaf5fb2b8fb65ce832e7b6d13f89546a".to_string(),
+            "e8ae579256c3b84efb76bbb69cb6bcbef1375f00".to_string(),
             hex::encode(pubkey_hash)
         );
     }

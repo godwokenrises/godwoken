@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use gw_common::H256;
+use gw_common::{registry_address::RegistryAddress, H256};
 use gw_types::{
     bytes::Bytes,
     offchain::RollupContext,
@@ -29,6 +29,7 @@ pub trait LockAlgorithm {
         &self,
         sender_script: Script,
         withdrawal: &WithdrawalRequestExtra,
+        _withdrawal_address: RegistryAddress,
     ) -> Result<(), LockAlgorithmError>;
 }
 

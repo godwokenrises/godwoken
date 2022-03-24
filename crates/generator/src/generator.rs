@@ -294,7 +294,14 @@ impl Generator {
             .get_lock_algorithm(&lock_code_hash.into())
             .ok_or(LockAlgorithmError::UnknownAccountLock)?;
 
-        lock_algo.verify_withdrawal(account_script, withdrawal)?;
+        let address = state
+            .get_registry_address_by_script_hash(
+                raw.registry_id().unpack(),
+                &account_script_hash.into(),
+            )?
+            .ok_or(AccountError::RegistryAddressNotFound)?;
+
+        lock_algo.verify_withdrawal(account_script, withdrawal, address)?;
 
         Ok(())
     }

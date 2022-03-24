@@ -1,4 +1,4 @@
-use gw_common::H256;
+use gw_common::{registry_address::RegistryAddress, H256};
 use gw_types::{
     bytes::Bytes,
     offchain::RollupContext,
@@ -35,6 +35,7 @@ impl LockAlgorithm for AlwaysSuccess {
         &self,
         _sender_script: Script,
         _withdrawal: &gw_types::packed::WithdrawalRequestExtra,
+        _address: RegistryAddress,
     ) -> Result<(), LockAlgorithmError> {
         Ok(())
     }
