@@ -42,7 +42,7 @@ use std::{
     iter::FromIterator,
     ops::Shr,
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 use tracing::instrument;
 
@@ -583,14 +583,28 @@ impl MemPool {
         }
 
         // estimate next l2block timestamp
-        let estimated_timestamp = self.provider.estimate_next_blocktime().await?;
+        let estimated_timestamp = {
+            let estimated = self.provider.estimate_next_blocktime().await?;
+            let tip_timestamp = Duration::from_millis(new_tip_block.raw().timestamp().unpack());
+            if estimated <= tip_timestamp {
+                let overwriten_timestamp = tip_timestamp.saturating_add(Duration::from_secs(1));
+                log::warn!(
+                    "[mem-pool] reset mem-pool with insatisfied estimated time, overwrite estimated time {:?} -> {:?}",
+                    estimated,
+                    overwriten_timestamp
+                );
+                overwriten_timestamp
+            } else {
+                estimated
+            }
+        };
         // reset mem block state
         // Fix execute_raw_l2transaction panic by updating mem_store first and storing it to mem_pool_state after.
         let snapshot = self.store.get_snapshot();
         assert_eq!(snapshot.get_tip_block_hash()?, new_tip, "set new snapshot");
         let mem_store = MemStore::new(snapshot);
-        mem_store.update_mem_pool_block_info(self.mem_block.block_info())?;
         let mem_block_content = self.mem_block.reset(&new_tip_block, estimated_timestamp);
+        mem_store.update_mem_pool_block_info(self.mem_block.block_info())?;
         self.mem_pool_state.store(Arc::new(mem_store));
 
         // set tip
