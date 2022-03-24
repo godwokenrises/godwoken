@@ -1851,7 +1851,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arc-swap",
- "ckb-fixed-hash 0.100.0",
+ "ckb-fixed-hash",
  "gw-config",
  "gw-jsonrpc-types",
  "gw-tx-filter",
