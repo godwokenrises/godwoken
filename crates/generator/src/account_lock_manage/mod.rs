@@ -20,6 +20,7 @@ pub trait LockAlgorithm {
     fn verify_tx(
         &self,
         ctx: &RollupContext,
+        sender_address: RegistryAddress,
         sender_script: Script,
         receiver_script: Script,
         tx: L2Transaction,
@@ -29,7 +30,7 @@ pub trait LockAlgorithm {
         &self,
         sender_script: Script,
         withdrawal: &WithdrawalRequestExtra,
-        _withdrawal_address: RegistryAddress,
+        withdrawal_address: RegistryAddress,
     ) -> Result<(), LockAlgorithmError>;
 }
 

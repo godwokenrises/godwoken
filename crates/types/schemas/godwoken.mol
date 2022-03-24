@@ -67,6 +67,8 @@ table RollupConfig {
 }
 
 table RawL2Transaction {
+    // chain id
+    chain_id: Uint64,
     from_id: Uint32,
     to_id: Uint32,
     nonce: Uint32,
