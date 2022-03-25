@@ -48,17 +48,17 @@ The `args` part in this transaction, contains a [MetaContractArgs](https://githu
 }
 ```
 
-The included `code_hash` and `hash_type` are pre-determined by each Godwoken deployments. The `args`(notice we have many different args here, please pay attention so you don't get confused :P) in the CreateAccount data structure, which value is `0x01000000`, contains the account ID for a layer 2 sUDT type. The specified sUDT here, will be treated as **pETH** for current Polyjuice deployments.
+The included `code_hash` and `hash_type` are pre-determined by each Godwoken deployments. The `args`(notice we have many different args here, please pay attention so you don't get confused :P) in the CreateAccount data structure, which value is `0x01000000`, contains the account ID for a layer 2 sUDT type. The specified sUDT here, will be treated as **pCKB** for current Polyjuice deployments.
 
-# pETH
+# pCKB
 
-**pETH** is a new concept introduced by Polyjuice. Recall that in Ethereum, the gas of each smart contract is calculated. The transaction fee is calculated then by multiplying gas with specified gas price. In Polyjuice we are preserving the same workflow for maximum compatibility, however one question arises: trasasction fee in Ethereum is calculated using ETH, what unit shall we use in Polyjuice?
+**pCKB** is a new concept introduced by Polyjuice. Recall that in Ethereum, the gas of each smart contract is calculated. The transaction fee is calculated then by multiplying gas with specified gas price. In Polyjuice we are preserving the same workflow for maximum compatibility, however one question arises: trasasction fee in Ethereum is calculated using ETH, what unit shall we use in Polyjuice?
 
-To solve this problem, we introduce the concept of **pETH** in Polyjuice. In Polyjuice, **pETH** is used as the unit for calculating transaction fees. This means while the gas price is Ethereum is ETH/gas(while this is over-simplified notation, since Ethereum also has wei, but I'm sure you will get the idea), in Polyjuice gas price is measured in pETH/gas. When executing a transaction, Polyjuice will deduct transaction fees using tokens in the layer 2 sUDT type denoted by **pETH**.
+To solve this problem, we introduce the concept of **pCKB** in Polyjuice. In Polyjuice, **pCKB** is used as the unit for calculating transaction fees. This means while the gas price in Ethereum is ETH/gas(while this is over-simplified notation, since Ethereum also has wei, but I'm sure you will get the idea), in Polyjuice gas price is measured in pCKB/gas. When executing a transaction, Polyjuice will deduct transaction fees using the token in the layer2 sUDT type denoted by **pCKB**.
 
-Note in Ethereum, one can also send some ETH to a smart contract for certain behavior. In Polyjuice, this feature is also performed by sending pETH.
+By default, we use CKB as **pCKB** in Polyjuice. 
 
-As shown above, one is free to use any Godwoken powered layer 2 sUDT type as **pETH**. This means we can use CKB, or any layer 1 sUDT as **pETH** in Polyjuice. One interesting idea, is that we can use [Force Bridge](https://github.com/nervosnetwork/force-bridge-eth) to map real ETH in Ethereum network, to a sUDT type on CKB, we then create a Polyjuice deployment using this particular sUDT type as **pETH**. The result here, is that we will have a Polyjuice deployment using **real** ETH in CKB as well.
+However, one is free to use any issued Godwoken layer2 sUDT type as **pCKB**. This means we can use any layer1 sUDT as **pCKB** in Polyjuice. One interesting idea, is that we can use [Force Bridge](https://github.com/nervosnetwork/force-bridge-eth) to map real ETH in Ethereum network, to a sUDT type on layer1, then we create a Polyjuice deployment using this particular sUDT type as **pCKB**. The result here, is that we may have a Polyjuice deployment using **real** ETH to pay transaction fees.
 
 # Actions
 
@@ -92,8 +92,8 @@ The `args` part uses a [custom serialization format](https://github.com/nervosne
 }
 ```
 
-* `to_id` contains the account ID for the polyjuice contract to call. In the case of deploying a smart contract, 0 is used here.
-* `value` contains pETH to send to the target smart contract.
+* `to_id` contains the account ID for the Polyjuice contract to call. In the case of deploying a smart contract, 0 is used here.
+* `value` contains pCKB to send to the target smart contract.
 * `data` contains the actual compiled smart contract to deploy.
 
 The returned result for running this layer 2 transaction, will contain the newly created account ID for the deployed smart contract.
@@ -127,7 +127,7 @@ The `args` part uses a [custom serialization format](https://github.com/nervosne
 ```
 
 * `to_id` in `args` is also set to the smart contract account ID to be called.
-* `value` in `args` contains any pETH sent to the smart contract.
+* `value` in `args` contains any pCKB sent to the smart contract.
 * `data` in `args` contains [Ethereum ABI compatible data payload](https://github.com/ethereumbook/ethereumbook/blob/develop/06transactions.asciidoc#transmitting-a-data-payload-to-an-eoa-or-contract) used to invoke the smart contract.
 
 To make an analogy:
