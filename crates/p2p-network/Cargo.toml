@@ -1,0 +1,22 @@
+[package]
+name = "gw-p2p-network"
+version = "0.1.0"
+authors = ["Nervos Network"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+gw-types = { path = "../types" }
+gw-config = { path = "../config" }
+tokio = "1.15"
+anyhow = "1.0"
+log = "0.4"
+async-trait = "0.1"
+tentacle = { version = "0.4.0-beta.4", features = ["unstable"] }
+socket2 = { version = "0.4.4", features = ["all"] }
+
+[dev-dependencies]
+bytes = "1.1.0"
+env_logger = "0.8.3"
+futures-util = "0.3.21"

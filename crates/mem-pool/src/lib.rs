@@ -11,7 +11,7 @@ pub mod fee;
 pub mod mem_block;
 pub mod pool;
 pub mod restore_manager;
-mod sync;
+pub mod sync;
 pub mod traits;
 mod types;
 pub mod withdrawal;

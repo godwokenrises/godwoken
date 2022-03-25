@@ -25,6 +25,7 @@ members = [
   "crates/tx-filter",
   "crates/replay-chain",
   "crates/dynamic-config",
+  "crates/p2p-network",
 ]
 
 [profile.release]

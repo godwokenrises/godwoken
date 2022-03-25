@@ -44,6 +44,8 @@ pub struct Config {
     pub reload_config_github_url: Option<GithubConfigUrl>,
     #[serde(default)]
     pub dynamic_config: DynamicConfig,
+    #[serde(default)]
+    pub p2p_network_config: Option<P2PNetworkConfig>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -258,6 +260,16 @@ impl Default for OffChainValidatorConfig {
             dump_tx_on_failure: true,
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct P2PNetworkConfig {
+    /// Multiaddr listen address, e.g. /ip4/1.2.3.4/tcp/443
+    #[serde(default)]
+    pub listen: Option<String>,
+    /// Multiaddr dial addresses, e.g. /ip4/1.2.3.4/tcp/443
+    #[serde(default)]
+    pub dial: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

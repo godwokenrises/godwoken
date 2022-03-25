@@ -29,8 +29,10 @@ use gw_mem_pool::{
     default_provider::DefaultMemPoolProvider,
     pool::{MemPool, MemPoolCreateArgs},
     spawn_sub_mem_pool_task,
+    sync::p2p,
     traits::MemPoolErrorTxHandler,
 };
+use gw_p2p_network::P2PNetwork;
 use gw_rpc_client::{
     ckb_client::CKBClient, contract::ContractsCellDepManager, indexer_client::CKBIndexerClient,
     rpc_client::RPCClient,
@@ -61,6 +63,7 @@ use std::{
     sync::{atomic::Ordering, Arc},
     time::{Duration, Instant},
 };
+use tentacle::service::ProtocolMeta;
 use tokio::{
     spawn,
     sync::{broadcast, mpsc, Mutex},
@@ -816,6 +819,48 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
     };
 
+    //Graceful shutdown event. If all the shutdown_sends get dropped, then we can shutdown gracefully.
+    let (shutdown_send, mut shutdown_recv) = mpsc::channel(1);
+    //Broadcase shutdown event.
+    let (shutdown_event, shutdown_event_recv) = broadcast::channel(1);
+
+    // P2P network.
+    let p2p_control_and_handle = if let Some(ref p2p_network_config) = config.p2p_network_config {
+        let mut protocols: Vec<ProtocolMeta> = Vec::new();
+        let mut sync_server_state: Option<Arc<Mutex<p2p::SyncServerState>>> = None;
+        match (&mem_pool, config.node_mode) {
+            (Some(_), NodeMode::FullNode | NodeMode::Test) => {
+                log::info!("will enable mem-pool p2p sync server");
+                let s = Arc::new(Mutex::new(Default::default()));
+                sync_server_state = Some(s.clone());
+                protocols.push(p2p::sync_server_protocol(s));
+            }
+            (Some(mem_pool), NodeMode::ReadOnly) => {
+                log::info!("will enable mem-pool p2p sync client");
+                protocols.push(p2p::sync_client_protocol(
+                    mem_pool.clone(),
+                    shutdown_event.clone(),
+                ));
+            }
+            _ => {}
+        }
+        let mut network = P2PNetwork::init(p2p_network_config, protocols).await?;
+        let control = network.control().clone();
+        if let (Some(sync_server_state), Some(mem_pool)) = (sync_server_state, &mem_pool) {
+            let mut mem_pool = mem_pool.lock().await;
+            mem_pool
+                .enable_publishing(control.clone(), sync_server_state)
+                .await;
+        }
+        let handle = tokio::spawn(async move {
+            log::info!("running the p2p network");
+            network.run().await;
+        });
+        Some((control, handle))
+    } else {
+        None
+    };
+
     // RPC registry
     let args = RegistryArgs {
         store,
@@ -859,10 +904,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     }
 
     log::info!("{:?} mode", config.node_mode);
-    //Graceful shutdown event. If all the shutdown_sends get dropped, then we can shutdown gracefully.
-    let (shutdown_send, mut shutdown_recv) = mpsc::channel(1);
-    //Broadcase shutdown event.
-    let (shutdown_event, shutdown_event_recv) = broadcast::channel(1);
 
     let chain_task = spawn({
         let ctx = ChainTaskContext {
@@ -941,6 +982,13 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     log::info!("send shutdown event");
     if let Err(err) = shutdown_event.send(()) {
         log::error!("Failed to brodcast error message: {:?}", err);
+    }
+    // Shutdown p2p network.
+    if let Some((control, handle)) = p2p_control_and_handle {
+        log::info!("closing p2p network");
+        let _ = control.close().await;
+        let _ = handle.await;
+        log::info!("p2p network closed");
     }
 
     // Make sure all the senders are dropped.

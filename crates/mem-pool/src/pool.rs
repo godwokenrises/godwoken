@@ -42,6 +42,8 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use tentacle::service::ServiceAsyncControl;
+use tokio::sync::{broadcast, Mutex};
 use tracing::instrument;
 
 use crate::{
@@ -49,7 +51,11 @@ use crate::{
     custodian::AvailableCustodians,
     mem_block::MemBlock,
     restore_manager::RestoreManager,
-    sync::{mq::tokio_kafka, publish::MemPoolPublishService},
+    sync::{
+        mq::tokio_kafka,
+        p2p::{self, SyncServerState},
+        publish::MemPoolPublishService,
+    },
     traits::{MemPoolErrorTxHandler, MemPoolProvider},
     types::EntryList,
     withdrawal::Generator as WithdrawalGenerator,
@@ -95,6 +101,7 @@ pub struct MemPool {
     node_mode: NodeMode,
     mem_pool_state: Arc<MemPoolState>,
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
+    new_tip_publisher: broadcast::Sender<(H256, u64)>,
 }
 
 pub struct MemPoolCreateArgs {
@@ -156,20 +163,27 @@ impl MemPool {
         }
 
         mem_block.clear_txs();
-        let fan_out_mem_block_handler = config
+
+        let producer = config
             .publish
-            .map(|config| -> Result<MemPoolPublishService> {
+            .map(|config| -> Result<tokio_kafka::Producer> {
                 log::info!("Setup fan out mem_block handler.");
                 let producer = tokio_kafka::Producer::connect(config.hosts, config.topic)?;
-                let handler = MemPoolPublishService::start(producer);
-                Ok(handler)
+                Ok(producer)
             })
             .transpose()?;
+        let mem_pool_publish_service = if producer.is_some() {
+            Some(MemPoolPublishService::start(producer, None))
+        } else {
+            None
+        };
 
         let mem_pool_state = {
             let mem_store = MemStore::new(store.get_snapshot());
             Arc::new(MemPoolState::new(Arc::new(mem_store), false))
         };
+
+        let (new_tip_publisher, _) = broadcast::channel(1);
 
         let mut mem_pool = MemPool {
             store,
@@ -183,10 +197,11 @@ impl MemPool {
             pending_deposits,
             restore_manager: restore_manager.clone(),
             pending_restored_tx_hashes,
-            mem_pool_publish_service: fan_out_mem_block_handler,
+            mem_pool_publish_service,
             node_mode,
             mem_pool_state,
             dynamic_config_manager,
+            new_tip_publisher,
         };
 
         // update mem block info
@@ -614,6 +629,12 @@ impl MemPool {
 
         // set tip
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
+
+        // Publish new tip.
+        let _ = self.new_tip_publisher.send(self.current_tip);
+        if let Some(ref publish) = self.mem_pool_publish_service {
+            publish.new_tip(self.current_tip).await;
+        }
 
         // mem block withdrawals
         let mem_block_withdrawals: Vec<_> = {
@@ -1181,6 +1202,31 @@ impl MemPool {
         }
         self.push_transaction(tx).await?;
         Ok(())
+    }
+
+    pub(crate) fn current_tip(&self) -> (H256, u64) {
+        self.current_tip
+    }
+
+    pub(crate) fn subscribe_new_tip(&self) -> broadcast::Receiver<(H256, u64)> {
+        self.new_tip_publisher.subscribe()
+    }
+
+    pub async fn enable_publishing(
+        &mut self,
+        control: ServiceAsyncControl,
+        shared: Arc<Mutex<SyncServerState>>,
+    ) {
+        let p2p_publisher = p2p::sync_server_publisher(control, shared);
+        match self.mem_pool_publish_service {
+            Some(ref service) => {
+                service.set_p2p_publisher(p2p_publisher).await;
+            }
+            None => {
+                self.mem_pool_publish_service =
+                    Some(MemPoolPublishService::start(None, Some(p2p_publisher)));
+            }
+        }
     }
 }
 
