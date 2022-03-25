@@ -45,6 +45,8 @@ pub struct Config {
     pub dynamic_config: DynamicConfig,
     #[serde(default)]
     pub eth_eoa_mapping_config: Option<EthEoaMappingConfig>,
+    #[serde(default)]
+    pub p2p_network_config: Option<P2PNetworkConfig>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -253,6 +255,14 @@ impl Default for OffChainValidatorConfig {
             dump_tx_on_failure: true,
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct P2PNetworkConfig {
+    /// Multiaddr listen address, e.g. /ip4/1.2.3.4/tcp/443
+    pub listen: Option<String>,
+    /// Multiaddr dial addresses, e.g. /ip4/1.2.3.4/tcp/443
+    pub dial: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

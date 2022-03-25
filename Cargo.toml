@@ -26,6 +26,7 @@ members = [
   "crates/replay-chain",
   "crates/dynamic-config",
   "crates/eoa-mapping",
+  "crates/p2p-network",
 ]
 
 [profile.release]
