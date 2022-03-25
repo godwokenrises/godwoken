@@ -68,3 +68,31 @@ union RefreshMemBlockMessage {
     NextL2Transaction,
     NextMemBlock,
 }
+
+struct P2PSyncRequest {
+    block_number: Uint64,
+    block_hash: Byte32,
+}
+
+union P2PSyncResponse {
+    TryAgain,
+    P2PSyncMessageVec,
+}
+
+struct TryAgain {
+    block_number: Uint64,
+    block_hash: Byte32,
+}
+
+union P2PSyncMessage {
+    L2Transaction,
+    NextMemBlock,
+    TipSync,
+}
+
+vector P2PSyncMessageVec <P2PSyncMessage>;
+
+struct TipSync {
+    block_number: Uint64,
+    block_hash: Byte32,
+}
