@@ -1174,6 +1174,9 @@ impl MemPool {
 
             let unregistered_account_hashes =
                 eth_eoa_mapping_register.filter_accounts(&state, from_id, to_id)?;
+            if unregistered_account_hashes.is_empty() {
+                return Ok(());
+            }
 
             log::debug!(
                 "[eoa mapping] filter from {} to {}: {}ms",
