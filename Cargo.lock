@@ -2102,6 +2102,7 @@ dependencies = [
  "gw-dynamic-config",
  "gw-eoa-mapping",
  "gw-generator",
+ "gw-p2p-network",
  "gw-rpc-client",
  "gw-rpc-ws-server",
  "gw-store",
@@ -2113,6 +2114,7 @@ dependencies = [
  "rand 0.8.4",
  "rdkafka",
  "tempfile",
+ "tentacle",
  "tokio",
  "tracing",
 ]

@@ -8,25 +8,42 @@ use gw_types::{
 };
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use super::mq::{tokio_kafka, Produce};
+use super::{
+    mq::{tokio_kafka, Produce},
+    p2p,
+};
 
 const CHANNEL_BUFFER_SIZE: usize = 1000;
 pub(crate) struct PublishMemPoolActor {
     receiver: Receiver<RefreshMemBlockMessageUnion>,
-    producer: tokio_kafka::Producer,
+    producer: Option<tokio_kafka::Producer>,
+    p2p_publisher: Option<p2p::Publisher>,
 }
 
 impl PublishMemPoolActor {
     pub(crate) fn new(
         receiver: Receiver<RefreshMemBlockMessageUnion>,
-        producer: tokio_kafka::Producer,
+        producer: Option<tokio_kafka::Producer>,
+        p2p_publisher: Option<p2p::Publisher>,
     ) -> Self {
-        Self { receiver, producer }
+        Self {
+            receiver,
+            producer,
+            p2p_publisher,
+        }
     }
 
     async fn handle(&mut self, msg: RefreshMemBlockMessageUnion) {
-        if let Err(err) = self.producer.send(msg).await {
-            log::error!("[Fan out mem block] message failed: {:?}", err);
+        if let Some(p) = self.p2p_publisher.as_mut() {
+            if let Err(err) = p.publish(msg.clone()).await {
+                log::error!("p2p publish failed: {:?}", err);
+            }
+        }
+
+        if let Some(p) = self.producer.as_mut() {
+            if let Err(err) = p.send(msg).await {
+                log::error!("[Fan out mem block] message failed: {:?}", err);
+            }
         }
     }
 }
@@ -43,10 +60,13 @@ pub(crate) struct MemPoolPublishService {
 }
 
 impl MemPoolPublishService {
-    pub(crate) fn start(producer: tokio_kafka::Producer) -> Self {
+    pub(crate) fn start(
+        producer: Option<tokio_kafka::Producer>,
+        p2p_publisher: Option<p2p::Publisher>,
+    ) -> Self {
         let (sender, receiver) = tokio::sync::mpsc::channel(CHANNEL_BUFFER_SIZE);
 
-        let actor = PublishMemPoolActor::new(receiver, producer);
+        let actor = PublishMemPoolActor::new(receiver, producer, p2p_publisher);
         tokio::spawn(publish_handle(actor));
         Self { sender }
     }

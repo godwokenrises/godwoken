@@ -68,3 +68,18 @@ union RefreshMemBlockMessage {
     NextL2Transaction,
     NextMemBlock,
 }
+
+vector RefreshMemBlockMessageVec <RefreshMemBlockMessage>;
+
+struct P2PSyncRequest {
+    block_number: Uint64,
+}
+
+union P2PSyncResponse {
+    TryAgain,
+    RefreshMemBlockMessageVec,
+}
+
+struct TryAgain {
+    block_number: Uint64,
+}

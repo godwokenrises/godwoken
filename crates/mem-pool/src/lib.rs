@@ -17,4 +17,4 @@ mod types;
 pub mod withdrawal;
 
 pub use async_trait::*;
-pub use sync::subscribe::spawn_sub_mem_pool_task;
+pub use sync::subscribe::{spawn_p2p_sync_client, spawn_sub_mem_pool_task};

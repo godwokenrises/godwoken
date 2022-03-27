@@ -29,7 +29,7 @@ use gw_generator::{
 use gw_mem_pool::{
     default_provider::DefaultMemPoolProvider,
     pool::{MemPool, MemPoolCreateArgs},
-    spawn_sub_mem_pool_task,
+    spawn_p2p_sync_client, spawn_sub_mem_pool_task,
     traits::MemPoolErrorTxHandler,
 };
 use gw_rpc_client::{
@@ -536,7 +536,7 @@ impl BaseInitComponents {
     }
 }
 
-pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
+pub async fn run(mut config: Config, skip_config_check: bool) -> Result<()> {
     // Set up sentry.
     let _guard = match &config.sentry_dsn.as_ref() {
         Some(sentry_dsn) => sentry::init((
@@ -647,6 +647,15 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                         node_mode: config.node_mode,
                         dynamic_config_manager: base.dynamic_config_manager.clone(),
                         eth_eoa_mapping_register,
+                        // Let mem pool start p2p network for publishing if we are full node.
+                        p2p_network_config: if matches!(
+                            config.node_mode,
+                            NodeMode::FullNode | NodeMode::Test
+                        ) {
+                            config.p2p_network_config.take()
+                        } else {
+                            None
+                        },
                     };
                     Arc::new(Mutex::new(
                         MemPool::create(args)
@@ -745,6 +754,18 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     }
                     None => {
                         log::warn!("Failed to init sync mem block, because mem_pool is None.");
+                    }
+                }
+            }
+            if let Some(p2p_network_config) = config.p2p_network_config {
+                match &mem_pool {
+                    Some(mem_pool) => {
+                        spawn_p2p_sync_client(mem_pool.clone(), p2p_network_config).await?;
+                    }
+                    None => {
+                        log::warn!(
+                            "Failed to init p2p mem block subscription, because mem_pool is None."
+                        );
                     }
                 }
             }

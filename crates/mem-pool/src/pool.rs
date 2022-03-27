@@ -14,12 +14,13 @@ use gw_common::{
     state::{to_short_script_hash, State},
     H256,
 };
-use gw_config::{MemPoolConfig, NodeMode};
+use gw_config::{MemPoolConfig, NodeMode, P2PNetworkConfig};
 use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_eoa_mapping::eth_register::EthEoaMappingRegister;
 use gw_generator::{
     constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, ArcSwap, Generator,
 };
+use gw_p2p_network::P2PNetwork;
 use gw_rpc_ws_server::notify_controller::NotifyController;
 use gw_store::{
     chain_view::ChainView,
@@ -45,6 +46,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use tokio::sync::Mutex;
 use tracing::instrument;
 
 use crate::{
@@ -52,7 +54,7 @@ use crate::{
     custodian::AvailableCustodians,
     mem_block::MemBlock,
     restore_manager::RestoreManager,
-    sync::{mq::tokio_kafka, publish::MemPoolPublishService},
+    sync::{mq::tokio_kafka, p2p, publish::MemPoolPublishService},
     traits::{MemPoolErrorTxHandler, MemPoolProvider},
     types::EntryList,
     withdrawal::Generator as WithdrawalGenerator,
@@ -110,6 +112,7 @@ pub struct MemPoolCreateArgs {
     pub error_tx_receipt_notifier: Option<NotifyController>,
     pub config: MemPoolConfig,
     pub node_mode: NodeMode,
+    pub p2p_network_config: Option<P2PNetworkConfig>,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     pub eth_eoa_mapping_register: Option<EthEoaMappingRegister>,
 }
@@ -137,6 +140,7 @@ impl MemPool {
             node_mode,
             dynamic_config_manager,
             eth_eoa_mapping_register,
+            p2p_network_config,
         } = args;
         let pending = Default::default();
 
@@ -162,15 +166,37 @@ impl MemPool {
         }
 
         mem_block.clear_txs();
-        let fan_out_mem_block_handler = config
+
+        let producer = config
             .publish
-            .map(|config| -> Result<MemPoolPublishService> {
+            .map(|config| -> Result<tokio_kafka::Producer> {
                 log::info!("Setup fan out mem_block handler.");
                 let producer = tokio_kafka::Producer::connect(config.hosts, config.topic)?;
-                let handler = MemPoolPublishService::start(producer);
-                Ok(handler)
+                Ok(producer)
             })
             .transpose()?;
+        let p2p_publisher = match (p2p_network_config, node_mode) {
+            (Some(config), NodeMode::FullNode | NodeMode::Test) => {
+                log::info!("Setup p2p publisher");
+                let shared = Arc::new(Mutex::new(p2p::SyncServerState::default()));
+                let mut service = P2PNetwork::init(
+                    &config,
+                    [p2p::sync_server_protocol(shared.clone())],
+                )
+                .await?;
+                let publisher = p2p::sync_server_publisher(service.control().clone(), shared);
+                tokio::spawn(async move {
+                    service.run().await;
+                });
+                Some(publisher)
+            }
+            _ => None,
+        };
+        let mem_pool_publish_service = if producer.is_some() || p2p_publisher.is_some() {
+            Some(MemPoolPublishService::start(producer, p2p_publisher))
+        } else {
+            None
+        };
 
         let mem_pool_state = {
             let mem_store = MemStore::new(store.get_snapshot());
@@ -189,7 +215,7 @@ impl MemPool {
             pending_deposits,
             restore_manager: restore_manager.clone(),
             pending_restored_tx_hashes,
-            mem_pool_publish_service: fan_out_mem_block_handler,
+            mem_pool_publish_service,
             node_mode,
             mem_pool_state,
             dynamic_config_manager,
@@ -432,6 +458,7 @@ impl MemPool {
     #[instrument(skip_all)]
     pub async fn notify_new_tip(&mut self, new_tip: H256) -> Result<()> {
         // reset pool state
+        log::info!("[mem-pool] notify_new_tip: {}", new_tip.pack());
         self.reset(Some(self.current_tip.0), Some(new_tip)).await?;
         Ok(())
     }
@@ -1268,6 +1295,10 @@ impl MemPool {
         }
         self.push_transaction(tx).await?;
         Ok(())
+    }
+
+    pub(crate) fn current_tip(&self) -> (H256, u64) {
+        self.current_tip
     }
 }
 

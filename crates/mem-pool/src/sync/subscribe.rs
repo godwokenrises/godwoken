@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use gw_config::SubscribeMemPoolConfig;
+use gw_config::{P2PNetworkConfig, SubscribeMemPoolConfig};
+use gw_p2p_network::P2PNetwork;
 use gw_types::packed::*;
 use gw_types::prelude::Unpack;
 use tokio::sync::Mutex;
 
-use crate::pool::MemPool;
+use crate::{pool::MemPool, sync::p2p};
 
 use super::mq::{tokio_kafka, Consume};
 
@@ -71,5 +72,17 @@ pub fn spawn_sub_mem_pool_task(
         }
     });
 
+    Ok(())
+}
+
+pub async fn spawn_p2p_sync_client(
+    mem_pool: Arc<Mutex<MemPool>>,
+    config: P2PNetworkConfig,
+) -> Result<()> {
+    let protocol = p2p::sync_client_protocol(mem_pool);
+    let mut network = P2PNetwork::init(&config, [protocol]).await?;
+    tokio::spawn(async move {
+        network.run().await;
+    });
     Ok(())
 }
