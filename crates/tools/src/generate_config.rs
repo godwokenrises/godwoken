@@ -68,7 +68,8 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         .into();
 
     // build configuration
-    let account_id = 0;
+    // In Godwoken v1, block producer should be an ETH EOA.
+    let account_id = 2; // Use the first Godwoken EOA (account_id = 2) as block_producer by default
     let node_wallet_info = get_wallet_info(privkey_path);
     let code_hash: [u8; 32] = {
         let mut hash = [0u8; 32];
