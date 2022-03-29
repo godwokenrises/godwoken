@@ -49,7 +49,7 @@ use gw_types::{
     packed::{Byte32, CellDep, NumberHash, RollupConfig, Script},
     prelude::*,
 };
-use gw_utils::{genesis_info::CKBGenesisInfo, wallet::Wallet};
+use gw_utils::{genesis_info::CKBGenesisInfo, since::EpochNumberWithFraction, wallet::Wallet};
 use gw_web3_indexer::{ErrorReceiptIndexer, Web3Indexer};
 use semver::Version;
 use sqlx::{
@@ -259,29 +259,27 @@ impl ChainTask {
 
             // update global hardfork info
             let hardfork_switch = self.rpc_client.get_hardfork_switch().await?;
-            let rpc32_epoch_number = hardfork_switch.rfc_0032();
+            let rfc0032_epoch_number = hardfork_switch.rfc_0032();
             let global_hardfork_switch = GLOBAL_HARDFORK_SWITCH.load();
             if !is_hardfork_switch_eq(&*global_hardfork_switch, &hardfork_switch) {
                 GLOBAL_HARDFORK_SWITCH.store(Arc::new(hardfork_switch));
             }
 
-            // update global current epoch number
-            let current_epoch_number = self.rpc_client.get_current_epoch_number().await?;
-            let global_epoch_number = GLOBAL_CURRENT_EPOCH_NUMBER.load(Ordering::SeqCst);
-            if global_epoch_number != current_epoch_number {
-                GLOBAL_CURRENT_EPOCH_NUMBER.store(current_epoch_number, Ordering::SeqCst);
-            }
-
-            // update global vm version
-            let vm_version: u32 = if current_epoch_number >= rpc32_epoch_number {
-                1
-            } else {
-                0
+            // when switching the epoch, update the tip epoch number and VM version
+            let tip_epoch = {
+                let tip_epoch: u64 = block.header().raw().epoch().unpack();
+                EpochNumberWithFraction::from_full_value(tip_epoch)
             };
-            let global_vm_version = GLOBAL_VM_VERSION.load(Ordering::SeqCst);
-            if global_vm_version != vm_version {
+            if tip_epoch.index() == 0 || tip_epoch.index() == tip_epoch.length() - 1 {
+                let vm_version: u32 = if tip_epoch.number() >= rfc0032_epoch_number {
+                    1
+                } else {
+                    0
+                };
+                GLOBAL_CURRENT_EPOCH_NUMBER.store(tip_epoch.number(), Ordering::SeqCst);
                 GLOBAL_VM_VERSION.store(vm_version, Ordering::SeqCst);
             }
+
             // update tip
             Ok(Some((new_block_number, block.header().hash().into())))
         } else {
