@@ -10,7 +10,7 @@ RUSTFLAGS="--cfg tokio_unstable" cargo build
 
 ## tokio-console
 
-**tokio-console** also uses unstable rust features.
+**tokio-console** also uses unstable tokio features.
 
 - build with: RUSTFLAGS="--cfg tokio_unstable" cargo build
 - install tokio-console: cargo install tokio-console

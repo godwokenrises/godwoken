@@ -20,6 +20,7 @@ gw-rpc-ws-server = { path = "../rpc-ws-server" }
 gw-dynamic-config = { path = "../dynamic-config" }
 gw-eoa-mapping = { path = "../eoa-mapping" }
 rdkafka = { version = "0.25", default-features = false }
+futures = { version = "0.3"}
 tokio = "1.15"
 anyhow = "1.0"
 log = "0.4"
