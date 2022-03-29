@@ -9,8 +9,8 @@ use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
 use gw_jsonrpc_types::blockchain::CellDep;
 use serde::de::DeserializeOwned;
 use serde_json::json;
-use tracing::instrument;
 use tokio_metrics::TaskMonitor;
+use tracing::instrument;
 
 #[derive(Clone)]
 pub struct CKBClient {
