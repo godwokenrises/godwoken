@@ -190,7 +190,7 @@ fn setup_nodes(
 ) -> Vec<(String, NodeWalletInfo)> {
     (0..nodes_count)
         .map(|i| {
-            let node_name = format!("node{}", (i + 1).to_string());
+            let node_name = format!("node{}", (i + 1));
             let node_dir = output_dir.join(&node_name);
             log::info!("Generate privkey file for {}...", &node_name);
             let node_pk_path = prepare_privkey(&node_dir);

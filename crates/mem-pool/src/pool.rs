@@ -58,7 +58,7 @@ use crate::{
     withdrawal::Generator as WithdrawalGenerator,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct OutputParam {
     pub retry_count: usize,
 }
@@ -66,12 +66,6 @@ pub struct OutputParam {
 impl OutputParam {
     pub fn new(retry_count: usize) -> Self {
         OutputParam { retry_count }
-    }
-}
-
-impl Default for OutputParam {
-    fn default() -> Self {
-        OutputParam { retry_count: 0 }
     }
 }
 

@@ -49,7 +49,7 @@ use gw_types::{
     packed::{Byte32, CellDep, NumberHash, RollupConfig, Script},
     prelude::*,
 };
-use gw_utils::{genesis_info::CKBGenesisInfo, since::EpochNumberWithFraction, wallet::Wallet};
+use gw_utils::{genesis_info::CKBGenesisInfo, wallet::Wallet};
 use gw_web3_indexer::{ErrorReceiptIndexer, Web3Indexer};
 use semver::Version;
 use sqlx::{
@@ -68,8 +68,6 @@ use tokio::{
 };
 
 const MIN_CKB_VERSION: &str = "0.40.0";
-const SMOL_THREADS_ENV_VAR: &str = "SMOL_THREADS";
-const DEFAULT_RUNTIME_THREADS: usize = 8;
 const EVENT_TIMEOUT_SECONDS: u64 = 30;
 
 struct ChainTaskContext {
@@ -85,6 +83,10 @@ struct ChainTask {
     ctx: Arc<tokio::sync::Mutex<ChainTaskContext>>,
     shutdown_event: broadcast::Receiver<()>,
     _shutdown_send: mpsc::Sender<()>,
+    metrics_monitor: tokio_metrics::TaskMonitor,
+    chain_update_metrics_monitor: tokio_metrics::TaskMonitor,
+    block_produce_metrics_monitor: tokio_metrics::TaskMonitor,
+    cleaner_metrics_monitor: tokio_metrics::TaskMonitor,
 }
 
 impl ChainTask {
@@ -96,12 +98,211 @@ impl ChainTask {
         shutdown_event: broadcast::Receiver<()>,
     ) -> Self {
         let ctx = Arc::new(tokio::sync::Mutex::new(ctx));
+        let metrics_monitor = tokio_metrics::TaskMonitor::new();
+        let chain_update_metrics_monitor = tokio_metrics::TaskMonitor::new();
+        let block_produce_metrics_monitor = tokio_metrics::TaskMonitor::new();
+        let cleaner_metrics_monitor = tokio_metrics::TaskMonitor::new();
+        let _metrics_monitor = metrics_monitor.clone();
+        let _chain_update_metrics_monitor = chain_update_metrics_monitor.clone();
+        let _block_produce_metrics_monitor = block_produce_metrics_monitor.clone();
+        let _cleaner_metrics_monitor = cleaner_metrics_monitor.clone();
+
+        tokio::spawn(async move {
+            let chain_intervals = _metrics_monitor.intervals();
+            let chain_update_intervals = _chain_update_metrics_monitor.intervals();
+            let block_produce_intervals = _block_produce_metrics_monitor.intervals();
+            let cleaner_intervals = _cleaner_metrics_monitor.intervals();
+
+            let zip_intervals = block_produce_intervals.zip(cleaner_intervals);
+            let zip_intervals = chain_update_intervals.zip(zip_intervals);
+            let zip_intervals = chain_intervals.zip(zip_intervals);
+
+            for (chain, (chain_update, (block_produce, cleaner))) in zip_intervals {
+                log::info!("chain task metrics: {:#?}", chain);
+                log::info!("chain_update metrics: {:?}", chain_update);
+                log::info!("block_produce metrics: {:?}", block_produce);
+                log::info!("cleaner metrics: {:?}", cleaner);
+                tokio::time::sleep(Duration::from_secs(30)).await;
+            }
+        });
         Self {
             rpc_client,
             poll_interval,
             ctx,
             _shutdown_send: shutdown_send,
             shutdown_event,
+            metrics_monitor,
+            chain_update_metrics_monitor,
+            block_produce_metrics_monitor,
+            cleaner_metrics_monitor,
+        }
+    }
+
+    async fn sync_next(
+        &self,
+        tip_number: u64,
+        tip_hash: H256,
+        last_event_time: &Instant,
+    ) -> Result<Option<(u64, H256)>> {
+        if let Some(block) = self.rpc_client.get_block_by_number(tip_number + 1).await? {
+            let raw_header = block.header().raw();
+            let new_block_number = raw_header.number().unpack();
+            let new_block_hash = block.header().hash();
+            assert_eq!(
+                new_block_number,
+                tip_number + 1,
+                "should be the same number"
+            );
+            let event = if raw_header.parent_hash().as_slice() == tip_hash.as_slice() {
+                // received new layer1 block
+                log::info!(
+                    "received new layer1 block {}, {}",
+                    new_block_number,
+                    hex::encode(new_block_hash),
+                );
+                ChainEvent::NewBlock {
+                    block: block.clone(),
+                }
+            } else {
+                // layer1 reverted
+                log::info!(
+                    "layer1 reverted current tip: {}, {} -> new block: {}, {}",
+                    tip_number,
+                    hex::encode(tip_hash.as_slice()),
+                    new_block_number,
+                    hex::encode(new_block_hash),
+                );
+                ChainEvent::Reverted {
+                    old_tip: NumberHash::new_builder()
+                        .number(tip_number.pack())
+                        .block_hash(tip_hash.pack())
+                        .build(),
+                    new_block: block.clone(),
+                }
+            };
+            // must execute chain update before block producer, otherwise we may run into an invalid chain state
+            let event = event.clone();
+            let ctx = self.ctx.clone();
+            let mut ctx = ctx.lock().await;
+
+            if let Some(ref mut withdrawal_unlocker) = ctx.withdrawal_unlocker {
+                if let Err(err) = withdrawal_unlocker.handle_event(&event).await {
+                    log::error!("[unlock withdrawal] {}", err);
+                }
+            }
+
+            if let Err(err) = self
+                .chain_update_metrics_monitor
+                .instrument(ctx.chain_updater.handle_event(event.clone()))
+                .await
+            {
+                if is_l1_query_error(&err) {
+                    log::error!("[polling] chain_updater event: {} error: {}", event, err);
+                    return Ok(None);
+                }
+                bail!(
+                    "Error occurred when polling chain_updater, event: {}, error: {}",
+                    event,
+                    err
+                );
+            }
+
+            if let Some(ref mut challenger) = ctx.challenger {
+                if let Err(err) = challenger.handle_event(event.clone()).await {
+                    if is_l1_query_error(&err) {
+                        log::error!("[polling] challenger event: {} error: {}", event, err);
+                        return Ok(None);
+                    }
+                    bail!(
+                        "Error occurred when polling challenger, event: {}, error: {}",
+                        event,
+                        err
+                    );
+                }
+            }
+
+            if let Some(ref mut block_producer) = ctx.block_producer {
+                if let Err(err) = self
+                    .block_produce_metrics_monitor
+                    .instrument(block_producer.handle_event(event.clone()))
+                    .await
+                {
+                    if is_l1_query_error(&err) {
+                        log::error!("[polling] block producer event: {} error: {}", event, err);
+                        return Ok(None);
+                    }
+                    bail!(
+                        "Error occurred when polling block_producer, event: {}, error: {}",
+                        event,
+                        err
+                    );
+                }
+            }
+
+            if let Some(ref cleaner) = ctx.cleaner {
+                if let Err(err) = self
+                    .cleaner_metrics_monitor
+                    .instrument(cleaner.handle_event(event.clone()))
+                    .await
+                {
+                    if is_l1_query_error(&err) {
+                        log::error!("[polling] cleaner event: {} error: {}", event, err);
+                        return Ok(None);
+                    }
+                    bail!(
+                        "Error occurred when polling cleaner, event: {}, error: {}",
+                        event,
+                        err
+                    );
+                }
+            }
+
+            // update global hardfork info
+            let hardfork_switch = self.rpc_client.get_hardfork_switch().await?;
+            let rpc32_epoch_number = hardfork_switch.rfc_0032();
+            let global_hardfork_switch = GLOBAL_HARDFORK_SWITCH.load();
+            if !is_hardfork_switch_eq(&*global_hardfork_switch, &hardfork_switch) {
+                GLOBAL_HARDFORK_SWITCH.store(Arc::new(hardfork_switch));
+            }
+
+            // update global current epoch number
+            let current_epoch_number = self.rpc_client.get_current_epoch_number().await?;
+            let global_epoch_number = GLOBAL_CURRENT_EPOCH_NUMBER.load(Ordering::SeqCst);
+            if global_epoch_number != current_epoch_number {
+                GLOBAL_CURRENT_EPOCH_NUMBER.store(current_epoch_number, Ordering::SeqCst);
+            }
+
+            // update global vm version
+            let vm_version: u32 = if current_epoch_number >= rpc32_epoch_number {
+                1
+            } else {
+                0
+            };
+            let global_vm_version = GLOBAL_VM_VERSION.load(Ordering::SeqCst);
+            if global_vm_version != vm_version {
+                GLOBAL_VM_VERSION.store(vm_version, Ordering::SeqCst);
+            }
+            // update tip
+            Ok(Some((new_block_number, block.header().hash().into())))
+        } else {
+            log::debug!(
+                "Not found layer1 block #{} sleep {}s then retry",
+                tip_number + 1,
+                self.poll_interval.as_secs()
+            );
+            let seconds_since_last_event = last_event_time.elapsed().as_secs();
+            if seconds_since_last_event > EVENT_TIMEOUT_SECONDS {
+                log::warn!(
+                    "Can't find layer1 block update in {}s. last block is #{}({}) CKB node may out of sync",
+                    seconds_since_last_event,
+                    tip_number,
+                    {
+                        let hash: Byte32 =  tip_hash.pack();
+                        hash
+                    }
+                );
+            }
+            Ok(None)
         }
     }
 
@@ -122,158 +323,17 @@ impl ChainTask {
                 log::info!("ChainTask existed successfully");
                 return Ok(());
             }
-            if let Some(block) = self.rpc_client.get_block_by_number(tip_number + 1).await? {
-                let raw_header = block.header().raw();
-                let new_block_number = raw_header.number().unpack();
-                let new_block_hash = block.header().hash();
-                assert_eq!(
-                    new_block_number,
-                    tip_number + 1,
-                    "should be the same number"
-                );
-                let event = if raw_header.parent_hash().as_slice() == tip_hash.as_slice() {
-                    // received new layer1 block
-                    log::info!(
-                        "received new layer1 block {}, {}",
-                        new_block_number,
-                        hex::encode(new_block_hash),
-                    );
-                    ChainEvent::NewBlock {
-                        block: block.clone(),
-                    }
-                } else {
-                    // layer1 reverted
-                    log::info!(
-                        "layer1 reverted current tip: {}, {} -> new block: {}, {}",
-                        tip_number,
-                        hex::encode(tip_hash.as_slice()),
-                        new_block_number,
-                        hex::encode(new_block_hash),
-                    );
-                    ChainEvent::Reverted {
-                        old_tip: NumberHash::new_builder()
-                            .number(tip_number.pack())
-                            .block_hash(tip_hash.pack())
-                            .build(),
-                        new_block: block.clone(),
-                    }
-                };
-                // must execute chain update before block producer, otherwise we may run into an invalid chain state
-                let event = event.clone();
-                let ctx = self.ctx.clone();
-                let mut ctx = ctx.lock().await;
 
-                if let Some(ref mut withdrawal_unlocker) = ctx.withdrawal_unlocker {
-                    if let Err(err) = withdrawal_unlocker.handle_event(&event).await {
-                        log::error!("[unlock withdrawal] {}", err);
-                    }
-                }
-
-                if let Err(err) = ctx.chain_updater.handle_event(event.clone()).await {
-                    if is_l1_query_error(&err) {
-                        log::error!("[polling] chain_updater event: {} error: {}", event, err);
-                        tokio::time::sleep(self.poll_interval).await;
-                        continue;
-                    }
-                    bail!(
-                        "Error occurred when polling chain_updater, event: {}, error: {}",
-                        event,
-                        err
-                    );
-                }
-
-                if let Some(ref mut challenger) = ctx.challenger {
-                    if let Err(err) = challenger.handle_event(event.clone()).await {
-                        if is_l1_query_error(&err) {
-                            log::error!("[polling] challenger event: {} error: {}", event, err);
-                            tokio::time::sleep(self.poll_interval).await;
-                            continue;
-                        }
-                        bail!(
-                            "Error occurred when polling challenger, event: {}, error: {}",
-                            event,
-                            err
-                        );
-                    }
-                }
-
-                if let Some(ref mut block_producer) = ctx.block_producer {
-                    if let Err(err) = block_producer.handle_event(event.clone()).await {
-                        if is_l1_query_error(&err) {
-                            log::error!("[polling] block producer event: {} error: {}", event, err);
-                            tokio::time::sleep(self.poll_interval).await;
-                            continue;
-                        }
-                        bail!(
-                            "Error occurred when polling block_producer, event: {}, error: {}",
-                            event,
-                            err
-                        );
-                    }
-                }
-
-                if let Some(ref cleaner) = ctx.cleaner {
-                    if let Err(err) = cleaner.handle_event(event.clone()).await {
-                        if is_l1_query_error(&err) {
-                            log::error!("[polling] cleaner event: {} error: {}", event, err);
-                            tokio::time::sleep(self.poll_interval).await;
-                            continue;
-                        }
-                        bail!(
-                            "Error occurred when polling cleaner, event: {}, error: {}",
-                            event,
-                            err
-                        );
-                    }
-                }
-
-                // update tip
-                tip_number = new_block_number;
-                tip_hash = block.header().hash().into();
-
-                // update global hardfork info
-                let hardfork_switch = self.rpc_client.get_hardfork_switch().await?;
-                let rfc0032_epoch_number = hardfork_switch.rfc_0032();
-                let global_hardfork_switch = GLOBAL_HARDFORK_SWITCH.load();
-                if !is_hardfork_switch_eq(&*global_hardfork_switch, &hardfork_switch) {
-                    GLOBAL_HARDFORK_SWITCH.store(Arc::new(hardfork_switch));
-                }
-
-                // when switching the epoch, update the tip epoch number and VM version
-                let tip_epoch = {
-                    let tip_epoch: u64 = block.header().raw().epoch().unpack();
-                    EpochNumberWithFraction::from_full_value(tip_epoch)
-                };
-                if tip_epoch.index() == 0 || tip_epoch.index() == tip_epoch.length() - 1 {
-                    let vm_version: u32 = if tip_epoch.number() >= rfc0032_epoch_number {
-                        1
-                    } else {
-                        0
-                    };
-                    GLOBAL_CURRENT_EPOCH_NUMBER.store(tip_epoch.number(), Ordering::SeqCst);
-                    GLOBAL_VM_VERSION.store(vm_version, Ordering::SeqCst);
-                }
+            if let Some((_tip_number, _tip_hash)) = self
+                .metrics_monitor
+                .instrument(self.sync_next(tip_number, tip_hash, &last_event_time))
+                .await?
+            {
+                tip_number = _tip_number;
+                tip_hash = _tip_hash;
                 last_event_time = Instant::now();
-            } else {
-                log::debug!(
-                    "Not found layer1 block #{} sleep {}s then retry",
-                    tip_number + 1,
-                    self.poll_interval.as_secs()
-                );
-                let seconds_since_last_event = last_event_time.elapsed().as_secs();
-                if seconds_since_last_event > EVENT_TIMEOUT_SECONDS {
-                    log::warn!(
-                    "Can't find layer1 block update in {}s. last block is #{}({}) CKB node may out of sync",
-                    seconds_since_last_event,
-                    tip_number,
-                    {
-                        let hash: Byte32 =  tip_hash.pack();
-                        hash
-                    }
-                );
-                }
-                tokio::time::sleep(self.poll_interval).await;
             }
+            tokio::time::sleep(self.poll_interval).await;
         }
     }
 }
@@ -491,21 +551,16 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         None => sentry::init(()),
     };
 
-    // Enable smol threads before smol::spawn
-    let runtime_threads = match std::env::var(SMOL_THREADS_ENV_VAR) {
-        Ok(s) => s.parse()?,
-        Err(_) => {
-            let threads = DEFAULT_RUNTIME_THREADS;
-            std::env::set_var(SMOL_THREADS_ENV_VAR, format!("{}", threads));
-            threads
-        }
-    };
-    log::info!(
-        "Runtime threads: {}. (set environment '{}' to tune this value)",
-        runtime_threads,
-        SMOL_THREADS_ENV_VAR
-    );
-
+    // Set up runtim monitor.
+    let runtime_monitor = tokio_metrics::RuntimeMonitor::new(&tokio::runtime::Handle::current());
+    {
+        tokio::spawn(async move {
+            for interval in runtime_monitor.intervals() {
+                log::info!("runtime monitor: {:#?}", interval);
+                tokio::time::sleep(Duration::from_secs(10)).await;
+            }
+        });
+    }
     let base = BaseInitComponents::init(&config, skip_config_check).await?;
     let (mem_pool, wallet, offchain_mock_context, pg_pool, err_receipt_notify_ctrl) =
         match config.block_producer.as_ref() {

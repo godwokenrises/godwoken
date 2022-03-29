@@ -68,19 +68,10 @@ pub fn to_custodian_cell(
     Ok((output, data))
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AvailableCustodians {
     pub capacity: u128,
     pub sudt: HashMap<[u8; 32], (u128, Script)>,
-}
-
-impl Default for AvailableCustodians {
-    fn default() -> Self {
-        AvailableCustodians {
-            capacity: 0,
-            sudt: Default::default(),
-        }
-    }
 }
 
 impl<'a> From<&'a CollectedCustodianCells> for AvailableCustodians {
