@@ -14,6 +14,7 @@ use gw_types::{
     packed::{AccountMerkleState, DepositRequest, Script, WithdrawalReceipt, WithdrawalRequest},
     prelude::*,
 };
+use tracing::instrument;
 
 pub trait StateExt {
     fn create_account_from_script(&mut self, script: Script) -> Result<u32, Error>;
@@ -90,6 +91,7 @@ impl<S: State + CodeStore> StateExt for S {
         Ok(merkle_state)
     }
 
+    #[instrument(skip_all)]
     fn apply_run_result(&mut self, run_result: &RunResult) -> Result<(), Error> {
         for (k, v) in &run_result.write_values {
             self.update_raw(*k, *v)?;
@@ -126,6 +128,7 @@ impl<S: State + CodeStore> StateExt for S {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn apply_deposit_request(
         &mut self,
         ctx: &RollupContext,
@@ -190,6 +193,7 @@ impl<S: State + CodeStore> StateExt for S {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn apply_withdrawal_request(
         &mut self,
         ctx: &RollupContext,

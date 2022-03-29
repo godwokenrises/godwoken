@@ -42,7 +42,6 @@ async-channel = "1.4.2"
 async-jsonrpc-client = { version = "0.3.0", default-features = false, features = ["http-tokio"] }
 clap = "2.33.3"
 ctrlc = {version = "3.2.1", features = ["termination"]}
-env_logger = "0.8.3"
 futures = "0.3.13"
 log = "0.4.14"
 serde_json = "1.0"
@@ -53,9 +52,15 @@ hex = "0.4"
 async-trait = "0.1"
 semver = "1.0"
 rayon = "1.5"
-sentry = "0.23.0"
-sentry-log = "0.23.0"
 thiserror = "1.0"
+# For latest tracing
+sentry = { git = "https://github.com/getsentry/sentry-rust", rev = "df694a49595d6890c510d80b85cfbb4b5ae6159a" }
+sentry-tracing = { git = "https://github.com/getsentry/sentry-rust", rev = "df694a49595d6890c510d80b85cfbb4b5ae6159a" }
+tracing = { version = "0.1", features = ["attributes"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "parking_lot", "smallvec", "tracing-log"] }
+tracing-opentelemetry = "0.16"
+opentelemetry-jaeger = { version = "0.15", features = ["rt-tokio"] }
+opentelemetry = { version = "0.16", features = ["rt-tokio"] }
 
 [target.'cfg(all(not(target_env = "msvc"), not(target_os="macos")))'.dependencies]
 tikv-jemallocator = { version = "0.4.0", features = ["unprefixed_malloc_on_supported_platforms"] }

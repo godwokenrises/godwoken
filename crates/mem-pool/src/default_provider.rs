@@ -9,6 +9,7 @@ use gw_types::{
     packed::{OutPoint, WithdrawalRequest},
     prelude::*,
 };
+use tracing::instrument;
 
 use crate::{
     constants::{MAX_MEM_BLOCK_DEPOSITS, MIN_CKB_DEPOSIT_CAPACITY, MIN_SUDT_DEPOSIT_CAPACITY},
@@ -31,6 +32,7 @@ impl DefaultMemPoolProvider {
 #[async_trait]
 impl MemPoolProvider for DefaultMemPoolProvider {
     // estimate next l2block timestamp
+    #[instrument(skip_all)]
     async fn estimate_next_blocktime(&self) -> Result<Duration> {
         // Minus one second for first empty block
         const ONE_SECOND: Duration = Duration::from_secs(1);
@@ -68,6 +70,7 @@ impl MemPoolProvider for DefaultMemPoolProvider {
         }
     }
 
+    #[instrument(skip_all)]
     async fn collect_deposit_cells(&self) -> Result<Vec<DepositInfo>> {
         let rpc_client = self.rpc_client.clone();
         rpc_client
@@ -79,10 +82,12 @@ impl MemPoolProvider for DefaultMemPoolProvider {
             .await
     }
 
+    #[instrument(skip_all)]
     async fn get_cell(&self, out_point: OutPoint) -> Result<Option<CellWithStatus>> {
         self.rpc_client.get_cell(out_point).await
     }
 
+    #[instrument(skip_all)]
     async fn query_available_custodians(
         &self,
         withdrawals: Vec<WithdrawalRequest>,

@@ -16,6 +16,7 @@ use gw_types::{
 };
 use serde::de::DeserializeOwned;
 use serde_json::json;
+use tracing::instrument;
 
 use std::collections::{HashMap, HashSet};
 
@@ -38,6 +39,7 @@ impl CKBIndexerClient {
         &self.0
     }
 
+    #[instrument(skip_all, fields(method = method))]
     pub async fn request<T: DeserializeOwned>(
         &self,
         method: &str,
@@ -63,6 +65,7 @@ impl CKBIndexerClient {
 
     /// query payment cells, the returned cells should provide at least required_capacity fee,
     /// and the remained fees should be enough to cover a charge cell
+    #[instrument(skip_all, fields(required_capacity = required_capacity))]
     pub async fn query_payment_cells(
         &self,
         lock: Script,
@@ -142,6 +145,7 @@ impl CKBIndexerClient {
         Ok(collected_cells)
     }
 
+    #[instrument(skip_all, fields(last_finalized_block_number = last_finalized_block_number))]
     pub async fn stat_custodian_cells(
         &self,
         lock: Script,

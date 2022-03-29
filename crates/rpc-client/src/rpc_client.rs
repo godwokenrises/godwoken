@@ -27,7 +27,9 @@ use gw_types::{
 };
 use rand::prelude::*;
 use serde_json::json;
+use tracing::instrument;
 
+use std::time::Instant;
 use std::{collections::HashSet, time::Duration};
 
 fn to_cell_info(cell: Cell) -> CellInfo {
@@ -131,6 +133,7 @@ impl RPCClient {
     }
 
     /// query lived rollup cell
+    #[instrument(skip_all)]
     pub async fn query_rollup_cell(&self) -> Result<Option<CellInfo>> {
         let search_key = SearchKey {
             script: self.rollup_type_script.clone().into(),
@@ -177,6 +180,7 @@ impl RPCClient {
     }
 
     /// this function queries identity cell by args
+    #[instrument(skip_all)]
     pub async fn query_identity_cell(&self, args: Bytes) -> Result<Option<CellInfo>> {
         let search_key = SearchKey {
             script: ckb_types::packed::Script::new_builder()
@@ -232,6 +236,7 @@ impl RPCClient {
     }
 
     /// this function return a cell that do not has data & _type fields
+    #[instrument(skip_all)]
     pub async fn query_owner_cell(
         &self,
         lock: Script,
@@ -287,6 +292,7 @@ impl RPCClient {
         Ok(cell)
     }
 
+    #[instrument(skip_all, fields(tx_hash = %out_point.tx_hash(), index = Unpack::<u32>::unpack(&out_point.index())))]
     pub async fn get_cell(&self, out_point: OutPoint) -> Result<Option<CellWithStatus>> {
         let json_out_point: ckb_jsonrpc_types::OutPoint = {
             let out_point = ckb_types::packed::OutPoint::new_unchecked(out_point.as_bytes());
@@ -333,6 +339,7 @@ impl RPCClient {
         }))
     }
 
+    #[instrument(skip_all, fields(tx_hash = %out_point.tx_hash(), index = Unpack::<u32>::unpack(&out_point.index())))]
     pub async fn get_cell_from_mempool(&self, out_point: OutPoint) -> Result<Option<CellInfo>> {
         let tx = match self.get_transaction(out_point.tx_hash().unpack()).await? {
             Some(tx) => tx,
@@ -358,12 +365,14 @@ impl RPCClient {
         }))
     }
 
+    #[instrument(skip_all)]
     pub async fn get_tip(&self) -> Result<NumberHash> {
         let number_hash: gw_jsonrpc_types::blockchain::NumberHash =
             self.indexer.request("get_tip", None).await?;
         Ok(number_hash.into())
     }
 
+    #[instrument(skip_all, fields(block_hash = %block_hash.pack()))]
     pub async fn get_block_median_time(&self, block_hash: H256) -> Result<Option<Duration>> {
         let opt_median_time: Option<gw_jsonrpc_types::ckb_jsonrpc_types::Uint64> = self
             .ckb
@@ -376,6 +385,7 @@ impl RPCClient {
         Ok(opt_median_time.map(|t| Duration::from_millis(t.into())))
     }
 
+    #[instrument(skip_all, fields(block = number))]
     pub async fn get_block_by_number(&self, number: u64) -> Result<Option<Block>> {
         let block_number = BlockNumber::from(number);
         let block_opt: Option<ckb_jsonrpc_types::BlockView> = self
@@ -393,6 +403,7 @@ impl RPCClient {
 
     /// return all lived deposit requests
     /// NOTICE the returned cells may contains invalid cells.
+    #[instrument(skip(self))]
     pub async fn query_deposit_cells(
         &self,
         count: usize,
@@ -516,6 +527,10 @@ impl RPCClient {
     /// query stake
     /// return cell which stake_block_number is less than last_finalized_block_number if the args isn't none
     /// otherwise return stake cell randomly
+    #[instrument(
+        skip_all,
+        fields(required_staking_capacity, last_finalized_block_number)
+    )]
     pub async fn query_stake(
         &self,
         rollup_context: &RollupContext,
@@ -605,6 +620,7 @@ impl RPCClient {
         Ok(stake_cell.map(fetch_cell_info))
     }
 
+    #[instrument(skip_all)]
     pub async fn query_stake_cells_by_owner_lock_hashes(
         &self,
         owner_lock_hashes: impl Iterator<Item = [u8; 32]>,
@@ -675,6 +691,7 @@ impl RPCClient {
         Ok(collected_cells)
     }
 
+    #[instrument(skip(self))]
     pub async fn query_custodian_cells_by_block_hashes(
         &self,
         block_hashes: &HashSet<H256>,
@@ -739,6 +756,7 @@ impl RPCClient {
         Ok((collected, collected_block_hashes))
     }
 
+    #[instrument(skip_all, fields(last_finalized_block_number = last_finalized_block_number, max_cells = max_cells))]
     pub async fn query_mergeable_ckb_custodians_cells(
         &self,
         mut collected: CollectedCustodianCells,
@@ -846,6 +864,7 @@ impl RPCClient {
         }
     }
 
+    #[instrument(skip_all, fields(last_finalized_block_number = last_finalized_block_number, max_cells = max_cells))]
     pub async fn query_mergeable_sudt_custodians_cells(
         &self,
         mut collected: CollectedCustodianCells,
@@ -965,6 +984,10 @@ impl RPCClient {
         }
     }
 
+    #[instrument(
+        skip_all,
+        fields(withdrawals_amount, last_finalized_block_number, max_cells)
+    )]
     pub async fn query_finalized_custodian_cells(
         &self,
         withdrawals_amount: &WithdrawalsAmount,
@@ -974,6 +997,11 @@ impl RPCClient {
         max_cells: usize,
     ) -> Result<QueryResult<CollectedCustodianCells>> {
         const MAX_CELLS: usize = 50;
+
+        let mut query_indexer_times = 0;
+        let mut query_indexer_cells = 0;
+        let now = Instant::now();
+
         let rollup_context = &self.rollup_context;
 
         let parse_sudt_amount = |cell: &Cell| -> Result<u128> {
@@ -1002,7 +1030,8 @@ impl RPCClient {
             script_type: ScriptType::Lock,
             filter,
         };
-        let order = Order::Desc;
+        // order by ASC so we can search more cells
+        let order = Order::Asc;
         let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
 
         let mut collected = CollectedCustodianCells::default();
@@ -1035,6 +1064,9 @@ impl RPCClient {
                 return Ok(QueryResult::NotEnough(collected));
             }
             cursor = Some(cells.last_cursor);
+
+            query_indexer_times += 1;
+            query_indexer_cells += cells.objects.len();
 
             for cell in cells.objects.into_iter() {
                 if collected.cells_info.len() >= max_cells {
@@ -1130,15 +1162,18 @@ impl RPCClient {
                     if collected.capacity >= required_capacity {
                         break;
                     } else {
+                        log::debug!("[query finalized custodian cells] query indexer times: {} query indexer cells: {} duration: {}ms", query_indexer_times, query_indexer_cells, now.elapsed().as_millis());
                         return Ok(QueryResult::NotEnough(collected));
                     }
                 }
             }
         }
 
+        log::debug!("[query finalized custodian cells] query indexer times: {} query indexer cells: {} duration: {}ms", query_indexer_times, query_indexer_cells, now.elapsed().as_millis());
         Ok(QueryResult::Full(collected))
     }
 
+    #[instrument(skip_all)]
     pub async fn query_verified_custodian_type_script(
         &self,
         sudt_script_hash: &[u8; 32],
@@ -1212,6 +1247,7 @@ impl RPCClient {
         }
     }
 
+    #[instrument(skip_all)]
     pub async fn query_withdrawal_cells_by_block_hashes(
         &self,
         block_hashes: &HashSet<H256>,
@@ -1277,6 +1313,7 @@ impl RPCClient {
         Ok((collected, collected_block_hashes))
     }
 
+    #[instrument(skip_all)]
     pub async fn query_verifier_cell(
         &self,
         allowed_script_type_hash: [u8; 32],
@@ -1344,6 +1381,7 @@ impl RPCClient {
         Ok(verifier_cell)
     }
 
+    #[instrument(skip_all)]
     pub async fn query_finalized_owner_lock_withdrawal_cells(
         &self,
         last_finalized_block_number: u64,
@@ -1414,6 +1452,7 @@ impl RPCClient {
         Ok(collected)
     }
 
+    #[instrument(skip_all, fields(block_hash = %block_hash.pack()))]
     pub async fn get_block(
         &self,
         block_hash: H256,
@@ -1429,6 +1468,7 @@ impl RPCClient {
         Ok(block)
     }
 
+    #[instrument(skip_all, fields(block_hash = %block_hash.pack()))]
     pub async fn get_header(
         &self,
         block_hash: H256,
@@ -1444,6 +1484,7 @@ impl RPCClient {
         Ok(block)
     }
 
+    #[instrument(skip_all, fields(number = %number))]
     pub async fn get_header_by_number(
         &self,
         number: u64,
@@ -1460,6 +1501,7 @@ impl RPCClient {
         Ok(header)
     }
 
+    #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]
     pub async fn get_transaction_block_hash(&self, tx_hash: H256) -> Result<Option<[u8; 32]>> {
         let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = self
             .ckb
@@ -1481,6 +1523,7 @@ impl RPCClient {
         }
     }
 
+    #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]
     pub async fn get_transaction_block_number(&self, tx_hash: H256) -> Result<Option<u64>> {
         match self.get_transaction_block_hash(tx_hash).await? {
             Some(block_hash) => {
@@ -1491,6 +1534,7 @@ impl RPCClient {
         }
     }
 
+    #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]
     pub async fn get_transaction(&self, tx_hash: H256) -> Result<Option<Transaction>> {
         let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = self
             .ckb
@@ -1505,6 +1549,7 @@ impl RPCClient {
         }))
     }
 
+    #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]
     pub async fn get_transaction_status(&self, tx_hash: H256) -> Result<Option<TxStatus>> {
         let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = self
             .ckb
@@ -1523,6 +1568,7 @@ impl RPCClient {
         )
     }
 
+    #[instrument(skip_all, fields(tx_hash = %tx.hash().pack()))]
     pub async fn send_transaction(&self, tx: &Transaction) -> Result<H256> {
         let tx: ckb_jsonrpc_types::Transaction = {
             let tx = ckb_types::packed::Transaction::new_unchecked(tx.as_bytes());
@@ -1538,11 +1584,13 @@ impl RPCClient {
         Ok(to_h256(tx_hash))
     }
 
+    #[instrument(skip_all)]
     pub async fn get_ckb_version(&self) -> Result<String> {
         let node: ckb_jsonrpc_types::LocalNode = self.ckb.request("local_node_info", None).await?;
         Ok(node.version)
     }
 
+    #[instrument(skip_all, fields(tx_hash = %tx.hash().pack()))]
     pub async fn dry_run_transaction(&self, tx: &Transaction) -> Result<u64> {
         let tx: ckb_jsonrpc_types::Transaction = {
             let tx = ckb_types::packed::Transaction::new_unchecked(tx.as_bytes());
@@ -1558,6 +1606,7 @@ impl RPCClient {
         Ok(dry_run_result.cycles.into())
     }
 
+    #[instrument(skip_all)]
     pub async fn get_current_epoch_number(&self) -> Result<u64> {
         let epoch_view: ckb_jsonrpc_types::EpochView =
             self.ckb.request("get_current_epoch", None).await?;
@@ -1565,6 +1614,7 @@ impl RPCClient {
         Ok(epoch_number)
     }
 
+    #[instrument(skip_all)]
     pub async fn get_hardfork_switch(&self) -> Result<HardForkSwitch> {
         let consensus: Consensus = self.ckb.request("get_consensus", None).await?;
         let rfc_0028 = self.get_hardfork_feature_epoch_number(&consensus, "0028")?;
@@ -1589,6 +1639,7 @@ impl RPCClient {
         Ok(hardfork_switch)
     }
 
+    #[instrument(skip_all)]
     fn get_hardfork_feature_epoch_number(&self, consensus: &Consensus, rfc: &str) -> Result<u64> {
         let rfc_info = consensus
             .hardfork_features
@@ -1601,6 +1652,7 @@ impl RPCClient {
         Ok(epoch_number)
     }
 
+    #[instrument(skip(self))]
     async fn query_random_sudt_type_script(
         &self,
         last_finalized_block_number: u64,
@@ -1696,6 +1748,7 @@ impl RPCClient {
         Ok(sudt_type_script_set)
     }
 
+    #[instrument(skip_all, fields(last_finalized_block_number = last_finalized_block_number, max_cells = max_cells))]
     async fn query_mergeable_sudt_custodians_cells_by_sudt_type_script(
         &self,
         sudt_type_script: &Script,

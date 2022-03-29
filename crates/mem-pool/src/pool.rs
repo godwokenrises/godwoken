@@ -35,7 +35,7 @@ use gw_types::{
         AccountMerkleState, BlockInfo, L2Block, L2Transaction, Script, TxReceipt,
         WithdrawalRequest, WithdrawalRequestExtra,
     },
-    prelude::{Entity, Unpack},
+    prelude::{Entity, Pack, Unpack},
 };
 use std::{
     cmp::{max, min},
@@ -45,6 +45,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use tracing::instrument;
 
 use crate::{
     constants::{MAX_MEM_BLOCK_TXS, MAX_MEM_BLOCK_WITHDRAWALS, MAX_TX_SIZE, MAX_WITHDRAWAL_SIZE},
@@ -272,6 +273,7 @@ impl MemPool {
     }
 
     /// Push a layer2 tx into pool
+    #[instrument(skip_all)]
     pub async fn push_transaction(&mut self, tx: L2Transaction) -> Result<()> {
         let db = self.store.begin_transaction();
 
@@ -283,6 +285,7 @@ impl MemPool {
     }
 
     /// Push a layer2 tx into pool
+    #[instrument(skip_all, fields(tx_hash = %tx.hash().pack()))]
     async fn push_transaction_with_db(
         &mut self,
         db: &StoreTransaction,
@@ -327,6 +330,7 @@ impl MemPool {
     }
 
     /// verify tx
+    #[instrument(skip_all)]
     fn verify_tx(&self, state: &(impl State + CodeStore), tx: &L2Transaction) -> Result<()> {
         // check tx size
         if tx.as_slice().len() > MAX_TX_SIZE {
@@ -342,6 +346,7 @@ impl MemPool {
     }
 
     /// Push a withdrawal request into pool
+    #[instrument(skip_all, fields(withdrawal = %withdrawal.hash().pack()))]
     pub async fn push_withdrawal_request(
         &mut self,
         withdrawal: WithdrawalRequestExtra,
@@ -380,6 +385,7 @@ impl MemPool {
 
     // Withdrawal request verification
     // TODO: duplicate withdrawal check
+    #[instrument(skip_all)]
     async fn verify_withdrawal_request(
         &self,
         withdrawal: &WithdrawalRequestExtra,
@@ -429,6 +435,7 @@ impl MemPool {
 
     /// Notify new tip
     /// this method update current state of mem pool
+    #[instrument(skip_all)]
     pub async fn notify_new_tip(&mut self, new_tip: H256) -> Result<()> {
         // reset pool state
         self.reset(Some(self.current_tip.0), Some(new_tip)).await?;
@@ -436,6 +443,7 @@ impl MemPool {
     }
 
     /// Clear mem block state and recollect deposits
+    #[instrument(skip_all)]
     pub async fn reset_mem_block(&mut self) -> Result<()> {
         log::info!("[mem-pool] reset mem block");
         // reset pool state
@@ -466,6 +474,7 @@ impl MemPool {
     }
 
     /// output mem block
+    #[instrument(skip_all, fields(retry_count = output_param.retry_count))]
     pub fn output_mem_block(&self, output_param: &OutputParam) -> (MemBlock, AccountMerkleState) {
         Self::package_mem_block(&self.mem_block, output_param)
     }
@@ -487,6 +496,7 @@ impl MemPool {
     /// Reset
     /// this method reset the current state of the mem pool
     /// discarded txs & withdrawals will be reinject to pool
+    #[instrument(skip_all, fields(old_tip = old_tip.map(|h| display(h.pack())), new_tip = new_tip.map(|h| display(h.pack()))))]
     async fn reset(&mut self, old_tip: Option<H256>, new_tip: Option<H256>) -> Result<()> {
         let mut reinject_txs = Default::default();
         let mut reinject_withdrawals = Default::default();
@@ -610,16 +620,14 @@ impl MemPool {
             }
         };
         // reset mem block state
-        {
-            let snapshot = self.store.get_snapshot();
-            let snap_last_valid_tip = snapshot.get_last_valid_tip_block_hash()?;
-            assert_eq!(snap_last_valid_tip, new_tip, "set new snapshot");
-            let mem_store = MemStore::new(snapshot);
-            self.mem_pool_state.store(Arc::new(mem_store));
-        }
+        let snapshot = self.store.get_snapshot();
+        let snap_last_valid_tip = snapshot.get_last_valid_tip_block_hash()?;
+        assert_eq!(snap_last_valid_tip, new_tip, "set new snapshot");
+        let mem_store = MemStore::new(snapshot);
+        // Fix execute_raw_l2transaction panic by updating mem_store first and storing it to mem_pool_state after.
+        mem_store.update_mem_pool_block_info(self.mem_block.block_info())?;
         let mem_block_content = self.mem_block.reset(&new_tip_block, estimated_timestamp);
-        let snap = self.mem_pool_state.load();
-        snap.update_mem_pool_block_info(self.mem_block.block_info())?;
+        self.mem_pool_state.store(Arc::new(mem_store));
 
         // set tip
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
@@ -667,6 +675,7 @@ impl MemPool {
     }
 
     /// Discard unexecutables from pending.
+    #[instrument(skip_all)]
     async fn remove_unexecutables(&mut self, db: &StoreTransaction) -> Result<()> {
         let snap = self.mem_pool_state.load();
         let state = snap.state()?;
@@ -702,6 +711,7 @@ impl MemPool {
     }
 
     /// Prepare for next mem block
+    #[instrument(skip_all, fields(withdrawals_count = withdrawals.size_hint().1, txs_count = txs.size_hint().1))]
     async fn prepare_next_mem_block<
         WithdrawalIter: Iterator<Item = WithdrawalRequestExtra>,
         TxIter: Iterator<Item = L2Transaction> + Clone,
@@ -770,6 +780,7 @@ impl MemPool {
     }
 
     /// expire if pending deposits is handled by new l2block
+    #[instrument(skip_all)]
     async fn refresh_deposit_cells(
         &mut self,
         db: &StoreTransaction,
@@ -866,6 +877,7 @@ impl MemPool {
         Ok(())
     }
 
+    #[instrument(skip_all, fields(deposits_count = deposit_cells.len()))]
     async fn finalize_deposits(&mut self, deposit_cells: Vec<DepositInfo>) -> Result<()> {
         let snap = self.mem_pool_state.load();
         let mut state = snap.state()?;
@@ -898,6 +910,7 @@ impl MemPool {
     }
 
     /// Execute withdrawal & update local state
+    #[instrument(skip_all, fields(withdrawals_count = withdrawals.len()))]
     async fn finalize_withdrawals(
         &mut self,
         mut withdrawals: Vec<WithdrawalRequestExtra>,
@@ -1036,6 +1049,7 @@ impl MemPool {
     }
 
     /// Execute tx & update local state
+    #[instrument(skip_all)]
     async fn finalize_tx(&mut self, db: &StoreTransaction, tx: L2Transaction) -> Result<TxReceipt> {
         let snap = self.mem_pool_state.load();
         let mut state = snap.state()?;
@@ -1198,6 +1212,7 @@ impl MemPool {
     // Always expects next block number equals with current_tip_block_number + 1.
     // This function returns Ok(Some(block_number)), if refresh is successful.
     // Or returns Ok(None) if current tip has not synced yet.
+    #[instrument(skip_all, fields(block = block_info.number().unpack(), withdrawals_count = withdrawals.len(), deposits_count = deposits.len()))]
     pub(crate) async fn refresh_mem_block(
         &mut self,
         block_info: BlockInfo,
@@ -1245,6 +1260,7 @@ impl MemPool {
 
     // Only **ReadOnly** node needs this.
     // Sync tx from fullnode to readonly.
+    #[instrument(skip_all, fields(tx_hash = %tx.hash().pack(), current_tip_block = current_tip_block_number))]
     pub(crate) async fn append_tx(
         &mut self,
         tx: L2Transaction,

@@ -10,6 +10,7 @@ use gw_jsonrpc_types::blockchain::{CellDep, Script};
 use gw_types::packed::RollupConfig;
 use gw_types::prelude::Pack;
 use serde_json::json;
+use tracing::instrument;
 
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey};
 use crate::rpc_client::RPCClient;
@@ -45,6 +46,7 @@ impl ContractsCellDepManager {
         &self.scripts
     }
 
+    #[instrument(skip_all)]
     pub async fn refresh(&self) -> Result<()> {
         log::info!("[contracts dep] refresh");
 

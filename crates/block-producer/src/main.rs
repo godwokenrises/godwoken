@@ -4,10 +4,9 @@ static GLOBAL_ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 use anyhow::{Context, Result};
 use clap::{App, Arg, SubCommand};
-use gw_block_producer::{db_block_validator, runner};
+use gw_block_producer::{db_block_validator, runner, trace};
 use gw_config::Config;
 use gw_version::Version;
-use sentry_log::LogFilter;
 use std::{fs, path::Path};
 
 const COMMAND_RUN: &str = "run";
@@ -103,15 +102,18 @@ async fn run_cli() -> Result<()> {
         (COMMAND_RUN, Some(m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
+            let _guard = trace::init(config.trace)?;
             runner::run(config, m.is_present(ARG_SKIP_CONFIG_CHECK)).await?;
         }
         (COMMAND_EXAMPLE_CONFIG, Some(m)) => {
             let path = m.value_of(ARG_OUTPUT_PATH).unwrap();
+            let _guard = trace::init(None)?;
             generate_example_config(path)?;
         }
         (COMMAND_VERIFY_DB_BLOCK, Some(m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
+            let _guard = trace::init(None)?;
             let from_block: Option<u64> = m.value_of(ARG_FROM_BLOCK).map(str::parse).transpose()?;
             let to_block: Option<u64> = m.value_of(ARG_TO_BLOCK).map(str::parse).transpose()?;
             db_block_validator::verify(config, from_block, to_block).await?;
@@ -120,6 +122,7 @@ async fn run_cli() -> Result<()> {
             // default command: start a Godwoken node
             let config_path = "./config.toml";
             let config = read_config(&config_path)?;
+            let _guard = trace::init(config.trace)?;
             runner::run(config, false).await?;
         }
     };
@@ -130,20 +133,5 @@ async fn run_cli() -> Result<()> {
 /// Default to number of cpus, pass `worker_threads` to manually configure workers.
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
-    init_log();
     run_cli().await.expect("run cli");
-}
-
-fn init_log() {
-    let logger = env_logger::builder()
-        .parse_env(env_logger::Env::default().default_filter_or("info"))
-        .build();
-    let level = logger.filter();
-    let logger = sentry_log::SentryLogger::with_dest(logger).filter(|md| match md.level() {
-        log::Level::Error | log::Level::Warn => LogFilter::Event,
-        _ => LogFilter::Ignore,
-    });
-    log::set_boxed_logger(Box::new(logger))
-        .map(|()| log::set_max_level(level))
-        .expect("set log");
 }

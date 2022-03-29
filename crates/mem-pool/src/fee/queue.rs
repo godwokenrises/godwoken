@@ -1,6 +1,7 @@
 use anyhow::Result;
 use gw_common::state::State;
 use std::collections::{BinaryHeap, HashMap};
+use tracing::instrument;
 
 /// Max queue size
 const MAX_QUEUE_SIZE: usize = 10000;
@@ -31,6 +32,7 @@ impl FeeQueue {
     }
 
     /// Add item to queue
+    #[instrument(skip_all, fields(count = self.len()))]
     pub fn add(&mut self, entry: FeeEntry) {
         // push to queue
         log::debug!(
@@ -66,6 +68,7 @@ impl FeeQueue {
     }
 
     /// Fetch items by fee sort
+    #[instrument(skip_all, fields(count = count))]
     pub fn fetch(&mut self, state: &impl State, count: usize) -> Result<Vec<FeeEntry>> {
         // sorted fee items
         let mut fetched_items = Vec::with_capacity(count as usize);
@@ -243,6 +246,81 @@ mod tests {
         {
             let items = queue.fetch(&tree, 3).expect("fetch");
             assert_eq!(items.len(), 0);
+        }
+    }
+
+    #[test]
+    fn test_sort_txs_by_order() {
+        let mut queue = FeeQueue::new();
+
+        let store = Store::open_tmp().expect("open store");
+        setup_genesis(&store);
+        {
+            let db = store.begin_transaction();
+            let genesis = db.get_tip_block().expect("tip");
+            assert_eq!(genesis.raw().number().unpack(), 0);
+            let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
+
+            // create accounts
+            for i in 0..4 {
+                state.create_account(H256::from_u32(i)).unwrap();
+            }
+
+            db.commit().expect("commit");
+        }
+        let snap = store.get_snapshot();
+
+        let entry1 = FeeEntry {
+            item: FeeItem::Tx(Default::default()),
+            fee: 10 * 1000,
+            cycles_limit: 1000,
+            sender: 2,
+            order: queue.len(),
+        };
+
+        queue.add(entry1);
+
+        let entry2 = FeeEntry {
+            item: FeeItem::Tx(Default::default()),
+            fee: 1000,
+            cycles_limit: 100,
+            sender: 3,
+            order: queue.len(),
+        };
+
+        queue.add(entry2);
+
+        let entry3 = FeeEntry {
+            item: FeeItem::Tx(Default::default()),
+            fee: 1000,
+            cycles_limit: 500,
+            sender: 4,
+            order: queue.len(),
+        };
+
+        queue.add(entry3);
+
+        let entry4 = FeeEntry {
+            item: FeeItem::Withdrawal(Default::default()),
+            fee: 101 * 1000,
+            cycles_limit: 1001,
+            sender: 5,
+            order: queue.len(),
+        };
+
+        queue.add(entry4);
+
+        let mem_store = MemStore::new(snap);
+        let tree = mem_store.state().unwrap();
+
+        // fetch 5
+        {
+            let items = queue.fetch(&tree, 5).expect("fetch");
+            assert_eq!(items.len(), 4);
+            assert_eq!(items[0].sender, 5);
+            assert_eq!(items[1].sender, 2);
+            assert_eq!(items[2].sender, 3);
+            assert_eq!(items[3].sender, 4);
         }
     }
 
