@@ -566,10 +566,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
             });
         }
     }
-
-    // Set up tokio console
-    console_subscriber::init();
-
     let base = BaseInitComponents::init(&config, skip_config_check).await?;
     let (mem_pool, wallet, offchain_mock_context, pg_pool, err_receipt_notify_ctrl) =
         match config.block_producer.as_ref() {

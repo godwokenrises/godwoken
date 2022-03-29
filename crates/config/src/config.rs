@@ -13,6 +13,7 @@ use std::{
 #[serde(rename_all = "lowercase")]
 pub enum Trace {
     Jaeger,
+    TokioConsole,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]

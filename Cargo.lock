@@ -2068,6 +2068,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+ "tokio-metrics",
  "toml",
  "tracing",
 ]
