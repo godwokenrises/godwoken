@@ -30,14 +30,3 @@ jobs:
         run: RUST_BACKTRACE=1 cargo test --all-targets
       - name: Test TOML serialization
         run: cargo run --bin godwoken -- generate-example-config -o test.toml
-
-  # FIXME: change to nervosnetwork/godwoken-tests after merge pr 675
-  integration-test:
-    uses: zeroqn/godwoken-tests/.github/workflows/reusable-integration-test-v1.yml@13e3482b6c00dc29891db8e624769762d19968b3
-    with:
-      # github.ref: The branch or tag ref that triggered the workflow run. For branches this is the format refs/heads/<branch_name>, and for tags it is refs/tags/<tag_name>.
-      godwoken_ref: ${{ github.ref }}
-      gw_prebuild_image_name: ghcr.io/zeroqn/godwoken-prebuilds
-      gw_prebuild_image_tag: v1.1-feat-change-ckb-decimal-to-18 # For godwoken-scripts and godwoken-polyjuice binaries
-      kicker_ref: refs/pull/239/head # https://github.com/RetricSu/godwoken-kicker/pull/239
-      tests_ref: refs/pull/105/head # https://github.com/nervosnetwork/godwoken-tests/pull/105
