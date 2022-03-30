@@ -27,6 +27,9 @@ impl<'db, DB: ChainStore> ChainViewTrait for ChainView<'db, DB> {
             if !is_number_in_a_valid_range(tip_number, number) {
                 return Ok(None);
             }
+            if tip_number == number {
+                return Ok(Some(self.tip_block_hash));
+            }
             // so we can direct return a block hash from db index
             return self.db.get_block_hash_by_number(number);
         }
@@ -41,5 +44,5 @@ impl<'db, DB: ChainStore> ChainViewTrait for ChainView<'db, DB> {
 }
 
 fn is_number_in_a_valid_range(tip_number: u64, number: u64) -> bool {
-    number < tip_number && number >= tip_number.saturating_sub(MAX_BLOCK_HASHES_DEPTH)
+    number <= tip_number && number >= tip_number.saturating_sub(MAX_BLOCK_HASHES_DEPTH)
 }
