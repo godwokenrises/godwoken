@@ -338,6 +338,9 @@ table CCWithdrawalWitness {
     sender: Script,
     owner_lock: Script,
     withdrawal_proof: CKBMerkleProof,
+    kv_state_proof: Bytes,
+    kv_state: KVPairVec,
+    account_count: Uint32,
 }
 
 // --- end of challenge ---

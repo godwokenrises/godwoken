@@ -13260,6 +13260,9 @@ impl ::core::fmt::Display for CCWithdrawalWitness {
         write!(f, ", {}: {}", "sender", self.sender())?;
         write!(f, ", {}: {}", "owner_lock", self.owner_lock())?;
         write!(f, ", {}: {}", "withdrawal_proof", self.withdrawal_proof())?;
+        write!(f, ", {}: {}", "kv_state_proof", self.kv_state_proof())?;
+        write!(f, ", {}: {}", "kv_state", self.kv_state())?;
+        write!(f, ", {}: {}", "account_count", self.account_count())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -13270,9 +13273,9 @@ impl ::core::fmt::Display for CCWithdrawalWitness {
 impl ::core::default::Default for CCWithdrawalWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            106, 2, 0, 0, 24, 0, 0, 0, 76, 1, 0, 0, 236, 1, 0, 0, 33, 2, 0, 0, 86, 2, 0, 0, 52, 1,
-            0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 88, 0, 0, 0, 120, 0, 0, 0, 128, 0, 0, 0,
-            164, 0, 0, 0, 200, 0, 0, 0, 204, 0, 0, 0, 240, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            130, 2, 0, 0, 36, 0, 0, 0, 88, 1, 0, 0, 248, 1, 0, 0, 45, 2, 0, 0, 98, 2, 0, 0, 118, 2,
+            0, 0, 122, 2, 0, 0, 126, 2, 0, 0, 52, 1, 0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0,
+            88, 0, 0, 0, 120, 0, 0, 0, 128, 0, 0, 0, 164, 0, 0, 0, 200, 0, 0, 0, 204, 0, 0, 0, 240,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -13281,23 +13284,24 @@ impl ::core::default::Default for CCWithdrawalWitness {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 160, 0, 0, 0, 12, 0,
-            0, 0, 156, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 160, 0, 0, 0, 12, 0, 0, 0, 156, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 20, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16,
+            0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0,
+            48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         CCWithdrawalWitness::new_unchecked(v.into())
     }
 }
 impl CCWithdrawalWitness {
-    pub const FIELD_COUNT: usize = 5;
+    pub const FIELD_COUNT: usize = 8;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -13341,11 +13345,29 @@ impl CCWithdrawalWitness {
     pub fn withdrawal_proof(&self) -> CKBMerkleProof {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[20..]) as usize;
+        let end = molecule::unpack_number(&slice[24..]) as usize;
+        CKBMerkleProof::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn kv_state_proof(&self) -> Bytes {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[24..]) as usize;
+        let end = molecule::unpack_number(&slice[28..]) as usize;
+        Bytes::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn kv_state(&self) -> KVPairVec {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[28..]) as usize;
+        let end = molecule::unpack_number(&slice[32..]) as usize;
+        KVPairVec::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn account_count(&self) -> Uint32 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[32..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[24..]) as usize;
-            CKBMerkleProof::new_unchecked(self.0.slice(start..end))
+            let end = molecule::unpack_number(&slice[36..]) as usize;
+            Uint32::new_unchecked(self.0.slice(start..end))
         } else {
-            CKBMerkleProof::new_unchecked(self.0.slice(start..))
+            Uint32::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> CCWithdrawalWitnessReader<'r> {
@@ -13380,6 +13402,9 @@ impl molecule::prelude::Entity for CCWithdrawalWitness {
             .sender(self.sender())
             .owner_lock(self.owner_lock())
             .withdrawal_proof(self.withdrawal_proof())
+            .kv_state_proof(self.kv_state_proof())
+            .kv_state(self.kv_state())
+            .account_count(self.account_count())
     }
 }
 #[derive(Clone, Copy)]
@@ -13406,6 +13431,9 @@ impl<'r> ::core::fmt::Display for CCWithdrawalWitnessReader<'r> {
         write!(f, ", {}: {}", "sender", self.sender())?;
         write!(f, ", {}: {}", "owner_lock", self.owner_lock())?;
         write!(f, ", {}: {}", "withdrawal_proof", self.withdrawal_proof())?;
+        write!(f, ", {}: {}", "kv_state_proof", self.kv_state_proof())?;
+        write!(f, ", {}: {}", "kv_state", self.kv_state())?;
+        write!(f, ", {}: {}", "account_count", self.account_count())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -13414,7 +13442,7 @@ impl<'r> ::core::fmt::Display for CCWithdrawalWitnessReader<'r> {
     }
 }
 impl<'r> CCWithdrawalWitnessReader<'r> {
-    pub const FIELD_COUNT: usize = 5;
+    pub const FIELD_COUNT: usize = 8;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -13458,11 +13486,29 @@ impl<'r> CCWithdrawalWitnessReader<'r> {
     pub fn withdrawal_proof(&self) -> CKBMerkleProofReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[20..]) as usize;
+        let end = molecule::unpack_number(&slice[24..]) as usize;
+        CKBMerkleProofReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn kv_state_proof(&self) -> BytesReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[24..]) as usize;
+        let end = molecule::unpack_number(&slice[28..]) as usize;
+        BytesReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn kv_state(&self) -> KVPairVecReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[28..]) as usize;
+        let end = molecule::unpack_number(&slice[32..]) as usize;
+        KVPairVecReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn account_count(&self) -> Uint32Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[32..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[24..]) as usize;
-            CKBMerkleProofReader::new_unchecked(&self.as_slice()[start..end])
+            let end = molecule::unpack_number(&slice[36..]) as usize;
+            Uint32Reader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            CKBMerkleProofReader::new_unchecked(&self.as_slice()[start..])
+            Uint32Reader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -13520,6 +13566,9 @@ impl<'r> molecule::prelude::Reader<'r> for CCWithdrawalWitnessReader<'r> {
         ScriptReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         ScriptReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         CKBMerkleProofReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
+        BytesReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
+        KVPairVecReader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
+        Uint32Reader::verify(&slice[offsets[7]..offsets[8]], compatible)?;
         Ok(())
     }
 }
@@ -13530,9 +13579,12 @@ pub struct CCWithdrawalWitnessBuilder {
     pub(crate) sender: Script,
     pub(crate) owner_lock: Script,
     pub(crate) withdrawal_proof: CKBMerkleProof,
+    pub(crate) kv_state_proof: Bytes,
+    pub(crate) kv_state: KVPairVec,
+    pub(crate) account_count: Uint32,
 }
 impl CCWithdrawalWitnessBuilder {
-    pub const FIELD_COUNT: usize = 5;
+    pub const FIELD_COUNT: usize = 8;
     pub fn raw_l2block(mut self, v: RawL2Block) -> Self {
         self.raw_l2block = v;
         self
@@ -13553,6 +13605,18 @@ impl CCWithdrawalWitnessBuilder {
         self.withdrawal_proof = v;
         self
     }
+    pub fn kv_state_proof(mut self, v: Bytes) -> Self {
+        self.kv_state_proof = v;
+        self
+    }
+    pub fn kv_state(mut self, v: KVPairVec) -> Self {
+        self.kv_state = v;
+        self
+    }
+    pub fn account_count(mut self, v: Uint32) -> Self {
+        self.account_count = v;
+        self
+    }
 }
 impl molecule::prelude::Builder for CCWithdrawalWitnessBuilder {
     type Entity = CCWithdrawalWitness;
@@ -13564,6 +13628,9 @@ impl molecule::prelude::Builder for CCWithdrawalWitnessBuilder {
             + self.sender.as_slice().len()
             + self.owner_lock.as_slice().len()
             + self.withdrawal_proof.as_slice().len()
+            + self.kv_state_proof.as_slice().len()
+            + self.kv_state.as_slice().len()
+            + self.account_count.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -13578,6 +13645,12 @@ impl molecule::prelude::Builder for CCWithdrawalWitnessBuilder {
         total_size += self.owner_lock.as_slice().len();
         offsets.push(total_size);
         total_size += self.withdrawal_proof.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.kv_state_proof.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.kv_state.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.account_count.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
@@ -13587,6 +13660,9 @@ impl molecule::prelude::Builder for CCWithdrawalWitnessBuilder {
         writer.write_all(self.sender.as_slice())?;
         writer.write_all(self.owner_lock.as_slice())?;
         writer.write_all(self.withdrawal_proof.as_slice())?;
+        writer.write_all(self.kv_state_proof.as_slice())?;
+        writer.write_all(self.kv_state.as_slice())?;
+        writer.write_all(self.account_count.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
