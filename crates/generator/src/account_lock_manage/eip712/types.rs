@@ -11,6 +11,7 @@ use sha3::{Digest, Keccak256};
 
 use super::traits::EIP712Encode;
 
+#[derive(Debug)]
 pub struct Script {
     code_hash: [u8; 32],
     hash_type: String,
@@ -44,6 +45,7 @@ impl EIP712Encode for Script {
     }
 }
 
+#[derive(Debug)]
 pub struct WithdrawalAsset {
     // CKB amount
     ckb_capacity: u64,
@@ -69,6 +71,7 @@ impl EIP712Encode for WithdrawalAsset {
     }
 }
 
+#[derive(Debug)]
 pub enum AddressRegistry {
     ETH,
 }
@@ -88,6 +91,7 @@ impl AddressRegistry {
     }
 }
 
+#[derive(Debug)]
 pub struct RegistryAddress {
     registry: AddressRegistry,
     address: [u8; 20],
@@ -131,6 +135,7 @@ impl EIP712Encode for RegistryAddress {
 }
 
 /// L2Transaction
+#[derive(Debug)]
 pub struct L2Transaction {
     chain_id: u64,
     from: RegistryAddress,
@@ -185,6 +190,7 @@ impl L2Transaction {
 }
 
 /// RawWithdrawalRequest
+#[derive(Debug)]
 pub struct Withdrawal {
     address: RegistryAddress,
     nonce: u32,
