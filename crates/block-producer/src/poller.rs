@@ -30,8 +30,10 @@ use serde_json::json;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
+    time::Duration,
 };
 use tokio::sync::Mutex;
+use tokio_metrics::TaskMonitor;
 use tracing::instrument;
 
 #[derive(thiserror::Error, Debug)]
@@ -58,6 +60,7 @@ pub struct ChainUpdater {
     rollup_type_script: ckb_types::packed::Script,
     web3_indexer: Option<Web3Indexer>,
     initialized: bool,
+    sync_monitor: TaskMonitor,
 }
 
 impl ChainUpdater {
@@ -70,6 +73,14 @@ impl ChainUpdater {
     ) -> ChainUpdater {
         let rollup_type_script =
             ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
+        let sync_monitor = TaskMonitor::new();
+        let _sync_monitor = sync_monitor.clone();
+        tokio::spawn(async move {
+            for interval in _sync_monitor.intervals() {
+                log::info!("sync_task: {:?}", interval);
+                tokio::time::sleep(Duration::from_secs(30)).await;
+            }
+        });
 
         ChainUpdater {
             chain,
@@ -79,6 +90,7 @@ impl ChainUpdater {
             last_tx_hash: None,
             web3_indexer,
             initialized: false,
+            sync_monitor,
         }
     }
 
@@ -130,7 +142,8 @@ impl ChainUpdater {
             );
         }
 
-        self.try_sync().await?;
+        let sync_monitor = self.sync_monitor.clone();
+        sync_monitor.instrument(self.try_sync()).await?;
 
         if initial_syncing {
             // Start notify mem pool after synced

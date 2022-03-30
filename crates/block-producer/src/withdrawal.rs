@@ -23,13 +23,6 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-#[derive(Clone)]
-struct CkbCustodian {
-    capacity: u128,
-    balance: u128,
-    min_capacity: u64,
-}
-
 pub struct GeneratedWithdrawals {
     pub deps: Vec<CellDep>,
     pub inputs: Vec<InputCellInfo>,

@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use anyhow::Result;
 use gw_config::SubscribeMemPoolConfig;
@@ -8,9 +8,7 @@ use tokio::sync::Mutex;
 
 use crate::pool::MemPool;
 
-use super::mq::{gw_kafka, Consume};
-
-const CONSUME_LATENCY: u64 = 200;
+use super::mq::{tokio_kafka, Consume};
 
 pub(crate) struct SubscribeMemPoolService {
     mem_pool: Arc<Mutex<MemPool>>,
@@ -63,14 +61,10 @@ pub fn spawn_sub_mem_pool_task(
         topic,
         group,
     } = mem_block_config;
-    let mut consumer = gw_kafka::Consumer::start(hosts, topic, group, fan_in)?;
+    let mut consumer = tokio_kafka::Consumer::start(hosts, topic, group, fan_in)?;
     tokio::spawn(async move {
         log::info!("Spawn fan in mem_block task");
         loop {
-            // This controls the latency of the consumer.
-            // When some tx mutates mem state in the fullnode, the readonly node
-            // will follow up after **CONSUME_LATENCY**ms at least.
-            let _ = tokio::time::sleep(Duration::from_millis(CONSUME_LATENCY)).await;
             if let Err(err) = consumer.poll().await {
                 log::error!("consume error: {:?}", err);
             }

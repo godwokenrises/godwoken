@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{
     error::RPCRequestError,
     utils::{to_result, DEFAULT_HTTP_TIMEOUT},
@@ -7,14 +9,31 @@ use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
 use gw_jsonrpc_types::blockchain::CellDep;
 use serde::de::DeserializeOwned;
 use serde_json::json;
+use tokio_metrics::TaskMonitor;
 use tracing::instrument;
 
 #[derive(Clone)]
-pub struct CKBClient(HttpClient);
+pub struct CKBClient {
+    ckb_client: HttpClient,
+    metrics_monitor: TaskMonitor,
+}
 
 impl CKBClient {
     pub fn new(ckb_client: HttpClient) -> Self {
-        Self(ckb_client)
+        let metrics_monitor = tokio_metrics::TaskMonitor::new();
+
+        let _metrics_monitor = metrics_monitor.clone();
+        tokio::spawn(async move {
+            let intervals = _metrics_monitor.intervals();
+            for interval in intervals {
+                log::debug!("ckb client metrics: {:?}", interval);
+                tokio::time::sleep(Duration::from_secs(30)).await;
+            }
+        });
+        Self {
+            ckb_client,
+            metrics_monitor,
+        }
     }
 
     pub fn with_url(url: &str) -> Result<Self> {
@@ -25,7 +44,7 @@ impl CKBClient {
     }
 
     fn client(&self) -> &HttpClient {
-        &self.0
+        &self.ckb_client
     }
 
     #[instrument(skip_all, fields(method = method))]
@@ -34,9 +53,9 @@ impl CKBClient {
         method: &str,
         params: Option<ClientParams>,
     ) -> Result<T> {
-        let response = self
-            .client()
-            .request(method, params)
+        let monitor = self.metrics_monitor.clone();
+        let response = monitor
+            .instrument(self.client().request(method, params))
             .await
             .map_err(|err| RPCRequestError::new("ckb client", method.to_string(), err))?;
         let response_str = response.to_string();

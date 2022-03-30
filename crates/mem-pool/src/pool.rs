@@ -52,13 +52,13 @@ use crate::{
     custodian::AvailableCustodians,
     mem_block::MemBlock,
     restore_manager::RestoreManager,
-    sync::{mq::gw_kafka, publish::MemPoolPublishService},
+    sync::{mq::tokio_kafka, publish::MemPoolPublishService},
     traits::{MemPoolErrorTxHandler, MemPoolProvider},
     types::EntryList,
     withdrawal::Generator as WithdrawalGenerator,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct OutputParam {
     pub retry_count: usize,
 }
@@ -66,12 +66,6 @@ pub struct OutputParam {
 impl OutputParam {
     pub fn new(retry_count: usize) -> Self {
         OutputParam { retry_count }
-    }
-}
-
-impl Default for OutputParam {
-    fn default() -> Self {
-        OutputParam { retry_count: 0 }
     }
 }
 
@@ -172,7 +166,7 @@ impl MemPool {
             .publish
             .map(|config| -> Result<MemPoolPublishService> {
                 log::info!("Setup fan out mem_block handler.");
-                let producer = gw_kafka::Producer::connect(config.hosts, config.topic)?;
+                let producer = tokio_kafka::Producer::connect(config.hosts, config.topic)?;
                 let handler = MemPoolPublishService::start(producer);
                 Ok(handler)
             })
