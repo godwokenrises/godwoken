@@ -21,7 +21,7 @@ use tentacle::{
     service::{ProtocolMeta, ServiceAsyncControl},
     ProtocolId, SessionId, SubstreamReadPart,
 };
-use tokio::sync::Mutex;
+use tokio::sync::{broadcast, Mutex};
 
 use crate::pool::MemPool;
 
@@ -75,11 +75,22 @@ impl MessageBuffer {
     }
 
     fn get(&self, block: u64) -> Option<RefreshMemBlockMessageVec> {
-        self.buffer.get(&block).map(|messages| {
-            RefreshMemBlockMessageVecBuilder::default()
-                .extend(messages.iter().cloned())
-                .build()
-        })
+        let first = self.first_block_buffered();
+        // Return all messages in and after this block.
+        if first.is_some() && first <= Some(block) {
+            let messages = self
+                .buffer
+                .range(block..)
+                .map(|(_, messages)| messages.iter())
+                .flatten();
+            Some(
+                RefreshMemBlockMessageVecBuilder::default()
+                    .extend(messages.cloned())
+                    .build(),
+            )
+        } else {
+            None
+        }
     }
 }
 
@@ -196,11 +207,21 @@ async fn sync_client_handle_msg(
             // Wait till mem pool tip is in sync.
             let mut mem_pool = loop {
                 let mem_pool = mem_pool.lock().await;
-                // TODO: notify instead of polling.
                 if mem_pool.current_tip().1 < block {
+                    let mut sub = mem_pool.subscribe_new_tip();
                     drop(mem_pool);
                     log::info!("waiting for tip update");
-                    tokio::time::sleep(Duration::from_secs(2)).await;
+                    loop {
+                        match sub.recv().await {
+                            Ok(tip) => {
+                                if tip >= block {
+                                    break;
+                                }
+                            }
+                            Err(broadcast::error::RecvError::Lagged(_)) => {}
+                            Err(_) => unreachable!(),
+                        }
+                    }
                 } else {
                     break mem_pool;
                 }
@@ -239,12 +260,28 @@ async fn sync_client(
 ) -> anyhow::Result<()> {
     let mut try_again_block = 0;
     loop {
-        let block_number = mem_pool.lock().await.current_tip().1;
-        if block_number < try_again_block {
-            // TODO: notify instead of polling.
-            tokio::time::sleep(Duration::from_secs(3)).await;
-            continue;
-        }
+        let block_number = 'outer: loop {
+            let mem_pool = mem_pool.lock().await;
+            let block = mem_pool.current_tip().1;
+            if block >= try_again_block {
+                break block;
+            } else {
+                let mut sub = mem_pool.subscribe_new_tip();
+                drop(mem_pool);
+                log::info!("waiting for tip update");
+                loop {
+                    match sub.recv().await {
+                        Ok(b) => {
+                            if b >= try_again_block {
+                                break 'outer b;
+                            }
+                        }
+                        Err(broadcast::error::RecvError::Lagged(_)) => {}
+                        Err(_) => unreachable!(),
+                    }
+                }
+            }
+        };
         log::info!("requesting messages for block {}", block_number);
         let request = P2PSyncRequestBuilder::default()
             .block_number(block_number.pack())
@@ -266,7 +303,7 @@ async fn sync_client(
                 tokio::time::sleep(Duration::from_secs(3)).await;
             }
             P2PSyncResponseUnion::RefreshMemBlockMessageVec(vec) => {
-                log::info!("got messages");
+                log::info!("got {} messages", vec.len());
                 for msg in vec {
                     sync_client_handle_msg(mem_pool, msg.to_enum()).await?;
                 }
@@ -278,8 +315,19 @@ async fn sync_client(
     while let Some(msg) = read_part.next().await {
         let msg = msg?;
         RefreshMemBlockMessageReader::from_slice(&msg)?;
-        let msg = RefreshMemBlockMessage::new_unchecked(msg);
-        sync_client_handle_msg(mem_pool, msg.to_enum()).await?;
+        let msg = RefreshMemBlockMessage::new_unchecked(msg).to_enum();
+        match msg {
+            RefreshMemBlockMessageUnion::NextL2Transaction(ref tx) => {
+                log::info!("received tx in block {}", tx.mem_block_number().unpack());
+            }
+            RefreshMemBlockMessageUnion::NextMemBlock(ref b) => {
+                log::info!(
+                    "received NextMemBlock number {}",
+                    b.block_info().number().unpack(),
+                );
+            }
+        }
+        sync_client_handle_msg(mem_pool, msg).await?;
     }
     Ok(())
 }
@@ -312,9 +360,7 @@ mod tests {
         prelude::{Builder, Pack},
     };
 
-    use crate::sync::p2p::KEEP_BLOCKS;
-
-    use super::MessageBuffer;
+    use super::{MessageBuffer, KEEP_BLOCKS};
 
     #[test]
     fn test_message_buffer() {

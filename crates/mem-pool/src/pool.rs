@@ -46,7 +46,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, broadcast};
 use tracing::instrument;
 
 use crate::{
@@ -101,6 +101,7 @@ pub struct MemPool {
     mem_pool_state: Arc<MemPoolState>,
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     eth_eoa_mapping_register: Option<EthEoaMappingRegister>,
+    new_tip_publisher: broadcast::Sender<u64>,
 }
 
 pub struct MemPoolCreateArgs {
@@ -200,6 +201,8 @@ impl MemPool {
             Arc::new(MemPoolState::new(Arc::new(mem_store)))
         };
 
+        let (new_tip_publisher, _) = broadcast::channel(1);
+
         let mut mem_pool = MemPool {
             store,
             current_tip: tip,
@@ -217,6 +220,7 @@ impl MemPool {
             mem_pool_state,
             dynamic_config_manager,
             eth_eoa_mapping_register,
+            new_tip_publisher,
         };
 
         // update mem block info
@@ -455,8 +459,8 @@ impl MemPool {
     #[instrument(skip_all)]
     pub async fn notify_new_tip(&mut self, new_tip: H256) -> Result<()> {
         // reset pool state
-        log::info!("[mem-pool] notify_new_tip: {}", new_tip.pack());
         self.reset(Some(self.current_tip.0), Some(new_tip)).await?;
+        let _ = self.new_tip_publisher.send(self.current_tip.1);
         Ok(())
     }
 
@@ -1296,6 +1300,10 @@ impl MemPool {
 
     pub(crate) fn current_tip(&self) -> (H256, u64) {
         self.current_tip
+    }
+
+    pub(crate) fn subscribe_new_tip(&self) -> broadcast::Receiver<u64> {
+        self.new_tip_publisher.subscribe()
     }
 }
 
