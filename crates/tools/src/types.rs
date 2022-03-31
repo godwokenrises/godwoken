@@ -38,8 +38,8 @@ pub struct UserRollupConfig {
     pub required_staking_capacity: u64,
     pub challenge_maturity_blocks: u64,
     pub finality_blocks: u64,
-    pub reward_burn_rate: u8,     // * reward_burn_rate / 100
-    pub compatible_chain_id: u32, // compatible chain id
+    pub reward_burn_rate: u8, // * reward_burn_rate / 100
+    pub chain_id: u64,        // chain id
     pub allowed_eoa_type_hashes: Vec<H256>,
     pub allowed_contract_type_hashes: Vec<H256>,
 }

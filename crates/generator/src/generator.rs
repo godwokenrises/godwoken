@@ -260,20 +260,14 @@ impl Generator {
         Ok(())
     }
 
-    /// check the first 32 bits is equals to the compatible_chain_id
-    /// In Godwoken level we only check the first 32 bits, the last 32 bits is supposed used by backends
+    /// check chain id
     fn check_chain_id(&self, chain_id: u64) -> Result<(), LockAlgorithmError> {
-        let compatible_chain_id = (chain_id >> 32) as u32;
-        let expected_rollup_chain_id: u32 = self
-            .rollup_context()
-            .rollup_config
-            .compatible_chain_id()
-            .unpack();
-        // check the first 32 bits, should be equals to compatible_chain_id
-        if expected_rollup_chain_id != compatible_chain_id {
-            return Err(LockAlgorithmError::InvalidSignature(
-                "Wrong compatible rollup_chain_id".to_string(),
-            ));
+        let expected_rollup_chain_id: u64 = self.rollup_context().rollup_config.chain_id().unpack();
+        if expected_rollup_chain_id != chain_id {
+            return Err(LockAlgorithmError::InvalidSignature(format!(
+                "Wrong chain_id, expected: {} actual: {}",
+                expected_rollup_chain_id, chain_id
+            )));
         }
         Ok(())
     }

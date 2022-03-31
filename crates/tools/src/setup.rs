@@ -241,7 +241,7 @@ fn generate_rollup_config(setup_config: &SetupConfig) -> Result<UserRollupConfig
         challenge_maturity_blocks: 450,
         finality_blocks: 3600,
         reward_burn_rate: 50,
-        compatible_chain_id: 0,
+        chain_id: 0,
         allowed_eoa_type_hashes: Vec::new(),
         allowed_contract_type_hashes: Vec::new(),
         cells_lock: setup_config.cells_lock.clone(),

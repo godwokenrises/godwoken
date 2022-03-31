@@ -207,11 +207,13 @@ impl LockAlgorithm for Secp256k1Eth {
         receiver_script: Script,
         tx: L2Transaction,
     ) -> Result<(), LockAlgorithmError> {
-        if let Some(rlp_data) = try_assemble_polyjuice_args(
-            ctx.rollup_config.compatible_chain_id().unpack(),
-            tx.raw(),
-            receiver_script.clone(),
-        ) {
+        // check chain id
+        let expected_chain_id = ctx.rollup_config.chain_id().unpack();
+        let chain_id = tx.raw().chain_id().unpack();
+        if expected_chain_id != chain_id {
+            return Err(LockAlgorithmError::InvalidTransactionArgs);
+        }
+        if let Some(rlp_data) = try_assemble_polyjuice_args(tx.raw(), receiver_script.clone()) {
             let mut hasher = Keccak256::new();
             hasher.update(&rlp_data);
             let buf = hasher.finalize();
@@ -391,11 +393,7 @@ fn calc_godwoken_signing_message(
     )
 }
 
-fn try_assemble_polyjuice_args(
-    rollup_chain_id: u32,
-    raw_tx: RawL2Transaction,
-    receiver_script: Script,
-) -> Option<Bytes> {
+fn try_assemble_polyjuice_args(raw_tx: RawL2Transaction, receiver_script: Script) -> Option<Bytes> {
     let args: Bytes = raw_tx.args().unpack();
     if args.len() < 52 {
         return None;
@@ -419,11 +417,9 @@ fn try_assemble_polyjuice_args(
         u64::from_le_bytes(data)
     };
     stream.append(&gas_limit);
-    let (to, polyjuice_chain_id) = if args[7] == 3 {
+    let to = if args[7] == 3 {
         // 3 for EVMC_CREATE
-        // In case of deploying a polyjuice contract, to id(creator account id)
-        // is directly used as chain id
-        (vec![0u8; 0], raw_tx.to_id().unpack())
+        vec![0u8; 0]
     } else {
         // For contract calling, chain id is read from scrpit args of
         // receiver_script, see the following link for more details:
@@ -435,14 +431,9 @@ fn try_assemble_polyjuice_args(
             log::error!("invalid ETH contract script args len: {}", args.len());
             return None;
         }
-        let polyjuice_chain_id = {
-            let mut data = [0u8; 4];
-            data.copy_from_slice(&args[32..36]);
-            u32::from_le_bytes(data)
-        };
         let to = args[36..].to_vec();
         assert_eq!(to.len(), 20, "eth address");
-        (to, polyjuice_chain_id)
+        to
     };
     stream.append(&to);
     let value = {
@@ -460,9 +451,7 @@ fn try_assemble_polyjuice_args(
         return None;
     }
     stream.append(&args[52..52 + payload_length].to_vec());
-    // calculate chain id by concanate rollup_chain_id || polyjuice_chain_id
-    let chain_id: u64 = ((rollup_chain_id as u64) << 32) | (polyjuice_chain_id as u64);
-    stream.append(&chain_id);
+    stream.append(&raw_tx.chain_id().unpack());
     stream.append(&0u8);
     stream.append(&0u8);
     stream.finalize_unbounded_list();
@@ -473,6 +462,7 @@ fn try_assemble_polyjuice_args(
 mod tests {
     use super::*;
     use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
+    use gw_types::packed::RollupConfig;
 
     #[test]
     fn test_secp256k1_eth_polyjuice_call() {
@@ -488,7 +478,10 @@ mod tests {
         let payload_length: u32 = 0;
         polyjuice_args[48..52].copy_from_slice(&payload_length.to_le_bytes());
 
+        let chain_id = 23u64;
+
         let raw_tx = RawL2Transaction::new_builder()
+            .chain_id(chain_id.pack())
             .nonce(9u32.pack())
             .to_id(1234u32.pack())
             .args(Bytes::from(polyjuice_args).pack())
@@ -523,7 +516,9 @@ mod tests {
             .build();
         let ctx = RollupContext {
             rollup_script_hash: Default::default(),
-            rollup_config: Default::default(),
+            rollup_config: RollupConfig::new_builder()
+                .chain_id(chain_id.pack())
+                .build(),
         };
         eth.verify_tx(&ctx, sender_address, sender_script, receiver_script, tx)
             .expect("verify signature");
@@ -543,7 +538,9 @@ mod tests {
         let payload_length: u32 = 0;
         polyjuice_args[48..52].copy_from_slice(&payload_length.to_le_bytes());
 
+        let chain_id = 23;
         let raw_tx = RawL2Transaction::new_builder()
+            .chain_id(chain_id.pack())
             .nonce(9u32.pack())
             .to_id(1234u32.pack())
             .args(Bytes::from(polyjuice_args).pack())
@@ -585,7 +582,9 @@ mod tests {
             .build();
         let ctx = RollupContext {
             rollup_script_hash: Default::default(),
-            rollup_config: Default::default(),
+            rollup_config: RollupConfig::new_builder()
+                .chain_id(chain_id.pack())
+                .build(),
         };
 
         eth.verify_tx(&ctx, sender_address, sender_script, receiver_script, tx)
@@ -607,7 +606,9 @@ mod tests {
         polyjuice_args[48..52].copy_from_slice(&payload_length.to_le_bytes());
         polyjuice_args[52..69].copy_from_slice(b"POLYJUICEcontract");
 
+        let chain_id = 23;
         let raw_tx = RawL2Transaction::new_builder()
+            .chain_id(chain_id.pack())
             .nonce(9u32.pack())
             .to_id(23u32.pack())
             .args(Bytes::from(polyjuice_args).pack())
@@ -641,7 +642,9 @@ mod tests {
             .build();
         let ctx = RollupContext {
             rollup_script_hash: Default::default(),
-            rollup_config: Default::default(),
+            rollup_config: RollupConfig::new_builder()
+                .chain_id(chain_id.pack())
+                .build(),
         };
         eth.verify_tx(&ctx, sender_address, sender_script, receiver_script, tx)
             .expect("verify signature");
@@ -649,10 +652,11 @@ mod tests {
 
     #[test]
     fn test_secp256k1_eth_normal_call() {
+        let chain_id = 1u64;
         let raw_tx = RawL2Transaction::new_builder()
             .nonce(9u32.pack())
             .to_id(1234u32.pack())
-            .chain_id(1u64.pack())
+            .chain_id(chain_id.pack())
             .build();
         let mut signature = [0u8; 65];
         signature.copy_from_slice(&hex::decode("64b164f5303000c283119974d7ba8f050cc7429984af904134d5cda6d3ce045934cc6b6f513ec939c2ae4cfb9cbee249ba8ae86f6274e4035c150f9c8e634a3a1b").expect("hex decode"));
@@ -683,7 +687,9 @@ mod tests {
             .build();
         let ctx = RollupContext {
             rollup_script_hash: Default::default(),
-            rollup_config: Default::default(),
+            rollup_config: RollupConfig::new_builder()
+                .chain_id(chain_id.pack())
+                .build(),
         };
         eth.verify_tx(&ctx, sender_address, sender_script, receiver_script, tx)
             .expect("verify signature");
