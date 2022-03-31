@@ -333,7 +333,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
         .challenge_maturity_blocks(GwPack::pack(&user_rollup_config.challenge_maturity_blocks))
         .finality_blocks(GwPack::pack(&user_rollup_config.finality_blocks))
         .reward_burn_rate(user_rollup_config.reward_burn_rate.into())
-        .compatible_chain_id(GwPack::pack(&user_rollup_config.compatible_chain_id))
+        .chain_id(GwPack::pack(&user_rollup_config.chain_id))
         .allowed_eoa_type_hashes(GwPackVec::pack(allowed_eoa_type_hashes))
         .allowed_contract_type_hashes(GwPackVec::pack(allowed_contract_type_hashes))
         .build();

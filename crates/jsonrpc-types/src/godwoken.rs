@@ -1056,8 +1056,8 @@ pub struct RollupConfig {
     pub required_staking_capacity: Uint64,
     pub challenge_maturity_blocks: Uint64,
     pub finality_blocks: Uint64,
-    pub reward_burn_rate: Uint32,    // * reward_burn_rate / 100
-    pub compatible_chain_id: Uint32, // compatible chain id
+    pub reward_burn_rate: Uint32, // * reward_burn_rate / 100
+    pub chain_id: Uint64,         // chain id
     pub allowed_eoa_type_hashes: Vec<AllowedEoaTypeHash>, // list of script code_hash allowed an EOA(external owned account) to use
     pub allowed_contract_type_hashes: Vec<AllowedContractTypeHash>, // list of script code_hash allowed a contract account to use
 }
@@ -1077,7 +1077,7 @@ impl From<RollupConfig> for packed::RollupConfig {
             challenge_maturity_blocks,
             finality_blocks,
             reward_burn_rate, // * reward_burn_rate / 100
-            compatible_chain_id,
+            chain_id,
             allowed_eoa_type_hashes, // list of script code_hash allowed an EOA(external owned account) to use
             allowed_contract_type_hashes, // list of script code_hash allowed a contract account to use
         } = json;
@@ -1085,7 +1085,7 @@ impl From<RollupConfig> for packed::RollupConfig {
         let challenge_maturity_blocks: u64 = challenge_maturity_blocks.into();
         let finality_blocks: u64 = finality_blocks.into();
         let reward_burn_rate: u32 = reward_burn_rate.into();
-        let compatible_chain_id: u32 = compatible_chain_id.into();
+        let chain_id: u64 = chain_id.into();
         let reward_burn_rate: u8 = reward_burn_rate.try_into().expect("reward burn rate");
         packed::RollupConfig::new_builder()
             .l1_sudt_script_type_hash(l1_sudt_script_type_hash.pack())
@@ -1100,7 +1100,7 @@ impl From<RollupConfig> for packed::RollupConfig {
             .challenge_maturity_blocks(challenge_maturity_blocks.pack())
             .finality_blocks(finality_blocks.pack())
             .reward_burn_rate(reward_burn_rate.into())
-            .compatible_chain_id(compatible_chain_id.pack())
+            .chain_id(chain_id.pack())
             .allowed_eoa_type_hashes(allowed_eoa_type_hashes.into_iter().map(From::from).pack())
             .allowed_contract_type_hashes(
                 allowed_contract_type_hashes
@@ -1118,7 +1118,7 @@ impl From<packed::RollupConfig> for RollupConfig {
         let challenge_maturity_blocks: u64 = data.challenge_maturity_blocks().unpack();
         let finality_blocks: u64 = data.finality_blocks().unpack();
         let reward_burn_date: u8 = data.reward_burn_rate().into();
-        let compatible_chain_id: u32 = data.compatible_chain_id().unpack();
+        let chain_id: u64 = data.chain_id().unpack();
         RollupConfig {
             l1_sudt_script_type_hash: data.l1_sudt_script_type_hash().unpack(),
             custodian_script_type_hash: data.custodian_script_type_hash().unpack(),
@@ -1132,7 +1132,7 @@ impl From<packed::RollupConfig> for RollupConfig {
             challenge_maturity_blocks: challenge_maturity_blocks.into(),
             finality_blocks: finality_blocks.into(),
             reward_burn_rate: (reward_burn_date as u32).into(),
-            compatible_chain_id: compatible_chain_id.into(),
+            chain_id: chain_id.into(),
             allowed_eoa_type_hashes: data
                 .allowed_eoa_type_hashes()
                 .into_iter()
