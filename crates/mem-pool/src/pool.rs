@@ -46,7 +46,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tokio::sync::{Mutex, broadcast};
+use tokio::sync::{broadcast, Mutex};
 use tracing::instrument;
 
 use crate::{

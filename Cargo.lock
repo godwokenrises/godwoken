@@ -1354,19 +1354,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "env_logger"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b2cf0344971ee6c64c31be0d530793fba457d322dfec2810c453d0ef228f9c3"
-dependencies = [
- "atty",
- "humantime",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
 name = "erased-serde"
 version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2126,7 +2113,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bytes 1.1.0",
- "env_logger 0.9.0",
+ "env_logger",
  "futures-util",
  "gw-config",
  "gw-types",
@@ -2146,7 +2133,7 @@ dependencies = [
  "ckb-types",
  "clap",
  "crossbeam-channel",
- "env_logger 0.8.4",
+ "env_logger",
  "gw-chain",
  "gw-challenge",
  "gw-common",
@@ -2179,7 +2166,7 @@ dependencies = [
  "ckb-crypto",
  "ckb-fixed-hash",
  "ckb-types",
- "env_logger 0.8.4",
+ "env_logger",
  "faster-hex 0.4.1",
  "futures",
  "gw-common",
@@ -2213,7 +2200,7 @@ dependencies = [
  "ckb-fixed-hash",
  "ckb-types",
  "clap",
- "env_logger 0.8.4",
+ "env_logger",
  "errno",
  "faster-hex 0.4.1",
  "futures",
@@ -2304,7 +2291,7 @@ dependencies = [
  "ckb-types",
  "ckb-vm",
  "ckb-vm-definitions",
- "env_logger 0.8.4",
+ "env_logger",
  "gw-block-producer",
  "gw-chain",
  "gw-ckb-hardfork",
@@ -2348,7 +2335,7 @@ dependencies = [
  "ckb-sdk",
  "ckb-types",
  "clap",
- "env_logger 0.8.4",
+ "env_logger",
  "faster-hex 0.5.0",
  "gw-common",
  "gw-config",

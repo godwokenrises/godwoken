@@ -1,7 +1,6 @@
 use std::{
     collections::{BTreeMap, HashSet},
     sync::Arc,
-    time::Duration,
 };
 
 use futures::StreamExt;
@@ -299,8 +298,6 @@ async fn sync_client(
             P2PSyncResponseUnion::TryAgain(try_again) => {
                 try_again_block = try_again.block_number().unpack();
                 log::info!("try again at: {}", try_again_block);
-                // TODO: notify instead of polling.
-                tokio::time::sleep(Duration::from_secs(3)).await;
             }
             P2PSyncResponseUnion::RefreshMemBlockMessageVec(vec) => {
                 log::info!("got {} messages", vec.len());
