@@ -179,11 +179,8 @@ impl MemPool {
             (Some(config), NodeMode::FullNode | NodeMode::Test) => {
                 log::info!("Setup p2p publisher");
                 let shared = Arc::new(Mutex::new(p2p::SyncServerState::default()));
-                let mut service = P2PNetwork::init(
-                    &config,
-                    [p2p::sync_server_protocol(shared.clone())],
-                )
-                .await?;
+                let mut service =
+                    P2PNetwork::init(&config, [p2p::sync_server_protocol(shared.clone())]).await?;
                 let publisher = p2p::sync_server_publisher(service.control().clone(), shared);
                 tokio::spawn(async move {
                     service.run().await;
