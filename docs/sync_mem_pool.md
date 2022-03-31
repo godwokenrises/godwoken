@@ -24,7 +24,7 @@ And for a read-only node:
 node_mode = "readonly"
 
 [p2p_network_config]
-dial = "/dns4/godwoken/tcp/9999"
+dial = ["/dns4/godwoken/tcp/9999"]
 ```
 
 ## With Kafka
