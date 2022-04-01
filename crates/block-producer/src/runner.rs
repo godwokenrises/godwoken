@@ -214,7 +214,7 @@ impl ChainTask {
                         return Ok(None);
                     }
                     bail!(
-                        "Error occurred when polling chain_updater, event: {}, error: {}",
+                        "Error occurred when polling challenger, event: {}, error: {}",
                         event,
                         err
                     );
@@ -299,7 +299,6 @@ impl ChainTask {
                         hash
                     }
                 );
-                tokio::time::sleep(self.poll_interval).await;
             }
             Ok(None)
         }
