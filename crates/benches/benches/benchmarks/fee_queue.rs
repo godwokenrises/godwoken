@@ -6,7 +6,9 @@ use gw_mem_pool::fee::{
     queue::FeeQueue,
     types::{FeeEntry, FeeItem},
 };
-use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore, Store, mem_pool_state::MemStore};
+use gw_store::{
+    mem_pool_state::MemStore, state::state_db::StateContext, traits::chain_store::ChainStore, Store,
+};
 use gw_types::{
     bytes::Bytes,
     packed::{
@@ -73,7 +75,7 @@ fn bench_add_full(b: &mut Bencher) {
     });
 }
 
-fn bench_add_fetch(b: &mut Bencher) {
+fn bench_add_fetch_20(b: &mut Bencher) {
     let mut queue = FeeQueue::new();
 
     let store = Store::open_tmp().expect("open store");
@@ -93,7 +95,7 @@ fn bench_add_fetch(b: &mut Bencher) {
     }
     let snap = store.get_snapshot();
 
-    for i in 0..(MAX_QUEUE_SIZE as u32) - 1 {
+    for i in 0..(MAX_QUEUE_SIZE as u32) - 100 {
         let entry1 = FeeEntry {
             item: FeeItem::Tx(
                 L2Transaction::new_builder()
@@ -112,23 +114,25 @@ fn bench_add_fetch(b: &mut Bencher) {
     let tree = mem_store.state().unwrap();
 
     b.iter(|| {
-        let entry1 = FeeEntry {
-            item: FeeItem::Tx(
-                L2Transaction::new_builder()
-                    .raw(
-                        RawL2Transaction::new_builder()
-                            .nonce(10001u32.pack())
-                            .build(),
-                    )
-                    .build(),
-            ),
-            fee: 100 * 1000,
-            cycles_limit: 1000,
-            sender: 2,
-            order: queue.len(),
-        };
-        queue.add(entry1);
-        queue.fetch(&tree, 1)
+        for i in 0..20 {
+            let entry1 = FeeEntry {
+                item: FeeItem::Tx(
+                    L2Transaction::new_builder()
+                        .raw(
+                            RawL2Transaction::new_builder()
+                                .nonce((MAX_QUEUE_SIZE + i).pack())
+                                .build(),
+                        )
+                        .build(),
+                ),
+                fee: 100 * 1000,
+                cycles_limit: 1000,
+                sender: 2,
+                order: queue.len(),
+            };
+            queue.add(entry1);
+        }
+        queue.fetch(&tree, 20)
     });
 }
 
@@ -136,8 +140,8 @@ pub fn bench(c: &mut Criterion) {
     c.bench_function("FeeQueue add when full", |b| {
         bench_add_full(b);
     });
-    c.bench_function("FeeQueue add and fetch", |b| {
-        bench_add_fetch(b);
+    c.bench_function("FeeQueue add and fetch 20", |b| {
+        bench_add_fetch_20(b);
     });
 }
 

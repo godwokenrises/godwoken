@@ -1,7 +1,7 @@
 use anyhow::Result;
 use gw_common::state::State;
+use std::collections::{BTreeSet, HashMap};
 use tracing::instrument;
-use std::collections::{HashMap, BTreeSet};
 
 /// Max queue size
 const MAX_QUEUE_SIZE: usize = 100_000;
