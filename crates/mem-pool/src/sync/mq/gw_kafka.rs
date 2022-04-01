@@ -124,7 +124,7 @@ impl Consume for Consumer {
                     let payload = msg.payload();
                     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as i64;
                     let msg_age = msg.timestamp().to_millis().map(|then| now - then);
-                    log::info!("MSG AGE: {:?}", msg_age);
+                    log::debug!("kafka msg age: {:?}", msg_age);
                     log::trace!(
                         "Recv kafka msg: {}:{}@{}: {:?}",
                         topic,

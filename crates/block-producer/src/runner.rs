@@ -170,7 +170,7 @@ impl ChainTask {
                     tip_number,
                     hex::encode(tip_hash.as_slice()),
                     new_block_number,
-                    hex::encode(new_block_hash),
+                    hex::encode(new_block_hash)
                 );
                 ChainEvent::Reverted {
                     old_tip: NumberHash::new_builder()
@@ -214,7 +214,7 @@ impl ChainTask {
                         return Ok(None);
                     }
                     bail!(
-                        "Error occurred when polling challenger, event: {}, error: {}",
+                        "Error occurred when polling chain_updater, event: {}, error: {}",
                         event,
                         err
                     );
@@ -299,6 +299,7 @@ impl ChainTask {
                         hash
                     }
                 );
+                tokio::time::sleep(self.poll_interval).await;
             }
             Ok(None)
         }
