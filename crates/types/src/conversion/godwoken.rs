@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use crate::{core::H256, packed, prelude::*, vec::Vec};
 
 impl Pack<packed::KVPair> for (H256, H256) {
@@ -24,9 +26,9 @@ impl Pack<packed::Byte20> for [u8; 20] {
 }
 
 impl<'r> Unpack<[u8; 20]> for packed::Byte20Reader<'r> {
+    #[inline]
     fn unpack(&self) -> [u8; 20] {
-        let ptr = self.as_slice().as_ptr() as *const [u8; 20];
-        unsafe { *ptr }
+        self.as_slice().try_into().expect("unpack Byte20Reader")
     }
 }
 impl_conversion_for_entity_unpack!([u8; 20], Byte20);
