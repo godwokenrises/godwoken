@@ -4,7 +4,7 @@ use std::collections::{BinaryHeap, HashMap};
 use tracing::instrument;
 
 /// Max queue size
-const MAX_QUEUE_SIZE: usize = 10000;
+const MAX_QUEUE_SIZE: usize = 100_000;
 /// Drop size when queue is full
 const DROP_SIZE: usize = 100;
 
