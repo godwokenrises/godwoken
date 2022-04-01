@@ -67,7 +67,7 @@ impl PartialOrd for FeeItem {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct FeeEntry {
     /// item: tx or withdrawal
     pub item: FeeItem,
