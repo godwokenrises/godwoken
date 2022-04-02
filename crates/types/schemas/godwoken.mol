@@ -201,6 +201,7 @@ union UnlockWithdrawalWitness {
     UnlockWithdrawalViaFinalize,
     UnlockWithdrawalViaRevert,
     UnlockWithdrawalViaTrade,
+    UnlockWithdrawalToV1,
 }
 table UnlockWithdrawalViaFinalize {
 }
@@ -209,6 +210,8 @@ struct UnlockWithdrawalViaRevert {
 }
 table UnlockWithdrawalViaTrade {
     owner_lock: Script,
+}
+table UnlockWithdrawalToV1 {
 }
 // --- end of withdrawal lock ---
 

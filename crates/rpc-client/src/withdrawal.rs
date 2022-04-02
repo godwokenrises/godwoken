@@ -13,6 +13,15 @@ pub enum UnlockMethod {
     WithdrawalToV1 { deposit_lock: Script },
 }
 
+impl UnlockMethod {
+    pub fn into_owner_lock(self) -> Script {
+        match self {
+            UnlockMethod::Finalized { owner_lock } => owner_lock,
+            UnlockMethod::WithdrawalToV1 { deposit_lock } => deposit_lock,
+        }
+    }
+}
+
 pub fn unlockable_to_owner(
     info: &CellInfo,
     last_finalized_block_number: u64,

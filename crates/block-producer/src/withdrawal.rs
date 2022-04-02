@@ -4,6 +4,7 @@ use anyhow::{anyhow, Result};
 use gw_common::H256;
 use gw_config::ContractsCellDep;
 use gw_mem_pool::{custodian::sum_withdrawals, withdrawal::Generator};
+use gw_rpc_client::withdrawal::UnlockMethod;
 use gw_types::{
     bytes::Bytes,
     core::{DepType, ScriptHashType},
@@ -12,8 +13,8 @@ use gw_types::{
     },
     packed::{
         CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, L2Block, Script,
-        UnlockWithdrawalViaFinalize, UnlockWithdrawalViaRevert, UnlockWithdrawalWitness,
-        UnlockWithdrawalWitnessUnion, WithdrawalRequestExtra, WitnessArgs,
+        UnlockWithdrawalToV1, UnlockWithdrawalViaFinalize, UnlockWithdrawalViaRevert,
+        UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion, WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::*,
 };
@@ -226,37 +227,41 @@ pub fn unlock_to_owner(
             .lock(Some(unlock_witness.as_bytes()).pack())
             .build()
     };
+    let unlock_to_v1_witness = {
+        let unlock_args = UnlockWithdrawalToV1::new_builder().build();
+        let unlock_witness = UnlockWithdrawalWitness::new_builder()
+            .set(UnlockWithdrawalWitnessUnion::UnlockWithdrawalToV1(
+                unlock_args,
+            ))
+            .build();
+        WitnessArgs::new_builder()
+            .lock(Some(unlock_witness.as_bytes()).pack())
+            .build()
+    };
 
     let global_state = global_state_from_slice(&rollup_cell.data)?;
     let last_finalized_block_number: u64 = global_state.last_finalized_block_number().unpack();
     let l1_sudt_script_hash = rollup_context.rollup_config.l1_sudt_script_type_hash();
     for withdrawal_cell in withdrawal_cells {
-        // Double check
-        if let Err(err) = gw_rpc_client::withdrawal::unlockable_to_owner(
+        let maybe_unlockable = gw_rpc_client::withdrawal::unlockable_to_owner(
             &withdrawal_cell,
             last_finalized_block_number,
             &l1_sudt_script_hash,
-        ) {
-            log::error!("[unlock withdrawal] unexpected verify failed {}", err);
-            continue;
-        }
+        );
 
-        let owner_lock = {
-            let args: Bytes = withdrawal_cell.output.lock().args().unpack();
-            match gw_utils::withdrawal::parse_lock_args(&args) {
-                Ok(parsed) => match parsed.opt_owner_lock {
-                    Some(owner_lock) => owner_lock,
-                    None => {
-                        log::error!("[unlock withdrawal] impossible, already pass verify_unlockable_to_owner above");
-                        continue;
-                    }
-                },
-                Err(_) => {
-                    log::error!("[unlock withdrawal] impossible, already pass verify_unlockable_to_owner above");
-                    continue;
-                }
+        let unlock_method = match maybe_unlockable {
+            Ok(method) => method,
+            Err(err) => {
+                log::error!("[unlock withdrawal] unexpected verify failed {}", err);
+                continue;
             }
         };
+
+        let witness = match unlock_method {
+            UnlockMethod::Finalized { owner_lock: _ } => unlock_via_finalize_witness.clone(),
+            UnlockMethod::WithdrawalToV1 { deposit_lock: _ } => unlock_to_v1_witness.clone(),
+        };
+        let owner_lock = unlock_method.into_owner_lock();
 
         let withdrawal_input = {
             let input = CellInput::new_builder()
@@ -273,7 +278,7 @@ pub fn unlock_to_owner(
         let output = withdrawal_cell.output.as_builder().lock(owner_lock).build();
 
         withdrawal_inputs.push(withdrawal_input);
-        withdrawal_witness.push(unlock_via_finalize_witness.clone());
+        withdrawal_witness.push(witness);
         unlocked_to_owner_outputs.push((output, withdrawal_cell.data));
     }
 
@@ -316,9 +321,9 @@ mod test {
     use gw_types::offchain::{CellInfo, CollectedCustodianCells, InputCellInfo};
     use gw_types::packed::{
         CellDep, CellInput, CellOutput, Fee, GlobalState, L2Block, OutPoint, RawL2Block,
-        RawWithdrawalRequest, Script, UnlockWithdrawalViaFinalize, UnlockWithdrawalWitness,
-        UnlockWithdrawalWitnessUnion, WithdrawalLockArgs, WithdrawalRequest,
-        WithdrawalRequestExtra, WitnessArgs,
+        RawWithdrawalRequest, Script, UnlockWithdrawalToV1, UnlockWithdrawalViaFinalize,
+        UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion, WithdrawalLockArgs,
+        WithdrawalRequest, WithdrawalRequestExtra, WitnessArgs,
     };
     use gw_types::prelude::{Builder, Entity, Pack, PackVec, Unpack};
     use gw_types::{offchain::RollupContext, packed::RollupConfig};
@@ -424,6 +429,53 @@ mod test {
 
         let generated = generate(
             &rollup_context,
+            finalized_custodians.clone(),
+            &block,
+            &contracts_dep,
+            &withdrawal_extras,
+        )
+        .unwrap();
+        let (output, data) = generated.unwrap().outputs.first().unwrap().to_owned();
+
+        let (expected_output, expected_data) =
+            gw_generator::Generator::build_withdrawal_cell_output(
+                &rollup_context,
+                &withdrawal,
+                &block.hash().into(),
+                block.raw().number().unpack(),
+                Some(sudt_script.clone()),
+                UnlockWithdrawal::from(owner_lock.clone()),
+            )
+            .unwrap();
+
+        assert_eq!(expected_output.as_slice(), output.as_slice());
+        assert_eq!(expected_data, data);
+
+        // Check our generate withdrawal can be queried and unlocked to owner
+        let info = CellInfo {
+            output,
+            data,
+            ..Default::default()
+        };
+        let last_finalized_block_number =
+            block.raw().number().unpack() + rollup_context.rollup_config.finality_blocks().unpack();
+        gw_rpc_client::withdrawal::unlockable_to_owner(
+            &info,
+            last_finalized_block_number,
+            &sudt_script.code_hash(),
+        )
+        .expect("pass verification");
+
+        // ## Withdrawal to v1
+        let withdrawal_extra = WithdrawalRequestExtra::new_builder()
+            .request(withdrawal.clone())
+            .owner_lock(Some(owner_lock.clone()).pack())
+            .withdraw_to_v1(1u8.into())
+            .build();
+        let withdrawal_extras = HashMap::from_iter([(withdrawal.hash().into(), withdrawal_extra)]);
+
+        let generated = generate(
+            &rollup_context,
             finalized_custodians,
             &block,
             &contracts_dep,
@@ -439,14 +491,16 @@ mod test {
                 &block.hash().into(),
                 block.raw().number().unpack(),
                 Some(sudt_script.clone()),
-                UnlockWithdrawal::from(owner_lock),
+                UnlockWithdrawal::ToV1 {
+                    deposit_lock: owner_lock,
+                },
             )
             .unwrap();
 
         assert_eq!(expected_output.as_slice(), output.as_slice());
         assert_eq!(expected_data, data);
 
-        // Check our generate withdrawal can be queried and unlocked to owner
+        // Check our generate withdrawal can be queried and unlocked to v1 deposit
         let info = CellInfo {
             output,
             data,
@@ -556,6 +610,29 @@ mod test {
             let lock = Script::new_builder().args(args.pack()).build();
             CellInfo {
                 output: CellOutput::new_builder()
+                    .type_(Some(sudt_script.clone()).pack())
+                    .lock(lock)
+                    .build(),
+                data: 100u128.pack().as_bytes(),
+                ..Default::default()
+            }
+        };
+
+        let withdrawal_to_v1 = {
+            let lock_args = WithdrawalLockArgs::new_builder()
+                .owner_lock_hash(owner_lock.hash().pack())
+                .withdrawal_block_number((last_finalized_block_number + 1).pack())
+                .build();
+
+            let mut args = rollup_type.hash().to_vec();
+            args.extend_from_slice(&lock_args.as_bytes());
+            args.extend_from_slice(&(owner_lock.as_bytes().len() as u32).to_be_bytes());
+            args.extend_from_slice(&owner_lock.as_bytes());
+            args.push(1u8);
+
+            let lock = Script::new_builder().args(args.pack()).build();
+            CellInfo {
+                output: CellOutput::new_builder()
                     .type_(Some(sudt_script).pack())
                     .lock(lock)
                     .build(),
@@ -571,18 +648,20 @@ mod test {
             vec![
                 withdrawal_without_owner_lock,
                 withdrawal_with_owner_lock.clone(),
+                withdrawal_to_v1.clone(),
             ],
         )
         .expect("unlock")
         .expect("some unlocked");
 
-        assert_eq!(unlocked.inputs.len(), 1, "skip one without owner lock");
-        assert_eq!(unlocked.outputs.len(), 1);
-        assert_eq!(unlocked.witness_args.len(), 1);
+        assert_eq!(unlocked.inputs.len(), 2, "skip one without owner lock");
+        assert_eq!(unlocked.outputs.len(), 2);
+        assert_eq!(unlocked.witness_args.len(), 2);
 
+        // Check unlocked via finalized
         let expected_output = {
             let output = withdrawal_with_owner_lock.output.clone().as_builder();
-            output.lock(owner_lock).build()
+            output.lock(owner_lock.clone()).build()
         };
 
         let (output, data) = unlocked.outputs.first().unwrap().to_owned();
@@ -623,6 +702,52 @@ mod test {
                 .build()
         };
         let witness = unlocked.witness_args.first().unwrap().to_owned();
+        assert_eq!(expected_witness.as_slice(), witness.as_slice());
+
+        // Check unlocked to v1
+        let expected_output = {
+            let output = withdrawal_to_v1.output.clone().as_builder();
+            output.lock(owner_lock).build()
+        };
+
+        let (output, data) = unlocked.outputs.last().unwrap().to_owned();
+        assert_eq!(expected_output.as_slice(), output.as_slice());
+        assert_eq!(withdrawal_to_v1.data, data);
+
+        let expected_input = {
+            let input = CellInput::new_builder()
+                .previous_output(withdrawal_to_v1.out_point.clone())
+                .build();
+
+            InputCellInfo {
+                input,
+                cell: withdrawal_to_v1,
+            }
+        };
+        let input = unlocked.inputs.last().unwrap().to_owned();
+        assert_eq!(expected_input.input.as_slice(), input.input.as_slice());
+        assert_eq!(
+            expected_input.cell.output.as_slice(),
+            input.cell.output.as_slice()
+        );
+        assert_eq!(
+            expected_input.cell.out_point.as_slice(),
+            input.cell.out_point.as_slice()
+        );
+        assert_eq!(expected_input.cell.data, input.cell.data);
+
+        let expected_witness = {
+            let unlock_args = UnlockWithdrawalToV1::new_builder().build();
+            let unlock_witness = UnlockWithdrawalWitness::new_builder()
+                .set(UnlockWithdrawalWitnessUnion::UnlockWithdrawalToV1(
+                    unlock_args,
+                ))
+                .build();
+            WitnessArgs::new_builder()
+                .lock(Some(unlock_witness.as_bytes()).pack())
+                .build()
+        };
+        let witness = unlocked.witness_args.last().unwrap().to_owned();
         assert_eq!(expected_witness.as_slice(), witness.as_slice());
 
         assert_eq!(unlocked.deps.len(), 3);
