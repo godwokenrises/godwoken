@@ -257,7 +257,9 @@ impl Chain {
 
                 log::debug!("[complete_initial_syncing] acquire mem-pool",);
                 let t = Instant::now();
-                mem_pool.lock().await.notify_new_tip(tip_block_hash).await?;
+                let mut mem_pool = mem_pool.lock().await;
+                mem_pool.notify_new_tip(tip_block_hash).await?;
+                mem_pool.mem_pool_state().set_completed_initial_syncing();
                 log::debug!(
                     "[complete_initial_syncing] unlock mem-pool {}ms",
                     t.elapsed().as_millis()

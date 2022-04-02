@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 use crate::snapshot::StoreSnapshot;
 use arc_swap::{ArcSwap, Guard};
@@ -11,7 +14,7 @@ use gw_db::{
     schema::{Col, COLUMNS, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_META},
 };
 use gw_types::{
-    packed::{self},
+    packed,
     prelude::{Entity, FromSliceShouldBeOk, Pack, Reader, Unpack},
 };
 
@@ -32,12 +35,14 @@ pub const META_MEM_SMT_COUNT_KEY: &[u8] = b"MEM_ACCOUNT_SMT_COUNT_KEY";
 
 pub struct MemPoolState {
     store: ArcSwap<MemStore>,
+    completed_initial_syncing: AtomicBool,
 }
 
 impl MemPoolState {
-    pub fn new(store: Arc<MemStore>) -> Self {
+    pub fn new(store: Arc<MemStore>, completed_initial_syncing: bool) -> Self {
         Self {
             store: ArcSwap::new(store),
+            completed_initial_syncing: AtomicBool::new(completed_initial_syncing),
         }
     }
 
@@ -49,6 +54,14 @@ impl MemPoolState {
     /// Replaces the snapshot inside this instance.
     pub fn store(&self, mem_store: Arc<MemStore>) {
         self.store.store(mem_store);
+    }
+
+    pub fn completed_initial_syncing(&self) -> bool {
+        self.completed_initial_syncing.load(Ordering::SeqCst)
+    }
+
+    pub fn set_completed_initial_syncing(&self) {
+        self.completed_initial_syncing.store(true, Ordering::SeqCst);
     }
 }
 
