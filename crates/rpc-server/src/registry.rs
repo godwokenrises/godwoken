@@ -1370,7 +1370,7 @@ async fn get_mem_pool_state_root(
 async fn get_mem_pool_state_ready(
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<bool, RpcError> {
-    Ok(mem_pool_state.complete_initial_syncing())
+    Ok(mem_pool_state.completed_initial_syncing())
 }
 
 async fn tests_produce_block(
