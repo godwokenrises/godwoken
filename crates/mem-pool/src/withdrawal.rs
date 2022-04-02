@@ -108,11 +108,14 @@ impl<'a> Generator<'a> {
             &block_hash,
             block_number,
             sudt_script,
-            UnlockWithdrawal::from(req_extra.owner_lock().to_opt()),
+            UnlockWithdrawal::from(req_extra),
         ) {
             Ok(output) => output,
             Err(WithdrawalCellError::OwnerLock(lock_hash)) => {
                 bail!("owner lock not match hash {}", lock_hash.pack())
+            }
+            Err(WithdrawalCellError::V1DepositLock(lock_hash)) => {
+                bail!("v1 deposit lock not match hash {}", lock_hash.pack())
             }
             Err(WithdrawalCellError::MinCapacity { min, req: _ }) => {
                 bail!("{} minimal capacity for {}", min, req)
@@ -391,8 +394,27 @@ mod test {
                 &req,
                 &block.hash().into(),
                 block.raw().number().unpack(),
+                Some(sudt_script.clone()),
+                UnlockWithdrawal::from(owner_lock.clone()),
+            )
+            .unwrap();
+
+        assert_eq!(output.as_slice(), expected_output.as_slice());
+        assert_eq!(data, expected_data);
+
+        // ## Withdraw to v1
+        let req_extra = req_extra.as_builder().withdraw_to_v1(1u8.into()).build();
+        let (output, data) = generator.verified_output(&req_extra, &block).unwrap();
+        let (expected_output, expected_data) =
+            gw_generator::Generator::build_withdrawal_cell_output(
+                &rollup_context,
+                &req,
+                &block.hash().into(),
+                block.raw().number().unpack(),
                 Some(sudt_script),
-                UnlockWithdrawal::from(owner_lock),
+                UnlockWithdrawal::ToV1 {
+                    deposit_lock: owner_lock,
+                },
             )
             .unwrap();
 
@@ -423,12 +445,23 @@ mod test {
                 .clone()
                 .as_builder()
                 .owner_lock(Some(err_owner_lock).pack())
+                .withdraw_to_v1(0u8.into())
                 .build()
         };
         let err = generator
             .verified_output(&err_req_extra, &block)
             .unwrap_err();
         assert!(err.to_string().contains("owner lock not match hash"));
+
+        // ## V1 Deposit lock error
+        let err_req_extra = err_req_extra
+            .as_builder()
+            .withdraw_to_v1(1u8.into())
+            .build();
+        let err = generator
+            .verified_output(&err_req_extra, &block)
+            .unwrap_err();
+        assert!(err.to_string().contains("v1 deposit lock not match hash"));
 
         // ## include_and_verify() and finish()
         generator.include_and_verify(&req_extra, &block).unwrap();

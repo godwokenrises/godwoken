@@ -7,6 +7,7 @@ pub struct ParsedWithdrawalLockArgs {
     pub rollup_type_hash: [u8; 32],
     pub lock_args: WithdrawalLockArgs,
     pub opt_owner_lock: Option<Script>,
+    pub withdraw_to_v1: bool,
 }
 
 pub fn parse_lock_args(args: &Bytes) -> Result<ParsedWithdrawalLockArgs> {
@@ -33,6 +34,7 @@ pub fn parse_lock_args(args: &Bytes) -> Result<ParsedWithdrawalLockArgs> {
             rollup_type_hash,
             lock_args,
             opt_owner_lock: None,
+            withdraw_to_v1: false,
         });
     }
 
@@ -41,7 +43,8 @@ pub fn parse_lock_args(args: &Bytes) -> Result<ParsedWithdrawalLockArgs> {
 
     let owner_lock_len = u32::from_be_bytes(owner_lock_len_buf) as usize;
     let owner_lock_end = owner_lock_start + owner_lock_len;
-    if owner_lock_end != args_len {
+    // Plus one v1 flag byte
+    if owner_lock_end != args_len && owner_lock_end + 1 != args_len {
         bail!("invalid args owner lock script len");
     }
 
@@ -56,9 +59,12 @@ pub fn parse_lock_args(args: &Bytes) -> Result<ParsedWithdrawalLockArgs> {
         bail!("invalid args owner lock hash");
     }
 
+    let withdraw_to_v1 = owner_lock_end + 1 == args_len && args[owner_lock_end] == 1u8;
+
     Ok(ParsedWithdrawalLockArgs {
         rollup_type_hash,
         lock_args,
         opt_owner_lock: Some(owner_lock),
+        withdraw_to_v1,
     })
 }
