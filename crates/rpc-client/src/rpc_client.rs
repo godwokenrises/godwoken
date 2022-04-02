@@ -1428,7 +1428,7 @@ impl RPCClient {
                     continue;
                 }
 
-                if let Err(err) = crate::withdrawal::verify_unlockable_to_owner(
+                if let Err(err) = crate::withdrawal::unlockable_to_owner(
                     &info,
                     last_finalized_block_number,
                     &rollup_context.rollup_config.l1_sudt_script_type_hash(),

@@ -232,7 +232,7 @@ pub fn unlock_to_owner(
     let l1_sudt_script_hash = rollup_context.rollup_config.l1_sudt_script_type_hash();
     for withdrawal_cell in withdrawal_cells {
         // Double check
-        if let Err(err) = gw_rpc_client::withdrawal::verify_unlockable_to_owner(
+        if let Err(err) = gw_rpc_client::withdrawal::unlockable_to_owner(
             &withdrawal_cell,
             last_finalized_block_number,
             &l1_sudt_script_hash,
@@ -454,7 +454,7 @@ mod test {
         };
         let last_finalized_block_number =
             block.raw().number().unpack() + rollup_context.rollup_config.finality_blocks().unpack();
-        gw_rpc_client::withdrawal::verify_unlockable_to_owner(
+        gw_rpc_client::withdrawal::unlockable_to_owner(
             &info,
             last_finalized_block_number,
             &sudt_script.code_hash(),

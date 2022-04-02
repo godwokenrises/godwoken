@@ -512,7 +512,7 @@ async fn test_build_unlock_to_owner_tx() {
     let unlockable_random_withdrawals: Vec<_> = random_withdrawal_cells
         .into_iter()
         .filter(|cell| {
-            gw_rpc_client::withdrawal::verify_unlockable_to_owner(
+            gw_rpc_client::withdrawal::unlockable_to_owner(
                 cell,
                 last_finalized_block_number,
                 &rollup_context.rollup_config.l1_sudt_script_type_hash(),
