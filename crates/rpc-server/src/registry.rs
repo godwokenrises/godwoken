@@ -183,9 +183,10 @@ impl Registry {
                 let mem_pool = pool.lock().await;
                 mem_pool.mem_pool_state()
             }
-            None => Arc::new(MemPoolState::new(Arc::new(MemStore::new(
-                store.get_snapshot(),
-            )))),
+            None => Arc::new(MemPoolState::new(
+                Arc::new(MemStore::new(store.get_snapshot())),
+                true,
+            )),
         };
         let (submit_tx, submit_rx) = async_channel::bounded(RequestSubmitter::MAX_CHANNEL_SIZE);
         if let Some(mem_pool) = mem_pool.as_ref().to_owned() {
@@ -280,6 +281,7 @@ impl Registry {
             )
             .with_method("gw_get_fee_config", get_fee_config)
             .with_method("gw_get_mem_pool_state_root", get_mem_pool_state_root)
+            .with_method("gw_get_mem_pool_state_ready", get_mem_pool_state_ready)
             .with_method("gw_get_node_info", get_node_info)
             .with_method("gw_reload_config", reload_config);
 
@@ -1363,6 +1365,12 @@ async fn get_mem_pool_state_root(
     let tree = snap.state()?;
     let root = tree.calculate_root()?;
     Ok(to_jsonh256(root))
+}
+
+async fn get_mem_pool_state_ready(
+    mem_pool_state: Data<Arc<MemPoolState>>,
+) -> Result<bool, RpcError> {
+    Ok(mem_pool_state.complete_initial_syncing())
 }
 
 async fn tests_produce_block(

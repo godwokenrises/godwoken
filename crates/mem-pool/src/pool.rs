@@ -174,7 +174,7 @@ impl MemPool {
 
         let mem_pool_state = {
             let mem_store = MemStore::new(store.get_snapshot());
-            Arc::new(MemPoolState::new(Arc::new(mem_store)))
+            Arc::new(MemPoolState::new(Arc::new(mem_store), false))
         };
 
         let mut mem_pool = MemPool {
