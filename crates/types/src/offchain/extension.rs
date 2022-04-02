@@ -1,7 +1,7 @@
 use crate::packed::{
-    AccountMerkleState, Byte32, CompactMemBlock, GlobalState, GlobalStateV0, MemBlock,
-    RawWithdrawalRequest, Script, TransactionKey, TxReceipt, WithdrawalKey, WithdrawalRequest,
-    WithdrawalRequestExtra,
+    AccountMerkleState, Byte32, CompactMemBlock, DeprecatedWithdrawRequestExtra, GlobalState,
+    GlobalStateV0, MemBlock, RawWithdrawalRequest, Script, TransactionKey, TxReceipt,
+    WithdrawalKey, WithdrawalRequest, WithdrawalRequestExtra,
 };
 use crate::prelude::*;
 use ckb_types::error::VerificationError;
@@ -101,6 +101,15 @@ impl WithdrawalRequestExtra {
             return Ok(extra);
         }
 
+        if let Ok(deprecated_extra) = DeprecatedWithdrawRequestExtra::from_slice(slice) {
+            let extra = WithdrawalRequestExtra::new_builder()
+                .request(deprecated_extra.request())
+                .owner_lock(deprecated_extra.owner_lock())
+                .withdraw_to_v1(0u8.into())
+                .build();
+            return Ok(extra);
+        }
+
         match WithdrawalRequestExtra::from_slice(slice) {
             Ok(withdrawal) => Ok(withdrawal),
             Err(_) => WithdrawalRequest::from_slice(slice).map(Into::into),
@@ -144,7 +153,10 @@ impl WithdrawalRequestExtra {
 
 impl From<WithdrawalRequest> for WithdrawalRequestExtra {
     fn from(req: WithdrawalRequest) -> Self {
-        WithdrawalRequestExtra::new_builder().request(req).build()
+        WithdrawalRequestExtra::new_builder()
+            .request(req)
+            .withdraw_to_v1(0u8.into())
+            .build()
     }
 }
 
@@ -160,7 +172,9 @@ impl Eq for WithdrawalRequestExtra {}
 mod test {
     use ckb_types::prelude::Entity;
 
-    use crate::packed::{Script, WithdrawalRequest, WithdrawalRequestExtra};
+    use crate::packed::{
+        DeprecatedWithdrawRequestExtra, Script, WithdrawalRequest, WithdrawalRequestExtra,
+    };
 
     #[test]
     fn test_withdrawal_request_extra_from_len_header_slice() {
@@ -197,5 +211,12 @@ mod test {
         raw.extend_from_slice(withdrawal.as_slice());
         let err = WithdrawalRequestExtra::from_len_header_slice(&raw).unwrap_err();
         assert!(err.to_string().contains("field count doesn't match"));
+    }
+
+    #[test]
+    fn test_withdrawal_request_extra_from_deprecated_withdrawal_request_extra() {
+        let deprecated = DeprecatedWithdrawRequestExtra::default();
+        let withdraw = WithdrawalRequestExtra::from_request_compitable_slice(deprecated.as_slice());
+        assert_eq!(withdraw.expect("valid").withdraw_to_v1(), 0u8.into());
     }
 }
