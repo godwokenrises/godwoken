@@ -95,6 +95,7 @@ impl<'r> Unpack<CollectedCustodianCells> for packed::CollectedCustodianCellsRead
 }
 
 impl_conversion_for_packed_iterator_pack!(AccountMerkleState, AccountMerkleStateVec);
+impl_conversion_for_packed_iterator_pack!(DepositInfo, DepositInfoVec);
 impl_conversion_for_vector!(DepositInfo, DepositInfoVec, DepositInfoVecReader);
 impl_conversion_for_vector!(CellInfo, CellInfoVec, CellInfoVecReader);
 impl_conversion_for_vector!(SudtCustodian, SudtCustodianVec, SudtCustodianVecReader);
