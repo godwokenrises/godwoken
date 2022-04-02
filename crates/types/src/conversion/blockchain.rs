@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+use core::convert::TryInto;
 
 use crate::vec::Vec;
 use crate::{bytes::Bytes, packed, prelude::*};
