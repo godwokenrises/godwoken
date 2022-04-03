@@ -233,10 +233,11 @@ async fn test_build_unlock_to_owner_tx() {
             .build(),
     };
 
-    // Generate random withdrawals(w/wo owner lock)
+    // Generate random withdrawals(w/wo owner lock and to v1 deposit)
     const WITHDRAWAL_CAPACITY: u64 = 1000 * CKB;
     const WITHDRAWAL_AMOUNT: u128 = 100;
-    let no_owner_lock_count = accounts.len() / 2;
+    let no_owner_lock_count = accounts.len() / 3;
+    let owner_lock_count = accounts.len() / 3;
     let withdrawals_no_lock = {
         let accounts = accounts.iter().take(no_owner_lock_count);
         accounts.map(|account_script| {
@@ -250,9 +251,9 @@ async fn test_build_unlock_to_owner_tx() {
             WithdrawalRequest::new_builder().raw(raw).build().into()
         })
     };
-    let withdrawals_lock = {
+    let withdrawals_owner_lock = {
         let accounts = accounts.iter().skip(no_owner_lock_count);
-        accounts.map(|account_script| {
+        accounts.take(owner_lock_count).map(|account_script| {
             let raw = RawWithdrawalRequest::new_builder()
                 .capacity(WITHDRAWAL_CAPACITY.pack())
                 .amount(WITHDRAWAL_AMOUNT.pack())
@@ -267,6 +268,25 @@ async fn test_build_unlock_to_owner_tx() {
                 .build()
         })
     };
+    let withdrawals_to_v1_deposit = {
+        let accounts = accounts.iter().skip(no_owner_lock_count);
+        accounts.skip(owner_lock_count).map(|account_script| {
+            let raw = RawWithdrawalRequest::new_builder()
+                .capacity(WITHDRAWAL_CAPACITY.pack())
+                .amount(WITHDRAWAL_AMOUNT.pack())
+                .account_script_hash(account_script.hash().pack())
+                .owner_lock_hash(account_script.hash().pack())
+                .sudt_script_hash(sudt_script.hash().pack())
+                .build();
+            let req = WithdrawalRequest::new_builder().raw(raw).build();
+            WithdrawalRequestExtra::new_builder()
+                .request(req)
+                .owner_lock(Some(account_script.to_owned()).pack())
+                .withdraw_to_v1(1u8.into())
+                .build()
+        })
+    };
+    assert!(withdrawals_to_v1_deposit.len() > 0);
 
     // Push withdrawals
     let finalized_custodians = CollectedCustodianCells {
@@ -291,7 +311,10 @@ async fn test_build_unlock_to_owner_tx() {
         };
         mem_pool.set_provider(Box::new(provider));
 
-        for withdrawal in withdrawals_no_lock.chain(withdrawals_lock) {
+        for withdrawal in withdrawals_no_lock
+            .chain(withdrawals_owner_lock)
+            .chain(withdrawals_to_v1_deposit)
+        {
             mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
         }
 
