@@ -799,6 +799,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         last_submitted_tx_hash: block_producer
             .as_ref()
             .map(|bp| bp.last_submitted_tx_hash()),
+        withdrawal_to_v1_config: config.withdrawal_to_v1_config.clone(),
     };
 
     let rpc_registry = Registry::create(args).await;

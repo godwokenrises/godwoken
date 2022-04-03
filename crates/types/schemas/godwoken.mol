@@ -163,6 +163,13 @@ table DepositLockArgs {
     layer2_lock: Script,
     cancel_timeout: Uint64,
 }
+
+table V1DepositLockArgs {
+    // layer1 lock hash
+    owner_lock_hash: Byte32,
+    layer2_lock: Script,
+    cancel_timeout: Uint64,
+}
 // --- end of deposit lock ---
 
 // --- custodian lock ---

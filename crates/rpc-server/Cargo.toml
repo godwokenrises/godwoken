@@ -21,6 +21,7 @@ gw-version = { path = "../version" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-rpc-ws-server = { path = "../rpc-ws-server" }
 gw-dynamic-config = { path = "../dynamic-config"}
+gw-utils = { path = "../utils" }
 faster-hex = "0.4"
 ckb-crypto = "0.100.0"
 ckb-fixed-hash = "0.100.0"

@@ -44,6 +44,8 @@ pub struct Config {
     pub reload_config_github_url: Option<GithubConfigUrl>,
     #[serde(default)]
     pub dynamic_config: DynamicConfig,
+    #[serde(default)]
+    pub withdrawal_to_v1_config: Option<WithdrawalToV1Config>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -419,6 +421,13 @@ pub struct GithubConfigUrl {
 pub struct DynamicConfig {
     pub fee_config: FeeConfig,
     pub rpc_config: RPCConfig,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WithdrawalToV1Config {
+    pub v1_rollup_type_hash: H256,
+    pub v1_deposit_lock_code_hash: H256,
+    pub v1_deposit_minimal_cancel_timeout_msecs: u64,
 }
 
 #[cfg(test)]

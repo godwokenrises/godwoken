@@ -1,8 +1,11 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{blake2b::new_blake2b, state::State, H256};
-use gw_config::{FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig};
+use gw_config::{
+    FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig,
+    WithdrawalToV1Config,
+};
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, ArcSwap, Generator};
 use gw_jsonrpc_types::{
@@ -32,9 +35,15 @@ use gw_store::{
 };
 use gw_traits::CodeStore;
 use gw_types::{
-    packed::{self, BlockInfo, Byte32, L2Transaction, RollupConfig, WithdrawalRequestExtra},
+    bytes::Bytes,
+    core::ScriptHashType,
+    packed::{
+        self, BlockInfo, Byte32, L2Transaction, RollupConfig, V1DepositLockArgsReader,
+        WithdrawalRequestExtra,
+    },
     prelude::*,
 };
+use gw_utils::since::{LockValue, Since};
 use gw_version::Version;
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
 use lru::LruCache;
@@ -124,6 +133,14 @@ pub struct ExecutionTransactionContext {
     dynamic_config: Arc<ArcSwap<DynamicConfigManager>>,
 }
 
+pub struct SubmitWithdrawalContext {
+    generator: Arc<Generator>,
+    store: Store,
+    submit_tx: async_channel::Sender<Request>,
+    rpc_client: RPCClient,
+    to_v1_verifier: WithdrawalToV1RequestVerifier,
+}
+
 pub struct RegistryArgs<T> {
     pub store: Store,
     pub mem_pool: MemPool,
@@ -137,6 +154,7 @@ pub struct RegistryArgs<T> {
     pub server_config: RPCServerConfig,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     pub last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
+    pub withdrawal_to_v1_config: Option<WithdrawalToV1Config>,
 }
 
 pub struct Registry {
@@ -155,6 +173,7 @@ pub struct Registry {
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
     mem_pool_state: Arc<MemPoolState>,
+    withdrawal_to_v1_verifier: WithdrawalToV1RequestVerifier,
 }
 
 impl Registry {
@@ -175,6 +194,7 @@ impl Registry {
             server_config,
             dynamic_config_manager,
             last_submitted_tx_hash,
+            withdrawal_to_v1_config,
         } = args;
 
         let backend_info = get_backend_info(generator.clone());
@@ -201,6 +221,7 @@ impl Registry {
             };
             tokio::spawn(submitter.in_background());
         }
+        let withdrawal_to_v1_verifier = WithdrawalToV1RequestVerifier::new(withdrawal_to_v1_config);
 
         Self {
             mem_pool,
@@ -219,6 +240,7 @@ impl Registry {
             dynamic_config_manager,
             last_submitted_tx_hash,
             mem_pool_state,
+            withdrawal_to_v1_verifier,
         }
     }
 
@@ -237,6 +259,13 @@ impl Registry {
                 store: self.store.clone(),
                 mem_pool_state: self.mem_pool_state.clone(),
                 dynamic_config: self.dynamic_config_manager.clone(),
+            }))
+            .with_data(Data::new(SubmitWithdrawalContext {
+                generator: self.generator.clone(),
+                store: self.store.clone(),
+                submit_tx: self.submit_tx.clone(),
+                rpc_client: self.rpc_client.clone(),
+                to_v1_verifier: self.withdrawal_to_v1_verifier.clone(),
             }))
             .with_data(Data::new(self.mem_pool))
             .with_data(Data(self.generator.clone()))
@@ -996,37 +1025,94 @@ async fn submit_l2transaction(
     Ok(tx_hash)
 }
 
+#[derive(Clone)]
+struct WithdrawalToV1RequestVerifier {
+    config: Option<WithdrawalToV1Config>,
+}
+
+impl WithdrawalToV1RequestVerifier {
+    fn new(config: Option<WithdrawalToV1Config>) -> Self {
+        Self { config }
+    }
+
+    fn verify(&self, request: &WithdrawalRequestExtra) -> Result<()> {
+        if request.withdraw_to_v1() != 1u8.into() {
+            return Ok(());
+        }
+        let config = match self.config.as_ref() {
+            Some(config) => config,
+            None => bail!("withdrawal to v1 is disabled"),
+        };
+
+        let deposit_lock = match request.owner_lock().to_opt() {
+            Some(lock) => lock,
+            None => bail!("v1 deposit lock not found"),
+        };
+        if deposit_lock.code_hash() != config.v1_deposit_lock_code_hash.pack() {
+            bail!("mismatch v1 deposit lock code hash")
+        }
+        if deposit_lock.hash_type() != ScriptHashType::Type.into() {
+            bail!("mismatch v1 deposit lock hash type");
+        }
+
+        let args: Bytes = deposit_lock.args().unpack();
+        if args.len() <= 32 {
+            bail!("invalid v1 deposit lock args");
+        }
+
+        let rollup_type_hash = args.slice(..32);
+        if rollup_type_hash.as_ref() != config.v1_rollup_type_hash.0 {
+            bail!("mismatch v1 rollup type hash");
+        }
+
+        let raw_args = args.slice(32..);
+        let deposit_args = match V1DepositLockArgsReader::from_slice(raw_args.as_ref()) {
+            Ok(args) => args,
+            Err(_err) => bail!("invalid v1 deposit lock args"),
+        };
+        let cancel_timeout = Since::new(deposit_args.cancel_timeout().unpack());
+        if !cancel_timeout.flags_is_valid() || !cancel_timeout.is_relative() {
+            bail!("invalid v1 deposit cancel timeout");
+        }
+        match cancel_timeout.extract_lock_value() {
+            Some(LockValue::Timestamp(timestamp))
+                if timestamp >= config.v1_deposit_minimal_cancel_timeout_msecs =>
+            {
+                Ok(())
+            }
+            _ => bail!("invalid v1 deposit cancel timeout"),
+        }
+    }
+}
+
 #[instrument(skip_all)]
 async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
-    generator: Data<Generator>,
-    store: Data<Store>,
-    submit_tx: Data<async_channel::Sender<Request>>,
-    rpc_client: Data<RPCClient>,
+    ctx: Data<SubmitWithdrawalContext>,
 ) -> Result<JsonH256, RpcError> {
-    let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = {
-        let w = packed::WithdrawalRequestExtra::from_request_compitable_slice(&withdrawal_bytes)?;
-        w.as_builder().owner_lock(Pack::pack(&None)).build()
+        let bytes = withdrawal_request.into_bytes();
+        packed::WithdrawalRequestExtra::from_request_compitable_slice(&bytes)?
     };
-    assert!(withdrawal.opt_owner_lock().is_none());
-    let withdrawal_hash = withdrawal.hash();
+    ctx.to_v1_verifier.verify(&withdrawal)?;
 
+    let withdrawal_hash = withdrawal.hash();
     // verify finalized custodian
     {
         let t = Instant::now();
         let finalized_custodians = {
-            let db = store.get_snapshot();
+            let db = ctx.store.get_snapshot();
             let tip = db.get_last_valid_tip_block()?;
             // query withdrawals from ckb-indexer
-            let last_finalized_block_number = generator
+            let last_finalized_block_number = ctx
+                .generator
                 .rollup_context()
                 .last_finalized_block_number(tip.raw().number().unpack());
             gw_mem_pool::custodian::query_finalized_custodians(
-                &rpc_client,
+                &ctx.rpc_client,
                 &db,
                 vec![withdrawal.request()].into_iter(),
-                generator.rollup_context(),
+                ctx.generator.rollup_context(),
                 last_finalized_block_number,
             )
             .await?
@@ -1039,7 +1125,7 @@ async fn submit_withdrawal_request(
         );
         let available_custodians = AvailableCustodians::from(&finalized_custodians);
         let withdrawal_generator = gw_mem_pool::withdrawal::Generator::new(
-            generator.rollup_context(),
+            ctx.generator.rollup_context(),
             available_custodians,
         );
         if let Err(err) = withdrawal_generator.verify_remained_amount(&withdrawal.request()) {
@@ -1054,7 +1140,7 @@ async fn submit_withdrawal_request(
         }
     }
 
-    if let Err(err) = submit_tx.try_send(Request::Withdrawal(withdrawal)) {
+    if let Err(err) = ctx.submit_tx.try_send(Request::Withdrawal(withdrawal)) {
         if err.is_full() {
             return Err(RpcError::Provided {
                 code: BUSY_ERR_CODE,
@@ -1460,4 +1546,230 @@ async fn reload_config(
     dynamic_config_manager: Data<Arc<ArcSwap<DynamicConfigManager>>>,
 ) -> Result<DynamicConfigReloadResponse> {
     gw_dynamic_config::reload(dynamic_config_manager.clone()).await
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use ckb_fixed_hash::H256;
+    use gw_config::WithdrawalToV1Config;
+    use gw_types::bytes::Bytes;
+    use gw_types::core::ScriptHashType;
+    use gw_types::packed::{
+        RawWithdrawalRequest, Script, V1DepositLockArgs, WithdrawalRequest, WithdrawalRequestExtra,
+    };
+    use gw_types::prelude::{Builder, Entity, Pack, Unpack};
+
+    use super::WithdrawalToV1RequestVerifier;
+
+    const FLAG_SINCE_BLOCK_NUMBER: u64 =
+        0b000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000;
+    const FLAG_SINCE_RELATIVE: u64 =
+        0b1000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000;
+    const FLAG_SINCE_TIMESTAMP: u64 =
+        0b100_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000;
+
+    fn build_cancel_timeout(timeout_secs: u64) -> u64 {
+        FLAG_SINCE_RELATIVE | FLAG_SINCE_TIMESTAMP | timeout_secs
+    }
+
+    #[test]
+    fn test_withdrawal_to_v1_request_verifier() {
+        const ONE_DAY: Duration = Duration::from_secs(24 * 60 * 60);
+        const SEVEN_DAYS: Duration = Duration::from_secs(ONE_DAY.as_secs() * 7);
+
+        let config = WithdrawalToV1Config {
+            v1_rollup_type_hash: H256([1u8; 32]),
+            v1_deposit_lock_code_hash: H256([2u8; 32]),
+            v1_deposit_minimal_cancel_timeout_msecs: SEVEN_DAYS.as_millis() as u64,
+        };
+        let verifier = WithdrawalToV1RequestVerifier::new(Some(config.clone()));
+
+        let deposit_args = V1DepositLockArgs::new_builder()
+            .layer2_lock(Script::default())
+            .owner_lock_hash([4u8; 32].pack())
+            .cancel_timeout(build_cancel_timeout(SEVEN_DAYS.as_secs()).pack())
+            .build();
+        let lock_args = {
+            let mut args = config.v1_rollup_type_hash.0.to_vec();
+            args.extend_from_slice(&deposit_args.as_bytes());
+            args
+        };
+        let deposit_lock = Script::new_builder()
+            .code_hash(config.v1_deposit_lock_code_hash.pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args(lock_args.pack())
+            .build();
+
+        let raw = RawWithdrawalRequest::new_builder()
+            .capacity(u64::MAX.pack())
+            .amount(u128::MAX.pack())
+            .account_script_hash([3u8; 32].pack())
+            .owner_lock_hash(deposit_lock.hash().pack())
+            .sudt_script_hash([5u8; 32].pack())
+            .build();
+        let req = WithdrawalRequest::new_builder().raw(raw.clone()).build();
+        let req_extra = WithdrawalRequestExtra::new_builder()
+            .request(req.clone())
+            .owner_lock(Some(deposit_lock.clone()).pack())
+            .withdraw_to_v1(1u8.into())
+            .build();
+
+        verifier.verify(&req_extra).expect("valid withdrawal to v1");
+
+        // ## Not withdrawal to v1
+        let no_2v1_req = req_extra.clone().as_builder().withdraw_to_v1(0u8.into());
+        verifier.verify(&no_2v1_req.build()).expect("valid");
+
+        // ## Disable verifier
+        let disabled_verifier = WithdrawalToV1RequestVerifier::new(None);
+        let err = disabled_verifier.verify(&req_extra).unwrap_err();
+        assert!(err.to_string().contains("withdrawal to v1 is disabled"));
+
+        // ## No deposit lock
+        let no_deposit_lock = req_extra.clone().as_builder().owner_lock(None.pack());
+        let err = verifier.verify(&no_deposit_lock.build()).unwrap_err();
+        assert!(err.to_string().contains("v1 deposit lock not found"));
+
+        let build_error_request = |err_deposit_lock: Script| -> WithdrawalRequestExtra {
+            let err_lock_hash = err_deposit_lock.hash().pack();
+            let err_raw = raw.clone().as_builder().owner_lock_hash(err_lock_hash);
+            let err_req = req.clone().as_builder().raw(err_raw.build()).build();
+            WithdrawalRequestExtra::new_builder()
+                .request(err_req)
+                .owner_lock(Some(err_deposit_lock).pack())
+                .withdraw_to_v1(1u8.into())
+                .build()
+        };
+
+        // ## Deposit lock code hash not match
+        let err_deposit_lock = { deposit_lock.clone() }
+            .as_builder()
+            .code_hash([0u8; 32].pack())
+            .build();
+        let err_req = build_error_request(err_deposit_lock);
+        let err_str = verifier.verify(&err_req).unwrap_err().to_string();
+        assert!(err_str.contains("mismatch v1 deposit lock code hash"));
+
+        // ## Deposit lock hash type not match
+        let err_deposit_lock = { deposit_lock.clone() }
+            .as_builder()
+            .hash_type(ScriptHashType::Data.into())
+            .build();
+        let err_req = build_error_request(err_deposit_lock);
+        let err_str = verifier.verify(&err_req).unwrap_err().to_string();
+        assert!(err_str.contains("mismatch v1 deposit lock hash type"));
+
+        // ## Args len is smaller than 32
+        let err_deposit_lock = { deposit_lock.clone() }
+            .as_builder()
+            .args([1u8; 32].to_vec().pack())
+            .build();
+        let err_req = build_error_request(err_deposit_lock);
+        let err_str = verifier.verify(&err_req).unwrap_err().to_string();
+        assert!(err_str.contains("invalid v1 deposit lock args"));
+
+        // ## V1 rollup type hash not match
+        let correct_args_bytes: Bytes = deposit_lock.args().unpack();
+        let err_args_bytes = {
+            let mut args = vec![0u8; 32];
+            args.extend_from_slice(&correct_args_bytes.slice(32..));
+            args
+        };
+        let err_deposit_lock = { deposit_lock.clone() }
+            .as_builder()
+            .args(err_args_bytes.pack())
+            .build();
+        let err_req = build_error_request(err_deposit_lock);
+        let err_str = verifier.verify(&err_req).unwrap_err().to_string();
+        assert!(err_str.contains("mismatch v1 rollup type hash"));
+
+        // ## Invalid V1 deposit lock
+        let err_args_bytes = {
+            let mut args = config.v1_rollup_type_hash.0.to_vec();
+            args.extend_from_slice(&V1DepositLockArgs::default().as_bytes()[1..]);
+            args
+        };
+        let err_deposit_lock = { deposit_lock.clone() }
+            .as_builder()
+            .args(err_args_bytes.pack())
+            .build();
+        let err_req = build_error_request(err_deposit_lock);
+        let err_str = verifier.verify(&err_req).unwrap_err().to_string();
+        assert!(err_str.contains("invalid v1 deposit lock args"));
+
+        // ## Invalid v1 deposit cancel timeout flags
+        let err_deposit_args = { deposit_args.clone() }
+            .as_builder()
+            .cancel_timeout(1u64.pack())
+            .build();
+        let err_args_bytes = {
+            let mut args = config.v1_rollup_type_hash.0.to_vec();
+            args.extend_from_slice(&err_deposit_args.as_bytes());
+            args
+        };
+        let err_deposit_lock = { deposit_lock.clone() }
+            .as_builder()
+            .args(err_args_bytes.pack())
+            .build();
+        let err_req = build_error_request(err_deposit_lock);
+        let err_str = verifier.verify(&err_req).unwrap_err().to_string();
+        assert!(err_str.contains("invalid v1 deposit cancel timeout"));
+
+        // ## V1 deposit cancel timeout isn't relative
+        let err_deposit_args = { deposit_args.clone() }
+            .as_builder()
+            .cancel_timeout((FLAG_SINCE_TIMESTAMP | SEVEN_DAYS.as_secs()).pack())
+            .build();
+        let err_args_bytes = {
+            let mut args = config.v1_rollup_type_hash.0.to_vec();
+            args.extend_from_slice(&err_deposit_args.as_bytes());
+            args
+        };
+        let err_deposit_lock = { deposit_lock.clone() }
+            .as_builder()
+            .args(err_args_bytes.pack())
+            .build();
+        let err_req = build_error_request(err_deposit_lock);
+        let err_str = verifier.verify(&err_req).unwrap_err().to_string();
+        assert!(err_str.contains("invalid v1 deposit cancel timeout"));
+
+        // ## V1 ceposit cancel timeout is smaller than config
+        let smaller_timeout = SEVEN_DAYS.saturating_sub(ONE_DAY);
+        let err_deposit_args = { deposit_args.clone() }
+            .as_builder()
+            .cancel_timeout(build_cancel_timeout(smaller_timeout.as_secs()).pack())
+            .build();
+        let err_args_bytes = {
+            let mut args = config.v1_rollup_type_hash.0.to_vec();
+            args.extend_from_slice(&err_deposit_args.as_bytes());
+            args
+        };
+        let err_deposit_lock = { deposit_lock.clone() }
+            .as_builder()
+            .args(err_args_bytes.pack())
+            .build();
+        let err_req = build_error_request(err_deposit_lock);
+        let err_str = verifier.verify(&err_req).unwrap_err().to_string();
+        assert!(err_str.contains("invalid v1 deposit cancel timeout"));
+
+        // ## V1 ceposit cancel timeout use block number
+        let err_deposit_args = { deposit_args.clone() }
+            .as_builder()
+            .cancel_timeout((FLAG_SINCE_RELATIVE | FLAG_SINCE_BLOCK_NUMBER | 1).pack())
+            .build();
+        let err_args_bytes = {
+            let mut args = config.v1_rollup_type_hash.0.to_vec();
+            args.extend_from_slice(&err_deposit_args.as_bytes());
+            args
+        };
+        let err_deposit_lock = { deposit_lock.clone() }
+            .as_builder()
+            .args(err_args_bytes.pack())
+            .build();
+        let err_req = build_error_request(err_deposit_lock);
+        let err_str = verifier.verify(&err_req).unwrap_err().to_string();
+        assert!(err_str.contains("invalid v1 deposit cancel timeout"));
+    }
 }
