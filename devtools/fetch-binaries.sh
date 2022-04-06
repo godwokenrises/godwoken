@@ -1,6 +1,6 @@
 #!/bin/bash
 dir_name='.tmp/binaries'
-image='ghcr.io/jjyr/godwoken-prebuilds:refactor-registry-address-202203150449'
+image='ghcr.io/jjyr/godwoken-prebuilds:refactor-registry-address-202204061147'
 
 docker pull $image
 [ -d $dir_name ] && rm -rf $dir_name && echo "Delete old dir"
