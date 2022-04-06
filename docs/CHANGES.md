@@ -1,8 +1,8 @@
 # v1.0 CHANGES
 
-Consider the further extension of the Godwoken, we use Godwoken internal addresses in the EVM instead of Ethereum addresses. This design causes some incompatiblity between Godwoken & Ethereum, to remove the incompability, we provide a web3-provider plugin to handling the conversion between the two types of address. We hope users can using Godwoken seamlessly as they are using Ethereum. However, even we can handle the conversion in mostly cases, we still have some conner cases: such as we cannot hanlde the conversion happend inside metamask or in some hardware wallets, we can't integrate web3 provider in these environments. In general, we think the legacy version(current mainnet) can solve 95% problems of the compatiblility, but it still leaves some problems need developers to solve it case by case, this downgrade the developer's experience.
+In Godwoken v0, Godwoken EVM has using an internal address format, users need to integrate web3-provider to handling the conversion between Godwoken internal address and the Ethereum address. Even in most cases the conversion is handled transparently, this incompatiblity still causes some problem in conner cases. Such as, we cannot hanlde the conversion happend inside metamask or some hardware wallets environments because the web3-provider plugin in unsupported in these environments.
 
-In the v1.0 version, we fix this problem by storing the mapping relation of Ethereum address & Godwoken script hash into a builtin contract: Ethereum address registry. So in the new version, we totally remove the web3-provider, and directly handling ethereum address in the godwoken-web3 server. Developers can calling or deploy their contract without modification or using extra plugins such as web3-provider.
+In the v1 version, we add a new builtin contract: Ethereum address registry, when a new account is created by user deposit, an Ethereum address is inserted to the contract. With the new builtin contract, the Ethereum address is supported in the EVM directly, now users can submit their transaction to Godwoken without using the web3-provider plugin. We suppose to provide 100% compatibility from the RPC level, once users switch the network to Godwoken, their can using the Ethereum Dapps or toolchains without modification.
 
 ## Godwoken internal changes
 
@@ -10,14 +10,154 @@ In the v1.0 version, we fix this problem by storing the mapping relation of Ethe
 
 ### Core data structure
 
-1. The deposit data structure is refactored, a field `registry_id` is added on the `DepositLockArgs` & `DepositRequest` to indicate which registry we deposited to (The `registry_id` should always using the Ethereum address registry in the current version).
-2. The `RawWithdrawalRequest` data structure is refactored, a field `registry_id` is added on the structure to indicate which registry it withdraws from.
-3. The `RawL2block#block_producer_id : Uint32` is change to `RawL2Block#block_producer : Bytes`
+* `RollupConfig#compatible_chain_id` is changed to `RollupConfig#chain_id`. In v1 we directly using `RollupConfig#chain_id` as the `chain_id` in the signature.
+
+``` molecule
+table RollupConfig {
+    l1_sudt_script_type_hash: Byte32,
+    custodian_script_type_hash: Byte32,
+    deposit_script_type_hash: Byte32,
+    withdrawal_script_type_hash: Byte32,
+    challenge_script_type_hash: Byte32,
+    stake_script_type_hash: Byte32,
+    l2_sudt_validator_script_type_hash: Byte32,
+    burn_lock_hash: Byte32,
+    required_staking_capacity: Uint64,
+    challenge_maturity_blocks: Uint64,
+    finality_blocks: Uint64,
+    reward_burn_rate: byte, // * reward_burn_rate / 100
+    chain_id: Uint64, // chain id
+    allowed_eoa_type_hashes: AllowedTypeHashVec, // list of script code_hash allowed an EOA(external owned account) to use
+    allowed_contract_type_hashes: AllowedTypeHashVec, // list of script code_hash allowed a contract account to use
+}
+```
+
+* A field `registry_id` is added on the `DepositLockArgs` & `DepositRequest` to indicate which registry we deposited to (The `registry_id` should always using the builtin Ethereum address registry in the v1).
+
+``` molecule
+table DepositLockArgs {
+    owner_lock_hash: Byte32,
+    layer2_lock: Script,
+    cancel_timeout: Uint64,
+    registry_id: Uint32,
+}
+
+table DepositRequest {
+    // CKB amount
+    capacity: Uint64,
+    // SUDT amount
+    amount: Uint128,
+    sudt_script_hash: Byte32,
+    script: Script,
+    // Deposit to a Godwoken registry
+    registry_id: Uint32,
+}
+```
+
+* The `RawWithdrawalRequest`, a field `registry_id` is added on the structure to indicate which registry it withdraws from.
+* `chain_id` is added to the structure to indicate the rollup chain_id.
+
+``` molecule
+struct RawWithdrawalRequest {
+    nonce: Uint32,
+    // chain id
+    chain_id: Uint64,
+    // CKB amount
+    capacity: Uint64,
+    // SUDT amount
+    amount: Uint128,
+    sudt_script_hash: Byte32,
+    // layer2 account_script_hash
+    account_script_hash: Byte32,
+    // withdrawal registry ID
+    registry_id: Uint32,
+    // layer1 lock to withdraw after challenge period
+    owner_lock_hash: Byte32,
+    // withdrawal fee, paid to block producer
+    fee: Uint64,
+}
+```
+
+* `chain_id` is added to `RawL2Transaction` to indicate the rollup chain_id.
+
+``` molecule
+table RawL2Transaction {
+    // chain id
+    chain_id: Uint64,
+    from_id: Uint32,
+    to_id: Uint32,
+    nonce: Uint32,
+    args: Bytes,
+}
+```
+
+* The `RawL2block#block_producer_id : Uint32` is change to `RawL2Block#block_producer : Bytes`, and the value is a serialized registry address.
+
+``` molecule
+table RawL2Block {
+    number: Uint64,
+    // In registry address format: registry_id (4 bytes) | address len (4 bytes) | address (n bytes)
+    block_producer: Bytes,
+    parent_block_hash: Byte32,
+    stake_cell_owner_lock_hash: Byte32,
+    timestamp: Uint64,
+    prev_account: AccountMerkleState,
+    post_account: AccountMerkleState,
+    // hash(account_root | account_count) of each withdrawals & transactions
+    state_checkpoint_list: Byte32Vec,
+    submit_withdrawals: SubmitWithdrawals,
+    submit_transactions: SubmitTransactions,
+}
+```
+
+* Pay fee with Simple UDT is removed in the v1, `registry_id` is added to `Fee` to indicate which registry the token in transfered to.
+
+``` molecule
+struct Fee {
+    // registry id
+    registry_id: Uint32,
+    // amount in CKB
+    amount: Uint64,
+}
+```
+
+* Ethereum address registry data structures.
+
+``` molecule
+// --- ETH Address Registry ---
+union ETHAddrRegArgs {
+    EthToGw,
+    GwToEth,
+    SetMapping,
+    BatchSetMapping,
+}
+
+struct EthToGw {
+    eth_address: Byte20,
+}
+
+struct GwToEth {
+    gw_script_hash: Byte32,
+}
+
+struct SetMapping {
+    gw_script_hash: Byte32,
+    fee: Fee,
+}
+
+table BatchSetMapping {
+    gw_script_hashes: Byte32Vec,
+    fee: Fee,
+}
+
+// --- end of ETH Address Registry ---
+```
 
 ### Address registry
 
-1. A new builtin contract Ethereum address registry is added, we can register or query addresses mapping from this contract.
-2. Deposit automatically mapping the Ethereum address for the account. But if the account is created through Meta contract, the developer must register the Ethereum address for the acount by calling the Ethereum address registry contract.
+1. A new builtin contract Ethereum address registry is added, Godwoken using it to handling the Ethereum address. When user deposit token to create a new account, a corresponded Ethereum address of the new account is inserted to the contract.
+2. Deposit automatically mapping the Ethereum address for new accounts. If the account is created through Meta contract, the developer must register the Ethereum address for the acount by calling the Ethereum address registry contract.
+3. The builtin Ethereum address registry is allocated to id 2 in the Godwoken genesis block.
 
 ### Godwoken syscalls
 
@@ -61,9 +201,22 @@ typedef int (*gw_get_script_hash_by_registry_address_fn)(
     struct gw_context_t *ctx, gw_reg_addr_t *address, uint8_t script_hash[32]);
 ```
 
+### Signing
+
+In v0 we only support sign transactions with personal sign, this is considered insecure since users can only see a random 32-bytes hex, they have no idea what data they are signing.
+
+V1 support two signature format:
+
+1. The Ethereum transaction format, users can signing transaction in metamask with the same experience in the ethereum world.
+2. The EIP-712 format, we support using EIP-712 format to sign withdrawal message, or a Godwoken transaction, users can check the content of the transaction before they are signing.
+
+### Polyjuice
+
+The polyjuice components using ethereum address in EVM execution.
+
 ### Fee
 
-In v1.0 we remove the feature of paying tx fee with Simple UDT, now CKB is the only token used to pay tx fee.
+In v1.0 we remove the feature of paying tx fee with Simple UDT, now CKB is the only token to be used to pay tx fee.
 
 ### RPC
 
