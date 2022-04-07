@@ -5,13 +5,15 @@ use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::hasher::{CkbHasher, EthHasher};
 use crate::types::ScriptsDeploymentResult;
 use crate::utils::transaction::read_config;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
-use ckb_sdk::{Address, HumanCapacity};
+use ckb_sdk::{AddressPayload, HumanCapacity, SECP256K1};
 use ckb_types::{prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity};
 use gw_types::core::ScriptHashType;
-use gw_types::packed::{CellOutput, WithdrawalLockArgs, WithdrawalRequestExtra};
+use gw_types::packed::{
+    CellOutput, Script, V1DepositLockArgs, WithdrawalLockArgs, WithdrawalRequestExtra,
+};
 use gw_types::{
     bytes::Bytes as GwBytes,
     packed::{Byte32, RawWithdrawalRequest, WithdrawalRequest},
@@ -22,18 +24,28 @@ use std::time::{Duration, Instant};
 use std::u128;
 use std::{fs, path::Path};
 
+const FLAG_SINCE_RELATIVE: u64 =
+    0b1000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000;
+const FLAG_SINCE_TIMESTAMP: u64 =
+    0b100_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000;
+
 #[allow(clippy::too_many_arguments)]
-pub async fn withdraw(
+pub fn withdraw(
     godwoken_rpc_url: &str,
     privkey_path: &Path,
     capacity: &str,
     amount: &str,
     fee: &str,
     sudt_script_hash: &str,
-    owner_ckb_address: &str,
+    eth_address: &str,
     config_path: &Path,
     scripts_deployment_path: &Path,
 ) -> Result<()> {
+    let config = read_config(&config_path)?;
+    if config.withdrawal_to_v1_config.is_none() {
+        bail!("withdrawal to v1 is disabled");
+    }
+
     let sudt_script_hash = H256::from_str(sudt_script_hash.trim().trim_start_matches("0x"))?;
     let capacity = parse_capacity(capacity)?;
     let amount: u128 = amount.parse().expect("sUDT amount format error");
@@ -46,7 +58,7 @@ pub async fn withdraw(
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
     let sell_capacity = u64::MAX;
-    let config = read_config(&config_path)?;
+    let payment_lock_hash = H256::from([0u8; 32]);
     let rollup_type_hash = &config.genesis.rollup_type_hash;
 
     let is_sudt = sudt_script_hash != H256([0u8; 32]);
@@ -60,31 +72,61 @@ pub async fn withdraw(
         return Err(msg);
     }
 
-    let payment_lock_hash = H256::from([0u8; 32]);
-
-    // owner_ckb_address -> owner_lock_hash
-    let owner_lock_script = {
-        let address = Address::from_str(owner_ckb_address).map_err(|err| anyhow!(err))?;
-        let payload = address.payload();
-        ckb_types::packed::Script::from(payload)
-    };
-    let owner_lock_hash: H256 = CkbHasher::new()
-        .update(owner_lock_script.as_slice())
-        .finalize();
-
     let privkey = read_privkey(privkey_path)?;
+    let v1_config = config.withdrawal_to_v1_config.expect("v1 config");
+
+    // v1 l2 lock
+    let v1_l2_lock = {
+        let eth_address = hex::decode(&eth_address.trim_start_matches("0x").as_bytes())?;
+        let args = {
+            let mut args = v1_config.v1_rollup_type_hash.0.to_vec();
+            args.extend_from_slice(&eth_address);
+            args
+        };
+
+        Script::new_builder()
+            .code_hash(v1_config.v1_eth_lock_code_hash.pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args(args.pack())
+            .build()
+    };
+    let v1_deposit_lock = {
+        let owner_lock_hash = privkey_to_lock_hash(&privkey)?;
+        let cancel_timeout = {
+            let timestamp =
+                Duration::from_millis(v1_config.v1_deposit_minimal_cancel_timeout_msecs).as_secs()
+                    + 1;
+            FLAG_SINCE_RELATIVE | FLAG_SINCE_TIMESTAMP | timestamp
+        };
+        let lock_args = V1DepositLockArgs::new_builder()
+            .owner_lock_hash(owner_lock_hash.pack())
+            .cancel_timeout(cancel_timeout.pack())
+            .layer2_lock(v1_l2_lock)
+            .build();
+
+        let mut args = v1_config.v1_rollup_type_hash.0.to_vec();
+        args.extend_from_slice(lock_args.as_slice());
+
+        Script::new_builder()
+            .code_hash(v1_config.v1_deposit_lock_code_hash.pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args(args.pack())
+            .build()
+    };
+
+    let v1_deposit_lock_hash: H256 = CkbHasher::new()
+        .update(v1_deposit_lock.as_slice())
+        .finalize();
 
     let from_address = privkey_to_short_address(&privkey, rollup_type_hash, &scripts_deployment)?;
 
     // get from_id
-    let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address).await?;
+    let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;
     let from_id = from_id.expect("from id not found!");
-    let nonce =
-        tokio::runtime::Handle::current().block_on(godwoken_rpc_client.get_nonce(from_id))?;
+    let nonce = godwoken_rpc_client.get_nonce(from_id)?;
 
     // get account_script_hash
-    let account_script_hash =
-        tokio::runtime::Handle::current().block_on(godwoken_rpc_client.get_script_hash(from_id))?;
+    let account_script_hash = godwoken_rpc_client.get_script_hash(from_id)?;
 
     let raw_request = create_raw_withdrawal_request(
         &nonce,
@@ -95,7 +137,7 @@ pub async fn withdraw(
         &account_script_hash,
         &sell_capacity,
         &0u128,
-        &owner_lock_hash,
+        &v1_deposit_lock_hash,
         &payment_lock_hash,
     )?;
 
@@ -106,21 +148,19 @@ pub async fn withdraw(
         .raw(raw_request)
         .signature(signature.pack())
         .build();
-    let owner_lock = gw_types::packed::Script::new_unchecked(owner_lock_script.as_bytes());
     let withdrawal_request_extra = WithdrawalRequestExtra::new_builder()
         .request(withdrawal_request)
-        .owner_lock(Some(owner_lock).pack())
+        .owner_lock(Some(v1_deposit_lock).pack())
+        .withdraw_to_v1(1u8.into())
         .build();
 
     log::info!("withdrawal_request_extra: {}", withdrawal_request_extra);
 
-    let init_balance = tokio::runtime::Handle::current().block_on(
-        godwoken_rpc_client.get_balance(JsonBytes::from_bytes(from_address.clone()), 1),
-    )?;
+    let init_balance =
+        godwoken_rpc_client.get_balance(JsonBytes::from_bytes(from_address.clone()), 1)?;
 
     let bytes = JsonBytes::from_bytes(withdrawal_request_extra.as_bytes());
-    let withdrawal_hash = tokio::runtime::Handle::current()
-        .block_on(godwoken_rpc_client.submit_withdrawal_request(bytes))?;
+    let withdrawal_hash = godwoken_rpc_client.submit_withdrawal_request(bytes)?;
     log::info!("withdrawal_hash: {}", withdrawal_hash.pack());
 
     wait_for_balance_change(&mut godwoken_rpc_client, from_address, init_balance, 180u64)?;
@@ -198,9 +238,8 @@ fn wait_for_balance_change(
     while start_time.elapsed() < retry_timeout {
         std::thread::sleep(Duration::from_secs(2));
 
-        let balance = tokio::runtime::Handle::current().block_on(
-            godwoken_rpc_client.get_balance(JsonBytes::from_bytes(from_address.clone()), 1),
-        )?;
+        let balance =
+            godwoken_rpc_client.get_balance(JsonBytes::from_bytes(from_address.clone()), 1)?;
         log::info!(
             "current balance: {}, waiting for {} secs.",
             balance,
@@ -271,4 +310,16 @@ fn minimal_withdrawal_capacity(is_sudt: bool) -> Result<u64> {
 
     let capacity = output.occupied_capacity(data_capacity)?;
     Ok(capacity)
+}
+
+fn privkey_to_lock_hash(privkey: &H256) -> Result<H256> {
+    use ckb_types::packed::Script;
+    use ckb_types::prelude::Unpack;
+
+    let privkey = secp256k1::SecretKey::from_slice(privkey.as_bytes())?;
+    let pubkey = secp256k1::PublicKey::from_secret_key(&SECP256K1, &privkey);
+    let address_payload = AddressPayload::from_pubkey(&pubkey);
+
+    let lock_hash: H256 = Script::from(&address_payload).calc_script_hash().unpack();
+    Ok(lock_hash)
 }

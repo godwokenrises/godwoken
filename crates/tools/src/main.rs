@@ -21,6 +21,7 @@ pub(crate) mod types;
 mod update_cell;
 mod utils;
 mod withdraw;
+mod withdraw_to_v1;
 
 use account::read_privkey;
 use anyhow::{anyhow, Result};
@@ -336,6 +337,55 @@ async fn run_cli() -> Result<()> {
                         .takes_value(true)
                         .required(true)
                         .help("owner ckb address (to)"),
+                )
+                .arg(
+                    Arg::with_name("sudt-script-hash")
+                        .long("sudt-script-hash")
+                        .takes_value(true)
+                        .required(false)
+                        .default_value(
+                            "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        )
+                        .help("l1 sudt script hash, default for withdrawal CKB"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("withdraw-to-v1")
+                .about("withdraw CKB / sUDT from godwoken v0 to v1")
+                .arg(arg_privkey_path.clone())
+                .arg(arg_deployment_results_path.clone())
+                .arg(arg_config_path.clone())
+                .arg(arg_godwoken_rpc_url.clone())
+                .arg(
+                    Arg::with_name("capacity")
+                        .short("c")
+                        .long("capacity")
+                        .takes_value(true)
+                        .required(true)
+                        .help("CKB capacity to withdrawal"),
+                )
+                .arg(
+                    Arg::with_name("amount")
+                        .short("m")
+                        .long("amount")
+                        .takes_value(true)
+                        .default_value("0")
+                        .help("sUDT amount to withdrawal"),
+                )
+                .arg(
+                    Arg::with_name("fee")
+                        .short("f")
+                        .long("fee")
+                        .takes_value(true)
+                        .default_value("0.0001")
+                        .help("Withdrawal fee, default to 0.0001 CKB"),
+                )
+                .arg(
+                    Arg::with_name("eth-address")
+                        .long("eth-address")
+                        .takes_value(true)
+                        .required(true)
+                        .help("v1 eth address"),
                 )
                 .arg(
                     Arg::with_name("sudt-script-hash")
@@ -1047,6 +1097,32 @@ async fn run_cli() -> Result<()> {
             )
             .await
             {
+                log::error!("Withdrawal error: {}", err);
+                std::process::exit(-1);
+            };
+        }
+        ("withdraw-to-v1", Some(m)) => {
+            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
+            let capacity = m.value_of("capacity").unwrap();
+            let amount = m.value_of("amount").unwrap();
+            let fee = m.value_of("fee").unwrap();
+            let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
+            let config_path = Path::new(m.value_of("config-path").unwrap());
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
+            let eth_address = m.value_of("eth-address").unwrap();
+            let sudt_script_hash = m.value_of("sudt-script-hash").unwrap();
+
+            if let Err(err) = withdraw_to_v1::withdraw(
+                godwoken_rpc_url,
+                privkey_path,
+                capacity,
+                amount,
+                fee,
+                sudt_script_hash,
+                eth_address,
+                config_path,
+                scripts_deployment_path,
+            ) {
                 log::error!("Withdrawal error: {}", err);
                 std::process::exit(-1);
             };

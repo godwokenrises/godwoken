@@ -427,6 +427,7 @@ pub struct DynamicConfig {
 pub struct WithdrawalToV1Config {
     pub v1_rollup_type_hash: H256,
     pub v1_deposit_lock_code_hash: H256,
+    pub v1_eth_lock_code_hash: H256, // Used in gw-tools withdraw-to-v1 command
     pub v1_deposit_minimal_cancel_timeout_msecs: u64,
 }
 

@@ -1582,6 +1582,7 @@ mod tests {
         let config = WithdrawalToV1Config {
             v1_rollup_type_hash: H256([1u8; 32]),
             v1_deposit_lock_code_hash: H256([2u8; 32]),
+            v1_eth_lock_code_hash: H256([9u8; 32]),
             v1_deposit_minimal_cancel_timeout_msecs: SEVEN_DAYS.as_millis() as u64,
         };
         let verifier = WithdrawalToV1RequestVerifier::new(Some(config.clone()));
@@ -1628,7 +1629,7 @@ mod tests {
         assert!(err.to_string().contains("withdrawal to v1 is disabled"));
 
         // ## No deposit lock
-        let no_deposit_lock = req_extra.clone().as_builder().owner_lock(None.pack());
+        let no_deposit_lock = req_extra.as_builder().owner_lock(None.pack());
         let err = verifier.verify(&no_deposit_lock.build()).unwrap_err();
         assert!(err.to_string().contains("v1 deposit lock not found"));
 
@@ -1755,7 +1756,7 @@ mod tests {
         assert!(err_str.contains("invalid v1 deposit cancel timeout"));
 
         // ## V1 ceposit cancel timeout use block number
-        let err_deposit_args = { deposit_args.clone() }
+        let err_deposit_args = deposit_args
             .as_builder()
             .cancel_timeout((FLAG_SINCE_RELATIVE | FLAG_SINCE_BLOCK_NUMBER | 1).pack())
             .build();
