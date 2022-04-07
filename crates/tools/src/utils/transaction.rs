@@ -88,22 +88,19 @@ pub fn wait_for_tx(
     let start_time = Instant::now();
     while start_time.elapsed() < retry_timeout {
         std::thread::sleep(Duration::from_secs(5));
-        match rpc_client
-            .get_transaction(tx_hash.clone())
-            .map_err(|err| anyhow!(err))?
-        {
-            Some(tx_with_status) if tx_with_status.tx_status.status == Status::Pending => {
+        match rpc_client.get_transaction(tx_hash.clone()) {
+            Ok(Some(tx_with_status)) if tx_with_status.tx_status.status == Status::Pending => {
                 log::info!("tx pending");
             }
-            Some(tx_with_status) if tx_with_status.tx_status.status == Status::Proposed => {
+            Ok(Some(tx_with_status)) if tx_with_status.tx_status.status == Status::Proposed => {
                 log::info!("tx proposed");
             }
-            Some(tx_with_status) if tx_with_status.tx_status.status == Status::Committed => {
+            Ok(Some(tx_with_status)) if tx_with_status.tx_status.status == Status::Committed => {
                 log::info!("tx commited");
                 return Ok(tx_with_status.transaction);
             }
-            err => {
-                log::error!("unexpected tx status: {:?}", err)
+            res => {
+                log::error!("unexpected response of get_transaction: {:?}", res)
             }
         }
     }
