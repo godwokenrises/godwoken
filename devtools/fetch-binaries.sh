@@ -1,9 +1,10 @@
 #!/bin/bash
 dir_name='.tmp/binaries'
-docker pull nervos/godwoken-prebuilds:latest
+GODWOKEN_TAG=v0.10.3
+docker pull nervos/godwoken-prebuilds:$GODWOKEN_TAG
 [ -d $dir_name ] && rm -rf $dir_name && echo "Delete old dir"
 mkdir -p $dir_name && echo "Create dir"
-docker run --rm -v $(pwd)/$dir_name:/tmp nervos/godwoken-prebuilds:latest cp -r /scripts/godwoken-scripts /tmp && echo "Copy scripts"
+docker run --rm -v $(pwd)/$dir_name:/tmp nervos/godwoken-prebuilds:$GODWOKEN_TAG cp -r /scripts/godwoken-scripts /tmp && echo "Copy scripts"
 # TODO: Wait prebuilds update
 docker pull ghcr.io/zeroqn/godwoken-prebuilds:docker-publish-v0.8-unlock-withdrawal-to-owner
 docker run --rm -v $(pwd)/$dir_name:/tmp ghcr.io/zeroqn/godwoken-prebuilds:docker-publish-v0.8-unlock-withdrawal-to-owner cp /scripts/godwoken-scripts/withdrawal-lock /tmp/godwoken-scripts/withdrawal-lock && echo "Override withdrawal-lock"
