@@ -8,4 +8,5 @@ pub struct ErrorTxReceipt {
     pub block_number: u64,
     pub return_data: Vec<u8>,
     pub last_log: Option<LogItem>,
+    pub exit_code: i8,
 }

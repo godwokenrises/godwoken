@@ -435,6 +435,7 @@ impl RequestSubmitter {
                 if !mem_pool.is_mem_txs_full(Self::MAX_BATCH_SIZE) {
                     break;
                 }
+                drop(mem_pool);
                 // sleep and try again
                 tokio::time::sleep(Self::INTERVAL_MS).await;
             }
@@ -796,6 +797,7 @@ async fn execute_l2transaction(
             block_number: number,
             return_data: run_result.return_data,
             last_log: run_result.logs.pop(),
+            exit_code: run_result.exit_code,
         };
 
         return Err(RpcError::Full {
@@ -906,6 +908,7 @@ async fn execute_raw_l2transaction(
             block_number,
             return_data: run_result.return_data,
             last_log: run_result.logs.pop(),
+            exit_code: run_result.exit_code,
         };
 
         return Err(RpcError::Full {
