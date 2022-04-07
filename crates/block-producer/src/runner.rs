@@ -892,7 +892,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     match rpc_ws_task {
         Some(rpc_ws_task) => {
             tokio::select! {
-                _ = tokio::signal::ctrl_c() => { },
+                _ = sigint_or_sigterm() => { },
                 _ = chain_task => {},
                 _ = rpc_ws_task => {},
                 _ = rpc_task => {},
@@ -900,7 +900,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
         None => {
             tokio::select! {
-                _ = tokio::signal::ctrl_c() => { },
+                _ = sigint_or_sigterm() => { },
                 _ = chain_task => {},
                 _ = rpc_task => {},
             };
@@ -1056,4 +1056,20 @@ fn is_l1_query_error(err: &anyhow::Error) -> bool {
     // TODO: filter rpc request method?
     err.downcast_ref::<RPCRequestError>().is_some()
         || err.downcast_ref::<QueryL1TxError>().is_some()
+}
+
+async fn sigint_or_sigterm() {
+    let int = tokio::signal::ctrl_c();
+    #[cfg(unix)]
+    let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .expect("creating SIGTERM stream");
+    #[cfg(unix)]
+    tokio::select! {
+        _ = int => {}
+        _ = term.recv() => {}
+    }
+    #[cfg(not(unix))]
+    let _ = int.await;
+
+    log::info!("received sigint or sigterm, shutting down");
 }
