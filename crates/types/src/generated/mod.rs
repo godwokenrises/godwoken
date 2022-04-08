@@ -22,6 +22,10 @@ mod omni_lock;
 #[allow(clippy::all)]
 mod xudt_rce;
 
+#[cfg(feature = "std")]
+#[allow(clippy::all)]
+pub mod in_queue_request_map_sync;
+
 pub mod packed {
     pub use molecule::prelude::{Byte, ByteReader};
 

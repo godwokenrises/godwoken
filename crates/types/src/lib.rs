@@ -10,7 +10,7 @@ mod generated;
 pub mod prelude;
 mod std_traits;
 
-pub use generated::packed;
+pub use generated::*;
 pub use molecule::bytes;
 
 cfg_if::cfg_if! {

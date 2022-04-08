@@ -57,6 +57,7 @@ fn main() {
             "mem_block",
             "omni_lock",
             "xudt_rce",
+            "in_queue_request_map_sync",
         ]);
     }
 }

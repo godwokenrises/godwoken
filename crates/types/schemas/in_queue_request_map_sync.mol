@@ -1,0 +1,13 @@
+import godwoken;
+import store;
+import blockchain;
+
+union SyncMessage {
+    L2Transaction,
+    WithdrawalRequestExtra,
+    RemoveRequest,
+}
+
+struct RemoveRequest {
+    hash: Byte32,
+}

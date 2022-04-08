@@ -251,6 +251,7 @@ async fn test_restore_mem_block() {
             server_config: Default::default(),
             dynamic_config_manager,
             last_submitted_tx_hash: None,
+            in_queue_request_map: Default::default(),
         };
 
         Registry::create(args).await

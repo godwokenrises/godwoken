@@ -34,9 +34,10 @@ impl FeeQueue {
         self.queue.is_empty()
     }
 
-    /// Add item to queue
+    /// Add item to queue. Returns dropped items if there are any.
+    #[allow(clippy::mutable_key_type)]
     #[instrument(skip_all, fields(count = self.len()))]
-    pub fn add(&mut self, entry: FeeEntry) {
+    pub fn add(&mut self, entry: FeeEntry) -> BTreeSet<FeeEntry> {
         // push to queue
         log::debug!(
             "QueueLen: {} | add entry: {:?} {}",
@@ -47,9 +48,11 @@ impl FeeQueue {
         self.queue.insert(entry);
 
         // drop items if full
+        let mut dropped = BTreeSet::new();
         if self.is_full() {
             if let Some(first_to_keep) = self.queue.iter().nth(DROP_SIZE + 1).cloned() {
-                self.queue = self.queue.split_off(&first_to_keep);
+                let to_keep = self.queue.split_off(&first_to_keep);
+                dropped = std::mem::replace(&mut self.queue, to_keep);
             }
             log::debug!(
                 "QueueLen: {} | Fee queue is full, drop {} items",
@@ -57,6 +60,7 @@ impl FeeQueue {
                 DROP_SIZE,
             );
         }
+        dropped
     }
 
     #[inline]

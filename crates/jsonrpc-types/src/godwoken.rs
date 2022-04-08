@@ -503,6 +503,7 @@ pub struct L2BlockWithStatus {
 pub enum L2TransactionStatus {
     Pending,
     Committed,
+    InQueue,
 }
 
 impl Default for L2TransactionStatus {
@@ -523,6 +524,7 @@ pub struct L2TransactionWithStatus {
 pub enum WithdrawalStatus {
     Pending,
     Committed,
+    InQueue,
 }
 
 impl Default for WithdrawalStatus {

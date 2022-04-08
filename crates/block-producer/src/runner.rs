@@ -29,7 +29,6 @@ use gw_mem_pool::{
     default_provider::DefaultMemPoolProvider,
     pool::{MemPool, MemPoolCreateArgs},
     spawn_sub_mem_pool_task,
-    sync::p2p,
     traits::MemPoolErrorTxHandler,
 };
 use gw_p2p_network::P2PNetwork;
@@ -38,6 +37,7 @@ use gw_rpc_client::{
     rpc_client::RPCClient,
 };
 use gw_rpc_server::{
+    in_queue_request_map::InQueueRequestMap,
     registry::{Registry, RegistryArgs},
     server::start_jsonrpc_server,
 };
@@ -824,33 +824,55 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     //Broadcase shutdown event.
     let (shutdown_event, shutdown_event_recv) = broadcast::channel(1);
 
+    let in_queue_request_map = Arc::new(InQueueRequestMap::default());
+
     // P2P network.
     let p2p_control_and_handle = if let Some(ref p2p_network_config) = config.p2p_network_config {
         let mut protocols: Vec<ProtocolMeta> = Vec::new();
-        let mut sync_server_state: Option<Arc<Mutex<p2p::SyncServerState>>> = None;
+        // Mem-pool sync.
+        let mut sync_server_state: Option<Arc<Mutex<gw_mem_pool::sync::p2p::SyncServerState>>> =
+            None;
         match (&mem_pool, config.node_mode) {
             (Some(_), NodeMode::FullNode | NodeMode::Test) => {
                 log::info!("will enable mem-pool p2p sync server");
                 let s = Arc::new(Mutex::new(Default::default()));
                 sync_server_state = Some(s.clone());
-                protocols.push(p2p::sync_server_protocol(s));
+                protocols.push(gw_mem_pool::sync::p2p::sync_server_protocol(s));
             }
             (Some(mem_pool), NodeMode::ReadOnly) => {
                 log::info!("will enable mem-pool p2p sync client");
-                protocols.push(p2p::sync_client_protocol(
+                protocols.push(gw_mem_pool::sync::p2p::sync_client_protocol(
                     mem_pool.clone(),
                     shutdown_event.clone(),
                 ));
             }
             _ => {}
         }
+        // In queue request map sync.
+        match config.node_mode {
+            NodeMode::FullNode | NodeMode::Test => {
+                log::info!("will enable in queue request map sync server");
+                protocols.push(gw_rpc_server::in_queue_request_map::sync_server_protocol());
+            }
+            NodeMode::ReadOnly => {
+                log::info!("will enable in queue request map sync client");
+                protocols.push(gw_rpc_server::in_queue_request_map::sync_client_protocol(
+                    in_queue_request_map.clone(),
+                ));
+            }
+        }
         let mut network = P2PNetwork::init(p2p_network_config, protocols).await?;
         let control = network.control().clone();
+        // Mem-pool sync setting control.
         if let (Some(sync_server_state), Some(mem_pool)) = (sync_server_state, &mem_pool) {
             let mut mem_pool = mem_pool.lock().await;
             mem_pool
                 .enable_publishing(control.clone(), sync_server_state)
                 .await;
+        }
+        // In queue request map sync setting control.
+        if matches!(config.node_mode, NodeMode::FullNode | NodeMode::Test) {
+            in_queue_request_map.set_p2p_control(control.clone());
         }
         let handle = tokio::spawn(async move {
             log::info!("running the p2p network");
@@ -877,6 +899,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         last_submitted_tx_hash: block_producer
             .as_ref()
             .map(|bp| bp.last_submitted_tx_hash()),
+        in_queue_request_map,
     };
 
     let rpc_registry = Registry::create(args).await;
