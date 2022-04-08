@@ -162,7 +162,8 @@ pub fn wait_for_l2_tx(
     while start_time.elapsed() < retry_timeout {
         std::thread::sleep(Duration::from_secs(2));
 
-        let receipt = godwoken_rpc_client.get_transaction_receipt(tx_hash)?;
+        let receipt = tokio::runtime::Handle::current()
+            .block_on(godwoken_rpc_client.get_transaction_receipt(tx_hash))?;
 
         match receipt {
             Some(_) => {

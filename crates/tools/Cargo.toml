@@ -43,3 +43,4 @@ rand = "0.8"
 hex = "0.4"
 tokio = { version = "1.15", features = ["full"] }
 jsonrpc-core = "17"
+csv = "1.1.6"

@@ -98,12 +98,12 @@ pub fn privkey_to_short_script_hash(
     Ok(short_script_hash)
 }
 
-pub fn short_script_hash_to_account_id(
+pub async fn short_script_hash_to_account_id(
     godwoken_rpc_client: &mut GodwokenRpcClient,
     short_script_hash: &GwBytes,
 ) -> Result<Option<u32>> {
     let bytes = JsonBytes::from_bytes(short_script_hash.clone());
-    let script_hash = match godwoken_rpc_client.get_script_hash_by_short_script_hash(bytes)? {
+    let script_hash = match godwoken_rpc_client.get_script_hash_by_short_script_hash(bytes).await? {
         Some(h) => h,
         None => {
             return Err(anyhow!(
@@ -112,13 +112,15 @@ pub fn short_script_hash_to_account_id(
             ))
         }
     };
-    let account_id = godwoken_rpc_client.get_account_id_by_script_hash(script_hash)?;
+    let account_id = godwoken_rpc_client
+        .get_account_id_by_script_hash(script_hash)
+        .await?;
 
     Ok(account_id)
 }
 
 // address: 0x... / id: 1
-pub fn parse_account_short_script_hash(
+pub async fn parse_account_short_script_hash(
     godwoken: &mut GodwokenRpcClient,
     account: &str,
 ) -> Result<GwBytes> {
@@ -133,7 +135,7 @@ pub fn parse_account_short_script_hash(
         Ok(a) => a,
         Err(_) => return Err(anyhow!("account id parse error!")),
     };
-    let script_hash = godwoken.get_script_hash(account_id)?;
+    let script_hash = godwoken.get_script_hash(account_id).await?;
     let short_script_hash = GwBytes::from((&script_hash.as_bytes()[..20]).to_vec());
     Ok(short_script_hash)
 }
