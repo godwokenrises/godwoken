@@ -51,22 +51,26 @@ pub fn to_godwoken_short_address(
     Ok(())
 }
 
-pub fn to_eth_eoa_address(godwoken_rpc_url: &str, godwoken_short_address: &str) -> Result<()> {
+pub async fn to_eth_eoa_address(
+    godwoken_rpc_url: &str,
+    godwoken_short_address: &str,
+) -> Result<()> {
     if godwoken_short_address.len() != 42 || !godwoken_short_address.starts_with("0x") {
         return Err(anyhow!("godwoken short address format error!"));
     }
 
-    let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
+    let godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
     let short_address = GwBytes::from(hex::decode(
         godwoken_short_address.trim_start_matches("0x").as_bytes(),
     )?);
 
     let script_hash = godwoken_rpc_client
-        .get_script_hash_by_short_address(JsonBytes::from_bytes(short_address))?;
+        .get_script_hash_by_short_address(JsonBytes::from_bytes(short_address))
+        .await?;
 
     let script = match script_hash {
-        Some(h) => godwoken_rpc_client.get_script(h)?,
+        Some(h) => godwoken_rpc_client.get_script(h).await?,
         None => return Err(anyhow!("script hash not found!")),
     };
 

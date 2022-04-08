@@ -18,7 +18,7 @@ use crate::{
 };
 use gw_types::{bytes::Bytes as GwBytes, prelude::Pack as GwPack};
 
-pub fn create_creator_account(
+pub async fn create_creator_account(
     godwoken_rpc_url: &str,
     privkey_path: &Path,
     sudt_id: u32,
@@ -39,11 +39,11 @@ pub fn create_creator_account(
 
     let privkey = read_privkey(privkey_path)?;
     let from_address = privkey_to_short_address(&privkey, rollup_type_hash, &scripts_deployment)?;
-    let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;
+    let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address).await?;
     let from_id = from_id.expect("Account id of provided privkey not found!");
     log::info!("from id: {}", from_id);
 
-    let nonce = godwoken_rpc_client.get_nonce(from_id)?;
+    let nonce = godwoken_rpc_client.get_nonce(from_id).await?;
 
     let validator_script_hash = &config.backends[2].validator_script_type_hash;
 
@@ -58,7 +58,9 @@ pub fn create_creator_account(
     let l2_script_hash = l2_script.hash();
     log::info!("l2 script hash: 0x{}", hex::encode(l2_script_hash));
 
-    let account_id = godwoken_rpc_client.get_account_id_by_script_hash(l2_script_hash.into())?;
+    let account_id = godwoken_rpc_client
+        .get_account_id_by_script_hash(l2_script_hash.into())
+        .await?;
     if let Some(id) = account_id {
         log::info!("Creator account id already exists: {}", id);
         return Ok(());
@@ -83,8 +85,8 @@ pub fn create_creator_account(
         .args(args.as_bytes().pack())
         .build();
 
-    let sender_script_hash = godwoken_rpc_client.get_script_hash(from_id)?;
-    let receiver_script_hash = godwoken_rpc_client.get_script_hash(0)?;
+    let sender_script_hash = godwoken_rpc_client.get_script_hash(from_id).await?;
+    let receiver_script_hash = godwoken_rpc_client.get_script_hash(0).await?;
 
     let message = generate_transaction_message_to_sign(
         &account_raw_l2_transaction,
@@ -100,13 +102,14 @@ pub fn create_creator_account(
         .build();
 
     let json_bytes = JsonBytes::from_bytes(account_l2_transaction.as_bytes());
-    let tx_hash = godwoken_rpc_client.submit_l2transaction(json_bytes)?;
+    let tx_hash = godwoken_rpc_client.submit_l2transaction(json_bytes).await?;
     log::info!("tx hash: 0x{}", hex::encode(tx_hash.as_bytes()));
 
     wait_for_l2_tx(&mut godwoken_rpc_client, &tx_hash, 180, false)?;
 
     let account_id = godwoken_rpc_client
-        .get_account_id_by_script_hash(l2_script_hash.into())?
+        .get_account_id_by_script_hash(l2_script_hash.into())
+        .await?
         .expect("Creator account id not exist!");
     log::info!("Creator account id: {}", account_id);
 

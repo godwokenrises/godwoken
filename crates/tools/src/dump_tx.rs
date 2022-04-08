@@ -26,7 +26,7 @@ impl FromStr for ChallengeBlock {
     }
 }
 
-pub fn dump_tx(
+pub async fn dump_tx(
     godwoken_rpc_url: &str,
     block: ChallengeBlock,
     target_index: u32,
@@ -46,8 +46,10 @@ pub fn dump_tx(
         },
     };
 
-    let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
-    let dump_tx = godwoken_rpc_client.debug_dump_cancel_challenge_tx(challenge_target)?;
+    let godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
+    let dump_tx = godwoken_rpc_client
+        .debug_dump_cancel_challenge_tx(challenge_target)
+        .await?;
 
     let json_tx = serde_json::to_string_pretty(&dump_tx)?;
     write(output, json_tx)?;
