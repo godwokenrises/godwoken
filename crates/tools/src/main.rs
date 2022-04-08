@@ -13,6 +13,7 @@ pub mod godwoken_rpc;
 mod hasher;
 mod polyjuice;
 mod prepare_scripts;
+mod report_accounts;
 mod setup;
 mod stat;
 mod sudt;
@@ -788,6 +789,19 @@ async fn run_cli() -> Result<()> {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("report-accounts")
+                .about("Report account to csv files")
+                .arg(arg_godwoken_rpc_url.clone())
+                .arg(
+                    Arg::with_name("output")
+                        .short("o")
+                        .long("output")
+                        .takes_value(true)
+                        .required(true)
+                        .help("output file"),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("stat-custodian-ckb")
                 .about("Output amount of layer2 custodian CKB")
                 .arg(arg_indexer_rpc.clone())
@@ -1026,7 +1040,9 @@ async fn run_cli() -> Result<()> {
                 ckb_rpc_url.as_str(),
                 eth_address,
                 godwoken_rpc_url,
-            ) {
+            )
+            .await
+            {
                 log::error!("Deposit CKB error: {}", err);
                 std::process::exit(-1);
             };
@@ -1054,7 +1070,9 @@ async fn run_cli() -> Result<()> {
                 owner_ckb_address,
                 config_path,
                 scripts_deployment_path,
-            ) {
+            )
+            .await
+            {
                 log::error!("Withdrawal error: {}", err);
                 std::process::exit(-1);
             };
@@ -1110,7 +1128,9 @@ async fn run_cli() -> Result<()> {
                 fee,
                 config_path,
                 scripts_deployment_path,
-            ) {
+            )
+            .await
+            {
                 log::error!("Transfer error: {}", err);
                 std::process::exit(-1);
             };
@@ -1134,7 +1154,9 @@ async fn run_cli() -> Result<()> {
                 fee,
                 config_path,
                 scripts_deployment_path,
-            ) {
+            )
+            .await
+            {
                 log::error!("Create creator account error: {}", err);
                 std::process::exit(-1);
             };
@@ -1189,7 +1211,9 @@ async fn run_cli() -> Result<()> {
                 &config,
                 &scripts_deployment,
                 quiet,
-            ) {
+            )
+            .await
+            {
                 Ok(account_id) => account_id,
                 Err(err) => {
                     log::error!("Create Simple UDT account error: {}", err);
@@ -1209,7 +1233,7 @@ async fn run_cli() -> Result<()> {
                 .parse()
                 .expect("sudt id format error");
 
-            if let Err(err) = get_balance::get_balance(godwoken_rpc_url, account, sudt_id) {
+            if let Err(err) = get_balance::get_balance(godwoken_rpc_url, account, sudt_id).await {
                 log::error!("Get balance error: {}", err);
                 std::process::exit(-1);
             };
@@ -1252,7 +1276,9 @@ async fn run_cli() -> Result<()> {
                 gas_price,
                 data,
                 value,
-            ) {
+            )
+            .await
+            {
                 log::error!("Polyjuice deploy error: {}", err);
                 std::process::exit(-1);
             };
@@ -1297,7 +1323,9 @@ async fn run_cli() -> Result<()> {
                 data,
                 value,
                 to_address,
-            ) {
+            )
+            .await
+            {
                 log::error!("Polyjuice send error: {}", err);
                 std::process::exit(-1);
             };
@@ -1332,7 +1360,9 @@ async fn run_cli() -> Result<()> {
                 value,
                 to_address,
                 from,
-            ) {
+            )
+            .await
+            {
                 log::error!("Polyjuice call error: {}", err);
                 std::process::exit(-1);
             };
@@ -1355,7 +1385,8 @@ async fn run_cli() -> Result<()> {
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
             let short_script_hash = m.value_of("short-script-hash").unwrap();
 
-            if let Err(err) = address::to_eth_eoa_address(godwoken_rpc_url, short_script_hash) {
+            if let Err(err) = address::to_eth_eoa_address(godwoken_rpc_url, short_script_hash).await
+            {
                 log::error!("To eth address error: {}", err);
                 std::process::exit(-1);
             };
@@ -1372,7 +1403,8 @@ async fn run_cli() -> Result<()> {
             };
             let output = Path::new(m.value_of("output").unwrap());
 
-            if let Err(err) = dump_tx::dump_tx(godwoken_rpc_url, block, index, type_, output) {
+            if let Err(err) = dump_tx::dump_tx(godwoken_rpc_url, block, index, type_, output).await
+            {
                 log::error!("Dump offchain cancel challenge tx: {}", err);
                 std::process::exit(-1);
             };
@@ -1479,6 +1511,16 @@ async fn run_cli() -> Result<()> {
 
             let output = serde_json::to_string_pretty(&withdrawal_lock)?;
             println!("{}", output);
+        }
+        ("report-accounts", Some(m)) => {
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
+            let output_path = m.value_of("output").unwrap();
+
+            if let Err(err) = report_accounts::report_accounts(godwoken_rpc_url, output_path).await
+            {
+                log::error!("Error: {}", err);
+                std::process::exit(-1);
+            };
         }
         _ => {
             app.print_help().expect("print help");

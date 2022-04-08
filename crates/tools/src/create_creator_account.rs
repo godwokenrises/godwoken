@@ -23,7 +23,7 @@ use crate::{
 use gw_types::{bytes::Bytes as GwBytes, prelude::Pack as GwPack};
 
 /// create ETH Address Registry account
-fn create_eth_addr_reg_account(
+async fn create_eth_addr_reg_account(
     godwoken_rpc_client: &mut GodwokenRpcClient,
     privkey: &ckb_fixed_hash::H256,
     fee_amount: u64,
@@ -33,7 +33,7 @@ fn create_eth_addr_reg_account(
     let rollup_type_hash = &config.genesis.rollup_type_hash;
     let from_address =
         privkey_to_short_script_hash(privkey, rollup_type_hash, scripts_deploy_result)?;
-    let from_id = short_script_hash_to_account_id(godwoken_rpc_client, &from_address)?;
+    let from_id = short_script_hash_to_account_id(godwoken_rpc_client, &from_address).await?;
     let from_id = from_id.expect("Account id of provided privkey not found!");
 
     let eth_addr_reg_validator_script_hash = {
@@ -57,13 +57,13 @@ fn create_eth_addr_reg_account(
     );
 
     let eth_addr_reg_id =
-        godwoken_rpc_client.get_account_id_by_script_hash(eth_addr_reg_script_hash.into())?;
+        godwoken_rpc_client.get_account_id_by_script_hash(eth_addr_reg_script_hash.into()).await?;
     if let Some(id) = eth_addr_reg_id {
         log::info!("ETH Address Registry account already exists, id = {}", id);
         return Ok(id);
     }
 
-    let nonce = godwoken_rpc_client.get_nonce(from_id)?;
+    let nonce = godwoken_rpc_client.get_nonce(from_id).await?;
     let create_account = CreateAccount::new_builder()
         .script(eth_addr_reg_script)
         .fee(fee_amount.pack())
@@ -76,8 +76,8 @@ fn create_eth_addr_reg_account(
         .args(l2tx_args.as_bytes().pack())
         .build();
 
-    let sender_script_hash = godwoken_rpc_client.get_script_hash(from_id)?;
-    let receiver_script_hash = godwoken_rpc_client.get_script_hash(RESERVED_ACCOUNT_ID)?;
+    let sender_script_hash = godwoken_rpc_client.get_script_hash(from_id).await?;
+    let receiver_script_hash = godwoken_rpc_client.get_script_hash(RESERVED_ACCOUNT_ID).await?;
 
     let message = generate_transaction_message_to_sign(
         &raw_l2tx,
@@ -92,19 +92,19 @@ fn create_eth_addr_reg_account(
         .build();
 
     let json_bytes = JsonBytes::from_bytes(l2tx.as_bytes());
-    let tx_hash = godwoken_rpc_client.submit_l2transaction(json_bytes)?;
+    let tx_hash = godwoken_rpc_client.submit_l2transaction(json_bytes).await?;
     log::info!("tx hash: 0x{}", hex::encode(tx_hash.as_bytes()));
     wait_for_l2_tx(godwoken_rpc_client, &tx_hash, 180, false)?;
 
     let eth_addr_reg_id = godwoken_rpc_client
-        .get_account_id_by_script_hash(eth_addr_reg_script_hash.into())?
+        .get_account_id_by_script_hash(eth_addr_reg_script_hash.into()).await?
         .expect("ETH Address Registry account id");
     log::info!("ETH Address Registry account id: {}", eth_addr_reg_id);
 
     Ok(eth_addr_reg_id)
 }
 
-pub fn create_creator_account(
+pub async fn create_creator_account(
     godwoken_rpc_url: &str,
     privkey_path: &Path,
     sudt_id: u32,
@@ -131,12 +131,12 @@ pub fn create_creator_account(
         fee,
         &config,
         &scripts_deployment,
-    )
+    ).await
     .expect("create_eth_addr_reg_account success");
 
     let from_address =
         privkey_to_short_script_hash(&privkey, rollup_type_hash, &scripts_deployment)?;
-    let from_id = short_script_hash_to_account_id(&mut godwoken_rpc_client, &from_address)?;
+    let from_id = short_script_hash_to_account_id(&mut godwoken_rpc_client, &from_address).await?;
     let from_id = from_id.expect("Account id of provided privkey not found!");
     log::info!("from id: {}", from_id);
 
@@ -160,7 +160,9 @@ pub fn create_creator_account(
     let l2_script_hash = l2_script.hash();
     log::info!("l2 script hash: 0x{}", hex::encode(l2_script_hash));
 
-    let account_id = godwoken_rpc_client.get_account_id_by_script_hash(l2_script_hash.into())?;
+    let account_id = godwoken_rpc_client
+        .get_account_id_by_script_hash(l2_script_hash.into())
+        .await?;
     if let Some(id) = account_id {
         log::info!("Creator account id already exists: {}", id);
         return Ok(());
@@ -172,7 +174,7 @@ pub fn create_creator_account(
         .build();
 
     let l2tx_args = MetaContractArgs::new_builder().set(create_account).build();
-    let nonce = godwoken_rpc_client.get_nonce(from_id)?;
+    let nonce = godwoken_rpc_client.get_nonce(from_id).await?;
     let account_raw_l2_transaction = RawL2Transaction::new_builder()
         .from_id(from_id.pack())
         .to_id(RESERVED_ACCOUNT_ID.pack())
@@ -180,8 +182,8 @@ pub fn create_creator_account(
         .args(l2tx_args.as_bytes().pack())
         .build();
 
-    let sender_script_hash = godwoken_rpc_client.get_script_hash(from_id)?;
-    let receiver_script_hash = godwoken_rpc_client.get_script_hash(RESERVED_ACCOUNT_ID)?;
+    let sender_script_hash = godwoken_rpc_client.get_script_hash(from_id).await?;
+    let receiver_script_hash = godwoken_rpc_client.get_script_hash(RESERVED_ACCOUNT_ID).await?;
 
     let message = generate_transaction_message_to_sign(
         &account_raw_l2_transaction,
@@ -197,13 +199,14 @@ pub fn create_creator_account(
         .build();
 
     let json_bytes = JsonBytes::from_bytes(account_l2_transaction.as_bytes());
-    let tx_hash = godwoken_rpc_client.submit_l2transaction(json_bytes)?;
+    let tx_hash = godwoken_rpc_client.submit_l2transaction(json_bytes).await?;
     log::info!("tx hash: 0x{}", hex::encode(tx_hash.as_bytes()));
 
     wait_for_l2_tx(&mut godwoken_rpc_client, &tx_hash, 180, false)?;
 
     let account_id = godwoken_rpc_client
-        .get_account_id_by_script_hash(l2_script_hash.into())?
+        .get_account_id_by_script_hash(l2_script_hash.into())
+        .await?
         .expect("Creator account id not exist!");
     log::info!("Creator account id: {}", account_id);
 

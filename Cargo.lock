@@ -2211,6 +2211,7 @@ dependencies = [
  "ckb-sdk",
  "ckb-types",
  "clap",
+ "csv",
  "env_logger",
  "faster-hex 0.5.0",
  "gw-common",
