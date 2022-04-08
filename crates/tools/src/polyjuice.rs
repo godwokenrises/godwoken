@@ -22,7 +22,7 @@ use gw_types::{bytes::Bytes as GwBytes, prelude::Pack as GwPack};
 const GW_LOG_POLYJUICE_SYSTEM: u8 = 0x2;
 
 #[allow(clippy::too_many_arguments)]
-pub fn deploy(
+pub async fn deploy(
     godwoken_rpc_url: &str,
     config_path: &Path,
     scripts_deployment_path: &Path,
@@ -57,13 +57,14 @@ pub fn deploy(
         value,
         rollup_type_hash,
         &scripts_deployment,
-    )?;
+    )
+    .await?;
 
     Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn send_transaction(
+pub async fn send_transaction(
     godwoken_rpc_url: &str,
     config_path: &Path,
     scripts_deployment_path: &Path,
@@ -101,13 +102,14 @@ pub fn send_transaction(
         value,
         rollup_type_hash,
         &scripts_deployment,
-    )?;
+    )
+    .await?;
 
     Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn polyjuice_call(
+pub async fn polyjuice_call(
     godwoken_rpc_url: &str,
     gas_limit: u64,
     gas_price: u128,
@@ -125,13 +127,14 @@ pub fn polyjuice_call(
         to_address_str.trim_start_matches("0x").as_bytes(),
     )?);
 
-    let from_address = parse_account_short_address(&mut godwoken_rpc_client, from)?;
-    let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;
+    let from_address = parse_account_short_address(&mut godwoken_rpc_client, from).await?;
+    let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address).await?;
     let from_id = from_id.expect("from account not found!");
-    let nonce = godwoken_rpc_client.get_nonce(from_id)?;
+    let nonce = godwoken_rpc_client.get_nonce(from_id).await?;
 
     let to_script_hash = match godwoken_rpc_client
-        .get_script_hash_by_short_address(JsonBytes::from_bytes(to_address))?
+        .get_script_hash_by_short_address(JsonBytes::from_bytes(to_address))
+        .await?
     {
         Some(h) => h,
         None => {
@@ -141,7 +144,9 @@ pub fn polyjuice_call(
             ))
         }
     };
-    let to_id = godwoken_rpc_client.get_account_id_by_script_hash(to_script_hash)?;
+    let to_id = godwoken_rpc_client
+        .get_account_id_by_script_hash(to_script_hash)
+        .await?;
     let to_id = to_id.expect("to id not found!");
 
     let creator_account_id = 0u32;
@@ -158,7 +163,8 @@ pub fn polyjuice_call(
     log::info!("raw l2 transaction: {}", raw_l2transaction);
 
     let run_result = godwoken_rpc_client
-        .execute_raw_l2transaction(JsonBytes::from_bytes(raw_l2transaction.as_bytes()))?;
+        .execute_raw_l2transaction(JsonBytes::from_bytes(raw_l2transaction.as_bytes()))
+        .await?;
 
     let j = serde_json::to_value(run_result)?;
     log::info!("run result: {}", serde_json::to_string_pretty(&j).unwrap());
@@ -167,7 +173,7 @@ pub fn polyjuice_call(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn send(
+async fn send(
     godwoken_rpc_client: &mut GodwokenRpcClient,
     to_address: GwBytes,
     creator_account_id: u32,
@@ -187,18 +193,22 @@ fn send(
 
     let l2_script_hash = privkey_to_l2_script_hash(privkey, rollup_type_hash, scripts_deployment)?;
     let from_address = l2_script_hash_to_short_address(&l2_script_hash);
-    let from_id = short_address_to_account_id(godwoken_rpc_client, &from_address)?
+    let from_id = short_address_to_account_id(godwoken_rpc_client, &from_address)
+        .await?
         .expect("Can find account id by privkey!");
 
-    let nonce = godwoken_rpc_client.get_nonce(from_id)?;
+    let nonce = godwoken_rpc_client.get_nonce(from_id).await?;
 
     let to_id = match to_address.clone() {
         None => creator_account_id,
         Some(addr) => {
             let script_hash = godwoken_rpc_client
-                .get_script_hash_by_short_address(JsonBytes::from_bytes(addr))?;
+                .get_script_hash_by_short_address(JsonBytes::from_bytes(addr))
+                .await?;
             let script_hash = script_hash.expect("to script_hash not found!");
-            let id = godwoken_rpc_client.get_account_id_by_script_hash(script_hash)?;
+            let id = godwoken_rpc_client
+                .get_account_id_by_script_hash(script_hash)
+                .await?;
 
             id.expect("to id not found!")
         }
@@ -214,8 +224,8 @@ fn send(
         .args(args.pack())
         .build();
 
-    let sender_script_hash = godwoken_rpc_client.get_script_hash(from_id)?;
-    let receiver_script_hash = godwoken_rpc_client.get_script_hash(to_id)?;
+    let sender_script_hash = godwoken_rpc_client.get_script_hash(from_id).await?;
+    let receiver_script_hash = godwoken_rpc_client.get_script_hash(to_id).await?;
     let message = generate_transaction_message_to_sign(
         &raw_l2_transaction,
         rollup_type_hash,
@@ -229,8 +239,9 @@ fn send(
         .signature(signature.pack())
         .build();
 
-    let tx_hash =
-        godwoken_rpc_client.submit_l2transaction(JsonBytes::from_bytes(l2_tx.as_bytes()))?;
+    let tx_hash = godwoken_rpc_client
+        .submit_l2transaction(JsonBytes::from_bytes(l2_tx.as_bytes()))
+        .await?;
     log::info!("tx hash: 0x{}", hex::encode(tx_hash.as_bytes()));
 
     let tx_receipt = wait_for_l2_tx(godwoken_rpc_client, &tx_hash, 180, false)?;

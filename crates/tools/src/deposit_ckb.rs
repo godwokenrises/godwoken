@@ -24,7 +24,7 @@ use std::time::{Duration, Instant};
 use std::u128;
 
 #[allow(clippy::too_many_arguments)]
-pub fn deposit_ckb(
+pub async fn deposit_ckb(
     privkey_path: &Path,
     scripts_deployment_path: &Path,
     config_path: &Path,
@@ -111,7 +111,7 @@ pub fn deposit_ckb(
     log::info!("short address: 0x{}", hex::encode(short_address));
 
     let init_balance =
-        get_balance_by_short_address(&mut godwoken_rpc_client, short_address.to_vec())?;
+        get_balance_by_short_address(&mut godwoken_rpc_client, short_address.to_vec()).await?;
 
     let output = run_cmd(vec![
         "--url",
@@ -138,7 +138,8 @@ pub fn deposit_ckb(
         &l2_lock_hash,
         init_balance,
         180u64,
-    )?;
+    )
+    .await?;
 
     Ok(())
 }
@@ -154,7 +155,7 @@ fn privkey_to_lock_hash(privkey: &H256) -> Result<H256> {
     Ok(lock_hash)
 }
 
-fn wait_for_balance_change(
+async fn wait_for_balance_change(
     godwoken_rpc_client: &mut GodwokenRpcClient,
     from_script_hash: &H256,
     init_balance: u128,
@@ -166,7 +167,8 @@ fn wait_for_balance_change(
         std::thread::sleep(Duration::from_secs(2));
 
         let short_address = &from_script_hash.as_bytes()[..20];
-        let balance = get_balance_by_short_address(godwoken_rpc_client, short_address.to_vec())?;
+        let balance =
+            get_balance_by_short_address(godwoken_rpc_client, short_address.to_vec()).await?;
         log::info!(
             "current balance: {}, waiting for {} secs.",
             balance,
@@ -176,7 +178,8 @@ fn wait_for_balance_change(
         if balance != init_balance {
             log::info!("deposit success!");
             let account_id = godwoken_rpc_client
-                .get_account_id_by_script_hash(from_script_hash.clone())?
+                .get_account_id_by_script_hash(from_script_hash.clone())
+                .await?
                 .unwrap();
             log::info!("Your account id: {}", account_id);
             return Ok(());
@@ -185,12 +188,12 @@ fn wait_for_balance_change(
     Err(anyhow!("Timeout: {:?}", retry_timeout))
 }
 
-fn get_balance_by_short_address(
+async fn get_balance_by_short_address(
     godwoken_rpc_client: &mut GodwokenRpcClient,
     short_address: Vec<u8>,
 ) -> Result<u128> {
     let bytes = JsonBytes::from_vec(short_address);
-    let balance = godwoken_rpc_client.get_balance(bytes, 1)?;
+    let balance = godwoken_rpc_client.get_balance(bytes, 1).await?;
     Ok(balance)
 }
 
