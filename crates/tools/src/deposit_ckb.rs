@@ -192,7 +192,7 @@ async fn get_balance_by_script_hash(
 ) -> Result<u128> {
     let addr = godwoken_rpc_client
         .get_registry_address_by_script_hash(script_hash)
-        .await?;
+        .await;
     let balance = match addr {
         Ok(reg_addr) => {
             godwoken_rpc_client
