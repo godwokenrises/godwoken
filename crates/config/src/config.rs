@@ -44,8 +44,6 @@ pub struct Config {
     pub reload_config_github_url: Option<GithubConfigUrl>,
     #[serde(default)]
     pub dynamic_config: DynamicConfig,
-    #[serde(default)]
-    pub eth_eoa_mapping_config: Option<EthEoaMappingConfig>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -369,11 +367,6 @@ impl Default for FeeConfig {
             eth_addr_reg_cycles_limit: 20000, // 1176198 cycles used
         }
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct EthEoaMappingConfig {
-    pub register_wallet_config: WalletConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

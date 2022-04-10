@@ -379,7 +379,6 @@ pub async fn setup_chain_with_account_lock_manage(
         config: mem_pool_config,
         node_mode: gw_config::NodeMode::FullNode,
         dynamic_config_manager: Default::default(),
-        eth_eoa_mapping_register: None,
     };
     let mem_pool = MemPool::create(args).await.unwrap();
     Chain::create(
