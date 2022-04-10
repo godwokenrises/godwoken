@@ -11,7 +11,7 @@ use ckb_types::{
     prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity, prelude::Pack as CKBPack,
     prelude::Unpack as CKBUnpack,
 };
-use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
+use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
 use gw_types::packed::{CellOutput, CustodianLockArgs};
 use gw_types::{
     bytes::Bytes as GwBytes,
@@ -111,6 +111,7 @@ pub async fn deposit_ckb(
     log::info!("script hash: 0x{}", hex::encode(l2_lock_hash.as_bytes()));
 
     let init_balance = get_balance_by_script_hash(&mut godwoken_rpc_client, &l2_lock_hash).await?;
+    log::info!("balance before deposit: {}", init_balance);
 
     let output = run_cmd(vec![
         "--url",
@@ -192,7 +193,17 @@ async fn get_balance_by_script_hash(
     let addr = godwoken_rpc_client
         .get_registry_address_by_script_hash(script_hash)
         .await?;
-    let balance = godwoken_rpc_client.get_balance(&addr, 1).await?;
+    let balance = match addr {
+        Ok(reg_addr) => {
+            godwoken_rpc_client
+                .get_balance(&reg_addr, CKB_SUDT_ACCOUNT_ID)
+                .await?
+        }
+        Err(e) => {
+            log::warn!("failed to get_registry_address_by_script_hash, {}", e);
+            0
+        }
+    };
     Ok(balance)
 }
 
