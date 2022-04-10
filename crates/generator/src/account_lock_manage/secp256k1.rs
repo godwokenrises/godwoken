@@ -52,7 +52,7 @@ impl Secp256k1 {
         let pubkey_hash = self.recover(message, signature.as_ref())?;
         if pubkey_hash.as_ref() != expected_pubkey_hash {
             return Err(LockAlgorithmError::InvalidSignature(
-                "Mismatch pubkey hash".to_string(),
+                "Secp256k1: Mismatch pubkey hash".to_string(),
             ));
         }
         Ok(())
@@ -152,7 +152,7 @@ impl Secp256k1Eth {
         let pubkey_hash = self.recover(message, signature.as_ref())?;
         if pubkey_hash.as_ref() != expected_pubkey_hash {
             return Err(LockAlgorithmError::InvalidSignature(
-                "Mismatch pubkey hash".to_string(),
+                "Secp256k1Eth: Mismatch pubkey hash".to_string(),
             ));
         }
         Ok(())
@@ -301,7 +301,7 @@ impl Secp256k1Tron {
         let pubkey_hash = self.recover(signing_message, signature.as_ref())?;
         if pubkey_hash.as_ref() != expected_pubkey_hash {
             return Err(LockAlgorithmError::InvalidSignature(
-                "Mismatch pubkey hash".to_string(),
+                "Secp256k1Tron: Mismatch pubkey hash".to_string(),
             ));
         }
         Ok(())
