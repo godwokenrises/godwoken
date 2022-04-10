@@ -3,6 +3,7 @@ use ckb_jsonrpc_types::JsonBytes;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::builtins::{ETH_REGISTRY_ACCOUNT_ID, RESERVED_ACCOUNT_ID};
 use gw_config::BackendType;
+use gw_generator::account_lock_manage::eip712::{self, traits::EIP712Encode};
 use gw_types::{
     core::ScriptHashType,
     packed::{CreateAccount, Fee, L2Transaction, MetaContractArgs, RawL2Transaction, Script},
@@ -10,13 +11,10 @@ use gw_types::{
 use std::path::Path;
 
 use crate::{
-    account::{eth_sign, privkey_to_l2_script_hash, read_privkey},
+    account::{eth_sign, privkey_to_eth_address, privkey_to_l2_script_hash, read_privkey},
     godwoken_rpc::GodwokenRpcClient,
     types::ScriptsDeploymentResult,
-    utils::{
-        message::generate_transaction_message_to_sign,
-        transaction::{read_config, wait_for_l2_tx},
-    },
+    utils::transaction::{read_config, wait_for_l2_tx},
 };
 use gw_types::{bytes::Bytes as GwBytes, prelude::Pack as GwPack};
 
@@ -88,28 +86,43 @@ pub async fn create_creator_account(
 
     let l2tx_args = MetaContractArgs::new_builder().set(create_account).build();
     let nonce = godwoken_rpc_client.get_nonce(from_id).await?;
-    let account_raw_l2_transaction = RawL2Transaction::new_builder()
+    let chain_id: u64 = config.genesis.rollup_config.chain_id.into();
+    let raw_l2_transaction = RawL2Transaction::new_builder()
+        .chain_id(chain_id.pack())
         .from_id(from_id.pack())
         .to_id(RESERVED_ACCOUNT_ID.pack())
         .nonce(nonce.pack())
         .args(l2tx_args.as_bytes().pack())
         .build();
 
-    let sender_script_hash = godwoken_rpc_client.get_script_hash(from_id).await?;
-    let receiver_script_hash = godwoken_rpc_client
+    let from_address = privkey_to_eth_address(&privkey)
+        .expect("privkey_to_eth_address")
+        .to_vec();
+    let sender_address =
+        gw_common::registry_address::RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, from_address);
+    let receiver_script_hash: [u8; 32] = godwoken_rpc_client
         .get_script_hash(RESERVED_ACCOUNT_ID)
-        .await?;
-
-    let message = generate_transaction_message_to_sign(
-        &account_raw_l2_transaction,
-        rollup_type_hash,
-        &sender_script_hash,
-        &receiver_script_hash,
-    );
-
-    let signature = eth_sign(&message, privkey)?;
+        .await?
+        .into();
+    let message = {
+        let typed_tx = eip712::types::L2Transaction::from_raw(
+            raw_l2_transaction.clone(),
+            sender_address,
+            receiver_script_hash.into(),
+        )
+        .unwrap();
+        let domain_seperator = eip712::types::EIP712Domain {
+            name: "Godwoken".to_string(),
+            version: "1".to_string(),
+            chain_id,
+            verifying_contract: None,
+            salt: None,
+        };
+        typed_tx.eip712_message(EIP712Encode::hash_struct(&domain_seperator))
+    };
+    let signature = eth_sign(&message.into(), privkey)?;
     let account_l2_transaction = L2Transaction::new_builder()
-        .raw(account_raw_l2_transaction)
+        .raw(raw_l2_transaction)
         .signature(signature.pack())
         .build();
 
