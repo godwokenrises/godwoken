@@ -30,7 +30,6 @@ gw-utils = { path = "../utils" }
 gw-version = { path = "../version" }
 gw-ckb-hardfork = { path = "../ckb-hardfork" }
 gw-dynamic-config = { path = "../dynamic-config"}
-gw-eoa-mapping = { path = "../eoa-mapping" }
 ckb-crypto = "0.100.0"
 ckb-fixed-hash = "0.100.0"
 ckb-types = "0.100.0"

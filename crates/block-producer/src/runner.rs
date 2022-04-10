@@ -13,10 +13,9 @@ use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainMockContextBuildArgs};
 use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH, GLOBAL_VM_VERSION};
 use gw_common::{blake2b::new_blake2b, registry_address::RegistryAddress, H256};
-use gw_config::{BackendType, BlockProducerConfig, Config, NodeMode};
+use gw_config::{BlockProducerConfig, Config, NodeMode};
 use gw_db::migrate::open_or_create_db;
 use gw_dynamic_config::manager::DynamicConfigManager;
-use gw_eoa_mapping::eth_register::EthEoaMappingRegister;
 use gw_generator::{
     account_lock_manage::{
         secp256k1::{Secp256k1Eth, Secp256k1Tron},
@@ -597,44 +596,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     let opt_ws_listen = config.rpc_server.err_receipt_ws_listen.as_ref();
                     opt_ws_listen.map(|_| NotifyService::new().start())
                 };
-                let eth_eoa_mapping_register = match config.eth_eoa_mapping_config.as_ref() {
-                    Some(eth_mapping_config) => {
-                        let wallet =
-                            Wallet::from_config(&eth_mapping_config.register_wallet_config)
-                                .with_context(|| "eoa mapping register")?;
-                        let eth_lock_code_hash = {
-                            let mut type_hashes =
-                                base.rollup_config.allowed_eoa_type_hashes().into_iter();
-                            let eth_type_hash = type_hashes
-                                .find(|th| th.type_() == AllowedEoaType::Eth.into())
-                                .ok_or_else(|| {
-                                    anyhow!("eth eoa mapping eth lock account hash not found")
-                                })?;
-                            eth_type_hash.hash().unpack()
-                        };
-                        // Search eth registry from backend
-                        let eth_registry_code_hash = {
-                            let opt_backend = base.generator.get_backends().iter().find(
-                                |(_code_hash, backend)| {
-                                    backend.backend_type == BackendType::EthAddrReg
-                                },
-                            );
-                            match opt_backend {
-                                Some((code_hash, _)) => code_hash,
-                                None => bail!("eth eoa mapping registry backend not found"),
-                            }
-                        };
-                        let eth_eoa_mapping_register = EthEoaMappingRegister::create(
-                            base.rollup_context.rollup_script_hash,
-                            *eth_registry_code_hash,
-                            eth_lock_code_hash,
-                            wallet,
-                        )?;
-
-                        Some(eth_eoa_mapping_register)
-                    }
-                    None => None,
-                };
                 let mem_pool = {
                     let block_producer = RegistryAddress::new(
                         block_producer_config.block_producer.registry_id,
@@ -654,7 +615,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                         config: config.mem_pool.clone(),
                         node_mode: config.node_mode,
                         dynamic_config_manager: base.dynamic_config_manager.clone(),
-                        eth_eoa_mapping_register,
                     };
                     Arc::new(Mutex::new(
                         MemPool::create(args)

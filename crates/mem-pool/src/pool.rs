@@ -14,7 +14,6 @@ use gw_common::{
 };
 use gw_config::{MemPoolConfig, NodeMode};
 use gw_dynamic_config::manager::DynamicConfigManager;
-use gw_eoa_mapping::eth_register::EthEoaMappingRegister;
 use gw_generator::{
     constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, ArcSwap, Generator,
 };
@@ -96,7 +95,6 @@ pub struct MemPool {
     node_mode: NodeMode,
     mem_pool_state: Arc<MemPoolState>,
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
-    eth_eoa_mapping_register: Option<EthEoaMappingRegister>,
 }
 
 pub struct MemPoolCreateArgs {
@@ -109,7 +107,6 @@ pub struct MemPoolCreateArgs {
     pub config: MemPoolConfig,
     pub node_mode: NodeMode,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
-    pub eth_eoa_mapping_register: Option<EthEoaMappingRegister>,
 }
 
 impl Drop for MemPool {
@@ -134,7 +131,6 @@ impl MemPool {
             config,
             node_mode,
             dynamic_config_manager,
-            eth_eoa_mapping_register,
         } = args;
         let pending = Default::default();
 
@@ -191,7 +187,6 @@ impl MemPool {
             node_mode,
             mem_pool_state,
             dynamic_config_manager,
-            eth_eoa_mapping_register,
         };
 
         // update mem block info
@@ -250,10 +245,6 @@ impl MemPool {
 
     pub fn set_provider(&mut self, provider: Box<dyn MemPoolProvider + Send + Sync>) {
         self.provider = provider;
-    }
-
-    pub fn set_eth_eoa_mapping_register(&mut self, register: EthEoaMappingRegister) {
-        self.eth_eoa_mapping_register = Some(register);
     }
 
     pub fn is_mem_txs_full(&self, expect_slots: usize) -> bool {
@@ -746,7 +737,6 @@ impl MemPool {
         // deposits
         let deposit_cells = self.pending_deposits.clone();
         self.finalize_deposits(deposit_cells.clone()).await?;
-        self.scan_and_register_eth_mapping(db).await?;
 
         // Register eth eoa mapping
         // Fan-out next mem block to readonly node
@@ -1122,89 +1112,6 @@ impl MemPool {
         }
 
         Ok(tx_receipt)
-    }
-
-    async fn scan_and_register_eth_mapping(&mut self, db: &StoreTransaction) -> Result<()> {
-        let eth_eoa_mapping_register = match self.eth_eoa_mapping_register.as_ref() {
-            Some(register) => register,
-            None => return Ok(()),
-        };
-
-        let snap = self.mem_pool_state.load();
-        let state = snap.state()?;
-        {
-            let script_hash = eth_eoa_mapping_register.registry_script_hash();
-            if state.get_account_id_by_script_hash(&script_hash)?.is_none() {
-                log::error!("[eoa mapping] eth registry(contract) account not found");
-                return Ok(());
-            }
-
-            let script_hash = eth_eoa_mapping_register.register_account_script_hash();
-            if state.get_account_id_by_script_hash(&script_hash)?.is_none() {
-                log::error!("[eoa mapping] eth register(tx_builder) account not found");
-                return Ok(());
-            }
-        }
-
-        let mut from_id = None;
-        let mut to_id = None;
-
-        // Scan new eth accounts
-        let mem_block_prev_account_count: u32 =
-            self.mem_block().prev_merkle_state().count().unpack();
-        let mem_block_account_count =
-            { self.mem_pool_state().load().get_mem_block_account_count()? }
-                .ok_or_else(|| anyhow!("none mem block accouont count"))?;
-        if mem_block_account_count != mem_block_prev_account_count {
-            from_id = Some(mem_block_prev_account_count);
-            to_id = Some(mem_block_account_count.saturating_sub(1));
-        }
-
-        // Check parent block new accounts
-        const MAX_PARENT_BLOCKS: u64 = 100;
-        let last_valid_tip_block_hash = db.get_last_valid_tip_block_hash()?;
-        if last_valid_tip_block_hash == self.current_tip.0 {
-            let max_parent_block_number = self.current_tip.1.saturating_sub(MAX_PARENT_BLOCKS);
-
-            let parent_block_hash = { db.get_block_hash_by_number(max_parent_block_number)? }
-                .ok_or_else(|| anyhow!("{} block hash not found", max_parent_block_number))?;
-            let parent_block = { db.get_block(&parent_block_hash)? }
-                .ok_or_else(|| anyhow!("{} block not found", max_parent_block_number))?;
-            let prev_account_count: u32 = parent_block.raw().prev_account().count().unpack();
-
-            if to_id.is_none() && prev_account_count == mem_block_prev_account_count {
-                // No new account
-                return Ok(());
-            }
-
-            from_id = Some(prev_account_count);
-            if to_id.is_none() {
-                to_id = Some(mem_block_prev_account_count.saturating_sub(1));
-            }
-        }
-
-        if let (Some(from_id), Some(to_id)) = (from_id, to_id) {
-            let t = Instant::now();
-
-            let unregistered_account_hashes =
-                eth_eoa_mapping_register.filter_accounts(&state, from_id, to_id)?;
-            if unregistered_account_hashes.is_empty() {
-                return Ok(());
-            }
-
-            log::debug!(
-                "[eoa mapping] filter from {} to {}: {}ms",
-                from_id,
-                to_id,
-                t.elapsed().as_millis()
-            );
-
-            let tx =
-                eth_eoa_mapping_register.build_register_tx(&state, unregistered_account_hashes)?;
-            self.push_transaction(tx).await?;
-        }
-
-        Ok(())
     }
 
     // Only **ReadOnly** node needs this.
