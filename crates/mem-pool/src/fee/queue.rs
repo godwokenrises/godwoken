@@ -1,10 +1,10 @@
 use anyhow::Result;
 use gw_common::state::State;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BTreeSet, HashMap};
 use tracing::instrument;
 
 /// Max queue size
-const MAX_QUEUE_SIZE: usize = 10000;
+const MAX_QUEUE_SIZE: usize = 100_000;
 /// Drop size when queue is full
 const DROP_SIZE: usize = 100;
 
@@ -13,20 +13,23 @@ use super::types::FeeEntry;
 /// Txs & withdrawals queue sorted by fee rate
 pub struct FeeQueue {
     // priority queue to store tx and withdrawal
-    queue: BinaryHeap<FeeEntry>,
+    queue: BTreeSet<FeeEntry>,
 }
 
 impl FeeQueue {
+    #[inline]
     pub fn new() -> Self {
         Self {
-            queue: BinaryHeap::with_capacity(MAX_QUEUE_SIZE + DROP_SIZE),
+            queue: BTreeSet::new(),
         }
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.queue.len()
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.queue.is_empty()
     }
@@ -41,30 +44,32 @@ impl FeeQueue {
             entry.item.kind(),
             hex::encode(entry.item.hash().as_slice())
         );
-        self.queue.push(entry);
+        self.queue.insert(entry);
 
         // drop items if full
         if self.is_full() {
-            let mut new_queue = BinaryHeap::with_capacity(MAX_QUEUE_SIZE + DROP_SIZE);
-            let expected_len = self.queue.len().saturating_sub(DROP_SIZE);
-            while let Some(entry) = self.queue.pop() {
-                new_queue.push(entry);
-                if new_queue.len() >= expected_len {
-                    break;
-                }
+            if let Some(first_to_keep) = self.queue.iter().nth(DROP_SIZE + 1).cloned() {
+                self.queue = self.queue.split_off(&first_to_keep);
             }
-            self.queue = new_queue;
             log::debug!(
-                "QueueLen: {} | Fee queue is full, drop {} items, new size: {}",
+                "QueueLen: {} | Fee queue is full, drop {} items",
                 self.len(),
                 DROP_SIZE,
-                expected_len
             );
         }
     }
 
+    #[inline]
     pub fn is_full(&self) -> bool {
         self.queue.len() > MAX_QUEUE_SIZE
+    }
+
+    fn pop_last(&mut self) -> Option<FeeEntry> {
+        if let Some(entry) = self.queue.iter().next_back().cloned() {
+            self.queue.take(&entry)
+        } else {
+            None
+        }
     }
 
     /// Fetch items by fee sort
@@ -77,7 +82,7 @@ impl FeeQueue {
         let mut future_queue = Vec::default();
 
         // Fetch item from PQ
-        while let Some(entry) = self.queue.pop() {
+        while let Some(entry) = self.pop_last() {
             let nonce = match fetched_senders.get(&entry.sender) {
                 Some(&nonce) => nonce,
                 None => state.get_nonce(entry.sender)?,
@@ -138,6 +143,7 @@ impl FeeQueue {
 }
 
 impl Default for FeeQueue {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
