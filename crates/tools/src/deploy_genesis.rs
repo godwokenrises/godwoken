@@ -287,17 +287,8 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
             .hash(eth_hash)
             .build();
 
-        let tron_hash = GwPack::pack(&scripts_result.tron_account_lock.script_type_hash);
-        let tron = gw_packed::AllowedTypeHash::new_builder()
-            .type_(AllowedEoaType::Tron.into())
-            .hash(tron_hash)
-            .build();
-
-        let mut type_hashes = vec![eth, tron];
-        let builtin_hashes = vec![
-            &scripts_result.eth_account_lock.script_type_hash,
-            &scripts_result.tron_account_lock.script_type_hash,
-        ];
+        let mut type_hashes = vec![eth];
+        let builtin_hashes = vec![&scripts_result.eth_account_lock.script_type_hash];
 
         let user_hashes: HashSet<_> =
             HashSet::from_iter(&user_rollup_config.allowed_eoa_type_hashes);

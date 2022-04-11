@@ -11,8 +11,8 @@ use gw_types::{
     core::ScriptHashType,
     packed::{
         BlockInfo, CellOutput, CreateAccount, DepositRequest, ETHAddrRegArgs, ETHAddrRegArgsUnion,
-        EthToGw, GwToEth, L2BlockCommittedInfo, L2Transaction, MetaContractArgs, RawL2Transaction,
-        Script, Fee,
+        EthToGw, Fee, GwToEth, L2BlockCommittedInfo, L2Transaction, MetaContractArgs,
+        RawL2Transaction, Script,
     },
     prelude::{Pack, Unpack},
 };

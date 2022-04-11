@@ -62,7 +62,6 @@ pub struct ScriptsDeploymentResult {
     pub meta_contract_validator: DeployItem,
     pub l2_sudt_validator: DeployItem,
     pub eth_account_lock: DeployItem,
-    pub tron_account_lock: DeployItem,
     pub polyjuice_validator: DeployItem,
     pub eth_addr_reg_validator: DeployItem,
 }
@@ -102,8 +101,6 @@ pub struct Programs {
 
     // path: godwoken-scripts/c/build/account_locks/eth-account-lock
     pub eth_account_lock: PathBuf,
-    // path: godwoken-scripts/c/build/account_locks/tron-account-lock
-    pub tron_account_lock: PathBuf,
 
     // path: godwoken-scripts/c/build/meta-contract-validator
     pub meta_contract_validator: PathBuf,
