@@ -133,7 +133,6 @@ pub fn deploy_scripts(
         &scripts_result.programs.state_validator,
         &scripts_result.programs.l2_sudt_validator,
         &scripts_result.programs.eth_account_lock,
-        &scripts_result.programs.tron_account_lock,
         &scripts_result.programs.meta_contract_validator,
         &scripts_result.programs.polyjuice_validator,
         &scripts_result.programs.eth_addr_reg_validator,
@@ -223,13 +222,6 @@ pub fn deploy_scripts(
         &target_lock,
         &target_address,
     )?;
-    let tron_account_lock = deploy_program(
-        privkey_path,
-        &mut rpc_client,
-        &scripts_result.programs.tron_account_lock,
-        &target_lock,
-        &target_address,
-    )?;
     // FIXME: write godwoken-polyjuice binary to named temp file then use the path
     let polyjuice_validator = deploy_program(
         privkey_path,
@@ -256,7 +248,6 @@ pub fn deploy_scripts(
         l2_sudt_validator,
         meta_contract_validator,
         eth_account_lock,
-        tron_account_lock,
         polyjuice_validator,
         eth_addr_reg_validator,
     };

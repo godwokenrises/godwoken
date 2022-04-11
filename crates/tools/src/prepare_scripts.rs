@@ -313,7 +313,6 @@ fn generate_script_deploy_config(
         state_validator: get_path("state_validator"),
         l2_sudt_validator: get_path("l2_sudt_validator"),
         eth_account_lock: get_path("eth_account_lock"),
-        tron_account_lock: get_path("tron_account_lock"),
         meta_contract_validator: get_path("meta_contract_validator"),
         polyjuice_validator: get_path("polyjuice_validator"),
         eth_addr_reg_validator: get_path("eth_addr_reg_validator"),

@@ -322,15 +322,6 @@ async fn query_contracts_script(
         deployment.eth_account_lock.script_type_hash
     );
 
-    let tron_account_lock = query(
-        "tron account",
-        deployment.tron_account_lock.cell_dep.clone(),
-    )
-    .await?;
-    assert_eq!(
-        tron_account_lock.hash(),
-        deployment.tron_account_lock.script_type_hash
-    );
     // Allowed contract script deps
     let meta_validator = query("meta", deployment.meta_contract_validator.cell_dep.clone()).await?;
     assert_eq!(
@@ -361,10 +352,8 @@ async fn query_contracts_script(
         deployment.eth_addr_reg_validator.script_type_hash
     );
 
-    let allowed_eoa_scripts: HashMap<_, _> = HashMap::from_iter([
-        (eth_account_lock.hash(), eth_account_lock),
-        (tron_account_lock.hash(), tron_account_lock),
-    ]);
+    let allowed_eoa_scripts: HashMap<_, _> =
+        HashMap::from_iter([(eth_account_lock.hash(), eth_account_lock)]);
 
     let allowed_contract_scripts: HashMap<_, _> = HashMap::from_iter([
         (meta_validator.hash(), meta_validator),
