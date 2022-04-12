@@ -9,6 +9,7 @@ use std::convert::{TryFrom, TryInto};
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct RawL2Transaction {
+    pub chain_id: Uint64, // chain id
     pub from_id: Uint32,
     pub to_id: Uint32,
     pub nonce: Uint32,
@@ -18,6 +19,7 @@ pub struct RawL2Transaction {
 impl From<RawL2Transaction> for packed::RawL2Transaction {
     fn from(tx: RawL2Transaction) -> Self {
         let RawL2Transaction {
+            chain_id,
             from_id,
             to_id,
             nonce,
@@ -25,6 +27,7 @@ impl From<RawL2Transaction> for packed::RawL2Transaction {
         } = tx;
         let args: Bytes = args.into_bytes();
         packed::RawL2Transaction::new_builder()
+            .chain_id(u64::from(chain_id).pack())
             .from_id(u32::from(from_id).pack())
             .to_id(u32::from(to_id).pack())
             .nonce(u32::from(nonce).pack())
@@ -38,10 +41,12 @@ impl From<packed::RawL2Transaction> for RawL2Transaction {
         let from_id: u32 = raw_l2_transaction.from_id().unpack();
         let to_id: u32 = raw_l2_transaction.to_id().unpack();
         let nonce: u32 = raw_l2_transaction.nonce().unpack();
+        let chain_id: u64 = raw_l2_transaction.chain_id().unpack();
         Self {
             from_id: from_id.into(),
             to_id: to_id.into(),
             nonce: nonce.into(),
+            chain_id: chain_id.into(),
             args: JsonBytes::from_bytes(raw_l2_transaction.args().unpack()),
         }
     }
@@ -368,7 +373,7 @@ impl From<packed::L2Block> for L2Block {
 pub struct RawL2Block {
     pub number: Uint64,
     pub parent_block_hash: H256,
-    pub block_producer: Bytes,
+    pub block_producer: JsonBytes,
     pub stake_cell_owner_lock_hash: H256,
     pub timestamp: Uint64,
     pub prev_account: AccountMerkleState,
@@ -401,7 +406,7 @@ impl From<RawL2Block> for packed::RawL2Block {
         packed::RawL2Block::new_builder()
             .number(u64::from(number).pack())
             .parent_block_hash(parent_block_hash.pack())
-            .block_producer(block_producer.pack())
+            .block_producer(block_producer.as_bytes().pack())
             .stake_cell_owner_lock_hash(stake_cell_owner_lock_hash.pack())
             .timestamp(u64::from(timestamp).pack())
             .prev_account(prev_account.into())
@@ -416,7 +421,7 @@ impl From<RawL2Block> for packed::RawL2Block {
 impl From<packed::RawL2Block> for RawL2Block {
     fn from(raw_l2_block: packed::RawL2Block) -> RawL2Block {
         let number: u64 = raw_l2_block.number().unpack();
-        let block_producer: Bytes = raw_l2_block.block_producer().unpack();
+        let block_producer = JsonBytes::from_vec(raw_l2_block.block_producer().unpack());
         let timestamp: u64 = raw_l2_block.timestamp().unpack();
         let state_checkpoint_list = raw_l2_block
             .state_checkpoint_list()
