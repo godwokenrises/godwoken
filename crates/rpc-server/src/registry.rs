@@ -1765,7 +1765,7 @@ mod tests {
             args.extend_from_slice(&err_deposit_args.as_bytes());
             args
         };
-        let err_deposit_lock = { deposit_lock.clone() }
+        let err_deposit_lock = deposit_lock
             .as_builder()
             .args(err_args_bytes.pack())
             .build();
