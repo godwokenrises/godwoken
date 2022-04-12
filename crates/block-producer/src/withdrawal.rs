@@ -217,7 +217,7 @@ pub fn unlock_to_owner(
     let mut unlocked_to_owner_outputs = vec![];
 
     let unlock_via_finalize_witness = {
-        let unlock_args = UnlockWithdrawalViaFinalize::new_builder().build();
+        let unlock_args = UnlockWithdrawalViaFinalize::default();
         let unlock_witness = UnlockWithdrawalWitness::new_builder()
             .set(UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(
                 unlock_args,
@@ -228,7 +228,7 @@ pub fn unlock_to_owner(
             .build()
     };
     let unlock_to_v1_witness = {
-        let unlock_args = UnlockWithdrawalToV1::new_builder().build();
+        let unlock_args = UnlockWithdrawalToV1::default();
         let unlock_witness = UnlockWithdrawalWitness::new_builder()
             .set(UnlockWithdrawalWitnessUnion::UnlockWithdrawalToV1(
                 unlock_args,
@@ -691,7 +691,7 @@ mod test {
         assert_eq!(expected_input.cell.data, input.cell.data);
 
         let expected_witness = {
-            let unlock_args = UnlockWithdrawalViaFinalize::new_builder().build();
+            let unlock_args = UnlockWithdrawalViaFinalize::default();
             let unlock_witness = UnlockWithdrawalWitness::new_builder()
                 .set(UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(
                     unlock_args,
@@ -737,7 +737,7 @@ mod test {
         assert_eq!(expected_input.cell.data, input.cell.data);
 
         let expected_witness = {
-            let unlock_args = UnlockWithdrawalToV1::new_builder().build();
+            let unlock_args = UnlockWithdrawalToV1::default();
             let unlock_witness = UnlockWithdrawalWitness::new_builder()
                 .set(UnlockWithdrawalWitnessUnion::UnlockWithdrawalToV1(
                     unlock_args,

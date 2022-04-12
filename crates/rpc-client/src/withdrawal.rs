@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use anyhow::{bail, Result};
 use ckb_types::prelude::{Entity, Reader};
 use gw_types::bytes::Bytes;
@@ -85,9 +87,8 @@ impl WithdrawalLock {
                 Err(_) => bail!("invalid withdrawal lock args"),
             };
 
-        let mut owner_lock_len_buf = [0u8; 4];
-        owner_lock_len_buf.copy_from_slice(&args.slice(lock_args_end..owner_lock_start));
-        let owner_lock_len = u32::from_be_bytes(owner_lock_len_buf) as usize;
+        let owner_lock_len =
+            u32::from_be_bytes(args[lock_args_end..owner_lock_start].try_into()?) as usize;
         let owner_lock_end = owner_lock_start + owner_lock_len;
         if owner_lock_end != args_len && owner_lock_end + 1 != args_len {
             bail!("invalid owner lock len");
