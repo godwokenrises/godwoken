@@ -21,7 +21,7 @@ impl RegistryAddress {
         }
         let registry_id = u32::from_le_bytes(slice[..4].try_into().unwrap());
         let address_len = u32::from_le_bytes(slice[4..8].try_into().unwrap());
-        if slice.len() < (8 + address_len) as usize {
+        if slice.len() < address_len.checked_add(8)? as usize {
             return None;
         }
         let reg_addr = RegistryAddress {
@@ -40,7 +40,7 @@ impl RegistryAddress {
     }
 
     pub fn write_to_slice(&self, buf: &mut [u8]) -> Result<usize, usize> {
-        if self.len() > buf.len() {
+        if self.len() > buf.len() || self.len() > u32::MAX as usize {
             return Err(self.len());
         }
         buf[..4].copy_from_slice(&self.registry_id.to_le_bytes());
