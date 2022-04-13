@@ -5,9 +5,10 @@ use crate::types::{
     UserRollupConfig,
 };
 use anyhow::{anyhow, Result};
-use ckb_jsonrpc_types::CellDep;
+use ckb_jsonrpc_types::{CellDep, JsonBytes};
 use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::{Builder, Entity};
+use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_config::{
     BackendConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config, ConsensusConfig,
     ContractTypeScriptConfig, GenesisConfig, NodeMode, RPCClientConfig, RPCServerConfig,
@@ -32,6 +33,7 @@ pub struct GenerateNodeConfigArgs<'a> {
     pub user_rollup_config: &'a UserRollupConfig,
     pub omni_lock_config: &'a OmniLockConfig,
     pub node_mode: NodeMode,
+    pub block_producer_address: Vec<u8>,
 }
 
 pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Config> {
@@ -47,6 +49,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         user_rollup_config,
         omni_lock_config,
         node_mode,
+        block_producer_address,
     } = args;
 
     let mut rpc_client = HttpRpcClient::new(ckb_url.to_string());
@@ -204,7 +207,10 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         contract_type_scripts,
     };
     let block_producer: Option<BlockProducerConfig> = Some(BlockProducerConfig {
-        block_producer: RegistryAddressConfig::default(),
+        block_producer: RegistryAddressConfig {
+            registry_id: ETH_REGISTRY_ACCOUNT_ID,
+            address: JsonBytes::from_vec(block_producer_address),
+        },
         // cell deps
         rollup_config_cell_dep,
         challenger_config,
