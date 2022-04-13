@@ -172,6 +172,7 @@ pub async fn setup(args: SetupArgs<'_>) {
             user_rollup_config: &rollup_config,
             omni_lock_config: &setup_config.omni_lock_config,
             node_mode,
+            block_producer_address: vec![0u8; 20],
         };
         let config = generate_node_config(args).await.expect("generate_config");
         let output_content = toml::to_string_pretty(&config).expect("serde toml to string pretty");

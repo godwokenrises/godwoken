@@ -199,6 +199,13 @@ async fn run_cli() -> Result<()> {
                         .help("The web3 store database url"),
                 )
                 .arg(
+                    Arg::with_name("block-producer-address")
+                        .long("block-producer-address")
+                        .takes_value(true)
+                        .default_value("0x0000000000000000000000000000000000000000")
+                        .help("Block producer address"),
+                )
+                .arg(
                     Arg::with_name("output-path")
                         .short("o")
                         .takes_value(true)
@@ -933,6 +940,12 @@ async fn run_cli() -> Result<()> {
                 Path::new(m.value_of("scripts-deployment-config-path").unwrap());
             let server_url = m.value_of("rpc-server-url").unwrap().to_string();
             let omni_lock_config_path = Path::new(m.value_of("omni-lock-config-path").unwrap());
+            let block_producer_address = hex::decode(
+                m.value_of("block-producer-address")
+                    .unwrap()
+                    .to_string()
+                    .trim_start_matches("0x"),
+            )?;
 
             let rollup_result: RollupDeploymentResult = {
                 let content = std::fs::read(genesis_path)?;
@@ -968,6 +981,7 @@ async fn run_cli() -> Result<()> {
                 user_rollup_config: &user_rollup_config,
                 omni_lock_config: &omni_lock_config,
                 node_mode: gw_config::NodeMode::ReadOnly,
+                block_producer_address,
             };
 
             match generate_config::generate_node_config(args).await {
