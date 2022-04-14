@@ -20,7 +20,7 @@ async fn producer(client: GodwokenRpcClient, tx: tokio::sync::mpsc::Sender<Task>
         let client = client.clone();
         let task = tokio::spawn(async move {
             let script_hash = client.get_script_hash(account_id).await?;
-            if script_hash.as_bytes() == &[0u8; 32] {
+            if script_hash.as_bytes() == [0u8; 32] {
                 return Ok::<_, anyhow::Error>(None);
             }
             let script = client
