@@ -164,6 +164,7 @@ fn setup_genesis(store: &Store) {
     let genesis_config = GenesisConfig {
         timestamp: 0,
         meta_contract_validator_type_hash: Default::default(),
+        eth_registry_validator_type_hash: Default::default(),
         rollup_config: rollup_config.into(),
         rollup_type_hash: {
             let h: [u8; 32] = rollup_type_hash.into();
