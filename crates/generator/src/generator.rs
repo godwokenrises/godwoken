@@ -157,7 +157,7 @@ impl Generator {
             let aot_code_opt = self
                 .backend_manage
                 .get_aot_code(&backend.validator_script_type_hash, global_vm_version);
-            #[cfg(feature = "aot")]
+            #[cfg(has_asm)]
             if aot_code_opt.is_none() {
                 log::warn!("[machine_run] Not AOT mode!");
             }

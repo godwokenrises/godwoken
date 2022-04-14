@@ -59,7 +59,7 @@ impl BackendManage {
     }
 
     pub fn register_backend(&mut self, backend: Backend) {
-        #[cfg(feature = "aot")]
+        #[cfg(has_asm)]
         {
             self.aot_codes.0.insert(
                 backend.validator_script_type_hash,
@@ -81,7 +81,7 @@ impl BackendManage {
         self.backends.get(code_hash)
     }
 
-    #[cfg(feature = "aot")]
+    #[cfg(has_asm)]
     fn aot_compile(&self, code_bytes: &Bytes, vm_version: u32) -> Result<AotCode, ckb_vm::Error> {
         log::info!("Compile AotCode with VMVersion::V{}", vm_version);
         let vm_version = match vm_version {
