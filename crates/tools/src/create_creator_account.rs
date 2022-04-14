@@ -56,8 +56,9 @@ async fn create_eth_addr_reg_account(
         hex::encode(eth_addr_reg_script_hash)
     );
 
-    let eth_addr_reg_id =
-        godwoken_rpc_client.get_account_id_by_script_hash(eth_addr_reg_script_hash.into()).await?;
+    let eth_addr_reg_id = godwoken_rpc_client
+        .get_account_id_by_script_hash(eth_addr_reg_script_hash.into())
+        .await?;
     if let Some(id) = eth_addr_reg_id {
         log::info!("ETH Address Registry account already exists, id = {}", id);
         return Ok(id);
@@ -77,7 +78,9 @@ async fn create_eth_addr_reg_account(
         .build();
 
     let sender_script_hash = godwoken_rpc_client.get_script_hash(from_id).await?;
-    let receiver_script_hash = godwoken_rpc_client.get_script_hash(RESERVED_ACCOUNT_ID).await?;
+    let receiver_script_hash = godwoken_rpc_client
+        .get_script_hash(RESERVED_ACCOUNT_ID)
+        .await?;
 
     let message = generate_transaction_message_to_sign(
         &raw_l2tx,
@@ -97,7 +100,8 @@ async fn create_eth_addr_reg_account(
     wait_for_l2_tx(godwoken_rpc_client, &tx_hash, 180, false)?;
 
     let eth_addr_reg_id = godwoken_rpc_client
-        .get_account_id_by_script_hash(eth_addr_reg_script_hash.into()).await?
+        .get_account_id_by_script_hash(eth_addr_reg_script_hash.into())
+        .await?
         .expect("ETH Address Registry account id");
     log::info!("ETH Address Registry account id: {}", eth_addr_reg_id);
 
@@ -131,7 +135,8 @@ pub async fn create_creator_account(
         fee,
         &config,
         &scripts_deployment,
-    ).await
+    )
+    .await
     .expect("create_eth_addr_reg_account success");
 
     let from_address =
@@ -183,7 +188,9 @@ pub async fn create_creator_account(
         .build();
 
     let sender_script_hash = godwoken_rpc_client.get_script_hash(from_id).await?;
-    let receiver_script_hash = godwoken_rpc_client.get_script_hash(RESERVED_ACCOUNT_ID).await?;
+    let receiver_script_hash = godwoken_rpc_client
+        .get_script_hash(RESERVED_ACCOUNT_ID)
+        .await?;
 
     let message = generate_transaction_message_to_sign(
         &account_raw_l2_transaction,

@@ -54,7 +54,10 @@ pub fn to_godwoken_short_script_hash(
     Ok(())
 }
 
-pub async fn to_eth_eoa_address(godwoken_rpc_url: &str, godwoken_short_script_hash: &str) -> Result<()> {
+pub async fn to_eth_eoa_address(
+    godwoken_rpc_url: &str,
+    godwoken_short_script_hash: &str,
+) -> Result<()> {
     if godwoken_short_script_hash.len() != 42 || !godwoken_short_script_hash.starts_with("0x") {
         return Err(anyhow!("godwoken short script hash format error!"));
     }
@@ -68,7 +71,8 @@ pub async fn to_eth_eoa_address(godwoken_rpc_url: &str, godwoken_short_script_ha
     )?);
 
     let script_hash = godwoken_rpc_client
-        .get_script_hash_by_short_script_hash(JsonBytes::from_bytes(short_script_hash)).await?;
+        .get_script_hash_by_short_script_hash(JsonBytes::from_bytes(short_script_hash))
+        .await?;
 
     let script = match script_hash {
         Some(h) => godwoken_rpc_client.get_script(h).await?,

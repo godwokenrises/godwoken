@@ -103,7 +103,10 @@ pub async fn short_script_hash_to_account_id(
     short_script_hash: &GwBytes,
 ) -> Result<Option<u32>> {
     let bytes = JsonBytes::from_bytes(short_script_hash.clone());
-    let script_hash = match godwoken_rpc_client.get_script_hash_by_short_script_hash(bytes).await? {
+    let script_hash = match godwoken_rpc_client
+        .get_script_hash_by_short_script_hash(bytes)
+        .await?
+    {
         Some(h) => h,
         None => {
             return Err(anyhow!(
