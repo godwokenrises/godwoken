@@ -98,7 +98,7 @@ pub async fn transfer(
 
     log::info!("tx_hash: 0x{}", faster_hex::hex_string(tx_hash.as_bytes())?);
 
-    wait_for_l2_tx(&mut godwoken_rpc_client, &tx_hash, 300, false)?;
+    wait_for_l2_tx(&mut godwoken_rpc_client, &tx_hash, 300, false).await?;
 
     log::info!("transfer success!");
 

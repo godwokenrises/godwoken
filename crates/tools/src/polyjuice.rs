@@ -239,7 +239,7 @@ async fn send(
         .await?;
     log::info!("tx hash: 0x{}", hex::encode(tx_hash.as_bytes()));
 
-    let tx_receipt = wait_for_l2_tx(godwoken_rpc_client, &tx_hash, 180, false)?;
+    let tx_receipt = wait_for_l2_tx(godwoken_rpc_client, &tx_hash, 180, false).await?;
 
     if let (None, Some(receipt)) = (to_address, tx_receipt) {
         let polyjuice_system_log = receipt

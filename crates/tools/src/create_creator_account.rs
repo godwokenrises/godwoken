@@ -130,7 +130,7 @@ pub async fn create_creator_account(
     let tx_hash = godwoken_rpc_client.submit_l2transaction(json_bytes).await?;
     log::info!("tx hash: 0x{}", hex::encode(tx_hash.as_bytes()));
 
-    wait_for_l2_tx(&mut godwoken_rpc_client, &tx_hash, 180, false)?;
+    wait_for_l2_tx(&mut godwoken_rpc_client, &tx_hash, 180, false).await?;
 
     let account_id = godwoken_rpc_client
         .get_account_id_by_script_hash(l2_script_hash.into())
