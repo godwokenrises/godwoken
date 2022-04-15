@@ -37,5 +37,5 @@ jobs:
       # github.head_ref: The head_ref or source branch of the pull request in a workflow run. This property is only available when the event that triggers a workflow run is either pull_request or pull_request_target.
       # github.ref: The branch or tag ref that triggered the workflow run. For branches this is the format refs/heads/<branch_name>, and for tags it is refs/tags/<tag_name>.
       godwoken_ref: ${{ github.head_ref || github.ref }}
-      kicker_ref: refs/pull/221/head # https://github.com/RetricSu/godwoken-kicker/pull/221
+      kicker_ref: v1.1 # https://github.com/RetricSu/godwoken-kicker/pull/221
       tests_ref: develop  # https://github.com/nervosnetwork/godwoken-tests/commits/develop
