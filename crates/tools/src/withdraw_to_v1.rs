@@ -29,6 +29,8 @@ const FLAG_SINCE_RELATIVE: u64 =
 const FLAG_SINCE_TIMESTAMP: u64 =
     0b100_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000;
 
+const ETH_REGISTRY_ACCOUNT_ID: u32 = 2;
+
 #[allow(clippy::too_many_arguments)]
 pub fn withdraw(
     godwoken_rpc_url: &str,
@@ -102,6 +104,7 @@ pub fn withdraw(
             .owner_lock_hash(owner_lock_hash.pack())
             .cancel_timeout(cancel_timeout.pack())
             .layer2_lock(v1_l2_lock)
+            .registry_id(ETH_REGISTRY_ACCOUNT_ID.pack())
             .build();
 
         let mut args = v1_config.v1_rollup_type_hash.0.to_vec();

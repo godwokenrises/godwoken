@@ -1031,6 +1031,8 @@ struct WithdrawalToV1RequestVerifier {
 }
 
 impl WithdrawalToV1RequestVerifier {
+    const ETH_REGISTRY_ACCOUNT_ID: u32 = 2;
+
     fn new(config: Option<WithdrawalToV1Config>) -> Self {
         Self { config }
     }
@@ -1070,6 +1072,9 @@ impl WithdrawalToV1RequestVerifier {
             Ok(args) => args,
             Err(_err) => bail!("invalid v1 deposit lock args"),
         };
+        if Self::ETH_REGISTRY_ACCOUNT_ID != Unpack::<u32>::unpack(&deposit_args.registry_id()) {
+            bail!("unexpected eth registry id, must be 2");
+        }
         let cancel_timeout = Since::new(deposit_args.cancel_timeout().unpack());
         if !cancel_timeout.flags_is_valid() || !cancel_timeout.is_relative() {
             bail!("invalid v1 deposit cancel timeout");
@@ -1586,11 +1591,13 @@ mod tests {
             v1_deposit_minimal_cancel_timeout_msecs: SEVEN_DAYS.as_millis() as u64,
         };
         let verifier = WithdrawalToV1RequestVerifier::new(Some(config.clone()));
+        let eth_registry_id = WithdrawalToV1RequestVerifier::ETH_REGISTRY_ACCOUNT_ID;
 
         let deposit_args = V1DepositLockArgs::new_builder()
             .layer2_lock(Script::default())
             .owner_lock_hash([4u8; 32].pack())
             .cancel_timeout(build_cancel_timeout(SEVEN_DAYS.as_secs()).pack())
+            .registry_id(eth_registry_id.pack())
             .build();
         let lock_args = {
             let mut args = config.v1_rollup_type_hash.0.to_vec();
@@ -1699,6 +1706,24 @@ mod tests {
         let err_req = build_error_request(err_deposit_lock);
         let err_str = verifier.verify(&err_req).unwrap_err().to_string();
         assert!(err_str.contains("invalid v1 deposit lock args"));
+
+        // ## Invalid v1 eth registry id
+        let err_deposit_args = { deposit_args.clone() }
+            .as_builder()
+            .registry_id(0u32.pack())
+            .build();
+        let err_args_bytes = {
+            let mut args = config.v1_rollup_type_hash.0.to_vec();
+            args.extend_from_slice(&err_deposit_args.as_bytes());
+            args
+        };
+        let err_deposit_lock = { deposit_lock.clone() }
+            .as_builder()
+            .args(err_args_bytes.pack())
+            .build();
+        let err_req = build_error_request(err_deposit_lock);
+        let err_str = verifier.verify(&err_req).unwrap_err().to_string();
+        assert!(err_str.contains("unexpected eth registry id, must be 2"));
 
         // ## Invalid v1 deposit cancel timeout flags
         let err_deposit_args = { deposit_args.clone() }
