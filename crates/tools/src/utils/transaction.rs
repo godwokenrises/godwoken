@@ -148,7 +148,7 @@ pub fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
     Ok(config)
 }
 
-pub fn wait_for_l2_tx(
+pub async fn wait_for_l2_tx(
     godwoken_rpc_client: &mut GodwokenRpcClient,
     tx_hash: &H256,
     timeout_secs: u64,
@@ -159,9 +159,7 @@ pub fn wait_for_l2_tx(
     while start_time.elapsed() < retry_timeout {
         std::thread::sleep(Duration::from_secs(2));
 
-        let receipt = tokio::runtime::Handle::current()
-            .block_on(godwoken_rpc_client.get_transaction_receipt(tx_hash))?;
-
+        let receipt = godwoken_rpc_client.get_transaction_receipt(tx_hash).await?;
         match receipt {
             Some(_) => {
                 if !quiet {

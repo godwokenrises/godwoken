@@ -150,7 +150,9 @@ pub async fn create_sudt_account(
         log::info!("tx hash: 0x{}", hex::encode(tx_hash.as_bytes()));
     }
 
-    wait_for_l2_tx(rpc_client, &tx_hash, 180, quiet).map_err(|err| anyhow!("{}", err))?;
+    wait_for_l2_tx(rpc_client, &tx_hash, 180, quiet)
+        .await
+        .map_err(|err| anyhow!("{}", err))?;
 
     let account_id = rpc_client
         .get_account_id_by_script_hash(l2_script_hash.into())
