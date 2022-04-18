@@ -7130,6 +7130,7 @@ impl ::core::fmt::Display for V1DepositLockArgs {
         write!(f, "{}: {}", "owner_lock_hash", self.owner_lock_hash())?;
         write!(f, ", {}: {}", "layer2_lock", self.layer2_lock())?;
         write!(f, ", {}: {}", "cancel_timeout", self.cancel_timeout())?;
+        write!(f, ", {}: {}", "registry_id", self.registry_id())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -7140,16 +7141,17 @@ impl ::core::fmt::Display for V1DepositLockArgs {
 impl ::core::default::Default for V1DepositLockArgs {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            109, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0,
-            0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            117, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 105, 0, 0, 0, 113, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0,
+            0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0,
         ];
         V1DepositLockArgs::new_unchecked(v.into())
     }
 }
 impl V1DepositLockArgs {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -7181,11 +7183,17 @@ impl V1DepositLockArgs {
     pub fn cancel_timeout(&self) -> Uint64 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        Uint64::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn registry_id(&self) -> Uint32 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            Uint64::new_unchecked(self.0.slice(start..end))
+            let end = molecule::unpack_number(&slice[20..]) as usize;
+            Uint32::new_unchecked(self.0.slice(start..end))
         } else {
-            Uint64::new_unchecked(self.0.slice(start..))
+            Uint32::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> V1DepositLockArgsReader<'r> {
@@ -7218,6 +7226,7 @@ impl molecule::prelude::Entity for V1DepositLockArgs {
             .owner_lock_hash(self.owner_lock_hash())
             .layer2_lock(self.layer2_lock())
             .cancel_timeout(self.cancel_timeout())
+            .registry_id(self.registry_id())
     }
 }
 #[derive(Clone, Copy)]
@@ -7242,6 +7251,7 @@ impl<'r> ::core::fmt::Display for V1DepositLockArgsReader<'r> {
         write!(f, "{}: {}", "owner_lock_hash", self.owner_lock_hash())?;
         write!(f, ", {}: {}", "layer2_lock", self.layer2_lock())?;
         write!(f, ", {}: {}", "cancel_timeout", self.cancel_timeout())?;
+        write!(f, ", {}: {}", "registry_id", self.registry_id())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -7250,7 +7260,7 @@ impl<'r> ::core::fmt::Display for V1DepositLockArgsReader<'r> {
     }
 }
 impl<'r> V1DepositLockArgsReader<'r> {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -7282,11 +7292,17 @@ impl<'r> V1DepositLockArgsReader<'r> {
     pub fn cancel_timeout(&self) -> Uint64Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        Uint64Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn registry_id(&self) -> Uint32Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            Uint64Reader::new_unchecked(&self.as_slice()[start..end])
+            let end = molecule::unpack_number(&slice[20..]) as usize;
+            Uint32Reader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            Uint64Reader::new_unchecked(&self.as_slice()[start..])
+            Uint32Reader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -7342,6 +7358,7 @@ impl<'r> molecule::prelude::Reader<'r> for V1DepositLockArgsReader<'r> {
         Byte32Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         ScriptReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         Uint64Reader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        Uint32Reader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         Ok(())
     }
 }
@@ -7350,9 +7367,10 @@ pub struct V1DepositLockArgsBuilder {
     pub(crate) owner_lock_hash: Byte32,
     pub(crate) layer2_lock: Script,
     pub(crate) cancel_timeout: Uint64,
+    pub(crate) registry_id: Uint32,
 }
 impl V1DepositLockArgsBuilder {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
     pub fn owner_lock_hash(mut self, v: Byte32) -> Self {
         self.owner_lock_hash = v;
         self
@@ -7365,6 +7383,10 @@ impl V1DepositLockArgsBuilder {
         self.cancel_timeout = v;
         self
     }
+    pub fn registry_id(mut self, v: Uint32) -> Self {
+        self.registry_id = v;
+        self
+    }
 }
 impl molecule::prelude::Builder for V1DepositLockArgsBuilder {
     type Entity = V1DepositLockArgs;
@@ -7374,6 +7396,7 @@ impl molecule::prelude::Builder for V1DepositLockArgsBuilder {
             + self.owner_lock_hash.as_slice().len()
             + self.layer2_lock.as_slice().len()
             + self.cancel_timeout.as_slice().len()
+            + self.registry_id.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -7384,6 +7407,8 @@ impl molecule::prelude::Builder for V1DepositLockArgsBuilder {
         total_size += self.layer2_lock.as_slice().len();
         offsets.push(total_size);
         total_size += self.cancel_timeout.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.registry_id.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
@@ -7391,6 +7416,7 @@ impl molecule::prelude::Builder for V1DepositLockArgsBuilder {
         writer.write_all(self.owner_lock_hash.as_slice())?;
         writer.write_all(self.layer2_lock.as_slice())?;
         writer.write_all(self.cancel_timeout.as_slice())?;
+        writer.write_all(self.registry_id.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {

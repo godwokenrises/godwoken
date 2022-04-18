@@ -169,6 +169,7 @@ table V1DepositLockArgs {
     owner_lock_hash: Byte32,
     layer2_lock: Script,
     cancel_timeout: Uint64,
+    registry_id: Uint32,
 }
 // --- end of deposit lock ---
 
