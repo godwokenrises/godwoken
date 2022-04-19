@@ -198,7 +198,7 @@ impl Registry {
             let submitter = RequestSubmitter {
                 mem_pool: Arc::clone(mem_pool),
                 submit_rx,
-                queue: Arc::new(Mutex::new(FeeQueue::new())),
+                queue: FeeQueue::new(),
                 dynamic_config_manager: dynamic_config_manager.clone(),
                 generator: generator.clone(),
                 mem_pool_state: mem_pool_state.clone(),
@@ -362,7 +362,7 @@ impl Request {
 struct RequestSubmitter {
     mem_pool: Arc<Mutex<gw_mem_pool::pool::MemPool>>,
     submit_rx: mpsc::Receiver<Request>,
-    queue: Arc<Mutex<FeeQueue>>,
+    queue: FeeQueue,
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     generator: Arc<Generator>,
     mem_pool_state: Arc<MemPoolState>,
@@ -455,7 +455,7 @@ impl RequestSubmitter {
             }
 
             // mem-pool can process more txs
-            let mut queue = self.queue.lock().await;
+            let queue = &mut self.queue;
 
             // wait next tx if queue is empty
             if queue.is_empty() {
@@ -530,8 +530,6 @@ impl RequestSubmitter {
                     continue;
                 }
             };
-            // release lock
-            drop(queue);
 
             if !items.is_empty() {
                 log::debug!("[Mem-pool background job] acquire mem_pool",);
