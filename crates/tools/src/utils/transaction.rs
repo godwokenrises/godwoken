@@ -97,6 +97,7 @@ pub fn wait_for_tx(
             }
             Ok(Some(tx_with_status)) if tx_with_status.tx_status.status == Status::Committed => {
                 log::info!("tx commited");
+                wait_for_tx_pool_synced(rpc_client)?;
                 return Ok(tx_with_status.transaction);
             }
             res => {
@@ -105,6 +106,34 @@ pub fn wait_for_tx(
         }
     }
     Err(anyhow!("Timeout: {:?}", retry_timeout))
+}
+
+// In CKB, there can be a lag between the tx-pool and chain.
+// This workaround ensures the tx-pool has caught up the chain.
+pub fn wait_for_tx_pool_synced(rpc_client: &mut HttpRpcClient) -> Result<()> {
+    let instant = Instant::now();
+    let chain_tip_number = rpc_client
+        .get_tip_block_number()
+        .map_err(|err| anyhow!("RPC get_tip_block_number error: {}", err))?;
+    while instant.elapsed() < Duration::from_secs(30) {
+        let pool_tip_number = rpc_client
+            .tx_pool_info()
+            .map_err(|err| anyhow!("RPC tx_pool_info error: {}", err))?
+            .tip_number;
+        if pool_tip_number >= chain_tip_number {
+            return Ok(());
+        }
+    }
+
+    let pool_tip_number = rpc_client
+        .tx_pool_info()
+        .map_err(|err| anyhow!("RPC tx_pool_info error: {}", err))?
+        .tip_number;
+    Err(anyhow!(
+        "wait_for_tx_pool_synced timeout, chain_tip_number: {}, pool_tip_number: {}",
+        chain_tip_number,
+        pool_tip_number,
+    ))
 }
 
 pub fn get_network_type(rpc_client: &mut HttpRpcClient) -> Result<NetworkType> {
@@ -160,6 +189,7 @@ pub async fn wait_for_l2_tx(
         std::thread::sleep(Duration::from_secs(2));
 
         let receipt = godwoken_rpc_client.get_transaction_receipt(tx_hash).await?;
+
         match receipt {
             Some(_) => {
                 if !quiet {
