@@ -21,6 +21,7 @@ use gw_rpc_ws_server::notify_controller::NotifyController;
 use gw_store::{
     chain_view::ChainView,
     mem_pool_state::{MemPoolState, MemStore},
+    state::mem_state_db::MemStateTree,
     traits::chain_store::ChainStore,
     transaction::StoreTransaction,
     Store,
@@ -621,11 +622,8 @@ impl MemPool {
         let snapshot = self.store.get_snapshot();
         let snap_last_valid_tip = snapshot.get_last_valid_tip_block_hash()?;
         assert_eq!(snap_last_valid_tip, new_tip, "set new snapshot");
-        // Fix execute_raw_l2transaction panic by updating mem_store first and storing it to mem_pool_state after.
-        let mem_store = MemStore::new(snapshot);
+
         let mem_block_content = self.mem_block.reset(&new_tip_block, estimated_timestamp);
-        mem_store.update_mem_pool_block_info(self.mem_block.block_info())?;
-        self.mem_pool_state.store(Arc::new(mem_store));
 
         // set tip
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
@@ -647,7 +645,7 @@ impl MemPool {
             withdrawals
         };
 
-        // Process txs
+        // mem block txs
         let mem_block_txs: Vec<_> = {
             let mut txs = Vec::with_capacity(mem_block_content.txs.len());
             for tx_hash in mem_block_content.txs {
@@ -658,8 +656,13 @@ impl MemPool {
             txs
         };
 
+        // create new mem_store to maintain memory state
+        let mem_store = MemStore::new(snapshot);
+        mem_store.update_mem_pool_block_info(self.mem_block.block_info())?;
+        let mut mem_state = mem_store.state()?;
+
         // remove from pending
-        self.remove_unexecutables(&db).await?;
+        self.remove_unexecutables(&mut mem_state, &db).await?;
 
         log::info!("[mem-pool] reset reinject txs: {} mem-block txs: {} reinject withdrawals: {} mem-block withdrawals: {}", reinject_txs.len(), mem_block_txs.len(), reinject_withdrawals.len(), mem_block_withdrawals.len());
         // re-inject withdrawals
@@ -670,9 +673,12 @@ impl MemPool {
         let txs_iter = reinject_txs.into_iter().chain(mem_block_txs);
 
         if self.node_mode != NodeMode::ReadOnly {
-            self.prepare_next_mem_block(&db, withdrawals_iter, txs_iter)
+            self.prepare_next_mem_block(&db, &mut mem_state, withdrawals_iter, txs_iter)
                 .await?;
         }
+
+        // store mem state
+        self.mem_pool_state.store(Arc::new(mem_store));
         db.commit()?;
 
         Ok(())
@@ -680,9 +686,11 @@ impl MemPool {
 
     /// Discard unexecutables from pending.
     #[instrument(skip_all)]
-    async fn remove_unexecutables(&mut self, db: &StoreTransaction) -> Result<()> {
-        let snap = self.mem_pool_state.load();
-        let state = snap.state()?;
+    async fn remove_unexecutables(
+        &mut self,
+        state: &mut MemStateTree<'_>,
+        db: &StoreTransaction,
+    ) -> Result<()> {
         let mut remove_list = Vec::default();
         // iter pending accounts and demote any non-executable objects
         for (&account_id, list) in &mut self.pending {
@@ -730,6 +738,7 @@ impl MemPool {
     >(
         &mut self,
         db: &StoreTransaction,
+        state: &mut MemStateTree<'_>,
         withdrawals: WithdrawalIter,
         txs: TxIter,
     ) -> Result<()> {
@@ -754,10 +763,11 @@ impl MemPool {
         // Handle state before txs
         // withdrawal
         let withdrawals: Vec<WithdrawalRequestExtra> = withdrawals.collect();
-        self.finalize_withdrawals(withdrawals.clone()).await?;
+        self.finalize_withdrawals(state, withdrawals.clone())
+            .await?;
         // deposits
         let deposit_cells = self.pending_deposits.clone();
-        self.finalize_deposits(deposit_cells.clone()).await?;
+        self.finalize_deposits(state, deposit_cells.clone()).await?;
 
         // Register eth eoa mapping
         // Fan-out next mem block to readonly node
@@ -771,13 +781,9 @@ impl MemPool {
                 .await
         }
 
-        // deposits
-        let snap = self.mem_pool_state.load();
-        let state = snap.state()?;
-
         // re-inject txs
         for tx in txs {
-            if let Err(err) = self.push_transaction_with_db(db, &state, tx.clone()).await {
+            if let Err(err) = self.push_transaction_with_db(db, state, tx.clone()).await {
                 let tx_hash = tx.hash();
                 log::info!(
                     "[mem pool] fail to re-inject tx {}, error: {}",
@@ -889,9 +895,11 @@ impl MemPool {
     }
 
     #[instrument(skip_all, fields(deposits_count = deposit_cells.len()))]
-    async fn finalize_deposits(&mut self, deposit_cells: Vec<DepositInfo>) -> Result<()> {
-        let snap = self.mem_pool_state.load();
-        let mut state = snap.state()?;
+    async fn finalize_deposits(
+        &mut self,
+        state: &mut MemStateTree<'_>,
+        deposit_cells: Vec<DepositInfo>,
+    ) -> Result<()> {
         state.tracker_mut().enable();
         // update deposits
         let deposits: Vec<_> = deposit_cells.iter().map(|c| c.request.clone()).collect();
@@ -924,6 +932,7 @@ impl MemPool {
     #[instrument(skip_all, fields(withdrawals_count = withdrawals.len()))]
     async fn finalize_withdrawals(
         &mut self,
+        state: &mut MemStateTree<'_>,
         mut withdrawals: Vec<WithdrawalRequestExtra>,
     ) -> Result<()> {
         // check mem block state
@@ -964,8 +973,6 @@ impl MemPool {
             sudt_value.map(|(_, script)| (script.hash().into(), script.to_owned()))
         }
         .collect();
-        let snap = self.mem_pool_state.load();
-        let mut state = snap.state()?;
         // verify the withdrawals
         let mut unused_withdrawals = Vec::with_capacity(withdrawals.len());
         let mut total_withdrawal_capacity: u128 = 0;
@@ -980,7 +987,7 @@ impl MemPool {
             // check withdrawal request
             if let Err(err) = self
                 .generator
-                .check_withdrawal_signature(&state, &withdrawal)
+                .check_withdrawal_signature(state, &withdrawal)
             {
                 log::info!("[mem-pool] withdrawal signature error: {:?}", err);
                 unused_withdrawals.push(withdrawal_hash);
@@ -991,7 +998,7 @@ impl MemPool {
                 .cloned();
             if let Err(err) =
                 self.generator
-                    .verify_withdrawal_request(&state, &withdrawal, asset_script)
+                    .verify_withdrawal_request(state, &withdrawal, asset_script)
             {
                 log::info!("[mem-pool] withdrawal verification error: {:?}", err);
                 unused_withdrawals.push(withdrawal_hash);
@@ -1169,8 +1176,10 @@ impl MemPool {
         self.mem_block = mem_block;
 
         let withdrawals = withdrawals.into_iter().map(Into::into).collect();
-        self.finalize_withdrawals(withdrawals).await?;
-        self.finalize_deposits(deposits).await?;
+        let mem_store = self.mem_pool_state().load();
+        let mut state = mem_store.state()?;
+        self.finalize_withdrawals(&mut state, withdrawals).await?;
+        self.finalize_deposits(&mut state, deposits).await?;
 
         db.commit()?;
 
