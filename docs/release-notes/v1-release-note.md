@@ -9,7 +9,7 @@ In the new version, we improve the compatibility of Godwoken:
 - Provide API level compatible. Deprecate web3-provider plugin.
 - Support native ETH address in API and EVM, remove the Godwoken address concept.
 - Support Ethereum signature format and EIP-712. User can view the transaction before signing, instead of signing a random 32 bytes message. [#561](https://github.com/nervosnetwork/godwoken/pull/561)
-- Fix the total supply interface of sUDT ERC-20 contract [#560](https://github.com/nervosnetwork/godwoken/pull/560)
+- Fix the total supply interface of sUDT ERC-20 proxy contract [#560](https://github.com/nervosnetwork/godwoken/pull/560)
 - Support interactive with eth address that haven't been registered to Godwoken.
 
 In short, as a developer, you can use Godwoken v1 just like anyother Ethereum compatible chain, all you need to do is to switch the network to Godwoken. The polyjuice-provider web3 plugin is removed in the v1 version.
