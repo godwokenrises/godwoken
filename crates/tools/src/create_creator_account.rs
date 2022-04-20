@@ -56,7 +56,6 @@ pub async fn create_creator_account(
 
     let mut l2_args_vec = rollup_type_hash.as_bytes().to_vec();
     l2_args_vec.append(&mut sudt_id.to_le_bytes().to_vec());
-    l2_args_vec.append(&mut ETH_REGISTRY_ACCOUNT_ID.to_le_bytes().to_vec());
     let l2_script_args = GwPack::pack(&GwBytes::from(l2_args_vec));
     let l2_script = Script::new_builder()
         .code_hash(polyjuice_validator_script_hash.pack())
