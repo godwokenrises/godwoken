@@ -87,7 +87,7 @@ pub async fn parse_account_from_str(
 ) -> Result<H256> {
     // if match script hash
     if account.starts_with("0x") && account.len() == 66 {
-        let r = H256::from_slice(account[2..].as_bytes())?;
+        let r = H256::from_slice(&hex::decode(&account[2..].as_bytes())?)?;
         return Ok(r);
     }
 
