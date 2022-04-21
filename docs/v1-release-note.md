@@ -1,4 +1,4 @@
-# v1.0 CHANGES
+# v1 release note
 
 In Godwoken v0, Godwoken EVM was using an internal address format. Users need to integrate web3-provider to handling the conversion between the internal address format and the Ethereum address format. Although in most cases the conversion is handled transparently, this incompatibility still causes problems in some corner cases. Such as, we cannot handle the conversion in metamask or some hardware wallets because the web3-provider plugin is unsupported in these environments.
 
