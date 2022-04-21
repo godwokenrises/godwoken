@@ -1,6 +1,12 @@
+# Changelog
+Documentation of all notable changes to the Godwoken related projects.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com).
+
+
 ## [Unreleased]
 
-## [1.1.0] - 2022-04-21
+## [1.1.0] - 2022-04-2x (release candidate)
 
 > Notice, the Godwoken v1 is not designed to upgrade the original chain! we will deploy v1 as a new chain, and provide tools to help users and developers migrating to the new chain.
 
