@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use gw_common::H256;
 use gw_config::{BackendConfig, BackendType};
 use gw_types::bytes::Bytes;
@@ -42,8 +42,12 @@ impl BackendManage {
             validator_script_type_hash,
             backend_type,
         } = config;
-        let validator = fs::read(validator_path)?.into();
-        let generator = fs::read(generator_path)?.into();
+        let validator = fs::read(&validator_path)
+            .with_context(|| format!("load validator from {}", validator_path.to_string_lossy()))?
+            .into();
+        let generator = fs::read(generator_path)
+            .with_context(|| format!("load generator from {}", validator_path.to_string_lossy()))?
+            .into();
         let validator_script_type_hash = {
             let hash: [u8; 32] = validator_script_type_hash.into();
             hash.into()
