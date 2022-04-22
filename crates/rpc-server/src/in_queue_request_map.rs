@@ -31,12 +31,13 @@ pub struct InQueueRequestMap {
 
 impl InQueueRequestMap {
     #[instrument(skip_all, fields(hash = %faster_hex::hex_string(k.as_slice()).expect("hex_string")))]
-    pub(crate) async fn insert(&self, k: H256, v: Request) {
-        {
+    pub(crate) async fn insert(&self, k: H256, v: Request) -> bool {
+        let inserted = {
             let mut map = self.map.write();
-            map.insert(k, v.clone());
+            let inserted = map.insert(k, v.clone()).is_none();
             tracing::info!(map.len = map.len(), "inserted");
-        }
+            inserted
+        };
         if let Some(control) = self.control.load().as_deref() {
             let msg: SyncMessageUnion = match v {
                 Request::Tx(tx) => tx.into(),
@@ -51,6 +52,7 @@ impl InQueueRequestMap {
                 )
                 .await;
         }
+        inserted
     }
 
     #[instrument(skip_all, fields(hash = %faster_hex::hex_string(k.as_slice()).expect("hex_string")))]

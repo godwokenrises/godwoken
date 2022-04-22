@@ -1014,8 +1014,10 @@ async fn submit_l2transaction(
 
     let request = Request::Tx(tx);
     // Use permit to insert before send so that remove won't happen before insert.
-    in_queue_request_map.insert(tx_hash, request.clone()).await;
-    permit.send(request);
+    if in_queue_request_map.insert(tx_hash, request.clone()).await {
+        // Send if the request wasn't already in the map.
+        permit.send(request);
+    }
 
     Ok(tx_hash_json)
 }
@@ -1087,10 +1089,13 @@ async fn submit_withdrawal_request(
 
     let request = Request::Withdrawal(withdrawal);
     // Use permit to insert before send so that remove won't happen before insert.
-    in_queue_request_map
+    if in_queue_request_map
         .insert(withdrawal_hash.into(), request.clone())
-        .await;
-    permit.send(request);
+        .await
+    {
+        // Send if the request wasn't already in the map.
+        permit.send(request);
+    }
 
     Ok(withdrawal_hash.into())
 }
