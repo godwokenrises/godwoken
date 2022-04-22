@@ -132,6 +132,6 @@ async fn run_cli() -> Result<()> {
 /// Godwoken entry
 /// Default to number of cpus, pass `worker_threads` to manually configure workers.
 #[tokio::main(flavor = "multi_thread")]
-async fn main() {
-    run_cli().await.expect("run cli");
+async fn main() -> Result<()> {
+    run_cli().await
 }

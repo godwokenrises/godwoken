@@ -135,6 +135,6 @@ async fn run_cli() -> Result<()> {
 }
 
 #[tokio::main(flavor = "multi_thread")]
-async fn main() {
-    run_cli().await.expect("cli");
+async fn main() -> Result<()> {
+    run_cli().await
 }

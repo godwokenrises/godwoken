@@ -49,12 +49,9 @@ use crate::{setup::SetupArgs, sudt::account::build_l1_sudt_type_script};
 use self::types::OmniLockConfig;
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() {
+async fn main() -> Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
-    run_cli().await.unwrap();
-}
 
-async fn run_cli() -> Result<()> {
     let arg_privkey_path = Arg::with_name("privkey-path")
         .long("privkey-path")
         .short("k")
