@@ -296,7 +296,7 @@ Request
     "id": 42,
     "jsonrpc": "2.0",
     "method": "gw_get_balance",
-    "params": ["0x0002dfb94d6794165b96668b4308607afc05790dc211", "0x1"]
+    "params": ["0x0200000014000000bb1d13450cfa630728d0390c99957c6948bf7d19", "0x1"]
 }
 ```
 
@@ -457,7 +457,7 @@ Request
 {
     "id": 42,
     "jsonrpc": "2.0",
-    "method": "gw_get_script",
+    "method": "gw_get_script_hash",
     "params": ["0x2"]
 }
 ```
@@ -489,7 +489,7 @@ Request
     "id": 42,
     "jsonrpc": "2.0",
     "method": "gw_get_script_hash_by_registry_address",
-    "params": ["0x0002dfb94d6794165b96668b4308607afc05790dc211"]
+    "params": ["0x0200000014000000bb1d13450cfa630728d0390c99957c6948bf7d19"]
 }
 ```
 
@@ -531,7 +531,7 @@ Response
 {
     "id": 42,
     "jsonrpc": "2.0",
-    "result": "0xdfb94d6794165b96668b4308607afc05790dc2110867d3370ceb8a412902e7b4"
+    "result": "0x0200000014000000bb1d13450cfa630728d0390c99957c6948bf7d19"
 }
 ```
 
