@@ -45,8 +45,8 @@ impl BackendManage {
         let validator = fs::read(&validator_path)
             .with_context(|| format!("load validator from {}", validator_path.to_string_lossy()))?
             .into();
-        let generator = fs::read(generator_path)
-            .with_context(|| format!("load generator from {}", validator_path.to_string_lossy()))?
+        let generator = fs::read(&generator_path)
+            .with_context(|| format!("load generator from {}", generator_path.to_string_lossy()))?
             .into();
         let validator_script_type_hash = {
             let hash: [u8; 32] = validator_script_type_hash.into();
