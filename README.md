@@ -1,6 +1,6 @@
 # Godwoken
 
-> Godwoken v1 release note: [docs/release-notes/v1-release-note.md](https://github.com/nervosnetwork/godwoken/blob/develop/docs/release-notes/v1-release-note.md)
+> Godwoken v1 release note: [docs/v1-release-note.md](https://github.com/nervosnetwork/godwoken/blob/develop/docs/v1-release-note.md)
 
 Godwoken is an optimistic rollup solution builtin upon [Nervos CKB](https://docs.nervos.org/). It is designed to be configurable in many regards, and continues to evolution:
 
