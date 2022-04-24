@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use super::eip712::types::EIP712Domain;
 use super::LockAlgorithm;
 use crate::account_lock_manage::eip712::traits::EIP712Encode;
@@ -22,16 +24,12 @@ lazy_static! {
 }
 
 fn convert_signature_to_byte65(signature: &[u8]) -> Result<[u8; 65], LockAlgorithmError> {
-    if signature.len() != 65 {
-        return Err(LockAlgorithmError::InvalidSignature(format!(
+    signature.try_into().map_err(|_| {
+        LockAlgorithmError::InvalidSignature(format!(
             "Signature length is {}, expect 65",
             signature.len()
-        )));
-    }
-
-    let mut buf = [0u8; 65];
-    buf.copy_from_slice(signature);
-    Ok(buf)
+        ))
+    })
 }
 
 #[derive(Debug, Default)]
@@ -47,10 +45,8 @@ impl Secp256k1 {
         if lock_args.len() != 52 {
             return Err(LockAlgorithmError::InvalidLockArgs);
         }
-        let mut expected_pubkey_hash = [0u8; 20];
-        expected_pubkey_hash.copy_from_slice(&lock_args[32..52]);
         let pubkey_hash = self.recover(message, signature.as_ref())?;
-        if pubkey_hash.as_ref() != expected_pubkey_hash {
+        if pubkey_hash.as_ref() != &lock_args[32..52] {
             return Err(LockAlgorithmError::InvalidSignature(
                 "Secp256k1: Mismatch pubkey hash".to_string(),
             ));
@@ -83,9 +79,7 @@ impl LockAlgorithm for Secp256k1 {
         let mut hasher = new_blake2b();
         hasher.update(&pubkey.serialize());
         hasher.finalize(&mut buf);
-        let mut pubkey_hash = vec![0u8; 20];
-        pubkey_hash.copy_from_slice(&buf[..20]);
-        Ok(Bytes::from(pubkey_hash))
+        Ok(Bytes::copy_from_slice(&buf[..20]))
     }
 
     fn verify_tx(
@@ -147,10 +141,8 @@ impl Secp256k1Eth {
             return Err(LockAlgorithmError::InvalidLockArgs);
         }
 
-        let mut expected_pubkey_hash = [0u8; 20];
-        expected_pubkey_hash.copy_from_slice(&lock_args[32..52]);
         let pubkey_hash = self.recover(message, signature.as_ref())?;
-        if pubkey_hash.as_ref() != expected_pubkey_hash {
+        if pubkey_hash.as_ref() != &lock_args[32..52] {
             return Err(LockAlgorithmError::InvalidSignature(
                 "Secp256k1Eth: Mismatch pubkey hash".to_string(),
             ));
@@ -194,9 +186,7 @@ impl LockAlgorithm for Secp256k1Eth {
         let mut hasher = Keccak256::new();
         hasher.update(&pubkey.serialize_uncompressed()[1..]);
         let buf = hasher.finalize();
-        let mut pubkey_hash = vec![0u8; 20];
-        pubkey_hash.copy_from_slice(&buf[12..]);
-        Ok(Bytes::from(pubkey_hash))
+        Ok(Bytes::copy_from_slice(&buf[12..]))
     }
 
     fn verify_tx(
@@ -216,9 +206,7 @@ impl LockAlgorithm for Secp256k1Eth {
         if let Some(rlp_data) = try_assemble_polyjuice_args(tx.raw(), receiver_script.clone()) {
             let mut hasher = Keccak256::new();
             hasher.update(&rlp_data);
-            let buf = hasher.finalize();
-            let mut signing_message = [0u8; 32];
-            signing_message.copy_from_slice(&buf[..]);
+            let signing_message: [u8; 32] = hasher.finalize().into();
             let signing_message = H256::from(signing_message);
             self.verify_alone(
                 sender_script.args().unpack(),
@@ -292,14 +280,10 @@ impl Secp256k1Tron {
         let mut hasher = Keccak256::new();
         hasher.update("\x19TRON Signed Message:\n32");
         hasher.update(message.as_slice());
-        let buf = hasher.finalize();
-        let mut signing_message = [0u8; 32];
-        signing_message.copy_from_slice(&buf[..]);
+        let signing_message: [u8; 32] = hasher.finalize().into();
         let signing_message = H256::from(signing_message);
-        let mut expected_pubkey_hash = [0u8; 20];
-        expected_pubkey_hash.copy_from_slice(&lock_args[32..52]);
         let pubkey_hash = self.recover(signing_message, signature.as_ref())?;
-        if pubkey_hash.as_ref() != expected_pubkey_hash {
+        if pubkey_hash.as_ref() != &lock_args[32..52] {
             return Err(LockAlgorithmError::InvalidSignature(
                 "Secp256k1Tron: Mismatch pubkey hash".to_string(),
             ));
@@ -337,9 +321,7 @@ impl LockAlgorithm for Secp256k1Tron {
         let mut hasher = Keccak256::new();
         hasher.update(&pubkey.serialize_uncompressed()[1..]);
         let buf = hasher.finalize();
-        let mut pubkey_hash = vec![0u8; 20];
-        pubkey_hash.copy_from_slice(&buf[12..]);
-        Ok(Bytes::from(pubkey_hash))
+        Ok(Bytes::copy_from_slice(&buf[12..]))
     }
 
     fn verify_tx(

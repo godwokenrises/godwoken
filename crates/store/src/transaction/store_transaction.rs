@@ -153,14 +153,10 @@ impl StoreTransaction {
                 txs.prev_state_checkpoint().to_entity()
             };
 
-            let root: [u8; 32] = prev_txs_state.merkle_root().unpack();
+            let root = prev_txs_state.merkle_root();
             let count: u32 = prev_txs_state.count().unpack();
-            let checkpoint: Byte32 = {
-                let checkpoint: [u8; 32] = calculate_state_checkpoint(&root.into(), count).into();
-                checkpoint.pack()
-            };
+            let checkpoint: Byte32 = calculate_state_checkpoint(&root.unpack(), count).pack();
             if checkpoint != prev_txs_state_checkpoint {
-                let root: Byte32 = root.pack();
                 log::debug!("root: {} count: {}", root, count);
                 return Err(Error::from(format!(
                     "unexpected prev tx state, checkpoint: {} prev_txs_state_checkpoint: {}",

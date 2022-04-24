@@ -43,8 +43,7 @@ impl EthHasher {
 
     pub fn finalize(self) -> H256 {
         let buf = self.hasher.finalize();
-        let mut result = [0u8; 32];
-        result.copy_from_slice(&buf[..]);
+        let result: [u8; 32] = buf.into();
         result.into()
     }
 }

@@ -24,7 +24,6 @@ use gw_common::{
     builtins::ETH_REGISTRY_ACCOUNT_ID,
     error::Error as StateError,
     h256_ext::H256Ext,
-    merkle_utils::calculate_state_checkpoint,
     registry_address::RegistryAddress,
     state::{build_account_field_key, State, GW_ACCOUNT_NONCE_TYPE},
     H256,
@@ -346,11 +345,9 @@ impl Generator {
                 Ok(receipt) => receipt,
                 Err(err) => return ApplyBlockResult::Error(err),
             };
-            let account_state = state.get_merkle_state();
-            let expected_checkpoint = calculate_state_checkpoint(
-                &account_state.merkle_root().unpack(),
-                account_state.count().unpack(),
-            );
+            let expected_checkpoint = state
+                .calculate_state_checkpoint()
+                .expect("calculate_state_checkpoint");
             let block_checkpoint: H256 = match state_checkpoint_list.get(wth_idx) {
                 Some(checkpoint) => *checkpoint,
                 None => {
@@ -464,12 +461,9 @@ impl Generator {
                     return ApplyBlockResult::Error(err);
                 }
                 apply_state_total_ms += now.elapsed().as_millis();
-                let account_state = state.get_merkle_state();
-
-                let expected_checkpoint = calculate_state_checkpoint(
-                    &account_state.merkle_root().unpack(),
-                    account_state.count().unpack(),
-                );
+                let expected_checkpoint = state
+                    .calculate_state_checkpoint()
+                    .expect("calculate_state_checkpoint");
                 let checkpoint_index = withdrawal_receipts.len() + tx_index;
                 let block_checkpoint: H256 = match state_checkpoint_list.get(checkpoint_index) {
                     Some(checkpoint) => *checkpoint,

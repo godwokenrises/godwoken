@@ -1,6 +1,9 @@
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
+use std::{
+    convert::TryInto,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 use crate::snapshot::StoreSnapshot;
@@ -104,9 +107,7 @@ impl MemStore {
     pub fn get_mem_block_account_smt_root(&self) -> Result<Option<H256>, Error> {
         match self.get(COLUMN_META, META_MEM_SMT_ROOT_KEY) {
             Some(slice) => {
-                debug_assert_eq!(slice.len(), 32);
-                let mut root = [0u8; 32];
-                root.copy_from_slice(&slice);
+                let root: [u8; 32] = slice[..].try_into().unwrap();
                 Ok(Some(root.into()))
             }
             None => Ok(None),

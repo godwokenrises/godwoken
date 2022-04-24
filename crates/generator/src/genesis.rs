@@ -67,15 +67,9 @@ pub fn build_genesis_from_store(
     // for example: send a tx to reserved account to create a new contract account
     let reserved_id = tree.create_account_from_script(
         Script::new_builder()
-            .code_hash({
-                let code_hash: [u8; 32] = config.meta_contract_validator_type_hash.clone().into();
-                code_hash.pack()
-            })
+            .code_hash(config.meta_contract_validator_type_hash.pack())
             .hash_type(ScriptHashType::Type.into())
-            .args({
-                let rollup_script_hash: [u8; 32] = rollup_context.rollup_script_hash.into();
-                Bytes::from(rollup_script_hash.to_vec()).pack()
-            })
+            .args(rollup_context.rollup_script_hash.as_slice().pack())
             .build(),
     )?;
     assert_eq!(
@@ -95,15 +89,9 @@ pub fn build_genesis_from_store(
     // setup ETH registry contract
     let eth_registry_id = tree.create_account_from_script(
         Script::new_builder()
-            .code_hash({
-                let code_hash: [u8; 32] = config.eth_registry_validator_type_hash.clone().into();
-                code_hash.pack()
-            })
+            .code_hash(config.eth_registry_validator_type_hash.pack())
             .hash_type(ScriptHashType::Type.into())
-            .args({
-                let rollup_script_hash: [u8; 32] = rollup_context.rollup_script_hash.into();
-                Bytes::from(rollup_script_hash.to_vec()).pack()
-            })
+            .args(rollup_context.rollup_script_hash.as_slice().pack())
             .build(),
     )?;
     assert_eq!(

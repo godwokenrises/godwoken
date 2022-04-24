@@ -1,7 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use ckb_types::bytes::Bytes;
 use ckb_types::prelude::{Builder, Entity};
-use gw_common::merkle_utils::calculate_state_checkpoint;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::state::State;
 use gw_common::H256;
@@ -64,11 +63,7 @@ impl ReplayBlock {
                 &withdrawal.request(),
             )?;
 
-            let account_state = state.get_merkle_state();
-            let expected_checkpoint = calculate_state_checkpoint(
-                &account_state.merkle_root().unpack(),
-                account_state.count().unpack(),
-            );
+            let expected_checkpoint = state.calculate_state_checkpoint()?;
 
             let block_checkpoint: H256 = match state_checkpoint_list.get(wth_idx) {
                 Some(checkpoint) => *checkpoint,
@@ -81,11 +76,7 @@ impl ReplayBlock {
 
         // apply deposition to state
         state.apply_deposit_requests(generator.rollup_context(), deposits)?;
-        let prev_txs_state = state.get_merkle_state();
-        let expected_prev_txs_state_checkpoint = calculate_state_checkpoint(
-            &prev_txs_state.merkle_root().unpack(),
-            prev_txs_state.count().unpack(),
-        );
+        let expected_prev_txs_state_checkpoint = state.calculate_state_checkpoint()?;
         let block_prev_txs_state_checkpoint: H256 = raw_block
             .submit_transactions()
             .prev_state_checkpoint()
@@ -125,12 +116,7 @@ impl ReplayBlock {
             )?;
 
             state.apply_run_result(&run_result)?;
-            let account_state = state.get_merkle_state();
-
-            let expected_checkpoint = calculate_state_checkpoint(
-                &account_state.merkle_root().unpack(),
-                account_state.count().unpack(),
-            );
+            let expected_checkpoint = state.calculate_state_checkpoint()?;
             let checkpoint_index = withdrawals.len() + tx_index;
             let block_checkpoint: H256 = match state_checkpoint_list.get(checkpoint_index) {
                 Some(checkpoint) => *checkpoint,
