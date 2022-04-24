@@ -13,6 +13,7 @@ use ckb_types::{
 };
 use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
 use gw_types::packed::{CellOutput, CustodianLockArgs};
+use gw_types::U256;
 use gw_types::{
     bytes::Bytes as GwBytes,
     packed::{Byte32, DepositLockArgs, Script},
@@ -21,7 +22,6 @@ use gw_types::{
 use std::path::Path;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
-use std::u128;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn deposit_ckb(
@@ -158,7 +158,7 @@ fn privkey_to_lock_hash(privkey: &H256) -> Result<H256> {
 async fn wait_for_balance_change(
     godwoken_rpc_client: &mut GodwokenRpcClient,
     from_script_hash: &H256,
-    init_balance: u128,
+    init_balance: U256,
     timeout_secs: u64,
 ) -> Result<()> {
     let retry_timeout = Duration::from_secs(timeout_secs);
@@ -189,7 +189,7 @@ async fn wait_for_balance_change(
 async fn get_balance_by_script_hash(
     godwoken_rpc_client: &mut GodwokenRpcClient,
     script_hash: &H256,
-) -> Result<u128> {
+) -> Result<U256> {
     let addr = godwoken_rpc_client
         .get_registry_address_by_script_hash(script_hash)
         .await;
@@ -201,7 +201,7 @@ async fn get_balance_by_script_hash(
         }
         Err(e) => {
             log::warn!("failed to get_registry_address_by_script_hash, {}", e);
-            0
+            U256::zero()
         }
     };
     Ok(balance)

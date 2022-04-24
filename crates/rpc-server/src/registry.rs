@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
-use gw_common::{blake2b::new_blake2b, state::State, H256};
+use gw_common::{blake2b::new_blake2b, builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
 use gw_config::{FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig};
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
 use gw_generator::{
@@ -10,7 +10,7 @@ use gw_generator::{
 };
 use gw_jsonrpc_types::{
     blockchain::Script,
-    ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
+    ckb_jsonrpc_types::{JsonBytes, Uint32},
     godwoken::{
         BackendInfo, ErrorTxReceipt, GlobalState, L2BlockCommittedInfo, L2BlockStatus, L2BlockView,
         L2BlockWithStatus, L2TransactionStatus, L2TransactionWithStatus, LastL2BlockCommittedInfo,
@@ -37,6 +37,7 @@ use gw_traits::CodeStore;
 use gw_types::{
     packed::{self, BlockInfo, Byte32, L2Transaction, RollupConfig, WithdrawalRequestExtra},
     prelude::*,
+    U256,
 };
 use gw_version::Version;
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
@@ -1155,7 +1156,7 @@ async fn get_balance(
     Params(params): Params<GetBalanceParams>,
     store: Data<Store>,
     mem_pool_state: Data<Arc<MemPoolState>>,
-) -> Result<Uint128, RpcError> {
+) -> Result<U256, RpcError> {
     let (serialized_address, sudt_id, block_number) = match params {
         GetBalanceParams::Tip(p) => (p.0, p.1, None),
         GetBalanceParams::Number(p) => p,
@@ -1168,15 +1169,23 @@ async fn get_balance(
         Some(block_number) => {
             let db = store.begin_transaction();
             let tree = db.state_tree(StateContext::ReadOnlyHistory(block_number.into()))?;
-            tree.get_sudt_balance(sudt_id.into(), &address)?
+            if sudt_id.value() == CKB_SUDT_ACCOUNT_ID {
+                tree.get_ckb_balance(&address)?
+            } else {
+                tree.get_sudt_balance(sudt_id.into(), &address)?.into()
+            }
         }
         None => {
             let snap = mem_pool_state.load();
             let tree = snap.state()?;
-            tree.get_sudt_balance(sudt_id.into(), &address)?
+            if sudt_id.value() == CKB_SUDT_ACCOUNT_ID {
+                tree.get_ckb_balance(&address)?
+            } else {
+                tree.get_sudt_balance(sudt_id.into(), &address)?.into()
+            }
         }
     };
-    Ok(balance.into())
+    Ok(balance)
 }
 
 // account_id, key, block_number

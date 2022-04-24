@@ -1,6 +1,7 @@
 use anyhow::Result;
 use ckb_jsonrpc_types::Serialize;
 use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
+use gw_types::U256;
 use std::path::Path;
 use tokio::task::JoinHandle;
 
@@ -10,7 +11,7 @@ use crate::godwoken_rpc::GodwokenRpcClient;
 struct Account {
     pub id: u32,
     pub code_hash: ckb_fixed_hash::H256,
-    pub ckb: u128,
+    pub ckb: U256,
     pub nonce: u32,
 }
 

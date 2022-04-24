@@ -181,7 +181,7 @@ fn generate_withdrawal_message_to_sign(
 async fn wait_for_balance_change(
     godwoken_rpc_client: &mut GodwokenRpcClient,
     addr: &RegistryAddress,
-    init_balance: u128,
+    init_balance: U256,
     timeout_secs: u64,
 ) -> Result<()> {
     let retry_timeout = Duration::from_secs(timeout_secs);

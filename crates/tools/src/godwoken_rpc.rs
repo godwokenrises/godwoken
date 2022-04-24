@@ -3,16 +3,17 @@ use ckb_jsonrpc_types::Script;
 use ckb_types::H256;
 use gw_common::{builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress};
 use gw_jsonrpc_types::{
-    ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
+    ckb_jsonrpc_types::{JsonBytes, Uint32},
     debugger::{DumpChallengeTarget, ReprMockTransaction},
     godwoken::{RunResult, TxReceipt},
 };
+use gw_types::U256;
 use std::{
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
-    u128, u32,
+    u32,
 };
 
 type AccountID = Uint32;
@@ -52,12 +53,12 @@ impl GodwokenRpcClient {
             .map(|opt| opt.map(Into::into))
     }
 
-    pub async fn get_balance(&self, addr: &RegistryAddress, sudt_id: u32) -> Result<u128> {
+    pub async fn get_balance(&self, addr: &RegistryAddress, sudt_id: u32) -> Result<U256> {
         let params = serde_json::to_value((
             JsonBytes::from_vec(addr.to_bytes()),
             AccountID::from(sudt_id),
         ))?;
-        self.rpc::<Uint128>("get_balance", params)
+        self.rpc::<U256>("get_balance", params)
             .await
             .map(Into::into)
     }
