@@ -102,7 +102,7 @@ impl<'a> Generator<'a> {
         };
         let block_hash: H256 = block.hash().into();
         let block_number = block.raw().number().unpack();
-        let output = match gw_generator::Generator::build_withdrawal_cell_output(
+        let output = match gw_generator::utils::build_withdrawal_cell_output(
             self.rollup_context,
             req_extra,
             &block_hash,
@@ -361,15 +361,14 @@ mod test {
         // ## With owner lock
         let req_extra = req_extra.as_builder().owner_lock(owner_lock).build();
         let (output, data) = generator.verified_output(&req_extra, &block).unwrap();
-        let (expected_output, expected_data) =
-            gw_generator::Generator::build_withdrawal_cell_output(
-                &rollup_context,
-                &req_extra,
-                &block.hash().into(),
-                block.raw().number().unpack(),
-                Some(sudt_script),
-            )
-            .unwrap();
+        let (expected_output, expected_data) = gw_generator::utils::build_withdrawal_cell_output(
+            &rollup_context,
+            &req_extra,
+            &block.hash().into(),
+            block.raw().number().unpack(),
+            Some(sudt_script),
+        )
+        .unwrap();
 
         assert_eq!(output.as_slice(), expected_output.as_slice());
         assert_eq!(data, expected_data);
