@@ -16,6 +16,7 @@ use gw_types::{
     packed::{AllowedTypeHash, BlockInfo, Fee},
     packed::{RawL2Transaction, RollupConfig, SUDTArgs, SUDTTransfer, Script},
     prelude::*,
+    U256,
 };
 
 const DUMMY_SUDT_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [3u8; 32];
@@ -184,7 +185,7 @@ pub fn bench(c: &mut Criterion) {
                 let b_script_hash = tree.get_script_hash(b_id).expect("get script hash");
                 tree.mapping_registry_address_to_script_hash(a_addr.clone(), a_script_hash)
                     .unwrap();
-                tree.mapping_registry_address_to_script_hash(b_addr.clone(), b_script_hash)
+                tree.mapping_registry_address_to_script_hash(b_addr, b_script_hash)
                     .unwrap();
 
                 let block_producer_script = {
@@ -220,7 +221,7 @@ pub fn bench(c: &mut Criterion) {
             |(mut tree, rollup_config, sudt_id, a_id, b_script_hash, block_info)| {
                 // transfer from A to B
                 let value = 4000u128;
-                let fee = 42u64;
+                let fee: U256 = 42u64.into();
                 let b_addr = tree
                     .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &b_script_hash)
                     .expect("get script hash")

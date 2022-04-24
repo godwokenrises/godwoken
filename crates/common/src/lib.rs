@@ -15,7 +15,7 @@ pub mod test_traits;
 // re-exports
 
 pub use gw_hash::blake2b;
-pub use h256_ext::{H256, U256};
+pub use h256_ext::H256;
 pub use sparse_merkle_tree;
 
 /// constants

@@ -1,6 +1,6 @@
 // type aliases
 
-pub use primitive_types::U256;
+use gw_types::U256;
 pub use sparse_merkle_tree::H256;
 
 pub trait H256Ext {

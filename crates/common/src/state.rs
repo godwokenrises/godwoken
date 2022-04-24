@@ -16,9 +16,11 @@
 //
 // Thus, the first 5 bytes keeps uniqueness for different type of keys.
 
+use gw_types::U256;
+
 use crate::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
 use crate::error::Error;
-use crate::h256_ext::{H256Ext, H256, U256};
+use crate::h256_ext::{H256Ext, H256};
 use crate::registry_address::RegistryAddress;
 use crate::vec::Vec;
 use crate::{blake2b::new_blake2b, merkle_utils::calculate_state_checkpoint};
@@ -213,9 +215,13 @@ pub trait State {
         Ok(balance.to_u128())
     }
 
+    fn get_ckb_total_supply(&self) -> Result<U256, Error> {
+        self.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID)
+    }
+
     fn get_sudt_total_supply(&self, sudt_id: u32) -> Result<U256, Error> {
-        let total_supoly = self.get_value(sudt_id, &SUDT_TOTAL_SUPPLY_KEY)?;
-        Ok(total_supoly.to_u256())
+        let total_supply = self.get_value(sudt_id, &SUDT_TOTAL_SUPPLY_KEY)?;
+        Ok(total_supply.to_u256())
     }
 
     fn store_data_hash(&mut self, data_hash: H256) -> Result<(), Error> {

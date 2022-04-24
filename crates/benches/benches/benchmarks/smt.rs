@@ -2,11 +2,8 @@ use std::sync::Arc;
 
 use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
 use gw_common::{
-    blake2b::new_blake2b,
-    builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
-    registry_address::RegistryAddress,
-    state::State,
-    H256,
+    blake2b::new_blake2b, builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress,
+    state::State, H256,
 };
 use gw_config::{BackendConfig, GenesisConfig, StoreConfig};
 use gw_db::{schema::COLUMNS, RocksDB};
@@ -35,6 +32,7 @@ use gw_types::{
         SubmitTransactions,
     },
     prelude::*,
+    U256,
 };
 use pprof::criterion::{Output, PProfProfiler};
 
@@ -192,9 +190,7 @@ impl BenchExecutionEnvironment {
             .timestamp(1.pack())
             .build();
 
-        let block_producer_balance = state
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &block_producer)
-            .unwrap();
+        let block_producer_balance = state.get_ckb_balance(&block_producer).unwrap();
 
         let addrs: Vec<_> = (0..=accounts)
             .map(Account::build_script)
@@ -228,7 +224,7 @@ impl BenchExecutionEnvironment {
                         .fee(
                             Fee::new_builder()
                                 .registry_id(ETH_REGISTRY_ACCOUNT_ID.pack())
-                                .amount(1.pack())
+                                .amount(U256::one().pack())
                                 .build(),
                         )
                         .build(),
@@ -264,9 +260,7 @@ impl BenchExecutionEnvironment {
 
         let snap = self.mem_pool_state.load();
         let state = snap.state().unwrap();
-        let post_block_producer_balance = state
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &block_producer)
-            .unwrap();
+        let post_block_producer_balance = state.get_ckb_balance(&block_producer).unwrap();
 
         assert_eq!(
             post_block_producer_balance,
@@ -286,9 +280,7 @@ impl BenchExecutionEnvironment {
             state
                 .mapping_registry_address_to_script_hash(addr.clone(), account_script_hash)
                 .unwrap();
-            state
-                .mint_sudt(CKB_SUDT_ACCOUNT_ID, &addr, CKB_BALANCE)
-                .unwrap();
+            state.mint_ckb(&addr, CKB_BALANCE.into()).unwrap();
 
             Account { id: account_id }
         };

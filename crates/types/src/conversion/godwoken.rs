@@ -1,5 +1,7 @@
 use core::convert::TryInto;
 
+use primitive_types::U256;
+
 use crate::{core::H256, packed, prelude::*, vec::Vec};
 
 impl Pack<packed::KVPair> for (H256, H256) {
@@ -32,6 +34,23 @@ impl<'r> Unpack<[u8; 20]> for packed::Byte20Reader<'r> {
     }
 }
 impl_conversion_for_entity_unpack!([u8; 20], Byte20);
+
+impl Pack<packed::Uint256> for U256 {
+    fn pack(&self) -> packed::Uint256 {
+        let mut buf = [0u8; 32];
+        self.to_little_endian(&mut buf);
+        packed::Uint256::new_unchecked(buf.to_vec().into())
+    }
+}
+
+impl<'r> Unpack<U256> for packed::Uint256Reader<'r> {
+    // Inline so that the panic branch can be optimized out.
+    #[inline]
+    fn unpack(&self) -> U256 {
+        U256::from_little_endian(self.as_slice())
+    }
+}
+impl_conversion_for_entity_unpack!(U256, Uint256);
 
 impl_conversion_for_vector!(u32, Uint32Vec, Uint32VecReader);
 impl_conversion_for_vector!((H256, H256), KVPairVec, KVPairVecReader);

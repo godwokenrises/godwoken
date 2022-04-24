@@ -17,3 +17,4 @@ gw-hash = { path = "../hash", default-features = false }
 ckb-fixed-hash = { version = "0.100.0", optional = true }
 sparse-merkle-tree = { version = "0.5.2-rc1", default-features = false }
 ckb-types = { version = "0.100.0", default-features = false, optional = true }
+primitive-types = { version = "0.10", default-features = false, features = [ "impl-serde", "impl-rlp" ] }

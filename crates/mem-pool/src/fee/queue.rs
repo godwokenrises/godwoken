@@ -196,7 +196,7 @@ mod tests {
 
         let entry1 = FeeEntry {
             item: FeeItem::Tx(Default::default()),
-            fee: 100 * 1000,
+            fee: (100 * 1000u64).into(),
             cycles_limit: 1000,
             sender: 2,
             order: queue.len(),
@@ -204,7 +204,7 @@ mod tests {
 
         let entry2 = FeeEntry {
             item: FeeItem::Tx(Default::default()),
-            fee: 101 * 1000,
+            fee: (101 * 1000u64).into(),
             cycles_limit: 1000,
             sender: 3,
             order: queue.len(),
@@ -212,7 +212,7 @@ mod tests {
 
         let entry3 = FeeEntry {
             item: FeeItem::Tx(Default::default()),
-            fee: 100 * 1001,
+            fee: (100 * 1001u64).into(),
             cycles_limit: 1001,
             sender: 4,
             order: queue.len(),
@@ -220,7 +220,7 @@ mod tests {
 
         let entry4 = FeeEntry {
             item: FeeItem::Withdrawal(Default::default()),
-            fee: 101 * 1001,
+            fee: (101 * 1001u64).into(),
             cycles_limit: 1001,
             sender: 5,
             order: queue.len(),
@@ -278,7 +278,7 @@ mod tests {
 
         let entry1 = FeeEntry {
             item: FeeItem::Tx(Default::default()),
-            fee: 10 * 1000,
+            fee: (10 * 1000u64).into(),
             cycles_limit: 1000,
             sender: 2,
             order: queue.len(),
@@ -288,7 +288,7 @@ mod tests {
 
         let entry2 = FeeEntry {
             item: FeeItem::Tx(Default::default()),
-            fee: 1000,
+            fee: 1000u64.into(),
             cycles_limit: 100,
             sender: 3,
             order: queue.len(),
@@ -298,7 +298,7 @@ mod tests {
 
         let entry3 = FeeEntry {
             item: FeeItem::Tx(Default::default()),
-            fee: 1000,
+            fee: 1000u64.into(),
             cycles_limit: 500,
             sender: 4,
             order: queue.len(),
@@ -308,7 +308,7 @@ mod tests {
 
         let entry4 = FeeEntry {
             item: FeeItem::Withdrawal(Default::default()),
-            fee: 101 * 1000,
+            fee: (101 * 1000u64).into(),
             cycles_limit: 1001,
             sender: 5,
             order: queue.len(),
@@ -356,7 +356,7 @@ mod tests {
                     .raw(RawL2Transaction::new_builder().nonce(1u32.pack()).build())
                     .build(),
             ),
-            fee: 100 * 1000,
+            fee: (100 * 1000u64).into(),
             cycles_limit: 1000,
             sender: 2,
             order: queue.len(),
@@ -368,7 +368,7 @@ mod tests {
                     .raw(RawL2Transaction::new_builder().nonce(0u32.pack()).build())
                     .build(),
             ),
-            fee: 100 * 1000,
+            fee: (100 * 1000u64).into(),
             cycles_limit: 1000,
             sender: 2,
             order: queue.len(),
@@ -415,7 +415,7 @@ mod tests {
                     .raw(RawL2Transaction::new_builder().nonce(0u32.pack()).build())
                     .build(),
             ),
-            fee: 100 * 1000,
+            fee: (100 * 1000u64).into(),
             cycles_limit: 1000,
             sender: 2,
             order: queue.len(),
@@ -427,7 +427,7 @@ mod tests {
                     .raw(RawL2Transaction::new_builder().nonce(0u32.pack()).build())
                     .build(),
             ),
-            fee: 101 * 1000,
+            fee: (101 * 1000u64).into(),
             cycles_limit: 1000,
             sender: 2,
             order: queue.len(),
@@ -444,7 +444,7 @@ mod tests {
         {
             let items = queue.fetch(&tree, 3).expect("fetch");
             assert_eq!(items.len(), 1);
-            assert_eq!(items[0].fee, 101 * 1000);
+            assert_eq!(items[0].fee, (101 * 1000u64).into());
             // try fetch remain items
             let items = queue.fetch(&tree, 1).expect("fetch");
             assert_eq!(items.len(), 0);
@@ -478,7 +478,7 @@ mod tests {
                         .raw(RawL2Transaction::new_builder().nonce(i.pack()).build())
                         .build(),
                 ),
-                fee: 100 * 1000,
+                fee: (100 * 1000u64).into(),
                 cycles_limit: 1000,
                 sender: 2,
                 order: queue.len(),
@@ -500,7 +500,7 @@ mod tests {
                         )
                         .build(),
                 ),
-                fee: 100 * 1000,
+                fee: (100 * 1000u64).into(),
                 cycles_limit: 1000,
                 sender: 2,
                 order: queue.len(),

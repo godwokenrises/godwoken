@@ -1,4 +1,4 @@
-use primitive_types::U256;
+use gw_types::U256;
 
 // NOTE: u64::MAX is about 10^18, U256::MAX is about 10^77. Multiple 10 pow
 // `CKB_DECIMAL_POW_EXP` should not overflow.

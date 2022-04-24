@@ -1962,7 +1962,6 @@ dependencies = [
  "gw-hash",
  "gw-types",
  "merkle-cbt",
- "primitive-types",
  "sparse-merkle-tree",
  "thiserror",
 ]
@@ -2384,6 +2383,7 @@ dependencies = [
  "ckb-types",
  "gw-hash",
  "molecule",
+ "primitive-types",
  "sparse-merkle-tree",
 ]
 

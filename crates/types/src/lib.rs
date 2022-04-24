@@ -12,6 +12,7 @@ mod std_traits;
 
 pub use generated::packed;
 pub use molecule::bytes;
+pub use primitive_types::U256;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "std")] {

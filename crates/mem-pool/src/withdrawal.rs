@@ -296,7 +296,7 @@ mod test {
     use std::iter::FromIterator;
 
     use gw_common::h256_ext::H256Ext;
-    use gw_common::H256;
+    use gw_common::{ckb_decimal, H256};
     use gw_types::offchain::RollupContext;
     use gw_types::packed::{
         L2Block, RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest,
@@ -334,7 +334,7 @@ mod test {
             .build();
 
         let req = {
-            let fee = 50u64;
+            let fee = ckb_decimal::to_18(50u64);
             let raw = RawWithdrawalRequest::new_builder()
                 .nonce(1u32.pack())
                 .capacity((500 * 10u64.pow(8)).pack())

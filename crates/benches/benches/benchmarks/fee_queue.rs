@@ -45,7 +45,7 @@ fn bench_add_full(b: &mut Bencher) {
                     .raw(RawL2Transaction::new_builder().nonce(i.pack()).build())
                     .build(),
             ),
-            fee: 100 * 1000,
+            fee: (100 * 1000u64).into(),
             cycles_limit: 1000,
             sender: 2,
             order: queue.len(),
@@ -66,7 +66,7 @@ fn bench_add_full(b: &mut Bencher) {
                     )
                     .build(),
             ),
-            fee: 100 * 1000,
+            fee: (100 * 1000u64).into(),
             cycles_limit: 1000,
             sender: 2,
             order: queue.len(),
@@ -102,7 +102,7 @@ fn bench_add_fetch_20(b: &mut Bencher) {
                     .raw(RawL2Transaction::new_builder().nonce(i.pack()).build())
                     .build(),
             ),
-            fee: 100 * 1000,
+            fee: (100 * 1000u64).into(),
             cycles_limit: 1000,
             sender: 2,
             order: queue.len(),
@@ -125,7 +125,7 @@ fn bench_add_fetch_20(b: &mut Bencher) {
                         )
                         .build(),
                 ),
-                fee: 100 * 1000,
+                fee: (100 * 1000u64).into(),
                 cycles_limit: 1000,
                 sender: 2,
                 order: queue.len(),
