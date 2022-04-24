@@ -4,7 +4,10 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_common::{blake2b::new_blake2b, state::State, H256};
 use gw_config::{FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig};
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
-use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, ArcSwap, Generator};
+use gw_generator::{
+    error::TransactionError, sudt::build_l2_sudt_script,
+    verification::transaction::TransactionVerifier, ArcSwap, Generator,
+};
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
@@ -776,10 +779,10 @@ async fn execute_l2transaction(
         let chain_view = ChainView::new(&db, tip_block_hash);
         let snap = ctx.mem_pool_state.load();
         let state = snap.state()?;
+        // tx basic verification
+        TransactionVerifier::new(&state, ctx.generator.rollup_context()).verify(&tx)?;
         // verify tx signature
         ctx.generator.check_transaction_signature(&state, &tx)?;
-        // tx basic verification
-        ctx.generator.verify_transaction(&state, &tx)?;
         // execute tx
         let raw_tx = tx.raw();
         let run_result = ctx.generator.unchecked_execute_transaction(

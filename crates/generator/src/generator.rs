@@ -15,14 +15,13 @@ use crate::{
 use crate::{
     backend_manage::Backend,
     error::{Error, TransactionError},
-    sudt::build_l2_sudt_script,
 };
 use crate::{error::AccountError, syscalls::L2Syscalls};
 use crate::{error::LockAlgorithmError, traits::StateExt};
 use arc_swap::ArcSwap;
 use gw_ckb_hardfork::GLOBAL_VM_VERSION;
 use gw_common::{
-    builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
+    builtins::ETH_REGISTRY_ACCOUNT_ID,
     error::Error as StateError,
     h256_ext::H256Ext,
     merkle_utils::calculate_state_checkpoint,
@@ -38,9 +37,8 @@ use gw_types::{
     core::{ChallengeTargetType, ScriptHashType},
     offchain::{RollupContext, RunResult},
     packed::{
-        AccountMerkleState, BlockInfo, CellOutput, ChallengeTarget, DepositRequest, L2Block,
-        L2Transaction, RawL2Block, RawL2Transaction, Script, TxReceipt, WithdrawalLockArgs,
-        WithdrawalReceipt, WithdrawalRequestExtra,
+        AccountMerkleState, BlockInfo, ChallengeTarget, DepositRequest, L2Block, L2Transaction,
+        RawL2Block, RawL2Transaction, TxReceipt, WithdrawalReceipt, WithdrawalRequestExtra,
     },
     prelude::*,
 };
@@ -185,93 +183,6 @@ impl Generator {
         Ok(run_result)
     }
 
-    /// Verify withdrawal request
-    /// Notice this function do not perform signature check
-    #[instrument(skip_all)]
-    pub fn verify_withdrawal_request<S: State + CodeStore>(
-        &self,
-        state: &S,
-        withdrawal: &WithdrawalRequestExtra,
-        asset_script: Option<Script>,
-    ) -> Result<(), Error> {
-        let raw = withdrawal.request().raw();
-        let account_script_hash: H256 = raw.account_script_hash().unpack();
-        let sudt_script_hash: H256 = raw.sudt_script_hash().unpack();
-        let amount: u128 = raw.amount().unpack();
-        let capacity: u64 = raw.capacity().unpack();
-        let fee: u64 = raw.fee().unpack();
-        let registry_address = state
-            .get_registry_address_by_script_hash(raw.registry_id().unpack(), &account_script_hash)?
-            .ok_or(Error::Account(AccountError::UnknownAccount))?;
-
-        // check capacity (use dummy block hash and number)
-        let rollup_context = self.rollup_context();
-        Self::build_withdrawal_cell_output(
-            rollup_context,
-            withdrawal,
-            &H256::one(),
-            1,
-            asset_script,
-        )?;
-
-        // find user account
-        let id = state
-            .get_account_id_by_script_hash(&account_script_hash)?
-            .ok_or(AccountError::UnknownAccount)?; // find Simple UDT account
-
-        // check nonce
-        let expected_nonce = state.get_nonce(id)?;
-        let actual_nonce: u32 = raw.nonce().unpack();
-        if actual_nonce != expected_nonce {
-            return Err(WithdrawalError::Nonce {
-                expected: expected_nonce,
-                actual: actual_nonce,
-            }
-            .into());
-        }
-
-        // check CKB balance
-        let ckb_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &registry_address)?;
-        let required_ckb_capacity: u128 = capacity.saturating_add(fee).into();
-        if required_ckb_capacity > ckb_balance {
-            return Err(WithdrawalError::Overdraft.into());
-        }
-        let l2_sudt_script_hash =
-            build_l2_sudt_script(&self.rollup_context, &sudt_script_hash).hash();
-        let sudt_id = state
-            .get_account_id_by_script_hash(&l2_sudt_script_hash.into())?
-            .ok_or(AccountError::UnknownSUDT)?;
-        // The sUDT id must not be equals to the CKB sUDT id if amount isn't 0
-        if sudt_id != CKB_SUDT_ACCOUNT_ID {
-            // check SUDT balance
-            // user can't withdrawal 0 SUDT when non-CKB sudt_id exists
-            if amount == 0 {
-                return Err(WithdrawalError::NonPositiveSUDTAmount.into());
-            }
-            let balance = state.get_sudt_balance(sudt_id, &registry_address)?;
-            if amount > balance {
-                return Err(WithdrawalError::Overdraft.into());
-            }
-        } else if amount != 0 {
-            // user can't withdrawal CKB token via SUDT fields
-            return Err(WithdrawalError::WithdrawFakedCKB.into());
-        }
-
-        Ok(())
-    }
-
-    /// check chain id
-    fn check_chain_id(&self, chain_id: u64) -> Result<(), LockAlgorithmError> {
-        let expected_rollup_chain_id: u64 = self.rollup_context().rollup_config.chain_id().unpack();
-        if expected_rollup_chain_id != chain_id {
-            return Err(LockAlgorithmError::InvalidSignature(format!(
-                "Wrong chain_id, expected: {} actual: {}",
-                expected_rollup_chain_id, chain_id
-            )));
-        }
-        Ok(())
-    }
-
     /// Check withdrawal request signature
     #[instrument(skip_all)]
     pub fn check_withdrawal_signature<S: State + CodeStore>(
@@ -281,10 +192,6 @@ impl Generator {
     ) -> Result<(), Error> {
         let raw = withdrawal.request().raw();
         let account_script_hash: [u8; 32] = raw.account_script_hash().unpack();
-
-        // check chain_id
-        let chain_id: u64 = raw.chain_id().unpack();
-        self.check_chain_id(chain_id)?;
 
         // check signature
         let account_script = state
@@ -308,32 +215,6 @@ impl Generator {
         Ok(())
     }
 
-    /// verify transaction
-    /// Notice this function do not perform signature check
-    #[instrument(skip_all)]
-    pub fn verify_transaction<S: State + CodeStore>(
-        &self,
-        state: &S,
-        tx: &L2Transaction,
-    ) -> Result<(), TransactionValidateError> {
-        let raw_tx = tx.raw();
-        let sender_id: u32 = raw_tx.from_id().unpack();
-
-        // verify nonce
-        let account_nonce: u32 = state.get_nonce(sender_id)?;
-        let nonce: u32 = raw_tx.nonce().unpack();
-        if nonce != account_nonce {
-            return Err(TransactionError::Nonce {
-                expected: account_nonce,
-                actual: nonce,
-                account_id: sender_id,
-            }
-            .into());
-        }
-
-        Ok(())
-    }
-
     // Check transaction signature
     #[instrument(skip_all)]
     pub fn check_transaction_signature<S: State + CodeStore>(
@@ -344,10 +225,6 @@ impl Generator {
         let raw_tx = tx.raw();
         let sender_id: u32 = raw_tx.from_id().unpack();
         let receiver_id: u32 = raw_tx.to_id().unpack();
-
-        // check chain_id
-        let chain_id: u64 = raw_tx.chain_id().unpack();
-        self.check_chain_id(chain_id)?;
 
         // verify signature
         let script_hash = state.get_script_hash(sender_id)?;
@@ -816,71 +693,6 @@ impl Generator {
         Ok(run_result)
     }
 
-    pub fn build_withdrawal_cell_output(
-        rollup_context: &RollupContext,
-        req: &WithdrawalRequestExtra,
-        block_hash: &H256,
-        block_number: u64,
-        opt_asset_script: Option<Script>,
-    ) -> Result<(CellOutput, Bytes), WithdrawalCellError> {
-        let withdrawal_capacity: u64 = req.raw().capacity().unpack();
-        let lock_args: Bytes = {
-            let withdrawal_lock_args = WithdrawalLockArgs::new_builder()
-                .account_script_hash(req.raw().account_script_hash())
-                .withdrawal_block_hash(Into::<[u8; 32]>::into(*block_hash).pack())
-                .withdrawal_block_number(block_number.pack())
-                .owner_lock_hash(req.raw().owner_lock_hash())
-                .build();
-
-            let mut args = Vec::new();
-            args.extend_from_slice(rollup_context.rollup_script_hash.as_slice());
-            args.extend_from_slice(withdrawal_lock_args.as_slice());
-            let owner_lock = req.owner_lock();
-            let owner_lock_hash: [u8; 32] = req.raw().owner_lock_hash().unpack();
-            if owner_lock_hash != owner_lock.hash() {
-                return Err(WithdrawalCellError::OwnerLock(owner_lock_hash.into()));
-            }
-            args.extend_from_slice(&(owner_lock.as_slice().len() as u32).to_be_bytes());
-            args.extend_from_slice(owner_lock.as_slice());
-
-            Bytes::from(args)
-        };
-
-        let lock = Script::new_builder()
-            .code_hash(rollup_context.rollup_config.withdrawal_script_type_hash())
-            .hash_type(ScriptHashType::Type.into())
-            .args(lock_args.pack())
-            .build();
-
-        let (type_, data) = match opt_asset_script {
-            Some(type_) => (Some(type_).pack(), req.raw().amount().as_bytes()),
-            None => (None::<Script>.pack(), Bytes::new()),
-        };
-
-        let output = CellOutput::new_builder()
-            .capacity(withdrawal_capacity.pack())
-            .type_(type_)
-            .lock(lock)
-            .build();
-
-        match output.occupied_capacity(data.len()) {
-            Ok(min_capacity) if min_capacity > withdrawal_capacity => {
-                Err(WithdrawalCellError::MinCapacity {
-                    min: min_capacity as u128,
-                    req: req.raw().capacity().unpack(),
-                })
-            }
-            Err(err) => {
-                log::debug!("calculate withdrawal capacity {}", err); // Overflow
-                Err(WithdrawalCellError::MinCapacity {
-                    min: u64::MAX as u128 + 1,
-                    req: req.raw().capacity().unpack(),
-                })
-            }
-            _ => Ok((output, data)),
-        }
-    }
-
     pub fn get_backends(&self) -> &HashMap<H256, Backend> {
         self.backend_manage.get_backends()
     }
@@ -905,169 +717,4 @@ fn build_challenge_target(
         .target_index(target_index.pack())
         .target_type(target_type.into())
         .build()
-}
-
-#[cfg(test)]
-mod test {
-    use gw_common::h256_ext::H256Ext;
-    use gw_common::H256;
-    use gw_types::bytes::Bytes;
-    use gw_types::core::ScriptHashType;
-    use gw_types::offchain::RollupContext;
-    use gw_types::packed::{
-        RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest, WithdrawalRequestExtra,
-    };
-    use gw_types::prelude::{Builder, Entity, Pack, Unpack};
-
-    use crate::generator::WithdrawalCellError;
-    use crate::Generator;
-
-    #[test]
-    fn test_build_withdrawal_cell_output() {
-        let rollup_context = RollupContext {
-            rollup_script_hash: H256::from_u32(1),
-            rollup_config: RollupConfig::new_builder()
-                .withdrawal_script_type_hash(H256::from_u32(100).pack())
-                .build(),
-        };
-        let sudt_script = Script::new_builder()
-            .code_hash(H256::from_u32(1).pack())
-            .args(vec![3; 32].pack())
-            .build();
-        let owner_lock = Script::new_builder()
-            .code_hash(H256::from_u32(4).pack())
-            .args(vec![5; 32].pack())
-            .build();
-
-        // ## Fulfill withdrawal request
-        let req = {
-            let fee = 50u64;
-            let raw = RawWithdrawalRequest::new_builder()
-                .nonce(1u32.pack())
-                .capacity((500 * 10u64.pow(8)).pack())
-                .amount(20u128.pack())
-                .sudt_script_hash(sudt_script.hash().pack())
-                .account_script_hash(H256::from_u32(10).pack())
-                .owner_lock_hash(owner_lock.hash().pack())
-                .fee(fee.pack())
-                .build();
-            WithdrawalRequest::new_builder()
-                .raw(raw)
-                .signature(vec![6u8; 65].pack())
-                .build()
-        };
-        let withdrawal = WithdrawalRequestExtra::new_builder()
-            .request(req.clone())
-            .owner_lock(owner_lock.clone())
-            .build();
-
-        let block_hash = H256::from_u32(11);
-        let block_number = 11u64;
-        let (output, data) = Generator::build_withdrawal_cell_output(
-            &rollup_context,
-            &withdrawal,
-            &block_hash,
-            block_number,
-            Some(sudt_script.clone()),
-        )
-        .unwrap();
-
-        // Basic check
-        assert_eq!(output.capacity().unpack(), req.raw().capacity().unpack());
-        assert_eq!(
-            output.type_().as_slice(),
-            Some(sudt_script.clone()).pack().as_slice()
-        );
-        assert_eq!(
-            output.lock().code_hash(),
-            rollup_context.rollup_config.withdrawal_script_type_hash()
-        );
-        assert_eq!(output.lock().hash_type(), ScriptHashType::Type.into());
-        assert_eq!(data, req.raw().amount().as_bytes());
-
-        // Check lock args
-        let parsed_args =
-            gw_utils::withdrawal::parse_lock_args(&output.lock().args().unpack()).unwrap();
-        assert_eq!(
-            parsed_args.rollup_type_hash.pack(),
-            rollup_context.rollup_script_hash.pack()
-        );
-        assert_eq!(parsed_args.owner_lock.hash(), owner_lock.hash());
-
-        let lock_args = parsed_args.lock_args;
-        assert_eq!(
-            lock_args.account_script_hash(),
-            req.raw().account_script_hash()
-        );
-        assert_eq!(lock_args.withdrawal_block_hash(), block_hash.pack());
-        assert_eq!(lock_args.withdrawal_block_number().unpack(), block_number);
-        assert_eq!(lock_args.owner_lock_hash(), owner_lock.hash().pack());
-
-        // ## None asset script
-        let (output2, data2) = Generator::build_withdrawal_cell_output(
-            &rollup_context,
-            &withdrawal,
-            &block_hash,
-            block_number,
-            None,
-        )
-        .unwrap();
-
-        assert!(output2.type_().to_opt().is_none());
-        assert_eq!(data2, Bytes::new());
-
-        assert_eq!(output2.capacity().unpack(), output.capacity().unpack());
-        assert_eq!(output2.lock().hash(), output.lock().hash());
-
-        // ## Min capacity error
-        let err_req = {
-            let raw = req.raw().as_builder();
-            let err_raw = raw
-                .capacity(500u64.pack()) // ERROR: capacity not enough
-                .build();
-            req.clone().as_builder().raw(err_raw).build()
-        };
-
-        let err = Generator::build_withdrawal_cell_output(
-            &rollup_context,
-            &WithdrawalRequestExtra::new_builder()
-                .request(err_req)
-                .owner_lock(owner_lock)
-                .build(),
-            &block_hash,
-            block_number,
-            Some(sudt_script.clone()),
-        )
-        .unwrap_err();
-        assert!(matches!(
-            err,
-            WithdrawalCellError::MinCapacity { req: _, min: _ }
-        ));
-        if let WithdrawalCellError::MinCapacity { req, min: _ } = err {
-            assert_eq!(req, 500);
-        }
-
-        // ## Owner lock error
-        let err_owner_lock = Script::new_builder()
-            .code_hash([100u8; 32].pack())
-            .hash_type(ScriptHashType::Data.into())
-            .args(vec![99u8; 32].pack())
-            .build();
-        let err = Generator::build_withdrawal_cell_output(
-            &rollup_context,
-            &WithdrawalRequestExtra::new_builder()
-                .request(req.clone())
-                .owner_lock(err_owner_lock)
-                .build(),
-            &block_hash,
-            block_number,
-            Some(sudt_script),
-        )
-        .unwrap_err();
-
-        assert!(matches!(err, WithdrawalCellError::OwnerLock(_)));
-        if let WithdrawalCellError::OwnerLock(owner_lock_hash) = err {
-            assert_eq!(req.raw().owner_lock_hash(), owner_lock_hash.pack());
-        }
-    }
 }

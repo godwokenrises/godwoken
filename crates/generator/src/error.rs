@@ -72,6 +72,13 @@ pub enum WithdrawalError {
     NonPositiveSUDTAmount,
     #[error("Expected owner lock hash {0}")]
     OwnerLock(Byte32),
+    #[error(
+        "Exceeded maximum withdrawal size: max size {max_size}, withdrawal size {withdrawal_size}"
+    )]
+    ExceededMaxWithdrawalSize {
+        max_size: usize,
+        withdrawal_size: usize,
+    },
 }
 
 impl From<WithdrawalError> for Error {
@@ -140,6 +147,8 @@ pub enum TransactionError {
     BackendMustIncreaseNonce,
     #[error("ScriptHashNotFound")]
     ScriptHashNotFound,
+    #[error("Exceeded maximum tx size: max size {max_size}, tx size {tx_size}")]
+    ExceededMaxTxSize { max_size: usize, tx_size: usize },
 }
 
 impl From<VMError> for TransactionError {

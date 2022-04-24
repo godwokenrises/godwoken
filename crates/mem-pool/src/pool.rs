@@ -15,7 +15,11 @@ use gw_common::{
 use gw_config::{MemPoolConfig, NodeMode};
 use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_generator::{
-    constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, ArcSwap, Generator,
+    constants::L2TX_MAX_CYCLES,
+    error::TransactionError,
+    traits::StateExt,
+    verification::{transaction::TransactionVerifier, withdrawal::WithdrawalVerifier},
+    ArcSwap, Generator,
 };
 use gw_rpc_ws_server::notify_controller::NotifyController;
 use gw_store::{
@@ -33,7 +37,7 @@ use gw_types::{
         AccountMerkleState, BlockInfo, L2Block, L2Transaction, Script, TxReceipt,
         WithdrawalRequest, WithdrawalRequestExtra,
     },
-    prelude::{Entity, Pack, Unpack},
+    prelude::{Pack, Unpack},
 };
 use std::{
     cmp::{max, min},
@@ -48,7 +52,7 @@ use tokio::sync::{broadcast, Mutex};
 use tracing::instrument;
 
 use crate::{
-    constants::{MAX_MEM_BLOCK_TXS, MAX_MEM_BLOCK_WITHDRAWALS, MAX_TX_SIZE, MAX_WITHDRAWAL_SIZE},
+    constants::{MAX_MEM_BLOCK_TXS, MAX_MEM_BLOCK_WITHDRAWALS},
     custodian::AvailableCustodians,
     mem_block::MemBlock,
     restore_manager::RestoreManager,
@@ -306,12 +310,14 @@ impl MemPool {
             ));
         }
 
-        // verification
-        self.verify_tx(state, &tx)?;
+        // verify transaction
+        TransactionVerifier::new(state, self.generator.rollup_context()).verify(&tx)?;
+        // verify signature
+        self.generator.check_transaction_signature(state, &tx)?;
 
         // instantly run tx in background & update local state
         let t = Instant::now();
-        let tx_receipt = self.finalize_tx(db, state, tx.clone()).await?;
+        let tx_receipt = self.execute_tx(db, state, tx.clone()).await?;
         log::debug!("[push tx] finalize tx time: {}ms", t.elapsed().as_millis());
 
         // save tx receipt in mem pool
@@ -328,33 +334,12 @@ impl MemPool {
         Ok(())
     }
 
-    /// verify tx
-    #[instrument(skip_all)]
-    fn verify_tx(&self, state: &(impl State + CodeStore), tx: &L2Transaction) -> Result<()> {
-        // check tx size
-        if tx.as_slice().len() > MAX_TX_SIZE {
-            return Err(anyhow!("tx over size"));
-        }
-
-        // verify transaction
-        self.generator.verify_transaction(state, tx)?;
-        // verify signature
-        self.generator.check_transaction_signature(state, tx)?;
-
-        Ok(())
-    }
-
     /// Push a withdrawal request into pool
     #[instrument(skip_all, fields(withdrawal = %withdrawal.hash().pack()))]
     pub async fn push_withdrawal_request(
         &mut self,
         withdrawal: WithdrawalRequestExtra,
     ) -> Result<()> {
-        // check withdrawal size
-        if withdrawal.as_slice().len() > MAX_WITHDRAWAL_SIZE {
-            return Err(anyhow!("withdrawal over size"));
-        }
-
         // check duplication
         let withdrawal_hash: H256 = withdrawal.raw().hash().into();
         if self.mem_block.withdrawals_set().contains(&withdrawal_hash) {
@@ -390,11 +375,6 @@ impl MemPool {
         withdrawal: &WithdrawalRequestExtra,
         state: &(impl State + CodeStore),
     ) -> Result<()> {
-        // check withdrawal size
-        if withdrawal.as_slice().len() > MAX_WITHDRAWAL_SIZE {
-            return Err(anyhow!("withdrawal over size"));
-        }
-
         // verify withdrawal signature
         self.generator
             .check_withdrawal_signature(state, withdrawal)?;
@@ -422,8 +402,8 @@ impl MemPool {
         // withdrawal basic verification
         let db = self.store.begin_transaction();
         let asset_script = db.get_asset_script(&withdrawal.raw().sudt_script_hash().unpack())?;
-        self.generator
-            .verify_withdrawal_request(state, withdrawal, asset_script)
+        WithdrawalVerifier::new(state, self.generator.rollup_context())
+            .verify(withdrawal, asset_script)
             .map_err(Into::into)
     }
 
@@ -994,9 +974,8 @@ impl MemPool {
             let asset_script = asset_scripts
                 .get(&withdrawal.raw().sudt_script_hash().unpack())
                 .cloned();
-            if let Err(err) =
-                self.generator
-                    .verify_withdrawal_request(state, &withdrawal, asset_script)
+            if let Err(err) = WithdrawalVerifier::new(state, self.generator.rollup_context())
+                .verify(&withdrawal, asset_script)
             {
                 log::info!("[mem-pool] withdrawal verification error: {:?}", err);
                 unused_withdrawals.push(withdrawal_hash);
@@ -1066,7 +1045,7 @@ impl MemPool {
 
     /// Execute tx & update local state
     #[instrument(skip_all)]
-    async fn finalize_tx(
+    async fn execute_tx(
         &mut self,
         db: &StoreTransaction,
         state: &mut MemStateTree<'_>,
