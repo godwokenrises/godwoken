@@ -248,8 +248,7 @@ async fn send(
             .find(|item| item.service_flag.value() as u8 == GW_LOG_POLYJUICE_SYSTEM)
             .ok_or_else(|| anyhow!("no system logs"))?;
         let data = polyjuice_system_log.data.as_bytes();
-        let mut contract_address = [0u8; 20];
-        contract_address.copy_from_slice(&data[16..36]);
+        let contract_address = &data[16..36];
         log::info!("contract address: 0x{}", hex::encode(contract_address));
     };
 

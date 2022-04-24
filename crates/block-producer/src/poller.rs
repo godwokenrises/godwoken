@@ -609,8 +609,7 @@ fn try_parse_deposit_request(
     if args.len() < 32 {
         return None;
     }
-    let rollup_type_script_hash: [u8; 32] = rollup_context.rollup_script_hash.into();
-    if args.slice(0..32) != rollup_type_script_hash[..] {
+    if &args[0..32] != rollup_context.rollup_script_hash.as_slice() {
         return None;
     }
     let lock_args = match DepositLockArgs::from_slice(&args.slice(32..)) {
@@ -654,8 +653,7 @@ fn try_parse_withdrawal_owner_lock(
     if args.len() < 32 {
         return None;
     }
-    let rollup_type_script_hash: [u8; 32] = rollup_context.rollup_script_hash.into();
-    if args.slice(0..32) != rollup_type_script_hash[..] {
+    if &args[0..32] != rollup_context.rollup_script_hash.as_slice() {
         return None;
     }
     let result = gw_utils::withdrawal::parse_lock_args(&args).expect("parse withdrawal extra");

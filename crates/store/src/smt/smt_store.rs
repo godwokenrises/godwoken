@@ -1,5 +1,7 @@
 //! Implement SMTStore trait
 
+use std::convert::TryInto;
+
 use crate::traits::kv_store::KVStore;
 use gw_common::{
     sparse_merkle_tree::{
@@ -47,8 +49,7 @@ impl<'a, DB: KVStore> Store<H256> for SMTStore<'a, DB> {
     fn get_leaf(&self, leaf_key: &H256) -> Result<Option<H256>, SMTError> {
         match self.store.get(self.leaf_col, leaf_key.as_slice()) {
             Some(slice) if 32 == slice.len() => {
-                let mut leaf = [0u8; 32];
-                leaf.copy_from_slice(slice.as_ref());
+                let leaf: [u8; 32] = slice[..].try_into().unwrap();
                 Ok(Some(H256::from(leaf)))
             }
             Some(_) => Err(SMTError::Store("get corrupted leaf".to_string())),

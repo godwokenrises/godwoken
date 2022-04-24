@@ -139,10 +139,7 @@ impl EthEoaMappingRegister {
             let mut hasher = Keccak256::new();
             hasher.update("\x19Ethereum Signed Message:\n32");
             hasher.update(message.as_slice());
-            let buf = hasher.finalize();
-            let mut signing_message = [0u8; 32];
-            signing_message.copy_from_slice(&buf[..]);
-            signing_message
+            hasher.finalize().into()
         };
 
         let sign = self.wallet.sign_message(signing_message)?;

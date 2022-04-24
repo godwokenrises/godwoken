@@ -21,7 +21,7 @@ pub trait StateTest: State {
         self.update_value(address.registry_id, &key, value.into())?;
         // address -> script
         let key = build_registry_address_to_script_hash_key(&address);
-        self.update_value(address.registry_id, &key, script_hash.into())?;
+        self.update_value(address.registry_id, &key, script_hash)?;
         Ok(())
     }
 }

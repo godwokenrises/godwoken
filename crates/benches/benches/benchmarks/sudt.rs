@@ -184,7 +184,7 @@ pub fn bench(c: &mut Criterion) {
                 let b_script_hash = tree.get_script_hash(b_id).expect("get script hash");
                 tree.mapping_registry_address_to_script_hash(a_addr.clone(), a_script_hash)
                     .unwrap();
-                tree.mapping_registry_address_to_script_hash(b_addr.clone(), b_script_hash)
+                tree.mapping_registry_address_to_script_hash(b_addr, b_script_hash)
                     .unwrap();
 
                 let block_producer_script = {
