@@ -9,9 +9,7 @@
 //!
 
 use anyhow::{anyhow, Result};
-use gw_common::{
-    builtins::CKB_SUDT_ACCOUNT_ID, registry_address::RegistryAddress, state::State, H256,
-};
+use gw_common::{ckb_decimal, registry_address::RegistryAddress, state::State, H256};
 use gw_config::{MemPoolConfig, NodeMode};
 use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_generator::{
@@ -690,7 +688,7 @@ impl MemPool {
                 let address = state
                     .get_registry_address_by_script_hash(registry_id, &script_hash)?
                     .expect("must exist");
-                let capacity = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &address)?;
+                let capacity = ckb_decimal::from_18(state.get_ckb_balance(&address)?);
                 let deprecated_withdrawals = list.remove_lower_nonce_withdrawals(nonce, capacity);
                 for withdrawal in deprecated_withdrawals {
                     let withdrawal_hash: H256 = withdrawal.hash().into();

@@ -1,5 +1,6 @@
 use crate::error::{AccountError, DepositError, Error, WithdrawalError};
 use crate::sudt::build_l2_sudt_script;
+use gw_common::ckb_decimal::{self, CKB_DECIMAL_POW_EXP};
 use gw_common::registry::context::RegistryContext;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, CKB_SUDT_SCRIPT_ARGS, H256};
@@ -107,6 +108,7 @@ impl<S: State + CodeStore> StateExt for S {
         Ok(())
     }
 
+    // FIXME: fee CKB_SUDT_ACCOUNT_ID
     fn pay_fee(
         &mut self,
         payer: &RegistryAddress,
@@ -136,6 +138,8 @@ impl<S: State + CodeStore> StateExt for S {
         let account_script_hash: H256 = request.script().hash().into();
         // mint CKB
         let capacity: u64 = request.capacity().unpack();
+        log::debug!("[generator] deposit capacity {}", capacity);
+
         // NOTE: the address length `20` is a hard-coded value, we may re-visit here to extend more address format
         let address = match self.get_account_id_by_script_hash(&account_script_hash)? {
             Some(_id) => {
@@ -171,10 +175,13 @@ impl<S: State + CodeStore> StateExt for S {
                 addr
             }
         };
-        self.mint_sudt(CKB_SUDT_ACCOUNT_ID, &address, capacity.into())?;
+        // Align CKB to 18 decimals
+        let ckb_amount = ckb_decimal::to_18(capacity);
+        self.mint_ckb(&address, ckb_amount)?;
         log::debug!(
-            "[generator] mint {} shannons CKB to account {}",
-            capacity,
+            "[generator] mint {} shannons * 10^{} CKB to account {}",
+            ckb_amount,
+            CKB_DECIMAL_POW_EXP,
             hex::encode(account_script_hash.as_slice()),
         );
         let sudt_script_hash = request.sudt_script_hash().unpack();
@@ -240,7 +247,7 @@ impl<S: State + CodeStore> StateExt for S {
             )?;
         }
         // burn CKB
-        self.burn_sudt(CKB_SUDT_ACCOUNT_ID, &withdrawal_address, capacity.into())?;
+        self.burn_ckb(&withdrawal_address, ckb_decimal::to_18(capacity))?;
         let sudt_id = self
             .get_account_id_by_script_hash(&l2_sudt_script_hash.into())?
             .ok_or(AccountError::UnknownSUDT)?;

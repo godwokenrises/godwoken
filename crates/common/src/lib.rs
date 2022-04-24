@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod builtins;
+pub mod ckb_decimal;
 pub mod error;
 pub mod h256_ext;
 pub mod merkle_utils;

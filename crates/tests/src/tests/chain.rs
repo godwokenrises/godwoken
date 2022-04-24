@@ -9,7 +9,7 @@ use gw_chain::chain::{
     SyncEvent, SyncParam,
 };
 use gw_common::{
-    builtins::CKB_SUDT_ACCOUNT_ID,
+    ckb_decimal,
     h256_ext::H256Ext,
     merkle_utils::{calculate_ckb_merkle_root, ckb_merkle_leaf_hash},
     smt::Blake2bHasher,
@@ -165,10 +165,10 @@ async fn test_produce_blocks() {
             )
             .unwrap()
             .unwrap();
-        let balance_a = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &a_addr).unwrap();
-        let balance_b = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &b_addr).unwrap();
-        assert_eq!(balance_a, 690 * CKB as u128);
-        assert_eq!(balance_b, 500 * CKB as u128);
+        let balance_a = tree.get_ckb_balance(&a_addr).unwrap();
+        let balance_b = tree.get_ckb_balance(&b_addr).unwrap();
+        assert_eq!(balance_a, ckb_decimal::to_18(690 * CKB));
+        assert_eq!(balance_b, ckb_decimal::to_18(500 * CKB));
     }
 
     drop(chain);
@@ -532,10 +532,8 @@ async fn test_layer1_revert() {
             )
             .unwrap()
             .unwrap();
-        let alice_balance = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &alice_addr)
-            .unwrap();
-        assert_eq!(alice_balance, 400 * CKB as u128);
+        let alice_balance = tree.get_ckb_balance(&alice_addr).unwrap();
+        assert_eq!(alice_balance, ckb_decimal::to_18(400 * CKB));
 
         let bob_id_opt = tree
             .get_account_id_by_script_hash(&bob_script.hash().into())
@@ -582,10 +580,8 @@ async fn test_layer1_revert() {
             )
             .unwrap()
             .unwrap();
-        let alice_balance = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &alice_addr)
-            .unwrap();
-        assert_eq!(alice_balance, 400 * CKB as u128);
+        let alice_balance = tree.get_ckb_balance(&alice_addr).unwrap();
+        assert_eq!(alice_balance, ckb_decimal::to_18(400 * CKB));
 
         let bob_script_hash: H256 = bob_script.hash().into();
         let bob_id = tree
@@ -601,10 +597,8 @@ async fn test_layer1_revert() {
             .unwrap()
             .unwrap();
 
-        let bob_balance = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &bob_addr)
-            .unwrap();
-        assert_eq!(bob_balance, 500 * CKB as u128);
+        let bob_balance = tree.get_ckb_balance(&bob_addr).unwrap();
+        assert_eq!(bob_balance, ckb_decimal::to_18(500 * CKB));
     }
 }
 
@@ -712,10 +706,10 @@ async fn test_sync_blocks() {
             )
             .unwrap()
             .unwrap();
-        let balance_a = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &a_addr).unwrap();
-        let balance_b = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &b_addr).unwrap();
-        assert_eq!(balance_a, 800 * CKB as u128);
-        assert_eq!(balance_b, 500 * CKB as u128);
+        let balance_a = tree.get_ckb_balance(&a_addr).unwrap();
+        let balance_b = tree.get_ckb_balance(&b_addr).unwrap();
+        assert_eq!(balance_a, ckb_decimal::to_18(800 * CKB));
+        assert_eq!(balance_b, ckb_decimal::to_18(500 * CKB));
     }
 
     drop(chain2);
