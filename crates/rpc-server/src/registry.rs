@@ -1414,6 +1414,17 @@ pub fn to_gw_scripts(
 ) -> Vec<GwScript> {
     let mut vec = Vec::new();
 
+    let script = consensus_config
+        .contract_type_scripts
+        .state_validator
+        .to_owned();
+    let state_validator = GwScript {
+        type_hash: script.hash(),
+        script,
+        script_type: GwScriptType::StateValidator,
+    };
+    vec.push(state_validator);
+
     let type_hash: ckb_types::H256 = rollup_config.deposit_script_type_hash().unpack();
     let script = consensus_config
         .contract_type_scripts
