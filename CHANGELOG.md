@@ -8,31 +8,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [1.1.0] - 2022-04-2x (release candidate)
 
-> Notice, the Godwoken v1 is not designed to upgrade the original chain! we will deploy v1 as a new chain, and provide tools to help users and developers migrating to the new chain.
+> Note that Godwoken v1 is not an upgrade on the existing chain! Instead, v1 will be deployed as a new chain with tools to help users and developers migrate to the new chain.
 
-### Compatiblility improvements
+### Compatiblility Improvements
 
-In the new version, we improve the compatibility of Godwoken:
+In the new version, compatibility improvements for Godwoken include:
 
-- Provide API level compatible. Deprecate web3-provider plugin.
+- Provide API level 
+compatibility, remove the web3-provider plugin.
 - Support native ETH address in API and EVM, remove the Godwoken address concept.
 - Support Ethereum signature format and EIP-712. User can view the transaction before signing, instead of signing a random 32 bytes message. [#561](https://github.com/nervosnetwork/godwoken/pull/561)
-- Fix the total supply interface of sUDT ERC-20 proxy contract [#560](https://github.com/nervosnetwork/godwoken/pull/560)
-- Support interactive with eth address that haven't been registered to Godwoken.
+- Fix total provisioning interface for sUDT ERC-20 proxy contract [#560](https://github.com/nervosnetwork/godwoken/pull/560)
+- Support interactive with eth address that are not yet registered to Godwoken.
 
-In short, as a developer, you can use Godwoken v1 just like anyother Ethereum compatible chain, all you need to do is to switch the network to Godwoken. The polyjuice-provider web3 plugin is removed in the v1 version.
+Developers can use Godwoken v1 the same way they use other ethereum-compatible chains, requiring only switching the network to Godwoken. With v1, the polyjuice-provider web3 plugin was removed.
 
 ### Other improvements
 
-- Support p2p mem-pool syncing [#642](https://github.com/nervosnetwork/godwoken/pull/642), we need further PRs to enable fully decentralized syncing, but this PR is a good starting.
+- Support p2p mem-pool syncing [#642](https://github.com/nervosnetwork/godwoken/pull/642), further PRs are needed to enable fully decentralized syncing, but this PR is a good starting.
 - perf: optimize molecule usage [#640](https://github.com/nervosnetwork/godwoken/pull/640)
 - perf: use BTreeSet in FeeQueue [#641](https://github.com/nervosnetwork/godwoken/pull/641)
-- Change rollup cell's lock to omni-lock [#608](https://github.com/nervosnetwork/godwoken/pull/608), Due to an error of secp256k1 lock, we can't fill too many data in the witness field of CKB transaction, this PR enable the rollup to submit larger size block.
+- Change rollup cell's lock to omni-lock [#608](https://github.com/nervosnetwork/godwoken/pull/608). Unable to put as much data in the witness field of a CKB transaction owing to a secp256k1 locking error, and this PR can make rolling commits of larger blocks.
 
 ### Godwoken internal changes
 
 > If you are a Dapp developer, feel free to skip it and move on.
 
-We add a new concept: Ethereum address registry to store ethereum address in Godwoken. Godwoken creates a mapping between Ethereum address and account once user deposit to a new account. We also adjust few RPC to support ethereum address as the parameter. A few Godwoken data structure is adjusted to support new address format.
+v1 adds a new concept in having the Ethereum address registry stores Ethereum addresses in Godwoken. Once user deposits a new account, Godwoken will create a mapping between the Ethereum address and the account. In addition, some RPCs have been adapted to support Ethereum addresses as parameters, and some Godwoken data structures have been adapted to support the new address format.
 
-You can learn more details about Godwoken internal changes in: [docs/v1-release-note.md](https://github.com/nervosnetwork/godwoken/blob/develop/docs/v1-release-note.md)
+More details about Godwoken internal changes refer to: [docs/v1-release-note.md](https://github.com/nervosnetwork/godwoken/blob/develop/docs/v1-release-note.md)
