@@ -225,7 +225,7 @@ impl BenchExecutionEnvironment {
                 .set(
                     SUDTTransfer::new_builder()
                         .to_address(Bytes::from(to_address.to_bytes()).pack())
-                        .amount(1.pack())
+                        .amount(U256::one().pack())
                         .fee(
                             Fee::new_builder()
                                 .registry_id(ETH_REGISTRY_ACCOUNT_ID.pack())
