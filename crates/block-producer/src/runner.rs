@@ -551,6 +551,8 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         None => sentry::init(()),
     };
 
+    spawn_starvation_detector();
+
     // Set up runtim monitor.
     #[cfg(tokio_unstable)]
     {
@@ -1154,4 +1156,21 @@ async fn sigint_or_sigterm() {
     let _ = int.await;
 
     log::info!("received sigint or sigterm, shutting down");
+}
+
+fn spawn_starvation_detector() {
+    tokio::spawn(async move {
+        let mut instant = Instant::now();
+        loop {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            let now = Instant::now();
+            let late_millis = (now.duration_since(instant).as_millis() as u32).saturating_sub(500);
+            if late_millis > 200 {
+                log::warn!("starvation detected: {}ms late", late_millis);
+            } else if late_millis > 50 {
+                log::info!("micro-starvation detected: {}ms late", late_millis);
+            }
+            instant = now;
+        }
+    });
 }
