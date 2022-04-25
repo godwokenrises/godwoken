@@ -1391,8 +1391,7 @@ pub fn to_node_rollup_config(rollup_config: &RollupConfig) -> NodeRollupConfig {
     let burn_rate: u32 =
         bytes_v10::Buf::get_u8(&mut rollup_config.reward_burn_rate().as_bytes()).into();
     let reward_burn_rate: GwUint32 = burn_rate.into();
-    let chain_id: GwUint32 =
-        bytes_v10::Buf::get_u32(&mut rollup_config.chain_id().as_bytes()).into();
+    let chain_id: GwUint64 = rollup_config.chain_id().as_reader().unpack().into();
     NodeRollupConfig {
         required_staking_capacity,
         challenge_maturity_blocks,
