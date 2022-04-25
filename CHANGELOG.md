@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 > Note that Godwoken v1 is not an upgrade on the existing chain! Instead, v1 will be deployed as a new chain with tools to help users and developers migrate to the new chain.
 
-### Compatiblility Improvements
+### Ethereum Compatiblility Improvements
 
 In the new version, compatibility improvements for Godwoken include:
 
