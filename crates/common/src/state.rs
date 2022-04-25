@@ -18,7 +18,7 @@
 
 use gw_types::U256;
 
-use crate::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
+use crate::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use crate::error::Error;
 use crate::h256_ext::{H256Ext, H256};
 use crate::registry_address::RegistryAddress;
@@ -202,21 +202,11 @@ pub trait State {
         Ok(Some(id))
     }
 
-    fn get_ckb_balance(&self, address: &RegistryAddress) -> Result<U256, Error> {
-        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, address);
-        let balance = self.get_value(CKB_SUDT_ACCOUNT_ID, &sudt_key)?;
-        Ok(balance.to_u256())
-    }
-
-    fn get_sudt_balance(&self, sudt_id: u32, address: &RegistryAddress) -> Result<u128, Error> {
+    fn get_sudt_balance(&self, sudt_id: u32, address: &RegistryAddress) -> Result<U256, Error> {
         // get balance
         let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, address);
         let balance = self.get_value(sudt_id, &sudt_key)?;
-        Ok(balance.to_u128())
-    }
-
-    fn get_ckb_total_supply(&self) -> Result<U256, Error> {
-        self.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID)
+        Ok(balance.to_u256())
     }
 
     fn get_sudt_total_supply(&self, sudt_id: u32) -> Result<U256, Error> {
@@ -236,63 +226,26 @@ pub trait State {
         Ok(v == H256::one())
     }
 
-    fn mint_ckb(&mut self, address: &RegistryAddress, amount: U256) -> Result<(), Error> {
-        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, address);
-        let raw_key = build_account_key(CKB_SUDT_ACCOUNT_ID, &sudt_key);
-
-        let mut balance = self.get_raw(&raw_key)?.to_u256();
-        balance = balance.checked_add(amount).ok_or(Error::AmountOverflow)?;
-        self.update_raw(raw_key, H256::from_u256(balance))?;
-
-        // update total supply
-        let raw_key = build_account_key(CKB_SUDT_ACCOUNT_ID, &SUDT_TOTAL_SUPPLY_KEY);
-        let mut total_supply = self.get_raw(&raw_key)?.to_u256();
-        total_supply = total_supply
-            .checked_add(amount)
-            .ok_or(Error::AmountOverflow)?;
-        self.update_raw(raw_key, H256::from_u256(total_supply))?;
-
-        Ok(())
-    }
-
     /// Mint SUDT token on layer2
     fn mint_sudt(
         &mut self,
         sudt_id: u32,
         address: &RegistryAddress,
-        amount: u128,
+        amount: impl Into<U256>,
     ) -> Result<(), Error> {
+        let amount = amount.into();
         let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, address);
         let raw_key = build_account_key(sudt_id, &sudt_key);
         // calculate balance
-        let mut balance = self.get_raw(&raw_key)?.to_u128();
+        let mut balance = self.get_raw(&raw_key)?.to_u256();
         balance = balance.checked_add(amount).ok_or(Error::AmountOverflow)?;
-        self.update_raw(raw_key, H256::from_u128(balance))?;
+        self.update_raw(raw_key, H256::from_u256(balance))?;
 
         // update total supply
         let raw_key = build_account_key(sudt_id, &SUDT_TOTAL_SUPPLY_KEY);
         let mut total_supply = self.get_raw(&raw_key)?.to_u256();
         total_supply = total_supply
-            .checked_add(U256::from(amount))
-            .ok_or(Error::AmountOverflow)?;
-        self.update_raw(raw_key, H256::from_u256(total_supply))?;
-
-        Ok(())
-    }
-
-    fn burn_ckb(&mut self, address: &RegistryAddress, amount: U256) -> Result<(), Error> {
-        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, address);
-        let raw_key = build_account_key(CKB_SUDT_ACCOUNT_ID, &sudt_key);
-        // calculate balance
-        let mut balance = self.get_raw(&raw_key)?.to_u256();
-        balance = balance.checked_sub(amount).ok_or(Error::AmountOverflow)?;
-        self.update_raw(raw_key, H256::from_u256(balance))?;
-
-        // update total supply
-        let raw_key = build_account_key(CKB_SUDT_ACCOUNT_ID, &SUDT_TOTAL_SUPPLY_KEY);
-        let mut total_supply = self.get_raw(&raw_key)?.to_u256();
-        total_supply = total_supply
-            .checked_sub(amount)
+            .checked_add(amount)
             .ok_or(Error::AmountOverflow)?;
         self.update_raw(raw_key, H256::from_u256(total_supply))?;
 
@@ -304,20 +257,21 @@ pub trait State {
         &mut self,
         sudt_id: u32,
         address: &RegistryAddress,
-        amount: u128,
+        amount: impl Into<U256>,
     ) -> Result<(), Error> {
+        let amount = amount.into();
         let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, address);
         let raw_key = build_account_key(sudt_id, &sudt_key);
         // calculate balance
-        let mut balance = self.get_raw(&raw_key)?.to_u128();
+        let mut balance = self.get_raw(&raw_key)?.to_u256();
         balance = balance.checked_sub(amount).ok_or(Error::AmountOverflow)?;
-        self.update_raw(raw_key, H256::from_u128(balance))?;
+        self.update_raw(raw_key, H256::from_u256(balance))?;
 
         // update total supply
         let raw_key = build_account_key(sudt_id, &SUDT_TOTAL_SUPPLY_KEY);
         let mut total_supply = self.get_raw(&raw_key)?.to_u256();
         total_supply = total_supply
-            .checked_sub(U256::from(amount))
+            .checked_sub(amount)
             .ok_or(Error::AmountOverflow)?;
         self.update_raw(raw_key, H256::from_u256(total_supply))?;
 

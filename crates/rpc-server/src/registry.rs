@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
-use gw_common::{blake2b::new_blake2b, builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
+use gw_common::{blake2b::new_blake2b, state::State, H256};
 use gw_config::{FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig};
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
 use gw_generator::{
@@ -1169,20 +1169,12 @@ async fn get_balance(
         Some(block_number) => {
             let db = store.begin_transaction();
             let tree = db.state_tree(StateContext::ReadOnlyHistory(block_number.into()))?;
-            if sudt_id.value() == CKB_SUDT_ACCOUNT_ID {
-                tree.get_ckb_balance(&address)?
-            } else {
-                tree.get_sudt_balance(sudt_id.into(), &address)?.into()
-            }
+            tree.get_sudt_balance(sudt_id.into(), &address)?
         }
         None => {
             let snap = mem_pool_state.load();
             let tree = snap.state()?;
-            if sudt_id.value() == CKB_SUDT_ACCOUNT_ID {
-                tree.get_ckb_balance(&address)?
-            } else {
-                tree.get_sudt_balance(sudt_id.into(), &address)?.into()
-            }
+            tree.get_sudt_balance(sudt_id.into(), &address)?
         }
     };
     Ok(balance)

@@ -7,7 +7,12 @@ use crate::testing_tool::chain::{
 
 use anyhow::Result;
 use gw_chain::chain::Chain;
-use gw_common::{builtins::ETH_REGISTRY_ACCOUNT_ID, ckb_decimal, state::State, H256};
+use gw_common::{
+    builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
+    ckb_decimal,
+    state::State,
+    H256,
+};
 use gw_generator::{
     error::{DepositError, WithdrawalError},
     sudt::build_l2_sudt_script,
@@ -167,9 +172,11 @@ async fn test_deposit_and_withdrawal() {
             .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &user_script_hash)
             .unwrap()
             .unwrap();
-        let ckb_balance = tree.get_ckb_balance(&user_addr).unwrap();
+        let ckb_balance = tree
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_addr)
+            .unwrap();
         assert_eq!(ckb_balance, ckb_decimal::to_18(capacity));
-        let ckb_total_supply = tree.get_ckb_total_supply().unwrap();
+        let ckb_total_supply = tree.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID).unwrap();
         assert_eq!(ckb_total_supply, ckb_decimal::to_18(capacity));
         (
             user_id,
@@ -199,11 +206,13 @@ async fn test_deposit_and_withdrawal() {
             user_id
         );
         assert_eq!(
-            state.get_ckb_balance(&user_addr).unwrap(),
+            state
+                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_addr)
+                .unwrap(),
             ckb_decimal::to_18(capacity)
         );
         assert_eq!(
-            state.get_ckb_total_supply().unwrap(),
+            state.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID,).unwrap(),
             ckb_decimal::to_18(capacity)
         )
     }
@@ -222,12 +231,14 @@ async fn test_deposit_and_withdrawal() {
     // check status
     let db = chain.store().begin_transaction();
     let tree = db.state_tree(StateContext::ReadOnly).unwrap();
-    let ckb_balance2 = tree.get_ckb_balance(&user_addr).unwrap();
+    let ckb_balance2 = tree
+        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_addr)
+        .unwrap();
     assert_eq!(
         ckb_balance,
         ckb_balance2 + ckb_decimal::to_18(withdraw_capacity)
     );
-    let ckb_total_supply2 = tree.get_ckb_total_supply().unwrap();
+    let ckb_total_supply2 = tree.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID).unwrap();
     assert_eq!(
         ckb_total_supply,
         ckb_total_supply2 + ckb_decimal::to_18(withdraw_capacity)
@@ -247,8 +258,16 @@ async fn test_deposit_and_withdrawal() {
                 .unwrap(),
             user_id
         );
-        assert_eq!(state.get_ckb_balance(&user_addr).unwrap(), ckb_balance2);
-        assert_eq!(state.get_ckb_total_supply().unwrap(), ckb_balance2);
+        assert_eq!(
+            state
+                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_addr)
+                .unwrap(),
+            ckb_balance2
+        );
+        assert_eq!(
+            state.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID,).unwrap(),
+            ckb_balance2
+        );
         assert_eq!(state.get_nonce(user_id).unwrap(), nonce);
     }
 }
@@ -346,7 +365,9 @@ async fn test_deposit_u128_overflow() {
         .expect("account exists");
     assert_ne!(alice_id, 0);
 
-    let ckb_balance = tree.get_ckb_balance(&alice_addr).unwrap();
+    let ckb_balance = tree
+        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &alice_addr)
+        .unwrap();
     assert_eq!(ckb_balance, ckb_decimal::to_18(capacity));
 
     let bob_id = tree
@@ -355,11 +376,13 @@ async fn test_deposit_u128_overflow() {
         .expect("account exists");
     assert_ne!(bob_id, 0);
 
-    let ckb_balance = tree.get_ckb_balance(&bob_addr).unwrap();
+    let ckb_balance = tree
+        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &bob_addr)
+        .unwrap();
     assert_eq!(ckb_balance, ckb_decimal::to_18(capacity));
 
-    let ckb_total_supply = tree.get_ckb_total_supply().unwrap();
-    assert_eq!(ckb_total_supply, ckb_decimal::to_18(capacity) * 2);
+    let ckb_total_supply = tree.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID).unwrap();
+    assert_eq!(ckb_total_supply, ckb_decimal::to_18(capacity) * 2u8);
 
     let l2_sudt_script_hash =
         build_l2_sudt_script(chain.generator().rollup_context(), &sudt_script_hash).hash();
@@ -369,10 +392,10 @@ async fn test_deposit_u128_overflow() {
         .expect("sudt exists");
 
     let alice_sudt_balance = tree.get_sudt_balance(sudt_id, &alice_addr).unwrap();
-    assert_eq!(alice_sudt_balance, u128::MAX);
+    assert_eq!(alice_sudt_balance, U256::from(u128::MAX));
 
     let bob_sudt_balance = tree.get_sudt_balance(sudt_id, &bob_addr).unwrap();
-    assert_eq!(bob_sudt_balance, u128::MAX);
+    assert_eq!(bob_sudt_balance, U256::from(u128::MAX));
 
     let sudt_total_supply = tree.get_sudt_total_supply(sudt_id).unwrap();
     assert_eq!(
@@ -442,7 +465,9 @@ async fn test_overdraft() {
             .unwrap();
 
         assert_eq!(
-            state.get_ckb_balance(&user_addr).unwrap(),
+            state
+                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_addr)
+                .unwrap(),
             ckb_decimal::to_18(capacity)
         );
     }

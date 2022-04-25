@@ -44,19 +44,12 @@ pub trait StateExt {
         Ok(())
     }
 
-    fn pay_ckb_fee(
-        &mut self,
-        payer: &RegistryAddress,
-        block_producer: &RegistryAddress,
-        amount: U256,
-    ) -> Result<(), Error>;
-
     fn pay_fee(
         &mut self,
         payer: &RegistryAddress,
         block_producer: &RegistryAddress,
         sudt_id: u32,
-        amount: u128,
+        amount: U256,
     ) -> Result<(), Error>;
 
     fn apply_withdrawal_requests(
@@ -121,7 +114,7 @@ impl<S: State + CodeStore> StateExt for S {
         payer: &RegistryAddress,
         block_producer: &RegistryAddress,
         sudt_id: u32,
-        amount: u128,
+        amount: U256,
     ) -> Result<(), Error> {
         log::debug!(
             "account: 0x{} pay fee to block_producer: 0x{}, sudt_id: {}, amount: {}",
@@ -132,24 +125,6 @@ impl<S: State + CodeStore> StateExt for S {
         );
         self.burn_sudt(sudt_id, payer, amount)?;
         self.mint_sudt(sudt_id, block_producer, amount)?;
-        Ok(())
-    }
-
-    fn pay_ckb_fee(
-        &mut self,
-        payer: &RegistryAddress,
-        block_producer: &RegistryAddress,
-        amount: U256,
-    ) -> Result<(), Error> {
-        log::debug!(
-            "account: 0x{} pay fee to block_producer: 0x{}, sudt_id: {}, amount: {}",
-            hex::encode(&payer.address),
-            hex::encode(&block_producer.address),
-            CKB_SUDT_ACCOUNT_ID,
-            &amount
-        );
-        self.burn_ckb(payer, amount)?;
-        self.mint_ckb(block_producer, amount)?;
         Ok(())
     }
 
@@ -202,7 +177,7 @@ impl<S: State + CodeStore> StateExt for S {
         };
         // Align CKB to 18 decimals
         let ckb_amount = ckb_decimal::to_18(capacity);
-        self.mint_ckb(&address, ckb_amount)?;
+        self.mint_sudt(CKB_SUDT_ACCOUNT_ID, &address, ckb_amount)?;
         log::debug!(
             "[generator] mint {} shannons * 10^{} CKB to account {}",
             ckb_amount,
@@ -264,10 +239,19 @@ impl<S: State + CodeStore> StateExt for S {
         // pay fee to block producer
         {
             let fee: U256 = raw.fee().unpack();
-            self.pay_ckb_fee(&withdrawal_address, block_producer_address, fee)?;
+            self.pay_fee(
+                &withdrawal_address,
+                block_producer_address,
+                CKB_SUDT_ACCOUNT_ID,
+                fee,
+            )?;
         }
         // burn CKB
-        self.burn_ckb(&withdrawal_address, ckb_decimal::to_18(capacity))?;
+        self.burn_sudt(
+            CKB_SUDT_ACCOUNT_ID,
+            &withdrawal_address,
+            ckb_decimal::to_18(capacity),
+        )?;
         let sudt_id = self
             .get_account_id_by_script_hash(&l2_sudt_script_hash.into())?
             .ok_or(AccountError::UnknownSUDT)?;
