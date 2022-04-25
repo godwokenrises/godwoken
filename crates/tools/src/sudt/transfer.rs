@@ -13,7 +13,6 @@ use gw_types::packed::{Fee, L2Transaction, RawL2Transaction, SUDTArgs, SUDTTrans
 use gw_types::prelude::Pack as GwPack;
 use gw_types::U256;
 use std::path::Path;
-use std::u128;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn transfer(
@@ -27,7 +26,7 @@ pub async fn transfer(
     config_path: &Path,
     scripts_deployment_path: &Path,
 ) -> Result<()> {
-    let amount: u128 = amount.parse().expect("sUDT amount format error");
+    let amount: U256 = amount.parse().expect("sUDT amount format error");
     let fee: U256 = fee.parse().expect("fee format error");
 
     let scripts_deployment_content = std::fs::read_to_string(scripts_deployment_path)?;

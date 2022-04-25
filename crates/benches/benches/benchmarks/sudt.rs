@@ -220,7 +220,7 @@ pub fn bench(c: &mut Criterion) {
             },
             |(mut tree, rollup_config, sudt_id, a_id, b_script_hash, block_info)| {
                 // transfer from A to B
-                let value = 4000u128;
+                let value: U256 = 4000u128.into();
                 let fee: U256 = 42u64.into();
                 let b_addr = tree
                     .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &b_script_hash)

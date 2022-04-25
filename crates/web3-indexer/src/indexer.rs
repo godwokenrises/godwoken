@@ -178,7 +178,7 @@ impl Web3Indexer {
             .bind(web3_tx.transaction_index)
             .bind(hex(&web3_tx.from_address)?)
             .bind(web3_to_address_hex)
-            .bind(Decimal::from(web3_tx.value))
+            .bind(format!("0x{:x}", web3_tx.value))
             .bind(Decimal::from(web3_tx.nonce))
             .bind(format!("0x{:x}", web3_tx.gas_limit))
             .bind(Decimal::from(web3_tx.gas_price))
@@ -380,7 +380,7 @@ impl Web3Indexer {
                     tx_index,
                     from_address,
                     to_address,
-                    polyjuice_args.value,
+                    polyjuice_args.value.into(),
                     nonce,
                     polyjuice_args.gas_limit.into(),
                     polyjuice_args.gas_price,
@@ -458,7 +458,7 @@ impl Web3Indexer {
                         let mut to_address = [0u8; 20];
                         to_address.copy_from_slice(to_address_data.as_ref());
 
-                        let amount: u128 = sudt_transfer.amount().unpack();
+                        let amount: U256 = sudt_transfer.amount().unpack();
                         let fee: U256 = sudt_transfer.fee().amount().unpack();
                         let value = amount;
 

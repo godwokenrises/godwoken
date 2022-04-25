@@ -10264,9 +10264,10 @@ impl ::core::fmt::Display for SUDTTransfer {
 impl ::core::default::Default for SUDTTransfer {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            72, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 36, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            88, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0,
         ];
         SUDTTransfer::new_unchecked(v.into())
     }
@@ -10295,11 +10296,11 @@ impl SUDTTransfer {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         Bytes::new_unchecked(self.0.slice(start..end))
     }
-    pub fn amount(&self) -> Uint128 {
+    pub fn amount(&self) -> Uint256 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
-        Uint128::new_unchecked(self.0.slice(start..end))
+        Uint256::new_unchecked(self.0.slice(start..end))
     }
     pub fn fee(&self) -> Fee {
         let slice = self.as_slice();
@@ -10396,11 +10397,11 @@ impl<'r> SUDTTransferReader<'r> {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         BytesReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn amount(&self) -> Uint128Reader<'r> {
+    pub fn amount(&self) -> Uint256Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
-        Uint128Reader::new_unchecked(&self.as_slice()[start..end])
+        Uint256Reader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn fee(&self) -> FeeReader<'r> {
         let slice = self.as_slice();
@@ -10463,7 +10464,7 @@ impl<'r> molecule::prelude::Reader<'r> for SUDTTransferReader<'r> {
             return ve!(Self, OffsetsNotMatch);
         }
         BytesReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        Uint128Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        Uint256Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         FeeReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
     }
@@ -10471,7 +10472,7 @@ impl<'r> molecule::prelude::Reader<'r> for SUDTTransferReader<'r> {
 #[derive(Debug, Default)]
 pub struct SUDTTransferBuilder {
     pub(crate) to_address: Bytes,
-    pub(crate) amount: Uint128,
+    pub(crate) amount: Uint256,
     pub(crate) fee: Fee,
 }
 impl SUDTTransferBuilder {
@@ -10480,7 +10481,7 @@ impl SUDTTransferBuilder {
         self.to_address = v;
         self
     }
-    pub fn amount(mut self, v: Uint128) -> Self {
+    pub fn amount(mut self, v: Uint256) -> Self {
         self.amount = v;
         self
     }
