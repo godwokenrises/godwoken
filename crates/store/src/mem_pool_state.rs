@@ -107,7 +107,7 @@ impl MemStore {
     pub fn get_mem_block_account_smt_root(&self) -> Result<Option<H256>, Error> {
         match self.get(COLUMN_META, META_MEM_SMT_ROOT_KEY) {
             Some(slice) => {
-                let root: [u8; 32] = slice[..].try_into().unwrap();
+                let root: [u8; 32] = slice.as_ref().try_into().unwrap();
                 Ok(Some(root.into()))
             }
             None => Ok(None),
