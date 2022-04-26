@@ -28,7 +28,7 @@ Developers can use Godwoken v1 the same way they use other ethereum-compatible c
 - Support p2p mem-pool syncing [#642](https://github.com/nervosnetwork/godwoken/pull/642), further PRs are needed to enable fully decentralized syncing, but this PR is a good starting.
 - perf: optimize molecule usage [#640](https://github.com/nervosnetwork/godwoken/pull/640)
 - perf: use BTreeSet in FeeQueue [#641](https://github.com/nervosnetwork/godwoken/pull/641)
-- Change rollup cell's lock to omni-lock [#608](https://github.com/nervosnetwork/godwoken/pull/608). Unable to put as much data in the witness field of a CKB transaction owing to a secp256k1 locking error, and this PR can make rolling commits of larger blocks.
+- Change rollup cell's lock to omni-lock [#608](https://github.com/nervosnetwork/godwoken/pull/608). This PR enables the optimistic rollup to submit larger blocks to fix the inability of putting up to much data in the witness field of a CKB transaction due to a secp256k1 locking error.
 
 ### Godwoken internal changes
 
