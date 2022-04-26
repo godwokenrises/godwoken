@@ -32,7 +32,7 @@ const FLAG_SINCE_TIMESTAMP: u64 =
 const ETH_REGISTRY_ACCOUNT_ID: u32 = 2;
 
 #[allow(clippy::too_many_arguments)]
-pub fn withdraw(
+pub async fn withdraw(
     godwoken_rpc_url: &str,
     privkey_path: &Path,
     capacity: &str,
@@ -124,12 +124,12 @@ pub fn withdraw(
     let from_address = privkey_to_short_address(&privkey, rollup_type_hash, &scripts_deployment)?;
 
     // get from_id
-    let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;
+    let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address).await?;
     let from_id = from_id.expect("from id not found!");
-    let nonce = godwoken_rpc_client.get_nonce(from_id)?;
+    let nonce = godwoken_rpc_client.get_nonce(from_id).await?;
 
     // get account_script_hash
-    let account_script_hash = godwoken_rpc_client.get_script_hash(from_id)?;
+    let account_script_hash = godwoken_rpc_client.get_script_hash(from_id).await?;
 
     let raw_request = create_raw_withdrawal_request(
         &nonce,
@@ -159,14 +159,15 @@ pub fn withdraw(
 
     log::info!("withdrawal_request_extra: {}", withdrawal_request_extra);
 
-    let init_balance =
-        godwoken_rpc_client.get_balance(JsonBytes::from_bytes(from_address.clone()), 1)?;
+    let init_balance = godwoken_rpc_client
+        .get_balance(JsonBytes::from_bytes(from_address.clone()), 1)
+        .await?;
 
     let bytes = JsonBytes::from_bytes(withdrawal_request_extra.as_bytes());
-    let withdrawal_hash = godwoken_rpc_client.submit_withdrawal_request(bytes)?;
+    let withdrawal_hash = godwoken_rpc_client.submit_withdrawal_request(bytes).await?;
     log::info!("withdrawal_hash: {}", withdrawal_hash.pack());
 
-    wait_for_balance_change(&mut godwoken_rpc_client, from_address, init_balance, 180u64)?;
+    wait_for_balance_change(&mut godwoken_rpc_client, from_address, init_balance, 180u64).await?;
 
     Ok(())
 }
@@ -230,7 +231,7 @@ fn generate_withdrawal_message_to_sign(
     message
 }
 
-fn wait_for_balance_change(
+async fn wait_for_balance_change(
     godwoken_rpc_client: &mut GodwokenRpcClient,
     from_address: GwBytes,
     init_balance: u128,
@@ -241,8 +242,9 @@ fn wait_for_balance_change(
     while start_time.elapsed() < retry_timeout {
         std::thread::sleep(Duration::from_secs(2));
 
-        let balance =
-            godwoken_rpc_client.get_balance(JsonBytes::from_bytes(from_address.clone()), 1)?;
+        let balance = godwoken_rpc_client
+            .get_balance(JsonBytes::from_bytes(from_address.clone()), 1)
+            .await?;
         log::info!(
             "current balance: {}, waiting for {} secs.",
             balance,

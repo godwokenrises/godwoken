@@ -1122,7 +1122,9 @@ async fn run_cli() -> Result<()> {
                 eth_address,
                 config_path,
                 scripts_deployment_path,
-            ) {
+            )
+            .await
+            {
                 log::error!("Withdrawal error: {}", err);
                 std::process::exit(-1);
             };
