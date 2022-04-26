@@ -1058,14 +1058,16 @@ impl MemPool {
 
         // execute tx
         let raw_tx = tx.raw();
-        let run_result = self.generator.unchecked_execute_transaction(
-            &chain_view,
-            state,
-            block_info,
-            &raw_tx,
-            L2TX_MAX_CYCLES,
-            Some(self.dynamic_config_manager.clone()),
-        )?;
+        let run_result = tokio::task::block_in_place(|| {
+            self.generator.unchecked_execute_transaction(
+                &chain_view,
+                state,
+                block_info,
+                &raw_tx,
+                L2TX_MAX_CYCLES,
+                Some(self.dynamic_config_manager.clone()),
+            )
+        })?;
 
         if run_result.exit_code != 0 {
             let tx_hash: H256 = tx.hash().into();
@@ -1097,7 +1099,7 @@ impl MemPool {
 
         // apply run result
         let t = Instant::now();
-        state.apply_run_result(&run_result)?;
+        tokio::task::block_in_place(|| state.apply_run_result(&run_result))?;
         log::debug!(
             "[finalize tx] apply run result: {}ms",
             t.elapsed().as_millis()
