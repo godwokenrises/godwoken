@@ -111,7 +111,7 @@ impl PolyjuiceTx {
         let args: Bytes = self.0.raw().args().unpack();
         if args.len() < 52 {
             log::error!(
-                "[gw-generator] parse PolyjuiceTx error, wrong args.len expected: 52, actual: {}",
+                "[gw-generator] parse PolyjuiceTx error, wrong args.len expected: >= 52, actual: {}",
                 args.len()
             );
             return None;

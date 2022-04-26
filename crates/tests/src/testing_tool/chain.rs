@@ -32,7 +32,7 @@ use lazy_static::lazy_static;
 use tokio::sync::Mutex;
 
 use std::{collections::HashSet, time::Duration};
-use std::{fs, io::Read, path::PathBuf, sync::Arc};
+use std::{fs, path::PathBuf, sync::Arc};
 
 use super::mem_pool_provider::DummyMemPoolProvider;
 
@@ -46,13 +46,10 @@ const ETH_ACCOUNT_LOCK_PATH: &str = "eth-account-lock";
 
 lazy_static! {
     pub static ref ALWAYS_SUCCESS_PROGRAM: Bytes = {
-        let mut buf = Vec::new();
         let mut path = PathBuf::new();
         path.push(&SCRIPT_DIR);
         path.push(&ALWAYS_SUCCESS_PATH);
-        let mut f = fs::File::open(&path).expect("load program");
-        f.read_to_end(&mut buf).expect("read program");
-        Bytes::from(buf.to_vec())
+        fs::read(&path).expect("read program").into()
     };
     pub static ref ALWAYS_SUCCESS_CODE_HASH: [u8; 32] = {
         let mut buf = [0u8; 32];
@@ -62,14 +59,12 @@ lazy_static! {
         buf
     };
     pub static ref WITHDRAWAL_LOCK_PROGRAM: Bytes = {
-        let mut buf = Vec::new();
         let mut path = PathBuf::new();
         path.push(&SCRIPT_DIR);
         path.push(&WITHDRAWAL_LOCK_PATH);
-        let mut f = fs::File::open(&path).expect("load withdrawal lock program");
-        f.read_to_end(&mut buf)
-            .expect("read withdrawal lock program");
-        Bytes::from(buf.to_vec())
+        fs::read(&path)
+            .expect("read withdrawal lock program")
+            .into()
     };
     pub static ref WITHDRAWAL_LOCK_CODE_HASH: [u8; 32] = {
         let mut buf = [0u8; 32];
@@ -79,14 +74,12 @@ lazy_static! {
         buf
     };
     pub static ref STATE_VALIDATOR_TYPE_PROGRAM: Bytes = {
-        let mut buf = Vec::new();
         let mut path = PathBuf::new();
         path.push(&SCRIPT_DIR);
         path.push(&STATE_VALIDATOR_TYPE_PATH);
-        let mut f = fs::File::open(&path).expect("load state validator type program");
-        f.read_to_end(&mut buf)
-            .expect("read state validator type program");
-        Bytes::from(buf.to_vec())
+        fs::read(&path)
+            .expect("read state validator type program")
+            .into()
     };
     pub static ref STATE_VALIDATOR_CODE_HASH: [u8; 32] = {
         let mut buf = [0u8; 32];
@@ -96,13 +89,10 @@ lazy_static! {
         buf
     };
     pub static ref STAKE_LOCK_PROGRAM: Bytes = {
-        let mut buf = Vec::new();
         let mut path = PathBuf::new();
         path.push(&SCRIPT_DIR);
         path.push(&STAKE_LOCK_PATH);
-        let mut f = fs::File::open(&path).expect("load stake lock program");
-        f.read_to_end(&mut buf).expect("read stake lock program");
-        Bytes::from(buf.to_vec())
+        fs::read(&path).expect("read stake lock program").into()
     };
     pub static ref STAKE_LOCK_CODE_HASH: [u8; 32] = {
         let mut buf = [0u8; 32];
@@ -112,14 +102,10 @@ lazy_static! {
         buf
     };
     pub static ref CUSTODIAN_LOCK_PROGRAM: Bytes = {
-        let mut buf = Vec::new();
         let mut path = PathBuf::new();
         path.push(&SCRIPT_DIR);
         path.push(&CUSTODIAN_LOCK_PATH);
-        let mut f = fs::File::open(&path).expect("load custodian lock program");
-        f.read_to_end(&mut buf)
-            .expect("read custodian lock program");
-        Bytes::from(buf.to_vec())
+        fs::read(&path).expect("read custodian lock program").into()
     };
     pub static ref CUSTODIAN_LOCK_CODE_HASH: [u8; 32] = {
         let mut buf = [0u8; 32];
@@ -129,14 +115,12 @@ lazy_static! {
         buf
     };
     pub static ref ETH_ACCOUNT_LOCK_PROGRAM: Bytes = {
-        let mut buf = Vec::new();
         let mut path = PathBuf::new();
         path.push(&SCRIPT_DIR);
         path.push(&ETH_ACCOUNT_LOCK_PATH);
-        let mut f = fs::File::open(&path).expect("load eth account lock program");
-        f.read_to_end(&mut buf)
-            .expect("read eth account lock program");
-        Bytes::from(buf.to_vec())
+        fs::read(&path)
+            .expect("read eth account lock program")
+            .into()
     };
     pub static ref ETH_ACCOUNT_LOCK_CODE_HASH: [u8; 32] = {
         let mut buf = [0u8; 32];
@@ -145,14 +129,9 @@ lazy_static! {
         hasher.finalize(&mut buf);
         buf
     };
-    pub static ref SUDT_VALIDATOR_PROGRAM: Bytes = {
-        let mut buf = Vec::new();
-        let mut path = PathBuf::new();
-        path.push(&SUDT_VALIDATOR_PATH);
-        let mut f = fs::File::open(&path).expect("load SUDT program");
-        f.read_to_end(&mut buf).expect("read SUDT program");
-        Bytes::from(buf.to_vec())
-    };
+    pub static ref SUDT_VALIDATOR_PROGRAM: Bytes = fs::read(&SUDT_VALIDATOR_PATH)
+        .expect("read SUDT program")
+        .into();
     pub static ref SUDT_VALIDATOR_CODE_HASH: [u8; 32] = {
         let mut buf = [0u8; 32];
         let mut hasher = new_blake2b();
@@ -160,15 +139,10 @@ lazy_static! {
         hasher.finalize(&mut buf);
         buf
     };
-    pub static ref ETH_EOA_MAPPING_REGISTRY_VALIDATOR_PROGRAM: Bytes = {
-        let mut buf = Vec::new();
-        let mut path = PathBuf::new();
-        path.push(&ETH_REGISTRY_VALIDATOR_PATH);
-        let mut f = fs::File::open(&path).expect("load eth eoa mapping registry program");
-        f.read_to_end(&mut buf)
-            .expect("read eth eoa mapping registry program");
-        Bytes::from(buf.to_vec())
-    };
+    pub static ref ETH_EOA_MAPPING_REGISTRY_VALIDATOR_PROGRAM: Bytes =
+        fs::read(&ETH_REGISTRY_VALIDATOR_PATH)
+            .expect("read eth eoa mapping registry program")
+            .into();
     pub static ref ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH: [u8; 32] = {
         let mut buf = [0u8; 32];
         let mut hasher = new_blake2b();
