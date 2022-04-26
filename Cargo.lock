@@ -1867,6 +1867,7 @@ dependencies = [
  "hex",
  "lazy_static",
  "log",
+ "num_cpus",
  "openssl",
  "opentelemetry",
  "opentelemetry-jaeger",
