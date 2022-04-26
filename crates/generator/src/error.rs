@@ -72,6 +72,8 @@ pub enum WithdrawalError {
     NonPositiveSUDTAmount,
     #[error("Expected owner lock hash {0}")]
     OwnerLock(Byte32),
+    #[error("Insufficient capacity expected {expected} actual {actual}")]
+    InsufficientCapacity { expected: u128, actual: u64 },
     #[error(
         "Exceeded maximum withdrawal size: max size {max_size}, withdrawal size {withdrawal_size}"
     )]
@@ -89,8 +91,6 @@ impl From<WithdrawalError> for Error {
 
 #[derive(Error, Debug, PartialEq, Clone, Eq)]
 pub enum AccountError {
-    #[error("Insufficient capacity expected {expected} actual {actual}")]
-    InsufficientCapacity { expected: u128, actual: u64 },
     #[error("Invalid SUDT operation")]
     InvalidSUDTOperation,
     #[error("Unknown SUDT")]
@@ -149,6 +149,8 @@ pub enum TransactionError {
     ScriptHashNotFound,
     #[error("Exceeded maximum tx size: max size {max_size}, tx size {tx_size}")]
     ExceededMaxTxSize { max_size: usize, tx_size: usize },
+    #[error("Insufficient balance")]
+    InsufficientBalance,
 }
 
 impl From<VMError> for TransactionError {

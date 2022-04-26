@@ -152,7 +152,7 @@ async fn test_restore_mem_block() {
                 let args = SUDTArgs::new_builder().set(transfer).build();
                 let raw = RawL2Transaction::new_builder()
                     .from_id(from_id.unwrap().pack())
-                    .to_id(1u32.pack()) // 1 is reserved for sudt
+                    .to_id(gw_common::builtins::CKB_SUDT_ACCOUNT_ID.pack()) // 1 is reserved for sudt
                     .args(args.as_bytes().pack())
                     .build();
                 L2Transaction::new_builder().raw(raw).build()
