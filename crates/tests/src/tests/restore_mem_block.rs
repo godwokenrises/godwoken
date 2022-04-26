@@ -33,7 +33,7 @@ use gw_types::prelude::Pack;
 
 const CKB: u64 = 100000000;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_restore_mem_block() {
     let _ = env_logger::builder().is_test(true).try_init();
 
