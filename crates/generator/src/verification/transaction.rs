@@ -1,11 +1,19 @@
-use gw_common::state::State;
+use std::convert::TryInto;
+
+use gw_common::{
+    builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
+    state::State,
+};
 use gw_traits::CodeStore;
-use gw_types::{offchain::RollupContext, packed::L2Transaction, prelude::*};
+use gw_types::{
+    core::AllowedContractType, offchain::RollupContext, packed::L2Transaction, prelude::*,
+};
 use tracing::instrument;
 
 use crate::{
     constants::MAX_TX_SIZE,
-    error::{TransactionError, TransactionValidateError},
+    error::{AccountError, TransactionError, TransactionValidateError},
+    typed_transaction::types::TypedTransaction,
 };
 
 use super::chain_id::ChainIdVerifier;
@@ -55,9 +63,46 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
         }
 
         // verify balance
-        // TODO
+        let sender_script_hash = self.state.get_script_hash(sender_id)?;
+        let sender_address = self
+            .state
+            .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &sender_script_hash)?
+            .ok_or(AccountError::RegistryAddressNotFound)?;
+        let balance = self
+            .state
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &sender_address)?;
         // get balance
+        let tx_cost = {
+            let tx_type = self.get_tx_type(tx)?;
+            let typed_tx = TypedTransaction::from_tx(tx.to_owned(), tx_type)?;
+            typed_tx.cost().map(Into::into).unwrap_or(u128::MAX)
+        };
+        if balance < tx_cost {
+            return Err(TransactionError::InsufficientBalance.into());
+        }
 
         Ok(())
+    }
+
+    fn get_tx_type(
+        &self,
+        tx: &L2Transaction,
+    ) -> Result<AllowedContractType, TransactionValidateError> {
+        let to_id: u32 = tx.raw().to_id().unpack();
+        let receiver_script_hash = self.state.get_script_hash(to_id)?;
+        let receiver_script = self
+            .state
+            .get_script(&receiver_script_hash)
+            .ok_or(TransactionError::ScriptHashNotFound)?;
+        self.rollup_context
+            .rollup_config
+            .allowed_contract_type_hashes()
+            .into_iter()
+            .find(|type_hash| type_hash.hash() == receiver_script.code_hash())
+            .map(|type_hash| {
+                let type_: u8 = type_hash.type_().into();
+                type_.try_into().unwrap_or(AllowedContractType::Unknown)
+            })
+            .ok_or_else(|| AccountError::UnknownScript.into())
     }
 }

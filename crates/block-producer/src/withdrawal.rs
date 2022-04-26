@@ -383,15 +383,14 @@ mod test {
         .unwrap();
         let (output, data) = generated.unwrap().outputs.first().unwrap().to_owned();
 
-        let (expected_output, expected_data) =
-            gw_generator::Generator::build_withdrawal_cell_output(
-                &rollup_context,
-                &withdrawal_extra,
-                &block.hash().into(),
-                block.raw().number().unpack(),
-                Some(sudt_script.clone()),
-            )
-            .unwrap();
+        let (expected_output, expected_data) = gw_generator::utils::build_withdrawal_cell_output(
+            &rollup_context,
+            &withdrawal_extra,
+            &block.hash().into(),
+            block.raw().number().unpack(),
+            Some(sudt_script.clone()),
+        )
+        .unwrap();
 
         assert_eq!(expected_output.as_slice(), output.as_slice());
         assert_eq!(expected_data, data);

@@ -11,6 +11,7 @@ pub mod genesis;
 pub mod sudt;
 pub mod syscalls;
 pub mod traits;
+pub mod typed_transaction;
 pub mod types;
 pub mod utils;
 pub mod verification;

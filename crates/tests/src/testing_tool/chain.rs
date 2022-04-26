@@ -145,6 +145,21 @@ lazy_static! {
         hasher.finalize(&mut buf);
         buf
     };
+    pub static ref SUDT_VALIDATOR_PROGRAM: Bytes = {
+        let mut buf = Vec::new();
+        let mut path = PathBuf::new();
+        path.push(&SUDT_VALIDATOR_PATH);
+        let mut f = fs::File::open(&path).expect("load SUDT program");
+        f.read_to_end(&mut buf).expect("read SUDT program");
+        Bytes::from(buf.to_vec())
+    };
+    pub static ref SUDT_VALIDATOR_CODE_HASH: [u8; 32] = {
+        let mut buf = [0u8; 32];
+        let mut hasher = new_blake2b();
+        hasher.update(&SUDT_VALIDATOR_PROGRAM);
+        hasher.finalize(&mut buf);
+        buf
+    };
     pub static ref ETH_EOA_MAPPING_REGISTRY_VALIDATOR_PROGRAM: Bytes = {
         let mut buf = Vec::new();
         let mut path = PathBuf::new();
@@ -220,12 +235,16 @@ pub async fn setup_chain(rollup_type_script: Script) -> Chain {
             .pack(),
         )
         .allowed_contract_type_hashes(
-            vec![AllowedTypeHash::new(
-                AllowedContractType::EthAddrReg,
-                *ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH,
-            )]
+            vec![
+                AllowedTypeHash::new(
+                    AllowedContractType::EthAddrReg,
+                    *ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH,
+                ),
+                AllowedTypeHash::new(AllowedContractType::Sudt, *SUDT_VALIDATOR_CODE_HASH),
+            ]
             .pack(),
         )
+        .l2_sudt_validator_script_type_hash(SUDT_VALIDATOR_CODE_HASH.pack())
         .finality_blocks(DEFAULT_FINALITY_BLOCKS.pack())
         .build();
     account_lock_manage

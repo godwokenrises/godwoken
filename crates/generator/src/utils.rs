@@ -88,7 +88,6 @@ mod test {
 
     use crate::generator::WithdrawalCellError;
     use crate::utils::build_withdrawal_cell_output;
-    use crate::Generator;
 
     #[test]
     fn test_build_withdrawal_cell_output() {

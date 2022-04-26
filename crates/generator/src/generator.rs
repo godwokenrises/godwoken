@@ -78,11 +78,13 @@ pub enum WithdrawalCellError {
 impl From<WithdrawalCellError> for Error {
     fn from(err: WithdrawalCellError) -> Self {
         match err {
-            WithdrawalCellError::MinCapacity { min, req } => AccountError::InsufficientCapacity {
-                expected: min,
-                actual: req,
+            WithdrawalCellError::MinCapacity { min, req } => {
+                WithdrawalError::InsufficientCapacity {
+                    expected: min,
+                    actual: req,
+                }
+                .into()
             }
-            .into(),
             WithdrawalCellError::OwnerLock(hash) => WithdrawalError::OwnerLock(hash.pack()).into(),
         }
     }
