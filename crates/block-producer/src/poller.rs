@@ -26,13 +26,14 @@ use gw_types::{
     prelude::*,
 };
 use gw_web3_indexer::indexer::Web3Indexer;
+use itertools::Itertools;
 use serde_json::json;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
 use tokio_metrics::TaskMonitor;
 use tracing::instrument;
 
@@ -52,14 +53,19 @@ impl QueryL1TxError {
     }
 }
 
-pub struct ChainUpdater {
+struct ChainUpdaterContext {
     chain: Arc<Mutex<Chain>>,
     rpc_client: RPCClient,
-    last_tx_hash: Option<H256>,
     rollup_context: RollupContext,
     rollup_type_script: ckb_types::packed::Script,
     web3_indexer: Option<Web3Indexer>,
+}
+
+pub struct ChainUpdater {
+    last_tx_hash: Option<H256>,
     initialized: bool,
+    // Context shared with sub tasks.
+    context: Arc<ChainUpdaterContext>,
     sync_monitor: TaskMonitor,
 }
 
@@ -83,14 +89,17 @@ impl ChainUpdater {
         });
 
         ChainUpdater {
-            chain,
-            rpc_client,
-            rollup_context,
-            rollup_type_script,
             last_tx_hash: None,
-            web3_indexer,
             initialized: false,
             sync_monitor,
+            context: ChainUpdaterContext {
+                chain,
+                rpc_client,
+                rollup_context,
+                rollup_type_script,
+                web3_indexer,
+            }
+            .into(),
         }
     }
 
@@ -106,7 +115,8 @@ impl ChainUpdater {
 
         // Check l1 fork
         let local_tip_committed_info = {
-            self.chain
+            self.context
+                .chain
                 .lock()
                 .await
                 .local_state()
@@ -122,7 +132,7 @@ impl ChainUpdater {
                 committed_l1_block_number,
                 committed_l1_block_hash,
             ) = {
-                let chain = self.chain.lock().await;
+                let chain = self.context.chain.lock().await;
                 let local_tip_block = chain.local_state().tip().raw();
                 let local_tip_committed_info = chain.local_state().last_synced();
                 (
@@ -147,16 +157,25 @@ impl ChainUpdater {
 
         if initial_syncing {
             // Start notify mem pool after synced
-            self.chain.lock().await.complete_initial_syncing().await?;
+            self.context
+                .chain
+                .lock()
+                .await
+                .complete_initial_syncing()
+                .await?;
         }
 
         Ok(())
     }
 
     #[instrument(skip_all)]
-    pub async fn try_sync(&mut self) -> anyhow::Result<()> {
+    async fn try_sync(&mut self) -> anyhow::Result<()> {
+        tracing::info!("try sync");
+        scopeguard::defer! {
+            tracing::info!("try sync completed");
+        }
         let valid_tip_l1_block_number = {
-            let chain = self.chain.lock().await;
+            let chain = self.context.chain.lock().await;
             let local_tip_block: u64 = chain.local_state().tip().raw().number().unpack();
             let local_committed_l1_block: u64 = chain.local_state().last_synced().number().unpack();
 
@@ -169,7 +188,7 @@ impl ChainUpdater {
             local_committed_l1_block
         };
         let search_key = SearchKey {
-            script: self.rollup_type_script.clone().into(),
+            script: self.context.rollup_type_script.clone().into(),
             script_type: ScriptType::Type,
             filter: Some(SearchKeyFilter {
                 script: None,
@@ -182,57 +201,216 @@ impl ChainUpdater {
             }),
         };
         let order = Order::Asc;
-        let limit = Uint32::from(1000);
+        let limit = Uint32::from(64);
 
-        // TODO: the syncing logic here works under the assumption that a single
-        // L1 CKB block can contain at most one L2 Godwoken block. The logic
-        // here needs revising, once we relax this constraint for more performance.
-        let mut last_cursor = None;
-        loop {
-            let txs: Pagination<Tx> = self
-                .rpc_client
-                .indexer
-                .request(
-                    "get_transactions",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(last_cursor),
-                    ])),
-                )
+        let context = self.context.clone();
+        let (tx, mut rx) = mpsc::channel(1024);
+
+        // Get transactions in another task so that the actual syncing does not need to wait for it (pipelining).
+        let task_handle = tokio::spawn(async move {
+            // TODO: the syncing logic here works under the assumption that a single
+            // L1 CKB block can contain at most one L2 Godwoken block. The logic
+            // here needs revising, once we relax this constraint for more performance.
+            let mut last_cursor = None;
+            loop {
+                let txs: Pagination<Tx> = context
+                    .rpc_client
+                    .indexer
+                    .request(
+                        "get_transactions",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(last_cursor),
+                        ])),
+                    )
+                    .await?;
+                if txs.objects.is_empty() {
+                    break;
+                }
+                last_cursor = Some(txs.last_cursor);
+
+                // Dedup because each transaction hash appears twice (input and output).
+                for tx_hash in txs.objects.into_iter().map(|tx| tx.tx_hash).dedup() {
+                    let result = context
+                        .get_transaction_and_sync_param(&tx_hash)
+                        .await
+                        .map(|(tx, sync_param)| (tx_hash, tx, sync_param));
+                    let is_err = result.is_err();
+                    if tx.send(result).await.is_err() || is_err {
+                        break;
+                    }
+                }
+            }
+            Ok::<_, anyhow::Error>(())
+        });
+        let guard = scopeguard::guard(task_handle, |h| h.abort());
+
+        let mut instant = Instant::now();
+        let mut counter = 0u32;
+
+        let context = self.context.clone();
+        let mut chain = context.chain.lock().await;
+        while let Some(result) = rx.recv().await {
+            let (tx_hash, tx, sync_param) = result?;
+            self.update_single(&mut *chain, tx_hash, tx, sync_param)
                 .await?;
-            if txs.objects.is_empty() {
+            counter += 1;
+            if counter == 100 {
+                let now = Instant::now();
+                let dur = now.duration_since(instant);
+                log::info!(
+                    "try sync: synced 100 blocks in {}.{:06}s",
+                    dur.as_secs(),
+                    dur.subsec_micros(),
+                );
+                instant = now;
+                counter = 0;
+            }
+        }
+
+        scopeguard::ScopeGuard::into_inner(guard).await??;
+
+        Ok(())
+    }
+
+    async fn update_single(
+        &mut self,
+        chain: &mut Chain,
+        tx_hash: H256,
+        tx: Transaction,
+        sync_param: SyncParam,
+    ) -> anyhow::Result<()> {
+        if self.last_tx_hash.as_ref() == Some(&tx_hash) {
+            log::info!("[sync revert] known last tx hash, skip {}", tx_hash);
+            return Ok(());
+        }
+
+        chain.sync(sync_param).await?;
+
+        // TODO sync missed block
+        match &self.context.web3_indexer {
+            Some(indexer) => {
+                let store = chain.store().to_owned();
+                if let Err(err) = indexer.store(&store, &tx).await {
+                    log::error!("Web3 indexer store failed: {:?}", err);
+                }
+            }
+            None => {}
+        }
+
+        self.last_tx_hash = Some(tx_hash);
+
+        Ok(())
+    }
+
+    #[instrument(skip_all)]
+    async fn find_l2block_on_l1(&self, committed_info: L2BlockCommittedInfo) -> Result<bool> {
+        let rpc_client = &self.context.rpc_client;
+        let tx_hash: gw_common::H256 =
+            From::<[u8; 32]>::from(committed_info.transaction_hash().unpack());
+        let tx_status = rpc_client.get_transaction_status(tx_hash).await?;
+        if !matches!(tx_status, Some(TxStatus::Committed)) {
+            return Ok(false);
+        }
+
+        let block_hash: [u8; 32] = committed_info.block_hash().unpack();
+        let l1_block_hash = rpc_client.get_transaction_block_hash(tx_hash).await?;
+        Ok(l1_block_hash == Some(block_hash))
+    }
+
+    #[instrument(skip_all)]
+    async fn revert_to_valid_tip_on_l1(&mut self) -> Result<()> {
+        let db = { self.context.chain.lock().await.store().begin_transaction() };
+        let mut revert_l1_actions = Vec::new();
+
+        // First rewind to last valid tip
+        let last_valid_tip_block_hash = db.get_last_valid_tip_block_hash()?;
+        let last_valid_tip_global_state = db
+            .get_block_post_global_state(&last_valid_tip_block_hash)?
+            .expect("valid tip global status should exists");
+        let last_valid_tip_committed_info = db
+            .get_l2block_committed_info(&last_valid_tip_block_hash)?
+            .expect("valid tip committed info should exists");
+        let rewind_to_last_valid_tip = RevertedL1Action {
+            prev_global_state: last_valid_tip_global_state,
+            l2block_committed_info: last_valid_tip_committed_info.clone(),
+            context: RevertL1ActionContext::RewindToLastValidTip,
+        };
+        revert_l1_actions.push(rewind_to_last_valid_tip);
+
+        // Revert until last valid block on l1 found
+        let mut local_valid_committed_info = last_valid_tip_committed_info;
+        let mut local_valid_block = db.get_last_valid_tip_block()?;
+        let from_block_number = local_valid_block.raw().number().unpack();
+        loop {
+            if self
+                .find_l2block_on_l1(local_valid_committed_info.clone())
+                .await?
+            {
                 break;
             }
-            last_cursor = Some(txs.last_cursor);
+            log::debug!(
+                "[sync revert] revert valid {} l2 block from {} l1 block",
+                local_valid_block.raw().number().unpack(),
+                local_valid_committed_info.number().unpack()
+            );
 
-            log::debug!("[sync revert] poll transactions: {}", txs.objects.len());
-            self.update(&txs.objects).await?;
+            let parent_valid_block_hash: [u8; 32] =
+                local_valid_block.raw().parent_block_hash().unpack();
+            let parent_valid_global_state = db
+                .get_block_post_global_state(&parent_valid_block_hash.into())?
+                .expect("valid tip global status should exists");
+            let parent_valid_committed_info = db
+                .get_l2block_committed_info(&parent_valid_block_hash.into())?
+                .expect("valid block l2 committed info should exists");
+            let revert_submit_valid_block = RevertedL1Action {
+                prev_global_state: parent_valid_global_state,
+                l2block_committed_info: parent_valid_committed_info.clone(),
+                context: RevertL1ActionContext::SubmitValidBlock {
+                    l2block: local_valid_block,
+                },
+            };
+            revert_l1_actions.push(revert_submit_valid_block);
+
+            local_valid_committed_info = parent_valid_committed_info;
+            local_valid_block = db
+                .get_block(&parent_valid_block_hash.into())?
+                .expect("valid block should exists");
         }
+
+        {
+            let param = SyncParam {
+                reverts: revert_l1_actions,
+                updates: vec![],
+            };
+            self.context.chain.lock().await.sync(param).await?;
+        }
+
+        // Also revert last tx hash
+        let local_tip_committed_info = db
+            .get_l2block_committed_info(&db.get_tip_block_hash()?)?
+            .expect("tip committed info should exists");
+        let local_tip_committed_l1_tx_hash = local_tip_committed_info.transaction_hash().unpack();
+        self.last_tx_hash = Some(local_tip_committed_l1_tx_hash);
+        log::debug!("[sync revert] revert last l1 tx to {:?}", self.last_tx_hash);
+
+        let end_block_number = local_valid_block.raw().number().unpack();
+        log::debug!(
+            "[sync revert] total revert {} l2 blocks",
+            from_block_number - end_block_number
+        );
 
         Ok(())
     }
+}
 
-    #[instrument(skip_all)]
-    pub async fn update(&mut self, txs: &[Tx]) -> anyhow::Result<()> {
-        for tx in txs.iter() {
-            self.update_single(&tx.tx_hash).await?;
-            self.last_tx_hash = Some(tx.tx_hash.clone());
-        }
-
-        Ok(())
-    }
-
-    #[instrument(skip_all)]
-    async fn update_single(&mut self, tx_hash: &H256) -> anyhow::Result<()> {
-        if let Some(last_tx_hash) = &self.last_tx_hash {
-            if last_tx_hash == tx_hash {
-                log::info!("[sync revert] known last tx hash, skip {}", tx_hash);
-                return Ok(());
-            }
-        }
-
+impl ChainUpdaterContext {
+    async fn get_transaction_and_sync_param(
+        &self,
+        tx_hash: &H256,
+    ) -> anyhow::Result<(Transaction, SyncParam)> {
         let tx: Option<TransactionWithStatus> = self
             .rpc_client
             .ckb
@@ -314,123 +492,9 @@ impl ChainUpdater {
             reverts: vec![],
             updates: vec![update],
         };
-        self.chain.lock().await.sync(sync_param).await?;
-
-        // TODO sync missed block
-        match &self.web3_indexer {
-            Some(indexer) => {
-                let store = { self.chain.lock().await.store().to_owned() };
-                if let Err(err) = indexer.store(&store, &tx).await {
-                    log::error!("Web3 indexer store failed: {:?}", err);
-                }
-            }
-            None => {}
-        }
-
-        Ok(())
+        Ok((tx, sync_param))
     }
 
-    #[instrument(skip_all)]
-    async fn find_l2block_on_l1(&self, committed_info: L2BlockCommittedInfo) -> Result<bool> {
-        let rpc_client = &self.rpc_client;
-        let tx_hash: gw_common::H256 =
-            From::<[u8; 32]>::from(committed_info.transaction_hash().unpack());
-        let tx_status = rpc_client.get_transaction_status(tx_hash).await?;
-        if !matches!(tx_status, Some(TxStatus::Committed)) {
-            return Ok(false);
-        }
-
-        let block_hash: [u8; 32] = committed_info.block_hash().unpack();
-        let l1_block_hash = rpc_client.get_transaction_block_hash(tx_hash).await?;
-        Ok(l1_block_hash == Some(block_hash))
-    }
-
-    #[instrument(skip_all)]
-    async fn revert_to_valid_tip_on_l1(&mut self) -> Result<()> {
-        let db = { self.chain.lock().await.store().begin_transaction() };
-        let mut revert_l1_actions = Vec::new();
-
-        // First rewind to last valid tip
-        let last_valid_tip_block_hash = db.get_last_valid_tip_block_hash()?;
-        let last_valid_tip_global_state = db
-            .get_block_post_global_state(&last_valid_tip_block_hash)?
-            .expect("valid tip global status should exists");
-        let last_valid_tip_committed_info = db
-            .get_l2block_committed_info(&last_valid_tip_block_hash)?
-            .expect("valid tip committed info should exists");
-        let rewind_to_last_valid_tip = RevertedL1Action {
-            prev_global_state: last_valid_tip_global_state,
-            l2block_committed_info: last_valid_tip_committed_info.clone(),
-            context: RevertL1ActionContext::RewindToLastValidTip,
-        };
-        revert_l1_actions.push(rewind_to_last_valid_tip);
-
-        // Revert until last valid block on l1 found
-        let mut local_valid_committed_info = last_valid_tip_committed_info;
-        let mut local_valid_block = db.get_last_valid_tip_block()?;
-        let from_block_number = local_valid_block.raw().number().unpack();
-        loop {
-            if self
-                .find_l2block_on_l1(local_valid_committed_info.clone())
-                .await?
-            {
-                break;
-            }
-            log::debug!(
-                "[sync revert] revert valid {} l2 block from {} l1 block",
-                local_valid_block.raw().number().unpack(),
-                local_valid_committed_info.number().unpack()
-            );
-
-            let parent_valid_block_hash: [u8; 32] =
-                local_valid_block.raw().parent_block_hash().unpack();
-            let parent_valid_global_state = db
-                .get_block_post_global_state(&parent_valid_block_hash.into())?
-                .expect("valid tip global status should exists");
-            let parent_valid_committed_info = db
-                .get_l2block_committed_info(&parent_valid_block_hash.into())?
-                .expect("valid block l2 committed info should exists");
-            let revert_submit_valid_block = RevertedL1Action {
-                prev_global_state: parent_valid_global_state,
-                l2block_committed_info: parent_valid_committed_info.clone(),
-                context: RevertL1ActionContext::SubmitValidBlock {
-                    l2block: local_valid_block,
-                },
-            };
-            revert_l1_actions.push(revert_submit_valid_block);
-
-            local_valid_committed_info = parent_valid_committed_info;
-            local_valid_block = db
-                .get_block(&parent_valid_block_hash.into())?
-                .expect("valid block should exists");
-        }
-
-        {
-            let param = SyncParam {
-                reverts: revert_l1_actions,
-                updates: vec![],
-            };
-            self.chain.lock().await.sync(param).await?;
-        }
-
-        // Also revert last tx hash
-        let local_tip_committed_info = db
-            .get_l2block_committed_info(&db.get_tip_block_hash()?)?
-            .expect("tip committed info should exists");
-        let local_tip_committed_l1_tx_hash = local_tip_committed_info.transaction_hash().unpack();
-        self.last_tx_hash = Some(local_tip_committed_l1_tx_hash);
-        log::debug!("[sync revert] revert last l1 tx to {:?}", self.last_tx_hash);
-
-        let end_block_number = local_valid_block.raw().number().unpack();
-        log::debug!(
-            "[sync revert] total revert {} l2 blocks",
-            from_block_number - end_block_number
-        );
-
-        Ok(())
-    }
-
-    #[instrument(skip_all)]
     fn extract_rollup_action(&self, tx: &Transaction) -> Result<RollupAction> {
         let rollup_type_hash: [u8; 32] = {
             let hash = self.rollup_type_script.calc_script_hash();
@@ -465,7 +529,6 @@ impl ChainUpdater {
         RollupAction::from_slice(&output_type).map_err(|e| anyhow!("invalid rollup action {}", e))
     }
 
-    #[instrument(skip_all)]
     async fn extract_challenge_context(
         &self,
         tx: &Transaction,
@@ -513,7 +576,6 @@ impl ChainUpdater {
         unreachable!("challenge output not found");
     }
 
-    #[instrument(skip_all)]
     async fn extract_deposit_requests(
         &self,
         tx: &Transaction,
@@ -594,7 +656,6 @@ impl ChainUpdater {
     }
 }
 
-#[instrument(skip_all)]
 fn try_parse_deposit_request(
     cell_output: &CellOutput,
     cell_data: &Bytes,
