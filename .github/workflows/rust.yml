@@ -37,5 +37,7 @@ jobs:
     with:
       # github.ref: The branch or tag ref that triggered the workflow run. For branches this is the format refs/heads/<branch_name>, and for tags it is refs/tags/<tag_name>.
       godwoken_ref: ${{ github.ref }}
+      gw_prebuild_image_name: ghcr.io/zeroqn/godwoken-prebuilds
+      gw_prebuild_image_tag: v1.1-feat-change-ckb-decimal-to-18 # For godwoken-scripts and godwoken-polyjuice binaries
       kicker_ref: refs/pull/239/head # https://github.com/RetricSu/godwoken-kicker/pull/239
       tests_ref: refs/pull/105/head # https://github.com/nervosnetwork/godwoken-tests/pull/105
