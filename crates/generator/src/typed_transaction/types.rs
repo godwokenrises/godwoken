@@ -4,7 +4,7 @@ use ckb_vm::Bytes;
 use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
 use gw_types::{
     core::AllowedContractType,
-    packed::{ETHAddrRegArgs, L2Transaction, MetaContractArgs, SUDTArgs},
+    packed::{ETHAddrRegArgsReader, L2Transaction, MetaContractArgsReader, SUDTArgsReader},
     prelude::*,
 };
 
@@ -49,10 +49,10 @@ pub struct EthAddrRegTx(L2Transaction);
 
 impl EthAddrRegTx {
     pub fn cost(&self) -> Option<u64> {
-        use gw_types::packed::ETHAddrRegArgsUnion::*;
+        use gw_types::packed::ETHAddrRegArgsUnionReader::*;
 
         let args: Bytes = self.0.raw().args().unpack();
-        let args = ETHAddrRegArgs::from_slice(&args).ok()?;
+        let args = ETHAddrRegArgsReader::from_slice(&args).ok()?;
 
         match args.to_enum() {
             EthToGw(_) | GwToEth(_) => None,
@@ -66,10 +66,10 @@ pub struct MetaTx(L2Transaction);
 
 impl MetaTx {
     pub fn cost(&self) -> Option<u64> {
-        use gw_types::packed::MetaContractArgsUnion::*;
+        use gw_types::packed::MetaContractArgsUnionReader::*;
 
         let args: Bytes = self.0.raw().args().unpack();
-        let args = MetaContractArgs::from_slice(&args).ok()?;
+        let args = MetaContractArgsReader::from_slice(&args).ok()?;
 
         match args.to_enum() {
             CreateAccount(args) => Some(args.fee().amount().unpack()),
@@ -81,10 +81,10 @@ pub struct SimpleUDTTx(L2Transaction);
 
 impl SimpleUDTTx {
     pub fn cost(&self) -> Option<u64> {
-        use gw_types::packed::SUDTArgsUnion::*;
+        use gw_types::packed::SUDTArgsUnionReader::*;
 
         let args: Bytes = self.0.raw().args().unpack();
-        let args = SUDTArgs::from_slice(&args).ok()?;
+        let args = SUDTArgsReader::from_slice(&args).ok()?;
 
         match args.to_enum() {
             SUDTQuery(_) => None,
