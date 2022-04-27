@@ -251,6 +251,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         trace: None,
         reload_config_github_url: None,
         dynamic_config: Default::default(),
+        withdrawal_to_v1_config: Default::default(),
     };
 
     Ok(config)

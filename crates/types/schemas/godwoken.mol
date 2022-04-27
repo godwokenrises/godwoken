@@ -163,6 +163,14 @@ table DepositLockArgs {
     layer2_lock: Script,
     cancel_timeout: Uint64,
 }
+
+table V1DepositLockArgs {
+    // layer1 lock hash
+    owner_lock_hash: Byte32,
+    layer2_lock: Script,
+    cancel_timeout: Uint64,
+    registry_id: Uint32,
+}
 // --- end of deposit lock ---
 
 // --- custodian lock ---
@@ -201,6 +209,7 @@ union UnlockWithdrawalWitness {
     UnlockWithdrawalViaFinalize,
     UnlockWithdrawalViaRevert,
     UnlockWithdrawalViaTrade,
+    UnlockWithdrawalToV1,
 }
 table UnlockWithdrawalViaFinalize {
 }
@@ -209,6 +218,8 @@ struct UnlockWithdrawalViaRevert {
 }
 table UnlockWithdrawalViaTrade {
     owner_lock: Script,
+}
+table UnlockWithdrawalToV1 {
 }
 // --- end of withdrawal lock ---
 

@@ -17,7 +17,8 @@ use gw_common::{
 use gw_config::{MemPoolConfig, NodeMode};
 use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_generator::{
-    constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, ArcSwap, Generator,
+    constants::L2TX_MAX_CYCLES, error::TransactionError, generator::UnlockWithdrawal,
+    traits::StateExt, ArcSwap, Generator,
 };
 use gw_rpc_ws_server::notify_controller::NotifyController;
 use gw_store::{
@@ -414,9 +415,9 @@ impl MemPool {
         // withdrawal basic verification
         let db = self.store.begin_transaction();
         let asset_script = db.get_asset_script(&withdrawal.raw().sudt_script_hash().unpack())?;
-        let opt_owner_lock = withdrawal.opt_owner_lock();
+        let unlock_withdrawl = UnlockWithdrawal::from(withdrawal);
         self.generator
-            .verify_withdrawal_request(state, &withdrawal.request(), asset_script, opt_owner_lock)
+            .verify_withdrawal_request(state, &withdrawal.request(), asset_script, unlock_withdrawl)
             .map_err(Into::into)
     }
 
@@ -958,7 +959,7 @@ impl MemPool {
                 &state,
                 &withdrawal.request(),
                 asset_script,
-                withdrawal.opt_owner_lock(),
+                UnlockWithdrawal::from(&withdrawal),
             ) {
                 log::info!("[mem-pool] withdrawal verification error: {:?}", err);
                 unused_withdrawals.push(withdrawal_hash);

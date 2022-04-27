@@ -50,6 +50,13 @@ table WithdrawalReceipt {
 table WithdrawalRequestExtra {
     request: WithdrawalRequest,
     owner_lock: ScriptOpt,
+    withdraw_to_v1: byte,
+}
+
+// For exists mempool withdrawal request in db
+table DeprecatedWithdrawRequestExtra {
+    request: WithdrawalRequest,
+    owner_lock: ScriptOpt,
 }
 
 struct SMTBranchKey {

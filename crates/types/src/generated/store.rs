@@ -3400,6 +3400,7 @@ impl ::core::fmt::Display for WithdrawalRequestExtra {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "request", self.request())?;
         write!(f, ", {}: {}", "owner_lock", self.owner_lock())?;
+        write!(f, ", {}: {}", "withdraw_to_v1", self.withdraw_to_v1())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -3410,20 +3411,21 @@ impl ::core::fmt::Display for WithdrawalRequestExtra {
 impl ::core::default::Default for WithdrawalRequestExtra {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            228, 0, 0, 0, 12, 0, 0, 0, 228, 0, 0, 0, 216, 0, 0, 0, 12, 0, 0, 0, 212, 0, 0, 0, 0, 0,
+            233, 0, 0, 0, 16, 0, 0, 0, 232, 0, 0, 0, 232, 0, 0, 0, 216, 0, 0, 0, 12, 0, 0, 0, 212,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0,
         ];
         WithdrawalRequestExtra::new_unchecked(v.into())
     }
 }
 impl WithdrawalRequestExtra {
-    pub const FIELD_COUNT: usize = 2;
+    pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -3449,11 +3451,17 @@ impl WithdrawalRequestExtra {
     pub fn owner_lock(&self) -> ScriptOpt {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        ScriptOpt::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn withdraw_to_v1(&self) -> Byte {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[12..]) as usize;
-            ScriptOpt::new_unchecked(self.0.slice(start..end))
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            Byte::new_unchecked(self.0.slice(start..end))
         } else {
-            ScriptOpt::new_unchecked(self.0.slice(start..))
+            Byte::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> WithdrawalRequestExtraReader<'r> {
@@ -3485,6 +3493,7 @@ impl molecule::prelude::Entity for WithdrawalRequestExtra {
         Self::new_builder()
             .request(self.request())
             .owner_lock(self.owner_lock())
+            .withdraw_to_v1(self.withdraw_to_v1())
     }
 }
 #[derive(Clone, Copy)]
@@ -3508,6 +3517,7 @@ impl<'r> ::core::fmt::Display for WithdrawalRequestExtraReader<'r> {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "request", self.request())?;
         write!(f, ", {}: {}", "owner_lock", self.owner_lock())?;
+        write!(f, ", {}: {}", "withdraw_to_v1", self.withdraw_to_v1())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -3516,7 +3526,7 @@ impl<'r> ::core::fmt::Display for WithdrawalRequestExtraReader<'r> {
     }
 }
 impl<'r> WithdrawalRequestExtraReader<'r> {
-    pub const FIELD_COUNT: usize = 2;
+    pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -3542,11 +3552,17 @@ impl<'r> WithdrawalRequestExtraReader<'r> {
     pub fn owner_lock(&self) -> ScriptOptReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        ScriptOptReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn withdraw_to_v1(&self) -> ByteReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[12..]) as usize;
-            ScriptOptReader::new_unchecked(&self.as_slice()[start..end])
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            ByteReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            ScriptOptReader::new_unchecked(&self.as_slice()[start..])
+            ByteReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -3601,6 +3617,7 @@ impl<'r> molecule::prelude::Reader<'r> for WithdrawalRequestExtraReader<'r> {
         }
         WithdrawalRequestReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         ScriptOptReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        ByteReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
     }
 }
@@ -3608,8 +3625,289 @@ impl<'r> molecule::prelude::Reader<'r> for WithdrawalRequestExtraReader<'r> {
 pub struct WithdrawalRequestExtraBuilder {
     pub(crate) request: WithdrawalRequest,
     pub(crate) owner_lock: ScriptOpt,
+    pub(crate) withdraw_to_v1: Byte,
 }
 impl WithdrawalRequestExtraBuilder {
+    pub const FIELD_COUNT: usize = 3;
+    pub fn request(mut self, v: WithdrawalRequest) -> Self {
+        self.request = v;
+        self
+    }
+    pub fn owner_lock(mut self, v: ScriptOpt) -> Self {
+        self.owner_lock = v;
+        self
+    }
+    pub fn withdraw_to_v1(mut self, v: Byte) -> Self {
+        self.withdraw_to_v1 = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for WithdrawalRequestExtraBuilder {
+    type Entity = WithdrawalRequestExtra;
+    const NAME: &'static str = "WithdrawalRequestExtraBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.request.as_slice().len()
+            + self.owner_lock.as_slice().len()
+            + self.withdraw_to_v1.as_slice().len()
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.request.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.owner_lock.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.withdraw_to_v1.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.request.as_slice())?;
+        writer.write_all(self.owner_lock.as_slice())?;
+        writer.write_all(self.withdraw_to_v1.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        WithdrawalRequestExtra::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct DeprecatedWithdrawRequestExtra(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for DeprecatedWithdrawRequestExtra {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for DeprecatedWithdrawRequestExtra {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for DeprecatedWithdrawRequestExtra {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "request", self.request())?;
+        write!(f, ", {}: {}", "owner_lock", self.owner_lock())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for DeprecatedWithdrawRequestExtra {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            228, 0, 0, 0, 12, 0, 0, 0, 228, 0, 0, 0, 216, 0, 0, 0, 12, 0, 0, 0, 212, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        DeprecatedWithdrawRequestExtra::new_unchecked(v.into())
+    }
+}
+impl DeprecatedWithdrawRequestExtra {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn request(&self) -> WithdrawalRequest {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        WithdrawalRequest::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn owner_lock(&self) -> ScriptOpt {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            ScriptOpt::new_unchecked(self.0.slice(start..end))
+        } else {
+            ScriptOpt::new_unchecked(self.0.slice(start..))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> DeprecatedWithdrawRequestExtraReader<'r> {
+        DeprecatedWithdrawRequestExtraReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for DeprecatedWithdrawRequestExtra {
+    type Builder = DeprecatedWithdrawRequestExtraBuilder;
+    const NAME: &'static str = "DeprecatedWithdrawRequestExtra";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        DeprecatedWithdrawRequestExtra(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        DeprecatedWithdrawRequestExtraReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        DeprecatedWithdrawRequestExtraReader::from_compatible_slice(slice)
+            .map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .request(self.request())
+            .owner_lock(self.owner_lock())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct DeprecatedWithdrawRequestExtraReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for DeprecatedWithdrawRequestExtraReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for DeprecatedWithdrawRequestExtraReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for DeprecatedWithdrawRequestExtraReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "request", self.request())?;
+        write!(f, ", {}: {}", "owner_lock", self.owner_lock())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> DeprecatedWithdrawRequestExtraReader<'r> {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn request(&self) -> WithdrawalRequestReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        WithdrawalRequestReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn owner_lock(&self) -> ScriptOptReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            ScriptOptReader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            ScriptOptReader::new_unchecked(&self.as_slice()[start..])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for DeprecatedWithdrawRequestExtraReader<'r> {
+    type Entity = DeprecatedWithdrawRequestExtra;
+    const NAME: &'static str = "DeprecatedWithdrawRequestExtraReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        DeprecatedWithdrawRequestExtraReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        if slice_len < offset_first {
+            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
+        }
+        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
+            .chunks_exact(molecule::NUMBER_SIZE)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        WithdrawalRequestReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        ScriptOptReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct DeprecatedWithdrawRequestExtraBuilder {
+    pub(crate) request: WithdrawalRequest,
+    pub(crate) owner_lock: ScriptOpt,
+}
+impl DeprecatedWithdrawRequestExtraBuilder {
     pub const FIELD_COUNT: usize = 2;
     pub fn request(mut self, v: WithdrawalRequest) -> Self {
         self.request = v;
@@ -3620,9 +3918,9 @@ impl WithdrawalRequestExtraBuilder {
         self
     }
 }
-impl molecule::prelude::Builder for WithdrawalRequestExtraBuilder {
-    type Entity = WithdrawalRequestExtra;
-    const NAME: &'static str = "WithdrawalRequestExtraBuilder";
+impl molecule::prelude::Builder for DeprecatedWithdrawRequestExtraBuilder {
+    type Entity = DeprecatedWithdrawRequestExtra;
+    const NAME: &'static str = "DeprecatedWithdrawRequestExtraBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.request.as_slice().len()
@@ -3647,7 +3945,7 @@ impl molecule::prelude::Builder for WithdrawalRequestExtraBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        WithdrawalRequestExtra::new_unchecked(inner.into())
+        DeprecatedWithdrawRequestExtra::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]

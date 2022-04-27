@@ -39,7 +39,7 @@ use gw_types::{
     packed::{
         AccountMerkleState, BlockInfo, CellOutput, ChallengeTarget, DepositRequest, L2Block,
         L2Transaction, RawL2Block, RawL2Transaction, Script, TxReceipt, WithdrawalLockArgs,
-        WithdrawalReceipt, WithdrawalRequest,
+        WithdrawalReceipt, WithdrawalRequest, WithdrawalRequestExtra,
     },
     prelude::*,
 };
@@ -73,6 +73,7 @@ pub enum ApplyBlockResult {
 pub enum WithdrawalCellError {
     MinCapacity { min: u128, req: u64 },
     OwnerLock(H256),
+    V1DepositLock(H256),
 }
 
 impl From<WithdrawalCellError> for Error {
@@ -84,6 +85,9 @@ impl From<WithdrawalCellError> for Error {
             }
             .into(),
             WithdrawalCellError::OwnerLock(hash) => WithdrawalError::OwnerLock(hash.pack()).into(),
+            WithdrawalCellError::V1DepositLock(hash) => {
+                WithdrawalError::V1DepositLock(hash.pack()).into()
+            }
         }
     }
 }
@@ -91,6 +95,19 @@ impl From<WithdrawalCellError> for Error {
 pub enum UnlockWithdrawal {
     WithoutOwnerLock,
     WithOwnerLock { lock: Script },
+    ToV1 { deposit_lock: Script },
+}
+
+impl From<&WithdrawalRequestExtra> for UnlockWithdrawal {
+    fn from(extra: &WithdrawalRequestExtra) -> Self {
+        match extra.opt_owner_lock() {
+            None => UnlockWithdrawal::WithoutOwnerLock,
+            Some(deposit_lock) if extra.withdraw_to_v1() == 1u8.into() => {
+                UnlockWithdrawal::ToV1 { deposit_lock }
+            }
+            Some(lock) => UnlockWithdrawal::WithOwnerLock { lock },
+        }
+    }
 }
 
 impl From<Option<Script>> for UnlockWithdrawal {
@@ -211,7 +228,7 @@ impl Generator {
         state: &S,
         withdrawal_request: &WithdrawalRequest,
         asset_script: Option<Script>,
-        opt_owner_lock: Option<Script>,
+        unlock_withdrawal: UnlockWithdrawal,
     ) -> Result<(), Error> {
         let raw = withdrawal_request.raw();
         let account_script_hash: H256 = raw.account_script_hash().unpack();
@@ -231,7 +248,7 @@ impl Generator {
             &H256::one(),
             1,
             asset_script,
-            UnlockWithdrawal::from(opt_owner_lock),
+            unlock_withdrawal,
         )?;
 
         // find user account
@@ -829,7 +846,10 @@ impl Generator {
             let mut args = Vec::new();
             args.extend_from_slice(rollup_context.rollup_script_hash.as_slice());
             args.extend_from_slice(withdrawal_lock_args.as_slice());
-            if let UnlockWithdrawal::WithOwnerLock { lock: owner_lock } = unlock_withdrawal {
+            if let UnlockWithdrawal::WithOwnerLock {
+                lock: ref owner_lock,
+            } = unlock_withdrawal
+            {
                 let owner_lock_hash: [u8; 32] = req.raw().owner_lock_hash().unpack();
                 if owner_lock_hash != owner_lock.hash() {
                     return Err(WithdrawalCellError::OwnerLock(owner_lock_hash.into()));
@@ -837,6 +857,16 @@ impl Generator {
 
                 args.extend_from_slice(&(owner_lock.as_slice().len() as u32).to_be_bytes());
                 args.extend_from_slice(owner_lock.as_slice());
+            }
+            if let UnlockWithdrawal::ToV1 { ref deposit_lock } = unlock_withdrawal {
+                let owner_lock_hash: [u8; 32] = req.raw().owner_lock_hash().unpack();
+                if owner_lock_hash != deposit_lock.hash() {
+                    return Err(WithdrawalCellError::V1DepositLock(owner_lock_hash.into()));
+                }
+
+                args.extend_from_slice(&(deposit_lock.as_slice().len() as u32).to_be_bytes());
+                args.extend_from_slice(deposit_lock.as_slice());
+                args.push(1u8);
             }
 
             Bytes::from(args)
@@ -993,6 +1023,7 @@ mod test {
             parsed_args.opt_owner_lock.map(|l| l.hash()),
             Some(owner_lock.hash())
         );
+        assert!(!parsed_args.withdraw_to_v1);
 
         let lock_args = parsed_args.lock_args.clone();
         assert_eq!(
@@ -1012,6 +1043,30 @@ mod test {
         );
         assert_eq!(lock_args.owner_lock_hash(), owner_lock.hash().pack());
         assert_eq!(lock_args.payment_lock_hash(), owner_lock.hash().pack());
+
+        // ## Withdraw to V1
+        let (v1_output, _v1_data) = Generator::build_withdrawal_cell_output(
+            &rollup_context,
+            &req,
+            &block_hash,
+            block_number,
+            Some(sudt_script.clone()),
+            UnlockWithdrawal::ToV1 {
+                deposit_lock: owner_lock.clone(),
+            },
+        )
+        .unwrap();
+        let parsed_to_v1_args =
+            gw_utils::withdrawal::parse_lock_args(&v1_output.lock().args().unpack()).unwrap();
+        assert_eq!(
+            parsed_to_v1_args.rollup_type_hash.pack(),
+            rollup_context.rollup_script_hash.pack()
+        );
+        assert_eq!(
+            parsed_to_v1_args.opt_owner_lock.map(|l| l.hash()),
+            Some(owner_lock.hash())
+        );
+        assert!(parsed_to_v1_args.withdraw_to_v1);
 
         // ## None asset script
         let (output2, data2) = Generator::build_withdrawal_cell_output(

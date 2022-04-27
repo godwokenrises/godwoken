@@ -72,6 +72,8 @@ pub enum WithdrawalError {
     NonPositiveSUDTAmount,
     #[error("Expected owner lock hash {0}")]
     OwnerLock(Byte32),
+    #[error("Expected v1 deposit lock hash {0}")]
+    V1DepositLock(Byte32),
 }
 
 impl From<WithdrawalError> for Error {
