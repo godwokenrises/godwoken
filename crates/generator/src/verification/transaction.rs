@@ -75,7 +75,11 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
         let tx_cost = {
             let tx_type = self.get_tx_type(tx)?;
             let typed_tx = TypedTransaction::from_tx(tx.to_owned(), tx_type)?;
-            typed_tx.cost().map(Into::into).unwrap_or(u128::MAX)
+            // reject txs has no cost, these transaction can only be execute without modify state tree
+            typed_tx
+                .cost()
+                .map(Into::into)
+                .ok_or(TransactionError::NoCost)?
         };
         if balance < tx_cost {
             return Err(TransactionError::InsufficientBalance.into());

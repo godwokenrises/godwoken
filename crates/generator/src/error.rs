@@ -151,6 +151,8 @@ pub enum TransactionError {
     ExceededMaxTxSize { max_size: usize, tx_size: usize },
     #[error("Insufficient balance")]
     InsufficientBalance,
+    #[error("Tx has no cost")]
+    NoCost,
 }
 
 impl From<VMError> for TransactionError {
