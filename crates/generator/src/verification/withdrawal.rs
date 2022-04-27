@@ -6,6 +6,7 @@ use gw_types::{
     offchain::RollupContext,
     packed::{Script, WithdrawalRequestExtra},
     prelude::*,
+    U256,
 };
 use tracing::instrument;
 
@@ -59,7 +60,7 @@ impl<'a, S: State + CodeStore> WithdrawalVerifier<'a, S> {
         let sudt_script_hash: H256 = raw.sudt_script_hash().unpack();
         let amount: u128 = raw.amount().unpack();
         let capacity: u64 = raw.capacity().unpack();
-        let fee: u64 = raw.fee().unpack();
+        let fee = raw.fee().unpack();
         let registry_address = self
             .state
             .get_registry_address_by_script_hash(raw.registry_id().unpack(), &account_script_hash)?
@@ -95,8 +96,8 @@ impl<'a, S: State + CodeStore> WithdrawalVerifier<'a, S> {
         let ckb_balance = self
             .state
             .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &registry_address)?;
-        let required_ckb_capacity = capacity.saturating_add(fee);
-        if ckb_decimal::to_18(required_ckb_capacity) > ckb_balance {
+        let required_ckb_capacity = ckb_decimal::to_18(capacity).saturating_add(fee);
+        if required_ckb_capacity > ckb_balance {
             return Err(WithdrawalError::Overdraft.into());
         }
         let l2_sudt_script_hash =
@@ -113,7 +114,7 @@ impl<'a, S: State + CodeStore> WithdrawalVerifier<'a, S> {
                 return Err(WithdrawalError::NonPositiveSUDTAmount.into());
             }
             let balance = self.state.get_sudt_balance(sudt_id, &registry_address)?;
-            if amount > balance {
+            if U256::from(amount) > balance {
                 return Err(WithdrawalError::Overdraft.into());
             }
         } else if amount != 0 {

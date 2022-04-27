@@ -41,7 +41,6 @@ use gw_types::{
         RawL2Block, RawL2Transaction, TxReceipt, WithdrawalReceipt, WithdrawalRequestExtra,
     },
     prelude::*,
-    U256,
 };
 
 use ckb_vm::{DefaultMachineBuilder, SupportMachine};

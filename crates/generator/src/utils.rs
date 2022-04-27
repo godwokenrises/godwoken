@@ -85,6 +85,7 @@ mod test {
         RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest, WithdrawalRequestExtra,
     };
     use gw_types::prelude::{Builder, Entity, Pack, Unpack};
+    use gw_types::U256;
 
     use crate::generator::WithdrawalCellError;
     use crate::utils::build_withdrawal_cell_output;
@@ -108,7 +109,7 @@ mod test {
 
         // ## Fulfill withdrawal request
         let req = {
-            let fee = 50u64;
+            let fee = U256::from(50u64);
             let raw = RawWithdrawalRequest::new_builder()
                 .nonce(1u32.pack())
                 .capacity((500 * 10u64.pow(8)).pack())
