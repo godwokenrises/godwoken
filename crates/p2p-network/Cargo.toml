@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 gw-types = { path = "../types" }
 gw-config = { path = "../config" }
+gw-utils = { path = "../utils" }
 tokio = "1.15"
 anyhow = "1.0"
 log = "0.4"
