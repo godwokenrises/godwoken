@@ -1257,7 +1257,7 @@ impl Default for GwScriptType {
 #[serde(rename_all = "snake_case")]
 pub struct RollupCell {
     pub type_hash: H256,
-    pub script: Script,
+    pub type_script: Script,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]

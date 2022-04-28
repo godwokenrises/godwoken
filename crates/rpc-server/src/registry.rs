@@ -1403,8 +1403,8 @@ pub fn to_node_rollup_config(rollup_config: &RollupConfig) -> NodeRollupConfig {
 
 pub fn to_rollup_cell(chain_config: &ChainConfig) -> RollupCell {
     let type_hash: ckb_types::H256 = chain_config.rollup_type_script.hash();
-    let script = chain_config.rollup_type_script.to_owned();
-    RollupCell { type_hash, script }
+    let type_script = chain_config.rollup_type_script.to_owned();
+    RollupCell { type_hash, type_script }
 }
 
 pub fn to_gw_scripts(
