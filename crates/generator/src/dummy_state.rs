@@ -62,7 +62,8 @@ mod tests {
     use gw_traits::CodeStore;
     use gw_types::{
         packed::Script,
-        prelude::{Builder, Entity, Pack}, U256,
+        prelude::{Builder, Entity, Pack},
+        U256,
     };
 
     use crate::{traits::StateExt, Error};
