@@ -229,7 +229,7 @@ impl BenchExecutionEnvironment {
                         .fee(
                             Fee::new_builder()
                                 .registry_id(ETH_REGISTRY_ACCOUNT_ID.pack())
-                                .amount(U256::one().pack())
+                                .amount(1u128.pack())
                                 .build(),
                         )
                         .build(),
@@ -288,7 +288,7 @@ impl BenchExecutionEnvironment {
                 .mapping_registry_address_to_script_hash(addr.clone(), account_script_hash)
                 .unwrap();
             state
-                .mint_sudt(CKB_SUDT_ACCOUNT_ID, &addr, CKB_BALANCE)
+                .mint_sudt(CKB_SUDT_ACCOUNT_ID, &addr, CKB_BALANCE.into())
                 .unwrap();
 
             Account { id: account_id }

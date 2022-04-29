@@ -231,9 +231,8 @@ pub trait State {
         &mut self,
         sudt_id: u32,
         address: &RegistryAddress,
-        amount: impl Into<U256>,
+        amount: U256,
     ) -> Result<(), Error> {
-        let amount = amount.into();
         let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, address);
         let raw_key = build_account_key(sudt_id, &sudt_key);
         // calculate balance
@@ -257,9 +256,8 @@ pub trait State {
         &mut self,
         sudt_id: u32,
         address: &RegistryAddress,
-        amount: impl Into<U256>,
+        amount: U256,
     ) -> Result<(), Error> {
-        let amount = amount.into();
         let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, address);
         let raw_key = build_account_key(sudt_id, &sudt_key);
         // calculate balance

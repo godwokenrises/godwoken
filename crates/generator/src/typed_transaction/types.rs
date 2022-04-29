@@ -57,8 +57,8 @@ impl EthAddrRegTx {
 
         match args.to_enum() {
             EthToGw(_) | GwToEth(_) => None,
-            SetMapping(args) => Some(args.fee().amount().unpack()),
-            BatchSetMapping(args) => Some(args.fee().amount().unpack()),
+            SetMapping(args) => Some(args.fee().amount().unpack().into()),
+            BatchSetMapping(args) => Some(args.fee().amount().unpack().into()),
         }
     }
 }
@@ -73,7 +73,7 @@ impl MetaTx {
         let args = MetaContractArgsReader::from_slice(&args).ok()?;
 
         match args.to_enum() {
-            CreateAccount(args) => Some(args.fee().amount().unpack()),
+            CreateAccount(args) => Some(args.fee().amount().unpack().into()),
         }
     }
 }
@@ -95,10 +95,10 @@ impl SimpleUDTTx {
                 if to_id == CKB_SUDT_ACCOUNT_ID {
                     // CKB transfer cost: transfer CKB value + fee
                     let value = args.amount().unpack();
-                    value.checked_add(fee)
+                    value.checked_add(fee.into())
                 } else {
                     // Simple UDT transfer cost: fee
-                    Some(fee)
+                    Some(fee.into())
                 }
             }
         }

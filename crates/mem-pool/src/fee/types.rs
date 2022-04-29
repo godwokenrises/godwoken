@@ -7,7 +7,6 @@ use gw_types::{
         MetaContractArgsUnion, SUDTArgs, SUDTArgsUnion, WithdrawalRequestExtra,
     },
     prelude::{Entity, Unpack},
-    U256,
 };
 use std::{cmp::Ordering, convert::TryInto};
 
@@ -77,7 +76,7 @@ pub struct FeeEntry {
     /// sender
     pub sender: u32,
     /// fee
-    pub fee: U256,
+    pub fee: u128,
     /// estimate cycles limit
     pub cycles_limit: u64,
 }
@@ -154,7 +153,7 @@ impl FeeEntry {
 }
 
 struct L2Fee {
-    fee: U256,
+    fee: u128,
     cycles_limit: u64,
 }
 
@@ -180,7 +179,7 @@ fn parse_l2tx_fee_rate(
     match backend_type {
         BackendType::Meta => {
             let meta_args = MetaContractArgs::from_slice(raw_l2tx_args.as_ref())?;
-            let fee: U256 = match meta_args.to_enum() {
+            let fee = match meta_args.to_enum() {
                 MetaContractArgsUnion::CreateAccount(args) => args.fee().amount().unpack(),
             };
             let cycles_limit: u64 = fee_config.meta_cycles_limit;
@@ -189,8 +188,8 @@ fn parse_l2tx_fee_rate(
         }
         BackendType::EthAddrReg => {
             let eth_addr_reg_args = ETHAddrRegArgs::from_slice(raw_l2tx_args.as_ref())?;
-            let fee: U256 = match eth_addr_reg_args.to_enum() {
-                ETHAddrRegArgsUnion::EthToGw(_) | ETHAddrRegArgsUnion::GwToEth(_) => U256::zero(),
+            let fee = match eth_addr_reg_args.to_enum() {
+                ETHAddrRegArgsUnion::EthToGw(_) | ETHAddrRegArgsUnion::GwToEth(_) => 0,
                 ETHAddrRegArgsUnion::SetMapping(args) => args.fee().amount().unpack(),
                 ETHAddrRegArgsUnion::BatchSetMapping(args) => args.fee().amount().unpack(),
             };
@@ -201,10 +200,10 @@ fn parse_l2tx_fee_rate(
         }
         BackendType::Sudt => {
             let sudt_args = SUDTArgs::from_slice(raw_l2tx_args.as_ref())?;
-            let fee: U256 = match sudt_args.to_enum() {
+            let fee = match sudt_args.to_enum() {
                 SUDTArgsUnion::SUDTQuery(_) => {
                     // SUDTQuery fee rate is 0
-                    U256::zero()
+                    0
                 }
                 SUDTArgsUnion::SUDTTransfer(args) => args.fee().amount().unpack(),
             };
@@ -223,7 +222,7 @@ fn parse_l2tx_fee_rate(
             let gas_limit = u64::from_le_bytes(poly_args[8..16].try_into()?);
             let gas_price = u128::from_le_bytes(poly_args[16..32].try_into()?);
             Ok(L2Fee {
-                fee: gas_price.saturating_mul(gas_limit.into()).try_into()?,
+                fee: gas_price.saturating_mul(gas_limit.into()),
                 cycles_limit: gas_limit,
             })
         }

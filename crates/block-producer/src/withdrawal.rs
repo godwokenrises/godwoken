@@ -307,7 +307,6 @@ mod test {
         WithdrawalRequestExtra, WitnessArgs,
     };
     use gw_types::prelude::{Builder, Entity, Pack, PackVec, Unpack};
-    use gw_types::U256;
     use gw_types::{offchain::RollupContext, packed::RollupConfig};
 
     use crate::withdrawal::generate;
@@ -342,7 +341,7 @@ mod test {
             .build();
 
         let withdrawal = {
-            let fee = U256::from(50u64);
+            let fee = 50u128;
             let raw = RawWithdrawalRequest::new_builder()
                 .nonce(1u32.pack())
                 .capacity((500 * 10u64.pow(8)).pack())

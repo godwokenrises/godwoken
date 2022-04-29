@@ -96,7 +96,7 @@ impl<'a, S: State + CodeStore> WithdrawalVerifier<'a, S> {
         let ckb_balance = self
             .state
             .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &registry_address)?;
-        let required_ckb_capacity = ckb_decimal::to_18(capacity).saturating_add(fee);
+        let required_ckb_capacity = ckb_decimal::to_18(capacity).saturating_add(fee.into());
         if required_ckb_capacity > ckb_balance {
             return Err(WithdrawalError::Overdraft.into());
         }

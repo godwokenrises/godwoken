@@ -202,7 +202,7 @@ impl<S: State + CodeStore> StateExt for S {
                 return Err(AccountError::InvalidSUDTOperation.into());
             }
             // mint SUDT
-            self.mint_sudt(sudt_id, &address, amount)?;
+            self.mint_sudt(sudt_id, &address, amount.into())?;
             log::debug!(
                 "[generator] mint {} amount sUDT {} to account {}",
                 amount,
@@ -238,7 +238,7 @@ impl<S: State + CodeStore> StateExt for S {
         let capacity: u64 = raw.capacity().unpack();
         // pay fee to block producer
         {
-            let fee: U256 = raw.fee().unpack();
+            let fee: U256 = raw.fee().unpack().into();
             self.pay_fee(
                 &withdrawal_address,
                 block_producer_address,
@@ -257,7 +257,7 @@ impl<S: State + CodeStore> StateExt for S {
             .ok_or(AccountError::UnknownSUDT)?;
         if sudt_id != CKB_SUDT_ACCOUNT_ID {
             // burn sudt
-            self.burn_sudt(sudt_id, &withdrawal_address, amount)?;
+            self.burn_sudt(sudt_id, &withdrawal_address, amount.into())?;
         } else if amount != 0 {
             return Err(WithdrawalError::WithdrawFakedCKB.into());
         }

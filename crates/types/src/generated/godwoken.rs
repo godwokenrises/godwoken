@@ -5569,14 +5569,14 @@ impl ::core::default::Default for RawWithdrawalRequest {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0,
         ];
         RawWithdrawalRequest::new_unchecked(v.into())
     }
 }
 impl RawWithdrawalRequest {
-    pub const TOTAL_SIZE: usize = 168;
-    pub const FIELD_SIZES: [usize; 9] = [4, 8, 8, 16, 32, 32, 4, 32, 32];
+    pub const TOTAL_SIZE: usize = 152;
+    pub const FIELD_SIZES: [usize; 9] = [4, 8, 8, 16, 32, 32, 4, 32, 16];
     pub const FIELD_COUNT: usize = 9;
     pub fn nonce(&self) -> Uint32 {
         Uint32::new_unchecked(self.0.slice(0..4))
@@ -5602,8 +5602,8 @@ impl RawWithdrawalRequest {
     pub fn owner_lock_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(104..136))
     }
-    pub fn fee(&self) -> Uint256 {
-        Uint256::new_unchecked(self.0.slice(136..168))
+    pub fn fee(&self) -> Uint128 {
+        Uint128::new_unchecked(self.0.slice(136..152))
     }
     pub fn as_reader<'r>(&'r self) -> RawWithdrawalRequestReader<'r> {
         RawWithdrawalRequestReader::new_unchecked(self.as_slice())
@@ -5680,8 +5680,8 @@ impl<'r> ::core::fmt::Display for RawWithdrawalRequestReader<'r> {
     }
 }
 impl<'r> RawWithdrawalRequestReader<'r> {
-    pub const TOTAL_SIZE: usize = 168;
-    pub const FIELD_SIZES: [usize; 9] = [4, 8, 8, 16, 32, 32, 4, 32, 32];
+    pub const TOTAL_SIZE: usize = 152;
+    pub const FIELD_SIZES: [usize; 9] = [4, 8, 8, 16, 32, 32, 4, 32, 16];
     pub const FIELD_COUNT: usize = 9;
     pub fn nonce(&self) -> Uint32Reader<'r> {
         Uint32Reader::new_unchecked(&self.as_slice()[0..4])
@@ -5707,8 +5707,8 @@ impl<'r> RawWithdrawalRequestReader<'r> {
     pub fn owner_lock_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[104..136])
     }
-    pub fn fee(&self) -> Uint256Reader<'r> {
-        Uint256Reader::new_unchecked(&self.as_slice()[136..168])
+    pub fn fee(&self) -> Uint128Reader<'r> {
+        Uint128Reader::new_unchecked(&self.as_slice()[136..152])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for RawWithdrawalRequestReader<'r> {
@@ -5742,11 +5742,11 @@ pub struct RawWithdrawalRequestBuilder {
     pub(crate) account_script_hash: Byte32,
     pub(crate) registry_id: Uint32,
     pub(crate) owner_lock_hash: Byte32,
-    pub(crate) fee: Uint256,
+    pub(crate) fee: Uint128,
 }
 impl RawWithdrawalRequestBuilder {
-    pub const TOTAL_SIZE: usize = 168;
-    pub const FIELD_SIZES: [usize; 9] = [4, 8, 8, 16, 32, 32, 4, 32, 32];
+    pub const TOTAL_SIZE: usize = 152;
+    pub const FIELD_SIZES: [usize; 9] = [4, 8, 8, 16, 32, 32, 4, 32, 16];
     pub const FIELD_COUNT: usize = 9;
     pub fn nonce(mut self, v: Uint32) -> Self {
         self.nonce = v;
@@ -5780,7 +5780,7 @@ impl RawWithdrawalRequestBuilder {
         self.owner_lock_hash = v;
         self
     }
-    pub fn fee(mut self, v: Uint256) -> Self {
+    pub fn fee(mut self, v: Uint128) -> Self {
         self.fee = v;
         self
     }
@@ -6182,13 +6182,12 @@ impl ::core::fmt::Display for WithdrawalRequest {
 impl ::core::default::Default for WithdrawalRequest {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            184, 0, 0, 0, 12, 0, 0, 0, 180, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            168, 0, 0, 0, 12, 0, 0, 0, 164, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         WithdrawalRequest::new_unchecked(v.into())
     }
@@ -9030,10 +9029,10 @@ impl ::core::fmt::Display for MetaContractArgs {
 impl ::core::default::Default for MetaContractArgs {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            0, 0, 0, 0, 101, 0, 0, 0, 12, 0, 0, 0, 65, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0,
+            0, 0, 0, 0, 85, 0, 0, 0, 12, 0, 0, 0, 65, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0,
             0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0,
         ];
         MetaContractArgs::new_unchecked(v.into())
     }
@@ -9298,22 +9297,19 @@ impl ::core::fmt::Display for Fee {
 }
 impl ::core::default::Default for Fee {
     fn default() -> Self {
-        let v: Vec<u8> = vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0,
-        ];
+        let v: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         Fee::new_unchecked(v.into())
     }
 }
 impl Fee {
-    pub const TOTAL_SIZE: usize = 36;
-    pub const FIELD_SIZES: [usize; 2] = [4, 32];
+    pub const TOTAL_SIZE: usize = 20;
+    pub const FIELD_SIZES: [usize; 2] = [4, 16];
     pub const FIELD_COUNT: usize = 2;
     pub fn registry_id(&self) -> Uint32 {
         Uint32::new_unchecked(self.0.slice(0..4))
     }
-    pub fn amount(&self) -> Uint256 {
-        Uint256::new_unchecked(self.0.slice(4..36))
+    pub fn amount(&self) -> Uint128 {
+        Uint128::new_unchecked(self.0.slice(4..20))
     }
     pub fn as_reader<'r>(&'r self) -> FeeReader<'r> {
         FeeReader::new_unchecked(self.as_slice())
@@ -9371,14 +9367,14 @@ impl<'r> ::core::fmt::Display for FeeReader<'r> {
     }
 }
 impl<'r> FeeReader<'r> {
-    pub const TOTAL_SIZE: usize = 36;
-    pub const FIELD_SIZES: [usize; 2] = [4, 32];
+    pub const TOTAL_SIZE: usize = 20;
+    pub const FIELD_SIZES: [usize; 2] = [4, 16];
     pub const FIELD_COUNT: usize = 2;
     pub fn registry_id(&self) -> Uint32Reader<'r> {
         Uint32Reader::new_unchecked(&self.as_slice()[0..4])
     }
-    pub fn amount(&self) -> Uint256Reader<'r> {
-        Uint256Reader::new_unchecked(&self.as_slice()[4..36])
+    pub fn amount(&self) -> Uint128Reader<'r> {
+        Uint128Reader::new_unchecked(&self.as_slice()[4..20])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for FeeReader<'r> {
@@ -9405,17 +9401,17 @@ impl<'r> molecule::prelude::Reader<'r> for FeeReader<'r> {
 #[derive(Debug, Default)]
 pub struct FeeBuilder {
     pub(crate) registry_id: Uint32,
-    pub(crate) amount: Uint256,
+    pub(crate) amount: Uint128,
 }
 impl FeeBuilder {
-    pub const TOTAL_SIZE: usize = 36;
-    pub const FIELD_SIZES: [usize; 2] = [4, 32];
+    pub const TOTAL_SIZE: usize = 20;
+    pub const FIELD_SIZES: [usize; 2] = [4, 16];
     pub const FIELD_COUNT: usize = 2;
     pub fn registry_id(mut self, v: Uint32) -> Self {
         self.registry_id = v;
         self
     }
-    pub fn amount(mut self, v: Uint256) -> Self {
+    pub fn amount(mut self, v: Uint128) -> Self {
         self.amount = v;
         self
     }
@@ -9469,10 +9465,9 @@ impl ::core::fmt::Display for CreateAccount {
 impl ::core::default::Default for CreateAccount {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            101, 0, 0, 0, 12, 0, 0, 0, 65, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0,
+            85, 0, 0, 0, 12, 0, 0, 0, 65, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         CreateAccount::new_unchecked(v.into())
     }
@@ -10264,10 +10259,9 @@ impl ::core::fmt::Display for SUDTTransfer {
 impl ::core::default::Default for SUDTTransfer {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            88, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            72, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         SUDTTransfer::new_unchecked(v.into())
     }
@@ -13272,8 +13266,8 @@ impl ::core::fmt::Display for CCWithdrawalWitness {
 impl ::core::default::Default for CCWithdrawalWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            154, 2, 0, 0, 36, 0, 0, 0, 88, 1, 0, 0, 16, 2, 0, 0, 69, 2, 0, 0, 122, 2, 0, 0, 142, 2,
-            0, 0, 146, 2, 0, 0, 150, 2, 0, 0, 52, 1, 0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0,
+            138, 2, 0, 0, 36, 0, 0, 0, 88, 1, 0, 0, 0, 2, 0, 0, 53, 2, 0, 0, 106, 2, 0, 0, 126, 2,
+            0, 0, 130, 2, 0, 0, 134, 2, 0, 0, 52, 1, 0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0,
             88, 0, 0, 0, 120, 0, 0, 0, 128, 0, 0, 0, 164, 0, 0, 0, 200, 0, 0, 0, 204, 0, 0, 0, 240,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -13284,18 +13278,17 @@ impl ::core::default::Default for CCWithdrawalWitness {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 184, 0, 0, 0, 12, 0, 0, 0, 180, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 168, 0, 0, 0, 12, 0, 0, 0, 164, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0,
-            0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0,
+            0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 12,
+            0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         CCWithdrawalWitness::new_unchecked(v.into())
     }
@@ -16246,21 +16239,20 @@ impl ::core::default::Default for SetMapping {
     fn default() -> Self {
         let v: Vec<u8> = vec![
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         SetMapping::new_unchecked(v.into())
     }
 }
 impl SetMapping {
-    pub const TOTAL_SIZE: usize = 68;
-    pub const FIELD_SIZES: [usize; 2] = [32, 36];
+    pub const TOTAL_SIZE: usize = 52;
+    pub const FIELD_SIZES: [usize; 2] = [32, 20];
     pub const FIELD_COUNT: usize = 2;
     pub fn gw_script_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
     pub fn fee(&self) -> Fee {
-        Fee::new_unchecked(self.0.slice(32..68))
+        Fee::new_unchecked(self.0.slice(32..52))
     }
     pub fn as_reader<'r>(&'r self) -> SetMappingReader<'r> {
         SetMappingReader::new_unchecked(self.as_slice())
@@ -16318,14 +16310,14 @@ impl<'r> ::core::fmt::Display for SetMappingReader<'r> {
     }
 }
 impl<'r> SetMappingReader<'r> {
-    pub const TOTAL_SIZE: usize = 68;
-    pub const FIELD_SIZES: [usize; 2] = [32, 36];
+    pub const TOTAL_SIZE: usize = 52;
+    pub const FIELD_SIZES: [usize; 2] = [32, 20];
     pub const FIELD_COUNT: usize = 2;
     pub fn gw_script_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
     pub fn fee(&self) -> FeeReader<'r> {
-        FeeReader::new_unchecked(&self.as_slice()[32..68])
+        FeeReader::new_unchecked(&self.as_slice()[32..52])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for SetMappingReader<'r> {
@@ -16355,8 +16347,8 @@ pub struct SetMappingBuilder {
     pub(crate) fee: Fee,
 }
 impl SetMappingBuilder {
-    pub const TOTAL_SIZE: usize = 68;
-    pub const FIELD_SIZES: [usize; 2] = [32, 36];
+    pub const TOTAL_SIZE: usize = 52;
+    pub const FIELD_SIZES: [usize; 2] = [32, 20];
     pub const FIELD_COUNT: usize = 2;
     pub fn gw_script_hash(mut self, v: Byte32) -> Self {
         self.gw_script_hash = v;
@@ -16416,8 +16408,8 @@ impl ::core::fmt::Display for BatchSetMapping {
 impl ::core::default::Default for BatchSetMapping {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            52, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            36, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
         ];
         BatchSetMapping::new_unchecked(v.into())
     }

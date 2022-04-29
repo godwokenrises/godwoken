@@ -7,7 +7,6 @@ use gw_generator::account_lock_manage::eip712::{self, traits::EIP712Encode};
 use gw_types::{
     core::ScriptHashType,
     packed::{CreateAccount, Fee, L2Transaction, MetaContractArgs, RawL2Transaction, Script},
-    U256,
 };
 use std::path::Path;
 
@@ -27,7 +26,7 @@ pub async fn create_creator_account(
     config_path: &Path,
     scripts_deployment_path: &Path,
 ) -> Result<()> {
-    let fee: U256 = fee_amount.parse().expect("fee format error");
+    let fee: u128 = fee_amount.parse().expect("fee format error");
 
     let scripts_deployment_content = std::fs::read_to_string(scripts_deployment_path)?;
     let scripts_deployment: ScriptsDeploymentResult =

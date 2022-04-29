@@ -6,7 +6,6 @@ use gw_types::{
     core::ScriptHashType,
     packed::{RawL2Transaction, RawWithdrawalRequest},
     prelude::Unpack,
-    U256,
 };
 use sha3::{Digest, Keccak256};
 
@@ -197,7 +196,7 @@ pub struct Withdrawal {
     nonce: u32,
     chain_id: u64,
     // withdrawal fee, paid to block producer
-    fee: U256,
+    fee: u128,
     // layer1 lock to withdraw after challenge period
     layer1_owner_lock: Script,
     // CKB amount
@@ -219,15 +218,12 @@ impl EIP712Encode for Withdrawal {
     fn encode_data(&self, buf: &mut Vec<u8>) {
         use ethabi::Token;
 
-        let mut fee_buf = [0u8; 32];
-        self.fee.to_little_endian(&mut fee_buf);
-
         buf.extend(ethabi::encode(&[Token::Uint(
             self.address.hash_struct().into(),
         )]));
         buf.extend(ethabi::encode(&[Token::Uint(self.nonce.into())]));
         buf.extend(ethabi::encode(&[Token::Uint(self.chain_id.into())]));
-        buf.extend(ethabi::encode(&[Token::Uint(From::from(fee_buf))]));
+        buf.extend(ethabi::encode(&[Token::Uint(self.fee.into())]));
         buf.extend(ethabi::encode(&[Token::Uint(
             self.layer1_owner_lock.hash_struct().into(),
         )]));
@@ -519,12 +515,12 @@ mod tests {
             salt: None,
         };
         let message = withdrawal.eip712_message(domain_seperator.hash_struct());
-        let signature: [u8; 65] = hex::decode("d3ab0b6b903657c570dd68766954287e67019be608838e0e11f327ab902235613aa4333164d6b764b138d21755b9c6405fb8f4a6df1ba7361a10d5946113fe6f00").unwrap().try_into().unwrap();
+        let signature: [u8; 65] = hex::decode("22cae59f1bfaf58f423d1a414cbcaefd45a89dd54c9142fccbb2473c74f4741b45f77f1f3680b8c0b6362957c8d79f96a683a859ccbf22a6cfc1ebc311b936d301").unwrap().try_into().unwrap();
         let pubkey_hash = Secp256k1Eth::default()
             .recover(message.into(), &signature)
             .unwrap();
         assert_eq!(
-            "2e09dd3c1737f1a08d06d2601667c9544fdafb84".to_string(),
+            "cc3e7fb0176a0e22a7f675306ceeb61d26eb0dc4".to_string(),
             hex::encode(pubkey_hash)
         );
     }

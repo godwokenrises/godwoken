@@ -134,7 +134,7 @@ pub fn bench(c: &mut Criterion) {
                     )
                     .build();
 
-                let init_a_balance: u128 = 10000;
+                let init_a_balance = U256::from(10000u128);
 
                 // init accounts
                 let _meta = tree
@@ -221,7 +221,7 @@ pub fn bench(c: &mut Criterion) {
             |(mut tree, rollup_config, sudt_id, a_id, b_script_hash, block_info)| {
                 // transfer from A to B
                 let value: U256 = 4000u128.into();
-                let fee: U256 = 42u64.into();
+                let fee = 42u128;
                 let b_addr = tree
                     .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &b_script_hash)
                     .expect("get script hash")

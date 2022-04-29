@@ -2,7 +2,6 @@ use crate::blockchain::Script;
 use anyhow::{anyhow, Error as JsonError};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32, Uint64};
-use gw_types::U256;
 use gw_types::{bytes::Bytes, offchain, packed, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
@@ -834,7 +833,7 @@ pub struct RawWithdrawalRequest {
     // layer1 lock to withdraw after challenge period
     pub owner_lock_hash: H256,
     pub chain_id: Uint64,
-    pub fee: U256,
+    pub fee: Uint128,
 }
 
 impl From<RawWithdrawalRequest> for packed::RawWithdrawalRequest {
@@ -859,7 +858,7 @@ impl From<RawWithdrawalRequest> for packed::RawWithdrawalRequest {
             .registry_id(registry_id.value().pack())
             .owner_lock_hash(owner_lock_hash.pack())
             .chain_id(chain_id.value().pack())
-            .fee(fee.pack())
+            .fee(u128::from(fee).pack())
             .build()
     }
 }
@@ -869,6 +868,7 @@ impl From<packed::RawWithdrawalRequest> for RawWithdrawalRequest {
         let nonce: u32 = raw_withdrawal_request.nonce().unpack();
         let capacity: u64 = raw_withdrawal_request.capacity().unpack();
         let amount: u128 = raw_withdrawal_request.amount().unpack();
+        let fee: u128 = raw_withdrawal_request.fee().unpack();
         let chain_id: u64 = raw_withdrawal_request.chain_id().unpack();
         let registry_id: u32 = raw_withdrawal_request.registry_id().unpack();
         Self {
@@ -879,7 +879,7 @@ impl From<packed::RawWithdrawalRequest> for RawWithdrawalRequest {
             account_script_hash: raw_withdrawal_request.account_script_hash().unpack(),
             registry_id: registry_id.into(),
             owner_lock_hash: raw_withdrawal_request.owner_lock_hash().unpack(),
-            fee: raw_withdrawal_request.fee().unpack(),
+            fee: fee.into(),
             chain_id: chain_id.into(),
         }
     }

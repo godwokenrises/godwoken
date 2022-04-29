@@ -38,7 +38,7 @@ pub async fn withdraw(
     let capacity = parse_capacity(capacity)?;
     let amount: u128 = amount.parse().expect("sUDT amount format error");
     let chain_id: u64 = chain_id.parse().expect("chain_id format error");
-    let fee: U256 = fee.parse()?;
+    let fee: u128 = fee.parse()?;
 
     let scripts_deployment_content = fs::read_to_string(scripts_deployment_path)?;
     let scripts_deployment: ScriptsDeploymentResult =
@@ -133,7 +133,7 @@ fn create_raw_withdrawal_request(
     nonce: u32,
     capacity: u64,
     amount: u128,
-    fee: U256,
+    fee: u128,
     chain_id: u64,
     sudt_script_hash: &H256,
     account_script_hash: &H256,

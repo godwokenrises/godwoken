@@ -149,7 +149,7 @@ struct RawWithdrawalRequest {
     // layer1 lock to withdraw after challenge period
     owner_lock_hash: Byte32,
     // withdrawal fee, paid to block producer
-    fee: Uint256,
+    fee: Uint128,
 }
 
 vector WithdrawalRequestVec <WithdrawalRequest>;
@@ -237,7 +237,7 @@ struct Fee {
     // registry id
     registry_id: Uint32,
     // amount in CKB
-    amount: Uint256,
+    amount: Uint128,
 }
 
 table CreateAccount {

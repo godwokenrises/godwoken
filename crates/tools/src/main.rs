@@ -34,7 +34,6 @@ use generate_config::GenerateNodeConfigArgs;
 use godwoken_rpc::GodwokenRpcClient;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
-use gw_types::U256;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -1223,7 +1222,7 @@ async fn main() -> Result<()> {
             let mut rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
             let config = read_config(config_path)?;
             let pk = read_privkey(privkey_path)?;
-            let fee: U256 = fee.parse().expect("fee format error");
+            let fee: u128 = fee.parse().expect("fee format error");
 
             let account_id = match sudt::account::create_sudt_account(
                 &mut rpc_client,

@@ -249,7 +249,7 @@ impl Web3Indexer {
     ) -> Result<Vec<Web3TransactionWithLogs>> {
         let block_number = l2_block.raw().number().unpack();
         let block_hash: gw_common::H256 = blake2b_256(l2_block.raw().as_slice()).into();
-        let mut cumulative_gas_used = U256::zero();
+        let mut cumulative_gas_used = 0u128;
         let l2_transactions = l2_block.transactions();
         let mut web3_tx_with_logs_vec: Vec<Web3TransactionWithLogs> = vec![];
         let mut tx_index = 0u32;
@@ -459,7 +459,7 @@ impl Web3Indexer {
                         to_address.copy_from_slice(to_address_data.as_ref());
 
                         let amount: U256 = sudt_transfer.amount().unpack();
-                        let fee: U256 = sudt_transfer.fee().amount().unpack();
+                        let fee = sudt_transfer.fee().amount().unpack();
                         let value = amount;
 
                         // Represent SUDTTransfer fee in web3 style, set gas_price as 1 temporary.
@@ -514,8 +514,8 @@ impl Web3Indexer {
         let block_number = l2_block.raw().number().unpack();
         let block_hash: gw_common::H256 = l2_block.hash().into();
         let parent_hash: gw_common::H256 = l2_block.raw().parent_block_hash().unpack();
-        let mut gas_limit = U256::zero();
-        let mut gas_used = U256::zero();
+        let mut gas_limit = 0u128;
+        let mut gas_used = 0u128;
         for web3_tx_with_logs in web3_tx_with_logs_vec {
             gas_limit += web3_tx_with_logs.tx.gas_limit;
             gas_used += web3_tx_with_logs.tx.gas_used;
