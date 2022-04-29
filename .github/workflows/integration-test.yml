@@ -7,20 +7,7 @@ on:
     types: [opened, synchronize]
 
 jobs:
-  generate-gw-bot-token:
-    runs-on: ubuntu-latest
-    outputs:
-      gw_bot_token: ${{ steps.generate_gw_bot_token.outputs.token }}
-    steps:
-      - name: Generate gw-bot token
-        id: generate_gw_bot_token
-        uses: wow-actions/use-app-token@v1
-        with:
-          app_id: ${{ secrets.GW_BOT_APP_ID }}
-          private_key: ${{ secrets.GW_BOT_PRIVATE_KEY }}
-
   from-comment:
-    needs: generate-gw-bot-token
     if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/itest')
     runs-on: ubuntu-latest
     steps:
@@ -32,6 +19,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate gw-bot token
+        id: generate_gw_bot_token
+        uses: wow-actions/use-app-token@v1
+        with:
+          app_id: ${{ secrets.GW_BOT_APP_ID }}
+          private_key: ${{ secrets.GW_BOT_PRIVATE_KEY }}
+
       # restrict /itest to users with admin or write permission
       # see https://docs.github.com/en/free-pro-team@latest/rest/reference/repos#get-repository-permissions-for-a-user
       - name: Dispatch if user does have correct permission
@@ -39,7 +33,7 @@ jobs:
         id: dispatch
         uses: actions/github-script@v6
         with:
-          github-token: ${{ needs.generate-gw-bot-token.outputs.gw_bot_token }}
+          github-token: ${{ steps.generate_gw_bot_token.outputs.token }}
           script: |
             const dispatch = {
               comment_body: `${{ github.event.comment.body }}`,
@@ -66,15 +60,21 @@ jobs:
             core.info(`${JSON.stringify(resp, null, 2)}`);
 
   from-pr:
-    needs: generate-gw-bot-token
     if: github.event.pull_request
     runs-on: ubuntu-latest
     steps:
+      - name: Generate gw-bot token
+        id: generate_gw_bot_token
+        uses: wow-actions/use-app-token@v1
+        with:
+          app_id: ${{ secrets.GW_BOT_APP_ID }}
+          private_key: ${{ secrets.GW_BOT_PRIVATE_KEY }}
+
       - name: Dispatch from pull request
         uses: actions/github-script@v6
         id: dispatch
         with:
-          github-token: ${{ needs.generate-gw-bot-token.outputs.gw_bot_token }}
+          github-token: ${{ steps.generate_gw_bot_token.outputs.token }}
           script: |
             const dispatch = {
               comment_body: "",
