@@ -2055,6 +2055,7 @@ impl ::core::fmt::Display for TxReceipt {
         write!(f, ", {}: {}", "post_state", self.post_state())?;
         write!(f, ", {}: {}", "read_data_hashes", self.read_data_hashes())?;
         write!(f, ", {}: {}", "logs", self.logs())?;
+        write!(f, ", {}: {}", "exit_code", self.exit_code())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -2065,16 +2066,16 @@ impl ::core::fmt::Display for TxReceipt {
 impl ::core::default::Default for TxReceipt {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            96, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 88, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            101, 0, 0, 0, 24, 0, 0, 0, 56, 0, 0, 0, 92, 0, 0, 0, 96, 0, 0, 0, 100, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0,
         ];
         TxReceipt::new_unchecked(v.into())
     }
 }
 impl TxReceipt {
-    pub const FIELD_COUNT: usize = 4;
+    pub const FIELD_COUNT: usize = 5;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -2112,11 +2113,17 @@ impl TxReceipt {
     pub fn logs(&self) -> LogItemVec {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
+        let end = molecule::unpack_number(&slice[20..]) as usize;
+        LogItemVec::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn exit_code(&self) -> Byte {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[20..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[20..]) as usize;
-            LogItemVec::new_unchecked(self.0.slice(start..end))
+            let end = molecule::unpack_number(&slice[24..]) as usize;
+            Byte::new_unchecked(self.0.slice(start..end))
         } else {
-            LogItemVec::new_unchecked(self.0.slice(start..))
+            Byte::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> TxReceiptReader<'r> {
@@ -2150,6 +2157,7 @@ impl molecule::prelude::Entity for TxReceipt {
             .post_state(self.post_state())
             .read_data_hashes(self.read_data_hashes())
             .logs(self.logs())
+            .exit_code(self.exit_code())
     }
 }
 #[derive(Clone, Copy)]
@@ -2175,6 +2183,7 @@ impl<'r> ::core::fmt::Display for TxReceiptReader<'r> {
         write!(f, ", {}: {}", "post_state", self.post_state())?;
         write!(f, ", {}: {}", "read_data_hashes", self.read_data_hashes())?;
         write!(f, ", {}: {}", "logs", self.logs())?;
+        write!(f, ", {}: {}", "exit_code", self.exit_code())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -2183,7 +2192,7 @@ impl<'r> ::core::fmt::Display for TxReceiptReader<'r> {
     }
 }
 impl<'r> TxReceiptReader<'r> {
-    pub const FIELD_COUNT: usize = 4;
+    pub const FIELD_COUNT: usize = 5;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -2221,11 +2230,17 @@ impl<'r> TxReceiptReader<'r> {
     pub fn logs(&self) -> LogItemVecReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
+        let end = molecule::unpack_number(&slice[20..]) as usize;
+        LogItemVecReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn exit_code(&self) -> ByteReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[20..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[20..]) as usize;
-            LogItemVecReader::new_unchecked(&self.as_slice()[start..end])
+            let end = molecule::unpack_number(&slice[24..]) as usize;
+            ByteReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            LogItemVecReader::new_unchecked(&self.as_slice()[start..])
+            ByteReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -2282,6 +2297,7 @@ impl<'r> molecule::prelude::Reader<'r> for TxReceiptReader<'r> {
         AccountMerkleStateReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         Byte32VecReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         LogItemVecReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
+        ByteReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
         Ok(())
     }
 }
@@ -2291,9 +2307,10 @@ pub struct TxReceiptBuilder {
     pub(crate) post_state: AccountMerkleState,
     pub(crate) read_data_hashes: Byte32Vec,
     pub(crate) logs: LogItemVec,
+    pub(crate) exit_code: Byte,
 }
 impl TxReceiptBuilder {
-    pub const FIELD_COUNT: usize = 4;
+    pub const FIELD_COUNT: usize = 5;
     pub fn tx_witness_hash(mut self, v: Byte32) -> Self {
         self.tx_witness_hash = v;
         self
@@ -2310,6 +2327,10 @@ impl TxReceiptBuilder {
         self.logs = v;
         self
     }
+    pub fn exit_code(mut self, v: Byte) -> Self {
+        self.exit_code = v;
+        self
+    }
 }
 impl molecule::prelude::Builder for TxReceiptBuilder {
     type Entity = TxReceipt;
@@ -2320,6 +2341,7 @@ impl molecule::prelude::Builder for TxReceiptBuilder {
             + self.post_state.as_slice().len()
             + self.read_data_hashes.as_slice().len()
             + self.logs.as_slice().len()
+            + self.exit_code.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -2332,6 +2354,8 @@ impl molecule::prelude::Builder for TxReceiptBuilder {
         total_size += self.read_data_hashes.as_slice().len();
         offsets.push(total_size);
         total_size += self.logs.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.exit_code.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
@@ -2340,6 +2364,7 @@ impl molecule::prelude::Builder for TxReceiptBuilder {
         writer.write_all(self.post_state.as_slice())?;
         writer.write_all(self.read_data_hashes.as_slice())?;
         writer.write_all(self.logs.as_slice())?;
+        writer.write_all(self.exit_code.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {

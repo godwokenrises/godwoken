@@ -35,6 +35,7 @@ impl TxReceipt {
         post_state: AccountMerkleState,
     ) -> Self {
         TxReceipt::new_builder()
+            .exit_code((run_result.exit_code as u8).into())
             .tx_witness_hash(tx_witness_hash.pack())
             .post_state(post_state)
             .read_data_hashes(

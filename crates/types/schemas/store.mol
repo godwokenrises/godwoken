@@ -34,6 +34,7 @@ table TxReceipt {
     post_state: AccountMerkleState,
     read_data_hashes: Byte32Vec,
     logs: LogItemVec,
+    exit_code: byte,
 }
 
 array WithdrawalKey [byte; 36];
