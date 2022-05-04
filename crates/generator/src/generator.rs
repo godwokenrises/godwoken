@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::{atomic::Ordering::SeqCst, Arc},
+    sync::atomic::Ordering::SeqCst,
     time::Instant,
 };
 
@@ -18,7 +18,6 @@ use crate::{
 };
 use crate::{error::AccountError, syscalls::L2Syscalls};
 use crate::{error::LockAlgorithmError, traits::StateExt};
-use arc_swap::ArcSwap;
 use gw_ckb_hardfork::GLOBAL_VM_VERSION;
 use gw_common::{
     builtins::ETH_REGISTRY_ACCOUNT_ID,
@@ -28,7 +27,6 @@ use gw_common::{
     state::{build_account_field_key, State, GW_ACCOUNT_NONCE_TYPE},
     H256,
 };
-use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_store::{state::state_db::StateContext, transaction::StoreTransaction};
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
@@ -437,7 +435,6 @@ impl Generator {
                 &block_info,
                 &raw_tx,
                 L2TX_MAX_CYCLES,
-                None,
             ) {
                 Ok(run_result) => run_result,
                 Err(err) => {
@@ -575,16 +572,9 @@ impl Generator {
         block_info: &BlockInfo,
         raw_tx: &RawL2Transaction,
         max_cycles: u64,
-        dynamic_config_manager: Option<Arc<ArcSwap<DynamicConfigManager>>>,
     ) -> Result<RunResult, TransactionError> {
-        let run_result = self.unchecked_execute_transaction(
-            chain,
-            state,
-            block_info,
-            raw_tx,
-            max_cycles,
-            dynamic_config_manager,
-        )?;
+        let run_result =
+            self.unchecked_execute_transaction(chain, state, block_info, raw_tx, max_cycles)?;
         if 0 != run_result.exit_code {
             return Err(TransactionError::InvalidExitCode(run_result.exit_code));
         }
@@ -601,30 +591,7 @@ impl Generator {
         block_info: &BlockInfo,
         raw_tx: &RawL2Transaction,
         max_cycles: u64,
-        dynamic_config_manager: Option<Arc<ArcSwap<DynamicConfigManager>>>,
     ) -> Result<RunResult, TransactionError> {
-        if let Some(polyjuice_contract_creator_allowlist) =
-            dynamic_config_manager.as_ref().and_then(|manager| {
-                manager
-                    .load()
-                    .get_polyjuice_contract_creator_allowlist()
-                    .to_owned()
-            })
-        {
-            use gw_tx_filter::polyjuice_contract_creator_allowlist::Error;
-            match polyjuice_contract_creator_allowlist.validate_with_state(state, raw_tx) {
-                Ok(_) => (),
-                Err(Error::Common(err)) => return Err(TransactionError::from(err)),
-                Err(Error::ScriptHashNotFound) => return Err(TransactionError::ScriptHashNotFound),
-                Err(Error::PermissionDenied { account_id }) => {
-                    return Err(TransactionError::InvalidContractCreatorAccount {
-                        backend: "polyjuice",
-                        account_id,
-                    })
-                }
-            }
-        }
-
         let sender_id: u32 = raw_tx.from_id().unpack();
         let nonce_before_execution = state.get_nonce(sender_id)?;
 
@@ -675,19 +642,6 @@ impl Generator {
                 max_bytes: MAX_READ_DATA_BYTES_LIMIT,
                 used_bytes: read_data_bytes,
             });
-        }
-        // check account id of sudt proxy contract creator is from whitelist
-        let from_id = raw_tx.from_id().unpack();
-        if let Some(manager) = dynamic_config_manager.as_ref() {
-            if !manager
-                .load()
-                .get_sudt_proxy_account_whitelist()
-                .validate(&run_result, from_id)
-            {
-                return Err(TransactionError::InvalidSUDTProxyCreatorAccount {
-                    account_id: from_id,
-                });
-            }
         }
         Ok(run_result)
     }

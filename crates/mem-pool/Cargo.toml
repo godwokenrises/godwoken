@@ -19,6 +19,7 @@ gw-utils = { path = "../utils" }
 gw-rpc-ws-server = { path = "../rpc-ws-server" }
 gw-dynamic-config = { path = "../dynamic-config" }
 gw-p2p-network = { path = "../p2p-network" }
+gw-tx-filter = { path = "../tx-filter" }
 rdkafka = { version = "0.25", default-features = false }
 futures = { version = "0.3"}
 tokio = "1.15"

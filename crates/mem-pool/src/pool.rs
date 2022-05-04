@@ -1059,6 +1059,30 @@ impl MemPool {
 
         let block_info = self.mem_block.block_info();
 
+        // check allow list
+        if let Some(polyjuice_contract_creator_allowlist) = self
+            .dynamic_config_manager
+            .load()
+            .get_polyjuice_contract_creator_allowlist()
+        {
+            use gw_tx_filter::polyjuice_contract_creator_allowlist::Error;
+
+            match polyjuice_contract_creator_allowlist.validate_with_state(state, &tx.raw()) {
+                Ok(_) => (),
+                Err(Error::Common(err)) => return Err(TransactionError::from(err).into()),
+                Err(Error::ScriptHashNotFound) => {
+                    return Err(TransactionError::ScriptHashNotFound.into())
+                }
+                Err(Error::PermissionDenied { account_id }) => {
+                    return Err(TransactionError::InvalidContractCreatorAccount {
+                        backend: "polyjuice",
+                        account_id,
+                    }
+                    .into())
+                }
+            }
+        }
+
         // execute tx
         let raw_tx = tx.raw();
         let run_result = tokio::task::block_in_place(|| {
@@ -1068,7 +1092,6 @@ impl MemPool {
                 block_info,
                 &raw_tx,
                 L2TX_MAX_CYCLES,
-                Some(self.dynamic_config_manager.clone()),
             )
         })?;
 
@@ -1100,6 +1123,21 @@ impl MemPool {
             return Err(TransactionError::InvalidExitCode(run_result.exit_code).into());
         }
 
+        // check account id of sudt proxy contract creator is from whitelist
+        {
+            let from_id = raw_tx.from_id().unpack();
+            if !self
+                .dynamic_config_manager
+                .load()
+                .get_sudt_proxy_account_whitelist()
+                .validate(&run_result, from_id)
+            {
+                return Err(TransactionError::InvalidSUDTProxyCreatorAccount {
+                    account_id: from_id,
+                }
+                .into());
+            }
+        }
         // apply run result
         let t = Instant::now();
         tokio::task::block_in_place(|| state.apply_run_result(&run_result))?;
