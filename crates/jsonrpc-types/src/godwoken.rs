@@ -139,6 +139,7 @@ pub struct TxReceipt {
     pub post_state: AccountMerkleState,
     pub read_data_hashes: Vec<H256>,
     pub logs: Vec<LogItem>,
+    pub exit_code: Uint32,
 }
 
 impl From<TxReceipt> for packed::TxReceipt {
@@ -148,6 +149,7 @@ impl From<TxReceipt> for packed::TxReceipt {
             post_state,
             read_data_hashes,
             logs,
+            exit_code,
         } = json;
         let tx_witness_hash: [u8; 32] = tx_witness_hash.into();
         let read_data_hashes: Vec<_> = read_data_hashes
@@ -163,6 +165,7 @@ impl From<TxReceipt> for packed::TxReceipt {
             .post_state(post_state.into())
             .read_data_hashes(read_data_hashes.pack())
             .logs(logs.pack())
+            .exit_code((exit_code.value() as u8).into())
             .build()
     }
 }
@@ -180,11 +183,13 @@ impl From<packed::TxReceipt> for TxReceipt {
             })
             .collect();
         let logs: Vec<LogItem> = data.logs().into_iter().map(|item| item.into()).collect();
+        let exit_code: u8 = data.exit_code().into();
         TxReceipt {
             tx_witness_hash: tx_witness_hash.into(),
             post_state,
             read_data_hashes,
             logs,
+            exit_code: (exit_code as u32).into(),
         }
     }
 }
@@ -1167,7 +1172,7 @@ impl From<offchain::RunResult> for RunResult {
             return_data, logs, ..
         } = data;
         RunResult {
-            return_data: JsonBytes::from_vec(return_data),
+            return_data: JsonBytes::from_bytes(return_data),
             logs: logs.into_iter().map(Into::into).collect(),
         }
     }
@@ -1307,7 +1312,7 @@ impl From<offchain::ErrorTxReceipt> for ErrorTxReceipt {
         ErrorTxReceipt {
             tx_hash: H256::from(Into::<[u8; 32]>::into(receipt.tx_hash)),
             block_number: receipt.block_number.into(),
-            return_data: JsonBytes::from_vec(receipt.return_data),
+            return_data: JsonBytes::from_bytes(receipt.return_data),
             last_log: receipt.last_log.map(Into::into),
             exit_code: (exit_code as u32).into(),
         }

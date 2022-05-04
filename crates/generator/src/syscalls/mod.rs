@@ -138,7 +138,7 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
                 let key = load_data_h256(machine, key_addr)?;
                 let value_addr = machine.registers()[A1].to_u64();
                 let value = load_data_h256(machine, value_addr)?;
-                self.result.write_values.insert(key, value);
+                self.result.write.write_values.insert(key, value);
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
@@ -160,7 +160,7 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
                     return Err(VMError::Unexpected);
                 }
                 let data = load_bytes(machine, data_addr, len as usize)?;
-                self.result.return_data = data;
+                self.result.return_data = data.into();
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
@@ -249,11 +249,11 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
 
                 // Same logic from State::create_account()
                 let id = self.get_account_count()?;
-                self.result.write_values.insert(
+                self.result.write.write_values.insert(
                     build_account_field_key(id, GW_ACCOUNT_NONCE_TYPE),
                     H256::zero(),
                 );
-                self.result.write_values.insert(
+                self.result.write.write_values.insert(
                     build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH_TYPE),
                     script_hash.into(),
                 );
@@ -264,14 +264,15 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
                     buf[4] = 1;
                     buf.into()
                 };
-                self.result.write_values.insert(
+                self.result.write.write_values.insert(
                     build_script_hash_to_account_id_key(&script_hash[..]),
                     script_hash_to_id_value,
                 );
                 // insert script
                 self.result
+                    .write
                     .new_scripts
-                    .insert(script_hash.into(), script.as_slice().to_vec());
+                    .insert(script_hash.into(), script);
                 self.set_account_count(id + 1);
                 machine
                     .memory_mut()
@@ -325,11 +326,15 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
                 hasher.finalize(&mut data_hash);
                 // insert data hash into SMT
                 let data_hash_key = build_data_hash_key(&data_hash);
-                self.result.write_values.insert(data_hash_key, H256::one());
+                self.result
+                    .write
+                    .write_values
+                    .insert(data_hash_key, H256::one());
                 // write data
                 self.result
+                    .write
                     .write_data
-                    .insert(data_hash.into(), data.as_slice().to_vec());
+                    .insert(data_hash.into(), data.into());
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
@@ -344,7 +349,7 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
                     }
                 };
                 store_data(machine, data.as_ref())?;
-                self.result.read_data.insert(data_hash, data.to_vec());
+                self.result.read_data.insert(data_hash, data);
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
@@ -498,7 +503,7 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
 
 impl<'a, S: State, C: ChainView> L2Syscalls<'a, S, C> {
     fn get_raw(&mut self, key: &H256) -> Result<H256, VMError> {
-        let value = match self.result.write_values.get(key) {
+        let value = match self.result.write.write_values.get(key) {
             Some(value) => *value,
             None => {
                 let tree_value = self.state.get_raw(key).map_err(|_| VMError::Unexpected)?;
@@ -509,7 +514,7 @@ impl<'a, S: State, C: ChainView> L2Syscalls<'a, S, C> {
         Ok(value)
     }
     fn get_account_count(&self) -> Result<u32, VMError> {
-        if let Some(id) = self.result.account_count {
+        if let Some(id) = self.result.write.account_count {
             Ok(id)
         } else {
             self.state.get_account_count().map_err(|err| {
@@ -519,27 +524,31 @@ impl<'a, S: State, C: ChainView> L2Syscalls<'a, S, C> {
         }
     }
     fn set_account_count(&mut self, count: u32) {
-        self.result.account_count = Some(count);
+        self.result.write.account_count = Some(count);
     }
     fn get_script(&mut self, script_hash: &H256) -> Option<Script> {
         let opt_script = self
             .result
+            .write
             .new_scripts
             .get(script_hash)
-            .map(|data| Script::from_slice(data).expect("Script"))
+            .cloned()
             .or_else(|| self.code_store.get_script(script_hash));
 
         if let Some(ref script) = opt_script {
-            self.result.get_scripts.insert(script.as_slice().to_vec());
+            self.result
+                .get_scripts
+                .insert(*script_hash, script.to_owned());
         }
 
         opt_script
     }
     fn get_data(&self, data_hash: &H256) -> Option<Bytes> {
         self.result
+            .write
             .write_data
             .get(data_hash)
-            .map(|data| Bytes::from(data.clone()))
+            .cloned()
             .or_else(|| self.code_store.get_data(data_hash))
     }
     fn get_script_hash(&mut self, id: u32) -> Result<H256, VMError> {

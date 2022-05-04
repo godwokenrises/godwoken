@@ -5,12 +5,10 @@ use gw_common::registry::context::RegistryContext;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_traits::CodeStore;
-use gw_types::offchain::RollupContext;
+use gw_types::offchain::{RollupContext, RunResultWriteState};
 use gw_types::U256;
 use gw_types::{
-    bytes::Bytes,
     core::ScriptHashType,
-    offchain::RunResult,
     packed::{AccountMerkleState, DepositRequest, Script, WithdrawalReceipt, WithdrawalRequest},
     prelude::*,
 };
@@ -19,7 +17,7 @@ use tracing::instrument;
 pub trait StateExt {
     fn create_account_from_script(&mut self, script: Script) -> Result<u32, Error>;
     fn merkle_state(&self) -> Result<AccountMerkleState, Error>;
-    fn apply_run_result(&mut self, run_result: &RunResult) -> Result<(), Error>;
+    fn apply_run_result(&mut self, write: &RunResultWriteState) -> Result<(), Error>;
     fn apply_deposit_request(
         &mut self,
         ctx: &RollupContext,
@@ -92,18 +90,18 @@ impl<S: State + CodeStore> StateExt for S {
     }
 
     #[instrument(skip_all)]
-    fn apply_run_result(&mut self, run_result: &RunResult) -> Result<(), Error> {
-        for (k, v) in &run_result.write_values {
+    fn apply_run_result(&mut self, write: &RunResultWriteState) -> Result<(), Error> {
+        for (k, v) in &write.write_values {
             self.update_raw(*k, *v)?;
         }
-        if let Some(id) = run_result.account_count {
+        if let Some(id) = write.account_count {
             self.set_account_count(id)?;
         }
-        for (script_hash, script) in &run_result.new_scripts {
-            self.insert_script(*script_hash, Script::from_slice(script).expect("script"));
+        for (script_hash, script) in &write.new_scripts {
+            self.insert_script(*script_hash, script.to_owned());
         }
-        for (data_hash, data) in &run_result.write_data {
-            self.insert_data(*data_hash, Bytes::from(data.clone()));
+        for (data_hash, data) in &write.write_data {
+            self.insert_data(*data_hash, data.clone());
         }
 
         Ok(())
@@ -263,7 +261,7 @@ impl<S: State + CodeStore> StateExt for S {
         }
         // increase nonce
         let nonce = self.get_nonce(id)?;
-        let new_nonce = nonce.checked_add(1).ok_or(AccountError::NonceOverflow)?;
+        let new_nonce = nonce.checked_add(1).ok_or(WithdrawalError::NonceOverflow)?;
         self.set_nonce(id, new_nonce)?;
 
         let post_state = {

@@ -1,19 +1,16 @@
-use std::convert::TryInto;
-
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     state::State,
 };
 use gw_traits::CodeStore;
-use gw_types::{
-    core::AllowedContractType, offchain::RollupContext, packed::L2Transaction, prelude::*,
-};
+use gw_types::{offchain::RollupContext, packed::L2Transaction, prelude::*};
 use tracing::instrument;
 
 use crate::{
     constants::MAX_TX_SIZE,
     error::{AccountError, TransactionError, TransactionValidateError},
-    typed_transaction::types::TypedTransaction,
+    typed_transaction::types::TypedRawTransaction,
+    utils::get_tx_type,
 };
 
 use super::chain_id::ChainIdVerifier;
@@ -73,8 +70,9 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
             .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &sender_address)?;
         // get balance
         let tx_cost = {
-            let tx_type = self.get_tx_type(tx)?;
-            let typed_tx = TypedTransaction::from_tx(tx.to_owned(), tx_type)?;
+            let tx_type = get_tx_type(self.rollup_context, self.state, &tx.raw())?;
+            let typed_tx = TypedRawTransaction::from_tx(tx.raw(), tx_type)
+                .ok_or(AccountError::UnknownScript)?;
             // reject txs has no cost, these transaction can only be execute without modify state tree
             typed_tx
                 .cost()
@@ -86,27 +84,5 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
         }
 
         Ok(())
-    }
-
-    fn get_tx_type(
-        &self,
-        tx: &L2Transaction,
-    ) -> Result<AllowedContractType, TransactionValidateError> {
-        let to_id: u32 = tx.raw().to_id().unpack();
-        let receiver_script_hash = self.state.get_script_hash(to_id)?;
-        let receiver_script = self
-            .state
-            .get_script(&receiver_script_hash)
-            .ok_or(TransactionError::ScriptHashNotFound)?;
-        self.rollup_context
-            .rollup_config
-            .allowed_contract_type_hashes()
-            .into_iter()
-            .find(|type_hash| type_hash.hash() == receiver_script.code_hash())
-            .map(|type_hash| {
-                let type_: u8 = type_hash.type_().into();
-                type_.try_into().unwrap_or(AllowedContractType::Unknown)
-            })
-            .ok_or_else(|| AccountError::UnknownScript.into())
     }
 }

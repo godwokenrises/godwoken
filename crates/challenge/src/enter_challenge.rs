@@ -1,6 +1,6 @@
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::H256;
-use gw_generator::ChallengeContext;
+use gw_generator::types::vm::ChallengeContext;
 use gw_types::core::{ScriptHashType, Status};
 use gw_types::offchain::RollupContext;
 use gw_types::packed::{

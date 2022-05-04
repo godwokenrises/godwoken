@@ -14,7 +14,7 @@ use arc_swap::Guard;
 use gw_common::blake2b::new_blake2b;
 use gw_common::H256;
 use gw_config::{BlockProducerConfig, ContractsCellDep};
-use gw_generator::ChallengeContext;
+use gw_generator::types::vm::ChallengeContext;
 use gw_types::bytes::Bytes;
 use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext};
 use gw_types::packed::{

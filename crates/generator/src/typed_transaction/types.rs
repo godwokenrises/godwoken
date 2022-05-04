@@ -4,34 +4,29 @@ use ckb_vm::Bytes;
 use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
 use gw_types::{
     core::AllowedContractType,
-    packed::{ETHAddrRegArgsReader, L2Transaction, MetaContractArgsReader, SUDTArgsReader},
+    packed::{ETHAddrRegArgsReader, MetaContractArgsReader, RawL2Transaction, SUDTArgsReader},
     prelude::*,
     U256,
 };
 
-use crate::error::{AccountError, TransactionValidateError};
-
 /// Types Transaction
-pub enum TypedTransaction {
+pub enum TypedRawTransaction {
     EthAddrReg(EthAddrRegTx),
     Meta(MetaTx),
     SimpleUDT(SimpleUDTTx),
     Polyjuice(PolyjuiceTx),
 }
 
-impl TypedTransaction {
-    pub fn from_tx(
-        tx: L2Transaction,
-        type_: AllowedContractType,
-    ) -> Result<Self, TransactionValidateError> {
+impl TypedRawTransaction {
+    pub fn from_tx(raw_tx: RawL2Transaction, type_: AllowedContractType) -> Option<Self> {
         let tx = match type_ {
-            AllowedContractType::EthAddrReg => Self::EthAddrReg(EthAddrRegTx(tx)),
-            AllowedContractType::Meta => Self::Meta(MetaTx(tx)),
-            AllowedContractType::Sudt => Self::SimpleUDT(SimpleUDTTx(tx)),
-            AllowedContractType::Polyjuice => Self::Polyjuice(PolyjuiceTx(tx)),
-            AllowedContractType::Unknown => return Err(AccountError::UnknownScript.into()),
+            AllowedContractType::EthAddrReg => Self::EthAddrReg(EthAddrRegTx(raw_tx)),
+            AllowedContractType::Meta => Self::Meta(MetaTx(raw_tx)),
+            AllowedContractType::Sudt => Self::SimpleUDT(SimpleUDTTx(raw_tx)),
+            AllowedContractType::Polyjuice => Self::Polyjuice(PolyjuiceTx(raw_tx)),
+            AllowedContractType::Unknown => return None,
         };
-        Ok(tx)
+        Some(tx)
     }
 
     /// Got expect cost of the tx, (transfer value + fee).
@@ -46,13 +41,13 @@ impl TypedTransaction {
     }
 }
 
-pub struct EthAddrRegTx(L2Transaction);
+pub struct EthAddrRegTx(RawL2Transaction);
 
 impl EthAddrRegTx {
     pub fn cost(&self) -> Option<U256> {
         use gw_types::packed::ETHAddrRegArgsUnionReader::*;
 
-        let args: Bytes = self.0.raw().args().unpack();
+        let args: Bytes = self.0.args().unpack();
         let args = ETHAddrRegArgsReader::from_slice(&args).ok()?;
 
         match args.to_enum() {
@@ -63,13 +58,13 @@ impl EthAddrRegTx {
     }
 }
 
-pub struct MetaTx(L2Transaction);
+pub struct MetaTx(RawL2Transaction);
 
 impl MetaTx {
     pub fn cost(&self) -> Option<U256> {
         use gw_types::packed::MetaContractArgsUnionReader::*;
 
-        let args: Bytes = self.0.raw().args().unpack();
+        let args: Bytes = self.0.args().unpack();
         let args = MetaContractArgsReader::from_slice(&args).ok()?;
 
         match args.to_enum() {
@@ -78,20 +73,20 @@ impl MetaTx {
     }
 }
 
-pub struct SimpleUDTTx(L2Transaction);
+pub struct SimpleUDTTx(RawL2Transaction);
 
 impl SimpleUDTTx {
     pub fn cost(&self) -> Option<U256> {
         use gw_types::packed::SUDTArgsUnionReader::*;
 
-        let args: Bytes = self.0.raw().args().unpack();
+        let args: Bytes = self.0.args().unpack();
         let args = SUDTArgsReader::from_slice(&args).ok()?;
 
         match args.to_enum() {
             SUDTQuery(_) => None,
             SUDTTransfer(args) => {
                 let fee = args.fee().amount().unpack();
-                let to_id: u32 = self.0.raw().to_id().unpack();
+                let to_id: u32 = self.0.to_id().unpack();
                 if to_id == CKB_SUDT_ACCOUNT_ID {
                     // CKB transfer cost: transfer CKB value + fee
                     let value = args.amount().unpack();
@@ -105,10 +100,10 @@ impl SimpleUDTTx {
     }
 }
 
-pub struct PolyjuiceTx(L2Transaction);
+pub struct PolyjuiceTx(RawL2Transaction);
 impl PolyjuiceTx {
-    pub fn cost(&self) -> Option<U256> {
-        let args: Bytes = self.0.raw().args().unpack();
+    fn extract_tx_args(&self) -> Option<(u128, u128, u64)> {
+        let args: Bytes = self.0.args().unpack();
         if args.len() < 52 {
             log::error!(
                 "[gw-generator] parse PolyjuiceTx error, wrong args.len expected: >= 52, actual: {}",
@@ -138,7 +133,26 @@ impl PolyjuiceTx {
             data.copy_from_slice(&args[32..48]);
             u128::from_le_bytes(data)
         };
-        let cost = value.checked_add(gas_price.checked_mul(gas_limit.into())?)?;
-        cost.try_into().ok()
+        Some((value, gas_price, gas_limit))
+    }
+
+    pub fn used_cost(&self, gas_used: u64) -> Option<U256> {
+        match self.extract_tx_args() {
+            Some((value, gas_price, _gas_limit)) => {
+                let cost = value.checked_add(gas_price.checked_mul(gas_used.into())?)?;
+                cost.try_into().ok()
+            }
+            None => None,
+        }
+    }
+
+    pub fn cost(&self) -> Option<U256> {
+        match self.extract_tx_args() {
+            Some((value, gas_price, gas_limit)) => {
+                let cost = value.checked_add(gas_price.checked_mul(gas_limit.into())?)?;
+                cost.try_into().ok()
+            }
+            None => None,
+        }
     }
 }

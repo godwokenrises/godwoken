@@ -18,7 +18,7 @@ use gw_challenge::revert::Revert;
 use gw_challenge::types::{RevertContext, VerifyContext};
 use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig};
-use gw_generator::ChallengeContext;
+use gw_generator::types::vm::ChallengeContext;
 use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_rpc_client::rpc_client::RPCClient;

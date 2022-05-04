@@ -1,13 +1,40 @@
-use gw_common::H256;
+use std::convert::TryInto;
+
+use gw_common::{state::State, H256};
+use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
-    core::ScriptHashType,
+    core::{AllowedContractType, ScriptHashType},
     offchain::RollupContext,
-    packed::{CellOutput, Script, WithdrawalLockArgs, WithdrawalRequestExtra},
+    packed::{CellOutput, RawL2Transaction, Script, WithdrawalLockArgs, WithdrawalRequestExtra},
     prelude::*,
 };
 
-use crate::generator::WithdrawalCellError;
+use crate::{error::TransactionError, generator::WithdrawalCellError};
+
+pub fn get_tx_type<S: State + CodeStore>(
+    rollup_context: &RollupContext,
+    state: &S,
+    raw_tx: &RawL2Transaction,
+) -> Result<AllowedContractType, TransactionError> {
+    let to_id: u32 = raw_tx.to_id().unpack();
+    let receiver_script_hash = state.get_script_hash(to_id)?;
+    let receiver_script = state
+        .get_script(&receiver_script_hash)
+        .ok_or(TransactionError::ScriptHashNotFound)?;
+    rollup_context
+        .rollup_config
+        .allowed_contract_type_hashes()
+        .into_iter()
+        .find(|type_hash| type_hash.hash() == receiver_script.code_hash())
+        .map(|type_hash| {
+            let type_: u8 = type_hash.type_().into();
+            type_.try_into().unwrap_or(AllowedContractType::Unknown)
+        })
+        .ok_or(TransactionError::BackendNotFound {
+            script_hash: receiver_script_hash,
+        })
+}
 
 pub fn build_withdrawal_cell_output(
     rollup_context: &RollupContext,

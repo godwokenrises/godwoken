@@ -81,6 +81,8 @@ pub enum WithdrawalError {
         max_size: usize,
         withdrawal_size: usize,
     },
+    #[error("Nonce Overflow")]
+    NonceOverflow,
 }
 
 impl From<WithdrawalError> for Error {
@@ -99,8 +101,6 @@ pub enum AccountError {
     UnknownAccount,
     #[error("Unknown script")]
     UnknownScript,
-    #[error("Nonce Overflow")]
-    NonceOverflow,
     #[error("can't find script for account {account_id}")]
     ScriptNotFound { account_id: u32 },
     #[error("can't find registry address")]
@@ -153,6 +153,8 @@ pub enum TransactionError {
     InsufficientBalance,
     #[error("Tx has no cost")]
     NoCost,
+    #[error("Nonce Overflow")]
+    NonceOverflow,
 }
 
 impl From<VMError> for TransactionError {
