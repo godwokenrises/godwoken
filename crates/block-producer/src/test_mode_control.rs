@@ -5,7 +5,7 @@ use gw_common::h256_ext::H256Ext;
 use gw_common::merkle_utils::{calculate_ckb_merkle_root, ckb_merkle_leaf_hash};
 use gw_common::smt::Blake2bHasher;
 use gw_common::H256;
-use gw_generator::ChallengeContext;
+use gw_generator::types::vm::ChallengeContext;
 use gw_jsonrpc_types::test_mode::ChallengeType;
 use gw_jsonrpc_types::{godwoken::GlobalState as JsonGlobalState, test_mode::TestModePayload};
 use gw_rpc_client::rpc_client::RPCClient;

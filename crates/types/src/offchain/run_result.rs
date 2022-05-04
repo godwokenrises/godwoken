@@ -1,3 +1,4 @@
+use crate::bytes::Bytes;
 use crate::packed::{CellOutput, LogItem, Script};
 use crate::prelude::*;
 use sparse_merkle_tree::H256;
@@ -9,24 +10,35 @@ pub struct RecoverAccount {
     pub signature: Vec<u8>,
     pub lock_script: Script,
 }
+#[derive(Debug, Clone, Default)]
+pub struct RunResultWriteState {
+    pub write_values: HashMap<H256, H256>,
+    pub account_count: Option<u32>,
+    pub new_scripts: HashMap<H256, Script>,
+    pub write_data: HashMap<H256, Bytes>,
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct RunResult {
     pub read_values: HashMap<H256, H256>,
-    pub write_values: HashMap<H256, H256>,
-    pub return_data: Vec<u8>,
-    pub account_count: Option<u32>,
+    pub return_data: Bytes,
     pub recover_accounts: HashSet<RecoverAccount>,
-    pub new_scripts: HashMap<H256, Vec<u8>>,
-    pub get_scripts: HashSet<Vec<u8>>,
-    pub write_data: HashMap<H256, Vec<u8>>,
+    pub get_scripts: HashMap<H256, Script>,
     // data hash -> data full size
-    pub read_data: HashMap<H256, Vec<u8>>,
+    pub read_data: HashMap<H256, Bytes>,
     // log data
     pub logs: Vec<LogItem>,
     // used cycles
     pub used_cycles: u64,
     pub exit_code: i8,
+    pub write: RunResultWriteState,
+}
+
+impl RunResult {
+    // clear all write fields
+    pub fn revert_write(&mut self) {
+        self.write = Default::default();
+    }
 }
 
 impl CellOutput {

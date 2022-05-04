@@ -1102,7 +1102,7 @@ impl MemPool {
             let receipt = ErrorTxReceipt {
                 tx_hash,
                 block_number,
-                return_data: run_result.return_data,
+                return_data: run_result.return_data.clone(),
                 last_log: run_result.logs.last().cloned(),
                 exit_code: run_result.exit_code,
             };
@@ -1140,7 +1140,7 @@ impl MemPool {
         }
         // apply run result
         let t = Instant::now();
-        tokio::task::block_in_place(|| state.apply_run_result(&run_result))?;
+        tokio::task::block_in_place(|| state.apply_run_result(&run_result.write))?;
         log::debug!(
             "[finalize tx] apply run result: {}ms",
             t.elapsed().as_millis()

@@ -7,7 +7,8 @@ use gw_config::ChainConfig;
 use gw_generator::{
     generator::{ApplyBlockArgs, ApplyBlockResult},
     traits::StateExt,
-    ChallengeContext, Generator,
+    types::vm::ChallengeContext,
+    Generator,
 };
 use gw_jsonrpc_types::debugger::ReprMockTransaction;
 use gw_mem_pool::pool::MemPool;

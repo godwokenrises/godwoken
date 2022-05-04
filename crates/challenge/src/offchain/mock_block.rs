@@ -22,8 +22,8 @@ use gw_types::offchain::{RollupContext, RunResult};
 use gw_types::packed::{
     AccountMerkleState, BlockMerkleState, Byte32, Bytes, CCTransactionSignatureWitness,
     CCTransactionWitness, CCWithdrawalWitness, CKBMerkleProof, ChallengeTarget, GlobalState,
-    L2Block, L2Transaction, RawL2Block, Script, ScriptReader, ScriptVec, SubmitTransactions,
-    SubmitWithdrawals, Uint64, WithdrawalRequestExtra,
+    L2Block, L2Transaction, RawL2Block, Script, ScriptVec, SubmitTransactions, SubmitWithdrawals,
+    Uint64, WithdrawalRequestExtra,
 };
 use gw_types::prelude::*;
 
@@ -149,7 +149,7 @@ impl MockBlockParam {
             self.transactions.set_prev_txs_checkpoint(checkpoint);
         }
 
-        mem_tree.apply_run_result(run_result)?;
+        mem_tree.apply_run_result(&run_result.write)?;
         let post_account = mem_tree.merkle_state()?;
         let checkpoint = calculate_state_checkpoint(
             &post_account.merkle_root().unpack(),
@@ -476,7 +476,7 @@ impl MockBlockParam {
             kv_state.insert(key.to_owned(), value);
         }
 
-        for key in run_result.write_values.keys() {
+        for key in run_result.write.write_values.keys() {
             if kv_state.contains_key(key) {
                 continue;
             }
@@ -500,15 +500,14 @@ impl MockBlockParam {
             let sender_script_hash = sender_script.hash();
             let receiver_script_hash = receiver_script.hash();
 
-            for slice in run_result.get_scripts.iter() {
-                let script = ScriptReader::from_slice_should_be_ok(slice);
-
-                let script_hash = script.hash();
-                if script_hash == sender_script_hash || script_hash == receiver_script_hash {
+            for (script_hash, script) in run_result.get_scripts.iter() {
+                if script_hash.as_slice() == sender_script_hash
+                    || script_hash.as_slice() == receiver_script_hash
+                {
                     continue;
                 }
 
-                builder = builder.push(script.to_entity());
+                builder = builder.push(script.to_owned());
             }
 
             builder.build()
@@ -524,7 +523,7 @@ impl MockBlockParam {
         let return_data_hash = {
             let return_data_hash: [u8; 32] = {
                 let mut hasher = new_blake2b();
-                hasher.update(run_result.return_data.as_slice());
+                hasher.update(&run_result.return_data);
                 let mut hash = [0u8; 32];
                 hasher.finalize(&mut hash);
                 hash

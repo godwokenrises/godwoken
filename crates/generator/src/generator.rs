@@ -9,8 +9,11 @@ use crate::{
     backend_manage::BackendManage,
     constants::{L2TX_MAX_CYCLES, MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
     error::{BlockError, TransactionValidateError, WithdrawalError},
+    run_result_state::RunResultState,
+    typed_transaction::types::TypedRawTransaction,
+    types::vm::VMVersion,
+    utils::get_tx_type,
     vm_cost_model::instruction_cycles,
-    VMVersion,
 };
 use crate::{
     backend_manage::Backend,
@@ -20,7 +23,7 @@ use crate::{error::AccountError, syscalls::L2Syscalls};
 use crate::{error::LockAlgorithmError, traits::StateExt};
 use gw_ckb_hardfork::GLOBAL_VM_VERSION;
 use gw_common::{
-    builtins::ETH_REGISTRY_ACCOUNT_ID,
+    builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     error::Error as StateError,
     h256_ext::H256Ext,
     registry_address::RegistryAddress,
@@ -454,7 +457,7 @@ impl Generator {
 
             {
                 let now = Instant::now();
-                if let Err(err) = state.apply_run_result(&run_result) {
+                if let Err(err) = state.apply_run_result(&run_result.write) {
                     return ApplyBlockResult::Error(err);
                 }
                 apply_state_total_ms += now.elapsed().as_millis();
@@ -592,9 +595,6 @@ impl Generator {
         raw_tx: &RawL2Transaction,
         max_cycles: u64,
     ) -> Result<RunResult, TransactionError> {
-        let sender_id: u32 = raw_tx.from_id().unpack();
-        let nonce_before_execution = state.get_nonce(sender_id)?;
-
         let account_id = raw_tx.to_id().unpack();
         let script_hash = state.get_script_hash(account_id)?;
         let backend = self
@@ -603,29 +603,87 @@ impl Generator {
 
         let run_result: RunResult =
             self.machine_run(chain, state, block_info, raw_tx, max_cycles, backend)?;
+        self.handle_run_result(state, block_info, raw_tx, run_result)
+    }
+
+    pub fn get_backends(&self) -> &HashMap<H256, Backend> {
+        self.backend_manage.get_backends()
+    }
+
+    // check and handle run_result before return
+    fn handle_run_result<S: State + CodeStore>(
+        &self,
+        state: &S,
+        block_info: &BlockInfo,
+        raw_tx: &RawL2Transaction,
+        mut run_result: RunResult,
+    ) -> Result<RunResult, TransactionError> {
+        let sender_id: u32 = raw_tx.from_id().unpack();
+        let nonce_raw_key = build_account_field_key(sender_id, GW_ACCOUNT_NONCE_TYPE);
+        let nonce_before = state.get_nonce(sender_id)?;
 
         if 0 == run_result.exit_code {
-            // check nonce is increased by backends
-            let nonce_after_execution = {
-                let nonce_raw_key = build_account_field_key(sender_id, GW_ACCOUNT_NONCE_TYPE);
+            // check sender's nonce is increased by backends
+            let nonce_after = {
                 let value = run_result
+                    .write
                     .write_values
                     .get(&nonce_raw_key)
                     .ok_or(TransactionError::BackendMustIncreaseNonce)?;
                 value.to_u32()
             };
-            if nonce_after_execution <= nonce_before_execution {
+            if nonce_after <= nonce_before {
                 log::error!(
                     "nonce should increased by backends nonce before: {}, nonce after: {}",
-                    nonce_before_execution,
-                    nonce_after_execution
+                    nonce_before,
+                    nonce_after
                 );
                 return Err(TransactionError::BackendMustIncreaseNonce);
             }
+        } else {
+            // revert tx
+            run_result.revert_write();
+
+            // handle tx fee
+            let tx_type = get_tx_type(self.rollup_context(), state, raw_tx)?;
+            let typed_tx = TypedRawTransaction::from_tx(raw_tx.to_owned(), tx_type)
+                .expect("Unknown type of tx");
+            let tx_fee = typed_tx.cost().ok_or(TransactionError::NoCost)?;
+
+            let mut run_result_state = RunResultState(&mut run_result);
+
+            let payer = {
+                let script_hash = state.get_script_hash(sender_id)?;
+                state
+                    .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &script_hash)?
+                    .ok_or(TransactionError::ScriptHashNotFound)?
+            };
+            let block_producer =
+                RegistryAddress::from_slice(&block_info.block_producer().raw_data())
+                    .unwrap_or_default();
+            run_result_state
+                .pay_fee(&payer, &block_producer, CKB_SUDT_ACCOUNT_ID, tx_fee.into())
+                .map_err(|err| {
+                    log::error!(
+                        "[gw-generator] failed to pay fee for failure tx, err: {}",
+                        err
+                    );
+                    TransactionError::InsufficientBalance
+                })?;
+
+            // increase sender's nonce
+            let nonce = nonce_before
+                .checked_add(1)
+                .ok_or(TransactionError::NonceOverflow)?;
+            run_result
+                .write
+                .write_values
+                .insert(nonce_raw_key, H256::from_u32(nonce));
         }
 
         // check write data bytes
         if let Some(data) = run_result
+            .write
             .write_data
             .values()
             .find(|data| data.len() > MAX_WRITE_DATA_BYTES_LIMIT)
@@ -636,18 +694,15 @@ impl Generator {
             });
         }
         // check read data bytes
-        let read_data_bytes: usize = run_result.read_data.values().map(Vec::len).sum();
+        let read_data_bytes: usize = run_result.read_data.values().map(Bytes::len).sum();
         if read_data_bytes > MAX_READ_DATA_BYTES_LIMIT {
             return Err(TransactionError::ExceededMaxReadData {
                 max_bytes: MAX_READ_DATA_BYTES_LIMIT,
                 used_bytes: read_data_bytes,
             });
         }
-        Ok(run_result)
-    }
 
-    pub fn get_backends(&self) -> &HashMap<H256, Backend> {
-        self.backend_manage.get_backends()
+        Ok(run_result)
     }
 }
 

@@ -114,7 +114,7 @@ impl ReplayBlock {
                 L2TX_MAX_CYCLES,
             )?;
 
-            state.apply_run_result(&run_result)?;
+            state.apply_run_result(&run_result.write)?;
             let expected_checkpoint = state.calculate_state_checkpoint()?;
             let checkpoint_index = withdrawals.len() + tx_index;
             let block_checkpoint: H256 = match state_checkpoint_list.get(checkpoint_index) {
