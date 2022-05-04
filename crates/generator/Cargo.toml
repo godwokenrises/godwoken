@@ -18,7 +18,6 @@ gw-config = { path = "../config" }
 gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
 gw-ckb-hardfork = { path = "../ckb-hardfork" }
-gw-tx-filter = { path = "../tx-filter" }
 gw-dynamic-config = { path = "../dynamic-config"}
 anyhow = "1.0"
 blake2b-rs = "0.2"

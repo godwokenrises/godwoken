@@ -131,7 +131,6 @@ pub struct ExecutionTransactionContext {
     generator: Arc<Generator>,
     store: Store,
     mem_pool_state: Arc<MemPoolState>,
-    dynamic_config: Arc<ArcSwap<DynamicConfigManager>>,
 }
 
 pub struct RegistryArgs<T> {
@@ -255,7 +254,6 @@ impl Registry {
                 generator: self.generator.clone(),
                 store: self.store.clone(),
                 mem_pool_state: self.mem_pool_state.clone(),
-                dynamic_config: self.dynamic_config_manager.clone(),
             }))
             .with_data(Data::new(self.mem_pool))
             .with_data(Data(self.generator.clone()))
@@ -786,7 +784,6 @@ async fn execute_l2transaction(
             &block_info,
             &raw_tx,
             100000000,
-            Some(ctx.dynamic_config.clone()),
         )?;
 
         Result::<_, anyhow::Error>::Ok(run_result)
@@ -884,7 +881,6 @@ async fn execute_raw_l2transaction(
                     &block_info,
                     &raw_l2tx,
                     execute_l2tx_max_cycles,
-                    Some(ctx.dynamic_config.clone()),
                 )?
             }
             None => {
@@ -896,7 +892,6 @@ async fn execute_raw_l2transaction(
                     &block_info,
                     &raw_l2tx,
                     execute_l2tx_max_cycles,
-                    Some(ctx.dynamic_config.clone()),
                 )?
             }
         };
