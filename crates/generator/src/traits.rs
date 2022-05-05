@@ -180,7 +180,7 @@ impl<S: State + CodeStore> StateExt for S {
         self.mint_sudt(CKB_SUDT_ACCOUNT_ID, &address, ckb_amount)?;
         log::debug!(
             "[generator] mint {} shannons * 10^{} CKB to account {}",
-            ckb_amount,
+            capacity,
             CKB_DECIMAL_POW_EXP,
             hex::encode(account_script_hash.as_slice()),
         );
