@@ -19,6 +19,8 @@ In the new version, we improve the compatibility of Godwoken:
 - Support Ethereum signature format and EIP-712. User can view the transaction before signing, instead of signing a random 32 bytes message. [#561](https://github.com/nervosnetwork/godwoken/pull/561)
 - Fix the total supply interface of sUDT ERC-20 proxy contract [#560](https://github.com/nervosnetwork/godwoken/pull/560)
 - Support interactive with eth address that haven't been registered to Godwoken.
+- Unify layer 2 fungible token represatation as uint256.
+- Change layer 2 ckb decimal from 8 to 18, improve compatibility between metamask and native ckb. [#675](https://github.com/nervosnetwork/godwoken/pull/675)
 
 In short, as a developer, you can use Godwoken v1 just like anyother Ethereum compatible chain, all you need to do is to switch the network to Godwoken. The polyjuice-provider web3 plugin is removed in the v1 version.
 
