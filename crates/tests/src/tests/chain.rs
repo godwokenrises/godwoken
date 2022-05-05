@@ -536,7 +536,10 @@ async fn test_layer1_revert() {
         let alice_balance = tree
             .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &alice_addr)
             .unwrap();
-        assert_eq!(alice_balance, CKBCapacity::from_layer1(400 * CKB).to_layer2());
+        assert_eq!(
+            alice_balance,
+            CKBCapacity::from_layer1(400 * CKB).to_layer2()
+        );
 
         let bob_id_opt = tree
             .get_account_id_by_script_hash(&bob_script.hash().into())
@@ -586,7 +589,10 @@ async fn test_layer1_revert() {
         let alice_balance = tree
             .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &alice_addr)
             .unwrap();
-        assert_eq!(alice_balance, CKBCapacity::from_layer1(400 * CKB).to_layer2());
+        assert_eq!(
+            alice_balance,
+            CKBCapacity::from_layer1(400 * CKB).to_layer2()
+        );
 
         let bob_script_hash: H256 = bob_script.hash().into();
         let bob_id = tree

@@ -177,7 +177,10 @@ async fn test_deposit_and_withdrawal() {
             .unwrap();
         assert_eq!(ckb_balance, CKBCapacity::from_layer1(capacity).to_layer2());
         let ckb_total_supply = tree.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID).unwrap();
-        assert_eq!(ckb_total_supply, CKBCapacity::from_layer1(capacity).to_layer2());
+        assert_eq!(
+            ckb_total_supply,
+            CKBCapacity::from_layer1(capacity).to_layer2()
+        );
         (
             user_id,
             user_script_hash,
