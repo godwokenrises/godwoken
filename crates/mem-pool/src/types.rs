@@ -50,7 +50,7 @@ impl EntryList {
         // remove lower balance withdrawals
         if let Some(withdrawal) = self.withdrawals.get(0) {
             let withdrawal_capacity: u64 = withdrawal.raw().capacity().unpack();
-            let capacity = capacity.to_layer1().unwrap_or(u64::MAX);
+            let capacity = capacity.to_layer1().unwrap();
             if withdrawal_capacity > capacity {
                 // TODO instead of remove all withdrawals, put them into future queue
                 removed.extend_from_slice(&self.withdrawals);
