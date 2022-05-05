@@ -1,6 +1,6 @@
 use crate::error::{AccountError, DepositError, Error, WithdrawalError};
 use crate::sudt::build_l2_sudt_script;
-use gw_common::ckb_decimal::{self, CKB_DECIMAL_POW_EXP};
+use gw_common::ckb_decimal::{CKBCapacity, CKB_DECIMAL_POW_EXP};
 use gw_common::registry::context::RegistryContext;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, CKB_SUDT_SCRIPT_ARGS, H256};
@@ -176,7 +176,7 @@ impl<S: State + CodeStore> StateExt for S {
             }
         };
         // Align CKB to 18 decimals
-        let ckb_amount = ckb_decimal::to_18(capacity);
+        let ckb_amount = CKBCapacity::from_layer1(capacity).to_layer2();
         self.mint_sudt(CKB_SUDT_ACCOUNT_ID, &address, ckb_amount)?;
         log::debug!(
             "[generator] mint {} shannons * 10^{} CKB to account {}",
@@ -250,7 +250,7 @@ impl<S: State + CodeStore> StateExt for S {
         self.burn_sudt(
             CKB_SUDT_ACCOUNT_ID,
             &withdrawal_address,
-            ckb_decimal::to_18(capacity),
+            CKBCapacity::from_layer1(capacity).to_layer2(),
         )?;
         let sudt_id = self
             .get_account_id_by_script_hash(&l2_sudt_script_hash.into())?

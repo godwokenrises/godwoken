@@ -1,5 +1,5 @@
 use gw_common::{
-    builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal, h256_ext::H256Ext, state::State, H256,
+    builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, h256_ext::H256Ext, state::State, H256,
 };
 use gw_traits::CodeStore;
 use gw_types::{
@@ -96,7 +96,9 @@ impl<'a, S: State + CodeStore> WithdrawalVerifier<'a, S> {
         let ckb_balance = self
             .state
             .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &registry_address)?;
-        let required_ckb_capacity = ckb_decimal::to_18(capacity).saturating_add(fee.into());
+        let required_ckb_capacity = CKBCapacity::from_layer1(capacity)
+            .to_layer2()
+            .saturating_add(fee.into());
         if required_ckb_capacity > ckb_balance {
             return Err(WithdrawalError::Overdraft.into());
         }

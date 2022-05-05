@@ -174,25 +174,43 @@ mod tests {
         let user_b = RegistryAddress::new(0, vec![2u8; 20]);
         tree.mint_sudt(sudt_id, &user_a, U256::from(100u64))
             .unwrap();
-        assert_eq!(tree.get_sudt_total_supply(sudt_id).unwrap(), 100.into());
+        assert_eq!(
+            tree.get_sudt_total_supply(sudt_id).unwrap(),
+            U256::from(100)
+        );
         tree.mint_sudt(sudt_id, &user_a, U256::from(230u64))
             .unwrap();
-        assert_eq!(tree.get_sudt_total_supply(sudt_id).unwrap(), 330.into());
+        assert_eq!(
+            tree.get_sudt_total_supply(sudt_id).unwrap(),
+            U256::from(330)
+        );
         tree.mint_sudt(sudt_id, &user_b, U256::from(155u64))
             .unwrap();
-        assert_eq!(tree.get_sudt_total_supply(sudt_id).unwrap(), 485.into());
+        assert_eq!(
+            tree.get_sudt_total_supply(sudt_id).unwrap(),
+            U256::from(485)
+        );
         // burn sudt
         tree.burn_sudt(sudt_id, &user_a, U256::from(85u64)).unwrap();
-        assert_eq!(tree.get_sudt_total_supply(sudt_id).unwrap(), 400.into());
+        assert_eq!(
+            tree.get_sudt_total_supply(sudt_id).unwrap(),
+            U256::from(400)
+        );
         // overdraft
         let err = tree
             .burn_sudt(sudt_id, &user_b, U256::from(200u64))
             .unwrap_err();
         assert_eq!(err, gw_common::error::Error::AmountOverflow);
-        assert_eq!(tree.get_sudt_total_supply(sudt_id).unwrap(), 400.into());
+        assert_eq!(
+            tree.get_sudt_total_supply(sudt_id).unwrap(),
+            U256::from(400)
+        );
         tree.burn_sudt(sudt_id, &user_b, U256::from(100u64))
             .unwrap();
-        assert_eq!(tree.get_sudt_total_supply(sudt_id).unwrap(), 300.into());
+        assert_eq!(
+            tree.get_sudt_total_supply(sudt_id).unwrap(),
+            U256::from(300)
+        );
     }
 
     #[test]
