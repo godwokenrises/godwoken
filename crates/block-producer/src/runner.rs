@@ -870,6 +870,8 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         generator,
         tests_rpc_impl: test_mode_control.map(Box::new),
         rollup_config,
+        chain_config: config.chain.to_owned(),
+        consensus_config: config.consensus.to_owned(),
         mem_pool_config: config.mem_pool.clone(),
         node_mode: config.node_mode,
         rpc_client: rpc_client.clone(),

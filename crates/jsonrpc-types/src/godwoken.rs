@@ -1176,9 +1176,27 @@ impl From<offchain::RunResult> for RunResult {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct NodeInfo {
-    // godwoken current version
+    pub mode: NodeMode,
     pub version: String,
     pub backends: Vec<BackendInfo>,
+    pub eoa_scripts: Vec<EoaScript>,
+    pub gw_scripts: Vec<GwScript>,
+    pub rollup_cell: RollupCell,
+    pub rollup_config: NodeRollupConfig,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum NodeMode {
+    FullNode,
+    Test,
+    ReadOnly,
+}
+
+impl Default for NodeMode {
+    fn default() -> Self {
+        NodeMode::ReadOnly
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
@@ -1187,8 +1205,91 @@ pub struct BackendInfo {
     pub validator_code_hash: H256,
     pub generator_code_hash: H256,
     pub validator_script_type_hash: H256,
+    pub backend_type: BackendType,
 }
 
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum BackendType {
+    Unknown,
+    Meta,
+    Sudt,
+    Polyjuice,
+    EthAddrReg,
+}
+
+impl Default for BackendType {
+    fn default() -> Self {
+        BackendType::Unknown
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct GwScript {
+    pub type_hash: H256,
+    pub script: Script,
+    pub script_type: GwScriptType,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum GwScriptType {
+    Unknown,
+    Deposit,
+    Withdraw,
+    StateValidator,
+    StakeLock,
+    CustodianLock,
+    ChallengeLock,
+    L1Sudt,
+    L2Sudt,
+    OmniLock,
+}
+
+impl Default for GwScriptType {
+    fn default() -> Self {
+        GwScriptType::Unknown
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct RollupCell {
+    pub type_hash: H256,
+    pub type_script: Script,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct NodeRollupConfig {
+    pub required_staking_capacity: Uint64,
+    pub challenge_maturity_blocks: Uint64,
+    pub finality_blocks: Uint64,
+    pub reward_burn_rate: Uint32,
+    pub chain_id: Uint64,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct EoaScript {
+    pub type_hash: H256,
+    pub script: Script,
+    pub eoa_type: EoaScriptType,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum EoaScriptType {
+    Unknown,
+    Eth,
+}
+
+impl Default for EoaScriptType {
+    fn default() -> Self {
+        EoaScriptType::Unknown
+    }
+}
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ErrorTxReceipt {

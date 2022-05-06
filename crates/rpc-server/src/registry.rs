@@ -2,7 +2,10 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{blake2b::new_blake2b, state::State, H256};
-use gw_config::{FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig};
+use gw_config::{
+    ChainConfig, ConsensusConfig, FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit,
+    RPCServerConfig,
+};
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
 use gw_generator::{
     error::TransactionError, sudt::build_l2_sudt_script,
@@ -12,9 +15,11 @@ use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
     godwoken::{
-        BackendInfo, ErrorTxReceipt, GlobalState, L2BlockCommittedInfo, L2BlockStatus, L2BlockView,
-        L2BlockWithStatus, L2TransactionStatus, L2TransactionWithStatus, LastL2BlockCommittedInfo,
-        NodeInfo, RegistryAddress, RunResult, TxReceipt, WithdrawalStatus, WithdrawalWithStatus,
+        BackendInfo, BackendType, EoaScript, EoaScriptType, ErrorTxReceipt, GlobalState, GwScript,
+        GwScriptType, L2BlockCommittedInfo, L2BlockStatus, L2BlockView, L2BlockWithStatus,
+        L2TransactionStatus, L2TransactionWithStatus, LastL2BlockCommittedInfo, NodeInfo,
+        NodeRollupConfig, RegistryAddress, RollupCell, RunResult, TxReceipt, WithdrawalStatus,
+        WithdrawalWithStatus,
     },
     test_mode::TestModePayload,
 };
@@ -61,6 +66,8 @@ type AccountID = Uint32;
 type JsonH256 = ckb_fixed_hash::H256;
 type BoxedTestsRPCImpl = Box<dyn TestModeRPC + Send + Sync>;
 type GwUint64 = gw_jsonrpc_types::ckb_jsonrpc_types::Uint64;
+type GwUint32 = gw_jsonrpc_types::ckb_jsonrpc_types::Uint32;
+type RpcNodeMode = gw_jsonrpc_types::godwoken::NodeMode;
 
 const HEADER_NOT_FOUND_ERR_CODE: i64 = -32000;
 const INVALID_NONCE_ERR_CODE: i64 = -32001;
@@ -137,6 +144,8 @@ pub struct RegistryArgs<T> {
     pub rpc_client: RPCClient,
     pub send_tx_rate_limit: Option<RPCRateLimit>,
     pub server_config: RPCServerConfig,
+    pub chain_config: ChainConfig,
+    pub consensus_config: ConsensusConfig,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     pub last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
 }
@@ -154,6 +163,8 @@ pub struct Registry {
     rpc_client: RPCClient,
     send_tx_rate_limit: Option<RPCRateLimit>,
     server_config: RPCServerConfig,
+    chain_config: ChainConfig,
+    consensus_config: ConsensusConfig,
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
     mem_pool_state: Arc<MemPoolState>,
@@ -175,6 +186,8 @@ impl Registry {
             rpc_client,
             send_tx_rate_limit,
             server_config,
+            chain_config,
+            consensus_config,
             dynamic_config_manager,
             last_submitted_tx_hash,
         } = args;
@@ -219,6 +232,8 @@ impl Registry {
             rpc_client,
             send_tx_rate_limit,
             server_config,
+            chain_config,
+            consensus_config,
             dynamic_config_manager,
             last_submitted_tx_hash,
             mem_pool_state,
@@ -253,6 +268,9 @@ impl Registry {
             .with_data(Data::new(send_transaction_rate_limiter))
             .with_data(Data::new(self.dynamic_config_manager.clone()))
             .with_data(Data::new(self.mem_pool_state))
+            .with_data(Data::new(self.chain_config))
+            .with_data(Data::new(self.consensus_config))
+            .with_data(Data::new(self.node_mode))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -549,30 +567,6 @@ impl RequestSubmitter {
             }
         }
     }
-}
-
-fn get_backend_info(generator: Arc<Generator>) -> Vec<BackendInfo> {
-    generator
-        .get_backends()
-        .values()
-        .map(|b| {
-            let mut validator_code_hash = [0u8; 32];
-            let mut hasher = new_blake2b();
-            hasher.update(&b.validator);
-            hasher.finalize(&mut validator_code_hash);
-            let mut generator_code_hash = [0u8; 32];
-            let mut hasher = new_blake2b();
-            hasher.update(&b.generator);
-            hasher.finalize(&mut generator_code_hash);
-            BackendInfo {
-                validator_code_hash: validator_code_hash.into(),
-                generator_code_hash: generator_code_hash.into(),
-                validator_script_type_hash: ckb_fixed_hash::H256(
-                    b.validator_script_type_hash.into(),
-                ),
-            }
-        })
-        .collect()
 }
 
 async fn ping() -> Result<String> {
@@ -1350,10 +1344,238 @@ async fn compute_l2_sudt_script_hash(
     Ok(to_jsonh256(l2_sudt_script.hash().into()))
 }
 
-async fn get_node_info(backend_info: Data<Vec<BackendInfo>>) -> Result<NodeInfo> {
+fn get_backend_info(generator: Arc<Generator>) -> Vec<BackendInfo> {
+    generator
+        .get_backends()
+        .values()
+        .map(|b| {
+            let mut validator_code_hash = [0u8; 32];
+            let mut hasher = new_blake2b();
+            hasher.update(&b.validator);
+            hasher.finalize(&mut validator_code_hash);
+            let mut generator_code_hash = [0u8; 32];
+            let mut hasher = new_blake2b();
+            hasher.update(&b.generator);
+            hasher.finalize(&mut generator_code_hash);
+            BackendInfo {
+                validator_code_hash: validator_code_hash.into(),
+                generator_code_hash: generator_code_hash.into(),
+                validator_script_type_hash: ckb_fixed_hash::H256(
+                    b.validator_script_type_hash.into(),
+                ),
+                backend_type: to_rpc_backend_type(&b.backend_type),
+            }
+        })
+        .collect()
+}
+
+fn to_rpc_backend_type(b_type: &gw_config::BackendType) -> BackendType {
+    match b_type {
+        gw_config::BackendType::EthAddrReg => BackendType::EthAddrReg,
+        gw_config::BackendType::Meta => BackendType::Meta,
+        gw_config::BackendType::Sudt => BackendType::Sudt,
+        gw_config::BackendType::Polyjuice => BackendType::Polyjuice,
+        _ => BackendType::Unknown,
+    }
+}
+
+pub fn to_node_rollup_config(rollup_config: &RollupConfig) -> NodeRollupConfig {
+    let required_staking_capacity: GwUint64 = rollup_config
+        .required_staking_capacity()
+        .as_reader()
+        .unpack()
+        .into();
+    let challenge_maturity_blocks: GwUint64 = rollup_config
+        .challenge_maturity_blocks()
+        .as_reader()
+        .unpack()
+        .into();
+    let finality_blocks: GwUint64 = rollup_config.finality_blocks().as_reader().unpack().into();
+    let burn_rate: u32 =
+        bytes_v10::Buf::get_u8(&mut rollup_config.reward_burn_rate().as_bytes()).into();
+    let reward_burn_rate: GwUint32 = burn_rate.into();
+    let chain_id: GwUint64 = rollup_config.chain_id().as_reader().unpack().into();
+    NodeRollupConfig {
+        required_staking_capacity,
+        challenge_maturity_blocks,
+        finality_blocks,
+        reward_burn_rate,
+        chain_id,
+    }
+}
+
+pub fn to_rollup_cell(chain_config: &ChainConfig) -> RollupCell {
+    let type_hash: ckb_types::H256 = chain_config.rollup_type_script.hash();
+    let type_script = chain_config.rollup_type_script.to_owned();
+    RollupCell {
+        type_hash,
+        type_script,
+    }
+}
+
+pub fn to_gw_scripts(
+    rollup_config: &RollupConfig,
+    consensus_config: &ConsensusConfig,
+) -> Vec<GwScript> {
+    let mut vec = Vec::new();
+
+    let script = consensus_config
+        .contract_type_scripts
+        .state_validator
+        .to_owned();
+    let state_validator = GwScript {
+        type_hash: script.hash(),
+        script,
+        script_type: GwScriptType::StateValidator,
+    };
+    vec.push(state_validator);
+
+    let type_hash: ckb_types::H256 = rollup_config.deposit_script_type_hash().unpack();
+    let script = consensus_config
+        .contract_type_scripts
+        .deposit_lock
+        .to_owned();
+    let deposit = GwScript {
+        type_hash,
+        script,
+        script_type: GwScriptType::Deposit,
+    };
+    vec.push(deposit);
+
+    let type_hash: ckb_types::H256 = rollup_config.withdrawal_script_type_hash().unpack();
+    let script = consensus_config
+        .contract_type_scripts
+        .withdrawal_lock
+        .to_owned();
+    let withdraw = GwScript {
+        type_hash,
+        script,
+        script_type: GwScriptType::Withdraw,
+    };
+    vec.push(withdraw);
+
+    let type_hash: ckb_types::H256 = rollup_config.stake_script_type_hash().unpack();
+    let script = consensus_config.contract_type_scripts.stake_lock.to_owned();
+    let stake_lock = GwScript {
+        type_hash,
+        script,
+        script_type: GwScriptType::StakeLock,
+    };
+    vec.push(stake_lock);
+
+    let type_hash: ckb_types::H256 = rollup_config.custodian_script_type_hash().unpack();
+    let script = consensus_config
+        .contract_type_scripts
+        .custodian_lock
+        .to_owned();
+    let custodian = GwScript {
+        type_hash,
+        script,
+        script_type: GwScriptType::CustodianLock,
+    };
+    vec.push(custodian);
+
+    let type_hash: ckb_types::H256 = rollup_config.withdrawal_script_type_hash().unpack();
+    let script = consensus_config
+        .contract_type_scripts
+        .challenge_lock
+        .to_owned();
+    let challenge = GwScript {
+        type_hash,
+        script,
+        script_type: GwScriptType::ChallengeLock,
+    };
+    vec.push(challenge);
+
+    let type_hash: ckb_types::H256 = rollup_config.l1_sudt_script_type_hash().unpack();
+    let script = consensus_config.contract_type_scripts.l1_sudt.to_owned();
+    let l1_sudt = GwScript {
+        type_hash,
+        script,
+        script_type: GwScriptType::L1Sudt,
+    };
+    vec.push(l1_sudt);
+
+    let type_hash: ckb_types::H256 = rollup_config.l2_sudt_validator_script_type_hash().unpack();
+    let script = consensus_config
+        .contract_type_scripts
+        .allowed_contract_scripts[&type_hash]
+        .to_owned();
+    let l2_sudt = GwScript {
+        type_hash,
+        script,
+        script_type: GwScriptType::L2Sudt,
+    };
+    vec.push(l2_sudt);
+
+    let script = consensus_config.contract_type_scripts.omni_lock.to_owned();
+    let type_hash: ckb_types::H256 = script.hash();
+    let omni_lock = GwScript {
+        type_hash,
+        script,
+        script_type: GwScriptType::OmniLock,
+    };
+    vec.push(omni_lock);
+
+    vec
+}
+
+pub fn to_eoa_scripts(
+    rollup_config: &RollupConfig,
+    consensus_config: &ConsensusConfig,
+) -> Vec<EoaScript> {
+    let mut vec = Vec::new();
+
+    let a_type_hash = rollup_config
+        .allowed_eoa_type_hashes()
+        .get(0)
+        .expect("idx 0 not exits in allowed_eoa_type_hashes");
+    let a_type_hash_value = a_type_hash.hash();
+
+    let mut hash: [u8; 32] = [0; 32];
+    let source = a_type_hash_value.as_slice();
+    hash.copy_from_slice(source);
+    let type_hash: JsonH256 = hash.into();
+
+    let script = consensus_config.contract_type_scripts.allowed_eoa_scripts[&type_hash].to_owned();
+    let eth_eoa_script = EoaScript {
+        type_hash,
+        script,
+        eoa_type: EoaScriptType::Eth,
+    };
+    vec.push(eth_eoa_script);
+
+    vec
+}
+
+pub fn to_rpc_node_mode(node_mode: &NodeMode) -> RpcNodeMode {
+    match node_mode {
+        NodeMode::FullNode => RpcNodeMode::FullNode,
+        NodeMode::ReadOnly => RpcNodeMode::ReadOnly,
+        NodeMode::Test => RpcNodeMode::Test,
+    }
+}
+
+async fn get_node_info(
+    node_mode: Data<NodeMode>,
+    backend_info: Data<Vec<BackendInfo>>,
+    rollup_config: Data<RollupConfig>,
+    (consensus_config, chain_config): (Data<ConsensusConfig>, Data<ChainConfig>),
+) -> Result<NodeInfo> {
+    let mode = to_rpc_node_mode(&node_mode);
+    let node_rollup_config = to_node_rollup_config(&rollup_config);
+    let rollup_cell = to_rollup_cell(&chain_config);
+    let gw_scripts = to_gw_scripts(&rollup_config, &consensus_config);
+    let eoa_scripts = to_eoa_scripts(&rollup_config, &consensus_config);
+
     Ok(NodeInfo {
+        mode,
         version: Version::current().to_string(),
         backends: backend_info.clone(),
+        rollup_config: node_rollup_config,
+        rollup_cell,
+        gw_scripts,
+        eoa_scripts,
     })
 }
 

@@ -249,6 +249,8 @@ async fn test_restore_mem_block() {
             rpc_client,
             send_tx_rate_limit: Default::default(),
             server_config: Default::default(),
+            chain_config: Default::default(),
+            consensus_config: Default::default(),
             dynamic_config_manager,
             last_submitted_tx_hash: None,
         };
