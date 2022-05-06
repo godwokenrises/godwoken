@@ -22,7 +22,6 @@ use gw_generator::{
     verification::{transaction::TransactionVerifier, withdrawal::WithdrawalVerifier},
     ArcSwap, Generator,
 };
-use gw_rpc_ws_server::notify_controller::NotifyController;
 use gw_store::{
     chain_view::ChainView,
     mem_pool_state::{MemPoolState, MemStore},
@@ -33,7 +32,7 @@ use gw_store::{
 };
 use gw_traits::CodeStore;
 use gw_types::{
-    offchain::{CellStatus, DepositInfo, ErrorTxReceipt},
+    offchain::{CellStatus, DepositInfo},
     packed::{
         AccountMerkleState, BlockInfo, L2Block, L2Transaction, Script, TxReceipt,
         WithdrawalRequest, WithdrawalRequestExtra,
@@ -62,7 +61,7 @@ use crate::{
         p2p::{self, SyncServerState},
         publish::MemPoolPublishService,
     },
-    traits::{MemPoolErrorTxHandler, MemPoolProvider},
+    traits::MemPoolProvider,
     types::EntryList,
     withdrawal::Generator as WithdrawalGenerator,
 };
@@ -86,10 +85,6 @@ pub struct MemPool {
     current_tip: (H256, u64),
     /// generator instance
     generator: Arc<Generator>,
-    /// error tx handler,
-    error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send + Sync>>,
-    /// error tx receipt notifier
-    error_tx_receipt_notifier: Option<NotifyController>,
     /// pending queue, contains executable contents
     pending: HashMap<u32, EntryList>,
     /// memory block
@@ -115,8 +110,6 @@ pub struct MemPoolCreateArgs {
     pub store: Store,
     pub generator: Arc<Generator>,
     pub provider: Box<dyn MemPoolProvider + Send + Sync>,
-    pub error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send + Sync>>,
-    pub error_tx_receipt_notifier: Option<NotifyController>,
     pub config: MemPoolConfig,
     pub node_mode: NodeMode,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
@@ -139,8 +132,6 @@ impl MemPool {
             store,
             generator,
             provider,
-            error_tx_handler,
-            error_tx_receipt_notifier,
             config,
             node_mode,
             dynamic_config_manager,
@@ -195,8 +186,6 @@ impl MemPool {
             store,
             current_tip: tip,
             generator,
-            error_tx_handler,
-            error_tx_receipt_notifier,
             pending,
             mem_block,
             provider,
@@ -1094,34 +1083,6 @@ impl MemPool {
                 L2TX_MAX_CYCLES,
             )
         })?;
-
-        if run_result.exit_code != 0 {
-            let tx_hash: H256 = tx.hash().into();
-            let block_number = self.mem_block.block_info().number().unpack();
-
-            let receipt = ErrorTxReceipt {
-                tx_hash,
-                block_number,
-                return_data: run_result.return_data.clone(),
-                last_log: run_result.logs.last().cloned(),
-                exit_code: run_result.exit_code,
-            };
-            if let Some(ref mut error_tx_handler) = self.error_tx_handler {
-                let t = Instant::now();
-                if let Err(err) = error_tx_handler.handle_error_receipt(receipt.clone()).await {
-                    log::warn!("handle error receipt {}", err);
-                }
-                log::debug!(
-                    "[finalize tx] handle error tx: {}ms",
-                    t.elapsed().as_millis()
-                );
-            }
-            if let Some(notifier) = self.error_tx_receipt_notifier.as_ref() {
-                notifier.notify_new_error_tx_receipt(receipt);
-            }
-
-            return Err(TransactionError::InvalidExitCode(run_result.exit_code).into());
-        }
 
         // check account id of sudt proxy contract creator is from whitelist
         {
