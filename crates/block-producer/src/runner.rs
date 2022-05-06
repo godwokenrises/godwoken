@@ -30,7 +30,6 @@ use gw_mem_pool::{
     pool::{MemPool, MemPoolCreateArgs},
     spawn_sub_mem_pool_task,
     sync::p2p,
-    traits::MemPoolErrorTxHandler,
 };
 use gw_p2p_network::P2PNetwork;
 use gw_rpc_client::{
@@ -51,7 +50,7 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::{genesis_info::CKBGenesisInfo, since::EpochNumberWithFraction, wallet::Wallet};
-use gw_web3_indexer::{ErrorReceiptIndexer, Web3Indexer};
+use gw_web3_indexer::Web3Indexer;
 use semver::Version;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
@@ -593,10 +592,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     }
                     None => None,
                 };
-                let error_tx_handler = pg_pool.clone().map(|pool| {
-                    Box::new(ErrorReceiptIndexer::new(pool))
-                        as Box<dyn MemPoolErrorTxHandler + Send + Sync>
-                });
                 let notify_controller = {
                     let opt_ws_listen = config.rpc_server.err_receipt_ws_listen.as_ref();
                     opt_ws_listen.map(|_| NotifyService::new().start())
@@ -615,8 +610,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                         store: base.store.clone(),
                         generator: base.generator.clone(),
                         provider: Box::new(mem_pool_provider),
-                        error_tx_handler,
-                        error_tx_receipt_notifier: notify_controller.clone(),
                         config: config.mem_pool.clone(),
                         node_mode: config.node_mode,
                         dynamic_config_manager: base.dynamic_config_manager.clone(),

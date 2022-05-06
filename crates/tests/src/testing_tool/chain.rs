@@ -367,8 +367,6 @@ pub async fn setup_chain_with_account_lock_manage(
         store: store.clone(),
         generator: Arc::clone(&generator),
         provider: Box::new(provider),
-        error_tx_handler: None,
-        error_tx_receipt_notifier: None,
         config: mem_pool_config,
         node_mode: gw_config::NodeMode::FullNode,
         dynamic_config_manager: Default::default(),

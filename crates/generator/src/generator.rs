@@ -578,10 +578,6 @@ impl Generator {
     ) -> Result<RunResult, TransactionError> {
         let run_result =
             self.unchecked_execute_transaction(chain, state, block_info, raw_tx, max_cycles)?;
-        if 0 != run_result.exit_code {
-            return Err(TransactionError::InvalidExitCode(run_result.exit_code));
-        }
-
         Ok(run_result)
     }
 
