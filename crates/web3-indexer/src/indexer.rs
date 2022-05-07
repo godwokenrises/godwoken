@@ -1,10 +1,7 @@
 use std::{collections::HashSet, convert::TryInto};
 
 use crate::{
-    helper::{
-        account_script_hash_to_eth_address, hex, parse_log, GwLog, PolyjuiceArgs,
-        GW_LOG_POLYJUICE_SYSTEM,
-    },
+    helper::{account_script_hash_to_eth_address, hex, PolyjuiceArgs},
     types::{
         Block as Web3Block, Log as Web3Log, Transaction as Web3Transaction,
         TransactionWithLogs as Web3TransactionWithLogs,
@@ -28,6 +25,7 @@ use gw_types::{
     },
     U256,
 };
+use gw_utils::script_log::{parse_log, GwLog, GW_LOG_POLYJUICE_SYSTEM};
 use rust_decimal::{prelude::ToPrimitive, Decimal};
 use sqlx::types::chrono::{DateTime, NaiveDateTime, Utc};
 use sqlx::PgPool;

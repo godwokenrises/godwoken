@@ -5,7 +5,7 @@ use gw_types::bytes::Bytes;
 use std::{collections::HashMap, fs};
 
 #[cfg(has_asm)]
-use crate::AotCode;
+use crate::types::vm::AotCode;
 
 #[derive(Clone)]
 pub struct Backend {
@@ -89,8 +89,8 @@ impl BackendManage {
     fn aot_compile(&self, code_bytes: &Bytes, vm_version: u32) -> Result<AotCode, ckb_vm::Error> {
         log::info!("Compile AotCode with VMVersion::V{}", vm_version);
         let vm_version = match vm_version {
-            0 => crate::VMVersion::V0,
-            1 => crate::VMVersion::V1,
+            0 => crate::types::vm::VMVersion::V0,
+            1 => crate::types::vm::VMVersion::V1,
             ver => panic!("Unsupport VMVersion: {}", ver),
         };
         let mut aot_machine = ckb_vm::machine::aot::AotCompilingMachine::load(
