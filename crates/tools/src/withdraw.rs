@@ -11,6 +11,7 @@ use ckb_types::{prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity};
 use gw_common::registry_address::RegistryAddress;
 use gw_types::core::ScriptHashType;
 use gw_types::packed::{CellOutput, WithdrawalLockArgs, WithdrawalRequestExtra};
+use gw_types::U256;
 use gw_types::{
     packed::{Byte32, RawWithdrawalRequest, WithdrawalRequest},
     prelude::Pack as GwPack,
@@ -37,7 +38,7 @@ pub async fn withdraw(
     let capacity = parse_capacity(capacity)?;
     let amount: u128 = amount.parse().expect("sUDT amount format error");
     let chain_id: u64 = chain_id.parse().expect("chain_id format error");
-    let fee = parse_capacity(fee)?;
+    let fee: u128 = fee.parse()?;
 
     let scripts_deployment_content = fs::read_to_string(scripts_deployment_path)?;
     let scripts_deployment: ScriptsDeploymentResult =
@@ -132,7 +133,7 @@ fn create_raw_withdrawal_request(
     nonce: u32,
     capacity: u64,
     amount: u128,
-    fee: u64,
+    fee: u128,
     chain_id: u64,
     sudt_script_hash: &H256,
     account_script_hash: &H256,
@@ -180,7 +181,7 @@ fn generate_withdrawal_message_to_sign(
 async fn wait_for_balance_change(
     godwoken_rpc_client: &mut GodwokenRpcClient,
     addr: &RegistryAddress,
-    init_balance: u128,
+    init_balance: U256,
     timeout_secs: u64,
 ) -> Result<()> {
     let retry_timeout = Duration::from_secs(timeout_secs);

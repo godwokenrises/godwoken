@@ -149,7 +149,7 @@ struct RawWithdrawalRequest {
     // layer1 lock to withdraw after challenge period
     owner_lock_hash: Byte32,
     // withdrawal fee, paid to block producer
-    fee: Uint64,
+    fee: Uint128,
 }
 
 vector WithdrawalRequestVec <WithdrawalRequest>;
@@ -237,7 +237,7 @@ struct Fee {
     // registry id
     registry_id: Uint32,
     // amount in CKB
-    amount: Uint64,
+    amount: Uint128,
 }
 
 table CreateAccount {
@@ -260,7 +260,7 @@ table SUDTQuery {
 table SUDTTransfer {
     // Godwoken registry address: (registry_id (4 bytes) | address len(4 bytes) | address)
     to_address: Bytes,
-    amount: Uint128,
+    amount: Uint256,
     // paid fee(ckb)
     fee: Fee,
 }

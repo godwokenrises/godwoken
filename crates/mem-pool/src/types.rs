@@ -1,3 +1,4 @@
+use gw_common::ckb_decimal::CKBCapacity;
 use gw_types::{
     packed::{L2Transaction, WithdrawalRequestExtra},
     prelude::*,
@@ -33,7 +34,7 @@ impl EntryList {
     pub fn remove_lower_nonce_withdrawals(
         &mut self,
         nonce: u32,
-        capacity: u128,
+        capacity: CKBCapacity,
     ) -> Vec<WithdrawalRequestExtra> {
         let mut removed = Vec::default();
 
@@ -49,7 +50,8 @@ impl EntryList {
         // remove lower balance withdrawals
         if let Some(withdrawal) = self.withdrawals.get(0) {
             let withdrawal_capacity: u64 = withdrawal.raw().capacity().unpack();
-            if (withdrawal_capacity as u128) > capacity {
+            let capacity = capacity.to_layer1().unwrap();
+            if withdrawal_capacity > capacity {
                 // TODO instead of remove all withdrawals, put them into future queue
                 removed.extend_from_slice(&self.withdrawals);
                 self.withdrawals.clear();

@@ -341,7 +341,7 @@ mod test {
             .build();
 
         let withdrawal = {
-            let fee = 50u64;
+            let fee = 50u128;
             let raw = RawWithdrawalRequest::new_builder()
                 .nonce(1u32.pack())
                 .capacity((500 * 10u64.pow(8)).pack())

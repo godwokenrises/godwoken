@@ -13,7 +13,7 @@ use gw_generator::{
 };
 use gw_jsonrpc_types::{
     blockchain::Script,
-    ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
+    ckb_jsonrpc_types::{JsonBytes, Uint32},
     godwoken::{
         BackendInfo, BackendType, EoaScript, EoaScriptType, ErrorTxReceipt, GlobalState, GwScript,
         GwScriptType, L2BlockCommittedInfo, L2BlockStatus, L2BlockView, L2BlockWithStatus,
@@ -42,6 +42,7 @@ use gw_traits::CodeStore;
 use gw_types::{
     packed::{self, BlockInfo, Byte32, L2Transaction, RollupConfig, WithdrawalRequestExtra},
     prelude::*,
+    U256,
 };
 use gw_version::Version;
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
@@ -1149,7 +1150,7 @@ async fn get_balance(
     Params(params): Params<GetBalanceParams>,
     store: Data<Store>,
     mem_pool_state: Data<Arc<MemPoolState>>,
-) -> Result<Uint128, RpcError> {
+) -> Result<U256, RpcError> {
     let (serialized_address, sudt_id, block_number) = match params {
         GetBalanceParams::Tip(p) => (p.0, p.1, None),
         GetBalanceParams::Number(p) => p,
@@ -1170,7 +1171,7 @@ async fn get_balance(
             tree.get_sudt_balance(sudt_id.into(), &address)?
         }
     };
-    Ok(balance.into())
+    Ok(balance)
 }
 
 // account_id, key, block_number

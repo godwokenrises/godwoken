@@ -1,10 +1,12 @@
 use crate::error::{AccountError, DepositError, Error, WithdrawalError};
 use crate::sudt::build_l2_sudt_script;
+use gw_common::ckb_decimal::{CKBCapacity, CKB_DECIMAL_POW_EXP};
 use gw_common::registry::context::RegistryContext;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_traits::CodeStore;
 use gw_types::offchain::RollupContext;
+use gw_types::U256;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -47,7 +49,7 @@ pub trait StateExt {
         payer: &RegistryAddress,
         block_producer: &RegistryAddress,
         sudt_id: u32,
-        amount: u128,
+        amount: U256,
     ) -> Result<(), Error>;
 
     fn apply_withdrawal_requests(
@@ -112,7 +114,7 @@ impl<S: State + CodeStore> StateExt for S {
         payer: &RegistryAddress,
         block_producer: &RegistryAddress,
         sudt_id: u32,
-        amount: u128,
+        amount: U256,
     ) -> Result<(), Error> {
         log::debug!(
             "account: 0x{} pay fee to block_producer: 0x{}, sudt_id: {}, amount: {}",
@@ -136,6 +138,8 @@ impl<S: State + CodeStore> StateExt for S {
         let account_script_hash: H256 = request.script().hash().into();
         // mint CKB
         let capacity: u64 = request.capacity().unpack();
+        log::debug!("[generator] deposit capacity {}", capacity);
+
         // NOTE: the address length `20` is a hard-coded value, we may re-visit here to extend more address format
         let address = match self.get_account_id_by_script_hash(&account_script_hash)? {
             Some(_id) => {
@@ -171,10 +175,13 @@ impl<S: State + CodeStore> StateExt for S {
                 addr
             }
         };
-        self.mint_sudt(CKB_SUDT_ACCOUNT_ID, &address, capacity.into())?;
+        // Align CKB to 18 decimals
+        let ckb_amount = CKBCapacity::from_layer1(capacity).to_layer2();
+        self.mint_sudt(CKB_SUDT_ACCOUNT_ID, &address, ckb_amount)?;
         log::debug!(
-            "[generator] mint {} shannons CKB to account {}",
+            "[generator] mint {} shannons * 10^{} CKB to account {}",
             capacity,
+            CKB_DECIMAL_POW_EXP,
             hex::encode(account_script_hash.as_slice()),
         );
         let sudt_script_hash = request.sudt_script_hash().unpack();
@@ -195,7 +202,7 @@ impl<S: State + CodeStore> StateExt for S {
                 return Err(AccountError::InvalidSUDTOperation.into());
             }
             // mint SUDT
-            self.mint_sudt(sudt_id, &address, amount)?;
+            self.mint_sudt(sudt_id, &address, amount.into())?;
             log::debug!(
                 "[generator] mint {} amount sUDT {} to account {}",
                 amount,
@@ -231,22 +238,26 @@ impl<S: State + CodeStore> StateExt for S {
         let capacity: u64 = raw.capacity().unpack();
         // pay fee to block producer
         {
-            let fee: u64 = raw.fee().unpack();
+            let fee: U256 = raw.fee().unpack().into();
             self.pay_fee(
                 &withdrawal_address,
                 block_producer_address,
                 CKB_SUDT_ACCOUNT_ID,
-                fee.into(),
+                fee,
             )?;
         }
         // burn CKB
-        self.burn_sudt(CKB_SUDT_ACCOUNT_ID, &withdrawal_address, capacity.into())?;
+        self.burn_sudt(
+            CKB_SUDT_ACCOUNT_ID,
+            &withdrawal_address,
+            CKBCapacity::from_layer1(capacity).to_layer2(),
+        )?;
         let sudt_id = self
             .get_account_id_by_script_hash(&l2_sudt_script_hash.into())?
             .ok_or(AccountError::UnknownSUDT)?;
         if sudt_id != CKB_SUDT_ACCOUNT_ID {
             // burn sudt
-            self.burn_sudt(sudt_id, &withdrawal_address, amount)?;
+            self.burn_sudt(sudt_id, &withdrawal_address, amount.into())?;
         } else if amount != 0 {
             return Err(WithdrawalError::WithdrawFakedCKB.into());
         }

@@ -11,8 +11,8 @@ use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::registry_address::RegistryAddress;
 use gw_types::packed::{Fee, L2Transaction, RawL2Transaction, SUDTArgs, SUDTTransfer};
 use gw_types::prelude::Pack as GwPack;
+use gw_types::U256;
 use std::path::Path;
-use std::u128;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn transfer(
@@ -26,8 +26,8 @@ pub async fn transfer(
     config_path: &Path,
     scripts_deployment_path: &Path,
 ) -> Result<()> {
-    let amount: u128 = amount.parse().expect("sUDT amount format error");
-    let fee: u64 = fee.parse().expect("fee format error");
+    let amount: U256 = amount.parse().expect("sUDT amount format error");
+    let fee: u128 = fee.parse().expect("fee format error");
 
     let scripts_deployment_content = std::fs::read_to_string(scripts_deployment_path)?;
     let scripts_deployment: ScriptsDeploymentResult =

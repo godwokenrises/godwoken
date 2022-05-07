@@ -63,6 +63,7 @@ mod tests {
     use gw_types::{
         packed::Script,
         prelude::{Builder, Entity, Pack},
+        U256,
     };
 
     use crate::{traits::StateExt, Error};
@@ -171,21 +172,45 @@ mod tests {
         // mint sudt
         let user_a = RegistryAddress::new(0, vec![1u8; 20]);
         let user_b = RegistryAddress::new(0, vec![2u8; 20]);
-        tree.mint_sudt(sudt_id, &user_a, 100).unwrap();
-        assert_eq!(tree.get_sudt_total_supply(sudt_id).unwrap(), 100.into());
-        tree.mint_sudt(sudt_id, &user_a, 230).unwrap();
-        assert_eq!(tree.get_sudt_total_supply(sudt_id).unwrap(), 330.into());
-        tree.mint_sudt(sudt_id, &user_b, 155).unwrap();
-        assert_eq!(tree.get_sudt_total_supply(sudt_id).unwrap(), 485.into());
+        tree.mint_sudt(sudt_id, &user_a, U256::from(100u64))
+            .unwrap();
+        assert_eq!(
+            tree.get_sudt_total_supply(sudt_id).unwrap(),
+            U256::from(100)
+        );
+        tree.mint_sudt(sudt_id, &user_a, U256::from(230u64))
+            .unwrap();
+        assert_eq!(
+            tree.get_sudt_total_supply(sudt_id).unwrap(),
+            U256::from(330)
+        );
+        tree.mint_sudt(sudt_id, &user_b, U256::from(155u64))
+            .unwrap();
+        assert_eq!(
+            tree.get_sudt_total_supply(sudt_id).unwrap(),
+            U256::from(485)
+        );
         // burn sudt
-        tree.burn_sudt(sudt_id, &user_a, 85).unwrap();
-        assert_eq!(tree.get_sudt_total_supply(sudt_id).unwrap(), 400.into());
+        tree.burn_sudt(sudt_id, &user_a, U256::from(85u64)).unwrap();
+        assert_eq!(
+            tree.get_sudt_total_supply(sudt_id).unwrap(),
+            U256::from(400)
+        );
         // overdraft
-        let err = tree.burn_sudt(sudt_id, &user_b, 200).unwrap_err();
+        let err = tree
+            .burn_sudt(sudt_id, &user_b, U256::from(200u64))
+            .unwrap_err();
         assert_eq!(err, gw_common::error::Error::AmountOverflow);
-        assert_eq!(tree.get_sudt_total_supply(sudt_id).unwrap(), 400.into());
-        tree.burn_sudt(sudt_id, &user_b, 100).unwrap();
-        assert_eq!(tree.get_sudt_total_supply(sudt_id).unwrap(), 300.into());
+        assert_eq!(
+            tree.get_sudt_total_supply(sudt_id).unwrap(),
+            U256::from(400)
+        );
+        tree.burn_sudt(sudt_id, &user_b, U256::from(100u64))
+            .unwrap();
+        assert_eq!(
+            tree.get_sudt_total_supply(sudt_id).unwrap(),
+            U256::from(300)
+        );
     }
 
     #[test]

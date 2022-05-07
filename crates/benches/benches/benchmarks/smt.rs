@@ -35,6 +35,7 @@ use gw_types::{
         SubmitTransactions,
     },
     prelude::*,
+    U256,
 };
 use pprof::criterion::{Output, PProfProfiler};
 
@@ -224,11 +225,11 @@ impl BenchExecutionEnvironment {
                 .set(
                     SUDTTransfer::new_builder()
                         .to_address(Bytes::from(to_address.to_bytes()).pack())
-                        .amount(1.pack())
+                        .amount(U256::one().pack())
                         .fee(
                             Fee::new_builder()
                                 .registry_id(ETH_REGISTRY_ACCOUNT_ID.pack())
-                                .amount(1.pack())
+                                .amount(1u128.pack())
                                 .build(),
                         )
                         .build(),
@@ -287,7 +288,7 @@ impl BenchExecutionEnvironment {
                 .mapping_registry_address_to_script_hash(addr.clone(), account_script_hash)
                 .unwrap();
             state
-                .mint_sudt(CKB_SUDT_ACCOUNT_ID, &addr, CKB_BALANCE)
+                .mint_sudt(CKB_SUDT_ACCOUNT_ID, &addr, CKB_BALANCE.into())
                 .unwrap();
 
             Account { id: account_id }

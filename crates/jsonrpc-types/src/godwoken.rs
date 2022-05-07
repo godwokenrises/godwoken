@@ -833,7 +833,7 @@ pub struct RawWithdrawalRequest {
     // layer1 lock to withdraw after challenge period
     pub owner_lock_hash: H256,
     pub chain_id: Uint64,
-    pub fee: Uint64,
+    pub fee: Uint128,
 }
 
 impl From<RawWithdrawalRequest> for packed::RawWithdrawalRequest {
@@ -858,7 +858,7 @@ impl From<RawWithdrawalRequest> for packed::RawWithdrawalRequest {
             .registry_id(registry_id.value().pack())
             .owner_lock_hash(owner_lock_hash.pack())
             .chain_id(chain_id.value().pack())
-            .fee(fee.value().pack())
+            .fee(u128::from(fee).pack())
             .build()
     }
 }
@@ -868,7 +868,7 @@ impl From<packed::RawWithdrawalRequest> for RawWithdrawalRequest {
         let nonce: u32 = raw_withdrawal_request.nonce().unpack();
         let capacity: u64 = raw_withdrawal_request.capacity().unpack();
         let amount: u128 = raw_withdrawal_request.amount().unpack();
-        let fee: u64 = raw_withdrawal_request.fee().unpack();
+        let fee: u128 = raw_withdrawal_request.fee().unpack();
         let chain_id: u64 = raw_withdrawal_request.chain_id().unpack();
         let registry_id: u32 = raw_withdrawal_request.registry_id().unpack();
         Self {

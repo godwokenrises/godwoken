@@ -68,6 +68,7 @@ pub(crate) struct L2Syscalls<'a, S, C> {
     pub(crate) result: &'a mut RunResult,
 }
 
+#[allow(dead_code)]
 fn load_data_u128<Mac: SupportMachine>(machine: &mut Mac, addr: u64) -> Result<u128, VMError> {
     let mut data = [0u8; 16];
     for (i, c) in data.iter_mut().enumerate() {
@@ -472,7 +473,7 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
                 let sudt_id = machine.registers()[A2].to_u8();
                 let amount = {
                     let amount_addr = machine.registers()[A3].to_u64();
-                    load_data_u128(machine, amount_addr)?
+                    load_data_h256(machine, amount_addr)?.to_u256()
                 };
 
                 // TODO record fee payment in the generator context

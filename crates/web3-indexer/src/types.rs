@@ -1,4 +1,5 @@
 use gw_common::H256;
+use gw_types::U256;
 use sha3::{Digest, Keccak256};
 use sqlx::types::chrono::{DateTime, Utc};
 
@@ -26,7 +27,7 @@ pub struct Transaction {
     pub transaction_index: u32,
     pub from_address: Address,
     pub to_address: Option<Address>,
-    pub value: u128,
+    pub value: U256,
     pub nonce: u32,
     pub gas_limit: u128,
     pub gas_price: u128,
@@ -51,7 +52,7 @@ impl Transaction {
         transaction_index: u32,
         from_address: Address,
         to_address: Option<Address>,
-        value: u128,
+        value: U256,
         nonce: u32,
         gas_limit: u128,
         gas_price: u128,

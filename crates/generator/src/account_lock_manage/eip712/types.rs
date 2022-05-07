@@ -196,7 +196,7 @@ pub struct Withdrawal {
     nonce: u32,
     chain_id: u64,
     // withdrawal fee, paid to block producer
-    fee: u64,
+    fee: u128,
     // layer1 lock to withdraw after challenge period
     layer1_owner_lock: Script,
     // CKB amount
@@ -217,6 +217,7 @@ impl EIP712Encode for Withdrawal {
 
     fn encode_data(&self, buf: &mut Vec<u8>) {
         use ethabi::Token;
+
         buf.extend(ethabi::encode(&[Token::Uint(
             self.address.hash_struct().into(),
         )]));
@@ -482,7 +483,7 @@ mod tests {
             },
             nonce: 1,
             chain_id: 1,
-            fee: 1000,
+            fee: 1000u64.into(),
             layer1_owner_lock: Script {
                 code_hash: hex::decode(
                     "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
@@ -514,12 +515,12 @@ mod tests {
             salt: None,
         };
         let message = withdrawal.eip712_message(domain_seperator.hash_struct());
-        let signature: [u8; 65] = hex::decode("edcae58907b6e218b1bc4513afeefb30aad433bcd4a9c937fa53a24bb9abc12a6bc4bfa29ef3f1ee0e58464b1f97ad6bcebd434dbbc2c29539b02539843675681b").unwrap().try_into().unwrap();
+        let signature: [u8; 65] = hex::decode("22cae59f1bfaf58f423d1a414cbcaefd45a89dd54c9142fccbb2473c74f4741b45f77f1f3680b8c0b6362957c8d79f96a683a859ccbf22a6cfc1ebc311b936d301").unwrap().try_into().unwrap();
         let pubkey_hash = Secp256k1Eth::default()
             .recover(message.into(), &signature)
             .unwrap();
         assert_eq!(
-            "e8ae579256c3b84efb76bbb69cb6bcbef1375f00".to_string(),
+            "cc3e7fb0176a0e22a7f675306ceeb61d26eb0dc4".to_string(),
             hex::encode(pubkey_hash)
         );
     }

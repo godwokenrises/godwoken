@@ -26,7 +26,7 @@ pub async fn create_creator_account(
     config_path: &Path,
     scripts_deployment_path: &Path,
 ) -> Result<()> {
-    let fee: u64 = fee_amount.parse().expect("fee format error");
+    let fee: u128 = fee_amount.parse().expect("fee format error");
 
     let scripts_deployment_content = std::fs::read_to_string(scripts_deployment_path)?;
     let scripts_deployment: ScriptsDeploymentResult =

@@ -76,7 +76,7 @@ pub struct FeeEntry {
     /// sender
     pub sender: u32,
     /// fee
-    pub fee: u64,
+    pub fee: u128,
     /// estimate cycles limit
     pub cycles_limit: u64,
 }
@@ -91,9 +91,10 @@ impl Ord for FeeEntry {
     fn cmp(&self, other: &Self) -> Ordering {
         // A / B > C / D => A * D > C * B
         // higher fee rate is priority
-        let ord = (self.fee as u128)
+        let ord = self
+            .fee
             .saturating_mul(other.cycles_limit.into())
-            .cmp(&(other.fee as u128).saturating_mul(self.cycles_limit.into()));
+            .cmp(&other.fee.saturating_mul(self.cycles_limit.into()));
         if ord != Ordering::Equal {
             return ord;
         }
@@ -152,7 +153,7 @@ impl FeeEntry {
 }
 
 struct L2Fee {
-    fee: u64,
+    fee: u128,
     cycles_limit: u64,
 }
 
@@ -178,7 +179,7 @@ fn parse_l2tx_fee_rate(
     match backend_type {
         BackendType::Meta => {
             let meta_args = MetaContractArgs::from_slice(raw_l2tx_args.as_ref())?;
-            let fee: u64 = match meta_args.to_enum() {
+            let fee = match meta_args.to_enum() {
                 MetaContractArgsUnion::CreateAccount(args) => args.fee().amount().unpack(),
             };
             let cycles_limit: u64 = fee_config.meta_cycles_limit;
@@ -187,7 +188,7 @@ fn parse_l2tx_fee_rate(
         }
         BackendType::EthAddrReg => {
             let eth_addr_reg_args = ETHAddrRegArgs::from_slice(raw_l2tx_args.as_ref())?;
-            let fee: u64 = match eth_addr_reg_args.to_enum() {
+            let fee = match eth_addr_reg_args.to_enum() {
                 ETHAddrRegArgsUnion::EthToGw(_) | ETHAddrRegArgsUnion::GwToEth(_) => 0,
                 ETHAddrRegArgsUnion::SetMapping(args) => args.fee().amount().unpack(),
                 ETHAddrRegArgsUnion::BatchSetMapping(args) => args.fee().amount().unpack(),
@@ -199,7 +200,7 @@ fn parse_l2tx_fee_rate(
         }
         BackendType::Sudt => {
             let sudt_args = SUDTArgs::from_slice(raw_l2tx_args.as_ref())?;
-            let fee: u64 = match sudt_args.to_enum() {
+            let fee = match sudt_args.to_enum() {
                 SUDTArgsUnion::SUDTQuery(_) => {
                     // SUDTQuery fee rate is 0
                     0
@@ -221,7 +222,7 @@ fn parse_l2tx_fee_rate(
             let gas_limit = u64::from_le_bytes(poly_args[8..16].try_into()?);
             let gas_price = u128::from_le_bytes(poly_args[16..32].try_into()?);
             Ok(L2Fee {
-                fee: gas_price.saturating_mul(gas_limit.into()).try_into()?,
+                fee: gas_price.saturating_mul(gas_limit.into()),
                 cycles_limit: gas_limit,
             })
         }

@@ -65,7 +65,7 @@ pub async fn create_sudt_account(
     rpc_client: &mut GodwokenRpcClient,
     pk: &H256,
     sudt_type_hash: H256,
-    fee: u64,
+    fee: u128,
     config: &Config,
     deployment: &ScriptsDeploymentResult,
     registry_id: u32,

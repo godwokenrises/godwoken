@@ -30,6 +30,7 @@ use gw_types::packed::{
     WithdrawalRequest, WithdrawalRequestExtra,
 };
 use gw_types::prelude::Pack;
+use gw_types::U256;
 
 const CKB: u64 = 100000000;
 
@@ -141,7 +142,7 @@ async fn test_restore_mem_block() {
                 let to_addr =
                     RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, to_script.hash()[0..20].to_vec());
                 let transfer = SUDTTransfer::new_builder()
-                    .amount((DEPOSIT_CAPACITY as u128 / 2).pack())
+                    .amount(U256::from(DEPOSIT_CAPACITY as u128 / 2).pack())
                     .to_address(Bytes::from(to_addr.to_bytes()).pack())
                     .fee(
                         Fee::new_builder()

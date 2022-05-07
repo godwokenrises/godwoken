@@ -6,6 +6,7 @@ use gw_types::{
     core::AllowedContractType,
     packed::{ETHAddrRegArgsReader, L2Transaction, MetaContractArgsReader, SUDTArgsReader},
     prelude::*,
+    U256,
 };
 
 use crate::error::{AccountError, TransactionValidateError};
@@ -35,7 +36,7 @@ impl TypedTransaction {
 
     /// Got expect cost of the tx, (transfer value + fee).
     /// returns none if tx has no cost, it may happend when we call readonly interface of some Godwoken builtin contracts.
-    pub fn cost(&self) -> Option<u64> {
+    pub fn cost(&self) -> Option<U256> {
         match self {
             Self::EthAddrReg(tx) => tx.cost(),
             Self::Meta(tx) => tx.cost(),
@@ -48,7 +49,7 @@ impl TypedTransaction {
 pub struct EthAddrRegTx(L2Transaction);
 
 impl EthAddrRegTx {
-    pub fn cost(&self) -> Option<u64> {
+    pub fn cost(&self) -> Option<U256> {
         use gw_types::packed::ETHAddrRegArgsUnionReader::*;
 
         let args: Bytes = self.0.raw().args().unpack();
@@ -56,8 +57,8 @@ impl EthAddrRegTx {
 
         match args.to_enum() {
             EthToGw(_) | GwToEth(_) => None,
-            SetMapping(args) => Some(args.fee().amount().unpack()),
-            BatchSetMapping(args) => Some(args.fee().amount().unpack()),
+            SetMapping(args) => Some(args.fee().amount().unpack().into()),
+            BatchSetMapping(args) => Some(args.fee().amount().unpack().into()),
         }
     }
 }
@@ -65,14 +66,14 @@ impl EthAddrRegTx {
 pub struct MetaTx(L2Transaction);
 
 impl MetaTx {
-    pub fn cost(&self) -> Option<u64> {
+    pub fn cost(&self) -> Option<U256> {
         use gw_types::packed::MetaContractArgsUnionReader::*;
 
         let args: Bytes = self.0.raw().args().unpack();
         let args = MetaContractArgsReader::from_slice(&args).ok()?;
 
         match args.to_enum() {
-            CreateAccount(args) => Some(args.fee().amount().unpack()),
+            CreateAccount(args) => Some(args.fee().amount().unpack().into()),
         }
     }
 }
@@ -80,7 +81,7 @@ impl MetaTx {
 pub struct SimpleUDTTx(L2Transaction);
 
 impl SimpleUDTTx {
-    pub fn cost(&self) -> Option<u64> {
+    pub fn cost(&self) -> Option<U256> {
         use gw_types::packed::SUDTArgsUnionReader::*;
 
         let args: Bytes = self.0.raw().args().unpack();
@@ -94,11 +95,10 @@ impl SimpleUDTTx {
                 if to_id == CKB_SUDT_ACCOUNT_ID {
                     // CKB transfer cost: transfer CKB value + fee
                     let value = args.amount().unpack();
-                    let cost = value.checked_add(fee.into())?;
-                    cost.try_into().ok()
+                    value.checked_add(fee.into())
                 } else {
                     // Simple UDT transfer cost: fee
-                    Some(fee)
+                    Some(fee.into())
                 }
             }
         }
@@ -107,7 +107,7 @@ impl SimpleUDTTx {
 
 pub struct PolyjuiceTx(L2Transaction);
 impl PolyjuiceTx {
-    pub fn cost(&self) -> Option<u64> {
+    pub fn cost(&self) -> Option<U256> {
         let args: Bytes = self.0.raw().args().unpack();
         if args.len() < 52 {
             log::error!(

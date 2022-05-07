@@ -17,18 +17,22 @@ use gw_common::state::State;
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, registry_address::RegistryAddress};
 use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore, Store};
 use gw_traits::CodeStore;
-use gw_types::packed::{
-    L2Block, RollupAction, RollupActionReader, RollupActionUnion, Transaction, WitnessArgs,
-};
 use gw_types::{
     bytes::Bytes,
     packed::{SUDTArgs, SUDTArgsUnion, Script},
     prelude::*,
 };
+use gw_types::{
+    packed::{
+        L2Block, RollupAction, RollupActionReader, RollupActionUnion, Transaction, WitnessArgs,
+    },
+    U256,
+};
 use rust_decimal::{prelude::ToPrimitive, Decimal};
 use sqlx::types::chrono::{DateTime, NaiveDateTime, Utc};
 use sqlx::PgPool;
 
+// TODO: Remove web3 indexer
 const MILLIS_PER_SEC: u64 = 1_000;
 pub struct Web3Indexer {
     pool: PgPool,
@@ -146,8 +150,8 @@ impl Web3Indexer {
             .bind(hex(web3_block.hash.as_slice())?)
             .bind(hex(web3_block.parent_hash.as_slice())?)
             .bind(hex(&web3_block.logs_bloom)?)
-            .bind(Decimal::from(web3_block.gas_limit))
-            .bind(Decimal::from(web3_block.gas_used))
+            .bind(format!("0x{:x}", web3_block.gas_limit))
+            .bind(format!("0x{:x}", web3_block.gas_used))
             .bind(web3_block.timestamp)
             .bind(hex(&web3_block.miner)?)
             .bind(Decimal::from(web3_block.size))
@@ -174,16 +178,16 @@ impl Web3Indexer {
             .bind(web3_tx.transaction_index)
             .bind(hex(&web3_tx.from_address)?)
             .bind(web3_to_address_hex)
-            .bind(Decimal::from(web3_tx.value))
+            .bind(format!("0x{:x}", web3_tx.value))
             .bind(Decimal::from(web3_tx.nonce))
-            .bind(Decimal::from(web3_tx.gas_limit))
+            .bind(format!("0x{:x}", web3_tx.gas_limit))
             .bind(Decimal::from(web3_tx.gas_price))
             .bind(hex(&web3_tx.data)?)
             .bind(Decimal::from(web3_tx.v))
             .bind(hex(&web3_tx.r)?)
             .bind(hex(&web3_tx.s)?)
-            .bind(Decimal::from(web3_tx.cumulative_gas_used))
-            .bind(Decimal::from(web3_tx.gas_used))
+            .bind(format!("0x{:x}", web3_tx.cumulative_gas_used))
+            .bind(format!("0x{:x}", web3_tx.gas_used))
             .bind(hex(&web3_tx.logs_bloom)?)
             .bind(web3_contract_address_hex)
             .bind(web3_tx.status)
@@ -245,7 +249,7 @@ impl Web3Indexer {
     ) -> Result<Vec<Web3TransactionWithLogs>> {
         let block_number = l2_block.raw().number().unpack();
         let block_hash: gw_common::H256 = blake2b_256(l2_block.raw().as_slice()).into();
-        let mut cumulative_gas_used = 0;
+        let mut cumulative_gas_used = 0u128;
         let l2_transactions = l2_block.transactions();
         let mut web3_tx_with_logs_vec: Vec<Web3TransactionWithLogs> = vec![];
         let mut tx_index = 0u32;
@@ -376,7 +380,7 @@ impl Web3Indexer {
                     tx_index,
                     from_address,
                     to_address,
-                    polyjuice_args.value,
+                    polyjuice_args.value.into(),
                     nonce,
                     polyjuice_args.gas_limit.into(),
                     polyjuice_args.gas_price,
@@ -454,13 +458,13 @@ impl Web3Indexer {
                         let mut to_address = [0u8; 20];
                         to_address.copy_from_slice(to_address_data.as_ref());
 
-                        let amount: u128 = sudt_transfer.amount().unpack();
-                        let fee: u64 = sudt_transfer.fee().amount().unpack();
+                        let amount: U256 = sudt_transfer.amount().unpack();
+                        let fee = sudt_transfer.fee().amount().unpack();
                         let value = amount;
 
                         // Represent SUDTTransfer fee in web3 style, set gas_price as 1 temporary.
                         let gas_price = 1;
-                        let gas_limit = fee.into();
+                        let gas_limit = fee;
                         cumulative_gas_used += gas_limit;
 
                         let nonce: u32 = l2_transaction.raw().nonce().unpack();
@@ -510,8 +514,8 @@ impl Web3Indexer {
         let block_number = l2_block.raw().number().unpack();
         let block_hash: gw_common::H256 = l2_block.hash().into();
         let parent_hash: gw_common::H256 = l2_block.raw().parent_block_hash().unpack();
-        let mut gas_limit = 0;
-        let mut gas_used = 0;
+        let mut gas_limit = 0u128;
+        let mut gas_used = 0u128;
         for web3_tx_with_logs in web3_tx_with_logs_vec {
             gas_limit += web3_tx_with_logs.tx.gas_limit;
             gas_used += web3_tx_with_logs.tx.gas_used;
