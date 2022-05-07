@@ -644,7 +644,23 @@ impl Generator {
             let tx_type = get_tx_type(self.rollup_context(), state, raw_tx)?;
             let typed_tx = TypedRawTransaction::from_tx(raw_tx.to_owned(), tx_type)
                 .expect("Unknown type of tx");
-            let tx_fee = typed_tx.cost().ok_or(TransactionError::NoCost)?;
+            let tx_fee = match typed_tx {
+                TypedRawTransaction::EthAddrReg(_)
+                | TypedRawTransaction::Meta(_)
+                | TypedRawTransaction::SimpleUDT(_) => typed_tx.cost(),
+                TypedRawTransaction::Polyjuice(ref tx) => {
+                    match read_polyjuice_gas_used(&run_result) {
+                        Some(gas_used) => tx.used_cost(gas_used),
+                        None => {
+                            log::warn!(
+                                "[gw-generator] failed to parse gas_used, use gas_limit instead"
+                            );
+                            typed_tx.cost()
+                        }
+                    }
+                }
+            }
+            .ok_or(TransactionError::NoCost)?;
 
             let mut run_result_state = RunResultState(&mut run_result);
 
@@ -658,7 +674,7 @@ impl Generator {
                 RegistryAddress::from_slice(&block_info.block_producer().raw_data())
                     .unwrap_or_default();
             run_result_state
-                .pay_fee(&payer, &block_producer, CKB_SUDT_ACCOUNT_ID, tx_fee.into())
+                .pay_fee(&payer, &block_producer, CKB_SUDT_ACCOUNT_ID, tx_fee)
                 .map_err(|err| {
                     log::error!(
                         "[gw-generator] failed to pay fee for failure tx, err: {}",
@@ -721,4 +737,33 @@ fn build_challenge_target(
         .target_index(target_index.pack())
         .target_type(target_type.into())
         .build()
+}
+
+fn read_polyjuice_gas_used(run_result: &RunResult) -> Option<u64> {
+    // read polyjuice system log
+    match run_result
+        .logs
+        .iter()
+        .find(|item| u8::from(item.service_flag()) == gw_utils::script_log::GW_LOG_POLYJUICE_SYSTEM)
+        .map(gw_utils::script_log::parse_log)
+    {
+        Some(Ok(polyjuice_system_log)) => {
+            if let gw_utils::script_log::GwLog::PolyjuiceSystem { gas_used, .. } =
+                polyjuice_system_log
+            {
+                return Some(gas_used);
+            } else {
+                log::warn!(
+                    "[gw-generator] read_polyjuice_gas_used: can't find polyjuice system log from logs"
+                )
+            }
+        }
+        Some(Err(err)) => {
+            log::warn!("[gw-generator] read_polyjuice_gas_used: an error happend when parsing polyjuice system log, {}", err);
+        }
+        None => {
+            log::warn!("[gw-generator] read_polyjuice_gas_used: Can't find polyjuice system log");
+        }
+    }
+    None
 }

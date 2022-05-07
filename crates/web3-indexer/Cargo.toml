@@ -16,6 +16,7 @@ gw-common = { path = "../common" }
 gw-generator = { path = "../generator" }
 gw-traits = { path = "../traits" }
 gw-mem-pool = { path = "../mem-pool" }
+gw-utils = { path = "../utils" }
 tokio = "1.15"
 ckb-hash = "0.100.0"
 ckb-types = "0.100.0"

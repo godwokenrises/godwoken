@@ -6,7 +6,8 @@ use rust_decimal::Decimal;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use crate::helper::{hex, parse_log, GwLog};
+use crate::helper::hex;
+use gw_utils::script_log::{parse_log, GwLog};
 
 pub const MAX_RETURN_DATA: usize = 96;
 pub const MAX_ERROR_TX_RECEIPT_BLOCKS: u64 = 3;
