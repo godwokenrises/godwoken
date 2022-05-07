@@ -870,6 +870,8 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         generator,
         tests_rpc_impl: test_mode_control.map(Box::new),
         rollup_config,
+        chain_config: config.chain.to_owned(),
+        consensus_config: config.consensus.to_owned(),
         mem_pool_config: config.mem_pool.clone(),
         node_mode: config.node_mode,
         rpc_client: rpc_client.clone(),
@@ -907,27 +909,36 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     log::info!("{:?} mode", config.node_mode);
 
-    let chain_task = spawn({
-        let ctx = ChainTaskContext {
-            chain_updater,
-            block_producer,
-            challenger,
-            withdrawal_unlocker,
-            cleaner,
-        };
-        let chain_task = ChainTask::create(
-            rpc_client,
-            Duration::from_secs(3),
-            ctx,
-            shutdown_send.clone(),
-            shutdown_event_recv,
-        );
-        async move {
-            if let Err(err) = chain_task.run().await {
-                log::error!("chain polling loop exit unexpected, error: {}", err);
+    let (chain_task_ended_tx, chain_task) = tokio::sync::oneshot::channel::<()>();
+    let rt_handle = tokio::runtime::Handle::current();
+    std::thread::Builder::new()
+        .name("chain-task".into())
+        .spawn({
+            let shutdown_send = shutdown_send.clone();
+            move || {
+                rt_handle.block_on(async move {
+                    let _tx = chain_task_ended_tx;
+                    let ctx = ChainTaskContext {
+                        chain_updater,
+                        block_producer,
+                        challenger,
+                        withdrawal_unlocker,
+                        cleaner,
+                    };
+                    let chain_task = ChainTask::create(
+                        rpc_client,
+                        Duration::from_secs(3),
+                        ctx,
+                        shutdown_send,
+                        shutdown_event_recv,
+                    );
+                    if let Err(err) = chain_task.run().await {
+                        log::error!("chain polling loop exit unexpected, error: {}", err);
+                    }
+                });
             }
-        }
-    });
+        })
+        .unwrap();
 
     let sub_shutdown = shutdown_event.subscribe();
     let rpc_shutdown_send = shutdown_send.clone();

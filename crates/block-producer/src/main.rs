@@ -7,7 +7,7 @@ use clap::{App, Arg, SubCommand};
 use gw_block_producer::{db_block_validator, runner, trace};
 use gw_config::Config;
 use gw_version::Version;
-use std::{fs, path::Path};
+use std::{env, fs, path::Path};
 
 const COMMAND_RUN: &str = "run";
 const COMMAND_EXAMPLE_CONFIG: &str = "generate-example-config";
@@ -130,8 +130,29 @@ async fn run_cli() -> Result<()> {
 }
 
 /// Godwoken entry
-/// Default to number of cpus, pass `worker_threads` to manually configure workers.
-#[tokio::main(flavor = "multi_thread")]
-async fn main() -> Result<()> {
-    run_cli().await
+fn main() -> Result<()> {
+    // Supports SMOL_THREADS for backward compatibility.
+    let threads = match env::var("SMOL_THREADS").or_else(|_| env::var("GODWOKEN_THREADS")) {
+        Err(env::VarError::NotPresent) => num_cpus::get(),
+        Err(e) => return Err(e.into()),
+        Ok(v) => v.parse()?,
+    };
+    // - 1 because ChainTask will have a dedicated thread.
+    let worker_threads = if threads >= 4 { threads - 1 } else { threads };
+    let blocking_threads = match env::var("GODWOKEN_BLOCKING_THREADS") {
+        Err(env::VarError::NotPresent) => {
+            // set blocking_threads to the number of CPUs because the blocking
+            // tasks are CPU bound.
+            threads
+        }
+        Err(e) => return Err(e.into()),
+        Ok(v) => v.parse()?,
+    };
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(worker_threads)
+        .max_blocking_threads(blocking_threads)
+        .enable_all()
+        .build()?;
+
+    rt.block_on(run_cli())
 }

@@ -34,7 +34,7 @@ use gw_types::U256;
 
 const CKB: u64 = 100000000;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_restore_mem_block() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -250,6 +250,8 @@ async fn test_restore_mem_block() {
             rpc_client,
             send_tx_rate_limit: Default::default(),
             server_config: Default::default(),
+            chain_config: Default::default(),
+            consensus_config: Default::default(),
             dynamic_config_manager,
             last_submitted_tx_hash: None,
         };
