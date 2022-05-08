@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
-## [1.1.0] - 2022-04-2x (release candidate)
+## [v1.1.0-beta](https://github.com/nervosnetwork/godwoken-docker-prebuilds/pkgs/container/godwoken-prebuilds/21567994?tag=v1.1.0-beta) - 2022-05-08
 
 > Note that Godwoken v1 is not an upgrade on the existing chain! Instead, v1 will be deployed as a new chain with tools to help users and developers migrate to the new chain.
 
