@@ -1552,21 +1552,27 @@ impl RPCClient {
 
     #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]
     pub async fn get_transaction_status(&self, tx_hash: H256) -> Result<Option<TxStatus>> {
-        let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = self
-            .ckb
-            .request(
-                "get_transaction",
-                Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
-            )
-            .await?;
+        let get_tx = self.ckb.request::<Option<serde_json::Value>>(
+            "get_transaction",
+            Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
+        );
 
-        Ok(
-            tx_with_status.map(|tx_with_status| match tx_with_status.tx_status.status {
-                ckb_jsonrpc_types::Status::Pending => TxStatus::Pending,
-                ckb_jsonrpc_types::Status::Committed => TxStatus::Committed,
-                ckb_jsonrpc_types::Status::Proposed => TxStatus::Proposed,
-            }),
-        )
+        let tx_with_status: ckb_jsonrpc_types::TransactionWithStatus = match get_tx.await? {
+            Some(ret) if ret["transaction"] == serde_json::Value::Null => {
+                log::debug!("get_transaction_status: tx {:x} {:?}", tx_hash.pack(), ret);
+                return Ok(None);
+            }
+            Some(ret) => serde_json::from_value(ret)?,
+            None => return Ok(None),
+        };
+
+        let status = match tx_with_status.tx_status.status {
+            ckb_jsonrpc_types::Status::Pending => TxStatus::Pending,
+            ckb_jsonrpc_types::Status::Committed => TxStatus::Committed,
+            ckb_jsonrpc_types::Status::Proposed => TxStatus::Proposed,
+        };
+
+        Ok(Some(status))
     }
 
     #[instrument(skip_all, fields(tx_hash = %tx.hash().pack()))]
