@@ -84,7 +84,9 @@ impl FinalizedWithdrawalUnlocker {
         for (tx_hash, withdrawal_to_unlock) in self.unlock_txs.iter() {
             match rpc_client.get_transaction_status(*tx_hash).await {
                 Err(err) => {
-                    log::debug!("[unlock withdrawal] get unlock tx failed {}", err);
+                    // Always drop this unlock tx and retry to avoid "lock" withdrawal cell
+                    log::info!("[unlock withdrawal] get unlock tx failed {}, drop it", err);
+                    drop_txs.push(*tx_hash);
                 }
                 Ok(None) => {
                     log::info!("[unlock withdrawal] dropped unlock tx {}", tx_hash.pack());
