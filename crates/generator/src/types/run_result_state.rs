@@ -6,8 +6,11 @@ pub struct RunResultState<'a>(pub &'a mut RunResult);
 
 impl<'a> State for RunResultState<'a> {
     fn get_raw(&self, key: &H256) -> Result<H256, gw_common::error::Error> {
-        let v = self.0.read_values.get(key).cloned().unwrap_or_default();
-        Ok(v)
+        self.0
+            .read_values
+            .get(key)
+            .cloned()
+            .ok_or(gw_common::error::Error::MissingKey)
     }
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), gw_common::error::Error> {
         self.0.write.write_values.insert(key, value);
@@ -15,13 +18,13 @@ impl<'a> State for RunResultState<'a> {
     }
     fn calculate_root(&self) -> Result<H256, gw_common::error::Error> {
         // unsupported operation
-        Err(gw_common::error::Error::InvalidArgs)
+        Err(gw_common::error::Error::MissingKey)
     }
     fn get_account_count(&self) -> Result<u32, gw_common::error::Error> {
         self.0
             .write
             .account_count
-            .ok_or(gw_common::error::Error::InvalidArgs)
+            .ok_or(gw_common::error::Error::MissingKey)
     }
     fn set_account_count(&mut self, count: u32) -> Result<(), gw_common::error::Error> {
         self.0.write.account_count = Some(count);

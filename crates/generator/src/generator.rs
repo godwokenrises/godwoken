@@ -27,7 +27,10 @@ use gw_common::{
     error::Error as StateError,
     h256_ext::H256Ext,
     registry_address::RegistryAddress,
-    state::{build_account_field_key, State, GW_ACCOUNT_NONCE_TYPE},
+    state::{
+        build_account_field_key, build_account_key, build_sudt_key, State, GW_ACCOUNT_NONCE_TYPE,
+        SUDT_KEY_FLAG_BALANCE, SUDT_TOTAL_SUPPLY_KEY,
+    },
     H256,
 };
 use gw_store::{state::state_db::StateContext, transaction::StoreTransaction};
@@ -640,39 +643,63 @@ impl Generator {
             // revert tx
             run_result.revert_write();
 
-            // handle tx fee
-            let tx_type = get_tx_type(self.rollup_context(), state, raw_tx)?;
-            let typed_tx = TypedRawTransaction::from_tx(raw_tx.to_owned(), tx_type)
-                .expect("Unknown type of tx");
-            let tx_fee = match typed_tx {
-                TypedRawTransaction::EthAddrReg(_)
-                | TypedRawTransaction::Meta(_)
-                | TypedRawTransaction::SimpleUDT(_) => typed_tx.cost(),
-                TypedRawTransaction::Polyjuice(ref tx) => {
-                    match read_polyjuice_gas_used(&run_result) {
-                        Some(gas_used) => tx.used_cost(gas_used),
-                        None => {
-                            log::warn!(
-                                "[gw-generator] failed to parse gas_used, use gas_limit instead"
-                            );
-                            typed_tx.cost()
-                        }
-                    }
-                }
-            }
-            .ok_or(TransactionError::NoCost)?;
-
-            let mut run_result_state = RunResultState(&mut run_result);
-
+            // sender address
             let payer = {
                 let script_hash = state.get_script_hash(sender_id)?;
                 state
                     .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &script_hash)?
                     .ok_or(TransactionError::ScriptHashNotFound)?
             };
+
+            // block producer address
             let block_producer =
                 RegistryAddress::from_slice(&block_info.block_producer().raw_data())
                     .unwrap_or_default();
+
+            // add charging fee key-values into run result
+            {
+                let sender_sudt_key = {
+                    let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, &payer);
+                    build_account_key(CKB_SUDT_ACCOUNT_ID, &sudt_key)
+                };
+                let block_producer_sudt_key = {
+                    let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, &block_producer);
+                    build_account_key(CKB_SUDT_ACCOUNT_ID, &sudt_key)
+                };
+                let total_supply_key =
+                    build_account_key(CKB_SUDT_ACCOUNT_ID, &SUDT_TOTAL_SUPPLY_KEY);
+                for raw_key in [sender_sudt_key, block_producer_sudt_key, total_supply_key] {
+                    let raw_value = state.get_raw(&raw_key)?;
+                    run_result.read_values.entry(raw_key).or_insert(raw_value);
+                }
+            }
+
+            // handle tx fee
+            let tx_type = get_tx_type(self.rollup_context(), state, raw_tx)?;
+            let typed_tx = TypedRawTransaction::from_tx(raw_tx.to_owned(), tx_type)
+                .expect("Unknown type of tx");
+            let tx_fee = match typed_tx {
+                TypedRawTransaction::EthAddrReg(tx) => tx.consumed(),
+                TypedRawTransaction::Meta(tx) => tx.consumed(),
+                TypedRawTransaction::SimpleUDT(tx) => tx.consumed(),
+                TypedRawTransaction::Polyjuice(ref tx) => {
+                    let args = tx.extract_tx_args().ok_or(TransactionError::NoCost)?;
+                    let gas_used = match read_polyjuice_gas_used(&run_result) {
+                        Some(gas_used) => gas_used,
+                        None => {
+                            log::warn!(
+                                "[gw-generator] failed to parse gas_used, use gas_limit instead"
+                            );
+                            args.gas_limit
+                        }
+                    };
+                    gw_types::U256::from(gas_used).checked_mul(args.gas_price.into())
+                }
+            }
+            .ok_or(TransactionError::NoCost)?;
+
+            let mut run_result_state = RunResultState(&mut run_result);
+
             run_result_state
                 .pay_fee(&payer, &block_producer, CKB_SUDT_ACCOUNT_ID, tx_fee)
                 .map_err(|err| {

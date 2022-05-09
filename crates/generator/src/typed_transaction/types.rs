@@ -29,7 +29,7 @@ impl TypedRawTransaction {
         Some(tx)
     }
 
-    /// Got expect cost of the tx, (transfer value + fee).
+    /// Got expect cost of the tx, (transfer value + maximum fee).
     /// returns none if tx has no cost, it may happend when we call readonly interface of some Godwoken builtin contracts.
     pub fn cost(&self) -> Option<U256> {
         match self {
@@ -44,7 +44,7 @@ impl TypedRawTransaction {
 pub struct EthAddrRegTx(RawL2Transaction);
 
 impl EthAddrRegTx {
-    pub fn cost(&self) -> Option<U256> {
+    pub fn consumed(&self) -> Option<U256> {
         use gw_types::packed::ETHAddrRegArgsUnionReader::*;
 
         let args: Bytes = self.0.args().unpack();
@@ -56,12 +56,16 @@ impl EthAddrRegTx {
             BatchSetMapping(args) => Some(args.fee().amount().unpack().into()),
         }
     }
+
+    pub fn cost(&self) -> Option<U256> {
+        self.consumed()
+    }
 }
 
 pub struct MetaTx(RawL2Transaction);
 
 impl MetaTx {
-    pub fn cost(&self) -> Option<U256> {
+    pub fn consumed(&self) -> Option<U256> {
         use gw_types::packed::MetaContractArgsUnionReader::*;
 
         let args: Bytes = self.0.args().unpack();
@@ -71,11 +75,30 @@ impl MetaTx {
             CreateAccount(args) => Some(args.fee().amount().unpack().into()),
         }
     }
+
+    pub fn cost(&self) -> Option<U256> {
+        self.consumed()
+    }
 }
 
 pub struct SimpleUDTTx(RawL2Transaction);
 
 impl SimpleUDTTx {
+    pub fn consumed(&self) -> Option<U256> {
+        use gw_types::packed::SUDTArgsUnionReader::*;
+
+        let args: Bytes = self.0.args().unpack();
+        let args = SUDTArgsReader::from_slice(&args).ok()?;
+
+        match args.to_enum() {
+            SUDTQuery(_) => None,
+            SUDTTransfer(args) => {
+                let fee = args.fee().amount().unpack();
+                Some(fee.into())
+            }
+        }
+    }
+
     pub fn cost(&self) -> Option<U256> {
         use gw_types::packed::SUDTArgsUnionReader::*;
 
@@ -100,9 +123,15 @@ impl SimpleUDTTx {
     }
 }
 
+pub struct PolyjuiceTxArgs {
+    pub value: u128,
+    pub gas_price: u128,
+    pub gas_limit: u64,
+}
+
 pub struct PolyjuiceTx(RawL2Transaction);
 impl PolyjuiceTx {
-    fn extract_tx_args(&self) -> Option<(u128, u128, u64)> {
+    pub fn extract_tx_args(&self) -> Option<PolyjuiceTxArgs> {
         let args: Bytes = self.0.args().unpack();
         if args.len() < 52 {
             log::error!(
@@ -133,22 +162,21 @@ impl PolyjuiceTx {
             data.copy_from_slice(&args[32..48]);
             u128::from_le_bytes(data)
         };
-        Some((value, gas_price, gas_limit))
+        Some(PolyjuiceTxArgs {
+            value,
+            gas_price,
+            gas_limit,
+        })
     }
 
-    pub fn used_cost(&self, gas_used: u64) -> Option<U256> {
-        match self.extract_tx_args() {
-            Some((value, gas_price, _gas_limit)) => {
-                let cost = value.checked_add(gas_price.checked_mul(gas_used.into())?)?;
-                cost.try_into().ok()
-            }
-            None => None,
-        }
-    }
-
+    /// Total cost of a tx, sender's balance must sufficient to pay Cost(value + gas_price * gas_limit)
     pub fn cost(&self) -> Option<U256> {
         match self.extract_tx_args() {
-            Some((value, gas_price, gas_limit)) => {
+            Some(PolyjuiceTxArgs {
+                value,
+                gas_price,
+                gas_limit,
+            }) => {
                 let cost = value.checked_add(gas_price.checked_mul(gas_limit.into())?)?;
                 cost.try_into().ok()
             }
