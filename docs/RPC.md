@@ -627,10 +627,6 @@ Response
 
 Get script by script hash.
 
-#### Params
-
-* Script Hash
-
 #### Examples
 
 Request
