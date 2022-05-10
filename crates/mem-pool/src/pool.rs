@@ -197,6 +197,7 @@ impl MemPool {
             mem_pool_state,
             dynamic_config_manager,
         };
+        mem_pool.restore_pending_withdrawals().await?;
 
         // update mem block info
         let snap = mem_pool.mem_pool_state().load();
@@ -1101,6 +1102,30 @@ impl MemPool {
         }
 
         Ok(tx_receipt)
+    }
+
+    async fn restore_pending_withdrawals(&mut self) -> Result<()> {
+        let db = self.store.begin_transaction();
+        let withdrawals_iter = db.get_mem_pool_withdrawal_iter();
+
+        for (withdrawal_hash, withdrawal) in withdrawals_iter {
+            if self.mem_block.withdrawals_set().contains(&withdrawal_hash) {
+                continue;
+            }
+
+            if let Err(err) = self.push_withdrawal_request(withdrawal).await {
+                // Outdated withdrawal in db before bug fix
+                log::info!(
+                    "[mem-pool] withdrawal restore outdated pending {:x} {}, drop it",
+                    withdrawal_hash.pack(),
+                    err
+                );
+                db.remove_mem_pool_withdrawal(&withdrawal_hash)?;
+            }
+        }
+
+        db.commit()?;
+        Ok(())
     }
 
     // Only **ReadOnly** node needs this.
