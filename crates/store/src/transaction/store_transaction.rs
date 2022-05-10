@@ -21,6 +21,7 @@ use gw_db::schema::{
 };
 use gw_db::{error::Error, iter::DBIter, DBIterator, IteratorMode, RocksDBTransaction};
 use gw_db::{DBRawIterator, Direction};
+use gw_types::from_box_should_be_ok;
 use gw_types::packed::{Script, WithdrawalKey};
 use gw_types::{
     packed::{
@@ -612,6 +613,18 @@ impl StoreTransaction {
             reverse_key.as_slice(),
             &[],
         )
+    }
+
+    pub fn get_mem_pool_withdrawal_iter(
+        &self,
+    ) -> impl Iterator<Item = (H256, packed::WithdrawalRequestExtra)> + '_ {
+        self.get_iter(COLUMN_MEM_POOL_WITHDRAWAL, IteratorMode::End)
+            .map(|(key, val)| {
+                (
+                    packed::Byte32Reader::from_slice_should_be_ok(key.as_ref()).unpack(),
+                    from_box_should_be_ok!(packed::WithdrawalRequestExtraReader, val),
+                )
+            })
     }
 }
 
