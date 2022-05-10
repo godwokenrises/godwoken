@@ -1,5 +1,70 @@
 # RPC
 
+## Table of Contents
+
+* [RPC Methods](#rpc-methods)
+    * [Method `gw_ping`](#method-gw_ping)
+    * [Method `gw_get_node_info`](#method-gw_get_node_info)
+    * [Method `gw_get_tip_block_hash`](#method-gw_get_tip_block_hash)
+    * [Method `gw_get_block_hash`](#method-gw_get_block_hash)
+    * [Method `gw_get_block`](#method-gw_get_block)
+    * [Method `gw_get_block_by_number`](#method-gw_get_block_by_number)
+    * [Method `gw_get_block_committed_info`](#method-gw_get_block_committed_info)
+    * [Method `gw_get_balance`](#method-gw_get_balance)
+    * [Method `gw_get_storage_at`](#method-gw_get_storage_at)
+    * [Method `gw_get_account_id_by_script_hash`](#method-gw_get_account_id_by_script_hash)
+    * [Method `gw_get_nonce`](#method-gw_get_nonce)
+    * [Method `gw_get_script`](#method-gw_get_script)
+    * [Method `gw_get_script_hash`](#method-gw_get_script_hash)
+    * [Method `gw_get_script_hash_by_registry_address`](#method-gw_get_script_hash_by_registry_address)
+    * [Method `gw_get_registry_address_by_script_hash`](#method-gw_get_registry_address_by_script_hash)
+    * [Method `gw_get_data`](#method-gw_get_data)
+    * [Method `gw_get_transaction`](#method-gw_get_transaction)
+    * [Method `gw_get_transaction_receipt`](#method-gw_get_transaction_receipt)
+    * [Method `gw_get_withdrawal`](#method-gw_get_withdrawal)
+    * [Method `gw_execute_l2transaction`](#method-gw_execute_l2transaction)
+    * [Method `gw_execute_raw_l2transaction`](#method-gw_execute_raw_l2transaction)
+    * [Method `gw_compute_l2_sudt_script_hash`](#method-gw_compute_l2_sudt_script_hash)
+    * [Method `gw_get_fee_config`](#method-gw_get_fee_config)
+    * [Method `gw_submit_l2transaction`](#method-gw_submit_l2transaction)
+    * [Method `gw_submit_withdrawal_request`](#method-gw_submit_withdrawal_request)
+    * [Method `gw_get_last_submitted_info`](#method-gw_get_last_submitted_info)
+    * [Method `gw_get_mem_pool_state_root`](#method-gw_get_mem_pool_state_root)
+* [RPC Types](#rpc-types)
+    * [Type `Uint32`](#type-uint32)
+    * [Type `Uint64`](#type-uint64)
+    * [Type `Uint128`](#type-uint128)
+    * [Type `Uint256`](#type-uint256)
+    * [Type `H256`](#type-h256)
+    * [Type `JsonBytes`](#type-jsonbytes)
+    * [Type `Backend`](#type-backend)
+    * [Type `NodeInfo`](#type-nodeinfo)
+    * [Type `L2BlockWithStatus`](#type-l2block)
+    * [Type `L2Block`](#type-l2block)
+    * [Type `KVPair`](#type-kvpair)
+    * [Type `RawL2Block`](#type-rawl2block)
+    * [Type `AccountMerkleState`](#type-accountinfo)
+    * [Type `SubmitTransaction`](#type-submittransaction)
+    * [Type `SubmitWithdrawal`](#type-submitwithdrawal)
+    * [Type `L2TransactionWithStatus`](#type-l2transactionwithstatus)
+    * [Type `L2Transaction`](#type-l2transaction)
+    * [Type `RawL2Transaction`](#type-rawl2transaction)
+    * [Type `L2TransactionReceipt`](#type-l2transactionreceipt)
+    * [Type `WithdrawalWithStatus`](#type-withdrawalwithstatus)
+    * [Type `WithdrawalRequestExtra`](#type-withdrawalrequestextra)
+    * [Type `WithdrawalRequest`](#type-withdrawalrequest)
+    * [Type `RawWithdrawalRequest`](#type-rawwithdrawalrequest)
+    * [Type `L2BlockCommittedInfo`](#type-l2blockcommittedinfo)
+    * [Type `LogItem`](#type-logitem)
+    * [Type `LastL2BlockCommittedInfo`](#type-lastl2blockcommittedinfo)
+    * [Type `SerializedRegistryAddress`](#type-serializedregistryaddress)
+    * [Type `SerializedL2Transaction`](#type-serializedmoleculeschema)
+    * [Type `SerializedRawL2Transaction`](#type-serializedmoleculeschema)
+    * [Type `SerializedWithdrawalRequest`](#type-serializedmoleculeschema)
+    * [Type `Script`](#type-script)
+    * [Type `ScriptHashType`](#type-scripthashtype)
+    
+
 ## Methods
 
 ### Method `gw_ping`
@@ -1011,3 +1076,424 @@ Response
     "result": "0xf3349effe912609ab277e227925995070ea8f3e452854852ed7386206371f07d"
 }
 ```
+
+
+
+
+## RPC Types
+
+### Type `Uint32`
+
+The 32-bit unsigned integer type encoded as the 0x-prefixed hex string in JSON.
+
+#### Examples
+
+|  JSON | Decimal Value |
+| --- |--- |
+|  “0x0” | 0 |
+|  “0x10” | 16 |
+|  “10” | Invalid, 0x is required |
+|  “0x01” | Invalid, redundant leading 0 |
+
+### Type `Uint64`
+
+The 64-bit unsigned integer type encoded as the 0x-prefixed hex string in JSON.
+
+#### Examples
+
+|  JSON | Decimal Value |
+| --- |--- |
+|  “0x0” | 0 |
+|  “0x10” | 16 |
+|  “10” | Invalid, 0x is required |
+|  “0x01” | Invalid, redundant leading 0 |
+
+### Type `Uint128`
+
+The 128-bit unsigned integer type encoded as the 0x-prefixed hex string in JSON.
+
+#### Examples
+
+|  JSON | Decimal Value |
+| --- |--- |
+|  “0x0” | 0 |
+|  “0x10” | 16 |
+|  “10” | Invalid, 0x is required |
+|  “0x01” | Invalid, redundant leading 0 |
+
+
+### Type `Uint256`
+
+The 256-bit unsigned integer type encoded as the 0x-prefixed hex string in JSON.
+
+#### Examples
+
+|  JSON | Decimal Value |
+| --- |--- |
+|  “0x0” | 0 |
+|  “0x10” | 16 |
+|  “10” | Invalid, 0x is required |
+|  “0x01” | Invalid, redundant leading 0 |
+
+### Type `H256`
+
+The 32-byte fixed-length binary data.
+
+The name comes from the number of bits in the data.
+
+In JSONRPC, it is encoded as a 0x-prefixed hex string.
+
+#### Fields
+
+`H256` is a JSON object with the following fields.
+
+*   `0`: https://doc.rust-lang.org/1.56.1/std/primitive.array.html - Converts `Self` to a byte slice.
+
+### Type `JsonBytes`
+
+Variable-length binary encoded as a 0x-prefixed hex string in JSON.
+
+#### Example
+
+|  JSON | Binary |
+| --- |--- |
+|  “0x” | Empty binary |
+|  “0x00” | Single byte 0 |
+|  “0x636b62” | 3 bytes, UTF-8 encoding of ckb |
+|  “00” | Invalid, 0x is required |
+|  “0x0” | Invalid, each byte requires 2 digits |
+
+
+### Type `Backend`
+
+#### Fields
+
+`Backend` is a JSON object with the following fields.
+
+*   `validator_code_hash`: [`H256`](#type-h256) - Validator script's code hash
+
+*   `generator_code_hash`: [`H256`](#type-h256) - Generator script's code hash
+
+*   `validator_script_type_hash`: [`H256`](#type-h256) - Validate script's hash (script.hash_type = type)
+
+
+### Type `NodeInfo`
+
+
+#### Fields
+
+`NodeInfo` is a JSON object with the following fields.
+
+*   `backends`: [`Backend[]`](#type-backend) - Backend infos
+
+*   `version`: `string` - Version of current godwoken node
+
+
+### Type `L2BlockWithStatus`
+
+#### Fields
+
+`L2BlockWithStatus` is a JSON object with the following fields.
+
+*   `block`: [`L2Block`](#type-l2block) - L2 block
+
+*   `status`: `finalized` `|` `unfinalized` `|` `reverted` - L2 block status
+    * `finalized`: Block already finalized
+
+    * `unfinalized`: Block not already finalized
+
+    * `reverted`: Block has already reverted
+
+
+### Type `L2Block`
+
+### Fields
+
+`L2Block` is a JSON object with the following fields.
+
+*   `block_proof`: [`JsonBytes`](#type-jsonbytes)
+
+*   `hash`: [`H256`](#type-h256) - Block hash
+
+*   `kv_state`: [`KVPair[]`](#type-kvpair)
+
+*   `kv_state_proof`: [`JsonBytes`](#type-jsonbytes)
+
+*   `raw`: [`RawL2Block`](#type-rawl2block)
+
+*   `transactions`: [`L2Transaction[]`](#type-l2transaction)
+
+*   `withdrawal_requests`: [`WithdrawalRequest[]`](#type-withdrawalrequest)
+
+### Type `KVPair`
+
+
+#### Fields
+
+`KVPair` is a JSON object with the following fields.
+
+*   `k`: [`H256`](#type-h256)
+
+*   `v`: [`H256`](#type-h256)
+
+
+### Type `RawL2Block`
+
+
+#### Fields
+
+`RawL2Block` is a JSON object with the following fields.
+
+*   `block_producer`: [`SerializedRegistryAddress`](#type-serializedregistryaddress) - Block producer's registry address
+
+*   `parent_block_hash`: [`H256`](#type-h256) - Prev block hash
+
+*   `post_account`: [`AccountInfo`](#type-accountinfo)
+
+*   `prev_account`: [`AccountInfo`](#type-accountinfo)
+
+*   `stake_cell_owner_lock_hash`: [`h256`](#type-h256)
+
+*   `state_checkpoint_list`: [`h256[]`](#type-256)
+
+*   `submit_transactions`: [`SubmitTransaction[]`](#type-submittransaction)
+
+*   `submit_withdrawals`: [`SubmitWithdrawal[]`](#type-submitwithdrawal)
+
+*   `timestamp`: [`Uint64`](#type-uint64)
+
+
+### Type `AccountInfo`
+
+
+#### Fields
+
+`AccountInfo` is a JSON object with the following fields.
+
+*   `count`: [`Uint32`](#type-uint32)
+
+*   `merkle_root`: [`H256`](#type-h256)
+
+### Type `AccountMerkleState`
+
+
+#### Fields
+
+`AccountMerkleState` is a JSON object with the following fields.
+
+*   `prev_state_checkpoint`: [`H256`](#type-h256)
+
+*   `tx_count`: [`Uint32`](#type-uint32)
+
+*   `tx_witness_root`: [`H256`](#type-h256)
+
+
+### Type `SubmitWithdrawal`
+
+
+#### Fields
+
+`AccountInfo` is a JSON object with the following fields.
+
+*   `withdrawal_count`: [`Uint32`](#type-uint32)
+
+*   `withdrawal_witness_root`: [`H256`](#type-h256)
+
+
+### Type `L2TransactionWithStatus`
+
+#### Fields
+
+`L2TransactionWithStatus` is a JSON object with the following fields.
+
+*   `transaction`: [`L2Transaction`](#type-l2transaction)
+
+*   `status`: `pending` `|` `committed`
+
+
+
+### Type `L2Transaction`
+
+#### Fields
+
+`L2Transaction` is a JSON object with the following fields.
+
+*   `raw`: [`RawL2Transaction`](#type-rawl2transaction) `|` `null`
+
+*   `signature`: [`JsonBytes`](#type-jsonbytes)
+
+*   `hash`: [`H256`](#type-h256) - Transaction hash
+
+
+### Type `RawL2Transaction`
+
+#### Fields
+
+`RawL2Transaction` is a JSON object with the following fields.
+
+*   `chain_id`: [`Uint64`](#type-uint64)
+
+*   `from_id`: [`Uint32`](#type-uint32)
+
+*   `to_id`: [`Uint32`](#type-uint32)
+
+*   `nonce`: [`Uint32`](#type-uint32)
+
+*   `args`: [`JsonBytes`](#type-jsonbytes)
+
+
+### Type `L2TransactionReceipt`
+
+#### Fields
+
+`L2TransactionReceipt` is a JSON object with the following fields.
+
+*   `tx_witness_hash`: [`H256`](#type-256)
+
+*   `post_state`: [`AccountMerkleState`](#type-accountmerklestate)
+
+*   `read_data_hashes`: [`H256[]`](#type-h256)
+
+*   `logs`: [`LogItem[]`](#type-logitem)
+
+
+### Type `LogItem`
+
+#### Fields
+
+`LogItem` is a JSON object with the following fields.
+
+*   `account_id`: [`Uint32`](#type-uint32)
+
+*   `service_flag`: [`Uint32`](#type-uint32)
+
+*   `data`: [`JsonBytes`](#type-jsonbytes)
+
+
+### Type `WithdrawalWithStatus`
+
+#### Fields
+
+`WithdrawalWithStatus` is a JSON object with the following fields.
+
+*   `withdrawal`: [`WithdrawalRequestExtra`](#type-withdrawalrequestextra) `|` `null`
+
+*   `status`: `pending` `|` `committed`
+
+
+### Type `WithdrawalRequestExtra`
+
+#### Fields
+
+`WithdrawalRequestExtra` is a JSON object with the following fields.
+
+*   `request`: [`WithdrawalRequest`](#type-withdrawalrequest)
+
+*   `owner_lock`: [`Script`](#type-script)
+
+
+### Type `WithdrawalRequest`
+
+#### Fields
+
+`WithdrawalRequest` is a JSON object with the following fields.
+
+*   `raw`: [`RawWithdrawalRequest`](#type-rawwithdrawalrequest)
+
+*   `signature`: [`JsonBytes`](#type-jsonbytes)
+
+
+### Type `RawWithdrawalRequest`
+
+#### Fields
+
+`RawWithdrawalRequest` is a JSON object with the following fields.
+
+*   `nonce`: [`Uint32`](#type-uint32)
+
+*   `capacity`: [`Uint64`](#type-uint64)
+
+*   `amount`: [`Uint128`](#type-uint128)
+
+*   `sudt_script_hash`: [`H256`](#type-h256)
+
+*   `account_script_hash`: [`H256`](#type-h256)
+
+*   `registry_id`: [`Uint32`](#type-uint32)
+
+*   `owner_lock_hash`: [`H256`](#type-h256) - layer1 lock to withdraw after challenge period
+
+*   `chain_id`: [`Uint64`](#type-uint64)
+
+*   `fee`: [`Uint128`](#type-uint128)
+
+
+### Type `L2BlockCommittedInfo`
+
+#### Fields
+
+`L2BlockCommittedInfo` is a JSON object with the following fields.
+
+*   `number`: [`Uint64`](#type-uint64)
+
+*   `block_hash`: [`H256`](#type-h256)
+
+*   `transaction_hash`: [`H256`](#type-h256)
+
+
+### Type `LastL2BlockCommittedInfo`
+
+#### Fields
+
+`LastL2BlockCommittedInfo` is a JSON object with the following fields.
+
+*   `transaction_hash`: [`H256`](#type-h256)
+
+
+### Type `SerializedRegistryAddress`
+
+It's a 0x-prefix hex string in JSON.
+
+#### Examples
+
+```
+registry_address = 0x0200000014000000bb1d13450cfa630728d0390c99957c6948bf7d19
+```
+
+#### Fields
+
+```
+registry_address = 0x | registry_account id | address_size | address
+```
+
+*   `registry_account_id`:
+    * 4-byte, Uint32 in little endian format.
+    * In example, it's `02000000`, means id is `2`.
+    * The builtin ID is 2 for Ethereum registry.
+
+*   `address_size`:
+    * Byte length of address, 4-byte, Uint32 in little endian format.
+    * In example, byte length is `14000000`, means address length is 20-byte.
+
+*   `address`: [`JsonBytes`](#type-jsonbytes)
+    * Addess such as Eth Address.
+    * In example, address is `bb1d13450cfa630728d0390c99957c6948bf7d19`
+
+
+### Type `SerializedMoleculeSchema`
+
+It's a 0x-prefix hex string in JSON. Serialized by [Molecule](https://github.com/nervosnetwork/molecule).
+
+See schema files for more info.
+
+*   `SerializedL2Transaction`: [schema](../crates/types/schemas/godwoken.mol#L78-L81)
+*   `SerializedRawL2Transaction`: [schema](../crates/types/schemas/godwoken.mol#L69-L76)
+*   `SerializedWithdrawRequest`: [schema](../crates/types/schemas/godwoken.mol#L157-L160)
+
+### Type `Script`
+
+More info [CKB RPC](https://github.com/nervosnetwork/ckb/blob/develop/rpc/README.md#type-script)
+
+### Type `ScriptHashType`
+
+More info [CKB RPC](https://github.com/nervosnetwork/ckb/blob/develop/rpc/README.md#type-scripthashtype)
