@@ -658,11 +658,14 @@ impl Generator {
         }
 
         // check write data bytes
-        let write_data_bytes: usize = run_result.write_data.values().map(|data| data.len()).sum();
-        if write_data_bytes > MAX_WRITE_DATA_BYTES_LIMIT {
+        if let Some(data) = run_result
+            .write_data
+            .values()
+            .find(|data| data.len() > MAX_WRITE_DATA_BYTES_LIMIT)
+        {
             return Err(TransactionError::ExceededMaxWriteData {
                 max_bytes: MAX_WRITE_DATA_BYTES_LIMIT,
-                used_bytes: write_data_bytes,
+                used_bytes: data.len(),
             });
         }
         // check read data bytes
