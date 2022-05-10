@@ -1,5 +1,7 @@
 # Quick Start
 
+Before continue, please check the [kicker](https://github.com/RetricSu/godwoken-kicker) project, which is a recommended tool to fast start a development environment. If you still want to mannually deploy a environment please continue to read this document.
+
 ## Requirements
 
 - Install [ckb](https://github.com/nervosnetwork/ckb)(v0.100.0 or above), run ckb and ckb-miner
