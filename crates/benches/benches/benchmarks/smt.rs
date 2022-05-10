@@ -244,17 +244,10 @@ impl BenchExecutionEnvironment {
 
             let run_result = self
                 .generator
-                .execute_transaction(
-                    &self.chain,
-                    &state,
-                    &block_info,
-                    &raw_tx,
-                    L2TX_MAX_CYCLES,
-                    None,
-                )
+                .execute_transaction(&self.chain, &state, &block_info, &raw_tx, L2TX_MAX_CYCLES)
                 .unwrap();
 
-            state.apply_run_result(&run_result).unwrap();
+            state.apply_run_result(&run_result.write).unwrap();
 
             from_id += 1;
             if from_id > end_account_id {
