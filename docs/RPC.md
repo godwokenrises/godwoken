@@ -4,7 +4,6 @@
 
 * [RPC Methods](#rpc-methods)
     * [Method `gw_ping`](#method-gw_ping)
-    * [Method `gw_get_node_info`](#method-gw_get_node_info)
     * [Method `gw_get_tip_block_hash`](#method-gw_get_tip_block_hash)
     * [Method `gw_get_block_hash`](#method-gw_get_block_hash)
     * [Method `gw_get_block`](#method-gw_get_block)
@@ -26,10 +25,13 @@
     * [Method `gw_execute_raw_l2transaction`](#method-gw_execute_raw_l2transaction)
     * [Method `gw_compute_l2_sudt_script_hash`](#method-gw_compute_l2_sudt_script_hash)
     * [Method `gw_get_fee_config`](#method-gw_get_fee_config)
+    * [Method `gw_get_mem_pool_state_root`](#method-gw_get_mem_pool_state_root)
+    * [Method `gw_get_mem_pool_state_ready`](#method-gw_get_mem_pool_state_ready)
+    * [Method `gw_get_node_info`](#method-gw_get_node_info)
+    * [Method `gw_reload_config`](#method-gw_reload_config)
     * [Method `gw_submit_l2transaction`](#method-gw_submit_l2transaction)
     * [Method `gw_submit_withdrawal_request`](#method-gw_submit_withdrawal_request)
     * [Method `gw_get_last_submitted_info`](#method-gw_get_last_submitted_info)
-    * [Method `gw_get_mem_pool_state_root`](#method-gw_get_mem_pool_state_root)
 * [RPC Types](#rpc-types)
     * [Type `Uint32`](#type-uint32)
     * [Type `Uint64`](#type-uint64)
@@ -39,6 +41,10 @@
     * [Type `JsonBytes`](#type-jsonbytes)
     * [Type `Backend`](#type-backend)
     * [Type `NodeInfo`](#type-nodeinfo)
+    * [Type `EoaScript`](#type-eoascript)
+    * [Type `GwScript`](#type-gwscript)
+    * [Type `RollupCell`](#type-rollupcell)
+    * [Type `NodeRollupConfig`](#type-noderollupconfig)
     * [Type `L2BlockWithStatus`](#type-l2block)
     * [Type `L2Block`](#type-l2block)
     * [Type `KVPair`](#type-kvpair)
@@ -56,7 +62,10 @@
     * [Type `RawWithdrawalRequest`](#type-rawwithdrawalrequest)
     * [Type `L2BlockCommittedInfo`](#type-l2blockcommittedinfo)
     * [Type `LogItem`](#type-logitem)
+    * [Type `RunResult`](#type-runresult)
+    * [Type `FeeConfig`](#type-feeconfig)
     * [Type `LastL2BlockCommittedInfo`](#type-lastl2blockcommittedinfo)
+    * [Type `RegistryAddress`](#type-registryaddress)
     * [Type `SerializedRegistryAddress`](#type-serializedregistryaddress)
     * [Type `SerializedL2Transaction`](#type-serializedmoleculeschema)
     * [Type `SerializedRawL2Transaction`](#type-serializedmoleculeschema)
@@ -68,6 +77,8 @@
 ## Methods
 
 ### Method `gw_ping`
+* `gw_ping()`
+* result: `pong`
 
 Get node info.
 
@@ -95,6 +106,8 @@ Response
 ```
 
 ### Method `gw_get_node_info`
+* params: None
+* result: [`NodeInfo`](#type-nodeinfo)
 
 Get node info.
 
@@ -114,33 +127,154 @@ Request
 Response
 
 ``` json
- {
-    "id": 42,
+{
     "jsonrpc": "2.0",
+    "id": 42,
     "result": {
+        "mode": "fullnode",
+        "version": "1.1.0 f3cdd47",
         "backends": [
             {
-                "generator_code_hash": "0x8ce08586eca43c72c720737af48ec515b1caec8d369dbed71a627f5bcef63eb4",
-                "validator_code_hash": "0x5f7054ae0a66a6a7fc9e45d5339035a620fb42677659cd3d6c90221aa8db47f2",
-                "validator_script_type_hash": "0x6677005599a98f86f003946eba01a21b54ed1f13a09f36b5e8bbcf7586b96b41"
+                "validator_code_hash": "0xb9d9375c0fd4d50ed95019d8307961238316cd18c1fb3faeb15ac0d3c6d76bda",
+                "generator_code_hash": "0xf87824d6723b3c0be51b1213e8b35a6e8587a10f2f27734a344f201bf2ab05ef",
+                "validator_script_type_hash": "0xb6176a6170ea33f8468d61f934c45c57d29cdc775bcd3ecaaec183f04b9f33d9",
+                "backend_type": "sudt"
             },
             {
-                "generator_code_hash": "0x6c14c12165d27ec773438c73143adb051d15f0357084c39e54f84a1bfa79194a",
-                "validator_code_hash": "0x6523b2f1ea42620e40c3be7a64ecb195dfda08ae6106f475c2a38f9dafd27e0b",
-                "validator_script_type_hash": "0x61dbbe7a228d4340a869c81748fed4c3dc5d597bb0fb0c0fa3d17a8230b51440"
+                "validator_code_hash": "0xb94f8adecaa8638318fc62f609431daa225bc22143ce23c03c59c78a78653448",
+                "generator_code_hash": "0x9c64de23b69dc8496879d18156f6e79fa7cae4a9faf67e23e0ab3e7d1687ac35",
+                "validator_script_type_hash": "0x1629b04b49ded9e5747481f985b11cba6cdd4ffc167971a585e96729455ca736",
+                "backend_type": "polyjuice"
             },
             {
-                "generator_code_hash": "0xe0c7e13381bae7973d71b1e9683044714ee8ec28b27e913bad0b3c211fe5877c",
-                "validator_code_hash": "0x8fbb70300b2873f98df2d1a4f74b40a64b7f15b90fb9b835dde8f828585a9835",
-                "validator_script_type_hash": "0xa78176967a0164dc35b9c5b8c83635f65c72a3715db0b589f278507a3937592b"
+                "validator_code_hash": "0x9085bd6a550a9921b46d23ba7d9b0f9f5c5d0c9c00999988cd907ce16015e467",
+                "generator_code_hash": "0xe2ba730569850cca7a56c9a96754bd0bfd784c8f001e997e4512edf572190c4a",
+                "validator_script_type_hash": "0xa30dcbb83ebe571f49122d8d1ce4537679ebf511261c8ffaaa6679bf9fdea3a4",
+                "backend_type": "eth_addr_reg"
+            },
+            {
+                "validator_code_hash": "0x4cf8b2b8b04dab0de276093de71f98592a5d683d42e2aa70110e904b564fc1c3",
+                "generator_code_hash": "0x8c6c44b97d9de23dc0047356fb0b3e258a60e14a1f2bfa8f95ddc7b41985a8e0",
+                "validator_script_type_hash": "0x37b25df86ca495856af98dff506e49f2380d673b0874e13d29f7197712d735e8",
+                "backend_type": "meta"
             }
         ],
-        "version": "0.7.0"
+        "eoa_scripts": [
+            {
+                "type_hash": "0x07521d0aa8e66ef441ebc31204d86bb23fc83e9edc58c19dbb1b0ebe64336ec0",
+                "script": {
+                    "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+                    "hash_type": "type",
+                    "args": "0x66056785e4e989729053508c30d620ead06b377f600eedc0419e6858e459ccfa"
+                },
+                "eoa_type": "eth"
+            }
+        ],
+        "gw_scripts": [
+            {
+                "type_hash": "0x1e44736436b406f8e48a30dfbddcf044feb0c9eebfe63b0f81cb5bb727d84854",
+                "script": {
+                    "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+                    "hash_type": "type",
+                    "args": "0x063555cc66a1c270aafbe9324718232289a462f4d9edfc7a57f9c6e0f8257669"
+                },
+                "script_type": "state_validator"
+            },
+            {
+                "type_hash": "0x50704b84ecb4c4b12b43c7acb260ddd69171c21b4c0ba15f3c469b7d143f6f18",
+                "script": {
+                    "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+                    "hash_type": "type",
+                    "args": "0x86d24e5cb132478005dcf2b59680a9f37011cb54a5947f42f19ba5076bc6594d"
+                },
+                "script_type": "deposit"
+            },
+            {
+                "type_hash": "0x06ae0706bb2d7997d66224741d3ec7c173dbb2854a6d2cf97088796b677269c6",
+                "script": {
+                    "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+                    "hash_type": "type",
+                    "args": "0xbfef6580c1f93b98fa7d33bb3faa63255caba9bfbebfbada5eab4ce195052b9f"
+                },
+                "script_type": "withdraw"
+            },
+            {
+                "type_hash": "0x7f5a09b8bd0e85bcf2ccad96411ccba2f289748a1c16900b0635c2ed9126f288",
+                "script": {
+                    "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+                    "hash_type": "type",
+                    "args": "0x0fc0f22f9a6e000692159c9d5dc633fba7ffcd1f1f2218d23aa2ede96f4b471d"
+                },
+                "script_type": "stake_lock"
+            },
+            {
+                "type_hash": "0x85ae4db0dd83f428a31deb342e4000af37ce2c9645d9e619df00096e3c50a2bb",
+                "script": {
+                    "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+                    "hash_type": "type",
+                    "args": "0xc4695745c69c298c89bc701b6cc8614332c6fd8a2ed160e04748fc6fda636e71"
+                },
+                "script_type": "custodian_lock"
+            },
+            {
+                "type_hash": "0x06ae0706bb2d7997d66224741d3ec7c173dbb2854a6d2cf97088796b677269c6",
+                "script": {
+                    "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+                    "hash_type": "type",
+                    "args": "0x7997689a9038a5487535cd8297d37b39840e140c849efd6f07ecc20ee9b9c244"
+                },
+                "script_type": "challenge_lock"
+            },
+            {
+                "type_hash": "0xc5e5dcf215925f7ef4dfaf5f4b4f105bc321c02776d6e7d52a1db3fcd9d011a4",
+                "script": {
+                    "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+                    "hash_type": "type",
+                    "args": "0x4db75e03349f4f2ec792476035dd1b7376c683130f7e2e74024be2d9ee064511"
+                },
+                "script_type": "l1_sudt"
+            },
+            {
+                "type_hash": "0xb6176a6170ea33f8468d61f934c45c57d29cdc775bcd3ecaaec183f04b9f33d9",
+                "script": {
+                    "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+                    "hash_type": "type",
+                    "args": "0xe9374fd920cd4144ce72ab7ef3405d89e5f8530d586ba986e993f1d285060a7a"
+                },
+                "script_type": "l2_sudt"
+            },
+            {
+                "type_hash": "0x79f90bb5e892d80dd213439eeab551120eb417678824f282b4ffb5f21bad2e1e",
+                "script": {
+                    "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+                    "hash_type": "type",
+                    "args": "0x1b8572b16c07f46a0efed623aea6de05d45985b9a7c1b0b52276da5d9f9615b7"
+                },
+                "script_type": "omni_lock"
+            }
+        ],
+        "rollup_cell": {
+            "type_hash": "0x702359ea7f073558921eb50d8c1c77e92f760c8f8656bde4995f26b8963e2dd8",
+            "type_script": {
+                "code_hash": "0x1e44736436b406f8e48a30dfbddcf044feb0c9eebfe63b0f81cb5bb727d84854",
+                "hash_type": "type",
+                "args": "0x86c7429247beba7ddd6e4361bcdfc0510b0b644131e2afb7e486375249a01802"
+            }
+        },
+        "rollup_config": {
+            "required_staking_capacity": "0x3691d6afc000",
+            "challenge_maturity_blocks": "0x1c2",
+            "finality_blocks": "0x64",
+            "reward_burn_rate": "0x32",
+            "chain_id": "0x116e9"
+        }
     }
 }
 ```
 
 ### Method `gw_get_tip_block_hash`
+* params: None
+* result: [`H256`](#type-h256)
 
 Get hash of the tip block.
 
@@ -168,8 +302,12 @@ Response
 ```
 
 ### Method `gw_get_block_hash`
+* params:
+    * `block_number`: [`Uint64`](#type-uint64)
+* result: [`H256`](#type-h256) `|` `null`
 
 Get block hash by number.
+
 
 #### Examples
 
@@ -195,6 +333,9 @@ Response
 ```
 
 ### Method `gw_get_block`
+* params:
+    * `block_hash`: [`H256`](#type-h256)
+* result: [`L2BlockWithStatus`](#type-h256) `|` `null`
 
 Get block.
 
@@ -207,7 +348,7 @@ Request
     "id": 42,
     "jsonrpc": "2.0",
     "method": "gw_get_block",
-    "params": ["0xbf55ed82cf4b33a83df679b6cba8444a3527b64735d5b5c73f6163c24af525aa"]
+    "params": ["0x4ac339b063e52dac1b845d935788f379ebcdb0e33ecce077519f39929dbc8829"]
 }
 ```
 
@@ -216,38 +357,40 @@ Response
 ``` json
 {
     "jsonrpc": "2.0",
+    "id": 42,
     "result": {
         "block": {
-            "block_proof": "0x4c4f0150d34fd947b81c2c60a7777d87c228e6565a30c653f8bcdda9f6b9c374d7fa96884f015023aefeaf5cedf8a3d5826d69d49e0f814ae3bd201bcbbe40b4b4e18a85ebb6354f015074b9c0407ea1d814c9ce19e65dd948cdb767f4a3189c84a39e82aa2be419e4454ffa",
-            "hash": "0xbf55ed82cf4b33a83df679b6cba8444a3527b64735d5b5c73f6163c24af525aa",
-            "kv_state": [],
-            "kv_state_proof": "0x",
             "raw": {
-                "block_producer_id": "0x0",                                                                                             "number": "0x2a",
-                "parent_block_hash": "0x082e50475067310505e1e2dccc8d88158722858cc43a15e417a4c4210c56ab80",
-                "post_account": {
-                    "count": "0x18",
-                    "merkle_root": "0xf3349effe912609ab277e227925995070ea8f3e452854852ed7386206371f07d"
-                },
+                "number": "0x1",
+                "parent_block_hash": "0x61bcff6f20e8be09bbe8e36092a9cc05dd3fa67e3841e206e8c30ae0dd7032df",
+                "block_producer": "0x0200000014000000715ab282b873b79a7be8b0e8c13c4e8966a52040",
+                "stake_cell_owner_lock_hash": "0xf245705db4fe72be953e4f9ee3808a1700a578341aa80a8b2349c236c4af64e5",
+                "timestamp": "0x180a1e9f622",
                 "prev_account": {
-                    "count": "0x18",
-                    "merkle_root": "0xf3349effe912609ab277e227925995070ea8f3e452854852ed7386206371f07d"
+                    "merkle_root": "0x52baafb94a6b1c43e7361460e3bb926ca6a7ab874cec19ba71a1a5dea501c34f",
+                    "count": "0x3"
                 },
-                "stake_cell_owner_lock_hash": "0x3bab60cef4af81a87b0386f29bbf1dd0f6fe71c9fe1d84ca37096a6284d3bdaf",
-                "state_checkpoint_list": [],
+                "post_account": {
+                    "merkle_root": "0x52baafb94a6b1c43e7361460e3bb926ca6a7ab874cec19ba71a1a5dea501c34f",
+                    "count": "0x3"
+                },
                 "submit_transactions": {
-                    "prev_state_checkpoint": "0x82e15c5f8a97bbce6dc56e6fbf352e7babd5de8b8d9af4b64a76c2d933e5818d",
+                    "tx_witness_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
                     "tx_count": "0x0",
-                    "tx_witness_root": "0x0000000000000000000000000000000000000000000000000000000000000000"
+                    "prev_state_checkpoint": "0xe4c6f7d8dc63058ed833552954f8e1635bdaa9608866dc3eaa26b148de503ba9"
                 },
                 "submit_withdrawals": {
-                    "withdrawal_count": "0x0",
-                    "withdrawal_witness_root": "0x0000000000000000000000000000000000000000000000000000000000000000"
+                    "withdrawal_witness_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    "withdrawal_count": "0x0"
                 },
-                "timestamp": "0x17da80a7770"
+                "state_checkpoint_list": []
             },
+            "kv_state": [],
+            "kv_state_proof": "0x",
             "transactions": [],
-            "withdrawal_requests": []
+            "block_proof": "0x4c5061bcff6f20e8be09bbe8e36092a9cc05dd3fa67e3841e206e8c30ae0dd7032df4fff",
+            "withdrawal_requests": [],
+            "hash": "0x4ac339b063e52dac1b845d935788f379ebcdb0e33ecce077519f39929dbc8829"
         },
         "status": "finalized"
     }
@@ -255,6 +398,9 @@ Response
 ```
 
 ### Method `gw_get_block_by_number`
+* params:
+    * `block_number`: [`Uint64`](#type-uint64)
+* result: [`L2Block`](#type-h256) `|` `null`
 
 Get block by number.
 
@@ -267,7 +413,7 @@ Request
     "id": 42,
     "jsonrpc": "2.0",
     "method": "gw_get_block_by_number",
-    "params": ["0x2a"]
+    "params": ["0x1"]
 }
 ```
 
@@ -276,42 +422,47 @@ Response
 ``` json
 {
     "jsonrpc": "2.0",
+    "id": 42,
     "result": {
-        "block_proof": "0x4c4f0150d34fd947b81c2c60a7777d87c228e6565a30c653f8bcdda9f6b9c374d7fa96884f015023aefeaf5cedf8a3d5826d69d49e0f814ae3bd201bcbbe40b4b4e18a85ebb6354f015074b9c0407ea1d814c9ce19e65dd948cdb767f4a3189c84a39e82aa2be419e4454ffa",
-        "hash": "0xbf55ed82cf4b33a83df679b6cba8444a3527b64735d5b5c73f6163c24af525aa",
-        "kv_state": [],
-        "kv_state_proof": "0x",
         "raw": {
-            "block_producer_id": "0x0",                                                                                             "number": "0x2a",
-            "parent_block_hash": "0x082e50475067310505e1e2dccc8d88158722858cc43a15e417a4c4210c56ab80",
-            "post_account": {
-                "count": "0x18",
-                "merkle_root": "0xf3349effe912609ab277e227925995070ea8f3e452854852ed7386206371f07d"
-            },
+            "number": "0x1",
+            "parent_block_hash": "0x61bcff6f20e8be09bbe8e36092a9cc05dd3fa67e3841e206e8c30ae0dd7032df",
+            "block_producer": "0x0200000014000000715ab282b873b79a7be8b0e8c13c4e8966a52040",
+            "stake_cell_owner_lock_hash": "0xf245705db4fe72be953e4f9ee3808a1700a578341aa80a8b2349c236c4af64e5",
+            "timestamp": "0x180a1e9f622",
             "prev_account": {
-                "count": "0x18",
-                "merkle_root": "0xf3349effe912609ab277e227925995070ea8f3e452854852ed7386206371f07d"
+                "merkle_root": "0x52baafb94a6b1c43e7361460e3bb926ca6a7ab874cec19ba71a1a5dea501c34f",
+                "count": "0x3"
             },
-            "stake_cell_owner_lock_hash": "0x3bab60cef4af81a87b0386f29bbf1dd0f6fe71c9fe1d84ca37096a6284d3bdaf",
-            "state_checkpoint_list": [],
+            "post_account": {
+                "merkle_root": "0x52baafb94a6b1c43e7361460e3bb926ca6a7ab874cec19ba71a1a5dea501c34f",
+                "count": "0x3"
+            },
             "submit_transactions": {
-                "prev_state_checkpoint": "0x82e15c5f8a97bbce6dc56e6fbf352e7babd5de8b8d9af4b64a76c2d933e5818d",
+                "tx_witness_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
                 "tx_count": "0x0",
-                "tx_witness_root": "0x0000000000000000000000000000000000000000000000000000000000000000"
+                "prev_state_checkpoint": "0xe4c6f7d8dc63058ed833552954f8e1635bdaa9608866dc3eaa26b148de503ba9"
             },
             "submit_withdrawals": {
-                "withdrawal_count": "0x0",
-                "withdrawal_witness_root": "0x0000000000000000000000000000000000000000000000000000000000000000"
+                "withdrawal_witness_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                "withdrawal_count": "0x0"
             },
-            "timestamp": "0x17da80a7770"
+            "state_checkpoint_list": []
         },
+        "kv_state": [],
+        "kv_state_proof": "0x",
         "transactions": [],
-        "withdrawal_requests": []
+        "block_proof": "0x4c5061bcff6f20e8be09bbe8e36092a9cc05dd3fa67e3841e206e8c30ae0dd7032df4fff",
+        "withdrawal_requests": [],
+        "hash": "0x4ac339b063e52dac1b845d935788f379ebcdb0e33ecce077519f39929dbc8829"
     }
 }
 ```
 
 ### Method `gw_get_block_committed_info`
+* params:
+    * `block_hash`: [`H256`](#type-h256)
+* result: [`L2BlockCommittedInfo`](#type-l2blockcommittedinfo) `|` `null`
 
 Get block layer1 committed info.
 
@@ -344,14 +495,14 @@ Response
 
 
 ### Method `gw_get_balance`
+* params:
+    * `registry_address`: [`SerializedRegistryAddress`](#type-serializedregistryaddress) - Serialized registry address
+    * `sudt_id`: [`Uint32`](#type-uint32) - Simple UDT account ID
+    * `block_number`(optional): [`Uint64`](#type-uint64) - block number, default is tip
+* result: [`Uint256`](#type-uint256)
 
 Get balance.
 
-#### Params
-
-* Serialized registry address
-* Simple UDT account ID
-* (Optional) block number, default is tip
 #### Examples
 
 Request
@@ -376,14 +527,13 @@ Response
 ```
 
 ### Method `gw_get_storage_at`
+* params:
+    * `account_id`: [`Uint32`](#type-uint32) - Account ID
+    * `key`: [`H256`](#type-h256) - Storage key
+    * `block_number`(optional): [`Uint64`](#type-uint64) - block number, default is tip
+* result: [`H256`](#type-h256)
 
 Get storage at.
-
-#### Params
-
-* Account ID
-* Storage key
-* (Optional) block number, default is tip
 
 #### Examples
 
@@ -409,12 +559,11 @@ Response
 ```
 
 ### Method `gw_get_account_id_by_script_hash`
+* params:
+    * `script_hash`: [`H256`](#type-h256) - Script Hash
+* result: [`Uint32`](#type-uint32) `|` `null`
 
 Get account ID by script hash.
-
-#### Params
-
-* Script Hash
 
 #### Examples
 
@@ -440,13 +589,12 @@ Response
 ```
 
 ### Method `gw_get_nonce`
+* params:
+    * `account_id`: [`H256`](#type-h256) - Account ID
+    * `block_number`(optional): [`Uint64`](#type-uint64) - block number, default is tip
+* result: [`Uint32`](#type-uint32) `|` `null`
 
 Get account nonce.
-
-#### Params
-
-* Account ID
-* (Optional) block number, default is tip
 
 #### Examples
 
@@ -472,6 +620,10 @@ Response
 ```
 
 ### Method `gw_get_script`
+* params:
+    * `script_hash`: [`H256`](#type-h256) - Script Hash
+* result: [`Script`](#type-script) `|` `null`
+
 
 Get script by script hash.
 
@@ -507,12 +659,11 @@ Response
 ```
 
 ### Method `gw_get_script_hash`
+* params:
+    * `account_id`: [`Uint32`](#type-uint32) - Account ID
+* result: [`H256`](#type-h256)
 
 Get script hash.
-
-#### Params
-
-* Account ID
 
 #### Examples
 
@@ -538,12 +689,11 @@ Response
 ```
 
 ### Method `gw_get_script_hash_by_registry_address`
+* params:
+    * `serialized_address`: [`SerializedRegistryAddress`](#type-serializedregistryaddress) - Serialized registry address
+* result: [`H256`](#type-h256) `|` `null`
 
 Get script hash by registry address.
-
-#### Params
-
-* Serialized registry address
 
 #### Examples
 
@@ -569,13 +719,12 @@ Response
 ```
 
 ### Method `gw_get_registry_address_by_script_hash`
+* params:
+    * `script_hash`: [`H256`](#type-h256) - Script hash
+    * `registry_id`: [`Uint32`](#type-uint32) - Registry ID (The builtin ID is 2 for Ethereum registry)
+* result: [`RegistryAddress`](#type-registryaddress) `|` `null`
 
 Get registry address by script hash.
-
-#### Params
-
-* Script hash
-* Registry ID (The builtin ID is 2 for Ethereum registry)
 
 #### Examples
 
@@ -601,12 +750,12 @@ Response
 ```
 
 ### Method `gw_get_data`
+* params:
+    * `data_hash`: [`H256`](#type-h256) - Data Hash
+    * `block_number`(optional): [`Uint64`](#type-uint64) - block number, default is tip
+* result: [`JsonBytes`](#type-jsonbytes) `|` `null`
 
 Get Data.
-
-#### Params
-
-* Data Hash
 
 #### Examples
 
@@ -633,13 +782,12 @@ Response
 
 
 ### Method `gw_get_transaction`
+* params:
+    * `tx_hash`: [`H256`](#type-h256) - Transaction Hash
+    * `verbose`(optional): `Uint8` - 0: Verbose; 1: Only Status. default is 0
+* result: [`L2TransactionWithStatus`](#type-l2transactionwithstatus) `|` `null`
 
 Get transaction.
-
-#### Params
-
-* Transaction Hash
-* (Optional) 0: Verbose; 1: Only Status. default is 0
 
 #### Examples
 
@@ -677,12 +825,12 @@ Response
 ```
 
 ### Method `gw_get_transaction_receipt`
+* params:
+    * `tx_hash`: [`H256`](#type-h256) - Transaction Hash
+* result: [`L2TransactionReceipt`](#type-l2transactionreceipt) `|` `null`
+
 
 Get transaction receipt.
-
-#### Params
-
-* Transaction Hash
 
 #### Examples
 
@@ -734,13 +882,13 @@ Response
 ```
 
 ### Method `gw_get_withdrawal`
+* params:
+    * `withdrawal_hash`: [`H256`](#type-h256) - Withdrawal Hash
+    * `verbose`(optional): `Uint8` - 0: Verbose; 1: Only Status. default is 0
+* result: [`WithdrawalWithStatus`](#type-withdrawalwithstatus) `|` `null`
+
 
 Get withdrawal info.
-
-#### Params
-
-* Withdrawal Hash
-* (Optional) 0: Verbose; 1: Only Status. default is 0
 
 #### Examples
 
@@ -751,7 +899,7 @@ Request
     "id": 42,
     "jsonrpc": "2.0",
     "method": "gw_get_withdrawal",
-    "params": ["0xb57c6da2f803413b5781f8c6508320a0ada61a2992bb59ab38f16da2d02099c1"]
+    "params": ["0x3c4772eeef6d2c43b4ead9db7c049202d1f0b9e1bb075d08da1ab821e42a6859"]
 }
 ```
 
@@ -759,39 +907,42 @@ Response
 
 ``` json
 {
-    "id": 42,
     "jsonrpc": "2.0",
+    "id": 42,
     "result": {
-        "status": "committed",
         "withdrawal": {
-            "raw": {
-                "account_script_hash": "0x333c37400c7a519205554c2e9c3d4f2d750a42f81661dfc4da4ce3e20a6bd23c",
-                "amount": "0x0",
-                "capacity": "0x991c03b00",
-                "fee": {
+            "request": {
+                "raw": {
+                    "nonce": "0x0",
+                    "capacity": "0x9502f9000",
                     "amount": "0x0",
-                    "sudt_id": "0x1"
+                    "sudt_script_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    "account_script_hash": "0x2a4504af3dccb71910d4fd70074de7a6aaea1f3140c97572155a2969e8a1aa16",
+                    "registry_id": "0x2",
+                    "owner_lock_hash": "0x651e4345ce3a3a7c4fcb1f78dc8fac799836da84ac8bf7d6e09f63b428875317",
+                    "chain_id": "0x116e9",
+                    "fee": "0x0"
                 },
-                "nonce": "0x2d5",
-                "owner_lock_hash": "0x9cb93d3362f5d511eb5baa98c9d5da8ada50161798c8800dde4b15b6531595f9",
-                "payment_lock_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-                "sell_amount": "0x0",
-                "sell_capacity": "0x0",
-                "sudt_script_hash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+                "signature": "0x361815da3468b2cd03999252d8f0c16242fa5d619e37dd25259c146fd40c71c51ebd564eb7ee54ba83dbb78ba9ecfbbd6adc06aa426ada1ca96af66711d9a4f71c"
             },
-            "signature": "0x0193740968815ce5a89a1c3a781ce44e0e16bf031d79c66056f56f3621dba5b0103d51bdf471f038feadf9e55fe00d09dd64aa02642b7327ab680d7d9f04f89e01"
-        }
+            "owner_lock": {
+                "code_hash": "0x79f90bb5e892d80dd213439eeab551120eb417678824f282b4ffb5f21bad2e1e",
+                "hash_type": "type",
+                "args": "0x019e18f89a2c541c259b40464fe9f1c8760722797200"
+            }
+        },
+        "status": "committed"
     }
 }
 ```
 
 ### Method `gw_execute_l2transaction`
+* params:
+    * `l2tx`: [`SerializedL2Transaction`](#type-serializedmoleculeschema) - Serialized L2 Transaction
+* result: [`RunResult`](#type-runresult)
+
 
 Execute layer2 transaction.
-
-#### Params
-
-* L2 Transaction
 
 #### Examples
 
@@ -842,12 +993,13 @@ Response
 ```
 
 ### Method `gw_execute_raw_l2transaction`
+* params:
+    * `raw_l2tx`: [`SerializedRawL2Transaction`](#type-serializedmoleculeschema) - Serialized Raw L2 Transaction
+    * `block_number`(optional): [`Uint64`](#type-uint64) - block number, default is tip
+* result: [`RunResult`](#type-runresult)
+
 
 Execute layer2 transaction without signature.
-
-#### Params
-
-* Raw L2 Transaction
 
 #### Examples
 
@@ -897,12 +1049,11 @@ Response
 ```
 
 ### Method `gw_compute_l2_sudt_script_hash`
+* params:
+    * `l1_sudt_script_hash`: [`H256`](#type-h256) - Layer1 Simple UDT type hash
+* result: [`H256`](#type-h256)
 
 Compute layer2 Simple UDT script hash
-
-#### Params
-
-* Layer1 Simple UDT type hash
 
 #### Examples
 
@@ -928,6 +1079,8 @@ Response
 ```
 
 ### Method `gw_get_fee_config`
+* params: None
+* result: [`FeeConfig`](#type-feeconfig)
 
 Get fee config
 
@@ -953,19 +1106,17 @@ Response
     "result": {
         "meta_cycles_limit": "0x4e20",
         "sudt_cycles_limit": "0x4e20",
-        "sudt_fee_rate_weight": [],
         "withdraw_cycles_limit": "0x4e20"
     }
 }
 ```
 
 ### Method `gw_submit_l2transaction`
+* params:
+    * `l2tx`: [`SerializedL2Transaction`](#type-serializdmoleculeschema) - L2 transaction
+* result: [`H256`](#type-h256)
 
 Submit layer2 transaction. This RPC may has rate limit.
-
-#### Params
-
-* L2 transaction
 
 #### Examples
 
@@ -991,12 +1142,11 @@ Response
 ```
 
 ### Method `gw_submit_withdrawal_request`
+* params:
+    * `withdrawal_request`: [`SerializedWithdrawRequest`](#type-serializedmoleculeschema) - L2 withdrawal
+* result: [`H256`](#type-h256)
 
 Submit layer2 withdrawal request
-
-#### Params
-
-* L2 withdrawal
 
 #### Examples
    
@@ -1022,6 +1172,8 @@ Response
 ```
 
 ### Method `gw_get_last_submitted_info`
+* params: None
+* result: [`LastL2BlockCommittedInfo`](#type-lastl2blockcommittedinfo)
 
 Get node last submitted info.
 
@@ -1051,6 +1203,8 @@ Response
 ```
 
 ### Method `gw_get_mem_pool_state_root`
+* params: None
+* result: [`H256`](#type-h256)
 
 Get mem-pool state root.
 
@@ -1077,6 +1231,35 @@ Response
 }
 ```
 
+
+### Method `gw_get_mem_pool_state_ready`
+* params: None
+* result: `true` `|` `false`
+
+Get mem-pool state root.
+
+#### Examples
+
+Request
+
+``` json
+{
+    "id": 42,
+    "jsonrpc": "2.0",
+    "method": "gw_get_mem_pool_state_ready",
+    "params": []
+}
+```
+
+Response
+
+``` json
+{
+    "id": 42,
+    "jsonrpc": "2.0",
+    "result": true
+}
+```
 
 
 
@@ -1184,9 +1367,70 @@ Variable-length binary encoded as a 0x-prefixed hex string in JSON.
 
 `NodeInfo` is a JSON object with the following fields.
 
+*   `mode`: `fullnode` `|` `test` `|` `readonly` - Node mode
+
 *   `backends`: [`Backend[]`](#type-backend) - Backend infos
 
 *   `version`: `string` - Version of current godwoken node
+
+*   `eoa_scripts`: [`EoaScript[]`](#type-eoascript)
+
+*   `gw_scripts`: [`GwScript[]`](#type-gwscript)
+
+*   `rollup_cell`: [`RollupCell`](#type-rollupcell)
+
+*   `rollup_config`: [`NodeRollupConfig`](#type-noderollupconfig)
+
+
+### Type `EoaScript`
+
+#### Fields
+
+`EoaScript` is a JSON object with the following fields.
+
+*   `type_hash`: [`H256`](#type-h256)
+
+*   `script`: [`Script`](#type-script)
+
+*   `eoa_type`: `unknown` `|` `eth`
+
+### Type `GwScript`
+
+#### Fields
+
+`GwScript` is a JSON object with the following fields.
+
+*   `type_hash`: [`H256`](#type-h256)
+
+*   `script`: [`Script`](#type-script)
+
+*   `script_type`: `unknown` `|` `deposit` `|` `withdraw` `|` `state_validator` `|` `stake_lock` `|` `custodian_lock` `|` `challenge_lock` `|` `l1_sudt` `|` `l2_sudt` `|` `omni_lock`
+
+### Type `RollupCell`
+
+#### Fields
+
+`RollupCell` is a JSON object with the following fields.
+
+*   `type_hash`: [`H256`](#type-h256)
+
+*   `type_script`: [`Script`](#type-script)
+
+### Type `NodeRollupConfig`
+
+#### Fields
+
+`NodeRollupConfig` is a JSON object with the following fields.
+
+*   `required_staking_capacity`: [`Uint64`](#type-uint64)
+
+*   `challenge_maturity_blocks`: [`Uint64`](#type-uint64)
+
+*   `finality_blocks`: [`Uint64`](#type-uint64)
+
+*   `reward_burn_rate`: [`Uint32`](#type-uint32)
+
+*   `chain_id`: [`Uint64`](#type-uint64)
 
 
 ### Type `L2BlockWithStatus`
@@ -1369,6 +1613,27 @@ Variable-length binary encoded as a 0x-prefixed hex string in JSON.
 
 *   `data`: [`JsonBytes`](#type-jsonbytes)
 
+### Type `RunResult`
+
+#### Fields
+
+`RunResult` is a JSON object with the following fields.
+
+*   `return_data`: [`JsonBytes`](#type-jsonbytes)
+
+*   `logs`: [`LogItem[]`](#type-logitem)
+
+### Type `FeeConfig`
+
+#### Fields
+
+`FeeConfig` is a JSON object with the following fields.
+
+*   `meta_cycles_limit`: [`Uint64`](#type-uint64)
+
+*   `sudt_cycles_limit`: [`Uint64`](#type-uint64)
+
+*   `withdraw_cycles_limit`: [`Uint64`](#type-uint64)
 
 ### Type `WithdrawalWithStatus`
 
@@ -1449,6 +1714,16 @@ Variable-length binary encoded as a 0x-prefixed hex string in JSON.
 
 *   `transaction_hash`: [`H256`](#type-h256)
 
+
+### Type `RegistryAddress`
+
+#### Fields
+
+`RegistryAddress` is a JSON object with the following fields.
+
+*   `registry_id`: [`Uint32`](#type-uint32)
+
+*   `address`: [`JsonBytes`](#type-jsonbytes)
 
 ### Type `SerializedRegistryAddress`
 
