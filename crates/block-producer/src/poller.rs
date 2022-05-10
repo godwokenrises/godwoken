@@ -1,5 +1,7 @@
 #![allow(clippy::mutable_key_type)]
 
+// TODO: update this for decouple producing and submitting.
+
 use crate::types::ChainEvent;
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::Params as ClientParams;

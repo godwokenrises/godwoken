@@ -70,7 +70,7 @@ pub fn replay_chain(ctx: ChainContext) -> Result<()> {
         if let Some(challenge) = chain.process_block(
             &db,
             block,
-            block_committed_info,
+            Some(block_committed_info),
             global_state,
             deposit_requests,
             Default::default(),

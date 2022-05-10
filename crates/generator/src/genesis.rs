@@ -219,7 +219,7 @@ pub fn init_genesis(
     let prev_txs_state = genesis.as_reader().raw().post_account().to_entity();
     db.insert_block(
         genesis.clone(),
-        genesis_committed_info,
+        Some(genesis_committed_info),
         global_state,
         Vec::new(),
         prev_txs_state,

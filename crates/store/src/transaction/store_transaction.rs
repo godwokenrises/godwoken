@@ -8,24 +8,27 @@ use gw_common::h256_ext::H256Ext;
 use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, H256};
 use gw_db::schema::{
     Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ASSET_SCRIPT,
-    COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSIT_REQUESTS,
-    COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF,
-    COLUMN_BLOCK_STATE_RECORD, COLUMN_BLOCK_STATE_REVERSE_RECORD, COLUMN_INDEX,
-    COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_MEM_POOL_TRANSACTION,
+    COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK, COLUMN_BLOCK_COLLECTED_CUSTODIAN_CELLS,
+    COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
+    COLUMN_BLOCK_ROLLUP_CELL, COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF,
+    COLUMN_BLOCK_STATE_RECORD, COLUMN_BLOCK_STATE_REVERSE_RECORD, COLUMN_BLOCK_SUBMIT_TX,
+    COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_MEM_POOL_TRANSACTION,
     COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
     COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF,
     COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
     COLUMN_TRANSACTION_RECEIPT, COLUMN_WITHDRAWAL, COLUMN_WITHDRAWAL_INFO, META_BLOCK_SMT_ROOT_KEY,
-    META_CHAIN_ID_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY, META_REVERTED_BLOCK_SMT_ROOT_KEY,
-    META_TIP_BLOCK_HASH_KEY,
+    META_CHAIN_ID_KEY, META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY,
+    META_LAST_SUBMITTED_BLOCK_NUMBER_HASH_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
+    META_REVERTED_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
 };
 use gw_db::{error::Error, iter::DBIter, DBIterator, IteratorMode, RocksDBTransaction};
 use gw_db::{DBRawIterator, Direction};
-use gw_types::from_box_should_be_ok;
-use gw_types::packed::{Script, WithdrawalKey};
+use gw_types::packed::NumberHash;
 use gw_types::{
+    from_box_should_be_ok,
     packed::{
-        self, AccountMerkleState, Byte32, ChallengeTarget, TransactionKey, WithdrawalReceipt,
+        self, AccountMerkleState, Byte32, ChallengeTarget, Script, TransactionKey, WithdrawalKey,
+        WithdrawalReceipt,
     },
     prelude::*,
 };
@@ -118,7 +121,7 @@ impl StoreTransaction {
     pub fn insert_block(
         &self,
         block: packed::L2Block,
-        committed_info: packed::L2BlockCommittedInfo,
+        committed_info: Option<packed::L2BlockCommittedInfo>,
         global_state: packed::GlobalState,
         withdrawal_receipts: Vec<WithdrawalReceipt>,
         prev_txs_state: AccountMerkleState,
@@ -130,11 +133,13 @@ impl StoreTransaction {
         debug_assert_eq!(block.withdrawals().len(), withdrawals.len());
         let block_hash = block.hash();
         self.insert_raw(COLUMN_BLOCK, &block_hash, block.as_slice())?;
-        self.insert_raw(
-            COLUMN_L2BLOCK_COMMITTED_INFO,
-            &block_hash,
-            committed_info.as_slice(),
-        )?;
+        if let Some(ref committed_info) = committed_info {
+            self.insert_raw(
+                COLUMN_L2BLOCK_COMMITTED_INFO,
+                &block_hash,
+                committed_info.as_slice(),
+            )?;
+        }
         self.insert_raw(
             COLUMN_BLOCK_GLOBAL_STATE,
             &block_hash,
@@ -273,6 +278,99 @@ impl StoreTransaction {
         )
     }
 
+    pub fn set_last_confirmed_block_number_hash(
+        &self,
+        number_hash: &packed::NumberHashReader,
+    ) -> Result<(), Error> {
+        self.insert_raw(
+            COLUMN_META,
+            META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY,
+            number_hash.as_slice(),
+        )
+        // TODO??: update block committed info.
+    }
+
+    pub fn set_last_submitted_block_number_hash(
+        &self,
+        number_hash: &packed::NumberHashReader,
+    ) -> Result<(), Error> {
+        self.insert_raw(
+            COLUMN_META,
+            META_LAST_SUBMITTED_BLOCK_NUMBER_HASH_KEY,
+            number_hash.as_slice(),
+        )
+    }
+
+    pub fn set_submit_tx(
+        &self,
+        block_number: u64,
+        tx: &packed::TransactionReader,
+    ) -> Result<(), Error> {
+        self.insert_raw(
+            COLUMN_BLOCK_SUBMIT_TX,
+            &block_number.to_be_bytes(),
+            tx.as_slice(),
+        )?;
+        if block_number >= 50 {
+            self.delete(COLUMN_BLOCK_SUBMIT_TX, &(block_number - 50).to_be_bytes())?;
+        }
+        Ok(())
+    }
+
+    pub fn set_rollup_cell(
+        &self,
+        block_number: u64,
+        rollup_cell: &packed::CellInfoReader,
+    ) -> Result<(), Error> {
+        self.insert_raw(
+            COLUMN_BLOCK_ROLLUP_CELL,
+            &block_number.to_be_bytes(),
+            rollup_cell.as_slice(),
+        )?;
+        if block_number >= 50 {
+            self.delete(COLUMN_BLOCK_ROLLUP_CELL, &(block_number - 50).to_be_bytes())?;
+        }
+        Ok(())
+    }
+
+    pub fn set_block_deposit_info_vec(
+        &self,
+        block_number: u64,
+        deposit_info_vec: &packed::DepositInfoVecReader,
+    ) -> Result<(), Error> {
+        self.insert_raw(
+            COLUMN_BLOCK_DEPOSIT_INFO_VEC,
+            &block_number.to_be_bytes(),
+            deposit_info_vec.as_slice(),
+        )?;
+        if block_number >= 50 {
+            self.delete(
+                COLUMN_BLOCK_DEPOSIT_INFO_VEC,
+                &(block_number - 50).to_be_bytes(),
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn set_block_collected_custodian_cells(
+        &self,
+        block_number: u64,
+        collected_custodian_cells: &packed::CollectedCustodianCellsReader,
+    ) -> Result<(), Error> {
+        self.insert_raw(
+            COLUMN_BLOCK_COLLECTED_CUSTODIAN_CELLS,
+            &block_number.to_be_bytes(),
+            collected_custodian_cells.as_slice(),
+        )?;
+        if block_number >= 50 {
+            self.delete(
+                COLUMN_BLOCK_COLLECTED_CUSTODIAN_CELLS,
+                &(block_number - 50).to_be_bytes(),
+            )?;
+        }
+        Ok(())
+    }
+
     pub fn set_reverted_block_smt_root(&self, root: H256) -> Result<(), Error> {
         self.insert_raw(
             COLUMN_META,
@@ -400,6 +498,10 @@ impl StoreTransaction {
     }
 
     /// Delete block from DB
+    ///
+    /// # Panics
+    ///
+    /// If the block is not the “last valid tip block”.
     pub fn detach_block(&self, block: &packed::L2Block) -> Result<(), Error> {
         // check
         {
@@ -444,6 +546,21 @@ impl StoreTransaction {
             parent_block_hash.as_slice(),
         )?;
         self.set_last_valid_tip_block_hash(&parent_block_hash)?;
+
+        // Update last confirmed block to parent if the current last confirmed block is this block.
+        if self
+            .get_last_confirmed_block_number_hash()
+            .map(|nh| nh.number().unpack())
+            == Some(block_number)
+        {
+            let parent_number_hash = NumberHash::new_builder()
+                .number(parent_number.pack())
+                .block_hash(parent_block_hash.pack())
+                .build();
+            self.set_last_confirmed_block_number_hash(&parent_number_hash.as_reader())?
+        }
+
+        // TODO??: update block submit tx and last submitted block.
 
         Ok(())
     }

@@ -2,7 +2,7 @@ use crate::{
     block_producer::{BlockProducer, BlockProducerCreateArgs},
     challenger::{Challenger, ChallengerNewArgs},
     cleaner::Cleaner,
-    poller::ChainUpdater,
+    psc::{PSCContext, ProduceSubmitConfirm},
     test_mode_control::TestModeControl,
     types::ChainEvent,
     withdrawal_unlocker::FinalizedWithdrawalUnlocker,
@@ -70,8 +70,7 @@ const MIN_CKB_VERSION: &str = "0.40.0";
 const EVENT_TIMEOUT_SECONDS: u64 = 30;
 
 struct ChainTaskContext {
-    chain_updater: ChainUpdater,
-    block_producer: Option<BlockProducer>,
+    // chain_updater: ChainUpdater,
     challenger: Option<Challenger>,
     withdrawal_unlocker: Option<FinalizedWithdrawalUnlocker>,
     cleaner: Option<Arc<Cleaner>>,
@@ -82,10 +81,6 @@ struct ChainTask {
     ctx: Arc<tokio::sync::Mutex<ChainTaskContext>>,
     shutdown_event: broadcast::Receiver<()>,
     _shutdown_send: mpsc::Sender<()>,
-    metrics_monitor: tokio_metrics::TaskMonitor,
-    chain_update_metrics_monitor: tokio_metrics::TaskMonitor,
-    block_produce_metrics_monitor: tokio_metrics::TaskMonitor,
-    cleaner_metrics_monitor: tokio_metrics::TaskMonitor,
 }
 
 impl ChainTask {
@@ -97,43 +92,13 @@ impl ChainTask {
         shutdown_event: broadcast::Receiver<()>,
     ) -> Self {
         let ctx = Arc::new(tokio::sync::Mutex::new(ctx));
-        let metrics_monitor = tokio_metrics::TaskMonitor::new();
-        let chain_update_metrics_monitor = tokio_metrics::TaskMonitor::new();
-        let block_produce_metrics_monitor = tokio_metrics::TaskMonitor::new();
-        let cleaner_metrics_monitor = tokio_metrics::TaskMonitor::new();
-        let _metrics_monitor = metrics_monitor.clone();
-        let _chain_update_metrics_monitor = chain_update_metrics_monitor.clone();
-        let _block_produce_metrics_monitor = block_produce_metrics_monitor.clone();
-        let _cleaner_metrics_monitor = cleaner_metrics_monitor.clone();
 
-        tokio::spawn(async move {
-            let chain_intervals = _metrics_monitor.intervals();
-            let chain_update_intervals = _chain_update_metrics_monitor.intervals();
-            let block_produce_intervals = _block_produce_metrics_monitor.intervals();
-            let cleaner_intervals = _cleaner_metrics_monitor.intervals();
-
-            let zip_intervals = block_produce_intervals.zip(cleaner_intervals);
-            let zip_intervals = chain_update_intervals.zip(zip_intervals);
-            let zip_intervals = chain_intervals.zip(zip_intervals);
-
-            for (chain, (chain_update, (block_produce, cleaner))) in zip_intervals {
-                log::info!("chain task metrics: {:#?}", chain);
-                log::info!("chain_update metrics: {:?}", chain_update);
-                log::info!("block_produce metrics: {:?}", block_produce);
-                log::info!("cleaner metrics: {:?}", cleaner);
-                tokio::time::sleep(Duration::from_secs(30)).await;
-            }
-        });
         Self {
             rpc_client,
             poll_interval,
             ctx,
             _shutdown_send: shutdown_send,
             shutdown_event,
-            metrics_monitor,
-            chain_update_metrics_monitor,
-            block_produce_metrics_monitor,
-            cleaner_metrics_monitor,
         }
     }
 
@@ -190,22 +155,6 @@ impl ChainTask {
                 }
             }
 
-            if let Err(err) = self
-                .chain_update_metrics_monitor
-                .instrument(ctx.chain_updater.handle_event(event.clone()))
-                .await
-            {
-                if is_l1_query_error(&err) {
-                    log::error!("[polling] chain_updater event: {} error: {}", event, err);
-                    return Ok(None);
-                }
-                bail!(
-                    "Error occurred when polling chain_updater, event: {}, error: {}",
-                    event,
-                    err
-                );
-            }
-
             if let Some(ref mut challenger) = ctx.challenger {
                 if let Err(err) = challenger.handle_event(event.clone()).await {
                     if is_l1_query_error(&err) {
@@ -220,30 +169,8 @@ impl ChainTask {
                 }
             }
 
-            if let Some(ref mut block_producer) = ctx.block_producer {
-                if let Err(err) = self
-                    .block_produce_metrics_monitor
-                    .instrument(block_producer.handle_event(event.clone()))
-                    .await
-                {
-                    if is_l1_query_error(&err) {
-                        log::error!("[polling] block producer event: {} error: {}", event, err);
-                        return Ok(None);
-                    }
-                    bail!(
-                        "Error occurred when polling block_producer, event: {}, error: {}",
-                        event,
-                        err
-                    );
-                }
-            }
-
             if let Some(ref cleaner) = ctx.cleaner {
-                if let Err(err) = self
-                    .cleaner_metrics_monitor
-                    .instrument(cleaner.handle_event(event.clone()))
-                    .await
-                {
+                if let Err(err) = cleaner.handle_event(event.clone()).await {
                     if is_l1_query_error(&err) {
                         log::error!("[polling] cleaner event: {} error: {}", event, err);
                         return Ok(None);
@@ -322,8 +249,7 @@ impl ChainTask {
             }
 
             if let Some((_tip_number, _tip_hash)) = self
-                .metrics_monitor
-                .instrument(self.sync_next(tip_number, tip_hash, &last_event_time))
+                .sync_next(tip_number, tip_hash, &last_event_time)
                 .await?
             {
                 tip_number = _tip_number;
@@ -653,12 +579,12 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     ));
 
     // create chain updater
-    let chain_updater = ChainUpdater::new(
-        Arc::clone(&chain),
-        rpc_client.clone(),
-        rollup_context.clone(),
-        rollup_type_script.clone(),
-    );
+    // let chain_updater = ChainUpdater::new(
+    //     Arc::clone(&chain),
+    //     rpc_client.clone(),
+    //     rollup_context.clone(),
+    //     rollup_type_script.clone(),
+    // );
 
     let (block_producer, challenger, test_mode_control, withdrawal_unlocker, cleaner) = match config
         .node_mode
@@ -757,7 +683,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 rpc_client: rpc_client.clone(),
                 ckb_genesis_info,
                 config: block_producer_config,
-                debug_config: config.debug.clone(),
                 tests_control: tests_control.clone(),
                 contracts_dep_manager,
             };
@@ -818,7 +743,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     // RPC registry
     let args = RegistryArgs {
-        store,
+        store: store.clone(),
         mem_pool,
         generator,
         tests_rpc_impl: test_mode_control.map(Box::new),
@@ -831,9 +756,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         send_tx_rate_limit: config.dynamic_config.rpc_config.send_tx_rate_limit.clone(),
         server_config: config.rpc_server.clone(),
         dynamic_config_manager,
-        last_submitted_tx_hash: block_producer
-            .as_ref()
-            .map(|bp| bp.last_submitted_tx_hash()),
     };
 
     let rpc_registry = Registry::create(args).await;
@@ -862,6 +784,24 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     log::info!("{:?} mode", config.node_mode);
 
+    if let Some(block_producer) = block_producer {
+        let psc_state = ProduceSubmitConfirm::create(Arc::new(PSCContext {
+            store: store.clone(),
+            block_producer,
+            rpc_client: rpc_client.clone(),
+            chain: chain.clone(),
+        }))
+        .await
+        .context("create ProduceSubmitConfirm")?;
+
+        // TODO: graceful shutdown. And avoid blocking, does this task (and task it spawns) block?
+        tokio::spawn(async move {
+            if let Err(e) = psc_state.run().await {
+                log::error!("ProduceSubmitConfirm error: {:?}", e);
+            }
+        });
+    }
+
     let (chain_task_ended_tx, chain_task) = tokio::sync::oneshot::channel::<()>();
     let rt_handle = tokio::runtime::Handle::current();
     std::thread::Builder::new()
@@ -872,8 +812,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 rt_handle.block_on(async move {
                     let _tx = chain_task_ended_tx;
                     let ctx = ChainTaskContext {
-                        chain_updater,
-                        block_producer,
+                        // chain_updater,
                         challenger,
                         withdrawal_unlocker,
                         cleaner,

@@ -19,7 +19,7 @@ use gw_store::{
 };
 use gw_types::{
     core::Status,
-    offchain::{BlockParam, CollectedCustodianCells},
+    offchain::{BlockParam, CollectedCustodianCells, DepositInfo},
     packed::{
         AccountMerkleState, BlockMerkleState, GlobalState, L2Block, RawL2Block, SubmitTransactions,
         SubmitWithdrawals, WithdrawalRequestExtra,
@@ -32,7 +32,9 @@ use tracing::instrument;
 pub struct ProduceBlockResult {
     pub block: L2Block,
     pub global_state: GlobalState,
+    pub deposit_cells: Vec<DepositInfo>,
     pub withdrawal_extras: Vec<WithdrawalRequestExtra>,
+    pub finalized_custodians: CollectedCustodianCells,
 }
 
 pub struct ProduceBlockParam {
@@ -40,6 +42,7 @@ pub struct ProduceBlockParam {
     pub reverted_block_root: H256,
     pub rollup_config_hash: H256,
     pub block_param: BlockParam,
+    pub finalized_custodians: CollectedCustodianCells,
 }
 
 /// Produce block
@@ -56,13 +59,14 @@ pub fn produce_block(
         stake_cell_owner_lock_hash,
         reverted_block_root,
         rollup_config_hash,
+        finalized_custodians,
         block_param:
             BlockParam {
                 number,
                 block_producer,
                 timestamp,
                 txs,
-                deposits: _,
+                deposits,
                 withdrawals,
                 parent_block,
                 prev_merkle_state,
@@ -169,7 +173,9 @@ pub fn produce_block(
     Ok(ProduceBlockResult {
         block,
         global_state,
+        deposit_cells: deposits,
         withdrawal_extras: withdrawals,
+        finalized_custodians,
     })
 }
 
@@ -186,6 +192,8 @@ pub fn generate_produce_block_param(
         let opt = db.get_block_hash_by_number(tip_block_number)?;
         opt.ok_or_else(|| anyhow!("[produce block] tip block {} not found", tip_block_number))?
     };
+    log::info!("tip block number: {}", tip_block_number);
+    log::info!("tip block hash: {:?}", tip_block_hash);
 
     // generate kv state & merkle proof from tip state
     let chain_state = db.state_tree(StateContext::ReadOnly)?;

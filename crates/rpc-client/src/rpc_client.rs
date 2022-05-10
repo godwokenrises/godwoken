@@ -409,12 +409,13 @@ impl RPCClient {
 
     /// return all lived deposit requests
     /// NOTICE the returned cells may contains invalid cells.
-    #[instrument(skip(self))]
+    #[instrument(skip(self, existing_deposit_out_points))]
     pub async fn query_deposit_cells(
         &self,
         count: usize,
         min_ckb_deposit_capacity: u64,
         min_sudt_deposit_capacity: u64,
+        existing_deposit_out_points: HashSet<OutPoint>,
     ) -> Result<Vec<DepositInfo>> {
         const BLOCKS_TO_SEARCH: u64 = 2000;
 
@@ -497,6 +498,7 @@ impl RPCClient {
                     data,
                 }
             });
+            let cells = cells.filter(|info| !existing_deposit_out_points.contains(&info.out_point));
 
             for cell in cells {
                 // Ensure finalized ckb custodians are clearly mergeable

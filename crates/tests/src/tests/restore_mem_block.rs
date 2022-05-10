@@ -253,7 +253,6 @@ async fn test_restore_mem_block() {
             chain_config: Default::default(),
             consensus_config: Default::default(),
             dynamic_config_manager,
-            last_submitted_tx_hash: None,
         };
 
         Registry::create(args).await

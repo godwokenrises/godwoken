@@ -148,7 +148,6 @@ pub struct RegistryArgs<T> {
     pub chain_config: ChainConfig,
     pub consensus_config: ConsensusConfig,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
-    pub last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
 }
 
 pub struct Registry {
@@ -167,7 +166,6 @@ pub struct Registry {
     chain_config: ChainConfig,
     consensus_config: ConsensusConfig,
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
-    last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
     mem_pool_state: Arc<MemPoolState>,
 }
 
@@ -190,7 +188,6 @@ impl Registry {
             chain_config,
             consensus_config,
             dynamic_config_manager,
-            last_submitted_tx_hash,
         } = args;
 
         let backend_info = get_backend_info(generator.clone());
@@ -236,7 +233,6 @@ impl Registry {
             chain_config,
             consensus_config,
             dynamic_config_manager,
-            last_submitted_tx_hash,
             mem_pool_state,
         }
     }
@@ -308,18 +304,13 @@ impl Registry {
             .with_method("gw_get_mem_pool_state_root", get_mem_pool_state_root)
             .with_method("gw_get_mem_pool_state_ready", get_mem_pool_state_ready)
             .with_method("gw_get_node_info", get_node_info)
-            .with_method("gw_reload_config", reload_config);
+            .with_method("gw_reload_config", reload_config)
+            .with_method("gw_get_last_submitted_info", get_last_submitted_info);
 
         if self.node_mode != NodeMode::ReadOnly {
             server = server
                 .with_method("gw_submit_l2transaction", submit_l2transaction)
                 .with_method("gw_submit_withdrawal_request", submit_withdrawal_request);
-        }
-
-        if let Some(last_submitted_tx_hash) = self.last_submitted_tx_hash {
-            server = server
-                .with_data(Data(last_submitted_tx_hash))
-                .with_method("gw_get_last_submitted_info", get_last_submitted_info);
         }
 
         // Tests
@@ -676,9 +667,12 @@ async fn get_block(
         }
 
         // block is on main chain
-        let tip_block_number = db.get_last_valid_tip_block()?.raw().number().unpack();
+        let last_confirmed_block_number = db
+            .get_last_confirmed_block_number_hash()
+            .map(|nh| nh.number().unpack())
+            .unwrap_or(0);
         let block_number = block.raw().number().unpack();
-        if tip_block_number >= block_number + rollup_config.finality_blocks().unpack() {
+        if last_confirmed_block_number >= block_number + rollup_config.finality_blocks().unpack() {
             status = L2BlockStatus::Finalized;
         }
     }
@@ -1596,15 +1590,8 @@ async fn get_node_info(
     })
 }
 
-async fn get_last_submitted_info(
-    last_submitted_tx_hash: Data<tokio::sync::RwLock<H256>>,
-) -> Result<LastL2BlockCommittedInfo> {
-    Ok(LastL2BlockCommittedInfo {
-        transaction_hash: {
-            let hash: [u8; 32] = (*last_submitted_tx_hash.read().await).into();
-            hash.into()
-        },
-    })
+async fn get_last_submitted_info(_store: Data<Store>) -> Result<LastL2BlockCommittedInfo> {
+    todo!()
 }
 
 async fn get_fee_config(

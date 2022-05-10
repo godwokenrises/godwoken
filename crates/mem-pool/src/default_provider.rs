@@ -1,6 +1,6 @@
-use std::time::Duration;
+use std::{collections::HashSet, time::Duration};
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use gw_config::MemBlockConfig;
 use gw_rpc_client::rpc_client::RPCClient;
@@ -32,6 +32,34 @@ impl DefaultMemPoolProvider {
             store,
             mem_block_config,
         }
+    }
+
+    #[instrument(skip_all)]
+    fn get_deposit_out_points_in_local_blocks(&self) -> Result<HashSet<OutPoint>> {
+        // TODO?: perf: don't construct the set each time. Maintain a persistent
+        // copy and only add/remove changed out points.
+        let snap = self.store.get_snapshot();
+        let last_confirmed = snap
+            .get_last_confirmed_block_number_hash()
+            .map(|nh| nh.number().unpack())
+            .unwrap_or_else(|| {
+                snap.get_last_valid_tip_block()
+                    .expect("last valid")
+                    .raw()
+                    .number()
+                    .unpack()
+            });
+        #[allow(clippy::mutable_key_type)]
+        let mut existing_deposit_out_points = HashSet::new();
+        for block_number in last_confirmed + 1.. {
+            if let Some(deposit_info_vec) = snap.get_block_deposit_info_vec(block_number) {
+                existing_deposit_out_points
+                    .extend(deposit_info_vec.into_iter().map(|i| i.cell().out_point()));
+            } else {
+                break;
+            }
+        }
+        Ok(existing_deposit_out_points)
     }
 }
 
@@ -84,6 +112,7 @@ impl MemPoolProvider for DefaultMemPoolProvider {
                 self.mem_block_config.max_deposits,
                 MIN_CKB_DEPOSIT_CAPACITY,
                 MIN_SUDT_DEPOSIT_CAPACITY,
+                self.get_deposit_out_points_in_local_blocks()?,
             )
             .await
     }

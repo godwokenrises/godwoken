@@ -109,6 +109,21 @@ impl Migration for DefaultMigration {
     }
 }
 
+struct AddLastSubmittedAndConfirmedBlocksMigration;
+
+impl Migration for AddLastSubmittedAndConfirmedBlocksMigration {
+    fn migrate(&self, db: RocksDB) -> Result<RocksDB> {
+        // The actual migration happens when PSCState is first created.
+        Ok(db)
+    }
+    fn version(&self) -> &str {
+        "20220517"
+    }
+    fn expensive(&self) -> bool {
+        false
+    }
+}
+
 struct MigrationFactory {
     migration_map: BTreeMap<String, Box<dyn Migration>>,
 }
@@ -117,6 +132,7 @@ fn init_migration_factory() -> MigrationFactory {
     let mut factory = MigrationFactory::create();
     let migration = DefaultMigration;
     factory.insert(Box::new(migration));
+    factory.insert(Box::new(AddLastSubmittedAndConfirmedBlocksMigration));
     factory
 }
 

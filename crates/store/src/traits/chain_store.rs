@@ -6,21 +6,33 @@ use gw_common::H256;
 use gw_db::error::Error;
 use gw_db::schema::{
     COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
-    COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_INDEX,
-    COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_MEM_POOL_TRANSACTION,
-    COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
-    COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
+    COLUMN_BLOCK_COLLECTED_CUSTODIAN_CELLS, COLUMN_BLOCK_DEPOSIT_INFO_VEC,
+    COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_ROLLUP_CELL,
+    COLUMN_BLOCK_SUBMIT_TX, COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO,
+    COLUMN_MEM_POOL_TRANSACTION, COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL,
+    COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
     COLUMN_TRANSACTION_RECEIPT, COLUMN_WITHDRAWAL, COLUMN_WITHDRAWAL_INFO, META_BLOCK_SMT_ROOT_KEY,
-    META_CHAIN_ID_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY, META_REVERTED_BLOCK_SMT_ROOT_KEY,
-    META_TIP_BLOCK_HASH_KEY,
+    META_CHAIN_ID_KEY, META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY,
+    META_LAST_SUBMITTED_BLOCK_NUMBER_HASH_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
+    META_REVERTED_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
 };
 use gw_types::offchain::global_state_from_slice;
-use gw_types::packed::{Script, WithdrawalKey};
+use gw_types::packed::{CellInfo, NumberHash, NumberHashReader};
 use gw_types::{
     from_box_should_be_ok,
-    packed::{self, ChallengeTarget, TransactionKey},
+    packed::{
+        self, ChallengeTarget, CollectedCustodianCells, DepositInfoVec, Script, Transaction,
+        TransactionKey, WithdrawalKey,
+    },
     prelude::*,
 };
+
+/// L2 block status on L1.
+pub enum BlockStatus {
+    Confirmed,
+    Submitted,
+    Local,
+}
 
 pub trait ChainStore: KVStoreRead {
     fn has_genesis(&self) -> Result<bool> {
@@ -73,6 +85,63 @@ pub trait ChainStore: KVStoreRead {
 
         let byte32 = packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref());
         Ok(byte32.unpack())
+    }
+
+    fn get_last_confirmed_block_number_hash(&self) -> Option<NumberHash> {
+        let data = self.get(COLUMN_META, META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY)?;
+        Some(from_box_should_be_ok!(NumberHashReader, data))
+    }
+
+    fn get_last_submitted_block_number_hash(&self) -> Option<NumberHash> {
+        let data = self.get(COLUMN_META, META_LAST_SUBMITTED_BLOCK_NUMBER_HASH_KEY)?;
+        Some(from_box_should_be_ok!(NumberHashReader, data))
+    }
+
+    fn get_block_status(&self, block_number: u64) -> BlockStatus {
+        if Some(block_number)
+            <= self
+                .get_last_confirmed_block_number_hash()
+                .map(|nh| nh.number().unpack())
+        {
+            return BlockStatus::Confirmed;
+        }
+        if Some(block_number)
+            <= self
+                .get_last_submitted_block_number_hash()
+                .map(|nh| nh.number().unpack())
+        {
+            return BlockStatus::Submitted;
+        }
+        BlockStatus::Local
+    }
+
+    fn get_submit_tx(&self, block_number: u64) -> Option<Transaction> {
+        let data = self.get(COLUMN_BLOCK_SUBMIT_TX, &block_number.to_be_bytes())?;
+        Some(from_box_should_be_ok!(packed::TransactionReader, data))
+    }
+
+    fn get_rollup_cell_info(&self, block_number: u64) -> Option<CellInfo> {
+        let data = self.get(COLUMN_BLOCK_ROLLUP_CELL, &block_number.to_be_bytes())?;
+        Some(from_box_should_be_ok!(packed::CellInfoReader, data))
+    }
+
+    fn get_block_deposit_info_vec(&self, block_number: u64) -> Option<DepositInfoVec> {
+        let data = self.get(COLUMN_BLOCK_DEPOSIT_INFO_VEC, &block_number.to_be_bytes())?;
+        Some(from_box_should_be_ok!(packed::DepositInfoVecReader, data))
+    }
+
+    fn get_block_collected_custodian_cells(
+        &self,
+        block_number: u64,
+    ) -> Option<CollectedCustodianCells> {
+        let data = self.get(
+            COLUMN_BLOCK_COLLECTED_CUSTODIAN_CELLS,
+            &block_number.to_be_bytes(),
+        )?;
+        Some(from_box_should_be_ok!(
+            packed::CollectedCustodianCellsReader,
+            data
+        ))
     }
 
     fn get_tip_block_hash(&self) -> Result<H256, Error> {

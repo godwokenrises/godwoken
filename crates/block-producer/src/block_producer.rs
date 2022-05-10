@@ -1,20 +1,19 @@
 #![allow(clippy::mutable_key_type)]
+//! Block producing and block submit tx composing.
 
 use crate::{
     custodian::query_mergeable_custodians,
     produce_block::{
         generate_produce_block_param, produce_block, ProduceBlockParam, ProduceBlockResult,
     },
-    replay_block::ReplayBlock,
     test_mode_control::TestModeControl,
-    types::ChainEvent,
-    utils,
 };
-use anyhow::{anyhow, bail, Context, Result};
-use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
-use gw_chain::chain::{Chain, SyncEvent};
+
+use anyhow::{Context, Result};
+
+use gw_chain::chain::Chain;
 use gw_common::{h256_ext::H256Ext, H256};
-use gw_config::{BlockProducerConfig, DebugConfig};
+use gw_config::BlockProducerConfig;
 use gw_generator::Generator;
 use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_mem_pool::{
@@ -22,30 +21,21 @@ use gw_mem_pool::{
     pool::{MemPool, OutputParam},
 };
 use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
-use gw_store::{traits::chain_store::ChainStore, Store};
+use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
-    core::Status,
-    offchain::{
-        global_state_from_slice, CellInfo, CollectedCustodianCells, DepositInfo, InputCellInfo,
-        RollupContext,
-    },
+    offchain::{CellInfo, CollectedCustodianCells, DepositInfo, InputCellInfo, RollupContext},
     packed::{
-        CellDep, CellInput, CellOutput, GlobalState, L2Block, RollupAction, RollupActionUnion,
-        RollupSubmitBlock, Transaction, WithdrawalRequestExtra, WitnessArgs,
+        CellDep, CellInput, CellOutput, GlobalState, L2Block, OutPoint, RollupAction,
+        RollupActionUnion, RollupSubmitBlock, Transaction, WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::*,
 };
 use gw_utils::{
-    fee::fill_tx_fee, genesis_info::CKBGenesisInfo, transaction_skeleton::TransactionSkeleton,
-    wallet::Wallet,
+    fee::fill_tx_fee, genesis_info::CKBGenesisInfo, since::Since,
+    transaction_skeleton::TransactionSkeleton, wallet::Wallet,
 };
-use std::{
-    collections::HashSet,
-    convert::TryFrom,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{collections::HashSet, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
 use tracing::instrument;
 
@@ -55,12 +45,6 @@ const TRANSACTION_EXCEEDED_MAXIMUM_BLOCK_BYTES_ERROR: &str = "ExceededMaximumBlo
 const TRANSACTION_FAILED_TO_RESOLVE_ERROR: &str = "TransactionFailedToResolve";
 /// 524_288 we choose this value because it is smaller than the MAX_BLOCK_BYTES which is 597K
 const MAX_ROLLUP_WITNESS_SIZE: usize = 1 << 19;
-const WAIT_PRODUCE_BLOCK_SECONDS: u64 = 90;
-
-enum SubmitResult {
-    Submitted,
-    Skip,
-}
 
 fn generate_custodian_cells(
     rollup_context: &RollupContext,
@@ -77,11 +61,6 @@ fn generate_custodian_cells(
     deposit_cells.iter().map(to_custodian).collect()
 }
 
-struct LastCommittedL2Block {
-    committed_at: Instant,
-    committed_tip_block_hash: H256,
-}
-
 pub struct BlockProducer {
     rollup_config_hash: H256,
     store: Store,
@@ -90,12 +69,9 @@ pub struct BlockProducer {
     generator: Arc<Generator>,
     wallet: Wallet,
     config: BlockProducerConfig,
-    debug_config: DebugConfig,
     rpc_client: RPCClient,
     ckb_genesis_info: CKBGenesisInfo,
     tests_control: Option<TestModeControl>,
-    last_committed_l2_block: LastCommittedL2Block,
-    last_submitted_tx_hash: Arc<tokio::sync::RwLock<H256>>,
     contracts_dep_manager: ContractsCellDepManager,
 }
 
@@ -108,7 +84,6 @@ pub struct BlockProducerCreateArgs {
     pub rpc_client: RPCClient,
     pub ckb_genesis_info: CKBGenesisInfo,
     pub config: BlockProducerConfig,
-    pub debug_config: DebugConfig,
     pub tests_control: Option<TestModeControl>,
     pub contracts_dep_manager: ContractsCellDepManager,
 }
@@ -124,7 +99,6 @@ impl BlockProducer {
             rpc_client,
             ckb_genesis_info,
             config,
-            debug_config,
             tests_control,
             contracts_dep_manager,
         } = args;
@@ -140,21 +114,7 @@ impl BlockProducer {
             wallet,
             ckb_genesis_info,
             config,
-            debug_config,
             tests_control,
-            last_committed_l2_block: LastCommittedL2Block {
-                committed_at: Instant::now(),
-                committed_tip_block_hash: H256::zero(),
-            },
-            last_submitted_tx_hash: {
-                let tip_block_hash = store.get_tip_block_hash()?;
-                let committed_info = store
-                    .get_l2block_committed_info(&tip_block_hash)?
-                    .ok_or_else(|| anyhow!("can't find committed info for tip block"))?;
-                Arc::new(tokio::sync::RwLock::new(
-                    committed_info.transaction_hash().unpack(),
-                ))
-            },
             store,
             contracts_dep_manager,
         };
@@ -254,7 +214,6 @@ impl BlockProducer {
         // try issue next block
         let mut retry_count = 0;
         while retry_count <= MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT {
-            let t = Instant::now();
             let (block_number, tx, next_global_state) = match self
                 .compose_next_block_submit_tx(rollup_input_since, rollup_cell.clone(), retry_count)
                 .await
@@ -263,23 +222,20 @@ impl BlockProducer {
                 Err(err) if err.downcast_ref::<GreaterBlockTimestampError>().is_some() => {
                     // Wait next l1 tip block median time
                     log::debug!(
-                        target: "produce-block",
-                        "block timestamp is greater than rollup input since, wait next median time"
+                        "[produce block] block timestamp is greater than rollup input since, wait next median time"
                     );
                     return Ok(());
                 }
                 Err(err) => {
                     retry_count += 1;
                     log::warn!(
-                        target: "produce-block",
-                        "retry compose next block submit tx, retry: {}, reason: {}",
+                        "[produce block] retry compose next block submit tx, retry: {}, reason: {}",
                         retry_count,
                         err
                     );
                     continue;
                 }
             };
-            log::debug!(target: "produce-block", "Produce l2block #{} ({}ms)", block_number, t.elapsed().as_millis());
 
             let expected_next_block_number = global_state.block().count().unpack();
             if expected_next_block_number != block_number {
@@ -291,11 +247,8 @@ impl BlockProducer {
             }
 
             let submitted_tx_hash = tx.hash();
-            let t = Instant::now();
             match self.submit_block_tx(block_number, tx).await {
                 Ok(SubmitResult::Submitted) => {
-                    log::debug!(target: "produce-block", "Submitted l2block #{} in {} ({}ms)",
-                        block_number, hex::encode(&submitted_tx_hash), t.elapsed().as_millis());
                     self.last_committed_l2_block = LastCommittedL2Block {
                         committed_tip_block_hash: l2_tip_block_hash,
                         committed_at: Instant::now(),
@@ -307,8 +260,7 @@ impl BlockProducer {
                 Err(err) => {
                     retry_count += 1;
                     log::warn!(
-                        target: "produce-block",
-                        "retry submit block tx , retry: {}, reason: {}",
+                        "[produce block] retry submit block tx , retry: {}, reason: {}",
                         retry_count,
                         err
                     );
@@ -325,12 +277,7 @@ impl BlockProducer {
     }
 
     #[instrument(skip_all, fields(retry_count = retry_count))]
-    async fn compose_next_block_submit_tx(
-        &mut self,
-        rollup_input_since: InputSince,
-        rollup_cell: CellInfo,
-        retry_count: usize,
-    ) -> Result<(u64, Transaction, GlobalState)> {
+    pub async fn produce_next_block(&self, retry_count: usize) -> Result<ProduceBlockResult> {
         if let Some(ref tests_control) = self.tests_control {
             match tests_control.payload().await {
                 Some(TestModePayload::None) => tests_control.clear_none().await?,
@@ -340,7 +287,7 @@ impl BlockProducer {
         }
 
         // get txs & withdrawal requests from mem pool
-        let (opt_finalized_custodians, block_param) = {
+        let (finalized_custodians, block_param) = {
             let (mem_block, post_block_state) = {
                 let t = Instant::now();
                 log::debug!(target: "produce-block", "acquire mem-pool",);
@@ -362,7 +309,6 @@ impl BlockProducer {
             let tip_block_number = mem_block.block_info().number().unpack().saturating_sub(1);
             let (finalized_custodians, produce_block_param) =
                 generate_produce_block_param(&self.store, mem_block, post_block_state)?;
-            rollup_input_since.verify_block_timestamp(produce_block_param.timestamp)?;
 
             let finalized_custodians = {
                 let last_finalized_block_number = {
@@ -387,10 +333,8 @@ impl BlockProducer {
                 "generate produce block param {}ms",
                 t.elapsed().as_millis()
             );
-            (Some(finalized_custodians), produce_block_param)
+            (finalized_custodians, produce_block_param)
         };
-        let deposit_cells = block_param.deposits.clone();
-        let withdrawals = block_param.withdrawals.clone();
 
         // produce block
         let reverted_block_root: H256 = {
@@ -403,19 +347,16 @@ impl BlockProducer {
             reverted_block_root,
             rollup_config_hash: self.rollup_config_hash,
             block_param,
+            finalized_custodians,
         };
         let db = self.store.begin_transaction();
-        let t = Instant::now();
         let block_result = produce_block(&db, &self.generator, param)?;
-        log::debug!(
-            target: "produce-block",
-            "produce block {}ms",
-            t.elapsed().as_millis()
-        );
         let ProduceBlockResult {
             mut block,
             mut global_state,
             withdrawal_extras,
+            deposit_cells,
+            finalized_custodians,
         } = block_result;
 
         let number: u64 = block.raw().number().unpack();
@@ -438,7 +379,6 @@ impl BlockProducer {
         let block_txs = block.transactions().len();
         let block_withdrawals = block.withdrawals().len();
         log::info!(
-            target: "produce-block",
             "produce new block #{} (txs: {}, deposits: {}, withdrawals: {})",
             number,
             block_txs,
@@ -466,26 +406,19 @@ impl BlockProducer {
         let args = CompleteTxArgs {
             deposit_cells,
             finalized_custodians,
-            block,
-            global_state: global_state.clone(),
-            rollup_input_since,
-            rollup_cell: rollup_cell.clone(),
-            withdrawal_extras,
         };
         let tx = match self.complete_tx_skeleton(args).await {
             Ok(tx) => tx,
             Err(err) => {
                 log::error!(
-                    target: "produce-block",
-                    "Failed to composite submitting transaction: {}",
+                    "[produce_next_block] Failed to composite submitting transaction: {}",
                     err
                 );
                 return Err(err);
             }
         };
         log::debug!(
-            target: "produce-block",
-            "complete tx skeleton {}ms",
+            "[compose_next_block_submit_tx] complete tx skeleton {}ms",
             t.elapsed().as_millis()
         );
         if tx.as_slice().len() <= MAX_BLOCK_BYTES as usize
@@ -509,143 +442,17 @@ impl BlockProducer {
         }
     }
 
-    #[instrument(skip_all, fields(block = block_number))]
-    async fn submit_block_tx(
-        &mut self,
-        block_number: u64,
-        tx: Transaction,
-    ) -> Result<SubmitResult> {
-        let t = Instant::now();
-        let cycles = match self.rpc_client.dry_run_transaction(&tx).await {
-            Ok(cycles) => {
-                log::info!(
-                    target: "produce-block",
-                    "Tx({}) L2 block #{} execution cycles: {}",
-                    block_number,
-                    hex::encode(tx.hash()),
-                    cycles
-                );
-                cycles
-            }
-            Err(err) => {
-                let err_str = err.to_string();
-                if err_str.contains(TRANSACTION_FAILED_TO_RESOLVE_ERROR) {
-                    // TODO: check dead out point
-                    if let Err(err) = self.contracts_dep_manager.refresh().await {
-                        // Lets retry on next error
-                        log::error!("[contracts dep] refresh failed {}", err);
-                    }
-
-                    log::info!(
-                        target: "produce-block",
-                        "Skip submitting l2 block since CKB can't resolve tx, previous block may haven't been processed by CKB"
-                    );
-                    return Ok(SubmitResult::Skip);
-                } else {
-                    if err_str.contains(TRANSACTION_SCRIPT_ERROR)
-                        || err_str.contains(TRANSACTION_EXCEEDED_MAXIMUM_BLOCK_BYTES_ERROR)
-                    {
-                        utils::dump_transaction(
-                            &self.debug_config.debug_tx_dump_path,
-                            &self.rpc_client,
-                            &tx,
-                        )
-                        .await;
-                    }
-
-                    return Err(anyhow!(
-                        "Fail to dry run transaction {}, error: {}",
-                        hex::encode(tx.hash()),
-                        err
-                    ));
-                }
-            }
-        };
-        log::debug!(
-            target: "produce-block",
-            "dry run {}ms",
-            t.elapsed().as_millis()
-        );
-
-        if cycles > self.debug_config.expected_l1_tx_upper_bound_cycles {
-            log::warn!(
-                target: "produce-block",
-                "Submitting l2 block is cost unexpected cycles: {:?}, expected upper bound: {}",
-                cycles,
-                self.debug_config.expected_l1_tx_upper_bound_cycles
-            );
-            utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx)
-                .await;
-            return Err(anyhow!(
-                "Submitting l2 block cycles exceeded limitation, cycles: {:?}",
-                cycles
-            ));
-        }
-
-        // send transaction
-        match self.rpc_client.send_transaction(&tx).await {
-            Ok(tx_hash) => {
-                log::info!(
-                    target: "produce-block",
-                    "Submitted l2 block {} in tx {}",
-                    block_number,
-                    hex::encode(tx_hash.as_slice())
-                );
-                Ok(SubmitResult::Submitted)
-            }
-            Err(err) => {
-                log::error!(target: "produce-block", "Submitting l2 block error: {}", err);
-
-                // dumping script error transactions
-                let err_str = err.to_string();
-                if err_str.contains(TRANSACTION_SCRIPT_ERROR)
-                    || err_str.contains(TRANSACTION_EXCEEDED_MAXIMUM_BLOCK_BYTES_ERROR)
-                {
-                    // dumping failed tx
-                    utils::dump_transaction(
-                        &self.debug_config.debug_tx_dump_path,
-                        &self.rpc_client,
-                        &tx,
-                    )
-                    .await;
-                    Err(anyhow!("Submitting l2 block error: {}", err))
-                } else {
-                    // ignore non script error
-                    let since_last_committed_secs = self
-                        .last_committed_l2_block
-                        .committed_at
-                        .elapsed()
-                        .as_secs();
-                    if since_last_committed_secs < WAIT_PRODUCE_BLOCK_SECONDS {
-                        log::debug!(
-                            target: "produce-block",
-                            "last committed is {}s ago, dump tx",
-                            since_last_committed_secs
-                        );
-                        // dumping failed tx
-                        utils::dump_transaction(
-                            &self.debug_config.debug_tx_dump_path,
-                            &self.rpc_client,
-                            &tx,
-                        )
-                        .await;
-                    } else {
-                        log::debug!("Skip dumping non-script-error tx");
-                    }
-                    Ok(SubmitResult::Skip)
-                }
-            }
-        }
-    }
-
     #[instrument(skip_all, fields(block = args.block.raw().number().unpack()))]
-    async fn complete_tx_skeleton(&self, args: CompleteTxArgs) -> Result<Transaction> {
-        let CompleteTxArgs {
+    pub async fn compose_submit_tx(
+        &self,
+        args: ComposeSubmitTxArgs,
+    ) -> Result<(Transaction, CellInfo)> {
+        let ComposeSubmitTxArgs {
             deposit_cells,
             finalized_custodians,
             block,
             global_state,
-            rollup_input_since,
+            since,
             rollup_cell,
             withdrawal_extras,
         } = args;
@@ -658,7 +465,7 @@ impl BlockProducer {
         tx_skeleton.inputs_mut().push(InputCellInfo {
             input: CellInput::new_builder()
                 .previous_output(rollup_cell.out_point.clone())
-                .since(rollup_input_since.value().pack())
+                .since(since.as_u64().pack())
                 .build(),
             cell: rollup_cell.clone(),
         });
@@ -749,7 +556,14 @@ impl BlockProducer {
                 .expect("capacity overflow");
             dummy.as_builder().capacity(capacity.pack()).build()
         };
+        let rollup_cell_output = output.clone();
+        let rollup_cell_output_data = output_data.clone();
         tx_skeleton.outputs_mut().push((output, output_data));
+        let rollup_cell_output_index: u32 = tx_skeleton
+            .outputs()
+            .len()
+            .try_into()
+            .expect("output index to u32");
 
         // deposit cells
         for deposit in &deposit_cells {
@@ -882,88 +696,29 @@ impl BlockProducer {
         );
         // sign
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
+        // TODO: check tx size witnesses size.
+        let tx_hash = tx.hash();
         log::debug!("final tx size: {}", tx.as_slice().len());
-        Ok(tx)
+        Ok((
+            tx,
+            CellInfo {
+                output: rollup_cell_output,
+                data: rollup_cell_output_data,
+                out_point: OutPoint::new_builder()
+                    .tx_hash(tx_hash.pack())
+                    .index(rollup_cell_output_index.pack())
+                    .build(),
+            },
+        ))
     }
 }
 
-struct CompleteTxArgs {
-    deposit_cells: Vec<DepositInfo>,
-    finalized_custodians: CollectedCustodianCells,
-    block: L2Block,
-    global_state: GlobalState,
-    rollup_input_since: InputSince,
-    rollup_cell: CellInfo,
-    withdrawal_extras: Vec<WithdrawalRequestExtra>,
-}
-
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
-#[error("block timestamp is greater than input since")]
-struct GreaterBlockTimestampError;
-
-#[derive(Debug, Clone, Copy)]
-struct InputSince {
-    timestamp: u64,
-    since: u64,
-}
-
-impl InputSince {
-    /// Transaction since flag
-    const SINCE_BLOCK_TIMESTAMP_FLAG: u64 = 0x4000_0000_0000_0000;
-
-    fn from_median_time(median_time: Duration) -> Self {
-        // Ensure ms precision
-        let timestamp = Duration::from_secs(median_time.as_secs()).as_millis() as u64;
-        let since = Self::SINCE_BLOCK_TIMESTAMP_FLAG | median_time.as_secs();
-
-        InputSince { timestamp, since }
-    }
-
-    fn verify_block_timestamp(
-        &self,
-        block_timestamp: u64,
-    ) -> Result<(), GreaterBlockTimestampError> {
-        if block_timestamp > self.timestamp {
-            log::debug!(
-                "block timestamp {}, input since timestamp {}",
-                block_timestamp,
-                self.timestamp,
-            );
-            Err(GreaterBlockTimestampError)
-        } else {
-            Ok(())
-        }
-    }
-
-    fn value(&self) -> u64 {
-        self.since
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use std::time::Duration;
-
-    use super::{GreaterBlockTimestampError, InputSince};
-
-    #[test]
-    fn test_input_since() {
-        let input_since = InputSince::from_median_time(Duration::from_secs(1645670634));
-        let block_timestamp: u64 = 1645670638000;
-
-        assert_eq!(input_since.timestamp, 1645670634000u64);
-        assert!(input_since.since >= block_timestamp); // Encoded timestamp is bigger than block timestamp
-        assert_eq!(
-            input_since.verify_block_timestamp(block_timestamp),
-            Err(GreaterBlockTimestampError)
-        );
-
-        let block_timestamp: u64 = 1645670633000;
-        assert_eq!(input_since.verify_block_timestamp(block_timestamp), Ok(()));
-
-        // Second
-        let input_since = InputSince::from_median_time(Duration::from_secs(11));
-        let block_timestamp: u64 = Duration::from_millis(10534).as_millis() as u64;
-        assert_eq!(input_since.verify_block_timestamp(block_timestamp), Ok(()));
-    }
+pub struct ComposeSubmitTxArgs {
+    pub deposit_cells: Vec<DepositInfo>,
+    pub finalized_custodians: CollectedCustodianCells,
+    pub block: L2Block,
+    pub global_state: GlobalState,
+    pub since: Since,
+    pub rollup_cell: CellInfo,
+    pub withdrawal_extras: Vec<WithdrawalRequestExtra>,
 }

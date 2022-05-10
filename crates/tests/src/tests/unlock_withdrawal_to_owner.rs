@@ -560,14 +560,13 @@ async fn test_build_unlock_to_owner_tx() {
         .unwrap();
 
     // Update reverted block smt root
-    let block_result = {
-        let builder = block_result.global_state.as_builder();
-        let builder = builder.reverted_block_root(reverted_block_smt.root().pack());
-        ProduceBlockResult {
-            block: block_result.block,
-            global_state: builder.build(),
-            withdrawal_extras: Default::default(),
-        }
+    let block_result = ProduceBlockResult {
+        global_state: block_result
+            .global_state
+            .as_builder()
+            .reverted_block_root(reverted_block_smt.root().pack())
+            .build(),
+        ..block_result
     };
 
     let input_rollup_cell = {

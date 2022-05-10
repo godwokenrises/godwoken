@@ -69,7 +69,7 @@ async fn test_repackage_mem_block() {
     }
 
     let (mem_block, post_merkle_state) = mem_pool.output_mem_block(&OutputParam::default());
-    let (_custodians, block_param) =
+    let (custodians, block_param) =
         generate_produce_block_param(chain.store(), mem_block, post_merkle_state).unwrap();
 
     let deposit_cells = block_param.deposits.clone();
@@ -87,6 +87,7 @@ async fn test_repackage_mem_block() {
         reverted_block_root,
         rollup_config_hash: rollup_context.rollup_config.hash().into(),
         block_param,
+        finalized_custodians: custodians.unwrap_or_default(),
     };
     let store = chain.store();
     let db = store.begin_transaction();

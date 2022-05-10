@@ -1,6 +1,6 @@
 #![allow(clippy::mutable_key_type)]
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use gw_challenge::offchain::{verify_tx::TxWithContext, OffChainMockContext};
 use gw_common::{sparse_merkle_tree, state::State, H256};
 use gw_config::ChainConfig;
@@ -180,6 +180,7 @@ impl Chain {
             "Database chain_id must equals to rollup_script_hash"
         );
         let tip = store.get_tip_block()?;
+        // TODO: need to adapt to having local/submitted blocks.
         let last_synced = store
             .get_l2block_committed_info(&tip.hash().into())?
             .ok_or_else(|| anyhow!("can't find last synced committed info"))?;
@@ -377,7 +378,7 @@ impl Chain {
                     if let Some(challenge_target) = self.process_block(
                         db,
                         l2block.clone(),
-                        l2block_committed_info.clone(),
+                        Some(l2block_committed_info.clone()),
                         global_state.clone(),
                         deposit_requests,
                         deposit_asset_scripts,
@@ -879,12 +880,53 @@ impl Chain {
         Ok(())
     }
 
+    pub async fn update_local(
+        &mut self,
+        store_tx: &StoreTransaction,
+        l2_block: L2Block,
+        deposit_requests: Vec<DepositRequest>,
+        deposit_asset_scripts: HashSet<Script>,
+        withdrawals: Vec<WithdrawalRequestExtra>,
+        global_state: GlobalState,
+    ) -> Result<()> {
+        let local_tip = self.local_state.tip();
+        let parent_block_hash: [u8; 32] = l2_block.raw().parent_block_hash().unpack();
+        if parent_block_hash != local_tip.hash() {
+            bail!("fork detected");
+        }
+
+        // Reverted block root should not change
+        let local_reverted_block_root = store_tx.get_reverted_block_smt_root()?;
+        let global_reverted_block_root: H256 = global_state.reverted_block_root().unpack();
+        assert_eq!(local_reverted_block_root, global_reverted_block_root);
+
+        // TODO??: check bad block challenge target.
+        let maybe_challenge_target = self.process_block(
+            store_tx,
+            l2_block,
+            None,
+            global_state,
+            deposit_requests,
+            deposit_asset_scripts,
+            withdrawals,
+        )?;
+
+        if let Some(challenge_target) = maybe_challenge_target {
+            bail!(
+                "process_block returned challenge target: {}",
+                challenge_target
+            );
+        }
+
+        Ok(())
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn process_block(
         &mut self,
         db: &StoreTransaction,
         l2block: L2Block,
-        l2block_committed_info: L2BlockCommittedInfo,
+        l2block_committed_info: Option<L2BlockCommittedInfo>,
         global_state: GlobalState,
         deposit_requests: Vec<DepositRequest>,
         deposit_asset_scripts: HashSet<Script>,

@@ -807,11 +807,13 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             .await
             .unwrap()
     };
-    let bad_block_result = {
+    let mut bad_block_result = {
         let ProduceBlockResult {
             block,
             global_state,
             withdrawal_extras,
+            deposit_cells,
+            finalized_custodians,
         } = block_result.clone();
         let (bad_block, bad_global_state) = generate_bad_block(&chain, block, global_state);
         let withdrawal_extras = withdrawal_extras
@@ -828,6 +830,8 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             block: bad_block,
             global_state: bad_global_state,
             withdrawal_extras,
+            deposit_cells,
+            finalized_custodians,
         }
     };
 
@@ -868,24 +872,11 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         output_data: Bytes::default(),
     };
 
-    let bad_block_result = {
-        let ProduceBlockResult {
-            block,
-            global_state,
-            withdrawal_extras,
-        } = bad_block_result;
-
-        let global_state = global_state
-            .as_builder()
-            .status(Status::Halting.into())
-            .build();
-
-        ProduceBlockResult {
-            global_state,
-            block,
-            withdrawal_extras,
-        }
-    };
+    bad_block_result.global_state = bad_block_result
+        .global_state
+        .as_builder()
+        .status(Status::Halting.into())
+        .build();
 
     let challenge_bad_block = L1Action {
         context: L1ActionContext::Challenge {
@@ -922,27 +913,17 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             .unwrap();
         global_state.unwrap().block()
     };
-    let reverted_block_result = {
-        let ProduceBlockResult {
-            block,
-            global_state,
-            withdrawal_extras,
-        } = bad_block_result;
-
-        let global_state = global_state
+    let reverted_block_result = ProduceBlockResult {
+        global_state: bad_block_result
+            .global_state
             .as_builder()
             .status(Status::Running.into())
             .reverted_block_root(reverted_block_smt_root.pack())
             .tip_block_hash(last_valid_tip_block_hash.pack())
             .block(block_smt)
             .account(last_valid_tip_block.raw().post_account())
-            .build();
-
-        ProduceBlockResult {
-            global_state,
-            block,
-            withdrawal_extras,
-        }
+            .build(),
+        ..bad_block_result
     };
 
     let revert_bad_block = L1Action {

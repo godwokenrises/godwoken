@@ -7,6 +7,7 @@ pub mod debugger;
 pub mod deposit;
 pub mod poller;
 pub mod produce_block;
+pub(crate) mod psc;
 pub mod replay_block;
 pub mod runner;
 pub mod stake;

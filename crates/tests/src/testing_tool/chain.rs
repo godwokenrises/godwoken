@@ -542,13 +542,14 @@ pub async fn construct_block_with_timestamp(
     mem_pool.set_provider(Box::new(provider));
 
     let (mem_block, post_merkle_state) = mem_pool.output_mem_block(&OutputParam::default());
-    let (_custodians, block_param) =
+    let (custodians, block_param) =
         generate_produce_block_param(chain.store(), mem_block, post_merkle_state)?;
     let param = ProduceBlockParam {
         stake_cell_owner_lock_hash,
         rollup_config_hash,
         reverted_block_root: H256::default(),
         block_param,
+        finalized_custodians: custodians.unwrap_or_default(),
     };
     produce_block(&db, generator, param)
 }
