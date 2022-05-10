@@ -87,15 +87,10 @@ fn run_contract_get_result<S: State + CodeStore>(
     };
     let generator = Generator::new(backend_manage, account_lock_manage, rollup_ctx);
     let chain_view = DummyChainStore;
-    let run_result = generator.execute_transaction(
-        &chain_view,
-        tree,
-        block_info,
-        &raw_tx,
-        L2TX_MAX_CYCLES,
-        None,
-    )?;
-    tree.apply_run_result(&run_result).expect("update state");
+    let run_result =
+        generator.execute_transaction(&chain_view, tree, block_info, &raw_tx, L2TX_MAX_CYCLES)?;
+    tree.apply_run_result(&run_result.write)
+        .expect("update state");
     Ok(run_result)
 }
 
@@ -109,7 +104,7 @@ fn run_contract<S: State + CodeStore>(
 ) -> Result<Vec<u8>, TransactionError> {
     let run_result =
         run_contract_get_result(rollup_config, tree, from_id, to_id, args, block_info)?;
-    Ok(run_result.return_data)
+    Ok(run_result.return_data.to_vec())
 }
 
 pub fn bench(c: &mut Criterion) {
