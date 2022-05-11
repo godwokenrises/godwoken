@@ -639,6 +639,7 @@ Response
     "id": 42,
     "jsonrpc": "2.0",
     "result": {
+        "exit_code": "0x0",
         "logs": [
             {
                 "account_id": "0x1",
