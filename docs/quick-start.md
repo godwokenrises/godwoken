@@ -1,6 +1,6 @@
 # Quick Start
 
-Before continue, please check the [kicker](https://github.com/RetricSu/godwoken-kicker) project, which is a recommended tool to fast start a development environment. If you still want to mannually deploy a environment please continue to read this document.
+Before continue, please check the [kicker](https://github.com/RetricSu/godwoken-kicker) project, which is a recommended tool to fast start a development environment. If you still want to manually deploy an environment please continue to read this document.
 
 ## Requirements
 
