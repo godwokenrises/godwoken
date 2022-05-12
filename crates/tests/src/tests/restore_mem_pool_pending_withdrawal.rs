@@ -92,11 +92,13 @@ async fn test_restore_mem_pool_pending_withdrawal() {
             })
             .collect()
     };
-    let pending_withdrawals = withdrawals.split_off(withdrawals.len() - 5);
+    let pending_withdrawals = withdrawals.split_off(withdrawals.len() - 10);
     let mem_block_withdrawals = withdrawals;
+    assert!(!pending_withdrawals.is_empty());
 
     // Insert error nonce withdrawal and expect them to be removed during pending restore
     let invalid_withdrawals_count = pending_withdrawals.len() - 5;
+    assert!(invalid_withdrawals_count > 0);
     let invalid_withdrawals: Vec<_> = pending_withdrawals
         .iter()
         .take(invalid_withdrawals_count)
