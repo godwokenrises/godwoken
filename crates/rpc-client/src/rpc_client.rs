@@ -3,6 +3,7 @@
 use crate::ckb_client::CKBClient;
 use crate::indexer_client::CKBIndexerClient;
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
+use crate::traits::IndexedCells;
 use crate::utils::{to_h256, to_jsonh256, DEFAULT_QUERY_LIMIT, TYPE_ID_CODE_HASH};
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::Params as ClientParams;
@@ -1001,13 +1002,34 @@ impl RPCClient {
         min_capacity: Option<u64>,
         max_cells: usize,
     ) -> Result<QueryResult<CollectedCustodianCells>> {
+        Self::query_finalized_custodian_cells_from_indexer(
+            &self.indexer,
+            &self.rollup_context,
+            withdrawals_amount,
+            custodian_change_capacity,
+            last_finalized_block_number,
+            min_capacity,
+            max_cells,
+        )
+        .await
+    }
+
+    // TODO: refactor into custodian mod
+    #[instrument(skip_all)]
+    async fn query_finalized_custodian_cells_from_indexer(
+        indexed_cells: &impl IndexedCells,
+        rollup_context: &RollupContext,
+        withdrawals_amount: &WithdrawalsAmount,
+        custodian_change_capacity: u128,
+        last_finalized_block_number: u64,
+        min_capacity: Option<u64>,
+        max_cells: usize,
+    ) -> Result<QueryResult<CollectedCustodianCells>> {
         const MAX_CELLS: usize = 50;
 
         let mut query_indexer_times = 0;
         let mut query_indexer_cells = 0;
         let now = Instant::now();
-
-        let rollup_context = &self.rollup_context;
 
         let parse_sudt_amount = |cell: &Cell| -> Result<u128> {
             if cell.output.type_.is_none() {
@@ -1052,17 +1074,8 @@ impl RPCClient {
         while collected.capacity < required_capacity
             || collected_fullfilled_sudt.len() < withdrawals_amount.sudt.len()
         {
-            let cells: Pagination<Cell> = self
-                .indexer
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(cursor),
-                    ])),
-                )
+            let cells = indexed_cells
+                .get_cells(&search_key, &order, &limit, cursor)
                 .await?;
 
             if cells.last_cursor.is_empty() {
@@ -1856,5 +1869,181 @@ impl RPCClient {
         } else {
             Ok(QueryResult::Full(collected))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RPCClient;
+
+    use std::collections::HashMap;
+
+    use anyhow::Result;
+    use async_trait::async_trait;
+    use gw_jsonrpc_types::ckb_jsonrpc_types::{JsonBytes, Uint32};
+    use gw_types::bytes::Bytes;
+    use gw_types::core::ScriptHashType;
+    use gw_types::offchain::{RollupContext, WithdrawalsAmount};
+    use gw_types::packed::{CellOutput, CustodianLockArgs, RollupConfig, Script, Uint128};
+    use gw_types::prelude::{Builder, Entity, Pack};
+
+    use crate::indexer_types::{Cell, Order, Pagination, SearchKey};
+    use crate::rpc_client::QueryResult;
+    use crate::traits::IndexedCells;
+
+    const CKB: u64 = 100_000_000;
+
+    struct DummyIndexedCells {
+        cells: Vec<Cell>,
+    }
+
+    #[async_trait]
+    impl IndexedCells for DummyIndexedCells {
+        async fn get_cells(
+            &self,
+            _search_key: &SearchKey,
+            _order: &Order,
+            _limit: &Uint32,
+            _cursor: Option<JsonBytes>,
+        ) -> Result<Pagination<Cell>> {
+            Ok(Pagination {
+                objects: serde_json::from_str(&serde_json::to_string(&self.cells).unwrap())
+                    .unwrap(),
+                last_cursor: JsonBytes::from_bytes(Bytes::from_static(b"1")),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn test_query_finalized_custodians() {
+        let rollup_context = RollupContext {
+            rollup_script_hash: [1u8; 32].into(),
+            rollup_config: RollupConfig::new_builder()
+                .custodian_script_type_hash([2u8; 32].pack())
+                .l1_sudt_script_type_hash([3u8; 32].pack())
+                .build(),
+        };
+
+        let sudt_script = Script::new_builder()
+            .code_hash([3u8; 32].pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args(Bytes::from_static(b"33").pack())
+            .build();
+
+        let withdrawals_amount = WithdrawalsAmount {
+            capacity: (1000 * CKB) as u128,
+            sudt: HashMap::from([(sudt_script.hash(), 500u128); 1]),
+        };
+
+        const FINALIZED_BLOCK_NUMBER: u64 = 100;
+        let ten_ckb_cells = generate_finalized_ckb_custodian_cells(
+            10,
+            &rollup_context,
+            FINALIZED_BLOCK_NUMBER,
+            1000 * CKB,
+        );
+        let one_sudt_cell = generate_finalized_sudt_custodian_cells(
+            1,
+            &rollup_context,
+            FINALIZED_BLOCK_NUMBER,
+            1000 * CKB,
+            sudt_script.clone(),
+            1000u128.pack(),
+        );
+
+        let max_five_cells = 5;
+        let change_capacity = 0;
+        let dummy_indexed_cells = DummyIndexedCells {
+            cells: vec![ten_ckb_cells, one_sudt_cell]
+                .into_iter()
+                .flatten()
+                .collect(),
+        };
+
+        let query_finalized_custodians = RPCClient::query_finalized_custodian_cells_from_indexer(
+            &dummy_indexed_cells,
+            &rollup_context,
+            &withdrawals_amount,
+            change_capacity,
+            FINALIZED_BLOCK_NUMBER,
+            None,
+            max_five_cells,
+        );
+
+        assert!(matches!(
+            query_finalized_custodians.await.unwrap(),
+            QueryResult::Full(_)
+        ));
+    }
+
+    fn generate_finalized_ckb_custodian_cells(
+        cell_num: usize,
+        rollup_context: &RollupContext,
+        last_finalized_block_number: u64,
+        capacity: u64,
+    ) -> Vec<Cell> {
+        let args = {
+            let custodian_lock_args = CustodianLockArgs::new_builder()
+                .deposit_block_number(last_finalized_block_number.pack())
+                .build();
+
+            let mut args = rollup_context.rollup_script_hash.as_slice().to_vec();
+            args.extend_from_slice(custodian_lock_args.as_slice());
+
+            Bytes::from(args)
+        };
+        let lock = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .args(args.pack())
+            .build();
+        let output = CellOutput::new_builder()
+            .capacity(capacity.pack())
+            .lock(lock)
+            .build();
+
+        (0..cell_num)
+            .map(|_| Cell {
+                output: ckb_types::packed::CellOutput::new_unchecked(output.as_bytes()).into(),
+                output_data: JsonBytes::default(),
+                out_point: ckb_types::packed::OutPoint::default().into(),
+                block_number: 10u64.into(),
+                tx_index: 0u32.into(),
+            })
+            .collect()
+    }
+
+    fn generate_finalized_sudt_custodian_cells(
+        cell_num: usize,
+        rollup_context: &RollupContext,
+        last_finalized_block_number: u64,
+        capacity: u64,
+        sudt_script: Script,
+        amount: Uint128,
+    ) -> Vec<Cell> {
+        use ckb_types::prelude::Pack;
+
+        let ckb_cells = generate_finalized_ckb_custodian_cells(
+            cell_num,
+            rollup_context,
+            last_finalized_block_number,
+            capacity,
+        );
+
+        let sudt_script = ckb_types::packed::Script::new_unchecked(sudt_script.as_bytes());
+        let convert_to_sudt = |cell: Cell| {
+            let output: ckb_types::packed::CellOutput = cell.output.into();
+            let sudt_output = output
+                .as_builder()
+                .type_(Some(sudt_script.clone()).pack())
+                .build();
+
+            Cell {
+                output: sudt_output.into(),
+                output_data: JsonBytes::from_bytes(amount.as_bytes()),
+                ..cell
+            }
+        };
+        ckb_cells.into_iter().map(convert_to_sudt).collect()
     }
 }
