@@ -1051,7 +1051,7 @@ impl RPCClient {
             script: None,
             block_range: None,
             output_data_len_range: None,
-            output_capacity_range: Some([min_capacity.into(), u64::MAX.into()]),
+            output_capacity_range: Some([min_capacity.into(), u64::MAX.into()]), // [inclusive, exclusive]
         });
         let search_key = SearchKey {
             script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
