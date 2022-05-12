@@ -781,7 +781,7 @@ impl RPCClient {
         let filter = Some(SearchKeyFilter {
             script: None,
             block_range: None,
-            output_data_len_range: Some([0.into(), 0.into()]),
+            output_data_len_range: Some([0.into(), 1.into()]), // [inclusive, exclusive]
             output_capacity_range: None,
         });
         let search_key = SearchKey {
