@@ -1074,6 +1074,14 @@ impl RPCClient {
                     return Ok(QueryResult::NotEnough(collected));
                 }
 
+                // Skip ckb custodians if capacity is fullfill
+                if collected.capacity >= required_capacity
+                    && !withdrawals_amount.sudt.is_empty()
+                    && cell.output.type_.is_none()
+                {
+                    continue;
+                }
+
                 let args = cell.output.lock.args.clone().into_bytes();
                 let custodian_lock_args = match CustodianLockArgsReader::verify(&args[32..], false)
                 {
