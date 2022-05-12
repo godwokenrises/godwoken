@@ -1877,6 +1877,7 @@ mod tests {
     use super::RPCClient;
 
     use std::collections::HashMap;
+    use std::iter::FromIterator;
 
     use anyhow::Result;
     use async_trait::async_trait;
@@ -1932,7 +1933,7 @@ mod tests {
 
         let withdrawals_amount = WithdrawalsAmount {
             capacity: (1000 * CKB) as u128,
-            sudt: HashMap::from([(sudt_script.hash(), 500u128); 1]),
+            sudt: HashMap::from_iter([(sudt_script.hash(), 500u128); 1]),
         };
 
         const FINALIZED_BLOCK_NUMBER: u64 = 100;
