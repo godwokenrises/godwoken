@@ -262,17 +262,19 @@ impl<'a> Generator<'a> {
                 return outputs;
             }
 
+            // Fit ckb-indexer output_capacity_range [inclusive, exclusive]
+            let max_capacity = u64::MAX - 1;
             let ckb_custodian = self.ckb_custodian;
             let mut remaind = ckb_custodian.capacity;
             while remaind > 0 {
                 let max = remaind.saturating_sub(ckb_custodian.min_capacity as u128);
-                match max.checked_sub(u64::MAX as u128) {
+                match max.checked_sub(max_capacity as u128) {
                     Some(cap) => {
-                        outputs.push(build_ckb_output(u64::MAX));
+                        outputs.push(build_ckb_output(max_capacity));
                         remaind = cap.saturating_add(ckb_custodian.min_capacity as u128);
                     }
                     None if max.saturating_add(ckb_custodian.min_capacity as u128)
-                        > u64::MAX as u128 =>
+                        > max_capacity as u128 =>
                     {
                         let max = max.saturating_add(ckb_custodian.min_capacity as u128);
                         let half = max / 2;
@@ -327,7 +329,7 @@ mod test {
             .build();
 
         let available_custodians = AvailableCustodians {
-            capacity: u64::MAX as u128,
+            capacity: u64::MAX as u128 * 2,
             sudt: HashMap::from_iter([(sudt_script.hash(), (u128::MAX, sudt_script.clone()))]),
         };
 
@@ -471,5 +473,9 @@ mod test {
 
         assert_eq!(output.as_slice(), expected_output.as_slice());
         assert_eq!(data, &expected_data);
+
+        // ## Max change capacity should be u64::MAX - 1
+        let (output, _data) = outputs.get(2).unwrap(); // the second is sudt change
+        assert_eq!(output.capacity().unpack(), u64::MAX - 1);
     }
 }
