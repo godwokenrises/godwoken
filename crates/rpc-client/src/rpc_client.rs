@@ -489,6 +489,11 @@ impl RPCClient {
             });
 
             for cell in cells {
+                // Ensure finalized ckb custodians are clearly mergeable
+                if cell.output.type_().is_none() && !cell.data.is_empty() {
+                    continue;
+                }
+
                 let args: Bytes = cell.output.lock().args().unpack();
                 let deposit_lock_args = match DepositLockArgsReader::verify(&args[32..], false) {
                     Ok(()) => DepositLockArgs::new_unchecked(args.slice(32..)),
