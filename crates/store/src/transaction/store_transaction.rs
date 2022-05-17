@@ -622,10 +622,10 @@ impl StoreTransaction {
     ) -> impl Iterator<Item = (H256, packed::WithdrawalRequestExtra)> + '_ {
         self.get_iter(COLUMN_MEM_POOL_WITHDRAWAL, IteratorMode::End)
             .map(|(key, val)| {
-                packed::WithdrawalRequestExtraReader::from_slice_should_be_ok(val.as_ref());
                 (
                     packed::Byte32Reader::from_slice_should_be_ok(key.as_ref()).unpack(),
-                    packed::WithdrawalRequestExtra::new_unchecked(val.into()),
+                    packed::WithdrawalRequestExtra::from_request_compitable_slice(val.as_ref())
+                        .unwrap(),
                 )
             })
     }
