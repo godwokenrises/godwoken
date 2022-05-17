@@ -125,19 +125,23 @@ async fn resolve_tx_deps(rpc_client: &RPCClient, tx_hash: [u8; 32]) -> Result<Ve
         let (tx_cell_deps_res, _index, remained) = select_all(resolve_dep_futs.into_iter()).await;
         resolve_dep_futs = remained;
         let tx_cell_deps = tx_cell_deps_res?;
-        let futs = tx_cell_deps
-            .iter()
-            .map(|dep| rpc_client.get_cell(dep.out_point()).boxed());
+        let futs = tx_cell_deps.iter().map(|dep| {
+            let out_point = dep.out_point();
+            rpc_client
+                .get_cell(out_point.clone())
+                .map(move |fut| fut.map(|r| (r, out_point)))
+                .boxed()
+        });
         get_cell_futs.extend(futs);
     }
 
     // wait all cells
     let mut cells = Vec::with_capacity(get_cell_futs.len());
     for cell_fut in get_cell_futs {
-        let cell = cell_fut
-            .await?
+        let (cell_opt, out_point) = cell_fut.await?;
+        let cell = cell_opt
             .and_then(|cell_status| cell_status.cell)
-            .ok_or_else(|| anyhow!("can't find dep cell"))?;
+            .ok_or_else(|| anyhow!("can't find dep cell {}", out_point))?;
         cells.push(cell);
     }
     Ok(cells)
