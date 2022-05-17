@@ -12,8 +12,6 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Context, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
-use ckb_types::prelude::Unpack as CKBUnpack;
-use futures::{future::select_all, FutureExt};
 use gw_chain::chain::{Chain, SyncEvent};
 use gw_common::{h256_ext::H256Ext, H256};
 use gw_config::{BlockProducerConfig, DebugConfig};
@@ -27,14 +25,14 @@ use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
     bytes::Bytes,
-    core::{DepType, ScriptHashType, Status},
+    core::Status,
     offchain::{
         global_state_from_slice, CellInfo, CollectedCustodianCells, DepositInfo, InputCellInfo,
         RollupContext,
     },
     packed::{
-        CellDep, CellInput, CellOutput, GlobalState, L2Block, OutPoint, OutPointVec, RollupAction,
-        RollupActionUnion, RollupSubmitBlock, Transaction, WithdrawalRequestExtra, WitnessArgs,
+        CellDep, CellInput, CellOutput, GlobalState, L2Block, RollupAction, RollupActionUnion,
+        RollupSubmitBlock, Transaction, WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::*,
 };
@@ -43,7 +41,7 @@ use gw_utils::{
     wallet::Wallet,
 };
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     convert::TryFrom,
     sync::Arc,
     time::{Duration, Instant},
@@ -77,87 +75,6 @@ fn generate_custodian_cells(
     };
 
     deposit_cells.iter().map(to_custodian).collect()
-}
-
-#[instrument(skip_all)]
-async fn resolve_tx_deps(rpc_client: &RPCClient, tx_hash: [u8; 32]) -> Result<Vec<CellInfo>> {
-    #[instrument(skip_all)]
-    async fn resolve_dep_group(rpc_client: &RPCClient, dep: CellDep) -> Result<Vec<CellDep>> {
-        // return dep
-        if dep.dep_type() == DepType::Code.into() {
-            return Ok(vec![dep]);
-        }
-        // parse dep group
-        let cell = rpc_client
-            .get_cell(dep.out_point())
-            .await?
-            .and_then(|cell_status| cell_status.cell)
-            .ok_or_else(|| anyhow!("can't find dep group cell"))?;
-        let out_points =
-            OutPointVec::from_slice(&cell.data).map_err(|_| anyhow!("invalid dep group"))?;
-        let cell_deps = out_points
-            .into_iter()
-            .map(|out_point| {
-                CellDep::new_builder()
-                    .out_point(out_point)
-                    .dep_type(DepType::Code.into())
-                    .build()
-            })
-            .collect();
-        Ok(cell_deps)
-    }
-
-    // get deposit cells txs
-    let tx = rpc_client
-        .get_transaction(tx_hash.into())
-        .await?
-        .ok_or_else(|| anyhow!("can't get deposit tx"))?;
-    let mut resolve_dep_futs: Vec<_> = tx
-        .raw()
-        .cell_deps()
-        .into_iter()
-        .map(|dep| resolve_dep_group(rpc_client, dep).boxed())
-        .collect();
-    let mut get_cell_futs = Vec::default();
-
-    // wait resolved dep groups futures
-    while !resolve_dep_futs.is_empty() {
-        let (tx_cell_deps_res, _index, remained) = select_all(resolve_dep_futs.into_iter()).await;
-        resolve_dep_futs = remained;
-        match tx_cell_deps_res {
-            Ok(tx_cell_deps) => {
-                let futs = tx_cell_deps.iter().map(|dep| {
-                    let out_point = dep.out_point();
-                    rpc_client
-                        .get_cell(out_point.clone())
-                        .map(move |fut| fut.map(|r| (r, out_point)))
-                        .boxed()
-                });
-                get_cell_futs.extend(futs);
-            }
-            Err(err) => {
-                log::warn!(
-                    "[resolve_tx_deps] Failed to resolve dep group, err: {}",
-                    err
-                );
-            }
-        }
-    }
-
-    // wait all cells
-    let mut cells = Vec::with_capacity(get_cell_futs.len());
-    for cell_fut in get_cell_futs {
-        let (cell_opt, out_point) = cell_fut.await?;
-        match cell_opt.and_then(|cell_status| cell_status.cell) {
-            Some(cell) => {
-                cells.push(cell);
-            }
-            None => {
-                log::warn!("[resolve_tx_deps] can't find dep cell {}", out_point);
-            }
-        }
-    }
-    Ok(cells)
 }
 
 struct LastCommittedL2Block {
@@ -812,66 +729,10 @@ impl BlockProducer {
             });
         }
 
-        // Some deposit cells might have type scripts for sUDTs, handle cell deps
-        // here.
-        let deposit_type_deps: HashSet<CellDep> = {
-            // fetch deposit cells deps
-            let dep_cell_futs: Vec<_> = deposit_cells
-                .iter()
-                .filter_map(|deposit| {
-                    deposit.cell.output.type_().to_opt().map(|_type_| {
-                        resolve_tx_deps(&self.rpc_client, deposit.cell.out_point.tx_hash().unpack())
-                    })
-                })
-                .collect();
-
-            // wait futures
-            let mut dep_cells: Vec<CellInfo> = Vec::new();
-            for fut in dep_cell_futs {
-                dep_cells.extend(fut.await?);
-            }
-
-            // resolve deposit cells deps
-            let dep_cell_by_data: HashMap<[u8; 32], OutPoint> = dep_cells
-                .iter()
-                .map(|cell| {
-                    let data_hash =
-                        ckb_types::packed::CellOutput::calc_data_hash(&cell.data).unpack();
-                    (data_hash, cell.out_point.clone())
-                })
-                .collect();
-            let dep_cell_by_type: HashMap<[u8; 32], OutPoint> = dep_cells
-                .iter()
-                .filter_map(|cell| {
-                    cell.output
-                        .type_()
-                        .to_opt()
-                        .map(|type_| (type_.hash(), cell.out_point.clone()))
-                })
-                .collect();
-
-            let mut deps: HashSet<CellDep> = Default::default();
-            for deposit in &deposit_cells {
-                if let Some(type_) = deposit.cell.output.type_().to_opt() {
-                    let code_hash: [u8; 32] = type_.code_hash().unpack();
-                    let out_point_opt = match ScriptHashType::try_from(type_.hash_type())
-                        .map_err(|n| anyhow!("invalid hash_type {}", n))?
-                    {
-                        ScriptHashType::Data => dep_cell_by_data.get(&code_hash),
-                        ScriptHashType::Type => dep_cell_by_type.get(&code_hash),
-                    };
-                    let out_point = out_point_opt
-                        .ok_or_else(|| anyhow!("can't find deps code_hash: {:?}", code_hash))?;
-                    let cell_dep = CellDep::new_builder()
-                        .out_point(out_point.to_owned())
-                        .dep_type(DepType::Code.into())
-                        .build();
-                    deps.insert(cell_dep);
-                }
-            }
-            deps
-        };
-        tx_skeleton.cell_deps_mut().extend(deposit_type_deps);
+        // Simple UDT dep
+        tx_skeleton
+            .cell_deps_mut()
+            .push(contracts_dep.l1_sudt_type.clone().into());
 
         // custodian cells
         let custodian_cells = generate_custodian_cells(rollup_context, &block, &deposit_cells);
