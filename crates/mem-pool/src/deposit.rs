@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
-use gw_common::{h256_ext::H256Ext, registry::context::RegistryContext, H256};
+use gw_common::{h256_ext::H256Ext, registry::context::RegistryContext, state::State, H256};
+use gw_store::state::mem_state_db::MemStateTree;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -15,12 +16,13 @@ use crate::custodian::to_custodian_cell;
 pub fn sanitize_deposit_cells(
     ctx: &RollupContext,
     unsanitize_deposits: Vec<DepositInfo>,
+    state: &MemStateTree,
 ) -> Vec<DepositInfo> {
     let mut deposit_cells = Vec::with_capacity(unsanitize_deposits.len());
     for cell in unsanitize_deposits {
         // check deposit lock
         // the lock should be correct unless the upstream ckb-indexer has bugs
-        if let Err(err) = check_deposit_cell(ctx, &cell) {
+        if let Err(err) = check_deposit_cell(ctx, &cell, state) {
             log::debug!("[sanitize deposit cell] {}", err);
             continue;
         }
@@ -83,7 +85,7 @@ fn check_deposit_cell_cancel_timeout(deposit_args: &DepositLockArgs) -> Result<(
 }
 
 // check deposit cell
-fn check_deposit_cell(ctx: &RollupContext, cell: &DepositInfo) -> Result<()> {
+fn check_deposit_cell(ctx: &RollupContext, cell: &DepositInfo, state: &MemStateTree) -> Result<()> {
     let hash_type = ScriptHashType::Type.into();
 
     // check deposit lock
@@ -181,15 +183,27 @@ fn check_deposit_cell(ctx: &RollupContext, cell: &DepositInfo) -> Result<()> {
                 .collect(),
         );
 
-        if let Err(err) = registry_ctx.extract_registry_address_from_deposit(
+        match registry_ctx.extract_registry_address_from_deposit(
             cell.request.registry_id().unpack(),
             &script.code_hash(),
             &script.args().raw_data(),
         ) {
-            return Err(anyhow!(
-                "Failed to extract registry address from deposit, err: {}",
-                err
-            ));
+            Ok(reg_addr) => {
+                //Registry address could be duplicated with a contract account.
+                if let Some(script_hash) = state.get_script_hash_by_registry_address(&reg_addr)? {
+                    if script.hash() != script_hash.as_slice() {
+                        return Err(anyhow!(
+                            "RegistryAddress has been mapped with another script hash before."
+                        ));
+                    }
+                }
+            }
+            Err(err) => {
+                return Err(anyhow!(
+                    "Failed to extract registry address from deposit, err: {}",
+                    err
+                ));
+            }
         }
     }
 
