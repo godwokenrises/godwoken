@@ -144,6 +144,20 @@ fn check_deposit_cell(ctx: &RollupContext, cell: &DepositInfo) -> Result<()> {
                 "Invalid deposit account script: unexpected hash_type: Data"
             ));
         }
+        // godwoken only allow to deposit to an EOA account
+        // check code hash of deposit reqeust is an EOA type hash
+        if !ctx
+            .rollup_config
+            .allowed_eoa_type_hashes()
+            .into_iter()
+            .any(|type_hash| type_hash.hash() == script.code_hash())
+        {
+            return Err(anyhow!(
+                "Not an EOA type hash: {}, we can only deposit to EOA account",
+                hex::encode(&script.code_hash().as_bytes())
+            ));
+        }
+
         let args: Bytes = script.args().unpack();
         if args.len() < 32 {
             return Err(anyhow!(
