@@ -840,6 +840,7 @@ impl MemPool {
                 crate::deposit::sanitize_deposit_cells(
                     self.generator.rollup_context(),
                     cells.collect(),
+                    &state,
                 )
             };
             log::debug!(
