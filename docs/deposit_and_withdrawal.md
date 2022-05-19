@@ -62,8 +62,8 @@ table CustodianLockArgs {
 
 CKB requires `capacity` to cover the cost of the cell, the `capacity` of the deposited cell must also cover the custodian cell, so the minimal deposit CKB that Godwoken allows is as follows:
 
-* Deposit CKB: 246 CKB
-* Deposit CKB and Simple UDT: 327 CKB
+* Deposit CKB: 298 CKB
+* Deposit CKB and Simple UDT: 379 CKB
 
 
 ## Withdrawal
@@ -98,5 +98,5 @@ struct WithdrawalLockArgs {
 
 CKB requires `capacity` to cover the cost of the cell, so the minimal withdrawal CKB that Godwoken allows is as follows:
 
-* Withdrawal CKB: 234 CKB
-* Withdrawal CKB and Simple UDT: 315 CKB
+* Withdrawal CKB: 266 CKB
+* Withdrawal CKB and Simple UDT: 347 CKB
