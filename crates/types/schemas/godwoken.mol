@@ -231,6 +231,7 @@ struct StakeLockArgs {
 // --- builtin Meta contract ---
 union MetaContractArgs {
     CreateAccount,
+    BatchCreateAccounts,
 }
 
 struct Fee {
@@ -243,6 +244,15 @@ struct Fee {
 table CreateAccount {
     script: Script,
     fee: Fee,
+}
+
+table BatchCreateAccounts {
+    scripts: ScriptVec,
+    fee: Fee,
+}
+
+union DeprecatedMetaContractArgs {
+    CreateAccount,
 }
 // --- end of Meta contract
 

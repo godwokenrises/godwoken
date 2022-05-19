@@ -9038,7 +9038,7 @@ impl ::core::default::Default for MetaContractArgs {
     }
 }
 impl MetaContractArgs {
-    pub const ITEMS_COUNT: usize = 1;
+    pub const ITEMS_COUNT: usize = 2;
     pub fn item_id(&self) -> molecule::Number {
         molecule::unpack_number(self.as_slice())
     }
@@ -9046,6 +9046,7 @@ impl MetaContractArgs {
         let inner = self.0.slice(molecule::NUMBER_SIZE..);
         match self.item_id() {
             0 => CreateAccount::new_unchecked(inner).into(),
+            1 => BatchCreateAccounts::new_unchecked(inner).into(),
             _ => panic!("{}: invalid data", Self::NAME),
         }
     }
@@ -9102,7 +9103,7 @@ impl<'r> ::core::fmt::Display for MetaContractArgsReader<'r> {
     }
 }
 impl<'r> MetaContractArgsReader<'r> {
-    pub const ITEMS_COUNT: usize = 1;
+    pub const ITEMS_COUNT: usize = 2;
     pub fn item_id(&self) -> molecule::Number {
         molecule::unpack_number(self.as_slice())
     }
@@ -9110,6 +9111,7 @@ impl<'r> MetaContractArgsReader<'r> {
         let inner = &self.as_slice()[molecule::NUMBER_SIZE..];
         match self.item_id() {
             0 => CreateAccountReader::new_unchecked(inner).into(),
+            1 => BatchCreateAccountsReader::new_unchecked(inner).into(),
             _ => panic!("{}: invalid data", Self::NAME),
         }
     }
@@ -9136,6 +9138,7 @@ impl<'r> molecule::prelude::Reader<'r> for MetaContractArgsReader<'r> {
         let inner_slice = &slice[molecule::NUMBER_SIZE..];
         match item_id {
             0 => CreateAccountReader::verify(inner_slice, compatible),
+            1 => BatchCreateAccountsReader::verify(inner_slice, compatible),
             _ => ve!(Self, UnknownItem, Self::ITEMS_COUNT, item_id),
         }?;
         Ok(())
@@ -9144,7 +9147,7 @@ impl<'r> molecule::prelude::Reader<'r> for MetaContractArgsReader<'r> {
 #[derive(Debug, Default)]
 pub struct MetaContractArgsBuilder(pub(crate) MetaContractArgsUnion);
 impl MetaContractArgsBuilder {
-    pub const ITEMS_COUNT: usize = 1;
+    pub const ITEMS_COUNT: usize = 2;
     pub fn set<I>(mut self, v: I) -> Self
     where
         I: ::core::convert::Into<MetaContractArgsUnion>,
@@ -9173,10 +9176,12 @@ impl molecule::prelude::Builder for MetaContractArgsBuilder {
 #[derive(Debug, Clone)]
 pub enum MetaContractArgsUnion {
     CreateAccount(CreateAccount),
+    BatchCreateAccounts(BatchCreateAccounts),
 }
 #[derive(Debug, Clone, Copy)]
 pub enum MetaContractArgsUnionReader<'r> {
     CreateAccount(CreateAccountReader<'r>),
+    BatchCreateAccounts(BatchCreateAccountsReader<'r>),
 }
 impl ::core::default::Default for MetaContractArgsUnion {
     fn default() -> Self {
@@ -9189,6 +9194,9 @@ impl ::core::fmt::Display for MetaContractArgsUnion {
             MetaContractArgsUnion::CreateAccount(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, CreateAccount::NAME, item)
             }
+            MetaContractArgsUnion::BatchCreateAccounts(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, BatchCreateAccounts::NAME, item)
+            }
         }
     }
 }
@@ -9198,6 +9206,9 @@ impl<'r> ::core::fmt::Display for MetaContractArgsUnionReader<'r> {
             MetaContractArgsUnionReader::CreateAccount(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, CreateAccount::NAME, item)
             }
+            MetaContractArgsUnionReader::BatchCreateAccounts(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, BatchCreateAccounts::NAME, item)
+            }
         }
     }
 }
@@ -9205,6 +9216,7 @@ impl MetaContractArgsUnion {
     pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
             MetaContractArgsUnion::CreateAccount(ref item) => write!(f, "{}", item),
+            MetaContractArgsUnion::BatchCreateAccounts(ref item) => write!(f, "{}", item),
         }
     }
 }
@@ -9212,6 +9224,7 @@ impl<'r> MetaContractArgsUnionReader<'r> {
     pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
             MetaContractArgsUnionReader::CreateAccount(ref item) => write!(f, "{}", item),
+            MetaContractArgsUnionReader::BatchCreateAccounts(ref item) => write!(f, "{}", item),
         }
     }
 }
@@ -9220,9 +9233,19 @@ impl ::core::convert::From<CreateAccount> for MetaContractArgsUnion {
         MetaContractArgsUnion::CreateAccount(item)
     }
 }
+impl ::core::convert::From<BatchCreateAccounts> for MetaContractArgsUnion {
+    fn from(item: BatchCreateAccounts) -> Self {
+        MetaContractArgsUnion::BatchCreateAccounts(item)
+    }
+}
 impl<'r> ::core::convert::From<CreateAccountReader<'r>> for MetaContractArgsUnionReader<'r> {
     fn from(item: CreateAccountReader<'r>) -> Self {
         MetaContractArgsUnionReader::CreateAccount(item)
+    }
+}
+impl<'r> ::core::convert::From<BatchCreateAccountsReader<'r>> for MetaContractArgsUnionReader<'r> {
+    fn from(item: BatchCreateAccountsReader<'r>) -> Self {
+        MetaContractArgsUnionReader::BatchCreateAccounts(item)
     }
 }
 impl MetaContractArgsUnion {
@@ -9230,26 +9253,31 @@ impl MetaContractArgsUnion {
     pub fn as_bytes(&self) -> molecule::bytes::Bytes {
         match self {
             MetaContractArgsUnion::CreateAccount(item) => item.as_bytes(),
+            MetaContractArgsUnion::BatchCreateAccounts(item) => item.as_bytes(),
         }
     }
     pub fn as_slice(&self) -> &[u8] {
         match self {
             MetaContractArgsUnion::CreateAccount(item) => item.as_slice(),
+            MetaContractArgsUnion::BatchCreateAccounts(item) => item.as_slice(),
         }
     }
     pub fn item_id(&self) -> molecule::Number {
         match self {
             MetaContractArgsUnion::CreateAccount(_) => 0,
+            MetaContractArgsUnion::BatchCreateAccounts(_) => 1,
         }
     }
     pub fn item_name(&self) -> &str {
         match self {
             MetaContractArgsUnion::CreateAccount(_) => "CreateAccount",
+            MetaContractArgsUnion::BatchCreateAccounts(_) => "BatchCreateAccounts",
         }
     }
     pub fn as_reader<'r>(&'r self) -> MetaContractArgsUnionReader<'r> {
         match self {
             MetaContractArgsUnion::CreateAccount(item) => item.as_reader().into(),
+            MetaContractArgsUnion::BatchCreateAccounts(item) => item.as_reader().into(),
         }
     }
 }
@@ -9258,16 +9286,19 @@ impl<'r> MetaContractArgsUnionReader<'r> {
     pub fn as_slice(&self) -> &'r [u8] {
         match self {
             MetaContractArgsUnionReader::CreateAccount(item) => item.as_slice(),
+            MetaContractArgsUnionReader::BatchCreateAccounts(item) => item.as_slice(),
         }
     }
     pub fn item_id(&self) -> molecule::Number {
         match self {
             MetaContractArgsUnionReader::CreateAccount(_) => 0,
+            MetaContractArgsUnionReader::BatchCreateAccounts(_) => 1,
         }
     }
     pub fn item_name(&self) -> &str {
         match self {
             MetaContractArgsUnionReader::CreateAccount(_) => "CreateAccount",
+            MetaContractArgsUnionReader::BatchCreateAccounts(_) => "BatchCreateAccounts",
         }
     }
 }
@@ -9696,6 +9727,540 @@ impl molecule::prelude::Builder for CreateAccountBuilder {
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
         CreateAccount::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct BatchCreateAccounts(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for BatchCreateAccounts {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for BatchCreateAccounts {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for BatchCreateAccounts {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "scripts", self.scripts())?;
+        write!(f, ", {}: {}", "fee", self.fee())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for BatchCreateAccounts {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            36, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        BatchCreateAccounts::new_unchecked(v.into())
+    }
+}
+impl BatchCreateAccounts {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn scripts(&self) -> ScriptVec {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        ScriptVec::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn fee(&self) -> Fee {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            Fee::new_unchecked(self.0.slice(start..end))
+        } else {
+            Fee::new_unchecked(self.0.slice(start..))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> BatchCreateAccountsReader<'r> {
+        BatchCreateAccountsReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for BatchCreateAccounts {
+    type Builder = BatchCreateAccountsBuilder;
+    const NAME: &'static str = "BatchCreateAccounts";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        BatchCreateAccounts(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        BatchCreateAccountsReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        BatchCreateAccountsReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().scripts(self.scripts()).fee(self.fee())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct BatchCreateAccountsReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for BatchCreateAccountsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for BatchCreateAccountsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for BatchCreateAccountsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "scripts", self.scripts())?;
+        write!(f, ", {}: {}", "fee", self.fee())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> BatchCreateAccountsReader<'r> {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn scripts(&self) -> ScriptVecReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        ScriptVecReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn fee(&self) -> FeeReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            FeeReader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            FeeReader::new_unchecked(&self.as_slice()[start..])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for BatchCreateAccountsReader<'r> {
+    type Entity = BatchCreateAccounts;
+    const NAME: &'static str = "BatchCreateAccountsReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        BatchCreateAccountsReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        if slice_len < offset_first {
+            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
+        }
+        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
+            .chunks_exact(molecule::NUMBER_SIZE)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        ScriptVecReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        FeeReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct BatchCreateAccountsBuilder {
+    pub(crate) scripts: ScriptVec,
+    pub(crate) fee: Fee,
+}
+impl BatchCreateAccountsBuilder {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn scripts(mut self, v: ScriptVec) -> Self {
+        self.scripts = v;
+        self
+    }
+    pub fn fee(mut self, v: Fee) -> Self {
+        self.fee = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for BatchCreateAccountsBuilder {
+    type Entity = BatchCreateAccounts;
+    const NAME: &'static str = "BatchCreateAccountsBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.scripts.as_slice().len()
+            + self.fee.as_slice().len()
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.scripts.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.fee.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.scripts.as_slice())?;
+        writer.write_all(self.fee.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        BatchCreateAccounts::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct DeprecatedMetaContractArgs(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for DeprecatedMetaContractArgs {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for DeprecatedMetaContractArgs {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for DeprecatedMetaContractArgs {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}(", Self::NAME)?;
+        self.to_enum().display_inner(f)?;
+        write!(f, ")")
+    }
+}
+impl ::core::default::Default for DeprecatedMetaContractArgs {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            0, 0, 0, 0, 85, 0, 0, 0, 12, 0, 0, 0, 65, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0,
+            0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0,
+        ];
+        DeprecatedMetaContractArgs::new_unchecked(v.into())
+    }
+}
+impl DeprecatedMetaContractArgs {
+    pub const ITEMS_COUNT: usize = 1;
+    pub fn item_id(&self) -> molecule::Number {
+        molecule::unpack_number(self.as_slice())
+    }
+    pub fn to_enum(&self) -> DeprecatedMetaContractArgsUnion {
+        let inner = self.0.slice(molecule::NUMBER_SIZE..);
+        match self.item_id() {
+            0 => CreateAccount::new_unchecked(inner).into(),
+            _ => panic!("{}: invalid data", Self::NAME),
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> DeprecatedMetaContractArgsReader<'r> {
+        DeprecatedMetaContractArgsReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for DeprecatedMetaContractArgs {
+    type Builder = DeprecatedMetaContractArgsBuilder;
+    const NAME: &'static str = "DeprecatedMetaContractArgs";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        DeprecatedMetaContractArgs(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        DeprecatedMetaContractArgsReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        DeprecatedMetaContractArgsReader::from_compatible_slice(slice)
+            .map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().set(self.to_enum())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct DeprecatedMetaContractArgsReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for DeprecatedMetaContractArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for DeprecatedMetaContractArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for DeprecatedMetaContractArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}(", Self::NAME)?;
+        self.to_enum().display_inner(f)?;
+        write!(f, ")")
+    }
+}
+impl<'r> DeprecatedMetaContractArgsReader<'r> {
+    pub const ITEMS_COUNT: usize = 1;
+    pub fn item_id(&self) -> molecule::Number {
+        molecule::unpack_number(self.as_slice())
+    }
+    pub fn to_enum(&self) -> DeprecatedMetaContractArgsUnionReader<'r> {
+        let inner = &self.as_slice()[molecule::NUMBER_SIZE..];
+        match self.item_id() {
+            0 => CreateAccountReader::new_unchecked(inner).into(),
+            _ => panic!("{}: invalid data", Self::NAME),
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for DeprecatedMetaContractArgsReader<'r> {
+    type Entity = DeprecatedMetaContractArgs;
+    const NAME: &'static str = "DeprecatedMetaContractArgsReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        DeprecatedMetaContractArgsReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let item_id = molecule::unpack_number(slice);
+        let inner_slice = &slice[molecule::NUMBER_SIZE..];
+        match item_id {
+            0 => CreateAccountReader::verify(inner_slice, compatible),
+            _ => ve!(Self, UnknownItem, Self::ITEMS_COUNT, item_id),
+        }?;
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct DeprecatedMetaContractArgsBuilder(pub(crate) DeprecatedMetaContractArgsUnion);
+impl DeprecatedMetaContractArgsBuilder {
+    pub const ITEMS_COUNT: usize = 1;
+    pub fn set<I>(mut self, v: I) -> Self
+    where
+        I: ::core::convert::Into<DeprecatedMetaContractArgsUnion>,
+    {
+        self.0 = v.into();
+        self
+    }
+}
+impl molecule::prelude::Builder for DeprecatedMetaContractArgsBuilder {
+    type Entity = DeprecatedMetaContractArgs;
+    const NAME: &'static str = "DeprecatedMetaContractArgsBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE + self.0.as_slice().len()
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        writer.write_all(&molecule::pack_number(self.0.item_id()))?;
+        writer.write_all(self.0.as_slice())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        DeprecatedMetaContractArgs::new_unchecked(inner.into())
+    }
+}
+#[derive(Debug, Clone)]
+pub enum DeprecatedMetaContractArgsUnion {
+    CreateAccount(CreateAccount),
+}
+#[derive(Debug, Clone, Copy)]
+pub enum DeprecatedMetaContractArgsUnionReader<'r> {
+    CreateAccount(CreateAccountReader<'r>),
+}
+impl ::core::default::Default for DeprecatedMetaContractArgsUnion {
+    fn default() -> Self {
+        DeprecatedMetaContractArgsUnion::CreateAccount(::core::default::Default::default())
+    }
+}
+impl ::core::fmt::Display for DeprecatedMetaContractArgsUnion {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        match self {
+            DeprecatedMetaContractArgsUnion::CreateAccount(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, CreateAccount::NAME, item)
+            }
+        }
+    }
+}
+impl<'r> ::core::fmt::Display for DeprecatedMetaContractArgsUnionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        match self {
+            DeprecatedMetaContractArgsUnionReader::CreateAccount(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, CreateAccount::NAME, item)
+            }
+        }
+    }
+}
+impl DeprecatedMetaContractArgsUnion {
+    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        match self {
+            DeprecatedMetaContractArgsUnion::CreateAccount(ref item) => write!(f, "{}", item),
+        }
+    }
+}
+impl<'r> DeprecatedMetaContractArgsUnionReader<'r> {
+    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        match self {
+            DeprecatedMetaContractArgsUnionReader::CreateAccount(ref item) => write!(f, "{}", item),
+        }
+    }
+}
+impl ::core::convert::From<CreateAccount> for DeprecatedMetaContractArgsUnion {
+    fn from(item: CreateAccount) -> Self {
+        DeprecatedMetaContractArgsUnion::CreateAccount(item)
+    }
+}
+impl<'r> ::core::convert::From<CreateAccountReader<'r>>
+    for DeprecatedMetaContractArgsUnionReader<'r>
+{
+    fn from(item: CreateAccountReader<'r>) -> Self {
+        DeprecatedMetaContractArgsUnionReader::CreateAccount(item)
+    }
+}
+impl DeprecatedMetaContractArgsUnion {
+    pub const NAME: &'static str = "DeprecatedMetaContractArgsUnion";
+    pub fn as_bytes(&self) -> molecule::bytes::Bytes {
+        match self {
+            DeprecatedMetaContractArgsUnion::CreateAccount(item) => item.as_bytes(),
+        }
+    }
+    pub fn as_slice(&self) -> &[u8] {
+        match self {
+            DeprecatedMetaContractArgsUnion::CreateAccount(item) => item.as_slice(),
+        }
+    }
+    pub fn item_id(&self) -> molecule::Number {
+        match self {
+            DeprecatedMetaContractArgsUnion::CreateAccount(_) => 0,
+        }
+    }
+    pub fn item_name(&self) -> &str {
+        match self {
+            DeprecatedMetaContractArgsUnion::CreateAccount(_) => "CreateAccount",
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> DeprecatedMetaContractArgsUnionReader<'r> {
+        match self {
+            DeprecatedMetaContractArgsUnion::CreateAccount(item) => item.as_reader().into(),
+        }
+    }
+}
+impl<'r> DeprecatedMetaContractArgsUnionReader<'r> {
+    pub const NAME: &'r str = "DeprecatedMetaContractArgsUnionReader";
+    pub fn as_slice(&self) -> &'r [u8] {
+        match self {
+            DeprecatedMetaContractArgsUnionReader::CreateAccount(item) => item.as_slice(),
+        }
+    }
+    pub fn item_id(&self) -> molecule::Number {
+        match self {
+            DeprecatedMetaContractArgsUnionReader::CreateAccount(_) => 0,
+        }
+    }
+    pub fn item_name(&self) -> &str {
+        match self {
+            DeprecatedMetaContractArgsUnionReader::CreateAccount(_) => "CreateAccount",
+        }
     }
 }
 #[derive(Clone)]
