@@ -180,7 +180,7 @@ While all operations on layer 2 Godwoken can be represented as a `L2Transaction`
 ```
 {
   "raw": {
-    "chain_id": "0x0",
+    "chain_id": "0x116e9",
     "from_id": "0x2",
     "to_id": "0x1",
     "nonce": "0x3",
@@ -304,7 +304,7 @@ Here is the JSON representation for a layer 2 transaction, which invokes MetaCon
 ```
 {
   "raw": {
-    "chain_id": "0x0",
+    "chain_id": "0x116e9",
     "from_id": "0x2",
     "to_id": "0x0",
     "nonce": "0x4",
@@ -393,7 +393,7 @@ Here is the JSON representation of a `WithdrawalRequest`:
 {
   "raw": {
     "nonce": "0x3",
-    "chain_id": "0x0",
+    "chain_id": "0x116e9",
     "capacity": "0x9502f9000",
     "amount": "0x0",
     "registry_id": "0x2",
