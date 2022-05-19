@@ -1,6 +1,6 @@
 # Deposit and withdrawal
 
-Deposit and withdrawal is a special layer1 <-> layer2 messaging mechanism with assets transfer.
+Deposit and withdrawal is a special layer1 <-> layer2 messaging mechanism with assets transfer. Users can deposit assets from layer1 (CKB) to layer2 (godwoken), or withdraw from layer2 back to layer1.
 
 ## Deposit
 
