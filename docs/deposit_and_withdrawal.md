@@ -4,7 +4,7 @@ Deposit and withdrawal is a special layer1 <-> layer2 messaging mechanism with a
 
 ## Deposit
 
-User deposit by sending a layer1 transaction on CKB while generating a cell with a special lock - deposit lock, which allows the block producer to unlock the cell. The block producer unlocks the deposited cell and then moves the assets under the custodian lock, at the same time, the block producer writes the deposit assets to layer2 state. All the process is enforced by layer1 script, even the block producer can't take the assets away.
+A deposit request is a layer1 transaction which generates a cell with a special lock - deposit lock. The block producer will collect these cells and process the deposit requests in blocks. It will unlock the deposit cells, move the assets under the custodian lock, and update layer2 state, in block submission layer1 transactions. These transactions are checked by a layer1 script, so the block producer can't take the assets away.
 
 The deposit cell:
 
@@ -34,7 +34,7 @@ table DepositLockArgs {
 
 ## Custodian cell
 
-The deposit cell is converted into a custodian cell, which means the assets are locked by layer2, custodian lock enforced the safety of the custodian assets, the assets can only be transferred out when the user withdrawal.
+Deposit cells are converted to custodian cells when assets are deposited to layer2. Custodian cells are protected by the custodian lock, which enforces that the assets can only be transferred out when a user withdraw.
 
 The custodian cell:
 
@@ -68,7 +68,7 @@ CKB requires `capacity` to cover the cost of the cell, the `capacity` of the dep
 
 ## Withdrawal
 
-Withdrawal is the reverse process of the deposit. A user signs a withdrawal request and sends it to the block producer, block producer converts the custodian cell into a withdrawal cell and updates the layer2 state.
+Users sign withdrawal requests and send them to the block producer. The block producer will process these requests in blocks, update layer2 state and convert custodian cells to withdrawal cells in block submission layer1 transactions.
 
 The withdrawal cell:
 
