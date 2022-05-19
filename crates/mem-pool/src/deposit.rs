@@ -154,10 +154,11 @@ fn check_deposit_cell(ctx: &RollupContext, cell: &DepositInfo, state: &MemStateT
             .into_iter()
             .any(|type_hash| type_hash.hash() == script.code_hash())
         {
-            return Err(anyhow!(
-                "Not an EOA type hash: {}, we can only deposit to EOA account",
-                hex::encode(&script.code_hash().as_bytes())
-            ));
+            return Err(
+                anyhow!("Invalid deposit account script: script.code_hash is not in configured allowed_eoa_type_hashes, script.code_hash: {}",
+                    hex::encode(&script.code_hash().as_bytes())
+                ),
+            );
         }
 
         let args: Bytes = script.args().unpack();
@@ -193,7 +194,10 @@ fn check_deposit_cell(ctx: &RollupContext, cell: &DepositInfo, state: &MemStateT
                 if let Some(script_hash) = state.get_script_hash_by_registry_address(&reg_addr)? {
                     if script.hash() != script_hash.as_slice() {
                         return Err(anyhow!(
-                            "RegistryAddress has been mapped with another script hash before."
+                            "The RegistryAddress {:?} was already occupied by script_hash {}, depositing script_hash: {}",
+                            hex::encode(reg_addr.to_bytes()),
+                            hex::encode(&script_hash.as_slice()),
+                            hex::encode(&script.hash()),
                         ));
                     }
                 }
