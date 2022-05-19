@@ -4,7 +4,7 @@ Deposit and withdrawal is a special layer1 <-> layer2 messaging mechanism with a
 
 ## Deposit
 
-A deposit request is a layer1 transaction which generates a cell with a special lock - deposit lock. The block producer will collect these cells and process the deposit requests in blocks. It will unlock the deposit cells, move the assets under the custodian lock, and update layer2 state, in block submission layer1 transactions. These transactions are checked by a layer1 script, so the block producer can't take the assets away.
+A deposit request is created by sending a layer1 transaction which generates a cell with a special lock - deposit lock. The block producer will collect these cells and process the deposit requests in blocks. It will unlock the deposit cells, move the assets under the custodian lock, and update layer2 state, in block submission layer1 transactions. These transactions are checked by a layer1 script, so the block producer can't take the assets away.
 
 The deposit cell:
 
