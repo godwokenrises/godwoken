@@ -434,7 +434,7 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
                 let data_addr = machine.registers()[A3].to_u64();
 
                 let data = load_bytes(machine, data_addr, data_len as usize)?;
-                self.result.logs.push(
+                self.result.write.logs.push(
                     LogItem::new_builder()
                         .account_id(account_id.pack())
                         .service_flag(service_flag.into())

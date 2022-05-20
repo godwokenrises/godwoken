@@ -795,7 +795,7 @@ async fn execute_l2transaction(
             tx_hash: tx_hash.into(),
             block_number: number,
             return_data: run_result.return_data,
-            last_log: run_result.logs.pop(),
+            last_log: run_result.write.logs.pop(),
             exit_code: run_result.exit_code,
         };
 
@@ -904,7 +904,7 @@ async fn execute_raw_l2transaction(
             tx_hash,
             block_number,
             return_data: run_result.return_data,
-            last_log: run_result.logs.pop(),
+            last_log: run_result.write.logs.pop(),
             exit_code: run_result.exit_code,
         };
 
