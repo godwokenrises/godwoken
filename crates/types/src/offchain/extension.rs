@@ -46,7 +46,7 @@ impl TxReceipt {
                     .collect::<Vec<_>>()
                     .pack(),
             )
-            .logs(run_result.logs.pack())
+            .logs(run_result.write.logs.pack())
             .build()
     }
 }

@@ -50,6 +50,7 @@ use ckb_vm::{DefaultMachineBuilder, SupportMachine};
 
 #[cfg(not(has_asm))]
 use ckb_vm::TraceMachine;
+use gw_utils::script_log::GW_LOG_POLYJUICE_SYSTEM;
 use tracing::instrument;
 
 pub struct ApplyBlockArgs {
@@ -641,6 +642,7 @@ impl Generator {
             }
         } else {
             // revert tx
+            let last_run_result_log = run_result.write.logs.pop();
             run_result.revert_write();
 
             // sender address
@@ -683,6 +685,12 @@ impl Generator {
                 TypedRawTransaction::Meta(tx) => tx.consumed(),
                 TypedRawTransaction::SimpleUDT(tx) => tx.consumed(),
                 TypedRawTransaction::Polyjuice(ref tx) => {
+                    // push polyjuice system log back to run_result
+                    if let Some(log) = last_run_result_log
+                        .filter(|log| log.service_flag() == GW_LOG_POLYJUICE_SYSTEM.into())
+                    {
+                        run_result.write.logs.push(log);
+                    }
                     let args = tx.extract_tx_args().ok_or(TransactionError::NoCost)?;
                     let gas_used = match read_polyjuice_gas_used(&run_result) {
                         Some(gas_used) => gas_used,
@@ -769,6 +777,7 @@ fn build_challenge_target(
 fn read_polyjuice_gas_used(run_result: &RunResult) -> Option<u64> {
     // read polyjuice system log
     match run_result
+        .write
         .logs
         .iter()
         .find(|item| u8::from(item.service_flag()) == gw_utils::script_log::GW_LOG_POLYJUICE_SYSTEM)

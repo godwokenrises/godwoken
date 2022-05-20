@@ -16,6 +16,8 @@ pub struct RunResultWriteState {
     pub account_count: Option<u32>,
     pub new_scripts: HashMap<H256, Script>,
     pub write_data: HashMap<H256, Bytes>,
+    // log data
+    pub logs: Vec<LogItem>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -26,8 +28,6 @@ pub struct RunResult {
     pub get_scripts: HashMap<H256, Script>,
     // data hash -> data full size
     pub read_data: HashMap<H256, Bytes>,
-    // log data
-    pub logs: Vec<LogItem>,
     // used cycles
     pub used_cycles: u64,
     pub exit_code: i8,

@@ -1169,11 +1169,11 @@ pub struct RunResult {
 impl From<offchain::RunResult> for RunResult {
     fn from(data: offchain::RunResult) -> RunResult {
         let offchain::RunResult {
-            return_data, logs, ..
+            return_data, write, ..
         } = data;
         RunResult {
             return_data: JsonBytes::from_bytes(return_data),
-            logs: logs.into_iter().map(Into::into).collect(),
+            logs: write.logs.into_iter().map(Into::into).collect(),
         }
     }
 }
