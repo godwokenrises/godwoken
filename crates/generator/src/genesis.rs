@@ -20,8 +20,8 @@ use gw_types::{
     core::{ScriptHashType, Status},
     offchain::RollupContext,
     packed::{
-        AccountMerkleState, BlockMerkleState, GlobalState, L2Block, L2BlockCommittedInfo,
-        RawL2Block, Script, SubmitTransactions,
+        AccountMerkleState, BlockMerkleState, GlobalState, L2Block, RawL2Block, Script,
+        SubmitTransactions,
     },
     prelude::*,
 };
@@ -186,12 +186,7 @@ pub fn build_genesis_from_store(
     Ok((db, genesis_with_global_state))
 }
 
-pub fn init_genesis(
-    store: &Store,
-    config: &GenesisConfig,
-    genesis_committed_info: L2BlockCommittedInfo,
-    secp_data: Bytes,
-) -> Result<()> {
+pub fn init_genesis(store: &Store, config: &GenesisConfig, secp_data: Bytes) -> Result<()> {
     let rollup_script_hash: H256 = {
         let rollup_script_hash: [u8; 32] = config.rollup_type_hash.clone().into();
         rollup_script_hash.into()
@@ -219,7 +214,6 @@ pub fn init_genesis(
     let prev_txs_state = genesis.as_reader().raw().post_account().to_entity();
     db.insert_block(
         genesis.clone(),
-        Some(genesis_committed_info),
         global_state,
         Vec::new(),
         prev_txs_state,

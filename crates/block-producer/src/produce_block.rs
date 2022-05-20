@@ -192,8 +192,6 @@ pub fn generate_produce_block_param(
         let opt = db.get_block_hash_by_number(tip_block_number)?;
         opt.ok_or_else(|| anyhow!("[produce block] tip block {} not found", tip_block_number))?
     };
-    log::info!("tip block number: {}", tip_block_number);
-    log::info!("tip block hash: {:?}", tip_block_hash);
 
     // generate kv state & merkle proof from tip state
     let chain_state = db.state_tree(StateContext::ReadOnly)?;

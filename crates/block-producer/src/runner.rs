@@ -2,6 +2,7 @@ use crate::{
     block_producer::{BlockProducer, BlockProducerCreateArgs},
     challenger::{Challenger, ChallengerNewArgs},
     cleaner::Cleaner,
+    payment::PaymentCellsManager,
     psc::{PSCContext, ProduceSubmitConfirm},
     test_mode_control::TestModeControl,
     types::ChainEvent,
@@ -349,13 +350,7 @@ impl BaseInitComponents {
                 .raw_data()
         };
 
-        init_genesis(
-            &store,
-            &config.genesis,
-            config.chain.genesis_committed_info.clone().into(),
-            secp_data.clone(),
-        )
-        .with_context(|| "init genesis")?;
+        init_genesis(&store, &config.genesis, secp_data.clone()).with_context(|| "init genesis")?;
 
         let dynamic_config_manager = Arc::new(ArcSwap::from_pointee(DynamicConfigManager::create(
             config.clone(),
@@ -744,7 +739,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     // RPC registry
     let args = RegistryArgs {
         store: store.clone(),
-        mem_pool,
+        mem_pool: mem_pool.clone(),
         generator,
         tests_rpc_impl: test_mode_control.map(Box::new),
         rollup_config,
@@ -784,12 +779,25 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     log::info!("{:?} mode", config.node_mode);
 
-    if let Some(block_producer) = block_producer {
-        let psc_state = ProduceSubmitConfirm::create(Arc::new(PSCContext {
+    if let (Some(block_producer), Some(mem_pool)) = (block_producer, mem_pool) {
+        let psc_state = ProduceSubmitConfirm::init(Arc::new(PSCContext {
             store: store.clone(),
             block_producer,
             rpc_client: rpc_client.clone(),
             chain: chain.clone(),
+            mem_pool,
+            payment_cells_manager: PaymentCellsManager::create(
+                store.clone(),
+                config
+                    .block_producer
+                    .as_ref()
+                    .unwrap()
+                    .wallet_config
+                    .lock
+                    .clone()
+                    .into(),
+            )
+            .into(),
         }))
         .await
         .context("create ProduceSubmitConfirm")?;

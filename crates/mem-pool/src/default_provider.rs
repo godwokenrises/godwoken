@@ -1,6 +1,6 @@
 use std::{collections::HashSet, time::Duration};
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use gw_config::MemBlockConfig;
 use gw_rpc_client::rpc_client::RPCClient;

@@ -160,9 +160,7 @@ mod tests {
     };
     use gw_types::{
         bytes::Bytes,
-        packed::{
-            AllowedTypeHash, L2BlockCommittedInfo, L2Transaction, RawL2Transaction, RollupConfig,
-        },
+        packed::{AllowedTypeHash, L2Transaction, RawL2Transaction, RollupConfig},
         prelude::{Builder, Entity, Pack, PackVec, Unpack},
     };
 
@@ -533,13 +531,6 @@ mod tests {
             },
             secp_data_dep: Default::default(),
         };
-        let genesis_committed_info = L2BlockCommittedInfo::default();
-        init_genesis(
-            store,
-            &genesis_config,
-            genesis_committed_info,
-            Bytes::default(),
-        )
-        .unwrap();
+        init_genesis(store, &genesis_config, Bytes::default()).unwrap();
     }
 }

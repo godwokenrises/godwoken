@@ -1,11 +1,13 @@
 #![allow(clippy::mutable_key_type)]
 
+use std::collections::HashSet;
+
 use crate::transaction_skeleton::TransactionSkeleton;
 use anyhow::Result;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
 use gw_types::{
-    offchain::InputCellInfo,
-    packed::{CellInput, CellOutput, Script},
+    offchain::{CellInfo, InputCellInfo},
+    packed::{CellInput, CellOutput, OutPoint, Script},
     prelude::*,
 };
 
@@ -17,10 +19,12 @@ fn calculate_required_tx_fee(tx_size: usize) -> u64 {
 }
 
 /// Add fee cell to tx skeleton
-pub async fn fill_tx_fee(
+pub async fn fill_tx_fee_with_local(
     tx_skeleton: &mut TransactionSkeleton,
     client: &CKBIndexerClient,
     lock_script: Script,
+    local_spent: &HashSet<OutPoint>,
+    local_live: &[CellInfo],
 ) -> Result<()> {
     const CHANGE_CELL_CAPACITY: u64 = 61_00000000;
 
@@ -71,7 +75,13 @@ pub async fn fill_tx_fee(
         let taken_outpoints = tx_skeleton.taken_outpoints()?;
         // get payment cells
         let cells = client
-            .query_payment_cells(lock_script.clone(), required_fee, &taken_outpoints)
+            .query_payment_cells(
+                lock_script.clone(),
+                required_fee,
+                &taken_outpoints,
+                local_spent,
+                local_live,
+            )
             .await?;
         assert!(!cells.is_empty(), "need cells to pay fee");
 
@@ -105,4 +115,14 @@ pub async fn fill_tx_fee(
         .push((change_cell, Default::default()));
 
     Ok(())
+}
+
+/// Add fee cell to tx skeleton
+// TODO: always use fill_tx_fee_with_local.
+pub async fn fill_tx_fee(
+    tx_skeleton: &mut TransactionSkeleton,
+    client: &CKBIndexerClient,
+    lock_script: Script,
+) -> Result<()> {
+    fill_tx_fee_with_local(tx_skeleton, client, lock_script, &HashSet::new(), &[]).await
 }

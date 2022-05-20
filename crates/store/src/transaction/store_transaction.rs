@@ -121,7 +121,6 @@ impl StoreTransaction {
     pub fn insert_block(
         &self,
         block: packed::L2Block,
-        committed_info: Option<packed::L2BlockCommittedInfo>,
         global_state: packed::GlobalState,
         withdrawal_receipts: Vec<WithdrawalReceipt>,
         prev_txs_state: AccountMerkleState,
@@ -133,13 +132,6 @@ impl StoreTransaction {
         debug_assert_eq!(block.withdrawals().len(), withdrawals.len());
         let block_hash = block.hash();
         self.insert_raw(COLUMN_BLOCK, &block_hash, block.as_slice())?;
-        if let Some(ref committed_info) = committed_info {
-            self.insert_raw(
-                COLUMN_L2BLOCK_COMMITTED_INFO,
-                &block_hash,
-                committed_info.as_slice(),
-            )?;
-        }
         self.insert_raw(
             COLUMN_BLOCK_GLOBAL_STATE,
             &block_hash,

@@ -32,7 +32,7 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::{
-    fee::fill_tx_fee, genesis_info::CKBGenesisInfo, since::Since,
+    fee::fill_tx_fee_with_local, genesis_info::CKBGenesisInfo, since::Since,
     transaction_skeleton::TransactionSkeleton, wallet::Wallet,
 };
 use std::{collections::HashSet, sync::Arc, time::Instant};
@@ -445,7 +445,7 @@ impl BlockProducer {
     #[instrument(skip_all, fields(block = args.block.raw().number().unpack()))]
     pub async fn compose_submit_tx(
         &self,
-        args: ComposeSubmitTxArgs,
+        args: ComposeSubmitTxArgs<'_>,
     ) -> Result<(Transaction, CellInfo)> {
         let ComposeSubmitTxArgs {
             deposit_cells,
@@ -455,6 +455,8 @@ impl BlockProducer {
             since,
             rollup_cell,
             withdrawal_extras,
+            local_spent_payment_cells,
+            local_live_payment_cells,
         } = args;
 
         let rollup_context = self.generator.rollup_context();
@@ -559,11 +561,6 @@ impl BlockProducer {
         let rollup_cell_output = output.clone();
         let rollup_cell_output_data = output_data.clone();
         tx_skeleton.outputs_mut().push((output, output_data));
-        let rollup_cell_output_index: u32 = tx_skeleton
-            .outputs()
-            .len()
-            .try_into()
-            .expect("output index to u32");
 
         // deposit cells
         for deposit in &deposit_cells {
@@ -683,10 +680,12 @@ impl BlockProducer {
         }
 
         // tx fee cell
-        fill_tx_fee(
+        fill_tx_fee_with_local(
             &mut tx_skeleton,
             &self.rpc_client.indexer,
             self.wallet.lock_script().to_owned(),
+            local_spent_payment_cells,
+            local_live_payment_cells,
         )
         .await?;
         debug_assert_eq!(
@@ -706,14 +705,15 @@ impl BlockProducer {
                 data: rollup_cell_output_data,
                 out_point: OutPoint::new_builder()
                     .tx_hash(tx_hash.pack())
-                    .index(rollup_cell_output_index.pack())
+                    // Rollup cell is the first output.
+                    .index(0u32.pack())
                     .build(),
             },
         ))
     }
 }
 
-pub struct ComposeSubmitTxArgs {
+pub struct ComposeSubmitTxArgs<'a> {
     pub deposit_cells: Vec<DepositInfo>,
     pub finalized_custodians: CollectedCustodianCells,
     pub block: L2Block,
@@ -721,4 +721,6 @@ pub struct ComposeSubmitTxArgs {
     pub since: Since,
     pub rollup_cell: CellInfo,
     pub withdrawal_extras: Vec<WithdrawalRequestExtra>,
+    pub local_spent_payment_cells: &'a HashSet<OutPoint>,
+    pub local_live_payment_cells: &'a [CellInfo],
 }

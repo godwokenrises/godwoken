@@ -88,13 +88,7 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
             .raw_data()
     };
 
-    init_genesis(
-        &local_store,
-        &config.genesis,
-        config.chain.genesis_committed_info.clone().into(),
-        secp_data,
-    )
-    .with_context(|| "init genesis")?;
+    init_genesis(&local_store, &config.genesis, secp_data).with_context(|| "init genesis")?;
     let generator = {
         let backend_manage = BackendManage::from_config(config.backend_switches.clone())
             .with_context(|| "config backends")?;

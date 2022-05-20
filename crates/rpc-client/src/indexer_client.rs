@@ -71,6 +71,8 @@ impl CKBIndexerClient {
         lock: Script,
         required_capacity: u64,
         taken_outpoints: &HashSet<OutPoint>,
+        local_spent: &HashSet<OutPoint>,
+        local_live: &[CellInfo],
     ) -> Result<Vec<CellInfo>> {
         let search_key = SearchKey {
             script: {
@@ -86,6 +88,15 @@ impl CKBIndexerClient {
         let mut collected_cells = Vec::new();
         let mut collected_capacity = 0u64;
         let mut cursor = None;
+
+        for cell in local_live {
+            collected_cells.push(cell.clone());
+            collected_capacity = collected_capacity.saturating_add(cell.output.capacity().unpack());
+            if collected_capacity >= required_capacity {
+                break;
+            }
+        }
+
         while collected_capacity < required_capacity {
             let cells: Pagination<Cell> = self
                 .request(
@@ -117,6 +128,7 @@ impl CKBIndexerClient {
                 if !cell.output_data.is_empty()
                     || cell.output.type_.is_some()
                     || taken_outpoints.contains(&out_point)
+                    || local_spent.contains(&out_point)
                 {
                     return None;
                 }

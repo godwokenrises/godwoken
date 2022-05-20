@@ -5,6 +5,7 @@ pub mod custodian;
 pub mod db_block_validator;
 pub mod debugger;
 pub mod deposit;
+pub(crate) mod payment;
 pub mod poller;
 pub mod produce_block;
 pub(crate) mod psc;

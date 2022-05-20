@@ -2,6 +2,8 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::{anyhow, bail, ensure, Result};
 use gw_chain::chain::Chain;
+use gw_common::H256;
+use gw_mem_pool::pool::MemPool;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
@@ -14,6 +16,7 @@ use tokio::{sync::Mutex, time::Instant};
 
 use crate::{
     block_producer::{BlockProducer, ComposeSubmitTxArgs},
+    payment::PaymentCellsManager,
     produce_block::ProduceBlockResult,
 };
 
@@ -30,11 +33,14 @@ pub struct PSCContext {
     pub store: Store,
     pub rpc_client: RPCClient,
     pub chain: Arc<Mutex<Chain>>,
+    pub mem_pool: Arc<Mutex<MemPool>>,
     pub block_producer: BlockProducer,
+    // Make rust happy. Actually we won't refresh or access this at the same time.
+    pub payment_cells_manager: Mutex<PaymentCellsManager>,
 }
 
 impl ProduceSubmitConfirm {
-    pub async fn create(context: Arc<PSCContext>) -> Result<Self> {
+    pub async fn init(context: Arc<PSCContext>) -> Result<Self> {
         let store_tx = context.store.begin_transaction();
         let last_valid_block = store_tx.get_last_valid_tip_block()?;
         let last_valid_number_hash = NumberHash::new_builder()
@@ -44,7 +50,7 @@ impl ProduceSubmitConfirm {
         let last_valid = last_valid_block.raw().number().unpack();
         // Set to last_valid because if it is None, it means we are
         // migrating from the version that does not decouple producing and
-        // submitting.
+        // submitting or it's a new chain.
         let last_submitted = match store_tx.get_last_submitted_block_number_hash() {
             Some(b) => b.number().unpack(),
             None => {
@@ -73,6 +79,7 @@ impl ProduceSubmitConfirm {
             }
         };
         store_tx.commit()?;
+        context.payment_cells_manager.lock().await.refresh();
         log::info!(
             "last valid: {}, last_submitted: {}, last_confirmed: {}",
             last_valid,
@@ -126,6 +133,7 @@ async fn run(mut state: ProduceSubmitConfirm) -> Result<()> {
                         let store_tx = state.context.store.begin_transaction();
                         store_tx.set_last_submitted_block_number_hash(&nh.as_reader())?;
                         store_tx.commit()?;
+                        state.context.payment_cells_manager.lock().await.refresh();
                         state.submitted_count += 1;
                         state.local_count -= 1;
                     }
@@ -141,12 +149,14 @@ async fn run(mut state: ProduceSubmitConfirm) -> Result<()> {
                         let store_tx = state.context.store.begin_transaction();
                         store_tx.set_last_confirmed_block_number_hash(&nh.as_reader())?;
                         store_tx.commit()?;
+                        state.context.payment_cells_manager.lock().await.refresh();
                         // TODO: update L2 block committed info.
                         state.submitted_count -= 1;
                     }
                     _ => {}
                 }
             }
+            else => {}
         }
         if !submitting && state.local_count > 0 && state.submitted_count < state.submitted_limit {
             submitting = true;
@@ -194,6 +204,7 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
         finalized_custodians,
     } = ctx.block_producer.produce_next_block(0).await?;
     let number: u64 = block.raw().number().unpack();
+    let block_hash: H256 = block.hash().into();
 
     let block_txs = block.transactions().len();
     let block_withdrawals = block.withdrawals().len();
@@ -235,6 +246,9 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
         .set_block_collected_custodian_cells(number, &finalized_custodians.pack().as_reader())?;
 
     store_tx.commit()?;
+
+    ctx.mem_pool.lock().await.notify_new_tip(block_hash).await?;
+
     // TODO??: update built-in web3_indexer
 
     Ok(())
@@ -296,6 +310,8 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
             .unpack();
         drop(snap);
 
+        let payment_cells_manager = ctx.payment_cells_manager.lock().await;
+
         let args = ComposeSubmitTxArgs {
             deposit_cells,
             finalized_custodians,
@@ -304,6 +320,8 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
             since,
             rollup_cell,
             withdrawal_extras,
+            local_spent_payment_cells: payment_cells_manager.local_spent(),
+            local_live_payment_cells: payment_cells_manager.local_live(),
         };
         let (tx, next_rollup_cell) = ctx.block_producer.compose_submit_tx(args).await?;
 
@@ -334,8 +352,13 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
     // TODO: Some error can be ignored. Some error we cannot recover from, e.g.
     // a deposit cell is dead after an L1 reorg. We may need to re-generate the
     // block in such cases.
+    log::info!(
+        "sending transaction {} to submit block {}",
+        hex::encode(tx.hash()),
+        block_number
+    );
     ctx.rpc_client.send_transaction(&tx).await?;
-    log::info!("sent transaction for submitting block {}", block_number);
+    log::info!("transaction sent");
     Ok(NumberHash::new_builder()
         .block_hash(block_hash.pack())
         .number(block_number.pack())

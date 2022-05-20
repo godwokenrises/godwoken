@@ -122,7 +122,6 @@ pub type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_mer
 
 pub struct LocalState {
     tip: L2Block,
-    last_synced: L2BlockCommittedInfo,
     last_global_state: GlobalState,
 }
 
@@ -134,10 +133,6 @@ impl LocalState {
     pub fn status(&self) -> Status {
         let status: u8 = self.last_global_state.status().into();
         Status::try_from(status).expect("invalid status")
-    }
-
-    pub fn last_synced(&self) -> &L2BlockCommittedInfo {
-        &self.last_synced
     }
 
     pub fn last_global_state(&self) -> &GlobalState {
@@ -181,15 +176,11 @@ impl Chain {
         );
         let tip = store.get_tip_block()?;
         // TODO: need to adapt to having local/submitted blocks.
-        let last_synced = store
-            .get_l2block_committed_info(&tip.hash().into())?
-            .ok_or_else(|| anyhow!("can't find last synced committed info"))?;
         let last_global_state = store
             .get_block_post_global_state(&tip.hash().into())?
             .ok_or_else(|| anyhow!("can't find last global state"))?;
         let local_state = LocalState {
             tip,
-            last_synced,
             last_global_state,
         };
         let rollup_config_hash = rollup_config.hash();
@@ -315,16 +306,6 @@ impl Chain {
             context,
         } = action;
         let global_state = parse_global_state(&transaction, &self.rollup_type_script_hash)?;
-        assert!(
-            {
-                let number: u64 = l2block_committed_info.number().unpack();
-                number
-            } >= {
-                let number: u64 = self.local_state.last_synced.number().unpack();
-                number
-            },
-            "must be greater than or equalled to last synced number"
-        );
         let status = {
             let status: u8 = self.local_state.last_global_state.status().into();
             Status::try_from(status).expect("invalid status")
@@ -378,7 +359,6 @@ impl Chain {
                     if let Some(challenge_target) = self.process_block(
                         db,
                         l2block.clone(),
-                        Some(l2block_committed_info.clone()),
                         global_state.clone(),
                         deposit_requests,
                         deposit_asset_scripts,
@@ -603,7 +583,6 @@ impl Chain {
 
         self.last_sync_event = update()?;
         self.local_state.last_global_state = global_state;
-        self.local_state.last_synced = l2block_committed_info;
         log::debug!("last sync event {:?}", self.last_sync_event);
 
         Ok(())
@@ -613,19 +592,9 @@ impl Chain {
     fn revert_l1action(&mut self, db: &StoreTransaction, action: RevertedL1Action) -> Result<()> {
         let RevertedL1Action {
             prev_global_state,
-            l2block_committed_info,
             context,
+            ..
         } = action;
-        assert!(
-            {
-                let number: u64 = l2block_committed_info.number().unpack();
-                number
-            } <= {
-                let number: u64 = self.local_state.last_synced.number().unpack();
-                number
-            },
-            "must be smaller than or equalled to last synced number"
-        );
 
         let revert = || -> Result<()> {
             match context {
@@ -807,9 +776,6 @@ impl Chain {
 
         self.local_state.last_global_state = prev_global_state;
         self.local_state.tip = db.get_tip_block()?;
-        self.local_state.last_synced = db
-            .get_l2block_committed_info(&db.get_tip_block_hash()?)?
-            .expect("last committed info");
         Ok(())
     }
 
@@ -904,7 +870,6 @@ impl Chain {
         let maybe_challenge_target = self.process_block(
             store_tx,
             l2_block,
-            None,
             global_state,
             deposit_requests,
             deposit_asset_scripts,
@@ -926,7 +891,6 @@ impl Chain {
         &mut self,
         db: &StoreTransaction,
         l2block: L2Block,
-        l2block_committed_info: Option<L2BlockCommittedInfo>,
         global_state: GlobalState,
         deposit_requests: Vec<DepositRequest>,
         deposit_asset_scripts: HashSet<Script>,
@@ -997,7 +961,6 @@ impl Chain {
         // update chain
         db.insert_block(
             l2block.clone(),
-            l2block_committed_info,
             global_state,
             withdrawal_receipts,
             prev_txs_state,
