@@ -5,6 +5,7 @@ use super::LockAlgorithm;
 use crate::account_lock_manage::eip712::traits::EIP712Encode;
 use crate::account_lock_manage::eip712::types::Withdrawal;
 use crate::error::LockAlgorithmError;
+use anyhow::bail;
 use gw_common::blake2b::new_blake2b;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::H256;
@@ -121,6 +122,42 @@ impl LockAlgorithm for Secp256k1 {
 pub struct Secp256k1Eth;
 
 impl Secp256k1Eth {
+    pub fn polyjuice_tx_signing_message(
+        chain_id: u64,
+        raw_tx: &RawL2Transaction,
+        receiver_script: &Script,
+    ) -> anyhow::Result<H256> {
+        let tx_chain_id = raw_tx.chain_id().unpack();
+        if chain_id != tx_chain_id {
+            bail!("mismatch tx chain id");
+        }
+
+        let rlp_data = try_assemble_polyjuice_args(raw_tx, receiver_script)
+            .ok_or_else(|| anyhow::anyhow!("invalid polyjuice args"))?;
+
+        let mut hasher = Keccak256::new();
+        hasher.update(&rlp_data);
+        let signing_message: [u8; 32] = hasher.finalize().into();
+
+        Ok(signing_message.into())
+    }
+
+    pub fn eip712_signing_message(
+        chain_id: u64,
+        raw_tx: &RawL2Transaction,
+        sender_registry_address: RegistryAddress,
+        to_script_hash: H256,
+    ) -> anyhow::Result<H256> {
+        let typed_tx = crate::account_lock_manage::eip712::types::L2Transaction::from_raw(
+            raw_tx,
+            sender_registry_address,
+            to_script_hash,
+        )?;
+        let message = typed_tx.eip712_message(Self::domain_with_chain_id(chain_id).hash_struct());
+
+        Ok(message.into())
+    }
+
     fn domain_with_chain_id(chain_id: u64) -> EIP712Domain {
         EIP712Domain {
             name: "Godwoken".to_string(),
@@ -203,7 +240,7 @@ impl LockAlgorithm for Secp256k1Eth {
         if expected_chain_id != chain_id {
             return Err(LockAlgorithmError::InvalidTransactionArgs);
         }
-        if let Some(rlp_data) = try_assemble_polyjuice_args(tx.raw(), receiver_script.clone()) {
+        if let Some(rlp_data) = try_assemble_polyjuice_args(&tx.raw(), &receiver_script) {
             let mut hasher = Keccak256::new();
             hasher.update(&rlp_data);
             let signing_message: [u8; 32] = hasher.finalize().into();
@@ -222,7 +259,7 @@ impl LockAlgorithm for Secp256k1Eth {
         let to_script_hash = receiver_script.hash().into();
 
         let typed_tx = crate::account_lock_manage::eip712::types::L2Transaction::from_raw(
-            raw_tx,
+            &raw_tx,
             sender_address,
             to_script_hash,
         )
@@ -375,7 +412,10 @@ fn calc_godwoken_signing_message(
     )
 }
 
-fn try_assemble_polyjuice_args(raw_tx: RawL2Transaction, receiver_script: Script) -> Option<Bytes> {
+fn try_assemble_polyjuice_args(
+    raw_tx: &RawL2Transaction,
+    receiver_script: &Script,
+) -> Option<Bytes> {
     let args: Bytes = raw_tx.args().unpack();
     if args.len() < 52 {
         return None;

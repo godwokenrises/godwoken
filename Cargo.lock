@@ -2206,6 +2206,7 @@ dependencies = [
  "gw-store",
  "gw-traits",
  "gw-types",
+ "gw-utils",
  "gw-version",
  "hyper",
  "jsonrpc-v2",

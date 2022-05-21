@@ -173,7 +173,7 @@ impl EIP712Encode for L2Transaction {
 
 impl L2Transaction {
     pub fn from_raw(
-        data: RawL2Transaction,
+        data: &RawL2Transaction,
         sender_address: gw_common::registry_address::RegistryAddress,
         to_script_hash: H256,
     ) -> Result<Self> {

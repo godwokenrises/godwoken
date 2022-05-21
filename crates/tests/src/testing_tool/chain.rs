@@ -150,6 +150,16 @@ lazy_static! {
         hasher.finalize(&mut buf);
         buf
     };
+    pub static ref POLYJUICE_VALIDATOR_PROGRAM: Bytes = fs::read(&POLYJUICE_VALIDATOR_PATH)
+        .expect("read polyjuice validator program")
+        .into();
+    pub static ref POLYJUICE_VALIDATOR_CODE_HASH: [u8; 32] = {
+        let mut buf = [0u8; 32];
+        let mut hasher = new_blake2b();
+        hasher.update(&POLYJUICE_VALIDATOR_PROGRAM);
+        hasher.finalize(&mut buf);
+        buf
+    };
 }
 
 // meta contract
@@ -169,6 +179,10 @@ pub const ETH_REGISTRY_VALIDATOR_PATH: &str =
     "../../.tmp/binaries/godwoken-scripts/eth-addr-reg-generator";
 pub const ETH_REGISTRY_GENERATOR_PATH: &str =
     "../../.tmp/binaries/godwoken-scripts/eth-addr-reg-validator";
+
+// polyjuice
+pub const POLYJUICE_VALIDATOR_PATH: &str = "../../.tmp/binaries/godwoken-polyjuice/validator";
+pub const POLYJUICE_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-polyjuice/generator";
 
 pub const DEFAULT_FINALITY_BLOCKS: u64 = 6;
 
@@ -193,6 +207,12 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
             generator_path: ETH_REGISTRY_GENERATOR_PATH.into(),
             validator_script_type_hash: (*ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH).into(),
             backend_type: gw_config::BackendType::EthAddrReg,
+        },
+        BackendConfig {
+            validator_path: POLYJUICE_VALIDATOR_PATH.into(),
+            generator_path: POLYJUICE_GENERATOR_PATH.into(),
+            validator_script_type_hash: (*POLYJUICE_VALIDATOR_CODE_HASH).into(),
+            backend_type: gw_config::BackendType::Polyjuice,
         },
     ];
     BackendManage::from_config(configs).expect("default backend")

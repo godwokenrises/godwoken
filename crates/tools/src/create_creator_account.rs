@@ -105,7 +105,7 @@ pub async fn create_creator_account(
         .into();
     let message = {
         let typed_tx = eip712::types::L2Transaction::from_raw(
-            raw_l2_transaction.clone(),
+            &raw_l2_transaction,
             sender_address,
             receiver_script_hash.into(),
         )
