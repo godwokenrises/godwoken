@@ -18,16 +18,18 @@ pub fn sanitize_deposit_cells(
     unsanitize_deposits: Vec<DepositInfo>,
     state: &MemStateTree,
 ) -> Vec<DepositInfo> {
+    log::debug!(target: "collect-deposit-cells", "sanitize {} deposits", unsanitize_deposits.len());
     let mut deposit_cells = Vec::with_capacity(unsanitize_deposits.len());
     for cell in unsanitize_deposits {
         // check deposit lock
         // the lock should be correct unless the upstream ckb-indexer has bugs
         if let Err(err) = check_deposit_cell(ctx, &cell, state) {
-            log::debug!("[sanitize deposit cell] {}", err);
+            log::debug!(target: "collect-deposit-cells", "invalid deposit cell: {}", err);
             continue;
         }
         deposit_cells.push(cell);
     }
+    log::debug!(target: "collect-deposit-cells", "return {} sanitized deposits", deposit_cells.len());
     deposit_cells
 }
 
@@ -77,6 +79,7 @@ fn check_deposit_cell_cancel_timeout(deposit_args: &DepositLockArgs) -> Result<(
     } else {
         // cancel timeout is invalid, which means user can't unlock it, so we can safely use this cell
         log::debug!(
+            target: "collect-deposit-cells",
             "Invalid deposit cancel_time: {}, invalid flag, the deposit is still can be packaged",
             deposit_args.cancel_timeout()
         );
