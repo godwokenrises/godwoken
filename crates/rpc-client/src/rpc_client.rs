@@ -434,6 +434,11 @@ impl RPCClient {
             let lock = ckb_types::packed::Script::new_unchecked(script.as_bytes());
             lock.into()
         };
+        let from_block = tip_number.saturating_sub(BLOCKS_TO_SEARCH);
+        let to_block = u64::max_value();
+
+        log::debug!(target: "collect-deposit-cells", "start searching deposit cells from_block {} to_block {} count {} min_ckb_deposit_capacity {} min_sudt_deposit_capacity {}",
+             from_block, to_block, count, min_ckb_deposit_capacity, min_sudt_deposit_capacity);
 
         let search_key = SearchKey {
             script,
@@ -442,10 +447,7 @@ impl RPCClient {
                 script: None,
                 output_data_len_range: None,
                 output_capacity_range: Some([min_ckb_deposit_capacity.into(), u64::MAX.into()]),
-                block_range: Some([
-                    BlockNumber::from(tip_number.saturating_sub(BLOCKS_TO_SEARCH)),
-                    BlockNumber::from(u64::max_value()),
-                ]),
+                block_range: Some([BlockNumber::from(from_block), BlockNumber::from(to_block)]),
             }),
         };
         let order = Order::Asc;
@@ -467,6 +469,8 @@ impl RPCClient {
                     ])),
                 )
                 .await?;
+
+            log::debug!(target: "collect-deposit-cells", "query {} cells", cells.objects.len());
 
             if cells.last_cursor.is_empty() {
                 break;
@@ -500,22 +504,26 @@ impl RPCClient {
                 let deposit_lock_args = match DepositLockArgsReader::verify(&args[32..], false) {
                     Ok(()) => DepositLockArgs::new_unchecked(args.slice(32..)),
                     Err(_) => {
-                        log::debug!("invalid deposit cell args: \n{:#x}", args);
+                        log::debug!(target: "collect-deposit-cells", "invalid deposit cell args: \n{:#x}", args);
                         continue;
                     }
                 };
-                let request =
-                    match parse_deposit_request(&cell.output, &cell.data, &deposit_lock_args) {
-                        Some(r) => r,
-                        None => {
-                            log::debug!("invalid deposit cell: \n{:?}", cell);
-                            continue;
-                        }
-                    };
+                let request = match parse_deposit_request(
+                    &cell.output,
+                    &cell.data,
+                    &deposit_lock_args,
+                ) {
+                    Some(r) => r,
+                    None => {
+                        log::debug!(target: "collect-deposit-cells", "invalid deposit cell: \n{:?}", cell);
+                        continue;
+                    }
+                };
 
                 let cell_capacity = cell.output.capacity().unpack();
                 if cell.output.type_().is_some() && cell_capacity < min_sudt_deposit_capacity {
                     log::debug!(
+                        target: "collect-deposit-cells",
                         "invalid sudt deposit cell, required capacity: {}, capacity: {}",
                         min_sudt_deposit_capacity,
                         cell_capacity
@@ -527,6 +535,8 @@ impl RPCClient {
                 deposit_infos.push(info);
             }
         }
+
+        log::debug!(target: "collect-deposit-cells", "return {} filtered cells", deposit_infos.len());
 
         Ok(deposit_infos)
     }
