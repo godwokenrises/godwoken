@@ -1,7 +1,7 @@
 /// MAX deposits in the mem block
-pub const MAX_MEM_BLOCK_DEPOSITS: usize = 50;
+pub const MAX_MEM_BLOCK_DEPOSITS: usize = 100;
 /// MAX withdrawals in the mem block
-pub const MAX_MEM_BLOCK_WITHDRAWALS: usize = 50;
+pub const MAX_MEM_BLOCK_WITHDRAWALS: usize = 100;
 /// MAX withdrawals in the mem block
 pub const MAX_MEM_BLOCK_TXS: usize = 1000;
 /// MIN CKB deposit capacity, calculated from custodian cell size
