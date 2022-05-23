@@ -519,6 +519,7 @@ impl BlockProducer {
         let cycles = match self.rpc_client.dry_run_transaction(&tx).await {
             Ok(cycles) => {
                 log::info!(
+                    target: "produce-block",
                     "Tx({}) L2 block #{} execution cycles: {}",
                     block_number,
                     hex::encode(tx.hash()),
@@ -535,7 +536,10 @@ impl BlockProducer {
                         log::error!("[contracts dep] refresh failed {}", err);
                     }
 
-                    log::info!("Skip submitting l2 block since CKB can't resolve tx, previous block may haven't been processed by CKB");
+                    log::info!(
+                        target: "produce-block",
+                        "Skip submitting l2 block since CKB can't resolve tx, previous block may haven't been processed by CKB"
+                    );
                     return Ok(SubmitResult::Skip);
                 } else {
                     if err_str.contains(TRANSACTION_SCRIPT_ERROR)
@@ -558,12 +562,14 @@ impl BlockProducer {
             }
         };
         log::debug!(
-            "[compose_next_block_submit_tx] dry run {}ms",
+            target: "produce-block",
+            "dry run {}ms",
             t.elapsed().as_millis()
         );
 
         if cycles > self.debug_config.expected_l1_tx_upper_bound_cycles {
             log::warn!(
+                target: "produce-block",
                 "Submitting l2 block is cost unexpected cycles: {:?}, expected upper bound: {}",
                 cycles,
                 self.debug_config.expected_l1_tx_upper_bound_cycles
@@ -580,6 +586,7 @@ impl BlockProducer {
         match self.rpc_client.send_transaction(&tx).await {
             Ok(tx_hash) => {
                 log::info!(
+                    target: "produce-block",
                     "Submitted l2 block {} in tx {}",
                     block_number,
                     hex::encode(tx_hash.as_slice())
@@ -587,7 +594,7 @@ impl BlockProducer {
                 Ok(SubmitResult::Submitted)
             }
             Err(err) => {
-                log::error!("Submitting l2 block error: {}", err);
+                log::error!(target: "produce-block", "Submitting l2 block error: {}", err);
 
                 // dumping script error transactions
                 let err_str = err.to_string();
@@ -611,6 +618,7 @@ impl BlockProducer {
                         .as_secs();
                     if since_last_committed_secs < WAIT_PRODUCE_BLOCK_SECONDS {
                         log::debug!(
+                            target: "produce-block",
                             "last committed is {}s ago, dump tx",
                             since_last_committed_secs
                         );
