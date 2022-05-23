@@ -259,12 +259,12 @@ impl Chain {
                 log::debug!("[complete_initial_syncing] acquire mem-pool",);
                 let t = Instant::now();
                 let mut mem_pool = mem_pool.lock().await;
-                mem_pool.notify_new_tip(tip_block_hash).await?;
-                mem_pool.mem_pool_state().set_completed_initial_syncing();
                 log::debug!(
                     "[complete_initial_syncing] unlock mem-pool {}ms",
                     t.elapsed().as_millis()
                 );
+                mem_pool.notify_new_tip(tip_block_hash).await?;
+                mem_pool.mem_pool_state().set_completed_initial_syncing();
             }
         }
         self.complete_initial_syncing = true;
@@ -825,8 +825,11 @@ impl Chain {
         }
 
         // update layer1 actions
-        for action in param.updates {
+        log::debug!(target: "sync-block", "sync {} actions", param.updates.len());
+        for (i, action) in param.updates.into_iter().enumerate() {
+            let t = Instant::now();
             self.update_l1action(&db, action)?;
+            log::debug!(target: "sync-block", "process {}th action cost {}ms", i, t.elapsed().as_millis());
             match self.last_sync_event() {
                 SyncEvent::Success => (),
                 _ => db.commit()?,
@@ -834,7 +837,6 @@ impl Chain {
         }
 
         db.commit()?;
-        log::debug!("commit db after sync");
 
         let tip_block_hash: H256 = self.local_state.tip.hash().into();
         if let Some(mem_pool) = &self.mem_pool {
@@ -842,10 +844,13 @@ impl Chain {
                 && (is_revert_happend || self.complete_initial_syncing)
             {
                 // update mem pool state
-                log::debug!("[sync] acquire mem-pool",);
+                log::debug!(target: "sync-block", "acquire mem-pool",);
                 let t = Instant::now();
-                mem_pool.lock().await.notify_new_tip(tip_block_hash).await?;
-                log::debug!("[sync] unlock mem-pool {}ms", t.elapsed().as_millis());
+                let mut mem_pool = mem_pool.lock().await;
+                log::debug!(target: "sync-block", "unlock mem-pool {}ms", t.elapsed().as_millis());
+                let t = Instant::now();
+                mem_pool.notify_new_tip(tip_block_hash).await?;
+                log::debug!(target: "sync-block", "notify mem-pool new tip cost {}ms", t.elapsed().as_millis());
             }
         }
 
@@ -870,6 +875,7 @@ impl Chain {
             "check account tree"
         );
 
+        log::debug!(target: "sync-block", "Complete");
         Ok(())
     }
 
