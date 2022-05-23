@@ -918,7 +918,19 @@ impl MemPool {
         if withdrawals.is_empty() {
             for entry in self.pending().values() {
                 if !entry.withdrawals.is_empty() && withdrawals.len() < MAX_MEM_BLOCK_WITHDRAWALS {
-                    withdrawals.push(entry.withdrawals.first().unwrap().clone());
+                    let withdrawal = entry.withdrawals.first().unwrap();
+                    let id = state
+                        .get_account_id_by_script_hash(
+                            &withdrawal.raw().account_script_hash().unpack(),
+                        )?
+                        .expect("get id of withdrawal account");
+                    let nonce = state.get_nonce(id)?;
+                    let expected_nonce: u32 = withdrawal.raw().nonce().unpack();
+                    // ignore withdrawal mismatch the nonce
+                    if nonce != expected_nonce {
+                        continue;
+                    }
+                    withdrawals.push(withdrawal.clone());
                 }
             }
         }
