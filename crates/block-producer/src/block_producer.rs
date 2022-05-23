@@ -254,6 +254,7 @@ impl BlockProducer {
         // try issue next block
         let mut retry_count = 0;
         while retry_count <= MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT {
+            let t = Instant::now();
             let (block_number, tx, next_global_state) = match self
                 .compose_next_block_submit_tx(rollup_input_since, rollup_cell.clone(), retry_count)
                 .await
@@ -262,20 +263,23 @@ impl BlockProducer {
                 Err(err) if err.downcast_ref::<GreaterBlockTimestampError>().is_some() => {
                     // Wait next l1 tip block median time
                     log::debug!(
-                        "[produce block] block timestamp is greater than rollup input since, wait next median time"
+                        target: "produce-block",
+                        "block timestamp is greater than rollup input since, wait next median time"
                     );
                     return Ok(());
                 }
                 Err(err) => {
                     retry_count += 1;
                     log::warn!(
-                        "[produce block] retry compose next block submit tx, retry: {}, reason: {}",
+                        target: "produce-block",
+                        "retry compose next block submit tx, retry: {}, reason: {}",
                         retry_count,
                         err
                     );
                     continue;
                 }
             };
+            log::debug!(target: "produce-block", "Produce l2block #{} ({}ms)", block_number, t.elapsed().as_millis());
 
             let expected_next_block_number = global_state.block().count().unpack();
             if expected_next_block_number != block_number {
@@ -287,8 +291,11 @@ impl BlockProducer {
             }
 
             let submitted_tx_hash = tx.hash();
+            let t = Instant::now();
             match self.submit_block_tx(block_number, tx).await {
                 Ok(SubmitResult::Submitted) => {
+                    log::debug!(target: "produce-block", "Submitted l2block #{} in {} ({}ms)",
+                        block_number, hex::encode(&submitted_tx_hash), t.elapsed().as_millis());
                     self.last_committed_l2_block = LastCommittedL2Block {
                         committed_tip_block_hash: l2_tip_block_hash,
                         committed_at: Instant::now(),
@@ -300,7 +307,8 @@ impl BlockProducer {
                 Err(err) => {
                     retry_count += 1;
                     log::warn!(
-                        "[produce block] retry submit block tx , retry: {}, reason: {}",
+                        target: "produce-block",
+                        "retry submit block tx , retry: {}, reason: {}",
                         retry_count,
                         err
                     );
@@ -335,13 +343,19 @@ impl BlockProducer {
         let (opt_finalized_custodians, block_param) = {
             let (mem_block, post_block_state) = {
                 let t = Instant::now();
-                log::debug!("[compose_next_block_submit_tx] acquire mem-pool",);
+                log::debug!(target: "produce-block", "acquire mem-pool",);
                 let mem_pool = self.mem_pool.lock().await;
                 log::debug!(
-                    "[compose_next_block_submit_tx] unlock mem-pool {}ms",
+                    target: "produce-block", "unlock mem-pool {}ms",
                     t.elapsed().as_millis()
                 );
-                mem_pool.output_mem_block(&OutputParam::new(retry_count))
+                let t = Instant::now();
+                let r = mem_pool.output_mem_block(&OutputParam::new(retry_count));
+                log::debug!(
+                    target: "produce-block", "output mem block {}ms",
+                    t.elapsed().as_millis()
+                );
+                r
             };
 
             let t = Instant::now();
@@ -363,12 +377,14 @@ impl BlockProducer {
                 query.await?.expect_any()
             };
             log::debug!(
+                target: "produce-block",
                 "finalized custodians {:?}",
                 finalized_custodians.cells_info.len()
             );
 
             log::debug!(
-                "[compose_next_block_submit_tx] generate produce block param {}ms",
+                target: "produce-block",
+                "generate produce block param {}ms",
                 t.elapsed().as_millis()
             );
             (Some(finalized_custodians), produce_block_param)
@@ -389,7 +405,13 @@ impl BlockProducer {
             block_param,
         };
         let db = self.store.begin_transaction();
+        let t = Instant::now();
         let block_result = produce_block(&db, &self.generator, param)?;
+        log::debug!(
+            target: "produce-block",
+            "produce block {}ms",
+            t.elapsed().as_millis()
+        );
         let ProduceBlockResult {
             mut block,
             mut global_state,
@@ -416,6 +438,7 @@ impl BlockProducer {
         let block_txs = block.transactions().len();
         let block_withdrawals = block.withdrawals().len();
         log::info!(
+            target: "produce-block",
             "produce new block #{} (txs: {}, deposits: {}, withdrawals: {})",
             number,
             block_txs,
@@ -453,14 +476,16 @@ impl BlockProducer {
             Ok(tx) => tx,
             Err(err) => {
                 log::error!(
-                    "[produce_next_block] Failed to composite submitting transaction: {}",
+                    target: "produce-block",
+                    "Failed to composite submitting transaction: {}",
                     err
                 );
                 return Err(err);
             }
         };
         log::debug!(
-            "[compose_next_block_submit_tx] complete tx skeleton {}ms",
+            target: "produce-block",
+            "complete tx skeleton {}ms",
             t.elapsed().as_millis()
         );
         if tx.as_slice().len() <= MAX_BLOCK_BYTES as usize
