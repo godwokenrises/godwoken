@@ -905,7 +905,7 @@ impl MemPool {
     async fn finalize_withdrawals(
         &mut self,
         state: &mut MemStateTree<'_>,
-        mut withdrawals: Vec<WithdrawalRequestExtra>,
+        withdrawals: Vec<WithdrawalRequestExtra>,
     ) -> Result<()> {
         // check mem block state
         assert!(self.mem_block.withdrawals().is_empty());
@@ -914,23 +914,35 @@ impl MemPool {
         assert!(self.mem_block.finalized_custodians().is_none());
         assert!(self.mem_block.txs().is_empty());
 
+        fn filter_withdrawals(
+            state: &MemStateTree<'_>,
+            withdrawal: &WithdrawalRequestExtra,
+        ) -> bool {
+            let id = state
+                .get_account_id_by_script_hash(&withdrawal.raw().account_script_hash().unpack())
+                .expect("get id")
+                .expect("id exist");
+            let nonce = state.get_nonce(id).expect("get nonce");
+            let expected_nonce: u32 = withdrawal.raw().nonce().unpack();
+            // ignore withdrawal mismatch the nonce
+            nonce == expected_nonce
+        }
+
         // find withdrawals from pending
-        if withdrawals.is_empty() {
+        let mut withdrawals: Vec<_> = withdrawals
+            .into_iter()
+            .filter(|withdrawal| filter_withdrawals(state, withdrawal))
+            .collect();
+        // package withdrawals
+        if withdrawals.len() < MAX_MEM_BLOCK_WITHDRAWALS {
             for entry in self.pending().values() {
-                if !entry.withdrawals.is_empty() && withdrawals.len() < MAX_MEM_BLOCK_WITHDRAWALS {
-                    let withdrawal = entry.withdrawals.first().unwrap();
-                    let id = state
-                        .get_account_id_by_script_hash(
-                            &withdrawal.raw().account_script_hash().unpack(),
-                        )?
-                        .expect("get id of withdrawal account");
-                    let nonce = state.get_nonce(id)?;
-                    let expected_nonce: u32 = withdrawal.raw().nonce().unpack();
-                    // ignore withdrawal mismatch the nonce
-                    if nonce != expected_nonce {
-                        continue;
+                if let Some(withdrawal) = entry.withdrawals.first() {
+                    if filter_withdrawals(state, withdrawal) {
+                        withdrawals.push(withdrawal.clone());
                     }
-                    withdrawals.push(withdrawal.clone());
+                    if withdrawals.len() >= MAX_MEM_BLOCK_WITHDRAWALS {
+                        break;
+                    }
                 }
             }
         }
