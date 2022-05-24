@@ -174,7 +174,10 @@ impl CKBClient {
 
         loop {
             match self.get_transaction_status(tx_hash).await? {
-                Some(TxStatus::Committed) => return Ok(()),
+                Some(TxStatus::Committed) => {
+                    log::info!("transaction committed");
+                    return Ok(());
+                }
                 Some(TxStatus::Rejected) => bail!("transaction rejected"),
                 Some(status) => log::info!("waiting for transaction, status: {:?}", status),
                 None => log::info!("waiting for transaction, not found"),
