@@ -95,7 +95,7 @@ impl ProduceSubmitConfirm {
             submitted_count,
             // TODO: make this configurable.
             local_limit: 5,
-            submitted_limit: 5,
+            submitted_limit: 3,
         })
     }
 
@@ -359,7 +359,18 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
         hex::encode(tx.hash()),
         block_number
     );
-    ctx.rpc_client.send_transaction(&tx).await?;
+    if let Err(e) = ctx.rpc_client.send_transaction(&tx).await {
+        if e.to_string().contains("TransactionFailedToResolve") {
+            if let Err(e) = check_tx_input(&ctx.rpc_client, &tx).await {
+                log::error!("tx input error: {:?}", e);
+            } else {
+                log::error!("but tx input is all live");
+            }
+        } else {
+            log::error!("send tx {:?}", e);
+        }
+        return Err(e);
+    }
     log::info!("transaction sent");
     Ok(NumberHash::new_builder()
         .block_hash(block_hash.pack())
@@ -380,12 +391,13 @@ async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<(
             None => {
                 // Resend the transaction if get_transaction returns null after 20 seconds.
                 if last_sent.elapsed() > Duration::from_secs(20) {
+                    log::info!("resend transaction 0x{}", hex::encode(tx.hash()));
                     if let Err(e) = rpc_client.send_transaction(tx).await {
                         if e.to_string().contains("TransactionFailedToResolve") {
                             if let Err(e) = check_tx_input(rpc_client, tx).await {
                                 log::error!("tx input error: {:?}", e);
                             } else {
-                                log::error!("tx input is ok");
+                                log::error!("but tx input is all live");
                             }
                         } else {
                             log::error!("send tx {:?}", e);
