@@ -905,7 +905,7 @@ impl MemPool {
     async fn finalize_withdrawals(
         &mut self,
         state: &mut MemStateTree<'_>,
-        withdrawals: Vec<WithdrawalRequestExtra>,
+        mut withdrawals: Vec<WithdrawalRequestExtra>,
     ) -> Result<()> {
         // check mem block state
         assert!(self.mem_block.withdrawals().is_empty());
@@ -929,10 +929,7 @@ impl MemPool {
         }
 
         // find withdrawals from pending
-        let mut withdrawals: Vec<_> = withdrawals
-            .into_iter()
-            .filter(|withdrawal| filter_withdrawals(state, withdrawal))
-            .collect();
+        withdrawals.retain(|withdrawal| filter_withdrawals(state, withdrawal));
         // package withdrawals
         if withdrawals.len() < MAX_MEM_BLOCK_WITHDRAWALS {
             for entry in self.pending().values() {
