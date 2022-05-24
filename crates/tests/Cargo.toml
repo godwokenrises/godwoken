@@ -19,6 +19,7 @@ gw-mem-pool = { path = "../mem-pool" }
 gw-utils = { path = "../utils" }
 gw-block-producer = { path = "../block-producer" }
 gw-rpc-server = { path = "../rpc-server" }
+gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-ckb-hardfork = { path = "../ckb-hardfork" }
 gw-dynamic-config = { path = "../dynamic-config"}
@@ -48,3 +49,4 @@ tokio = "1.15"
 env_logger = "0.8"
 tempfile = "3"
 async-trait = "0.1"
+jsonrpc-v2 = { version = "0.10.0", default-features = false, features = ["easy-errors"] }

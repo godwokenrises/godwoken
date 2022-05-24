@@ -182,7 +182,7 @@ pub const ETH_REGISTRY_GENERATOR_PATH: &str =
 
 // polyjuice
 pub const POLYJUICE_VALIDATOR_PATH: &str = "../../.tmp/binaries/godwoken-polyjuice/validator";
-pub const POLYJUICE_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-polyjuice/generator";
+pub const POLYJUICE_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-polyjuice/generator_log";
 
 pub const DEFAULT_FINALITY_BLOCKS: u64 = 6;
 
@@ -234,16 +234,22 @@ pub async fn setup_chain(rollup_type_script: Script) -> Chain {
         )
         .allowed_contract_type_hashes(
             vec![
+                AllowedTypeHash::new(AllowedContractType::Meta, META_VALIDATOR_SCRIPT_TYPE_HASH),
+                AllowedTypeHash::new(AllowedContractType::Sudt, *SUDT_VALIDATOR_CODE_HASH),
                 AllowedTypeHash::new(
                     AllowedContractType::EthAddrReg,
                     *ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH,
                 ),
-                AllowedTypeHash::new(AllowedContractType::Sudt, *SUDT_VALIDATOR_CODE_HASH),
+                AllowedTypeHash::new(
+                    AllowedContractType::Polyjuice,
+                    *POLYJUICE_VALIDATOR_CODE_HASH,
+                ),
             ]
             .pack(),
         )
         .l2_sudt_validator_script_type_hash(SUDT_VALIDATOR_CODE_HASH.pack())
         .finality_blocks(DEFAULT_FINALITY_BLOCKS.pack())
+        .chain_id(rand::random::<u64>().pack())
         .build();
     account_lock_manage
         .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
