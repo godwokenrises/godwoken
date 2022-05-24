@@ -422,27 +422,6 @@ impl MemPool {
         Ok(())
     }
 
-    /// FIXME
-    /// This function is a temporary mechanism
-    /// Try to recovery from invalid state by drop txs & deposit
-    pub fn try_to_recovery_from_invalid_state(&mut self) -> Result<()> {
-        log::warn!("[mem-pool] try to recovery from invalid state by drop txs & deposits");
-        log::warn!("[mem-pool] drop mem-block");
-        log::warn!(
-            "[mem-pool] drop withdrawals: {}",
-            self.mem_block.withdrawals().len()
-        );
-        log::warn!("[mem-pool] drop txs: {}", self.mem_block.txs().len());
-        for tx_hash in self.mem_block.txs() {
-            log::warn!("[mem-pool] drop tx: {}", hex::encode(tx_hash.as_slice()));
-        }
-        self.mem_block.clear();
-        log::warn!("[mem-pool] drop pending: {}", self.pending.len());
-        self.pending.clear();
-        log::warn!("[mem-pool] try_to_recovery - done");
-        Ok(())
-    }
-
     /// output mem block
     #[instrument(skip_all, fields(retry_count = output_param.retry_count))]
     pub fn output_mem_block(&self, output_param: &OutputParam) -> (MemBlock, AccountMerkleState) {
