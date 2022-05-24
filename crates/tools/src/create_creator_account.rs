@@ -135,7 +135,9 @@ pub async fn create_creator_account(
         .get_account_id_by_script_hash(l2_script_hash.into())
         .await?
         .expect("Creator account id not exist!");
-    log::info!("Creator account id: {}", account_id);
+    // Kicker relies on this output to determine that creator account creation
+    // is successful.
+    println!("Creator account id: {}", account_id);
 
     Ok(())
 }
