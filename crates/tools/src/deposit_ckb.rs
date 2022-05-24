@@ -196,11 +196,12 @@ async fn get_balance_by_script_hash(
         .get_registry_address_by_script_hash(script_hash)
         .await;
     let balance = match addr {
-        Ok(reg_addr) => {
+        Ok(Some(reg_addr)) => {
             godwoken_rpc_client
                 .get_balance(&reg_addr, CKB_SUDT_ACCOUNT_ID)
                 .await?
         }
+        Ok(None) => U256::zero(),
         Err(e) => {
             log::warn!("failed to get_registry_address_by_script_hash, {}", e);
             U256::zero()

@@ -66,14 +66,15 @@ impl GodwokenRpcClient {
     pub async fn get_registry_address_by_script_hash(
         &self,
         script_hash: &H256,
-    ) -> Result<RegistryAddress> {
+    ) -> Result<Option<RegistryAddress>> {
         let params = serde_json::to_value((script_hash, AccountID::from(ETH_REGISTRY_ACCOUNT_ID)))?;
-        self.rpc::<gw_jsonrpc_types::godwoken::RegistryAddress>(
-            "get_registry_address_by_script_hash",
-            params,
-        )
-        .await
-        .map(Into::into)
+        let opt_address = self
+            .rpc::<Option<gw_jsonrpc_types::godwoken::RegistryAddress>>(
+                "get_registry_address_by_script_hash",
+                params,
+            )
+            .await?;
+        Ok(opt_address.map(Into::into))
     }
 
     pub async fn get_script_hash_by_registry_address(
