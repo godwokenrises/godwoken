@@ -24,7 +24,6 @@ mod withdraw;
 
 use account::read_privkey;
 use anyhow::{anyhow, Result};
-use async_jsonrpc_client::HttpClient;
 use ckb_sdk::constants::ONE_CKB;
 use ckb_types::prelude::Unpack;
 use clap::{value_t, App, Arg, SubCommand};
@@ -868,7 +867,9 @@ async fn main() -> Result<()> {
                 let content = std::fs::read(input_path)?;
                 serde_json::from_slice(&content)?
             };
-            match deploy_scripts::deploy_scripts(privkey_path, ckb_rpc_url, &build_script_result) {
+            match deploy_scripts::deploy_scripts(privkey_path, ckb_rpc_url, &build_script_result)
+                .await
+            {
                 Ok(script_deployment) => {
                     output_json_file(&script_deployment, output_path);
                 }
@@ -914,7 +915,7 @@ async fn main() -> Result<()> {
                 timestamp,
             };
 
-            match deploy_genesis::deploy_rollup_cell(args) {
+            match deploy_genesis::deploy_rollup_cell(args).await {
                 Ok(rollup_deployment) => {
                     output_json_file(&rollup_deployment, output_path);
                 }
@@ -1436,7 +1437,7 @@ async fn main() -> Result<()> {
             let min_capacity: u64 = m.value_of("min-capacity").unwrap_or_default().parse()?;
             let tip_block_number: u64 =
                 m.value_of("tip-block-number").unwrap_or_default().parse()?;
-            let rpc_client = CKBIndexerClient::new(HttpClient::new(indexer_rpc_url)?);
+            let rpc_client = CKBIndexerClient::with_url(indexer_rpc_url)?;
 
             let alias: HashMap<ckb_types::bytes::Bytes, String> = [
                 (

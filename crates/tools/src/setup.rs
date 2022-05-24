@@ -99,6 +99,7 @@ pub async fn setup(args: SetupArgs<'_>) {
     let deploy_scripts_result = {
         let scripts_deploy_result = output_dir.join("scripts-result.json");
         let deploy_result = deploy_scripts(privkey_path, ckb_rpc_url, &build_scripts_result)
+            .await
             .expect("deploy scripts");
         let output_content =
             serde_json::to_string_pretty(&deploy_result).expect("serde json to string pretty");
@@ -141,7 +142,7 @@ pub async fn setup(args: SetupArgs<'_>) {
             timestamp: None,
             skip_config_check: false,
         };
-        let rollup_result = deploy_rollup_cell(args).expect("deploy rollup cell");
+        let rollup_result = deploy_rollup_cell(args).await.expect("deploy rollup cell");
         let output_content =
             serde_json::to_string_pretty(&rollup_result).expect("serde json to string pretty");
         fs::write(rollup_result_path, output_content.as_bytes())

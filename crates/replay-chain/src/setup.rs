@@ -77,6 +77,7 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
         };
         let out_point = config.genesis.secp_data_dep.out_point.clone();
         rpc_client
+            .ckb
             .get_transaction(out_point.tx_hash.0.into())
             .await?
             .ok_or_else(|| anyhow!("can not found transaction: {:?}", out_point.tx_hash))?

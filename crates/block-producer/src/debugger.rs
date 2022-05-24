@@ -110,9 +110,12 @@ pub async fn build_mock_transaction(
         .ok_or_else(|| anyhow!("can't find input cell"))?;
 
         let input_tx_hash = input.previous_output().tx_hash().unpack();
-        let input_block_hash = match rpc_client.get_transaction_status(input_tx_hash).await? {
+        let input_block_hash = match rpc_client.ckb.get_transaction_status(input_tx_hash).await? {
             Some(TxStatus::Committed) => {
-                let block_hash = rpc_client.get_transaction_block_hash(input_tx_hash).await?;
+                let block_hash = rpc_client
+                    .ckb
+                    .get_transaction_block_hash(input_tx_hash)
+                    .await?;
                 Some(block_hash.ok_or_else(|| anyhow!("not found input cell tx hash"))?)
             }
             _ => None,
@@ -160,9 +163,14 @@ pub async fn build_mock_transaction(
         }
         .ok_or_else(|| anyhow!("can't find dep cell"))?;
         let dep_cell_tx_hash = cell_dep.out_point().tx_hash().unpack();
-        let dep_cell_block_hash = match rpc_client.get_transaction_status(dep_cell_tx_hash).await? {
+        let dep_cell_block_hash = match rpc_client
+            .ckb
+            .get_transaction_status(dep_cell_tx_hash)
+            .await?
+        {
             Some(TxStatus::Committed) => {
                 let query = rpc_client
+                    .ckb
                     .get_transaction_block_hash(dep_cell_tx_hash)
                     .await?;
                 Some(query.ok_or_else(|| anyhow!("not found dep cell tx hash"))?)

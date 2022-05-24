@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 use anyhow::{anyhow, Result};
 use ckb_types::bytes::{BufMut, BytesMut};
+use gw_rpc_client::ckb_client::CKBClient;
 use tempfile::NamedTempFile;
 
 use ckb_fixed_hash::H256;
@@ -42,7 +43,7 @@ use gw_types::{
 use crate::types::{
     OmniLockConfig, RollupDeploymentResult, ScriptsDeploymentResult, UserRollupConfig,
 };
-use crate::utils::transaction::{get_network_type, run_cmd, wait_for_tx};
+use crate::utils::transaction::{get_network_type, run_cmd};
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -51,12 +52,13 @@ struct DeployContext<'a> {
     owner_address: &'a Address,
     genesis_info: &'a GenesisInfo,
     deployment_result: &'a ScriptsDeploymentResult,
+    rpc_client: &'a mut HttpRpcClient,
+    gw_ckb_client: &'a CKBClient,
 }
 
 impl<'a> DeployContext<'a> {
-    fn deploy(
+    async fn deploy(
         &mut self,
-        rpc_client: &mut HttpRpcClient,
         mut outputs: Vec<ckb_packed::CellOutput>,
         mut outputs_data: Vec<Bytes>,
         mut deps: Vec<ckb_packed::CellDep>,
@@ -72,12 +74,13 @@ impl<'a> DeployContext<'a> {
             })
             .sum();
         let total_capacity = total_output_capacity + tx_fee;
-        let tip_number = rpc_client
+        let tip_number = self
+            .rpc_client
             .get_tip_block_number()
             .map_err(|err| anyhow!(err))?;
-        let max_mature_number = get_max_mature_number(rpc_client)?;
+        let max_mature_number = get_max_mature_number(self.rpc_client)?;
         let (inputs, total_input_capacity) = collect_live_cells(
-            rpc_client.url(),
+            self.rpc_client.url(),
             self.owner_address.to_string().as_str(),
             max_mature_number,
             tip_number,
@@ -124,7 +127,7 @@ impl<'a> DeployContext<'a> {
         let tx_path_str = tx_file.path().to_str().unwrap();
         let _output = run_cmd(&[
             "--url",
-            rpc_client.url(),
+            self.rpc_client.url(),
             "tx",
             "init",
             "--tx-file",
@@ -139,7 +142,7 @@ impl<'a> DeployContext<'a> {
         std::fs::write(tx_path_str, cli_tx_content.as_bytes())?;
         let _output = run_cmd(&[
             "--url",
-            rpc_client.url(),
+            self.rpc_client.url(),
             "tx",
             "sign-inputs",
             "--privkey-path",
@@ -152,7 +155,7 @@ impl<'a> DeployContext<'a> {
         // 8. send and then wait for tx
         let send_output = run_cmd(&[
             "--url",
-            rpc_client.url(),
+            self.rpc_client.url(),
             "tx",
             "send",
             "--tx-file",
@@ -163,7 +166,9 @@ impl<'a> DeployContext<'a> {
         ])?;
         let tx_hash = H256::from_str(send_output.trim().trim_start_matches("0x"))?;
         log::info!("tx_hash: {:#x}", tx_hash);
-        wait_for_tx(rpc_client, &tx_hash, 120)?;
+        self.gw_ckb_client
+            .wait_tx_committed_with_timeout_and_logging(tx_hash.0.into(), 120)
+            .await?;
         Ok(tx_hash)
     }
 }
@@ -178,7 +183,7 @@ pub struct DeployRollupCellArgs<'a> {
     pub skip_config_check: bool,
 }
 
-pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeploymentResult> {
+pub async fn deploy_rollup_cell(args: DeployRollupCellArgs<'_>) -> Result<RollupDeploymentResult> {
     let DeployRollupCellArgs {
         privkey_path,
         ckb_rpc_url,
@@ -211,6 +216,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
         }
     }
 
+    let gw_ckb_client = gw_rpc_client::ckb_client::CKBClient::with_url(ckb_rpc_url)?;
     let mut rpc_client = HttpRpcClient::new(ckb_rpc_url.to_string());
     let network_type = get_network_type(&mut rpc_client)?;
     let privkey_string = std::fs::read_to_string(privkey_path)?
@@ -334,6 +340,8 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
         owner_address: &owner_address,
         genesis_info: &genesis_info,
         deployment_result: scripts_result,
+        rpc_client: &mut rpc_client,
+        gw_ckb_client: &gw_ckb_client,
     };
 
     let (rollup_config_output, rollup_config_data): (ckb_packed::CellOutput, Bytes) = {
@@ -345,14 +353,15 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
         (output, data)
     };
     let rollup_config_cell_dep = {
-        let tx_hash = deploy_context.deploy(
-            &mut rpc_client,
-            vec![rollup_config_output],
-            vec![rollup_config_data],
-            Default::default(),
-            None,
-            Default::default(),
-        )?;
+        let tx_hash = deploy_context
+            .deploy(
+                vec![rollup_config_output],
+                vec![rollup_config_data],
+                Default::default(),
+                None,
+                Default::default(),
+            )
+            .await?;
         let out_point = ckb_packed::OutPoint::new_builder()
             .tx_hash(CKBPack::pack(&tx_hash))
             .index(CKBPack::pack(&0u32))
@@ -376,7 +385,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
     });
 
     let first_cell_input: ckb_packed::CellInput = get_live_cells(
-        rpc_client.url(),
+        ckb_rpc_url,
         owner_address_string.as_str(),
         max_mature_number,
         None,
@@ -462,14 +471,15 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
     // 4. deploy genesis rollup cell
     let outputs_data = vec![rollup_data];
     let outputs = vec![rollup_output];
-    let tx_hash = deploy_context.deploy(
-        &mut rpc_client,
-        outputs,
-        outputs_data,
-        vec![rollup_config_cell_dep.clone()],
-        Some(&first_cell_input),
-        witness_0,
-    )?;
+    let tx_hash = deploy_context
+        .deploy(
+            outputs,
+            outputs_data,
+            vec![rollup_config_cell_dep.clone()],
+            Some(&first_cell_input),
+            witness_0,
+        )
+        .await?;
 
     // 5. write genesis deployment result
     let rollup_result = RollupDeploymentResult {

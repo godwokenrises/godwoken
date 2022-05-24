@@ -58,6 +58,12 @@ pub enum TxStatus {
     Proposed,
     /// Status "committed". The transaction has been committed to the canonical chain.
     Committed,
+    /// Status "unknown". The node has not seen the transaction,
+    /// or it should be rejected but was cleared due to storage limitations.
+    Unknown,
+    /// Status "rejected". The transaction has been recently removed from the pool.
+    /// Due to storage limitations, the node can only hold the most recently removed transactions.
+    Rejected,
 }
 
 #[derive(Debug, Clone, Default)]

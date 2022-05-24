@@ -1,6 +1,6 @@
 use crate::{
     types::{BuildScriptsResult, DeployItem, Programs, ScriptsDeploymentResult},
-    utils::transaction::{get_network_type, run_cmd, wait_for_tx, TYPE_ID_CODE_HASH},
+    utils::transaction::{get_network_type, run_cmd, TYPE_ID_CODE_HASH},
 };
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
@@ -23,9 +23,10 @@ struct DeploymentIndex {
     pub lock: Script,
 }
 
-pub fn deploy_program(
+pub async fn deploy_program(
     privkey_path: &Path,
-    rpc_client: &mut HttpRpcClient,
+    ckb_rpc_url: &str,
+    gw_ckb_client: &gw_rpc_client::ckb_client::CKBClient,
     binary_path: &Path,
     target_lock: &packed::Script,
     target_address: &Address,
@@ -67,7 +68,7 @@ pub fn deploy_program(
     );
     let output = run_cmd(vec![
         "--url",
-        rpc_client.url(),
+        ckb_rpc_url,
         "wallet",
         "transfer",
         "--privkey-path",
@@ -86,11 +87,22 @@ pub fn deploy_program(
     let tx_hash = H256::from_str(output.trim().trim_start_matches("0x"))?;
     log::info!("tx_hash: {:#x}", tx_hash);
 
-    let tx = wait_for_tx(rpc_client, &tx_hash, 300)?;
-    let first_output_type_script = tx.inner.outputs[0].type_.clone().expect("type id cell");
-    let script_type_hash: H256 = packed::Script::from(first_output_type_script)
-        .calc_script_hash()
-        .unpack();
+    gw_ckb_client
+        .wait_tx_committed_with_timeout_and_logging(tx_hash.0.into(), 300)
+        .await?;
+    let tx = gw_ckb_client
+        .get_transaction(tx_hash.0.into())
+        .await?
+        .ok_or_else(|| anyhow!("tx not found"))?;
+    let first_output_type_script = tx
+        .raw()
+        .outputs()
+        .get(0)
+        .expect("output 0")
+        .type_()
+        .to_opt()
+        .expect("type id cell");
+    let script_type_hash = first_output_type_script.hash().into();
     let cell_dep = CellDep {
         out_point: OutPoint {
             tx_hash,
@@ -104,7 +116,7 @@ pub fn deploy_program(
     })
 }
 
-pub fn deploy_scripts(
+pub async fn deploy_scripts(
     privkey_path: &Path,
     ckb_rpc_url: &str,
     scripts_result: &BuildScriptsResult,
@@ -117,6 +129,7 @@ pub fn deploy_scripts(
     }
 
     let mut rpc_client = HttpRpcClient::new(ckb_rpc_url.to_string());
+    let gw_ckb_client = gw_rpc_client::ckb_client::CKBClient::with_url(ckb_rpc_url)?;
     let network_type = get_network_type(&mut rpc_client)?;
     let target_lock = packed::Script::from(scripts_result.lock.clone());
     let address_payload = AddressPayload::from(target_lock.clone());
@@ -154,89 +167,113 @@ pub fn deploy_scripts(
 
     let custodian_lock = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        ckb_rpc_url,
+        &gw_ckb_client,
         &scripts_result.programs.custodian_lock,
         &target_lock,
         &target_address,
-    )?;
+    )
+    .await?;
     let deposit_lock = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        ckb_rpc_url,
+        &gw_ckb_client,
         &scripts_result.programs.deposit_lock,
         &target_lock,
         &target_address,
-    )?;
+    )
+    .await?;
     let withdrawal_lock = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        ckb_rpc_url,
+        &gw_ckb_client,
         &scripts_result.programs.withdrawal_lock,
         &target_lock,
         &target_address,
-    )?;
+    )
+    .await?;
     let challenge_lock = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        ckb_rpc_url,
+        &gw_ckb_client,
         &scripts_result.programs.challenge_lock,
         &target_lock,
         &target_address,
-    )?;
+    )
+    .await?;
     let stake_lock = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        ckb_rpc_url,
+        &gw_ckb_client,
         &scripts_result.programs.stake_lock,
         &target_lock,
         &target_address,
-    )?;
+    )
+    .await?;
     let omni_lock = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        ckb_rpc_url,
+        &gw_ckb_client,
         &scripts_result.programs.omni_lock,
         &target_lock,
         &target_address,
-    )?;
+    )
+    .await?;
     let state_validator = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        ckb_rpc_url,
+        &gw_ckb_client,
         &scripts_result.programs.state_validator,
         &target_lock,
         &target_address,
-    )?;
+    )
+    .await?;
     let l2_sudt_validator = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        ckb_rpc_url,
+        &gw_ckb_client,
         &scripts_result.programs.l2_sudt_validator,
         &target_lock,
         &target_address,
-    )?;
+    )
+    .await?;
     let meta_contract_validator = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        ckb_rpc_url,
+        &gw_ckb_client,
         &scripts_result.programs.meta_contract_validator,
         &target_lock,
         &target_address,
-    )?;
+    )
+    .await?;
     let eth_account_lock = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        ckb_rpc_url,
+        &gw_ckb_client,
         &scripts_result.programs.eth_account_lock,
         &target_lock,
         &target_address,
-    )?;
+    )
+    .await?;
     // FIXME: write godwoken-polyjuice binary to named temp file then use the path
     let polyjuice_validator = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        ckb_rpc_url,
+        &gw_ckb_client,
         &scripts_result.programs.polyjuice_validator,
         &target_lock,
         &target_address,
-    )?;
+    )
+    .await?;
     let eth_addr_reg_validator = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        ckb_rpc_url,
+        &gw_ckb_client,
         &scripts_result.programs.eth_addr_reg_validator,
         &target_lock,
         &target_address,
-    )?;
+    )
+    .await?;
     let deployment_result = ScriptsDeploymentResult {
         custodian_lock,
         deposit_lock,
