@@ -560,7 +560,16 @@ impl RPCClient {
         owner_lock_hash: [u8; 32],
         required_staking_capacity: u64,
         last_finalized_block_number: Option<u64>,
+        local_consumed_cells: &HashSet<OutPoint>,
+        local_live_stake_cells: &[CellInfo],
     ) -> Result<Option<CellInfo>> {
+        // First try local live stake cells.
+        for c in local_live_stake_cells {
+            if c.output.capacity().unpack() >= required_staking_capacity {
+                return Ok(Some(c.clone()));
+            }
+        }
+
         let lock = Script::new_builder()
             .code_hash(rollup_context.rollup_config.stake_script_type_hash())
             .hash_type(ScriptHashType::Type.into())
@@ -607,6 +616,13 @@ impl RPCClient {
             cursor = Some(cells.last_cursor);
 
             stake_cell = cells.objects.into_iter().find(|cell| {
+                let out_point = {
+                    let out_point: ckb_types::packed::OutPoint = cell.out_point.clone().into();
+                    OutPoint::new_unchecked(out_point.as_bytes())
+                };
+                if local_consumed_cells.contains(&out_point) {
+                    return false;
+                }
                 let args = cell.output.lock.args.clone().into_bytes();
                 let stake_lock_args = match StakeLockArgsReader::verify(&args[32..], false) {
                     Ok(()) => StakeLockArgs::new_unchecked(args.slice(32..)),

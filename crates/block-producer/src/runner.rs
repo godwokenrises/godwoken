@@ -2,7 +2,7 @@ use crate::{
     block_producer::{BlockProducer, BlockProducerCreateArgs},
     challenger::{Challenger, ChallengerNewArgs},
     cleaner::Cleaner,
-    payment::PaymentCellsManager,
+    local_cells::LocalCellsManager,
     psc::{PSCContext, ProduceSubmitConfirm},
     test_mode_control::TestModeControl,
     types::ChainEvent,
@@ -786,7 +786,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
             rpc_client: rpc_client.clone(),
             chain: chain.clone(),
             mem_pool,
-            payment_cells_manager: PaymentCellsManager::create(
+            local_cells_manager: LocalCellsManager::create(
                 store.clone(),
                 config
                     .block_producer
@@ -796,6 +796,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     .lock
                     .clone()
                     .into(),
+                config.genesis.rollup_config.stake_script_type_hash.into(),
             )
             .into(),
         }))

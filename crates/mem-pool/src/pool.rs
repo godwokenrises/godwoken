@@ -852,6 +852,7 @@ impl MemPool {
                     tip_account_count
                 );
             let cells = self.provider.collect_deposit_cells().await?;
+            log::debug!("[mem-pool] collected deposit cells: {}", cells.len());
             self.pending_deposits = {
                 let cells = cells
                     .into_iter()

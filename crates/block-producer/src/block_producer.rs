@@ -455,8 +455,9 @@ impl BlockProducer {
             since,
             rollup_cell,
             withdrawal_extras,
-            local_spent_payment_cells,
+            local_consumed_cells,
             local_live_payment_cells,
+            local_live_stake_cells,
         } = args;
 
         let rollup_context = self.generator.rollup_context();
@@ -590,6 +591,8 @@ impl BlockProducer {
             &contracts_dep,
             &self.rpc_client,
             self.wallet.lock_script().to_owned(),
+            local_consumed_cells,
+            local_live_stake_cells,
         )
         .await?;
         tx_skeleton.cell_deps_mut().extend(generated_stake.deps);
@@ -684,7 +687,7 @@ impl BlockProducer {
             &mut tx_skeleton,
             &self.rpc_client.indexer,
             self.wallet.lock_script().to_owned(),
-            local_spent_payment_cells,
+            local_consumed_cells,
             local_live_payment_cells,
         )
         .await?;
@@ -721,6 +724,7 @@ pub struct ComposeSubmitTxArgs<'a> {
     pub since: Since,
     pub rollup_cell: CellInfo,
     pub withdrawal_extras: Vec<WithdrawalRequestExtra>,
-    pub local_spent_payment_cells: &'a HashSet<OutPoint>,
+    pub local_consumed_cells: &'a HashSet<OutPoint>,
     pub local_live_payment_cells: &'a [CellInfo],
+    pub local_live_stake_cells: &'a [CellInfo],
 }

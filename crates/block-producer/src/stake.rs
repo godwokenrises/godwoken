@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use anyhow::Result;
 use ckb_types::{
     bytes::Bytes,
@@ -8,7 +10,7 @@ use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::{
     core::ScriptHashType,
     offchain::{CellInfo, InputCellInfo, RollupContext},
-    packed::{CellDep, CellInput, CellOutput, L2Block, Script, StakeLockArgs},
+    packed::{CellDep, CellInput, CellOutput, L2Block, OutPoint, Script, StakeLockArgs},
     prelude::{Pack, Unpack},
 };
 
@@ -26,6 +28,8 @@ pub async fn generate(
     contracts_dep: &ContractsCellDep,
     rpc_client: &RPCClient,
     lock_script: Script,
+    local_consumed_cells: &HashSet<OutPoint>,
+    local_live_stake_cells: &[CellInfo],
 ) -> Result<GeneratedStake> {
     let owner_lock_hash = lock_script.hash();
     let lock_args: Bytes = {
@@ -57,9 +61,12 @@ pub async fn generate(
             owner_lock_hash,
             required_staking_capacity,
             None,
+            local_consumed_cells,
+            local_live_stake_cells,
         )
         .await?
     {
+        log::info!("using stake cell input: {:?}", unlocked_stake.out_point);
         let stake_lock_dep = contracts_dep.stake_cell_lock.clone();
 
         let stake_cell = CellOutput::new_builder()

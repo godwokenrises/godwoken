@@ -23,7 +23,7 @@ pub async fn fill_tx_fee_with_local(
     tx_skeleton: &mut TransactionSkeleton,
     client: &CKBIndexerClient,
     lock_script: Script,
-    local_spent: &HashSet<OutPoint>,
+    local_consumed: &HashSet<OutPoint>,
     local_live: &[CellInfo],
 ) -> Result<()> {
     const CHANGE_CELL_CAPACITY: u64 = 61_00000000;
@@ -79,7 +79,7 @@ pub async fn fill_tx_fee_with_local(
                 lock_script.clone(),
                 required_fee,
                 &taken_outpoints,
-                local_spent,
+                local_consumed,
                 local_live,
             )
             .await?;
@@ -89,6 +89,7 @@ pub async fn fill_tx_fee_with_local(
         tx_skeleton
             .inputs_mut()
             .extend(cells.into_iter().map(|cell| {
+                log::info!("using payment cell {:?}", cell.out_point);
                 let input = CellInput::new_builder()
                     .previous_output(cell.out_point.clone())
                     .build();

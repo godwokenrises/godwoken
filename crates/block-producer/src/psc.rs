@@ -7,8 +7,8 @@ use gw_mem_pool::pool::MemPool;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
-    offchain::{CellInfo, CollectedCustodianCells, DepositInfo, TxStatus},
-    packed::{GlobalState, NumberHash, WithdrawalKey},
+    offchain::{CellInfo, CellStatus, CollectedCustodianCells, DepositInfo, TxStatus},
+    packed::{GlobalState, NumberHash, OutPoint, Transaction, WithdrawalKey},
     prelude::*,
 };
 use gw_utils::since::Since;
@@ -16,7 +16,7 @@ use tokio::{sync::Mutex, time::Instant};
 
 use crate::{
     block_producer::{BlockProducer, ComposeSubmitTxArgs},
-    payment::PaymentCellsManager,
+    local_cells::LocalCellsManager,
     produce_block::ProduceBlockResult,
 };
 
@@ -35,8 +35,9 @@ pub struct PSCContext {
     pub chain: Arc<Mutex<Chain>>,
     pub mem_pool: Arc<Mutex<MemPool>>,
     pub block_producer: BlockProducer,
-    // Make rust happy. Actually we won't refresh or access this at the same time.
-    pub payment_cells_manager: Mutex<PaymentCellsManager>,
+    // Use mutex to make rust happy. Actually we won't refresh or access this at
+    // the same time.
+    pub local_cells_manager: Mutex<LocalCellsManager>,
 }
 
 impl ProduceSubmitConfirm {
@@ -79,7 +80,7 @@ impl ProduceSubmitConfirm {
             }
         };
         store_tx.commit()?;
-        context.payment_cells_manager.lock().await.refresh();
+        context.local_cells_manager.lock().await.refresh();
         log::info!(
             "last valid: {}, last_submitted: {}, last_confirmed: {}",
             last_valid,
@@ -133,7 +134,7 @@ async fn run(mut state: ProduceSubmitConfirm) -> Result<()> {
                         let store_tx = state.context.store.begin_transaction();
                         store_tx.set_last_submitted_block_number_hash(&nh.as_reader())?;
                         store_tx.commit()?;
-                        state.context.payment_cells_manager.lock().await.refresh();
+                        state.context.local_cells_manager.lock().await.refresh();
                         state.submitted_count += 1;
                         state.local_count -= 1;
                     }
@@ -149,7 +150,7 @@ async fn run(mut state: ProduceSubmitConfirm) -> Result<()> {
                         let store_tx = state.context.store.begin_transaction();
                         store_tx.set_last_confirmed_block_number_hash(&nh.as_reader())?;
                         store_tx.commit()?;
-                        state.context.payment_cells_manager.lock().await.refresh();
+                        state.context.local_cells_manager.lock().await.refresh();
                         // TODO: update L2 block committed info.
                         state.submitted_count -= 1;
                     }
@@ -168,7 +169,7 @@ async fn run(mut state: ProduceSubmitConfirm) -> Result<()> {
                         Err(err) => {
                             log::warn!("failed to submit next block: {:?}", err);
                             // TOOO: backoff.
-                            tokio::time::sleep(Duration::from_secs(3)).await;
+                            tokio::time::sleep(Duration::from_secs(20)).await;
                         }
                     }
                 }
@@ -310,7 +311,7 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
             .unpack();
         drop(snap);
 
-        let payment_cells_manager = ctx.payment_cells_manager.lock().await;
+        let payment_cells_manager = ctx.local_cells_manager.lock().await;
 
         let args = ComposeSubmitTxArgs {
             deposit_cells,
@@ -320,8 +321,9 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
             since,
             rollup_cell,
             withdrawal_extras,
-            local_spent_payment_cells: payment_cells_manager.local_spent(),
-            local_live_payment_cells: payment_cells_manager.local_live(),
+            local_consumed_cells: payment_cells_manager.local_consumed(),
+            local_live_payment_cells: payment_cells_manager.local_live_payment(),
+            local_live_stake_cells: payment_cells_manager.local_live_stake(),
         };
         let (tx, next_rollup_cell) = ctx.block_producer.compose_submit_tx(args).await?;
 
@@ -353,7 +355,7 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
     // a deposit cell is dead after an L1 reorg. We may need to re-generate the
     // block in such cases.
     log::info!(
-        "sending transaction {} to submit block {}",
+        "sending transaction 0x{} to submit block {}",
         hex::encode(tx.hash()),
         block_number
     );
@@ -363,6 +365,37 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
         .block_hash(block_hash.pack())
         .number(block_number.pack())
         .build())
+}
+
+async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<()> {
+    log::info!("waiting for tx 0x{}", hex::encode(tx.hash()));
+    let mut last_sent = Instant::now();
+    loop {
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        let status = rpc_client.get_transaction_status(tx.hash().into()).await?;
+        match status {
+            Some(TxStatus::Pending) => {}
+            Some(TxStatus::Proposed) => {}
+            Some(TxStatus::Committed) => break Ok(()),
+            None => {
+                // Resend the transaction if get_transaction returns null after 20 seconds.
+                if last_sent.elapsed() > Duration::from_secs(20) {
+                    if let Err(e) = rpc_client.send_transaction(tx).await {
+                        if e.to_string().contains("TransactionFailedToResolve") {
+                            if let Err(e) = check_tx_input(rpc_client, tx).await {
+                                log::error!("tx input error: {:?}", e);
+                            } else {
+                                log::error!("tx input is ok");
+                            }
+                        } else {
+                            log::error!("send tx {:?}", e);
+                        }
+                    }
+                    last_sent = Instant::now();
+                }
+            }
+        }
+    }
 }
 
 async fn sync_next_block(context: &PSCContext) -> Result<NumberHash> {
@@ -378,23 +411,7 @@ async fn sync_next_block(context: &PSCContext) -> Result<NumberHash> {
         .expect("block hash");
     let tx = snap.get_submit_tx(block_number).expect("get submit tx");
     drop(snap);
-    loop {
-        tokio::time::sleep(Duration::from_secs(3)).await;
-        let status = context
-            .rpc_client
-            .get_transaction_status(tx.hash().into())
-            .await?
-            .ok_or_else(|| anyhow!("get transaction status"))?;
-        match status {
-            TxStatus::Pending => {}
-            TxStatus::Proposed => {}
-            TxStatus::Committed => break,
-        }
-        log::info!(
-            "confirming block {}, waiting for transaction committed",
-            block_number
-        );
-    }
+    poll_tx_confirmed(&context.rpc_client, &tx).await?;
     log::info!("block {} confirmed", block_number);
     Ok(NumberHash::new_builder()
         .block_hash(block_hash.pack())
@@ -429,4 +446,51 @@ fn test_greater_since() {
         assert!(since_t > t);
         assert!(since_t.saturating_sub(1000) <= t);
     }
+}
+
+async fn check_cell(rpc_client: &RPCClient, out_point: OutPoint) -> Result<()> {
+    let block_number = rpc_client
+        .get_transaction_block_number(out_point.tx_hash().unpack())
+        .await?
+        .ok_or_else(|| anyhow!("transaction not committed"))?;
+    let mut opt_block = rpc_client.get_block_by_number(block_number).await?;
+    // Search later blocks to see who consumed this cell.
+    loop {
+        if let Some(block) = opt_block {
+            for tx in block.transactions() {
+                if tx
+                    .raw()
+                    .inputs()
+                    .into_iter()
+                    .any(|i| i.previous_output() == out_point)
+                {
+                    bail!(
+                        "OutPoint {:?} is consumed by tx 0x{}",
+                        out_point,
+                        hex::encode(tx.hash())
+                    );
+                }
+            }
+            opt_block = rpc_client
+                .get_block_by_number(block.header().raw().number().unpack() + 1)
+                .await?;
+        } else {
+            return Ok(());
+        }
+    }
+}
+
+async fn check_tx_input(rpc_client: &RPCClient, tx: &Transaction) -> Result<()> {
+    // Check inputs.
+    for input in tx.raw().inputs() {
+        let out_point = input.previous_output();
+        let status = rpc_client
+            .get_cell(out_point.clone())
+            .await?
+            .map(|c| c.status);
+        if status != Some(CellStatus::Live) {
+            check_cell(rpc_client, out_point).await?;
+        }
+    }
+    Ok(())
 }
