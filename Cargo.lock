@@ -2324,7 +2324,6 @@ dependencies = [
  "ckb-types",
  "clap",
  "csv",
- "env_logger",
  "faster-hex 0.5.0",
  "gw-common",
  "gw-config",
@@ -2348,6 +2347,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "toml",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -5472,11 +5472,12 @@ dependencies = [
 
 [[package]]
 name = "tracing-core"
-version = "0.1.21"
+version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f4ed65637b8390770814083d20756f87bfa2c21bf2f110babdc5438351746e4"
+checksum = "f54c8ca710e81886d498c2fd3331b56c93aa248d49de2222ad2742247c60072f"
 dependencies = [
  "lazy_static",
+ "valuable",
 ]
 
 [[package]]
@@ -5515,14 +5516,14 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.3.6"
+version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77be66445c4eeebb934a7340f227bfe7b338173d3f8c00a60a5a58005c9faecf"
+checksum = "4bc28f93baff38037f64e6f43d34cfa1605f27a49c34e8a04c5e78b0babf2596"
 dependencies = [
  "ansi_term",
  "lazy_static",
  "matchers",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.0",
  "regex",
  "sharded-slab",
  "smallvec",
@@ -5666,6 +5667,12 @@ dependencies = [
  "getrandom 0.2.4",
  "serde",
 ]
+
+[[package]]
+name = "valuable"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
 
 [[package]]
 name = "vcpkg"

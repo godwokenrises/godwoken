@@ -38,6 +38,7 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
+use tracing_subscriber::prelude::*;
 use types::{
     BuildScriptsResult, RollupDeploymentResult, ScriptsDeploymentResult, UserRollupConfig,
 };
@@ -49,7 +50,12 @@ use self::types::OmniLockConfig;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
-    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
+    let env_filter_layer = tracing_subscriber::EnvFilter::try_from_default_env()
+        .or_else(|_| tracing_subscriber::EnvFilter::try_new("info"))?;
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_ansi(false))
+        .with(env_filter_layer)
+        .try_init()?;
 
     let arg_privkey_path = Arg::with_name("privkey-path")
         .long("privkey-path")
