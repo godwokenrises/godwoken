@@ -115,7 +115,8 @@ pub async fn withdraw(
 
     let from_addr = godwoken_rpc_client
         .get_registry_address_by_script_hash(&from_script_hash)
-        .await?;
+        .await?
+        .ok_or_else(|| anyhow!("registry address is not found"))?;
     let init_balance = godwoken_rpc_client.get_balance(&from_addr, 1).await?;
 
     let bytes = JsonBytes::from_bytes(withdrawal_request_extra.as_bytes());

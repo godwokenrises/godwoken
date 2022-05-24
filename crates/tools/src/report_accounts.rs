@@ -32,7 +32,8 @@ async fn producer(client: GodwokenRpcClient, tx: tokio::sync::mpsc::Sender<Task>
             // balance
             let addr = client
                 .get_registry_address_by_script_hash(&script_hash)
-                .await?;
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("no registry address"))?;
             let ckb = client.get_balance(&addr, CKB_SUDT_ACCOUNT_ID).await?;
             let nonce = client.get_nonce(account_id).await?;
             Ok(Some(Account {
