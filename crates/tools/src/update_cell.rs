@@ -3,7 +3,7 @@ use ckb_jsonrpc_types::OutputsValidator;
 use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::{Entity, Unpack as CKBUnpack};
 use gw_config::WalletConfig;
-use gw_rpc_client::indexer_client::CKBIndexerClient;
+use gw_rpc_client::{ckb_client::CKBClient, indexer_client::CKBIndexerClient};
 use gw_types::{
     offchain::{CellInfo, InputCellInfo},
     packed::{CellInput, CellOutput, OutPoint},
@@ -14,8 +14,6 @@ use gw_utils::{
     wallet::Wallet,
 };
 use std::path::{Path, PathBuf};
-
-use crate::utils::transaction::wait_for_tx;
 
 pub async fn update_cell<P: AsRef<Path>>(
     ckb_rpc_url: &str,
@@ -126,7 +124,9 @@ pub async fn update_cell<P: AsRef<Path>>(
         )
         .map_err(|err| anyhow!("{}", err))?;
     println!("Send tx...");
-    wait_for_tx(&mut rpc_client, &tx_hash, 180).map_err(|err| anyhow!("{}", err))?;
+    CKBClient::with_url(ckb_rpc_url)?
+        .wait_tx_committed_with_timeout_and_logging(tx_hash.0.into(), 180)
+        .await?;
     println!("{}", update_message);
     println!("Cell is updated!");
     Ok(())

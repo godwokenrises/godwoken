@@ -4,8 +4,6 @@
 use anyhow::anyhow;
 use anyhow::Result;
 use ckb_fixed_hash::{h256, H256};
-use ckb_jsonrpc_types::Status;
-use ckb_sdk::rpc::TransactionView;
 use ckb_sdk::HttpRpcClient;
 use ckb_sdk::NetworkType;
 use gw_config::Config;
@@ -76,64 +74,6 @@ where
         log::debug!("stdout: {}", stdout);
         Ok(stdout)
     }
-}
-
-pub fn wait_for_tx(
-    rpc_client: &mut HttpRpcClient,
-    tx_hash: &H256,
-    timeout_secs: u64,
-) -> Result<TransactionView> {
-    log::info!("waiting tx {}", hex::encode(&tx_hash));
-    let retry_timeout = Duration::from_secs(timeout_secs);
-    let start_time = Instant::now();
-    while start_time.elapsed() < retry_timeout {
-        std::thread::sleep(Duration::from_secs(5));
-        match rpc_client.get_transaction(tx_hash.clone()) {
-            Ok(Some(tx_with_status)) if tx_with_status.tx_status.status == Status::Pending => {
-                log::info!("tx pending");
-            }
-            Ok(Some(tx_with_status)) if tx_with_status.tx_status.status == Status::Proposed => {
-                log::info!("tx proposed");
-            }
-            Ok(Some(tx_with_status)) if tx_with_status.tx_status.status == Status::Committed => {
-                log::info!("tx commited");
-                wait_for_tx_pool_synced(rpc_client)?;
-                return Ok(tx_with_status.transaction);
-            }
-            res => {
-                log::error!("unexpected response of get_transaction: {:?}", res)
-            }
-        }
-    }
-    Err(anyhow!("Timeout: {:?}", retry_timeout))
-}
-
-// In CKB, there can be a lag between the tx-pool and chain.
-// This workaround ensures the tx-pool has caught up the chain.
-pub fn wait_for_tx_pool_synced(rpc_client: &mut HttpRpcClient) -> Result<()> {
-    let instant = Instant::now();
-    let chain_tip_number = rpc_client
-        .get_tip_block_number()
-        .map_err(|err| anyhow!("RPC get_tip_block_number error: {}", err))?;
-    while instant.elapsed() < Duration::from_secs(30) {
-        let pool_tip_number = rpc_client
-            .tx_pool_info()
-            .map_err(|err| anyhow!("RPC tx_pool_info error: {}", err))?
-            .tip_number;
-        if pool_tip_number >= chain_tip_number {
-            return Ok(());
-        }
-    }
-
-    let pool_tip_number = rpc_client
-        .tx_pool_info()
-        .map_err(|err| anyhow!("RPC tx_pool_info error: {}", err))?
-        .tip_number;
-    Err(anyhow!(
-        "wait_for_tx_pool_synced timeout, chain_tip_number: {}, pool_tip_number: {}",
-        chain_tip_number,
-        pool_tip_number,
-    ))
 }
 
 pub fn get_network_type(rpc_client: &mut HttpRpcClient) -> Result<NetworkType> {

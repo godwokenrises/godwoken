@@ -359,3 +359,59 @@ impl From<packed::NumberHash> for NumberHash {
         }
     }
 }
+
+/// The JSON view of a transaction as well as its status.
+///
+/// This is the same as in ckb-jsonrpc-types 0.103.0.
+///
+/// The ckb-jsonrpc-types version we use is a bit old and cannot handle responses from later version CKB nodes.
+///
+/// We can remove this and use the one from ckb-jsonrpc-types after we updated it to 0.103.0.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+pub struct TransactionWithStatus {
+    /// The transaction.
+    pub transaction: Option<ckb_jsonrpc_types::TransactionView>,
+    /// The Transaction status.
+    pub tx_status: TxStatus,
+}
+
+/// Transaction status and the block hash if it is committed.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+pub struct TxStatus {
+    /// The transaction status, allowed values: "pending", "proposed" "committed" "unknown" and "rejected".
+    pub status: Status,
+    /// The block hash of the block which has committed this transaction in the canonical chain.
+    pub block_hash: Option<H256>,
+    /// The reason why the transaction is rejected
+    pub reason: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum Status {
+    /// Status "pending". The transaction is in the pool, and not proposed yet.
+    Pending,
+    /// Status "proposed". The transaction is in the pool and has been proposed.
+    Proposed,
+    /// Status "committed". The transaction has been committed to the canonical chain.
+    Committed,
+    /// Status "unknown". The node has not seen the transaction,
+    /// or it should be rejected but was cleared due to storage limitations.
+    Unknown,
+    /// Status "rejected". The transaction has been recently removed from the pool.
+    /// Due to storage limitations, the node can only hold the most recently removed transactions.
+    Rejected,
+}
+
+impl From<Status> for gw_types::offchain::TxStatus {
+    fn from(val: Status) -> Self {
+        use gw_types::offchain::TxStatus::*;
+        match val {
+            Status::Pending => Pending,
+            Status::Proposed => Proposed,
+            Status::Committed => Committed,
+            Status::Unknown => Unknown,
+            Status::Rejected => Rejected,
+        }
+    }
+}

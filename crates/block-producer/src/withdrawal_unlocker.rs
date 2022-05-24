@@ -82,7 +82,7 @@ impl FinalizedWithdrawalUnlocker {
         // Check unlock tx
         let mut drop_txs = vec![];
         for (tx_hash, withdrawal_to_unlock) in self.unlock_txs.iter() {
-            match rpc_client.get_transaction_status(*tx_hash).await {
+            match rpc_client.ckb.get_transaction_status(*tx_hash).await {
                 Err(err) => {
                     // Always drop this unlock tx and retry to avoid "lock" withdrawal cell
                     log::info!("[unlock withdrawal] get unlock tx failed {}, drop it", err);

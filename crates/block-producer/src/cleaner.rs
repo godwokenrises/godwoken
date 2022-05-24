@@ -103,12 +103,13 @@ impl Cleaner {
         let rpc_client = &self.rpc_client;
         let tip_l1_block_number = rpc_client.get_tip().await?.number().unpack();
         for tx_hash in consumed_txs {
-            let tx_status = rpc_client.get_transaction_status(tx_hash).await?;
+            let tx_status = rpc_client.ckb.get_transaction_status(tx_hash).await?;
             if !matches!(tx_status, Some(TxStatus::Committed)) {
                 continue;
             }
 
-            if let Some(block_nubmer) = rpc_client.get_transaction_block_number(tx_hash).await? {
+            if let Some(block_nubmer) = rpc_client.ckb.get_transaction_block_number(tx_hash).await?
+            {
                 if block_nubmer < tip_l1_block_number.saturating_sub(L1_FINALITY_BLOCKS) {
                     confirmed.insert(tx_hash);
                 }
@@ -140,7 +141,9 @@ impl Cleaner {
         let rpc_client = &self.rpc_client;
         for (idx, tx_hash) in consumed_txs {
             let consumed = match tx_hash {
-                Some(tx_hash) => !matches!(rpc_client.get_transaction_status(tx_hash).await?, None),
+                Some(tx_hash) => {
+                    !matches!(rpc_client.ckb.get_transaction_status(tx_hash).await?, None)
+                }
                 None => false,
             };
             if consumed {
@@ -152,6 +155,7 @@ impl Cleaner {
                 verifiers.get(idx).expect("exists").to_owned().0
             };
             let verifier_status = rpc_client
+                .ckb
                 .get_transaction_status(verifier.tx_hash())
                 .await?;
             if !matches!(verifier_status, Some(TxStatus::Committed)) {

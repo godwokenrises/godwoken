@@ -2,7 +2,7 @@ use crate::account::{privkey_to_eth_address, read_privkey};
 use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::hasher::CkbHasher;
 use crate::types::ScriptsDeploymentResult;
-use crate::utils::transaction::{get_network_type, read_config, run_cmd, wait_for_tx};
+use crate::utils::transaction::{get_network_type, read_config, run_cmd};
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
 use ckb_sdk::{Address, AddressPayload, HttpRpcClient, HumanCapacity, SECP256K1};
@@ -131,7 +131,9 @@ pub async fn deposit_ckb(
     let tx_hash = H256::from_str(output.trim().trim_start_matches("0x"))?;
     log::info!("tx_hash: {:#x}", tx_hash);
 
-    wait_for_tx(&mut rpc_client, &tx_hash, 180u64)?;
+    gw_rpc_client::ckb_client::CKBClient::with_url(ckb_rpc_url)?
+        .wait_tx_committed_with_timeout_and_logging(tx_hash.0.into(), 180)
+        .await?;
 
     wait_for_balance_change(
         &mut godwoken_rpc_client,

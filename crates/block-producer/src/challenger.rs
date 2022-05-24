@@ -4,7 +4,7 @@ use crate::cleaner::{Cleaner, Verifier};
 use crate::test_mode_control::TestModeControl;
 use crate::types::ChainEvent;
 use crate::utils;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use ckb_types::prelude::{Builder, Entity, Reader};
 use gw_chain::chain::{Chain, ChallengeCell, SyncEvent};
 use gw_challenge::cancel_challenge::{
@@ -41,7 +41,7 @@ use tokio::sync::Mutex;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 const MAX_CANCEL_CYCLES: u64 = 7000_0000;
 const MAX_CANCEL_TX_BYTES: u64 = ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
@@ -291,7 +291,12 @@ impl Challenger {
         let verifier_tx_hash = self.rpc_client.send_transaction(&tx).await?;
         log::info!("Create verifier in tx {}", to_hex(&verifier_tx_hash));
 
-        self.wait_tx_proposed(verifier_tx_hash).await?;
+        tokio::time::timeout(
+            Duration::from_secs(30),
+            self.rpc_client.ckb.wait_tx_proposed(verifier_tx_hash),
+        )
+        .await
+        .with_context(|| format!("waiting for tx proposed 0x{}", to_hex(&verifier_tx_hash)))??;
 
         // Build cancellation transaction
         let challenge_input = to_input_cell_info(challenge_cell);
@@ -372,13 +377,17 @@ impl Challenger {
         let challenge_cell = to_cell_info(challenge_cell);
         let challenge_tx_block_number = {
             let tx_hash: H256 = challenge_cell.out_point.tx_hash().unpack();
-            let tx_status = self.rpc_client.get_transaction_status(tx_hash).await?;
+            let tx_status = self.rpc_client.ckb.get_transaction_status(tx_hash).await?;
             if !matches!(tx_status, Some(TxStatus::Committed)) {
                 log::debug!("challenge tx isn't committed");
                 return Ok(());
             }
 
-            let query = self.rpc_client.get_transaction_block_number(tx_hash).await;
+            let query = self
+                .rpc_client
+                .ckb
+                .get_transaction_block_number(tx_hash)
+                .await;
             query?.ok_or_else(|| anyhow!("challenge tx block number not found"))?
         };
 
@@ -614,7 +623,12 @@ impl Challenger {
         }
 
         log::debug!("can't find a owner cell for verifier, try wait verifier tx committed");
-        self.wait_tx_committed(verifier_tx_hash).await?;
+        tokio::time::timeout(
+            Duration::from_secs(30),
+            self.rpc_client.ckb.wait_tx_committed(verifier_tx_hash),
+        )
+        .await
+        .with_context(|| format!("wait for tx committed 0x{}", to_hex(&verifier_tx_hash)))??;
 
         let owner_lock = self.wallet.lock_script().to_owned();
         let cell = {
@@ -623,44 +637,6 @@ impl Challenger {
         };
 
         Ok(to_input_cell_info(cell))
-    }
-
-    async fn wait_tx_proposed(&self, tx_hash: H256) -> Result<()> {
-        let timeout = Duration::new(30, 0);
-        let now = Instant::now();
-
-        loop {
-            match self.rpc_client.get_transaction_status(tx_hash).await? {
-                Some(TxStatus::Proposed) | Some(TxStatus::Committed) => return Ok(()),
-                Some(TxStatus::Pending) => (),
-                None => return Err(anyhow!("tx hash {} not found", to_hex(&tx_hash))),
-            }
-
-            if now.elapsed() >= timeout {
-                return Err(anyhow!("wait tx hash {} timeout", to_hex(&tx_hash)));
-            }
-
-            tokio::time::sleep(Duration::new(3, 0)).await;
-        }
-    }
-
-    async fn wait_tx_committed(&self, tx_hash: H256) -> Result<()> {
-        let timeout = Duration::new(30, 0);
-        let now = Instant::now();
-
-        loop {
-            match self.rpc_client.get_transaction_status(tx_hash).await? {
-                Some(TxStatus::Committed) => return Ok(()),
-                Some(TxStatus::Proposed) | Some(TxStatus::Pending) => (),
-                None => return Err(anyhow!("tx hash {} not found", to_hex(&tx_hash))),
-            }
-
-            if now.elapsed() >= timeout {
-                return Err(anyhow!("wait tx hash {} timeout", to_hex(&tx_hash)));
-            }
-
-            tokio::time::sleep(Duration::new(3, 0)).await;
-        }
     }
 
     async fn dry_run_transaction(&self, tx: &Transaction, action: &str) -> Result<()> {
