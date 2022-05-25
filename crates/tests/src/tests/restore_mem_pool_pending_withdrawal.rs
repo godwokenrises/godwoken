@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use crate::testing_tool::chain::{build_sync_tx, construct_block, restart_chain, setup_chain};
+use crate::testing_tool::chain::{
+    build_sync_tx, construct_block, construct_block_with_timestamp, restart_chain, setup_chain,
+};
 use crate::testing_tool::common::random_always_success_script;
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 
@@ -188,7 +190,7 @@ async fn test_restore_mem_pool_pending_withdrawal() {
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, vec![])
+        construct_block_with_timestamp(&chain, &mut mem_pool, vec![], 0, false)
             .await
             .unwrap()
     };

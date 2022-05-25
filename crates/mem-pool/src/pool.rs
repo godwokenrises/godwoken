@@ -408,7 +408,9 @@ impl MemPool {
     #[instrument(skip_all)]
     pub async fn notify_new_tip(&mut self, new_tip: H256) -> Result<()> {
         // reset pool state
-        self.reset(Some(self.current_tip.0), Some(new_tip)).await?;
+        if self.current_tip.0 != new_tip {
+            self.reset(Some(self.current_tip.0), Some(new_tip)).await?;
+        }
         Ok(())
     }
 
@@ -613,15 +615,51 @@ impl MemPool {
         self.remove_unexecutables(&mut mem_state, &db).await?;
 
         log::info!("[mem-pool] reset reinject txs: {} mem-block txs: {} reinject withdrawals: {} mem-block withdrawals: {}", reinject_txs.len(), mem_block_txs.len(), reinject_withdrawals.len(), mem_block_withdrawals.len());
-        // re-inject withdrawals
-        let withdrawals_iter = reinject_withdrawals
-            .into_iter()
-            .chain(mem_block_withdrawals);
-        // re-inject txs
-        let txs_iter = reinject_txs.into_iter().chain(mem_block_txs);
-
         if self.node_mode != NodeMode::ReadOnly {
-            self.prepare_next_mem_block(&db, &mut mem_state, withdrawals_iter, txs_iter)
+            // re-inject txs
+            let txs = reinject_txs.into_iter().chain(mem_block_txs).collect();
+            let is_mem_pool_recovery = old_tip.is_none();
+
+            // re-inject withdrawals
+            let mut withdrawals: Vec<_> = reinject_withdrawals.into_iter().collect();
+            if is_mem_pool_recovery {
+                // recovery mem block withdrawals
+                withdrawals.extend(mem_block_withdrawals);
+            } else {
+                // packages more withdrawals
+                fn filter_withdrawals(
+                    state: &MemStateTree<'_>,
+                    withdrawal: &WithdrawalRequestExtra,
+                ) -> bool {
+                    let id = state
+                        .get_account_id_by_script_hash(
+                            &withdrawal.raw().account_script_hash().unpack(),
+                        )
+                        .expect("get id")
+                        .expect("id exist");
+                    let nonce = state.get_nonce(id).expect("get nonce");
+                    let expected_nonce: u32 = withdrawal.raw().nonce().unpack();
+                    // ignore withdrawal mismatch the nonce
+                    nonce == expected_nonce
+                }
+                withdrawals.retain(|w| filter_withdrawals(&mem_state, w));
+
+                // package withdrawals
+                if withdrawals.len() < MAX_MEM_BLOCK_WITHDRAWALS {
+                    for entry in self.pending().values() {
+                        if let Some(withdrawal) = entry.withdrawals.first() {
+                            if filter_withdrawals(&mem_state, withdrawal) {
+                                withdrawals.push(withdrawal.clone());
+                            }
+                            if withdrawals.len() >= MAX_MEM_BLOCK_WITHDRAWALS {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            self.prepare_next_mem_block(&db, &mut mem_state, withdrawals, txs)
                 .await?;
         }
 
@@ -681,21 +719,18 @@ impl MemPool {
     }
 
     /// Prepare for next mem block
-    #[instrument(skip_all, fields(withdrawals_count = withdrawals.size_hint().1, txs_count = txs.size_hint().1))]
-    async fn prepare_next_mem_block<
-        WithdrawalIter: Iterator<Item = WithdrawalRequestExtra>,
-        TxIter: Iterator<Item = L2Transaction> + Clone,
-    >(
+    #[instrument(skip_all, fields(withdrawals_count = withdrawals.len(), txs_count = txs.len()))]
+    async fn prepare_next_mem_block(
         &mut self,
         db: &StoreTransaction,
         state: &mut MemStateTree<'_>,
-        withdrawals: WithdrawalIter,
-        txs: TxIter,
+        withdrawals: Vec<WithdrawalRequestExtra>,
+        txs: Vec<L2Transaction>,
     ) -> Result<()> {
         // check order of inputs
         {
             let mut id_to_nonce: HashMap<u32, u32> = HashMap::default();
-            for tx in txs.clone() {
+            for tx in &txs {
                 let id: u32 = tx.raw().from_id().unpack();
                 let nonce: u32 = tx.raw().nonce().unpack();
                 if let Some(&prev_nonce) = id_to_nonce.get(&id) {
@@ -712,7 +747,6 @@ impl MemPool {
         }
         // Handle state before txs
         // withdrawal
-        let withdrawals: Vec<WithdrawalRequestExtra> = withdrawals.collect();
         self.finalize_withdrawals(state, withdrawals.clone())
             .await?;
         // deposits
@@ -884,7 +918,7 @@ impl MemPool {
     async fn finalize_withdrawals(
         &mut self,
         state: &mut MemStateTree<'_>,
-        mut withdrawals: Vec<WithdrawalRequestExtra>,
+        withdrawals: Vec<WithdrawalRequestExtra>,
     ) -> Result<()> {
         // check mem block state
         assert!(self.mem_block.withdrawals().is_empty());
@@ -892,36 +926,6 @@ impl MemPool {
         assert!(self.mem_block.deposits().is_empty());
         assert!(self.mem_block.finalized_custodians().is_none());
         assert!(self.mem_block.txs().is_empty());
-
-        fn filter_withdrawals(
-            state: &MemStateTree<'_>,
-            withdrawal: &WithdrawalRequestExtra,
-        ) -> bool {
-            let id = state
-                .get_account_id_by_script_hash(&withdrawal.raw().account_script_hash().unpack())
-                .expect("get id")
-                .expect("id exist");
-            let nonce = state.get_nonce(id).expect("get nonce");
-            let expected_nonce: u32 = withdrawal.raw().nonce().unpack();
-            // ignore withdrawal mismatch the nonce
-            nonce == expected_nonce
-        }
-
-        // find withdrawals from pending
-        withdrawals.retain(|withdrawal| filter_withdrawals(state, withdrawal));
-        // package withdrawals
-        if withdrawals.len() < MAX_MEM_BLOCK_WITHDRAWALS {
-            for entry in self.pending().values() {
-                if let Some(withdrawal) = entry.withdrawals.first() {
-                    if filter_withdrawals(state, withdrawal) {
-                        withdrawals.push(withdrawal.clone());
-                    }
-                    if withdrawals.len() >= MAX_MEM_BLOCK_WITHDRAWALS {
-                        break;
-                    }
-                }
-            }
-        }
 
         let max_withdrawal_capacity = std::u128::MAX;
         let finalized_custodians = {

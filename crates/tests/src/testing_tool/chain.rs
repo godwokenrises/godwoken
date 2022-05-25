@@ -446,7 +446,7 @@ pub async fn construct_block(
     mem_pool: &mut MemPool,
     deposit_requests: Vec<DepositRequest>,
 ) -> anyhow::Result<ProduceBlockResult> {
-    construct_block_with_timestamp(chain, mem_pool, deposit_requests, 0).await
+    construct_block_with_timestamp(chain, mem_pool, deposit_requests, 0, true).await
 }
 
 pub async fn construct_block_with_timestamp(
@@ -454,7 +454,14 @@ pub async fn construct_block_with_timestamp(
     mem_pool: &mut MemPool,
     deposit_requests: Vec<DepositRequest>,
     timestamp: u64,
+    refresh_mem_pool: bool,
 ) -> anyhow::Result<ProduceBlockResult> {
+    if !refresh_mem_pool {
+        assert!(
+            deposit_requests.is_empty(),
+            "skip refresh mem pool, bug deposits isn't empty"
+        )
+    }
     let stake_cell_owner_lock_hash = H256::zero();
     let db = chain.store().begin_transaction();
     let generator = chain.generator();
@@ -520,7 +527,9 @@ pub async fn construct_block_with_timestamp(
     };
     mem_pool.set_provider(Box::new(provider));
     // refresh mem block
-    mem_pool.reset_mem_block().await?;
+    if refresh_mem_pool {
+        mem_pool.reset_mem_block().await?;
+    }
     let provider = DummyMemPoolProvider {
         deposit_cells: Vec::default(),
         fake_blocktime: Duration::from_millis(0),
