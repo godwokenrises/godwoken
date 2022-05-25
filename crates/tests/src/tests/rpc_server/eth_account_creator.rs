@@ -3,7 +3,9 @@
 use anyhow::Result;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
-use gw_rpc_server::polyjuice_tx::eoa_creator::PolyjuiceEthEoaCreator;
+use gw_rpc_server::polyjuice_tx::{
+    eth_account_creator::EthAccountCreator, eth_sender::PolyjuiceTxEthSender, EthAccountContext,
+};
 use gw_types::{
     packed::{RawL2Transaction, Script},
     prelude::{Pack, Unpack},
@@ -16,7 +18,7 @@ use crate::testing_tool::{
 };
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_eoa_creator() {
+async fn test_eth_account_creator() {
     let _ = env_logger::builder().is_test(true).try_init();
 
     let rollup_type_script = Script::default();
@@ -43,14 +45,13 @@ async fn test_eoa_creator() {
     let polyjuice_account = PolyjuiceAccount::create(rollup_script_hash, &mut state).unwrap();
     state.submit_tree_to_mem_block();
 
-    let eth_eoa_creator = PolyjuiceEthEoaCreator::create(
-        &state,
+    let account_ctx = EthAccountContext::new(
         chain_id,
         rollup_script_hash,
         (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
-        creator_wallet.inner,
-    )
-    .unwrap();
+    );
+    let eth_account_creator =
+        EthAccountCreator::create(&account_ctx, creator_wallet.inner).unwrap();
 
     let eth_eoa_count = 5;
     let eth_eoa_wallet: Vec<_> = (0..eth_eoa_count)
@@ -82,11 +83,14 @@ async fn test_eoa_creator() {
         .collect::<Result<Vec<_>>>()
         .unwrap();
 
-    let map_sig_eoa_scripts = eth_eoa_creator.filter_map_from_id_zero_has_ckb_balance(&state, &txs);
-    assert_eq!(map_sig_eoa_scripts.len(), eth_eoa_wallet.len());
+    let recovered_account_scripts = txs
+        .iter()
+        .filter_map(|tx| PolyjuiceTxEthSender::recover_unregistered(&account_ctx, &state, tx).ok())
+        .collect::<Vec<_>>();
+    assert_eq!(recovered_account_scripts.len(), eth_eoa_wallet.len());
 
-    let batch_create_tx = eth_eoa_creator
-        .build_batch_create_tx(&state, map_sig_eoa_scripts.values())
+    let batch_create_tx = eth_account_creator
+        .build_batch_create_tx(&state, recovered_account_scripts)
         .unwrap();
 
     {

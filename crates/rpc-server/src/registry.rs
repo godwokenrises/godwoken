@@ -63,6 +63,7 @@ use tokio::sync::{mpsc, Mutex};
 use tracing::instrument;
 
 use crate::in_queue_request_map::{InQueueRequestHandle, InQueueRequestMap};
+use crate::polyjuice_tx::PolyjuiceTxContext;
 
 static PROFILER_GUARD: Lazy<tokio::sync::Mutex<Option<ProfilerGuard>>> =
     Lazy::new(|| tokio::sync::Mutex::new(None));
@@ -140,6 +141,15 @@ pub struct ExecutionTransactionContext {
     mem_pool_state: Arc<MemPoolState>,
 }
 
+pub struct SubmitTransactionContext {
+    submit_tx: async_channel::Sender<Request>,
+    mem_pool_state: Arc<MemPoolState>,
+    rate_limiter: Option<SendTransactionRateLimiter>,
+    rate_limit_config: Option<RPCRateLimit>,
+    polyjuice_tx_ctx: Arc<PolyjuiceTxContext>,
+    mem_pool: MemPool,
+}
+
 pub struct RegistryArgs<T> {
     pub store: Store,
     pub mem_pool: MemPool,
@@ -155,6 +165,7 @@ pub struct RegistryArgs<T> {
     pub consensus_config: ConsensusConfig,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     pub last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
+    pub polyjuice_tx_ctx: PolyjuiceTxContext,
 }
 
 pub struct Registry {
@@ -176,6 +187,7 @@ pub struct Registry {
     last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
     mem_pool_state: Arc<MemPoolState>,
     in_queue_request_map: Option<Arc<InQueueRequestMap>>,
+    polyjuice_tx_ctx: Arc<PolyjuiceTxContext>,
 }
 
 impl Registry {
@@ -198,6 +210,7 @@ impl Registry {
             consensus_config,
             dynamic_config_manager,
             last_submitted_tx_hash,
+            polyjuice_tx_ctx,
         } = args;
 
         let backend_info = get_backend_info(generator.clone());
@@ -251,6 +264,7 @@ impl Registry {
             last_submitted_tx_hash,
             mem_pool_state,
             in_queue_request_map,
+            polyjuice_tx_ctx: Arc::new(polyjuice_tx_ctx),
         }
     }
 
@@ -269,22 +283,28 @@ impl Registry {
                 store: self.store.clone(),
                 mem_pool_state: self.mem_pool_state.clone(),
             }))
-            .with_data(Data::new(self.mem_pool))
+            .with_data(Data::new(SubmitTransactionContext {
+                submit_tx: self.submit_tx,
+                mem_pool_state: self.mem_pool_state.clone(),
+                rate_limiter: send_transaction_rate_limiter,
+                rate_limit_config: self.send_tx_rate_limit,
+                polyjuice_tx_ctx: self.polyjuice_tx_ctx.clone(),
+                mem_pool: self.mem_pool.clone(),
+            }))
+            .with_data(Data::new(self.mem_pool.clone()))
             .with_data(Data(self.generator.clone()))
             .with_data(Data::new(self.store))
             .with_data(Data::new(self.rollup_config))
             .with_data(Data::new(self.mem_pool_config))
             .with_data(Data::new(self.backend_info))
-            .with_data(Data::new(self.submit_tx))
             .with_data(Data::new(self.rpc_client))
-            .with_data(Data::new(self.send_tx_rate_limit))
-            .with_data(Data::new(send_transaction_rate_limiter))
             .with_data(Data::new(self.dynamic_config_manager.clone()))
             .with_data(Data::new(self.mem_pool_state))
             .with_data(Data::new(self.chain_config))
             .with_data(Data::new(self.consensus_config))
             .with_data(Data::new(self.node_mode))
             .with_data(Data::new(self.in_queue_request_map))
+            .with_data(Data::new((self.polyjuice_tx_ctx, self.mem_pool)))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -1027,19 +1047,21 @@ async fn submit_l2transaction(
     rate_limiter: Data<Option<SendTransactionRateLimiter>>,
     rate_limit_config: Data<Option<RPCRateLimit>>,
     mem_pool_state: Data<Arc<MemPoolState>>,
+    ctx: Data<SubmitTransactionContext>,
 ) -> Result<JsonH256, RpcError> {
     let l2tx_bytes = l2tx.into_bytes();
-    let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
+    let mut tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
     let tx_hash = tx.hash().into();
-    let tx_hash_json = to_jsonh256(tx_hash);
+    let mut tx_hash_json = to_jsonh256(tx_hash);
 
     // check rate limit
-    if let Some(rate_limiter) = rate_limiter.as_ref() {
+    if let Some(rate_limiter) = ctx.rate_limiter.as_ref() {
         let mut rate_limiter = rate_limiter.lock().await;
         let sender_id: u32 = tx.raw().from_id().unpack();
         if let Some(last_touch) = rate_limiter.get(&sender_id) {
             if last_touch.elapsed().as_secs()
-                < rate_limit_config
+                < ctx
+                    .rate_limit_config
                     .as_ref()
                     .map(|c| c.seconds)
                     .unwrap_or_default()
@@ -1050,11 +1072,13 @@ async fn submit_l2transaction(
         rate_limiter.put(sender_id, Instant::now());
     }
 
-    // check sender's nonce
     {
+        // check sender's nonce
+
         // fetch mem-pool state
-        let snap = mem_pool_state.load();
+        let snap = ctx.mem_pool_state.load();
         let tree = snap.state()?;
+
         // sender_id
         let sender_id = tx.raw().from_id().unpack();
         let sender_nonce: u32 = tree.get_nonce(sender_id)?;
@@ -1075,6 +1099,62 @@ async fn submit_l2transaction(
                 message: err.to_string(),
                 data: None,
             });
+        }
+
+        // create sender account
+        if sender_id == 0 && tx_nonce == 0 {
+            let eth_ctx = &ctx.polyjuice_tx_ctx.eth;
+            let account_creator = match eth_ctx.opt_account_creator {
+                Some(ref creator) => creator,
+                None => return Err(anyhow!("unregistered sender account").into()),
+            };
+
+            let account_script = eth_ctx.recover_unregistered_account_script(&tree, &tx)?;
+            let account_script_hash: H256 = account_script.hash().into();
+
+            let create_tx = account_creator.build_batch_create_tx(&tree, vec![account_script])?;
+            log::info!(
+                "[polyjuice sender creator] create eth account for tx {:x}",
+                tx_hash
+            );
+
+            {
+                log::debug!("[polyjuice sender creator] acquire mem_pool");
+                let t = Instant::now();
+                let mut mem_pool = match ctx.mem_pool.as_ref() {
+                    Some(mem_pool) => mem_pool.lock().await,
+                    None => return Err(mem_pool_is_disabled_err()),
+                };
+                log::debug!(
+                    "[polyjuice sender creator] unlock mem_pool {}ms",
+                    t.elapsed().as_millis()
+                );
+
+                if let Err(err) = mem_pool.push_transaction(create_tx).await {
+                    log::warn!(
+                        "[polyjuice sender creator] create sender account for tx {:x} {}",
+                        tx_hash,
+                        err
+                    );
+                    return Err(anyhow!("unregistered sender account").into());
+                }
+            }
+
+            let account_id = tree
+                .get_account_id_by_script_hash(&account_script_hash)?
+                .ok_or_else(|| anyhow!("tx {:x} sender account id not found", tx_hash))?;
+
+            let raw_tx = tx.raw().as_builder().from_id(account_id.pack()).build();
+            tx = tx.as_builder().raw(raw_tx).build();
+
+            let origin_tx_hash = tx_hash_json;
+            tx_hash_json = to_jsonh256(tx.hash().into());
+
+            log::debug!(
+                "[polyjuice sender creator] new tx hash from {:x} to {:x}",
+                origin_tx_hash,
+                tx_hash
+            );
         }
     }
 

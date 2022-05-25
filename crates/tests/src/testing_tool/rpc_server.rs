@@ -11,12 +11,16 @@ use gw_jsonrpc_types::ckb_jsonrpc_types::{Byte32, JsonBytes};
 use gw_rpc_client::{
     ckb_client::CKBClient, indexer_client::CKBIndexerClient, rpc_client::RPCClient,
 };
-use gw_rpc_server::registry::{Registry, RegistryArgs};
+use gw_rpc_server::{
+    polyjuice_tx::{EthContext, PolyjuiceTxContext},
+    registry::{Registry, RegistryArgs},
+};
 use gw_types::{
     packed::{L2Transaction, Script},
     prelude::Pack,
 };
 
+use gw_utils::wallet::Wallet;
 use jsonrpc_v2::{
     MapRouter, RequestBuilder, RequestObject, ResponseObject, ResponseObjects, Server,
 };
@@ -32,6 +36,7 @@ impl RPCServer {
     pub fn default_registry_args(
         chain: &Chain,
         rollup_type_script: Script,
+        creator_wallet: Option<Wallet>,
     ) -> RegistryArgs<TestModeControl> {
         let store = chain.store().clone();
         let mem_pool = chain.mem_pool().clone();
@@ -52,6 +57,9 @@ impl RPCServer {
             )
         };
 
+        let eth_ctx = EthContext::create(&generator, creator_wallet).unwrap();
+        let polyjuice_tx_ctx = PolyjuiceTxContext::new(eth_ctx);
+
         RegistryArgs {
             store,
             mem_pool,
@@ -67,6 +75,7 @@ impl RPCServer {
             consensus_config: Default::default(),
             dynamic_config_manager: Default::default(),
             last_submitted_tx_hash: None,
+            polyjuice_tx_ctx,
         }
     }
 
@@ -80,8 +89,12 @@ impl RPCServer {
         Ok(server)
     }
 
-    pub async fn build(chain: &Chain, rollup_type_script: Script) -> Result<Self> {
-        let registry_args = Self::default_registry_args(chain, rollup_type_script);
+    pub async fn build(
+        chain: &Chain,
+        rollup_type_script: Script,
+        creator_wallet: Option<Wallet>,
+    ) -> Result<Self> {
+        let registry_args = Self::default_registry_args(chain, rollup_type_script, creator_wallet);
         Self::build_from_registry_args(registry_args).await
     }
 

@@ -249,7 +249,6 @@ pub async fn setup_chain(rollup_type_script: Script) -> Chain {
         )
         .l2_sudt_validator_script_type_hash(SUDT_VALIDATOR_CODE_HASH.pack())
         .finality_blocks(DEFAULT_FINALITY_BLOCKS.pack())
-        .chain_id(rand::random::<u64>().pack())
         .build();
     account_lock_manage
         .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));

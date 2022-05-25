@@ -1,62 +1,89 @@
-use anyhow::{anyhow, bail, Result};
-use gw_common::{
-    builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, state::State, H256,
-};
-use gw_generator::account_lock_manage::{secp256k1::Secp256k1Eth, LockAlgorithm};
+use anyhow::{anyhow, Result};
+use gw_common::{state::State, H256};
+use gw_generator::Generator;
 use gw_traits::CodeStore;
-use gw_types::{
-    bytes::Bytes,
-    core::ScriptHashType,
-    packed::{RawL2Transaction, Script},
-    prelude::{Builder, Entity, Pack, Unpack},
+use gw_types::{core::AllowedEoaType, packed::L2Transaction, prelude::Unpack};
+use gw_utils::wallet::Wallet;
+
+use self::{
+    eth_account_creator::EthAccountCreator,
+    eth_sender::{EthEOAScript, PolyjuiceTxEthSender},
 };
-use tracing::instrument;
 
-pub mod eoa_creator;
+pub mod eth_account_creator;
+pub mod eth_sender;
 
-#[instrument(skip_all)]
-pub fn recover_registry_address(
-    chain_id: u64,
-    state: &(impl State + CodeStore),
-    raw_tx: &RawL2Transaction,
-    signature: &Bytes,
-) -> Result<RegistryAddress> {
-    if Unpack::<u32>::unpack(&raw_tx.from_id()) != 0 {
-        bail!("from id isnt 0");
-    }
-    if raw_tx.chain_id().unpack() != chain_id {
-        bail!("mismatch chain id");
-    }
-
-    let to_script_hash = state.get_script_hash(raw_tx.to_id().unpack())?;
-    if to_script_hash.is_zero() {
-        bail!("to script hash is zero");
-    }
-
-    let to_script = state
-        .get_script(&to_script_hash)
-        .ok_or_else(|| anyhow!("to script not found"))?;
-
-    let message = Secp256k1Eth::polyjuice_tx_signing_message(chain_id, raw_tx, &to_script)?;
-    let address = Secp256k1Eth::default().recover(message, signature)?;
-
-    Ok(RegistryAddress::new(
-        ETH_REGISTRY_ACCOUNT_ID,
-        address.to_vec(),
-    ))
+#[derive(Clone)]
+pub struct EthAccountContext {
+    pub chain_id: u64,
+    pub rollup_script_hash: H256,
+    pub eth_lock_code_hash: H256,
 }
 
-pub fn to_eth_eoa_script(
-    rollup_script_hash: H256,
-    eth_lock_code_hash: H256,
-    registry_address: &RegistryAddress,
-) -> Script {
-    let mut args = rollup_script_hash.as_slice().to_vec();
-    args.extend_from_slice(&registry_address.address);
+impl EthAccountContext {
+    pub fn new(chain_id: u64, rollup_script_hash: H256, eth_lock_code_hash: H256) -> Self {
+        Self {
+            chain_id,
+            rollup_script_hash,
+            eth_lock_code_hash,
+        }
+    }
+}
 
-    Script::new_builder()
-        .code_hash(eth_lock_code_hash.pack())
-        .hash_type(ScriptHashType::Type.into())
-        .args(args.pack())
-        .build()
+pub struct EthContext {
+    pub account_context: EthAccountContext,
+    pub opt_account_creator: Option<EthAccountCreator>,
+}
+
+impl EthContext {
+    pub fn create(generator: &Generator, creator_wallet: Option<Wallet>) -> Result<Self> {
+        let rollup_context = generator.rollup_context();
+        let chain_id = rollup_context.rollup_config.chain_id().unpack();
+        let rollup_script_hash = rollup_context.rollup_script_hash;
+        let eth_lock_code_hash = {
+            let allowed_eoa_type_hashes = rollup_context.rollup_config.allowed_eoa_type_hashes();
+            allowed_eoa_type_hashes
+                .as_reader()
+                .iter()
+                .find_map(|type_hash| {
+                    if type_hash.type_().to_entity() == AllowedEoaType::Eth.into() {
+                        Some(type_hash.hash().unpack())
+                    } else {
+                        None
+                    }
+                })
+                .ok_or_else(|| anyhow!("eth lock code hash not found"))?
+        };
+
+        let account_context =
+            EthAccountContext::new(chain_id, rollup_script_hash, eth_lock_code_hash);
+        let opt_account_creator = creator_wallet
+            .map(|wallet| EthAccountCreator::create(&account_context, wallet))
+            .transpose()?;
+
+        let ctx = EthContext {
+            account_context,
+            opt_account_creator,
+        };
+
+        Ok(ctx)
+    }
+
+    pub fn recover_unregistered_account_script(
+        &self,
+        state: &(impl State + CodeStore),
+        tx: &L2Transaction,
+    ) -> Result<EthEOAScript> {
+        PolyjuiceTxEthSender::recover_unregistered(&self.account_context, state, tx)
+    }
+}
+
+pub struct PolyjuiceTxContext {
+    pub eth: EthContext,
+}
+
+impl PolyjuiceTxContext {
+    pub fn new(eth: EthContext) -> Self {
+        Self { eth }
+    }
 }
