@@ -383,12 +383,17 @@ async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<(
     let mut last_sent = Instant::now();
     loop {
         tokio::time::sleep(Duration::from_secs(3)).await;
-        let status = rpc_client.get_transaction_status(tx.hash().into()).await?;
+        let status = rpc_client
+            .ckb
+            .get_transaction_status(tx.hash().into())
+            .await?;
         match status {
-            Some(TxStatus::Pending) => {}
-            Some(TxStatus::Proposed) => {}
+            Some(TxStatus::Pending) | Some(TxStatus::Proposed) => {}
             Some(TxStatus::Committed) => break Ok(()),
-            None => {
+            Some(TxStatus::Rejected) => {
+                // TODO.
+            }
+            Some(TxStatus::Unknown) | None => {
                 // Resend the transaction if get_transaction returns null after 20 seconds.
                 if last_sent.elapsed() > Duration::from_secs(20) {
                     log::info!("resend transaction 0x{}", hex::encode(tx.hash()));
@@ -462,6 +467,7 @@ fn test_greater_since() {
 
 async fn check_cell(rpc_client: &RPCClient, out_point: OutPoint) -> Result<()> {
     let block_number = rpc_client
+        .ckb
         .get_transaction_block_number(out_point.tx_hash().unpack())
         .await?
         .ok_or_else(|| anyhow!("transaction not committed"))?;
