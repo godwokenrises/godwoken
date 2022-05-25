@@ -811,6 +811,11 @@ impl MemPool {
             }
         }
 
+        if force_expired {
+            log::debug!("[mem-pool] forced clear pending deposits");
+            self.pending_deposits.clear();
+        }
+
         // refresh
         let snap = self.mem_pool_state.load();
         let state = snap.state()?;
@@ -847,13 +852,6 @@ impl MemPool {
                 "[mem-pool] refreshed deposits: {}",
                 self.pending_deposits.len()
             );
-        } else if force_expired {
-            log::debug!(
-                    "[mem-pool] forced clear pending deposits, mem_account_count: {}, tip_account_count: {}",
-                    mem_account_count,
-                    tip_account_count
-                );
-            self.pending_deposits.clear();
         } else {
             log::debug!(
                     "[mem-pool] skip pending deposits, pending deposits: {}, mem_account_count: {}, tip_account_count: {}",
