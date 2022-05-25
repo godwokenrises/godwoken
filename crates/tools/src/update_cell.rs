@@ -125,7 +125,7 @@ pub async fn update_cell<P: AsRef<Path>>(
         .map_err(|err| anyhow!("{}", err))?;
     println!("Send tx...");
     CKBClient::with_url(ckb_rpc_url)?
-        .wait_tx_committed_with_timeout_and_logging(tx_hash.0.into(), 180)
+        .wait_tx_committed_with_timeout_and_logging(tx_hash.0.into(), 600)
         .await?;
     println!("{}", update_message);
     println!("Cell is updated!");

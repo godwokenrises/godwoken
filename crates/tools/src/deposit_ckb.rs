@@ -132,7 +132,7 @@ pub async fn deposit_ckb(
     log::info!("tx_hash: {:#x}", tx_hash);
 
     gw_rpc_client::ckb_client::CKBClient::with_url(ckb_rpc_url)?
-        .wait_tx_committed_with_timeout_and_logging(tx_hash.0.into(), 180)
+        .wait_tx_committed_with_timeout_and_logging(tx_hash.0.into(), 600)
         .await?;
 
     wait_for_balance_change(
