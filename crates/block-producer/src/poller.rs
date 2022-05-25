@@ -8,10 +8,7 @@ use gw_chain::chain::{
     Chain, ChallengeCell, L1Action, L1ActionContext, RevertL1ActionContext, RevertedL1Action,
     SyncParam,
 };
-use gw_jsonrpc_types::{
-    blockchain::TransactionWithStatus,
-    ckb_jsonrpc_types::{BlockNumber, HeaderView, Uint32},
-};
+use gw_jsonrpc_types::ckb_jsonrpc_types::{BlockNumber, HeaderView, Uint32};
 use gw_rpc_client::{
     indexer_types::{Order, Pagination, ScriptType, SearchKey, SearchKeyFilter, Tx},
     rpc_client::RPCClient,
@@ -236,16 +233,12 @@ impl ChainUpdater {
             }
         }
 
-        let tx: Option<TransactionWithStatus> = self
+        let tx_with_status = self
             .rpc_client
             .ckb
-            .request(
-                "get_transaction",
-                Some(ClientParams::Array(vec![json!(tx_hash)])),
-            )
-            .await?;
-        let tx_with_status =
-            tx.ok_or_else(|| QueryL1TxError::new(tx_hash, anyhow!("cannot locate tx")))?;
+            .get_transaction_with_status(tx_hash.0.into())
+            .await?
+            .ok_or_else(|| QueryL1TxError::new(tx_hash, anyhow!("cannot locate tx")))?;
         let tx = {
             let tx: ckb_types::packed::Transaction = tx_with_status
                 .transaction
@@ -531,24 +524,12 @@ impl ChainUpdater {
             // Load cell denoted by the transaction input
             let tx_hash: H256 = input.previous_output().tx_hash().unpack();
             let index = input.previous_output().index().unpack();
-            let tx: Option<TransactionWithStatus> = self
+            let tx = self
                 .rpc_client
                 .ckb
-                .request(
-                    "get_transaction",
-                    Some(ClientParams::Array(vec![json!(tx_hash)])),
-                )
-                .await?;
-            let tx_with_status =
-                tx.ok_or_else(|| QueryL1TxError::new(&tx_hash, anyhow!("cannot locate tx")))?;
-            let tx = {
-                let tx: ckb_types::packed::Transaction = tx_with_status
-                    .transaction
-                    .ok_or_else(|| QueryL1TxError::new(&tx_hash, anyhow!("cannot locate tx")))?
-                    .inner
-                    .into();
-                Transaction::new_unchecked(tx.as_bytes())
-            };
+                .get_transaction(tx_hash.0.into())
+                .await?
+                .ok_or_else(|| QueryL1TxError::new(&tx_hash, anyhow!("cannot locate tx")))?;
             let cell_output = tx
                 .raw()
                 .outputs()
