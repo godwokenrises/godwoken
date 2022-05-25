@@ -113,27 +113,51 @@ pub async fn deposit_ckb(
     let init_balance = get_balance_by_script_hash(&mut godwoken_rpc_client, &l2_lock_hash).await?;
     log::info!("balance before deposit: {}", init_balance);
 
-    let output = run_cmd(vec![
-        "--url",
-        rpc_client.url(),
-        "wallet",
-        "transfer",
-        "--privkey-path",
-        privkey_path.to_str().expect("non-utf8 file path"),
-        "--to-address",
-        address.to_string().as_str(),
-        "--capacity",
-        capacity,
-        "--tx-fee",
-        fee,
-        "--skip-check-to-address",
-    ])?;
-    let tx_hash = H256::from_str(output.trim().trim_start_matches("0x"))?;
-    log::info!("tx_hash: {:#x}", tx_hash);
+    loop {
+        let result = run_cmd(vec![
+            "--url",
+            rpc_client.url(),
+            "wallet",
+            "transfer",
+            "--privkey-path",
+            privkey_path.to_str().expect("non-utf8 file path"),
+            "--to-address",
+            address.to_string().as_str(),
+            "--capacity",
+            capacity,
+            "--tx-fee",
+            fee,
+            "--skip-check-to-address",
+        ]);
+        let output = match result {
+            Ok(output) => output,
+            Err(e) => {
+                // Sending transaction may fail because there is another
+                // **proposed** but not committed transaction using the same
+                // input.
+                log::warn!("Running ckb-cli failed: {:?}. Retrying.", e);
+                tokio::time::sleep(Duration::from_secs(3)).await;
+                continue;
+            }
+        };
 
-    gw_rpc_client::ckb_client::CKBClient::with_url(ckb_rpc_url)?
-        .wait_tx_committed_with_timeout_and_logging(tx_hash.0.into(), 600)
-        .await?;
+        let tx_hash = H256::from_str(output.trim().trim_start_matches("0x"))?;
+        log::info!("tx_hash: {:#x}", tx_hash);
+
+        if let Err(e) = gw_rpc_client::ckb_client::CKBClient::with_url(ckb_rpc_url)?
+            .wait_tx_committed_with_timeout_and_logging(tx_hash.0.into(), 600)
+            .await
+        {
+            if e.to_string().contains("rejected") {
+                // Transaction can be rejected due to double spending. Retry.
+                log::warn!("Transaction is rejected. Retrying.");
+            } else {
+                return Err(e);
+            }
+        } else {
+            break;
+        }
+    }
 
     wait_for_balance_change(
         &mut godwoken_rpc_client,
