@@ -297,7 +297,7 @@ async fn test_build_unlock_to_owner_tx() {
     let withdrawal_block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block_with_timestamp(&chain, &mut mem_pool, vec![], BLOCK_TIMESTAMP)
+        construct_block_with_timestamp(&chain, &mut mem_pool, vec![], BLOCK_TIMESTAMP, true)
             .await
             .unwrap()
     };
@@ -546,7 +546,7 @@ async fn test_build_unlock_to_owner_tx() {
         let provider = DummyMemPoolProvider::default();
         mem_pool.set_provider(Box::new(provider));
         mem_pool.reset_mem_block().await.unwrap();
-        construct_block_with_timestamp(&chain, &mut mem_pool, vec![], BLOCK_TIMESTAMP2)
+        construct_block_with_timestamp(&chain, &mut mem_pool, vec![], BLOCK_TIMESTAMP2, true)
             .await
             .unwrap()
     };
