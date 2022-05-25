@@ -88,7 +88,7 @@ pub async fn deploy_program(
     log::info!("tx_hash: {:#x}", tx_hash);
 
     gw_ckb_client
-        .wait_tx_committed_with_timeout_and_logging(tx_hash.0.into(), 300)
+        .wait_tx_committed_with_timeout_and_logging(tx_hash.0.into(), 600)
         .await?;
     let tx = gw_ckb_client
         .get_transaction(tx_hash.0.into())

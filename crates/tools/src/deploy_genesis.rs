@@ -167,7 +167,7 @@ impl<'a> DeployContext<'a> {
         let tx_hash = H256::from_str(send_output.trim().trim_start_matches("0x"))?;
         log::info!("tx_hash: {:#x}", tx_hash);
         self.gw_ckb_client
-            .wait_tx_committed_with_timeout_and_logging(tx_hash.0.into(), 120)
+            .wait_tx_committed_with_timeout_and_logging(tx_hash.0.into(), 600)
             .await?;
         Ok(tx_hash)
     }
