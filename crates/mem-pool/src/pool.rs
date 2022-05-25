@@ -32,7 +32,7 @@ use gw_store::{
 };
 use gw_traits::CodeStore;
 use gw_types::{
-    offchain::{CellStatus, DepositInfo},
+    offchain::{CellStatus, CellWithStatus, DepositInfo},
     packed::{
         AccountMerkleState, BlockInfo, L2Block, L2Transaction, Script, TxReceipt,
         WithdrawalRequest, WithdrawalRequestExtra,
@@ -783,30 +783,30 @@ impl MemPool {
 
         // check expire
         let mut force_expired = false;
-        let mut tasks = Vec::with_capacity(self.pending_deposits.len());
         for deposit in &self.pending_deposits {
             // check is handled by current block
             if processed_deposit_requests.contains(&deposit.request) {
                 force_expired = true;
                 break;
             }
-
-            // query deposit live cell
-            tasks.push(self.provider.get_cell(deposit.cell.out_point.clone()));
         }
 
-        // check cell is available
-        for task in tasks {
-            match task.await? {
-                Some(cell_with_status) => {
-                    if cell_with_status.status != CellStatus::Live {
+        // check whether the deposited cells are live
+        if !force_expired {
+            for deposit in &self.pending_deposits {
+                match self
+                    .provider
+                    .get_cell(deposit.cell.out_point.clone())
+                    .await?
+                {
+                    Some(CellWithStatus {
+                        status: CellStatus::Live,
+                        ..
+                    }) => {}
+                    _ => {
                         force_expired = true;
                         break;
                     }
-                }
-                None => {
-                    force_expired = true;
-                    break;
                 }
             }
         }
