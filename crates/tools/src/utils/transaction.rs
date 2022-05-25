@@ -60,6 +60,7 @@ where
     log::debug!("[Execute]: {} {:?}", bin, args);
     let init_output = Command::new(bin.to_owned())
         .env("RUST_BACKTRACE", "full")
+        .env("RUST_LOG", "warn")
         .args(args)
         .output()
         .expect("Run command failed");
