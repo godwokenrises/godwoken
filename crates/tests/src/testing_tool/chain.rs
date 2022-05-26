@@ -459,7 +459,7 @@ pub async fn construct_block_with_timestamp(
     if !refresh_mem_pool {
         assert!(
             deposit_requests.is_empty(),
-            "skip refresh mem pool, bug deposits isn't empty"
+            "skip refresh mem pool, but deposits isn't empty"
         )
     }
     let stake_cell_owner_lock_hash = H256::zero();
