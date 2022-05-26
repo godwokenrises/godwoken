@@ -2283,6 +2283,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ckb-crypto",
+ "ckb-types",
  "faster-hex 0.4.1",
  "gw-common",
  "gw-config",

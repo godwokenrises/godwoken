@@ -2,9 +2,12 @@
 
 use std::collections::HashSet;
 
-use crate::transaction_skeleton::TransactionSkeleton;
-use anyhow::Result;
-use gw_rpc_client::indexer_client::CKBIndexerClient;
+use crate::{local_cells::LocalCellsManager, transaction_skeleton::TransactionSkeleton};
+use anyhow::{bail, Result};
+use gw_rpc_client::{
+    indexer_client::CKBIndexerClient,
+    indexer_types::{Order, ScriptType, SearchKey},
+};
 use gw_types::{
     offchain::{CellInfo, InputCellInfo},
     packed::{CellInput, CellOutput, OutPoint, Script},
@@ -23,8 +26,7 @@ pub async fn fill_tx_fee_with_local(
     tx_skeleton: &mut TransactionSkeleton,
     client: &CKBIndexerClient,
     lock_script: Script,
-    local_consumed: &HashSet<OutPoint>,
-    local_live: &[CellInfo],
+    local_cells_manager: Option<&LocalCellsManager>,
 ) -> Result<()> {
     const CHANGE_CELL_CAPACITY: u64 = 61_00000000;
 
@@ -74,15 +76,14 @@ pub async fn fill_tx_fee_with_local(
         // to filter used input cells
         let taken_outpoints = tx_skeleton.taken_outpoints()?;
         // get payment cells
-        let cells = client
-            .query_payment_cells(
-                lock_script.clone(),
-                required_fee,
-                &taken_outpoints,
-                local_consumed,
-                local_live,
-            )
-            .await?;
+        let cells = collect_payment_cells(
+            client,
+            lock_script.clone(),
+            required_fee,
+            &taken_outpoints,
+            local_cells_manager,
+        )
+        .await?;
         assert!(!cells.is_empty(), "need cells to pay fee");
 
         // put cells in tx skeleton
@@ -125,5 +126,90 @@ pub async fn fill_tx_fee(
     client: &CKBIndexerClient,
     lock_script: Script,
 ) -> Result<()> {
-    fill_tx_fee_with_local(tx_skeleton, client, lock_script, &HashSet::new(), &[]).await
+    fill_tx_fee_with_local(tx_skeleton, client, lock_script, None).await
+}
+
+/// query payment cells, the returned cells should provide at least required_capacity fee,
+/// and the remained fees should be enough to cover a charge cell
+pub async fn collect_payment_cells(
+    client: &CKBIndexerClient,
+    lock: Script,
+    required_capacity: u64,
+    taken_outpoints: &HashSet<OutPoint>,
+    local_cells_manager: Option<&LocalCellsManager>,
+) -> Result<Vec<CellInfo>> {
+    let mut collected_cells = Vec::new();
+    let mut collected_capacity = 0u64;
+
+    // First try local live cells. Usually this is enough.
+    for cell in local_cells_manager
+        .iter()
+        .flat_map(|l| l.local_live())
+        .filter(|c| c.output.lock() == lock && c.data.is_empty() && c.output.type_().is_none())
+    {
+        collected_cells.push(cell.clone());
+        collected_capacity = collected_capacity.saturating_add(cell.output.capacity().unpack());
+        if collected_capacity >= required_capacity {
+            return Ok(collected_cells);
+        }
+    }
+
+    let search_key = SearchKey {
+        script: {
+            let lock = ckb_types::packed::Script::new_unchecked(lock.as_bytes());
+            lock.into()
+        },
+        script_type: ScriptType::Lock,
+        filter: None,
+    };
+    let order = Order::Desc;
+    let mut cursor = None;
+
+    while collected_capacity < required_capacity {
+        let cells = client.get_cells(&search_key, &order, None, &cursor).await?;
+
+        if cells.last_cursor.is_empty() {
+            bail!(
+                "no enough payment cells, required: {}, taken: {:?}",
+                required_capacity,
+                taken_outpoints
+            );
+        }
+        cursor = Some(cells.last_cursor);
+
+        let cells = cells.objects.into_iter().filter_map(|cell| {
+            let out_point = {
+                let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
+                OutPoint::new_unchecked(out_point.as_bytes())
+            };
+            // delete cells with data & type
+            if !cell.output_data.is_empty()
+                || cell.output.type_.is_some()
+                || taken_outpoints.contains(&out_point)
+                || local_cells_manager.map_or(false, |l| l.is_dead(&out_point))
+            {
+                return None;
+            }
+            let output = {
+                let output: ckb_types::packed::CellOutput = cell.output.into();
+                CellOutput::new_unchecked(output.as_bytes())
+            };
+            let data = cell.output_data.into_bytes();
+            Some(CellInfo {
+                out_point,
+                output,
+                data,
+            })
+        });
+
+        // collect least cells
+        for cell in cells {
+            collected_capacity = collected_capacity.saturating_add(cell.output.capacity().unpack());
+            collected_cells.push(cell);
+            if collected_capacity >= required_capacity {
+                break;
+            }
+        }
+    }
+    Ok(collected_cells)
 }

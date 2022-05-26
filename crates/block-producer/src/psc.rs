@@ -11,12 +11,11 @@ use gw_types::{
     packed::{GlobalState, NumberHash, OutPoint, Transaction, WithdrawalKey},
     prelude::*,
 };
-use gw_utils::since::Since;
+use gw_utils::{local_cells::LocalCellsManager, since::Since};
 use tokio::{sync::Mutex, time::Instant};
 
 use crate::{
     block_producer::{BlockProducer, ComposeSubmitTxArgs},
-    local_cells::LocalCellsManager,
     produce_block::ProduceBlockResult,
 };
 
@@ -80,7 +79,14 @@ impl ProduceSubmitConfirm {
             }
         };
         store_tx.commit()?;
-        context.local_cells_manager.lock().await.refresh();
+        {
+            let mut local_cells_manager = context.local_cells_manager.lock().await;
+            for b in last_confirmed + 1..=last_submitted {
+                let tx = store_tx.get_submit_tx(b).expect("submit tx");
+                local_cells_manager.apply_tx(&tx.as_reader());
+            }
+            // TODO: mark deposits and collected custodian cells in local blocks as dead.
+        }
         log::info!(
             "last valid: {}, last_submitted: {}, last_confirmed: {}",
             last_valid,
@@ -134,7 +140,6 @@ async fn run(mut state: ProduceSubmitConfirm) -> Result<()> {
                         let store_tx = state.context.store.begin_transaction();
                         store_tx.set_last_submitted_block_number_hash(&nh.as_reader())?;
                         store_tx.commit()?;
-                        state.context.local_cells_manager.lock().await.refresh();
                         state.submitted_count += 1;
                         state.local_count -= 1;
                     }
@@ -150,7 +155,6 @@ async fn run(mut state: ProduceSubmitConfirm) -> Result<()> {
                         let store_tx = state.context.store.begin_transaction();
                         store_tx.set_last_confirmed_block_number_hash(&nh.as_reader())?;
                         store_tx.commit()?;
-                        state.context.local_cells_manager.lock().await.refresh();
                         // TODO: update L2 block committed info.
                         state.submitted_count -= 1;
                     }
@@ -311,7 +315,7 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
             .unpack();
         drop(snap);
 
-        let payment_cells_manager = ctx.local_cells_manager.lock().await;
+        let local_cells_manager = ctx.local_cells_manager.lock().await;
 
         let args = ComposeSubmitTxArgs {
             deposit_cells,
@@ -321,9 +325,7 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
             since,
             rollup_cell,
             withdrawal_extras,
-            local_consumed_cells: payment_cells_manager.local_consumed(),
-            local_live_payment_cells: payment_cells_manager.local_live_payment(),
-            local_live_stake_cells: payment_cells_manager.local_live_stake(),
+            local_cells_manager: &*local_cells_manager,
         };
         let (tx, next_rollup_cell) = ctx.block_producer.compose_submit_tx(args).await?;
 
@@ -339,6 +341,11 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
 
         tx
     };
+
+    ctx.local_cells_manager
+        .lock()
+        .await
+        .apply_tx(&tx.as_reader());
 
     // Wait until median >= since, or CKB will reject the transaction.
     loop {
@@ -378,6 +385,7 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
         .build())
 }
 
+// TODO: use wait_tx_confirmed.
 async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<()> {
     log::info!("waiting for tx 0x{}", hex::encode(tx.hash()));
     let mut last_sent = Instant::now();
@@ -430,6 +438,8 @@ async fn sync_next_block(context: &PSCContext) -> Result<NumberHash> {
     drop(snap);
     poll_tx_confirmed(&context.rpc_client, &tx).await?;
     log::info!("block {} confirmed", block_number);
+    // TODO: wait for ckb-indexer sync this block.
+    context.local_cells_manager.lock().await.confirm_tx(&tx);
     Ok(NumberHash::new_builder()
         .block_hash(block_hash.pack())
         .number(block_number.pack())

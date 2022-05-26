@@ -10,7 +10,6 @@ use crate::{
 };
 
 use anyhow::{Context, Result};
-
 use gw_chain::chain::Chain;
 use gw_common::{h256_ext::H256Ext, H256};
 use gw_config::BlockProducerConfig;
@@ -32,8 +31,8 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::{
-    fee::fill_tx_fee_with_local, genesis_info::CKBGenesisInfo, since::Since,
-    transaction_skeleton::TransactionSkeleton, wallet::Wallet,
+    fee::fill_tx_fee_with_local, genesis_info::CKBGenesisInfo, local_cells::LocalCellsManager,
+    since::Since, transaction_skeleton::TransactionSkeleton, wallet::Wallet,
 };
 use std::{collections::HashSet, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
@@ -455,9 +454,7 @@ impl BlockProducer {
             since,
             rollup_cell,
             withdrawal_extras,
-            local_consumed_cells,
-            local_live_payment_cells,
-            local_live_stake_cells,
+            local_cells_manager,
         } = args;
 
         let rollup_context = self.generator.rollup_context();
@@ -591,8 +588,7 @@ impl BlockProducer {
             &contracts_dep,
             &self.rpc_client,
             self.wallet.lock_script().to_owned(),
-            local_consumed_cells,
-            local_live_stake_cells,
+            local_cells_manager,
         )
         .await?;
         tx_skeleton.cell_deps_mut().extend(generated_stake.deps);
@@ -687,8 +683,7 @@ impl BlockProducer {
             &mut tx_skeleton,
             &self.rpc_client.indexer,
             self.wallet.lock_script().to_owned(),
-            local_consumed_cells,
-            local_live_payment_cells,
+            Some(local_cells_manager),
         )
         .await?;
         debug_assert_eq!(
@@ -724,7 +719,5 @@ pub struct ComposeSubmitTxArgs<'a> {
     pub since: Since,
     pub rollup_cell: CellInfo,
     pub withdrawal_extras: Vec<WithdrawalRequestExtra>,
-    pub local_consumed_cells: &'a HashSet<OutPoint>,
-    pub local_live_payment_cells: &'a [CellInfo],
-    pub local_live_stake_cells: &'a [CellInfo],
+    pub local_cells_manager: &'a LocalCellsManager,
 }
