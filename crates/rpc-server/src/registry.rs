@@ -63,7 +63,10 @@ use tokio::sync::{mpsc, Mutex};
 use tracing::instrument;
 
 use crate::in_queue_request_map::{InQueueRequestHandle, InQueueRequestMap};
-use crate::{execute_tx_state::MemExecuteTxStateTree, polyjuice_tx::PolyjuiceTxContext};
+use crate::{
+    execute_tx_state::MemExecuteTxStateTree,
+    polyjuice_tx::{PolyjuiceTxContext, ERR_UNREGISTERED_EOA_ACCOUNT},
+};
 
 static PROFILER_GUARD: Lazy<tokio::sync::Mutex<Option<ProfilerGuard>>> =
     Lazy::new(|| tokio::sync::Mutex::new(None));
@@ -882,7 +885,7 @@ async fn execute_l2transaction(
             Ok(tx) => tx,
             Err(err) => {
                 log::warn!("[tx from zero] mock {:x} sender {}", tx_hash, err);
-                bail!("unregistered EOA account");
+                bail!(ERR_UNREGISTERED_EOA_ACCOUNT);
             }
         };
 
@@ -1029,7 +1032,7 @@ async fn execute_raw_l2transaction(
                     Ok(raw_tx) => raw_tx,
                     Err(err) => {
                         log::warn!("[tx from zero] mock {:x} sender {}", tx_hash.pack(), err);
-                        bail!("unregistered EOA account");
+                        bail!(ERR_UNREGISTERED_EOA_ACCOUNT);
                     }
                 };
 
@@ -1053,7 +1056,7 @@ async fn execute_raw_l2transaction(
                     Ok(raw_tx) => raw_tx,
                     Err(err) => {
                         log::warn!("[tx from zero] mock {:x} sender {}", tx_hash.pack(), err);
-                        bail!("unregistered EOA account");
+                        bail!(ERR_UNREGISTERED_EOA_ACCOUNT);
                     }
                 };
 
@@ -1169,7 +1172,7 @@ async fn submit_l2transaction(
         Ok(tx) => tx,
         Err(err) => {
             log::warn!("[tx from zero] create {:x} sender {}", tx_hash, err);
-            return Err(invalid_param_err("unregistered EOA account"));
+            return Err(invalid_param_err(ERR_UNREGISTERED_EOA_ACCOUNT));
         }
     };
     tx_hash_json = to_jsonh256(tx.hash().into());

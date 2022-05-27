@@ -1,7 +1,6 @@
 use std::convert::TryInto;
 
 use anyhow::{anyhow, Result};
-use gw_chain::chain::Chain;
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     registry_address::RegistryAddress,
@@ -17,7 +16,7 @@ use gw_types::{
 };
 use gw_utils::script_log::{parse_log, GwLog};
 
-use super::chain::POLYJUICE_VALIDATOR_CODE_HASH;
+use super::chain::{TestChain, POLYJUICE_VALIDATOR_CODE_HASH};
 
 pub mod erc20;
 
@@ -104,7 +103,7 @@ pub struct PolyjuiceSystemLog {
 }
 
 impl PolyjuiceSystemLog {
-    pub fn parse_from_tx_hash(chain: &Chain, tx_hash: H256) -> Result<Self> {
+    pub fn parse_from_tx_hash(chain: &TestChain, tx_hash: H256) -> Result<Self> {
         let receipt = chain
             .store()
             .get_mem_pool_transaction_receipt(&tx_hash)?

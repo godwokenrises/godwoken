@@ -16,20 +16,20 @@ use gw_generator::{
 };
 
 use gw_mem_pool::pool::{MemPool, MemPoolCreateArgs, OutputParam};
-use gw_store::{traits::chain_store::ChainStore, Store};
+use gw_store::{mem_pool_state::MemPoolState, traits::chain_store::ChainStore, Store};
 use gw_types::{
     bytes::Bytes,
     core::{AllowedContractType, AllowedEoaType, ScriptHashType},
     offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupContext},
     packed::{
-        AllowedTypeHash, CellOutput, DepositLockArgs, DepositRequest, L2BlockCommittedInfo,
-        RawTransaction, RollupAction, RollupActionUnion, RollupConfig, RollupSubmitBlock, Script,
-        Transaction, WitnessArgs,
+        AllowedTypeHash, CellOutput, DepositLockArgs, DepositRequest, L2Block,
+        L2BlockCommittedInfo, RawTransaction, RollupAction, RollupActionUnion, RollupConfig,
+        RollupSubmitBlock, Script, Transaction, WitnessArgs,
     },
     prelude::*,
 };
 use lazy_static::lazy_static;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 
 use std::{collections::HashSet, time::Duration};
 use std::{fs, path::PathBuf, sync::Arc};
@@ -185,6 +185,56 @@ pub const POLYJUICE_VALIDATOR_PATH: &str = "../../.tmp/binaries/godwoken-polyjui
 pub const POLYJUICE_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-polyjuice/generator";
 
 pub const DEFAULT_FINALITY_BLOCKS: u64 = 6;
+
+pub struct TestChain {
+    pub rollup_type_script: Script,
+    pub inner: Chain,
+}
+
+impl TestChain {
+    pub async fn setup(rollup_type_script: Script) -> Self {
+        let inner = setup_chain(rollup_type_script.clone()).await;
+
+        Self {
+            rollup_type_script,
+            inner,
+        }
+    }
+
+    pub fn chain_id(&self) -> u64 {
+        let config = &self.inner.generator().rollup_context().rollup_config;
+        config.chain_id().unpack()
+    }
+
+    pub async fn mem_pool_state(&self) -> Arc<MemPoolState> {
+        let mem_pool = self.inner.mem_pool().as_ref().unwrap().lock().await;
+        mem_pool.mem_pool_state()
+    }
+
+    pub async fn mem_pool(&self) -> MutexGuard<'_, MemPool> {
+        self.inner.mem_pool().as_ref().unwrap().lock().await
+    }
+
+    pub fn rollup_type_hash(&self) -> H256 {
+        self.inner.generator().rollup_context().rollup_script_hash
+    }
+
+    pub fn store(&self) -> &Store {
+        self.inner.store()
+    }
+
+    pub fn last_valid_block(&self) -> L2Block {
+        self.inner
+            .store()
+            .get_snapshot()
+            .get_last_valid_tip_block()
+            .unwrap()
+    }
+
+    pub async fn produce_block(&mut self) -> anyhow::Result<()> {
+        sync_dummy_block(&mut self.inner, self.rollup_type_script.clone()).await
+    }
+}
 
 pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
     let sudt_validator_script_type_hash: [u8; 32] =
