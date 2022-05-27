@@ -68,7 +68,7 @@ async fn test_polyjuice_erc20_tx() {
         .await
         .unwrap();
 
-    let system_log = PolyjuiceSystemLog::parse(&chain, erc20_deploy_tx_hash).unwrap();
+    let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, erc20_deploy_tx_hash).unwrap();
     assert_eq!(system_log.status_code, 0);
 
     let erc20_contract_account_id = system_log.contract_account_id(&state).unwrap();
@@ -93,7 +93,7 @@ async fn test_polyjuice_erc20_tx() {
         .await
         .unwrap();
 
-    let system_log = PolyjuiceSystemLog::parse(&chain, erc20_deploy_tx_hash).unwrap();
+    let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, erc20_deploy_tx_hash).unwrap();
     assert_eq!(system_log.status_code, 0);
 
     let balance = state
@@ -158,7 +158,7 @@ async fn test_polyjuice_tx_from_id_zero() {
         .await
         .unwrap();
 
-    let system_log = PolyjuiceSystemLog::parse(&chain, erc20_deploy_tx_hash).unwrap();
+    let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, erc20_deploy_tx_hash).unwrap();
     assert_eq!(system_log.status_code, 0);
 
     let test_account_id = state
@@ -231,7 +231,7 @@ async fn test_polyjuice_tx_from_id_zero_insufficient_balance() {
         .submit_l2transaction(&erc20_deploy_tx)
         .await
         .unwrap_err();
-    eprintln!("err {}", err.to_string());
+    eprintln!("err {}", err);
 
     assert!(err.to_string().contains("insufficient balance"))
 }
@@ -291,7 +291,7 @@ async fn test_polyjuice_tx_from_id_zero_with_registered_registry_address() {
         .submit_l2transaction(&erc20_deploy_tx)
         .await
         .unwrap_err();
-    eprintln!("err {}", err.to_string());
+    eprintln!("err {}", err);
 
     let expect_err_str = format!("registered to script {:x}", test_script_hash.pack());
     assert!(err.to_string().contains(&expect_err_str))

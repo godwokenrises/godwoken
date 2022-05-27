@@ -12,7 +12,7 @@ use gw_generator::traits::StateExt;
 use gw_store::traits::chain_store::ChainStore;
 use gw_types::{
     core::ScriptHashType,
-    packed::Script,
+    packed::{LogItem, Script},
     prelude::{Builder, Entity, Pack},
 };
 use gw_utils::script_log::{parse_log, GwLog};
@@ -104,14 +104,18 @@ pub struct PolyjuiceSystemLog {
 }
 
 impl PolyjuiceSystemLog {
-    pub fn parse(chain: &Chain, tx_hash: H256) -> Result<Self> {
+    pub fn parse_from_tx_hash(chain: &Chain, tx_hash: H256) -> Result<Self> {
         let receipt = chain
             .store()
             .get_mem_pool_transaction_receipt(&tx_hash)?
             .ok_or_else(|| anyhow!("tx receipt not found"))?;
 
-        let logs = receipt.logs().into_iter();
+        Self::parse_logs(receipt.logs())
+    }
+
+    pub fn parse_logs(logs: impl IntoIterator<Item = LogItem>) -> Result<Self> {
         let (created_address, status_code) = logs
+            .into_iter()
             .filter_map(|item| parse_log(&item).ok())
             .find_map(|gw_log| match gw_log {
                 GwLog::PolyjuiceSystem {

@@ -5,10 +5,7 @@ use gw_traits::CodeStore;
 use gw_types::{core::AllowedEoaType, packed::L2Transaction, prelude::Unpack};
 use gw_utils::wallet::Wallet;
 
-use self::{
-    eth_account_creator::EthAccountCreator,
-    eth_sender::{EthEOAScript, PolyjuiceTxEthSender},
-};
+use self::{eth_account_creator::EthAccountCreator, eth_sender::PolyjuiceTxEthSender};
 
 pub mod eth_account_creator;
 pub mod eth_sender;
@@ -69,12 +66,12 @@ impl EthContext {
         Ok(ctx)
     }
 
-    pub fn recover_unregistered_account_script(
+    pub fn recover_sender(
         &self,
         state: &(impl State + CodeStore),
         tx: &L2Transaction,
-    ) -> Result<EthEOAScript> {
-        PolyjuiceTxEthSender::recover_unregistered(&self.account_context, state, tx)
+    ) -> Result<PolyjuiceTxEthSender> {
+        PolyjuiceTxEthSender::recover(&self.account_context, state, tx)
     }
 }
 

@@ -182,7 +182,7 @@ pub const ETH_REGISTRY_GENERATOR_PATH: &str =
 
 // polyjuice
 pub const POLYJUICE_VALIDATOR_PATH: &str = "../../.tmp/binaries/godwoken-polyjuice/validator";
-pub const POLYJUICE_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-polyjuice/generator_log";
+pub const POLYJUICE_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-polyjuice/generator";
 
 pub const DEFAULT_FINALITY_BLOCKS: u64 = 6;
 
@@ -572,4 +572,36 @@ pub async fn construct_block_with_timestamp(
         block_param,
     };
     produce_block(&db, generator, param)
+}
+
+pub async fn sync_dummy_block(chain: &mut Chain, rollup_type_script: Script) -> anyhow::Result<()> {
+    let dummy_rollup_cell = CellOutput::new_builder()
+        .type_(Some(rollup_type_script).pack())
+        .build();
+
+    let dummy_block_result = {
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block(&chain, &mut mem_pool, Default::default()).await?
+    };
+
+    let action1 = L1Action {
+        context: L1ActionContext::SubmitBlock {
+            l2block: dummy_block_result.block.clone(),
+            deposit_requests: Default::default(),
+            deposit_asset_scripts: Default::default(),
+            withdrawals: Default::default(),
+        },
+        transaction: build_sync_tx(dummy_rollup_cell, dummy_block_result),
+        l2block_committed_info: Default::default(),
+    };
+    let param = SyncParam {
+        updates: vec![action1],
+        reverts: Default::default(),
+    };
+
+    chain.sync(param).await?;
+    assert!(chain.last_sync_event().is_success());
+
+    Ok(())
 }

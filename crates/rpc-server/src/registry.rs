@@ -57,7 +57,10 @@ use std::{
 use tokio::sync::Mutex;
 use tracing::instrument;
 
-use crate::polyjuice_tx::PolyjuiceTxContext;
+use crate::{
+    execute_tx_state::MemExecuteTxStore,
+    polyjuice_tx::{eth_sender::PolyjuiceTxEthSender, PolyjuiceTxContext},
+};
 
 static PROFILER_GUARD: Lazy<tokio::sync::Mutex<Option<ProfilerGuard>>> =
     Lazy::new(|| tokio::sync::Mutex::new(None));
@@ -133,6 +136,7 @@ pub struct ExecutionTransactionContext {
     generator: Arc<Generator>,
     store: Store,
     mem_pool_state: Arc<MemPoolState>,
+    polyjuice_tx_ctx: Arc<PolyjuiceTxContext>,
 }
 
 pub struct SubmitTransactionContext {
@@ -269,6 +273,7 @@ impl Registry {
                 generator: self.generator.clone(),
                 store: self.store.clone(),
                 mem_pool_state: self.mem_pool_state.clone(),
+                polyjuice_tx_ctx: self.polyjuice_tx_ctx.clone(),
             }))
             .with_data(Data::new(SubmitTransactionContext {
                 submit_tx: self.submit_tx,
@@ -770,7 +775,23 @@ async fn execute_l2transaction(
     }
 
     let l2tx_bytes = l2tx.into_bytes();
-    let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
+    let mut tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
+
+    let mut sender_id: u32 = tx.raw().from_id().unpack();
+    let mut opt_mock_account = None;
+    if sender_id == 0 {
+        let snap = ctx.mem_pool_state.load();
+        let state = snap.state()?;
+
+        let eth_ctx = &ctx.polyjuice_tx_ctx.eth;
+        match eth_ctx.recover_sender(&state, &tx)? {
+            PolyjuiceTxEthSender::Unregistered {
+                account_script,
+                registry_address,
+            } => opt_mock_account = Some((account_script, registry_address)),
+            PolyjuiceTxEthSender::Registered { account_id, .. } => sender_id = account_id,
+        }
+    }
 
     let raw_block = ctx.store.get_snapshot().get_last_valid_tip_block()?.raw();
     let block_producer = raw_block.block_producer();
@@ -791,8 +812,18 @@ async fn execute_l2transaction(
         let db = ctx.store.get_snapshot();
         let tip_block_hash = db.get_last_valid_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
-        let snap = ctx.mem_pool_state.load();
-        let state = snap.state()?;
+        let snap = MemExecuteTxStore::new(Arc::clone(&ctx.mem_pool_state.load()));
+        let mut state = snap.state()?;
+
+        if let Some((account_script, registry_address)) = opt_mock_account {
+            log::debug!("[RPC] mock account {:x}", registry_address.address.pack());
+            sender_id = state.mock_account(registry_address, account_script)?;
+        }
+        if Unpack::<u32>::unpack(&tx.raw().from_id()) != sender_id {
+            let raw_tx = tx.raw().as_builder().from_id(sender_id.pack()).build();
+            tx = tx.as_builder().raw(raw_tx).build();
+        }
+
         // tx basic verification
         TransactionVerifier::new(&state, ctx.generator.rollup_context()).verify(&tx)?;
         // verify tx signature
@@ -836,6 +867,7 @@ async fn execute_l2transaction(
 enum ExecuteRawL2TransactionParams {
     Tip((JsonBytes,)),
     Number((JsonBytes, Option<GwUint64>)),
+    // PolyjuiceFromIdZero((JsonBytes, Option<GwUint64>, RegistryAddressJsonBytes)),
 }
 
 #[instrument(skip_all)]
@@ -1000,43 +1032,59 @@ async fn submit_l2transaction(
             let eth_ctx = &ctx.polyjuice_tx_ctx.eth;
             let account_creator = match eth_ctx.opt_account_creator {
                 Some(ref creator) => creator,
-                None => return Err(anyhow!("unregistered sender account").into()),
+                None => return Err(anyhow!("sender must be registered EOA").into()),
             };
 
-            let account_script = eth_ctx.recover_unregistered_account_script(&tree, &tx)?;
-            let account_script_hash: H256 = account_script.hash().into();
+            let sender = eth_ctx.recover_sender(&tree, &tx)?;
+            let account_id = match sender {
+                PolyjuiceTxEthSender::Registered { account_id, .. } => account_id,
+                PolyjuiceTxEthSender::Unregistered {
+                    registry_address,
+                    account_script,
+                } => {
+                    let account_script_hash: H256 = account_script.hash().into();
 
-            let create_tx = account_creator.build_batch_create_tx(&tree, vec![account_script])?;
-            log::info!(
-                "[polyjuice sender creator] create eth account for tx {:x}",
-                tx_hash
-            );
-
-            {
-                log::debug!("[polyjuice sender creator] acquire mem_pool");
-                let t = Instant::now();
-                let mut mem_pool = match ctx.mem_pool.as_ref() {
-                    Some(mem_pool) => mem_pool.lock().await,
-                    None => return Err(mem_pool_is_disabled_err()),
-                };
-                log::debug!(
-                    "[polyjuice sender creator] unlock mem_pool {}ms",
-                    t.elapsed().as_millis()
-                );
-
-                if let Err(err) = mem_pool.push_transaction(create_tx).await {
-                    log::warn!(
-                        "[polyjuice sender creator] create sender account for tx {:x} {}",
-                        tx_hash,
-                        err
+                    let create_tx =
+                        account_creator.build_batch_create_tx(&tree, vec![account_script])?;
+                    log::info!(
+                        "[polyjuice sender creator] create eth account {:x} for tx {:x}",
+                        registry_address.address.pack(),
+                        tx_hash
                     );
-                    return Err(anyhow!("unregistered sender account").into());
-                }
-            }
 
-            let account_id = tree
-                .get_account_id_by_script_hash(&account_script_hash)?
-                .ok_or_else(|| anyhow!("tx {:x} sender account id not found", tx_hash))?;
+                    {
+                        log::debug!("[polyjuice sender creator] acquire mem_pool");
+                        let t = Instant::now();
+                        let mut mem_pool = match ctx.mem_pool.as_ref() {
+                            Some(mem_pool) => mem_pool.lock().await,
+                            None => return Err(mem_pool_is_disabled_err()),
+                        };
+                        log::debug!(
+                            "[polyjuice sender creator] unlock mem_pool {}ms",
+                            t.elapsed().as_millis()
+                        );
+
+                        if let Err(err) = mem_pool.push_transaction(create_tx).await {
+                            log::warn!(
+                                "[polyjuice sender creator] create eth account {:x} for tx {:x} {}",
+                                registry_address.address.pack(),
+                                tx_hash,
+                                err
+                            );
+                            return Err(anyhow!("sender must be registered EOA").into());
+                        }
+                    }
+
+                    tree.get_account_id_by_script_hash(&account_script_hash)?
+                        .ok_or_else(|| {
+                            anyhow!(
+                                "tx {:x} sender account {:x} id not found",
+                                tx_hash,
+                                registry_address.address.pack(),
+                            )
+                        })?
+                }
+            };
 
             let raw_tx = tx.raw().as_builder().from_id(account_id.pack()).build();
             tx = tx.as_builder().raw(raw_tx).build();
