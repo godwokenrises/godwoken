@@ -1107,30 +1107,48 @@ async fn get_withdrawal(
             (to_h256(withdrawal_hash), verbose)
         }
     };
-    let db = store.get_snapshot();
-    let withdrawal_opt;
-    let status;
-    match db.get_withdrawal_info(&withdrawal_hash)? {
-        Some(withdrawal_info) => {
-            withdrawal_opt = db.get_withdrawal_by_key(&withdrawal_info.key())?;
-            status = WithdrawalStatus::Committed;
-        }
-        None => {
-            withdrawal_opt = db.get_mem_pool_withdrawal(&withdrawal_hash)?;
-            status = WithdrawalStatus::Pending;
-        }
-    };
 
-    Ok(withdrawal_opt.map(|withdrawal| match verbose {
-        GetWithdrawalVerbose::OnlyStatus => WithdrawalWithStatus {
-            withdrawal: None,
-            status,
-        },
-        GetWithdrawalVerbose::WithdrawalWithStatus => WithdrawalWithStatus {
-            withdrawal: Some(withdrawal.into()),
-            status,
-        },
-    }))
+    let db = store.get_snapshot();
+    if let Some(withdrawal) = db.get_mem_pool_withdrawal(&withdrawal_hash)? {
+        let withdrawal_opt = match verbose {
+            GetWithdrawalVerbose::OnlyStatus => None,
+            GetWithdrawalVerbose::WithdrawalWithStatus => Some(withdrawal.into()),
+        };
+        return Ok(Some(WithdrawalWithStatus {
+            status: WithdrawalStatus::Pending,
+            withdrawal: withdrawal_opt,
+            ..Default::default()
+        }));
+    }
+    if let Some(withdrawal_info) = db.get_withdrawal_info(&withdrawal_hash)? {
+        if let Some(withdrawal) = db.get_withdrawal_by_key(&withdrawal_info.key())? {
+            let l2_block_number: u64 = withdrawal_info.block_number().unpack();
+            let l2_block_hash =
+                packed::Byte32::from_slice(&withdrawal_info.key().as_slice()[..32])?.unpack();
+            let l2_withdrawal_index: u32 =
+                packed::Uint32::from_slice(&withdrawal_info.key().as_slice()[32..36])?.unpack();
+            if let Some(committed_info) = db.get_l2block_committed_info(&l2_block_hash)? {
+                let l1_block_number = committed_info.number().unpack();
+                let l1_block_hash = committed_info.block_hash();
+                let l1_transaction_hash = committed_info.transaction_hash();
+                let withdrawal_opt = match verbose {
+                    GetWithdrawalVerbose::OnlyStatus => None,
+                    GetWithdrawalVerbose::WithdrawalWithStatus => Some(withdrawal.into()),
+                };
+                return Ok(Some(WithdrawalWithStatus {
+                    status: WithdrawalStatus::Committed,
+                    withdrawal: withdrawal_opt,
+                    l2_block_number: Some(l2_block_number),
+                    l2_block_hash: Some(to_jsonh256(l2_block_hash)),
+                    l2_withdrawal_index: Some(l2_withdrawal_index),
+                    l1_block_number: Some(l1_block_number),
+                    l1_block_hash: Some(l1_block_hash.unpack()),
+                    l1_transaction_hash: Some(l1_transaction_hash.unpack()),
+                }));
+            }
+        }
+    }
+    Ok(None)
 }
 
 // registry address, sudt_id, block_number

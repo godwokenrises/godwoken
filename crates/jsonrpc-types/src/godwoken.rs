@@ -541,6 +541,12 @@ impl Default for WithdrawalStatus {
 pub struct WithdrawalWithStatus {
     pub withdrawal: Option<WithdrawalRequestExtra>,
     pub status: WithdrawalStatus,
+    pub l1_block_number: Option<u64>,
+    pub l1_block_hash: Option<H256>,
+    pub l1_transaction_hash: Option<H256>,
+    pub l2_block_number: Option<u64>,
+    pub l2_block_hash: Option<H256>,
+    pub l2_withdrawal_index: Option<u32>,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
