@@ -4,7 +4,8 @@ use anyhow::Result;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
 use gw_rpc_server::polyjuice_tx::{
-    eth_account_creator::EthAccountCreator, eth_sender::PolyjuiceTxEthSender, EthAccountContext,
+    eth_account_creator::EthAccountCreator, eth_context::EthAccountContext,
+    eth_sender::PolyjuiceTxEthSender,
 };
 use gw_types::{
     packed::{RawL2Transaction, Script},

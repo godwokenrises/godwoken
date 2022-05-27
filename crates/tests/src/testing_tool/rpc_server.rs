@@ -15,7 +15,7 @@ use gw_rpc_client::{
     ckb_client::CKBClient, indexer_client::CKBIndexerClient, rpc_client::RPCClient,
 };
 use gw_rpc_server::{
-    polyjuice_tx::{EthContext, PolyjuiceTxContext},
+    polyjuice_tx::{eth_context::EthContext, PolyjuiceTxContext},
     registry::{Registry, RegistryArgs},
 };
 use gw_types::{
@@ -60,7 +60,7 @@ impl RPCServer {
             )
         };
 
-        let eth_ctx = EthContext::create(&generator, creator_wallet).unwrap();
+        let eth_ctx = EthContext::create(generator.rollup_context(), creator_wallet).unwrap();
         let polyjuice_tx_ctx = PolyjuiceTxContext::new(eth_ctx);
 
         RegistryArgs {

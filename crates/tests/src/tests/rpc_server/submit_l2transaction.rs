@@ -233,7 +233,7 @@ async fn test_polyjuice_tx_from_id_zero_insufficient_balance() {
         .unwrap_err();
     eprintln!("err {}", err);
 
-    assert!(err.to_string().contains("insufficient balance"))
+    assert!(err.to_string().contains("unregistered EOA account"))
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -293,6 +293,5 @@ async fn test_polyjuice_tx_from_id_zero_with_registered_registry_address() {
         .unwrap_err();
     eprintln!("err {}", err);
 
-    let expect_err_str = format!("registered to script {:x}", test_script_hash.pack());
-    assert!(err.to_string().contains(&expect_err_str))
+    assert!(err.to_string().contains("unregistered EOA account"))
 }

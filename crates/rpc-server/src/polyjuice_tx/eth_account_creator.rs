@@ -12,8 +12,8 @@ use gw_types::prelude::{Builder, Entity, Pack};
 use gw_utils::wallet::Wallet;
 use tracing::instrument;
 
+use super::eth_context::EthAccountContext;
 use super::eth_sender::EthEOAScript;
-use super::EthAccountContext;
 
 const META_CONTRACT_ACCOUNT_ID: u32 = RESERVED_ACCOUNT_ID;
 pub const MAX_EOA_PER_BATCH: usize = 50;
@@ -51,7 +51,7 @@ impl EthAccountCreator {
         let eoa_scripts = eoa_scripts.into_iter().collect();
         let creator_account_id = state
             .get_account_id_by_script_hash(&self.creator_script_hash)?
-            .ok_or_else(|| anyhow!("[polyjuice sender creator] creator account id not found"))?;
+            .ok_or_else(|| anyhow!("[tx from zero] creator account id not found"))?;
 
         let creator_registry_address = match state.get_registry_address_by_script_hash(
             ETH_REGISTRY_ACCOUNT_ID,
@@ -59,7 +59,7 @@ impl EthAccountCreator {
         )? {
             Some(addr) => addr,
             None => {
-                bail!("[polyjuice sender creator] creator eth registry address not found")
+                bail!("[tx from zero] creator eth registry address not found")
             }
         };
 
