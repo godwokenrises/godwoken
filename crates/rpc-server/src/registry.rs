@@ -40,7 +40,10 @@ use gw_store::{
 };
 use gw_traits::CodeStore;
 use gw_types::{
-    packed::{self, BlockInfo, Byte32, L2Transaction, RollupConfig, WithdrawalRequestExtra},
+    packed::{
+        self, BlockInfo, Byte32, L2Transaction, RawL2Transaction, RollupConfig,
+        WithdrawalRequestExtra,
+    },
     prelude::*,
     U256,
 };
@@ -58,7 +61,7 @@ use tokio::sync::Mutex;
 use tracing::instrument;
 
 use crate::{
-    execute_tx_state::MemExecuteTxStore,
+    execute_tx_state::MemExecuteTxStateTree,
     polyjuice_tx::{eth_sender::PolyjuiceTxEthSender, PolyjuiceTxContext},
 };
 
@@ -74,6 +77,7 @@ type BoxedTestsRPCImpl = Box<dyn TestModeRPC + Send + Sync>;
 type GwUint64 = gw_jsonrpc_types::ckb_jsonrpc_types::Uint64;
 type GwUint32 = gw_jsonrpc_types::ckb_jsonrpc_types::Uint32;
 type RpcNodeMode = gw_jsonrpc_types::godwoken::NodeMode;
+type RegistryAddressJsonBytes = JsonBytes;
 
 const HEADER_NOT_FOUND_ERR_CODE: i64 = -32000;
 const INVALID_NONCE_ERR_CODE: i64 = -32001;
@@ -812,8 +816,9 @@ async fn execute_l2transaction(
         let db = ctx.store.get_snapshot();
         let tip_block_hash = db.get_last_valid_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
-        let snap = MemExecuteTxStore::new(Arc::clone(&ctx.mem_pool_state.load()));
-        let mut state = snap.state()?;
+        let snap = ctx.mem_pool_state.load();
+        let mem_state = snap.state()?;
+        let mut state = MemExecuteTxStateTree::new(mem_state);
 
         if let Some((account_script, registry_address)) = opt_mock_account {
             log::debug!("[RPC] mock account {:x}", registry_address.address.pack());
@@ -867,7 +872,7 @@ async fn execute_l2transaction(
 enum ExecuteRawL2TransactionParams {
     Tip((JsonBytes,)),
     Number((JsonBytes, Option<GwUint64>)),
-    // PolyjuiceFromIdZero((JsonBytes, Option<GwUint64>, RegistryAddressJsonBytes)),
+    PolyjuiceFromIdZero((JsonBytes, Option<GwUint64>, RegistryAddressJsonBytes)),
 }
 
 #[instrument(skip_all)]
@@ -876,14 +881,31 @@ async fn execute_raw_l2transaction(
     mem_pool_config: Data<MemPoolConfig>,
     ctx: Data<ExecutionTransactionContext>,
 ) -> Result<RunResult, RpcError> {
-    let (raw_l2tx, block_number_opt) = match params {
-        ExecuteRawL2TransactionParams::Tip(p) => (p.0, None),
-        ExecuteRawL2TransactionParams::Number(p) => p,
+    use gw_common::registry_address::RegistryAddress;
+    use gw_types::packed::Script;
+
+    let (raw_l2tx, block_number_opt, registry_address_opt) = match params {
+        ExecuteRawL2TransactionParams::Tip(p) => (p.0, None, None),
+        ExecuteRawL2TransactionParams::Number(p) => (p.0, p.1, None),
+        ExecuteRawL2TransactionParams::PolyjuiceFromIdZero(p) => (p.0, p.1, Some(p.2)),
     };
     let block_number_opt = block_number_opt.map(|n| n.value());
 
     let raw_l2tx_bytes = raw_l2tx.into_bytes();
     let raw_l2tx = packed::RawL2Transaction::from_slice(&raw_l2tx_bytes)?;
+
+    let sender_id: u32 = raw_l2tx.from_id().unpack();
+    let opt_mock_account = match registry_address_opt {
+        None if 0 == sender_id => return Err(invalid_param_err("No registry address")),
+        Some(json_bytes) if 0 == sender_id => {
+            let script_address = RegistryAddress::from_slice(json_bytes.as_bytes())
+                .map(|r| (ctx.polyjuice_tx_ctx.eth.to_account_script(&r), r))
+                .ok_or_else(|| invalid_param_err("Invalid registry address"))?;
+            Some(script_address)
+        }
+        // sender id isn't 0
+        Some(_) | None => None,
+    };
 
     let db = ctx.store.begin_transaction();
 
@@ -918,6 +940,35 @@ async fn execute_raw_l2transaction(
     let tx_hash: H256 = raw_l2tx.hash().into();
     let block_number: u64 = block_info.number().unpack();
 
+    fn restore_tx_sender<S: State + CodeStore>(
+        opt_mock_account: Option<(Script, RegistryAddress)>,
+        raw_tx: RawL2Transaction,
+        state: &mut MemExecuteTxStateTree<S>,
+    ) -> Result<RawL2Transaction> {
+        match opt_mock_account {
+            Some((account_script, registry_address)) => {
+                log::debug!(
+                    "[RPC] mock account {:x} for {:x}",
+                    registry_address.address.pack(),
+                    raw_tx.hash().pack()
+                );
+
+                let sender_id = state.mock_account(registry_address, account_script)?;
+                let tx_hash = raw_tx.hash();
+                let new_raw_tx = raw_tx.as_builder().from_id(sender_id.pack()).build();
+
+                log::debug!(
+                    "[RPC] new tx hash from {:x} to {:x}",
+                    tx_hash.pack(),
+                    new_raw_tx.hash().pack()
+                );
+
+                Ok(new_raw_tx)
+            }
+            None => Ok(raw_tx),
+        }
+    }
+
     // execute tx in task
     let mut run_result = tokio::task::spawn_blocking(move || {
         let chain_view = {
@@ -927,7 +978,10 @@ async fn execute_raw_l2transaction(
         // execute tx
         let run_result = match block_number_opt {
             Some(block_number) => {
-                let state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
+                let hist_state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
+                let mut state = MemExecuteTxStateTree::new(hist_state);
+                let raw_l2tx = restore_tx_sender(opt_mock_account, raw_l2tx, &mut state)?;
+
                 ctx.generator.unchecked_execute_transaction(
                     &chain_view,
                     &state,
@@ -938,7 +992,10 @@ async fn execute_raw_l2transaction(
             }
             None => {
                 let snap = ctx.mem_pool_state.load();
-                let state = snap.state()?;
+                let mem_state = snap.state()?;
+                let mut state = MemExecuteTxStateTree::new(mem_state);
+                let raw_l2tx = restore_tx_sender(opt_mock_account, raw_l2tx, &mut state)?;
+
                 ctx.generator.unchecked_execute_transaction(
                     &chain_view,
                     &state,

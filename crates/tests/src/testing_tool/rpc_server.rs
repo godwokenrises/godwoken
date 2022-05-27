@@ -4,11 +4,11 @@ use anyhow::{bail, Result};
 use ckb_types::prelude::Entity;
 use gw_block_producer::test_mode_control::TestModeControl;
 use gw_chain::chain::Chain;
-use gw_common::H256;
+use gw_common::{registry_address::RegistryAddress, H256};
 use gw_config::{NodeMode::FullNode, RPCClientConfig};
 
 use gw_jsonrpc_types::{
-    ckb_jsonrpc_types::{Byte32, JsonBytes},
+    ckb_jsonrpc_types::{Byte32, JsonBytes, Uint64},
     godwoken::RunResult,
 };
 use gw_rpc_client::{
@@ -19,7 +19,7 @@ use gw_rpc_server::{
     registry::{Registry, RegistryArgs},
 };
 use gw_types::{
-    packed::{L2Transaction, Script},
+    packed::{L2Transaction, RawL2Transaction, Script},
     prelude::Pack,
 };
 
@@ -126,6 +126,40 @@ impl RPCServer {
         let req = RequestBuilder::default()
             .with_id(1)
             .with_method("gw_execute_l2transaction")
+            .with_params(params)
+            .finish();
+
+        let run_result = self.handle_single_request(req).await?;
+        Ok(run_result)
+    }
+
+    pub async fn execute_raw_l2transaction(
+        &self,
+        raw_tx: &RawL2Transaction,
+        opt_block_number: Option<u64>,
+        opt_registry_address: Option<&RegistryAddress>,
+    ) -> Result<RunResult> {
+        let raw_tx_bytes = JsonBytes::from_bytes(raw_tx.as_bytes());
+        let params = match (opt_block_number, opt_registry_address) {
+            (None, None) => serde_json::to_value(&(raw_tx_bytes))?,
+            (Some(block_number), None) => {
+                let block_number: Uint64 = block_number.into();
+                serde_json::to_value(&(raw_tx_bytes, block_number))?
+            }
+            (Some(block_number), Some(registry_address)) => {
+                let block_number: Uint64 = block_number.into();
+                let address_bytes = JsonBytes::from_bytes(registry_address.to_bytes().into());
+                serde_json::to_value(&(raw_tx_bytes, block_number, address_bytes))?
+            }
+            (None, Some(registry_address)) => {
+                let address_bytes = JsonBytes::from_bytes(registry_address.to_bytes().into());
+                serde_json::to_value(&(raw_tx_bytes, Option::<Uint64>::None, address_bytes))?
+            }
+        };
+
+        let req = RequestBuilder::default()
+            .with_id(1)
+            .with_method("gw_execute_raw_l2transaction")
             .with_params(params)
             .finish();
 

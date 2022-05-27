@@ -83,6 +83,21 @@ impl PolyjuiceTxEthSender {
     }
 }
 
+pub fn to_account_script(
+    rollup_script_hash: H256,
+    eth_lock_code_hash: H256,
+    registry_address: &RegistryAddress,
+) -> Script {
+    let mut args = rollup_script_hash.as_slice().to_vec();
+    args.extend_from_slice(&registry_address.address);
+
+    Script::new_builder()
+        .code_hash(eth_lock_code_hash.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args(args.pack())
+        .build()
+}
+
 #[instrument(skip_all)]
 fn recover_registry_address(
     chain_id: u64,
@@ -111,19 +126,4 @@ fn recover_registry_address(
     let registry_address = RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, eth_address.to_vec());
 
     Ok(registry_address)
-}
-
-fn to_account_script(
-    rollup_script_hash: H256,
-    eth_lock_code_hash: H256,
-    registry_address: &RegistryAddress,
-) -> Script {
-    let mut args = rollup_script_hash.as_slice().to_vec();
-    args.extend_from_slice(&registry_address.address);
-
-    Script::new_builder()
-        .code_hash(eth_lock_code_hash.pack())
-        .hash_type(ScriptHashType::Type.into())
-        .args(args.pack())
-        .build()
 }

@@ -1,14 +1,19 @@
 use anyhow::{anyhow, Result};
-use gw_common::{state::State, H256};
+use gw_common::{registry_address::RegistryAddress, state::State, H256};
 use gw_generator::Generator;
 use gw_traits::CodeStore;
-use gw_types::{core::AllowedEoaType, packed::L2Transaction, prelude::Unpack};
+use gw_types::{
+    core::AllowedEoaType,
+    packed::{L2Transaction, Script},
+    prelude::Unpack,
+};
 use gw_utils::wallet::Wallet;
-
-use self::{eth_account_creator::EthAccountCreator, eth_sender::PolyjuiceTxEthSender};
 
 pub mod eth_account_creator;
 pub mod eth_sender;
+
+use eth_account_creator::EthAccountCreator;
+use eth_sender::{to_account_script, PolyjuiceTxEthSender};
 
 #[derive(Clone)]
 pub struct EthAccountContext {
@@ -72,6 +77,14 @@ impl EthContext {
         tx: &L2Transaction,
     ) -> Result<PolyjuiceTxEthSender> {
         PolyjuiceTxEthSender::recover(&self.account_context, state, tx)
+    }
+
+    pub fn to_account_script(&self, registry_address: &RegistryAddress) -> Script {
+        to_account_script(
+            self.account_context.rollup_script_hash,
+            self.account_context.eth_lock_code_hash,
+            registry_address,
+        )
     }
 }
 
