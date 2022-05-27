@@ -280,4 +280,30 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .unwrap_err();
     eprintln!("err {}", err);
     assert!(err.to_string().contains(ERR_UNREGISTERED_EOA_ACCOUNT));
+
+    // Account has tx history
+    let test_wallet = EthWallet::random(chain.rollup_type_hash());
+    let test_account_id = test_wallet
+        .create_account(&mut state, 10000000u128.into())
+        .unwrap();
+    state.set_nonce(test_account_id, 1).unwrap();
+    state.submit_tree_to_mem_block();
+
+    let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18).finish();
+    let raw_tx = RawL2Transaction::new_builder()
+        .chain_id(chain.chain_id().pack())
+        .from_id(0u32.pack())
+        .to_id(polyjuice_account.id.pack())
+        .nonce(1u32.pack())
+        .args(deploy_args.pack())
+        .build();
+
+    let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
+    let err = rpc_server
+        .submit_l2transaction(&deploy_tx)
+        .await
+        .unwrap_err();
+    eprintln!("err {}", err);
+
+    assert!(err.to_string().contains("invalid nonce"));
 }

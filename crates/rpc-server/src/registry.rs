@@ -1035,8 +1035,12 @@ async fn submit_l2transaction(
 
         // sender_id
         let sender_id = tx.raw().from_id().unpack();
-        let sender_nonce: u32 = tree.get_nonce(sender_id)?;
         let tx_nonce: u32 = tx.raw().nonce().unpack();
+        let sender_nonce: u32 = if 0 == sender_id {
+            0
+        } else {
+            tree.get_nonce(sender_id)?
+        };
         if sender_nonce != tx_nonce {
             let err = TransactionError::Nonce {
                 account_id: sender_id,
