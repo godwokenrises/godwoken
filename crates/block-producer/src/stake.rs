@@ -6,19 +6,18 @@ use ckb_types::{
 use gw_config::ContractsCellDep;
 use gw_rpc_client::{
     indexer_client::CKBIndexerClient,
-    indexer_types::{Cell, Order, ScriptType, SearchKey, SearchKeyFilter},
+    indexer_types::{Order, SearchKey, SearchKeyFilter},
     rpc_client::RPCClient,
 };
 use gw_types::{
     core::ScriptHashType,
     offchain::{CellInfo, InputCellInfo, RollupContext},
-    packed::{
-        CellDep, CellInput, CellOutput, L2Block, OutPoint, Script, StakeLockArgs,
-        StakeLockArgsReader,
-    },
+    packed::{CellDep, CellInput, CellOutput, L2Block, Script, StakeLockArgs, StakeLockArgsReader},
     prelude::*,
 };
-use gw_utils::local_cells::LocalCellsManager;
+use gw_utils::local_cells::{
+    collect_local_and_indexer_cells, CollectLocalAndIndexerCursor, LocalCellsManager,
+};
 
 pub struct GeneratedStake {
     pub deps: Vec<CellDep>,
@@ -145,53 +144,30 @@ pub async fn query_stake(
         .args(rollup_context.rollup_script_hash.as_slice().pack())
         .build();
 
-    // First try local live stake cells.
-    // TODO: check lock args, finality.
-    let c = local_cells_manager.local_live().find(|c| {
-        c.output.lock() == lock && c.output.capacity().unpack() >= required_staking_capacity
-    });
-    if c.is_some() {
-        return Ok(c.cloned());
-    }
-
-    let search_key = SearchKey {
-        script: {
-            let lock = ckb_types::packed::Script::new_unchecked(lock.as_bytes());
-            lock.into()
-        },
-        script_type: ScriptType::Lock,
-        filter: Some(SearchKeyFilter {
-            script: None,
-            output_data_len_range: None,
-            output_capacity_range: Some([required_staking_capacity.into(), u64::MAX.into()]),
-            block_range: None,
-        }),
-    };
+    let search_key = SearchKey::with_lock(lock).with_filter(Some(SearchKeyFilter {
+        output_capacity_range: Some([required_staking_capacity.into(), u64::MAX.into()]),
+        ..Default::default()
+    }));
     let order = Order::Desc;
 
     let mut stake_cell = None;
-    let mut cursor = None;
+    let mut cursor = CollectLocalAndIndexerCursor::Local;
 
-    while stake_cell.is_none() {
-        let cells = client.get_cells(&search_key, &order, None, &cursor).await?;
+    while stake_cell.is_none() && !cursor.is_ended() {
+        let cells = collect_local_and_indexer_cells(
+            local_cells_manager,
+            client,
+            &search_key,
+            &order,
+            Some(1),
+            &mut cursor,
+        )
+        .await?;
 
-        if cells.last_cursor.is_empty() {
-            log::debug!("no unlocked stake");
-            return Ok(None);
-        }
-        cursor = Some(cells.last_cursor);
-
-        stake_cell = cells.objects.into_iter().find(|cell| {
-            let out_point = {
-                let out_point: ckb_types::packed::OutPoint = cell.out_point.clone().into();
-                OutPoint::new_unchecked(out_point.as_bytes())
-            };
-            if local_cells_manager.is_dead(&out_point) {
-                return false;
-            }
-            let args = cell.output.lock.args.clone().into_bytes();
-            let stake_lock_args = match StakeLockArgsReader::verify(&args[32..], false) {
-                Ok(()) => StakeLockArgs::new_unchecked(args.slice(32..)),
+        stake_cell = cells.into_iter().find(|cell| {
+            let args = cell.output.as_reader().lock().args().raw_data();
+            let stake_lock_args = match StakeLockArgsReader::from_slice(&args[32..]) {
+                Ok(r) => r,
                 Err(_) => return false,
             };
             match last_finalized_block_number {
@@ -204,23 +180,5 @@ pub async fn query_stake(
         });
     }
 
-    let fetch_cell_info = |cell: Cell| {
-        let out_point = {
-            let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
-            OutPoint::new_unchecked(out_point.as_bytes())
-        };
-        let output = {
-            let output: ckb_types::packed::CellOutput = cell.output.into();
-            CellOutput::new_unchecked(output.as_bytes())
-        };
-        let data = cell.output_data.into_bytes();
-
-        CellInfo {
-            out_point,
-            output,
-            data,
-        }
-    };
-
-    Ok(stake_cell.map(fetch_cell_info))
+    Ok(stake_cell)
 }

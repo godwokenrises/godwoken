@@ -8,16 +8,21 @@ use gw_types::{
     },
     packed::{OutPoint, WithdrawalRequest},
 };
+use gw_utils::local_cells::LocalCellsManager;
 
 #[async_trait]
 pub trait MemPoolProvider {
     async fn estimate_next_blocktime(&self) -> Result<Duration>;
-    async fn collect_deposit_cells(&self) -> Result<Vec<DepositInfo>>;
+    async fn collect_deposit_cells(
+        &self,
+        local_cells_manager: &LocalCellsManager,
+    ) -> Result<Vec<DepositInfo>>;
     async fn query_available_custodians(
         &self,
         withdrawals: Vec<WithdrawalRequest>,
         last_finalized_block_number: u64,
         rollup_context: RollupContext,
+        local_cells_manager: &LocalCellsManager,
     ) -> Result<CollectedCustodianCells>;
     async fn get_cell(&self, out_point: OutPoint) -> Result<Option<CellWithStatus>>;
 }

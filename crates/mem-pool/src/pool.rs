@@ -39,6 +39,7 @@ use gw_types::{
     },
     prelude::{Pack, Unpack},
 };
+use gw_utils::local_cells::LocalCellsManager;
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
@@ -62,7 +63,6 @@ use crate::{
     },
     traits::MemPoolProvider,
     types::EntryList,
-    withdrawal::Generator as WithdrawalGenerator,
 };
 
 #[derive(Debug, Default)]
@@ -205,7 +205,10 @@ impl MemPool {
         let snap = mem_pool.mem_pool_state().load();
         snap.update_mem_pool_block_info(mem_pool.mem_block.block_info())?;
         // set tip
-        mem_pool.reset(None, Some(tip.0)).await?;
+        mem_pool
+            // TODO: initialize LocalCellsManager.
+            .reset(None, Some(tip.0), &Default::default())
+            .await?;
         // clear stored mem blocks
         tokio::spawn(async move {
             restore_manager.delete_before_one_hour();
@@ -371,25 +374,7 @@ impl MemPool {
         self.generator
             .check_withdrawal_signature(state, withdrawal)?;
 
-        // verify finalized custodian
-        let finalized_custodians = {
-            // query withdrawals from ckb-indexer
-            let last_finalized_block_number = self
-                .generator
-                .rollup_context()
-                .last_finalized_block_number(self.current_tip.1);
-            self.provider
-                .query_available_custodians(
-                    vec![withdrawal.request()],
-                    last_finalized_block_number,
-                    self.generator.rollup_context().to_owned(),
-                )
-                .await?
-        };
-        let avaliable_custodians = AvailableCustodians::from(&finalized_custodians);
-        let withdrawal_generator =
-            WithdrawalGenerator::new(self.generator.rollup_context(), avaliable_custodians);
-        withdrawal_generator.verify_remained_amount(&withdrawal.request())?;
+        // TODO: verify remaining amount.
 
         // withdrawal basic verification
         let db = self.store.begin_transaction();
@@ -407,21 +392,28 @@ impl MemPool {
     /// Notify new tip
     /// this method update current state of mem pool
     #[instrument(skip_all)]
-    pub async fn notify_new_tip(&mut self, new_tip: H256) -> Result<()> {
+    pub async fn notify_new_tip(
+        &mut self,
+        new_tip: H256,
+        local_cells_manager: &LocalCellsManager,
+    ) -> Result<()> {
         // reset pool state
-        if self.current_tip.0 != new_tip {
-            self.reset(Some(self.current_tip.0), Some(new_tip)).await?;
-        }
+        self.reset(Some(self.current_tip.0), Some(new_tip), local_cells_manager)
+            .await?;
         Ok(())
     }
 
     /// Clear mem block state and recollect deposits
     #[instrument(skip_all)]
-    pub async fn reset_mem_block(&mut self) -> Result<()> {
+    pub async fn reset_mem_block(&mut self, local_cells_manager: &LocalCellsManager) -> Result<()> {
         log::info!("[mem-pool] reset mem block");
         // reset pool state
-        self.reset(Some(self.current_tip.0), Some(self.current_tip.0))
-            .await?;
+        self.reset(
+            Some(self.current_tip.0),
+            Some(self.current_tip.0),
+            local_cells_manager,
+        )
+        .await?;
         Ok(())
     }
 
@@ -449,7 +441,12 @@ impl MemPool {
     /// this method reset the current state of the mem pool
     /// discarded txs & withdrawals will be reinject to pool
     #[instrument(skip_all, fields(old_tip = old_tip.map(|h| display(h.pack())), new_tip = new_tip.map(|h| display(h.pack()))))]
-    async fn reset(&mut self, old_tip: Option<H256>, new_tip: Option<H256>) -> Result<()> {
+    async fn reset(
+        &mut self,
+        old_tip: Option<H256>,
+        new_tip: Option<H256>,
+        local_cells_manager: &LocalCellsManager,
+    ) -> Result<()> {
         let mut reinject_txs = Default::default();
         let mut reinject_withdrawals = Default::default();
         // read block from db
@@ -548,7 +545,8 @@ impl MemPool {
 
         if self.node_mode != NodeMode::ReadOnly {
             // check pending deposits
-            self.refresh_deposit_cells(&db, new_tip).await?;
+            self.refresh_deposit_cells(&db, new_tip, local_cells_manager)
+                .await?;
         } else {
             self.pending_deposits.clear();
         }
@@ -660,8 +658,14 @@ impl MemPool {
                 }
             }
 
-            self.prepare_next_mem_block(&db, &mut mem_state, withdrawals, txs)
-                .await?;
+            self.prepare_next_mem_block(
+                &db,
+                &mut mem_state,
+                withdrawals_iter,
+                txs_iter,
+                local_cells_manager,
+            )
+            .await?;
         }
 
         // store mem state
@@ -727,6 +731,8 @@ impl MemPool {
         state: &mut MemStateTree<'_>,
         withdrawals: Vec<WithdrawalRequestExtra>,
         txs: Vec<L2Transaction>,
+        withdrawals: WithdrawalIter,
+        local_cells_manager: &LocalCellsManager,
     ) -> Result<()> {
         // check order of inputs
         {
@@ -748,7 +754,7 @@ impl MemPool {
         }
         // Handle state before txs
         // withdrawal
-        self.finalize_withdrawals(state, withdrawals.clone())
+        self.finalize_withdrawals(state, withdrawals.clone(), local_cells_manager)
             .await?;
         // deposits
         let deposit_cells = self.pending_deposits.clone();
@@ -787,6 +793,7 @@ impl MemPool {
         &mut self,
         db: &StoreTransaction,
         new_block_hash: H256,
+        local_cells_manager: &LocalCellsManager,
     ) -> Result<()> {
         // get processed deposit requests
         let processed_deposit_requests: HashSet<_> = db
@@ -851,7 +858,10 @@ impl MemPool {
                     mem_account_count,
                     tip_account_count
                 );
-            let cells = self.provider.collect_deposit_cells().await?;
+            let cells = self
+                .provider
+                .collect_deposit_cells(local_cells_manager)
+                .await?;
             log::debug!("[mem-pool] collected deposit cells: {}", cells.len());
             self.pending_deposits = {
                 let cells = cells
@@ -919,6 +929,7 @@ impl MemPool {
         &mut self,
         state: &mut MemStateTree<'_>,
         withdrawals: Vec<WithdrawalRequestExtra>,
+        local_cells_manager: &LocalCellsManager,
     ) -> Result<()> {
         // check mem block state
         assert!(self.mem_block.withdrawals().is_empty());
@@ -939,6 +950,7 @@ impl MemPool {
                     withdrawals.iter().map(|w| w.request()).collect(),
                     last_finalized_block_number,
                     self.generator.rollup_context().to_owned(),
+                    local_cells_manager,
                 )
                 .await?
         };
@@ -1192,7 +1204,9 @@ impl MemPool {
         let withdrawals = withdrawals.into_iter().map(Into::into).collect();
         let mem_store = self.mem_pool_state().load();
         let mut state = mem_store.state()?;
-        self.finalize_withdrawals(&mut state, withdrawals).await?;
+        // TODO: this may be problematic.
+        self.finalize_withdrawals(&mut state, withdrawals, &LocalCellsManager::default())
+            .await?;
         self.finalize_deposits(&mut state, deposits).await?;
 
         db.commit()?;

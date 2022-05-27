@@ -10,9 +10,9 @@ use gw_db::schema::{
     Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ASSET_SCRIPT,
     COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK, COLUMN_BLOCK_COLLECTED_CUSTODIAN_CELLS,
     COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
-    COLUMN_BLOCK_ROLLUP_CELL, COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF,
-    COLUMN_BLOCK_STATE_RECORD, COLUMN_BLOCK_STATE_REVERSE_RECORD, COLUMN_BLOCK_SUBMIT_TX,
-    COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_MEM_POOL_TRANSACTION,
+    COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD,
+    COLUMN_BLOCK_STATE_REVERSE_RECORD, COLUMN_BLOCK_SUBMIT_TX, COLUMN_INDEX,
+    COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_MEM_POOL_TRANSACTION,
     COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
     COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF,
     COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
@@ -305,22 +305,6 @@ impl StoreTransaction {
         )?;
         if block_number >= 50 {
             self.delete(COLUMN_BLOCK_SUBMIT_TX, &(block_number - 50).to_be_bytes())?;
-        }
-        Ok(())
-    }
-
-    pub fn set_rollup_cell(
-        &self,
-        block_number: u64,
-        rollup_cell: &packed::CellInfoReader,
-    ) -> Result<(), Error> {
-        self.insert_raw(
-            COLUMN_BLOCK_ROLLUP_CELL,
-            &block_number.to_be_bytes(),
-            rollup_cell.as_slice(),
-        )?;
-        if block_number >= 50 {
-            self.delete(COLUMN_BLOCK_ROLLUP_CELL, &(block_number - 50).to_be_bytes())?;
         }
         Ok(())
     }

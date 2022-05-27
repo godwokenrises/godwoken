@@ -3,7 +3,7 @@
 /// Column families alias type
 pub type Col = u8;
 /// Total column number
-pub const COLUMNS: u32 = 40;
+pub const COLUMNS: u32 = 38;
 /// Column store meta data
 pub const COLUMN_META: Col = 0;
 /// Column store chain index
@@ -70,10 +70,6 @@ pub const COLUMN_BLOCK_DEPOSIT_INFO_VEC: Col = 36;
 ///
 /// Only recent blocks are kept.
 pub const COLUMN_BLOCK_COLLECTED_CUSTODIAN_CELLS: Col = 37;
-/// block number (in big endian) -> Rollup CellInfo (output of block submit tx).
-///
-/// Only recent blocks are kept.
-pub const COLUMN_BLOCK_ROLLUP_CELL: Col = 38;
 
 /// chain id
 pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";

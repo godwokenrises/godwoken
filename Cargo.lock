@@ -2287,6 +2287,7 @@ dependencies = [
  "faster-hex 0.4.1",
  "gw-common",
  "gw-config",
+ "gw-jsonrpc-types",
  "gw-rpc-client",
  "gw-types",
  "log",

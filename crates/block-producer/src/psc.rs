@@ -7,7 +7,7 @@ use gw_mem_pool::pool::MemPool;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
-    offchain::{CellInfo, CellStatus, CollectedCustodianCells, DepositInfo, TxStatus},
+    offchain::{CellStatus, CollectedCustodianCells, DepositInfo, TxStatus},
     packed::{GlobalState, NumberHash, OutPoint, Transaction, WithdrawalKey},
     prelude::*,
 };
@@ -54,17 +54,6 @@ impl ProduceSubmitConfirm {
         let last_submitted = match store_tx.get_last_submitted_block_number_hash() {
             Some(b) => b.number().unpack(),
             None => {
-                // Get rollup cell from indexer.
-                let rollup_cell = context
-                    .rpc_client
-                    .query_rollup_cell()
-                    .await?
-                    .ok_or_else(|| anyhow!("failed to query rollup cell"))?;
-                // TODO: make sure rollup cell data global state matches that of
-                // last_valid. If it does not match, we need to sync with L1
-                // state.
-                store_tx.set_rollup_cell(last_valid, &rollup_cell.pack().as_reader())?;
-
                 store_tx
                     .set_last_submitted_block_number_hash(&last_valid_number_hash.as_reader())?;
                 last_valid
@@ -200,6 +189,7 @@ async fn run(mut state: ProduceSubmitConfirm) -> Result<()> {
 
 /// Produce and save local block.
 async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
+    let local_cells_manager = ctx.local_cells_manager.lock().await;
     // TODO: check block and retry.
     let ProduceBlockResult {
         block,
@@ -207,7 +197,12 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
         withdrawal_extras,
         deposit_cells,
         finalized_custodians,
-    } = ctx.block_producer.produce_next_block(0).await?;
+    } = ctx
+        .block_producer
+        .produce_next_block(0, &local_cells_manager)
+        .await?;
+    // TODO: lock consumed deposit and custodian cells. Add output custodian promise.
+    drop(local_cells_manager);
     let number: u64 = block.raw().number().unpack();
     let block_hash: H256 = block.hash().into();
 
@@ -252,7 +247,12 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
 
     store_tx.commit()?;
 
-    ctx.mem_pool.lock().await.notify_new_tip(block_hash).await?;
+    let local_cells_manager = ctx.local_cells_manager.lock().await;
+    ctx.mem_pool
+        .lock()
+        .await
+        .notify_new_tip(block_hash, &local_cells_manager)
+        .await?;
 
     // TODO??: update built-in web3_indexer
 
@@ -308,11 +308,6 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
             .ok_or_else(|| anyhow!("failed to get block collected custodian cells"))?
             .as_reader()
             .unpack();
-        let rollup_cell: CellInfo = snap
-            .get_rollup_cell_info(block_number - 1)
-            .ok_or_else(|| anyhow!("get rollup cell"))?
-            .as_reader()
-            .unpack();
         drop(snap);
 
         let local_cells_manager = ctx.local_cells_manager.lock().await;
@@ -323,7 +318,6 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
             block,
             global_state,
             since,
-            rollup_cell,
             withdrawal_extras,
             local_cells_manager: &*local_cells_manager,
         };
@@ -331,7 +325,6 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
 
         let store_tx = ctx.store.begin_transaction();
         store_tx.set_submit_tx(block_number, &tx.as_reader())?;
-        store_tx.set_rollup_cell(block_number, &next_rollup_cell.pack().as_reader())?;
         store_tx.commit()?;
 
         log::info!(

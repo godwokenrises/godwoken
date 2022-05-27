@@ -251,6 +251,11 @@ impl Chain {
                 log::debug!("[complete_initial_syncing] acquire mem-pool",);
                 let t = Instant::now();
                 let mut mem_pool = mem_pool.lock().await;
+                // TODO: local cells manager.
+                mem_pool
+                    .notify_new_tip(tip_block_hash, &Default::default())
+                    .await?;
+                mem_pool.mem_pool_state().set_completed_initial_syncing();
                 log::debug!(
                     "[complete_initial_syncing] unlock mem-pool {}ms",
                     t.elapsed().as_millis()
@@ -813,11 +818,13 @@ impl Chain {
                 // update mem pool state
                 log::debug!(target: "sync-block", "acquire mem-pool",);
                 let t = Instant::now();
-                let mut mem_pool = mem_pool.lock().await;
-                log::debug!(target: "sync-block", "unlock mem-pool {}ms", t.elapsed().as_millis());
-                let t = Instant::now();
-                mem_pool.notify_new_tip(tip_block_hash).await?;
-                log::debug!(target: "sync-block", "notify mem-pool new tip cost {}ms", t.elapsed().as_millis());
+                // TODO: local cells manager.
+                mem_pool
+                    .lock()
+                    .await
+                    .notify_new_tip(tip_block_hash, &Default::default())
+                    .await?;
+                log::debug!("[sync] unlock mem-pool {}ms", t.elapsed().as_millis());
             }
         }
 

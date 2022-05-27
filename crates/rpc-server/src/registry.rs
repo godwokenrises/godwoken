@@ -24,12 +24,9 @@ use gw_jsonrpc_types::{
     },
     test_mode::TestModePayload,
 };
-use gw_mem_pool::{
-    custodian::AvailableCustodians,
-    fee::{
-        queue::FeeQueue,
-        types::{FeeEntry, FeeItem},
-    },
+use gw_mem_pool::fee::{
+    queue::FeeQueue,
+    types::{FeeEntry, FeeItem},
 };
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{
@@ -74,7 +71,7 @@ type RpcNodeMode = gw_jsonrpc_types::godwoken::NodeMode;
 const HEADER_NOT_FOUND_ERR_CODE: i64 = -32000;
 const INVALID_NONCE_ERR_CODE: i64 = -32001;
 const BUSY_ERR_CODE: i64 = -32006;
-const CUSTODIAN_NOT_ENOUGH_CODE: i64 = -32007;
+// const CUSTODIAN_NOT_ENOUGH_CODE: i64 = -32007;
 const INTERNAL_ERROR_ERR_CODE: i64 = -32099;
 const INVALID_REQUEST: i64 = -32600;
 const METHOD_NOT_AVAILABLE_ERR_CODE: i64 = -32601;
@@ -991,56 +988,16 @@ async fn submit_l2transaction(
 #[instrument(skip_all)]
 async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
-    generator: Data<Generator>,
-    store: Data<Store>,
+    _generator: Data<Generator>,
+    _store: Data<Store>,
     submit_tx: Data<async_channel::Sender<Request>>,
-    rpc_client: Data<RPCClient>,
+    _rpc_client: Data<RPCClient>,
 ) -> Result<JsonH256, RpcError> {
     let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = packed::WithdrawalRequestExtra::from_slice(&withdrawal_bytes)?;
     let withdrawal_hash = withdrawal.hash();
 
-    // verify finalized custodian
-    {
-        let t = Instant::now();
-        let finalized_custodians = {
-            let db = store.get_snapshot();
-            let tip = db.get_last_valid_tip_block()?;
-            // query withdrawals from ckb-indexer
-            let last_finalized_block_number = generator
-                .rollup_context()
-                .last_finalized_block_number(tip.raw().number().unpack());
-            gw_mem_pool::custodian::query_finalized_custodians(
-                &rpc_client,
-                &db,
-                vec![withdrawal.request()].into_iter(),
-                generator.rollup_context(),
-                last_finalized_block_number,
-            )
-            .await?
-            .expect_any()
-        };
-        log::debug!(
-            "[submit withdrawal] collected {} finalized custodian cells {}ms",
-            finalized_custodians.cells_info.len(),
-            t.elapsed().as_millis()
-        );
-        let available_custodians = AvailableCustodians::from(&finalized_custodians);
-        let withdrawal_generator = gw_mem_pool::withdrawal::Generator::new(
-            generator.rollup_context(),
-            available_custodians,
-        );
-        if let Err(err) = withdrawal_generator.verify_remained_amount(&withdrawal.request()) {
-            return Err(RpcError::Full {
-                code: CUSTODIAN_NOT_ENOUGH_CODE,
-                message: format!(
-                    "Withdrawal fund are still finalizing, please try again later. error: {}",
-                    err
-                ),
-                data: None,
-            });
-        }
-    }
+    // TODO: verify remaining finalized custodian ckb/sudt capacity.
 
     if let Err(err) = submit_tx.try_send(Request::Withdrawal(withdrawal)) {
         if err.is_full() {

@@ -9,7 +9,7 @@ use crate::{
     test_mode_control::TestModeControl,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use gw_chain::chain::Chain;
 use gw_common::{h256_ext::H256Ext, H256};
 use gw_config::BlockProducerConfig;
@@ -26,13 +26,14 @@ use gw_types::{
     offchain::{CellInfo, CollectedCustodianCells, DepositInfo, InputCellInfo, RollupContext},
     packed::{
         CellDep, CellInput, CellOutput, GlobalState, L2Block, OutPoint, RollupAction,
-        RollupActionUnion, RollupSubmitBlock, Transaction, WithdrawalRequestExtra, WitnessArgs,
+        RollupActionUnion, RollupSubmitBlock, Script, Transaction, WithdrawalRequestExtra,
+        WitnessArgs,
     },
     prelude::*,
 };
 use gw_utils::{
     fee::fill_tx_fee_with_local, genesis_info::CKBGenesisInfo, local_cells::LocalCellsManager,
-    since::Since, transaction_skeleton::TransactionSkeleton, wallet::Wallet,
+    query_rollup_cell, since::Since, transaction_skeleton::TransactionSkeleton, wallet::Wallet,
 };
 use std::{collections::HashSet, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
@@ -276,7 +277,11 @@ impl BlockProducer {
     }
 
     #[instrument(skip_all, fields(retry_count = retry_count))]
-    pub async fn produce_next_block(&self, retry_count: usize) -> Result<ProduceBlockResult> {
+    pub async fn produce_next_block(
+        &self,
+        retry_count: usize,
+        local_cells_manager: &LocalCellsManager,
+    ) -> Result<ProduceBlockResult> {
         if let Some(ref tests_control) = self.tests_control {
             match tests_control.payload().await {
                 Some(TestModePayload::None) => tests_control.clear_none().await?,
@@ -315,6 +320,7 @@ impl BlockProducer {
                     context.last_finalized_block_number(tip_block_number)
                 };
                 let query = query_mergeable_custodians(
+                    local_cells_manager,
                     &self.rpc_client,
                     finalized_custodians.unwrap_or_default(),
                     last_finalized_block_number,
@@ -452,10 +458,13 @@ impl BlockProducer {
             block,
             global_state,
             since,
-            rollup_cell,
             withdrawal_extras,
             local_cells_manager,
         } = args;
+
+        let rollup_cell = query_rollup_cell(local_cells_manager, &self.rpc_client)
+            .await?
+            .ok_or_else(|| anyhow!("rollup cell not found"))?;
 
         let rollup_context = self.generator.rollup_context();
         let omni_lock_code_hash = self.contracts_dep_manager.load_scripts().omni_lock.hash();
@@ -683,7 +692,7 @@ impl BlockProducer {
             &mut tx_skeleton,
             &self.rpc_client.indexer,
             self.wallet.lock_script().to_owned(),
-            Some(local_cells_manager),
+            local_cells_manager,
         )
         .await?;
         debug_assert_eq!(
@@ -717,7 +726,6 @@ pub struct ComposeSubmitTxArgs<'a> {
     pub block: L2Block,
     pub global_state: GlobalState,
     pub since: Since,
-    pub rollup_cell: CellInfo,
     pub withdrawal_extras: Vec<WithdrawalRequestExtra>,
     pub local_cells_manager: &'a LocalCellsManager,
 }
