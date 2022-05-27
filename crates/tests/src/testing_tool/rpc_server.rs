@@ -31,6 +31,8 @@ use serde::de::DeserializeOwned;
 
 use crate::testing_tool::chain::chain_generator;
 
+use super::chain::TestChain;
+
 pub struct RPCServer {
     inner: Arc<Server<MapRouter>>,
 }
@@ -92,12 +94,10 @@ impl RPCServer {
         Ok(server)
     }
 
-    pub async fn build(
-        chain: &Chain,
-        rollup_type_script: Script,
-        creator_wallet: Option<Wallet>,
-    ) -> Result<Self> {
-        let registry_args = Self::default_registry_args(chain, rollup_type_script, creator_wallet);
+    pub async fn build(chain: &TestChain, creator_wallet: Option<Wallet>) -> Result<Self> {
+        let rollup_type_script = chain.rollup_type_script.to_owned();
+        let registry_args =
+            Self::default_registry_args(&chain.inner, rollup_type_script, creator_wallet);
         Self::build_from_registry_args(registry_args).await
     }
 
@@ -183,14 +183,14 @@ impl RPCServer {
     }
 }
 
-pub async fn wait_tx_committed(chain: &Chain, tx_hash: &H256, timeout: Duration) -> Result<()> {
+pub async fn wait_tx_committed(chain: &TestChain, tx_hash: &H256, timeout: Duration) -> Result<()> {
     let now = std::time::Instant::now();
 
     loop {
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         {
-            let mem_pool = chain.mem_pool().as_ref().unwrap().lock().await;
+            let mem_pool = chain.mem_pool().await;
             if mem_pool.mem_block().txs_set().contains(tx_hash) {
                 return Ok(());
             }

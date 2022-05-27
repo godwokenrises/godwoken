@@ -57,8 +57,16 @@ impl EthWallet {
         }
     }
 
+    pub fn reg_address(&self) -> &RegistryAddress {
+        &self.registry_address
+    }
+
     pub fn account_script(&self) -> &Script {
         self.inner.lock_script()
+    }
+
+    pub fn account_script_hash(&self) -> H256 {
+        self.inner.lock_script().hash().into()
     }
 
     pub fn sign_polyjuice_tx(
@@ -107,6 +115,11 @@ impl EthWallet {
         state.mint_sudt(CKB_SUDT_ACCOUNT_ID, &self.registry_address, ckb_balance)?;
 
         Ok(account_id)
+    }
+
+    pub fn mint_ckb_sudt(&self, state: &mut impl State, amount: U256) -> Result<()> {
+        state.mint_sudt(CKB_SUDT_ACCOUNT_ID, &self.registry_address, amount)?;
+        Ok(())
     }
 
     pub fn mint_sudt(&self, state: &mut impl State, sudt_id: u32, amount: U256) -> Result<()> {
