@@ -27,7 +27,7 @@ async fn test_polyjuice_erc20_tx() {
     let rpc_server = RPCServer::build(&chain, None).await.unwrap();
 
     // Check block producer is valid registry address
-    chain.produce_block().await.unwrap();
+    chain.produce_block(vec![], vec![]).await.unwrap();
     let block_producer: Bytes = chain.last_valid_block().raw().block_producer().unpack();
     assert!(RegistryAddress::from_slice(&block_producer).is_some());
 
@@ -71,7 +71,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     let rpc_server = RPCServer::build(&chain, None).await.unwrap();
 
     // Check block producer is valid registry address
-    chain.produce_block().await.unwrap();
+    chain.produce_block(vec![], vec![]).await.unwrap();
     let block_producer: Bytes = chain.last_valid_block().raw().block_producer().unpack();
     assert!(RegistryAddress::from_slice(&block_producer).is_some());
 
@@ -169,7 +169,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     let rpc_server = RPCServer::build(&chain, None).await.unwrap();
 
     // Check block producer is valid registry address
-    chain.produce_block().await.unwrap();
+    chain.produce_block(vec![], vec![]).await.unwrap();
     let block_producer: Bytes = chain.last_valid_block().raw().block_producer().unpack();
     assert!(RegistryAddress::from_slice(&block_producer).is_some());
 

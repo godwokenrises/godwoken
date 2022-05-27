@@ -24,7 +24,7 @@ use gw_types::{
     packed::{
         AllowedTypeHash, CellOutput, DepositLockArgs, DepositRequest, L2Block,
         L2BlockCommittedInfo, RawTransaction, RollupAction, RollupActionUnion, RollupConfig,
-        RollupSubmitBlock, Script, Transaction, WitnessArgs,
+        RollupSubmitBlock, Script, Transaction, WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::*,
 };
@@ -187,6 +187,7 @@ pub const POLYJUICE_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-polyjui
 pub const DEFAULT_FINALITY_BLOCKS: u64 = 6;
 
 pub struct TestChain {
+    pub l1_committed_block_number: u64,
     pub rollup_type_script: Script,
     pub inner: Chain,
 }
@@ -196,6 +197,7 @@ impl TestChain {
         let inner = setup_chain(rollup_type_script.clone()).await;
 
         Self {
+            l1_committed_block_number: 1,
             rollup_type_script,
             inner,
         }
@@ -231,8 +233,42 @@ impl TestChain {
             .unwrap()
     }
 
-    pub async fn produce_block(&mut self) -> anyhow::Result<()> {
-        sync_dummy_block(&mut self.inner, self.rollup_type_script.clone()).await
+    pub async fn produce_block(
+        &mut self,
+        deposit_requests: Vec<DepositRequest>,
+        withdrawals: Vec<WithdrawalRequestExtra>,
+    ) -> anyhow::Result<()> {
+        let rollup_cell = CellOutput::new_builder()
+            .type_(Some(self.rollup_type_script.clone()).pack())
+            .build();
+
+        let block_result = {
+            let mut mem_pool = self.mem_pool().await;
+            construct_block(&self.inner, &mut mem_pool, deposit_requests.clone()).await?
+        };
+
+        self.l1_committed_block_number += 1;
+        let update_action = L1Action {
+            context: L1ActionContext::SubmitBlock {
+                l2block: block_result.block.clone(),
+                deposit_requests,
+                deposit_asset_scripts: Default::default(),
+                withdrawals,
+            },
+            transaction: build_sync_tx(rollup_cell, block_result),
+            l2block_committed_info: L2BlockCommittedInfo::new_builder()
+                .number(self.l1_committed_block_number.pack())
+                .build(),
+        };
+        let param = SyncParam {
+            updates: vec![update_action],
+            reverts: Default::default(),
+        };
+
+        self.inner.sync(param).await?;
+        assert!(self.inner.last_sync_event().is_success());
+
+        Ok(())
     }
 }
 
@@ -622,36 +658,4 @@ pub async fn construct_block_with_timestamp(
         block_param,
     };
     produce_block(&db, generator, param)
-}
-
-pub async fn sync_dummy_block(chain: &mut Chain, rollup_type_script: Script) -> anyhow::Result<()> {
-    let dummy_rollup_cell = CellOutput::new_builder()
-        .type_(Some(rollup_type_script).pack())
-        .build();
-
-    let dummy_block_result = {
-        let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = mem_pool.lock().await;
-        construct_block(chain, &mut mem_pool, Default::default()).await?
-    };
-
-    let action1 = L1Action {
-        context: L1ActionContext::SubmitBlock {
-            l2block: dummy_block_result.block.clone(),
-            deposit_requests: Default::default(),
-            deposit_asset_scripts: Default::default(),
-            withdrawals: Default::default(),
-        },
-        transaction: build_sync_tx(dummy_rollup_cell, dummy_block_result),
-        l2block_committed_info: Default::default(),
-    };
-    let param = SyncParam {
-        updates: vec![action1],
-        reverts: Default::default(),
-    };
-
-    chain.sync(param).await?;
-    assert!(chain.last_sync_event().is_success());
-
-    Ok(())
 }

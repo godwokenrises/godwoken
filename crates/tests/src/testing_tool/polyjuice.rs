@@ -25,18 +25,19 @@ pub struct PolyjuiceAccount {
 }
 
 impl PolyjuiceAccount {
+    pub fn build_script(rollup_script_hash: H256) -> Script {
+        let mut args = rollup_script_hash.as_slice().to_vec();
+        args.extend_from_slice(&CKB_SUDT_ACCOUNT_ID.to_le_bytes());
+
+        Script::new_builder()
+            .code_hash(POLYJUICE_VALIDATOR_CODE_HASH.pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args(args.pack())
+            .build()
+    }
+
     pub fn create(rollup_script_hash: H256, state: &mut impl StateExt) -> Result<Self> {
-        let polyjuice_script = {
-            let mut args = rollup_script_hash.as_slice().to_vec();
-            args.extend_from_slice(&CKB_SUDT_ACCOUNT_ID.to_le_bytes());
-
-            Script::new_builder()
-                .code_hash(POLYJUICE_VALIDATOR_CODE_HASH.pack())
-                .hash_type(ScriptHashType::Type.into())
-                .args(args.pack())
-                .build()
-        };
-
+        let polyjuice_script = Self::build_script(rollup_script_hash);
         let id = state.create_account_from_script(polyjuice_script)?;
 
         Ok(Self { id })

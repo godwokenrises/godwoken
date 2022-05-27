@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use ckb_types::prelude::Entity;
 use gw_block_producer::test_mode_control::TestModeControl;
 use gw_chain::chain::Chain;
-use gw_common::{registry_address::RegistryAddress, H256};
+use gw_common::H256;
 use gw_config::{NodeMode::FullNode, RPCClientConfig};
 
 use gw_jsonrpc_types::{
@@ -19,6 +19,7 @@ use gw_rpc_server::{
     registry::{Registry, RegistryArgs},
 };
 use gw_types::{
+    bytes::Bytes,
     packed::{L2Transaction, RawL2Transaction, Script},
     prelude::Pack,
 };
@@ -137,7 +138,7 @@ impl RPCServer {
         &self,
         raw_tx: &RawL2Transaction,
         opt_block_number: Option<u64>,
-        opt_registry_address: Option<&RegistryAddress>,
+        opt_registry_address: Option<Bytes>,
     ) -> Result<RunResult> {
         let raw_tx_bytes = JsonBytes::from_bytes(raw_tx.as_bytes());
         let params = match (opt_block_number, opt_registry_address) {
@@ -146,13 +147,13 @@ impl RPCServer {
                 let block_number: Uint64 = block_number.into();
                 serde_json::to_value(&(raw_tx_bytes, block_number))?
             }
-            (Some(block_number), Some(registry_address)) => {
+            (Some(block_number), Some(registry_address_bytes)) => {
                 let block_number: Uint64 = block_number.into();
-                let address_bytes = JsonBytes::from_bytes(registry_address.to_bytes().into());
+                let address_bytes = JsonBytes::from_bytes(registry_address_bytes);
                 serde_json::to_value(&(raw_tx_bytes, block_number, address_bytes))?
             }
-            (None, Some(registry_address)) => {
-                let address_bytes = JsonBytes::from_bytes(registry_address.to_bytes().into());
+            (None, Some(registry_address_bytes)) => {
+                let address_bytes = JsonBytes::from_bytes(registry_address_bytes);
                 serde_json::to_value(&(raw_tx_bytes, Option::<Uint64>::None, address_bytes))?
             }
         };
