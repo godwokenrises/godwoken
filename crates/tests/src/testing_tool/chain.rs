@@ -587,7 +587,7 @@ pub async fn sync_dummy_block(chain: &mut Chain, rollup_type_script: Script) -> 
     let dummy_block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, Default::default()).await?
+        construct_block(chain, &mut mem_pool, Default::default()).await?
     };
 
     let action1 = L1Action {
