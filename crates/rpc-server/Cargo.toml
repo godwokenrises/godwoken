@@ -11,6 +11,7 @@ gw-challenge = { path = "../challenge" }
 gw-common = { path = "../common" }
 gw-config = { path = "../config" }
 gw-chain = { path = "../chain" }
+gw-db = { path = "../db" }
 gw-types = { path = "../types" }
 gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }

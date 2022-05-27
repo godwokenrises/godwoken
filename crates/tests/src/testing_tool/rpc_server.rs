@@ -7,7 +7,10 @@ use gw_chain::chain::Chain;
 use gw_common::H256;
 use gw_config::{NodeMode::FullNode, RPCClientConfig};
 
-use gw_jsonrpc_types::ckb_jsonrpc_types::{Byte32, JsonBytes};
+use gw_jsonrpc_types::{
+    ckb_jsonrpc_types::{Byte32, JsonBytes},
+    godwoken::RunResult,
+};
 use gw_rpc_client::{
     ckb_client::CKBClient, indexer_client::CKBIndexerClient, rpc_client::RPCClient,
 };
@@ -40,7 +43,7 @@ impl RPCServer {
     ) -> RegistryArgs<TestModeControl> {
         let store = chain.store().clone();
         let mem_pool = chain.mem_pool().clone();
-        let generator = chain_generator(&chain, rollup_type_script.clone());
+        let generator = chain_generator(chain, rollup_type_script.clone());
         let rollup_config = generator.rollup_context().rollup_config.to_owned();
         let rollup_context = generator.rollup_context().to_owned();
         let rpc_client = {
@@ -114,6 +117,22 @@ impl RPCServer {
         Ok(tx_hash.0.into())
     }
 
+    pub async fn execute_l2transaction(&self, tx: &L2Transaction) -> Result<RunResult> {
+        let params = {
+            let bytes = JsonBytes::from_bytes(tx.as_bytes());
+            serde_json::to_value(&(bytes,))?
+        };
+
+        let req = RequestBuilder::default()
+            .with_id(1)
+            .with_method("gw_execute_l2transaction")
+            .with_params(params)
+            .finish();
+
+        let run_result = self.handle_single_request(req).await?;
+        Ok(run_result)
+    }
+
     async fn handle_single_request<R: DeserializeOwned>(&self, req: RequestObject) -> Result<R> {
         let ret = match self.inner.handle(req).await {
             ResponseObjects::One(ResponseObject::Result { result, .. }) => {
@@ -138,7 +157,7 @@ pub async fn wait_tx_committed(chain: &Chain, tx_hash: &H256, timeout: Duration)
 
         {
             let mem_pool = chain.mem_pool().as_ref().unwrap().lock().await;
-            if mem_pool.mem_block().txs_set().contains(&tx_hash) {
+            if mem_pool.mem_block().txs_set().contains(tx_hash) {
                 return Ok(());
             }
             if now.elapsed() > timeout {

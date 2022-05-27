@@ -2053,6 +2053,7 @@ dependencies = [
  "gw-challenge",
  "gw-common",
  "gw-config",
+ "gw-db",
  "gw-dynamic-config",
  "gw-generator",
  "gw-jsonrpc-types",

@@ -18,41 +18,68 @@ use tracing::instrument;
 
 use super::EthAccountContext;
 
-pub type Signature = Bytes;
 pub type EthEOAScript = Script;
 
-pub struct PolyjuiceTxEthSender;
+pub enum PolyjuiceTxEthSender {
+    Unregistered {
+        registry_address: RegistryAddress,
+        account_script: EthEOAScript,
+    },
+    Registered {
+        registry_address: RegistryAddress,
+        account_id: u32,
+    },
+}
 
 impl PolyjuiceTxEthSender {
     #[instrument(skip_all)]
-    pub fn recover_unregistered(
+    pub fn recover(
         ctx: &EthAccountContext,
         state: &(impl State + CodeStore),
         tx: &L2Transaction,
-    ) -> Result<EthEOAScript> {
+    ) -> Result<Self> {
         let sig = tx.signature().unpack();
+
         let registry_address = recover_registry_address(ctx.chain_id, state, &tx.raw(), &sig)?;
-
-        if let Some(hash) = state.get_script_hash_by_registry_address(&registry_address)? {
-            bail!(
-                "eth address {:x} is registered to script {:x}",
-                registry_address.address.pack(),
-                hash.pack()
-            );
-        }
-
-        let ckb_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &registry_address)?;
-        if U256::zero() == ckb_balance {
-            bail!("{:x} insufficient balance", registry_address.address.pack());
-        }
-
         let account_script = to_account_script(
             ctx.rollup_script_hash,
             ctx.eth_lock_code_hash,
             &registry_address,
         );
 
-        Ok(account_script)
+        match state.get_script_hash_by_registry_address(&registry_address)? {
+            Some(script_hash) if script_hash != account_script.hash().into() => bail!(
+                "eth address {:x} is registered to script {:x}",
+                registry_address.address.pack(),
+                script_hash.pack()
+            ),
+            Some(account_script_hash) => {
+                let account_id = state
+                    .get_account_id_by_script_hash(&account_script_hash)?
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "eth address {:x} account id not found",
+                            registry_address.address.pack()
+                        )
+                    })?;
+
+                Ok(Self::Registered {
+                    registry_address,
+                    account_id,
+                })
+            }
+            None => {
+                let ckb_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &registry_address)?;
+                if U256::zero() == ckb_balance {
+                    bail!("{:x} insufficient balance", registry_address.address.pack());
+                }
+
+                Ok(Self::Unregistered {
+                    registry_address,
+                    account_script,
+                })
+            }
+        }
     }
 }
 
