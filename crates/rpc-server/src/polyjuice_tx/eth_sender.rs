@@ -3,20 +3,18 @@ use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     registry_address::RegistryAddress,
     state::State,
-    H256,
 };
 use gw_generator::account_lock_manage::{secp256k1::Secp256k1Eth, LockAlgorithm};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
-    core::ScriptHashType,
     packed::{L2Transaction, RawL2Transaction, Script},
-    prelude::{Builder, Entity, Pack, Unpack},
+    prelude::{Pack, Unpack},
     U256,
 };
 use tracing::instrument;
 
-use super::EthAccountContext;
+use super::eth_context::EthAccountContext;
 
 pub type EthEOAScript = Script;
 
@@ -41,11 +39,7 @@ impl PolyjuiceTxEthSender {
         let sig = tx.signature().unpack();
 
         let registry_address = recover_registry_address(ctx.chain_id, state, &tx.raw(), &sig)?;
-        let account_script = to_account_script(
-            ctx.rollup_script_hash,
-            ctx.eth_lock_code_hash,
-            &registry_address,
-        );
+        let account_script = ctx.to_account_script(&registry_address);
 
         match state.get_script_hash_by_registry_address(&registry_address)? {
             Some(script_hash) if script_hash != account_script.hash().into() => bail!(
@@ -81,21 +75,6 @@ impl PolyjuiceTxEthSender {
             }
         }
     }
-}
-
-pub fn to_account_script(
-    rollup_script_hash: H256,
-    eth_lock_code_hash: H256,
-    registry_address: &RegistryAddress,
-) -> Script {
-    let mut args = rollup_script_hash.as_slice().to_vec();
-    args.extend_from_slice(&registry_address.address);
-
-    Script::new_builder()
-        .code_hash(eth_lock_code_hash.pack())
-        .hash_type(ScriptHashType::Type.into())
-        .args(args.pack())
-        .build()
 }
 
 #[instrument(skip_all)]

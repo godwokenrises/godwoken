@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
@@ -45,10 +45,7 @@ use gw_traits::CodeStore;
 use gw_types::offchain::RollupContext;
 use gw_types::packed::RawL2Transaction;
 use gw_types::{
-    packed::{
-        self, BlockInfo, Byte32, L2Transaction, RawL2Transaction, RollupConfig,
-        WithdrawalRequestExtra,
-    },
+    packed::{self, BlockInfo, Byte32, L2Transaction, RollupConfig, WithdrawalRequestExtra},
     prelude::*,
     U256,
 };
@@ -66,10 +63,7 @@ use tokio::sync::{mpsc, Mutex};
 use tracing::instrument;
 
 use crate::in_queue_request_map::{InQueueRequestHandle, InQueueRequestMap};
-use crate::{
-    execute_tx_state::MemExecuteTxStateTree,
-    polyjuice_tx::{eth_sender::PolyjuiceTxEthSender, PolyjuiceTxContext},
-};
+use crate::{execute_tx_state::MemExecuteTxStateTree, polyjuice_tx::PolyjuiceTxContext};
 
 static PROFILER_GUARD: Lazy<tokio::sync::Mutex<Option<ProfilerGuard>>> =
     Lazy::new(|| tokio::sync::Mutex::new(None));
@@ -842,23 +836,7 @@ async fn execute_l2transaction(
     }
 
     let l2tx_bytes = l2tx.into_bytes();
-    let mut tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
-
-    let mut sender_id: u32 = tx.raw().from_id().unpack();
-    let mut opt_mock_account = None;
-    if sender_id == 0 {
-        let snap = ctx.mem_pool_state.load();
-        let state = snap.state()?;
-
-        let eth_ctx = &ctx.polyjuice_tx_ctx.eth;
-        match eth_ctx.recover_sender(&state, &tx)? {
-            PolyjuiceTxEthSender::Unregistered {
-                account_script,
-                registry_address,
-            } => opt_mock_account = Some((account_script, registry_address)),
-            PolyjuiceTxEthSender::Registered { account_id, .. } => sender_id = account_id,
-        }
-    }
+    let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
 
     let raw_block = ctx.store.get_snapshot().get_last_valid_tip_block()?.raw();
     let block_producer = raw_block.block_producer();
@@ -897,14 +875,16 @@ async fn execute_l2transaction(
         let mem_state = snap.state()?;
         let mut state = MemExecuteTxStateTree::new(mem_state);
 
-        if let Some((account_script, registry_address)) = opt_mock_account {
-            log::debug!("[RPC] mock account {:x}", registry_address.address.pack());
-            sender_id = state.mock_account(registry_address, account_script)?;
-        }
-        if Unpack::<u32>::unpack(&tx.raw().from_id()) != sender_id {
-            let raw_tx = tx.raw().as_builder().from_id(sender_id.pack()).build();
-            tx = tx.as_builder().raw(raw_tx).build();
-        }
+        // Mock sender account if not exists
+        let eth_ctx = &ctx.polyjuice_tx_ctx.eth;
+        let tx_hash = tx.hash().pack();
+        let tx = match eth_ctx.mock_sender_if_not_exists(tx, &mut state) {
+            Ok(tx) => tx,
+            Err(err) => {
+                log::warn!("[tx from zero] mock {:x} sender {}", tx_hash, err);
+                bail!("unregistered EOA account");
+            }
+        };
 
         // tx basic verification
         TransactionVerifier::new(&state, ctx.generator.rollup_context()).verify(&tx)?;
@@ -958,31 +938,21 @@ async fn execute_raw_l2transaction(
     mem_pool_config: Data<MemPoolConfig>,
     ctx: Data<ExecutionTransactionContext>,
 ) -> Result<RunResult, RpcError> {
-    use gw_common::registry_address::RegistryAddress;
-    use gw_types::packed::Script;
-
     let (raw_l2tx, block_number_opt, registry_address_opt) = match params {
         ExecuteRawL2TransactionParams::Tip(p) => (p.0, None, None),
         ExecuteRawL2TransactionParams::Number(p) => (p.0, p.1, None),
         ExecuteRawL2TransactionParams::PolyjuiceFromIdZero(p) => (p.0, p.1, Some(p.2)),
     };
     let block_number_opt = block_number_opt.map(|n| n.value());
+    let registry_address_opt = registry_address_opt
+        .map(|json_bytes| {
+            gw_common::registry_address::RegistryAddress::from_slice(json_bytes.as_bytes())
+                .ok_or_else(|| invalid_param_err("Invalid registry address"))
+        })
+        .transpose()?;
 
     let raw_l2tx_bytes = raw_l2tx.into_bytes();
     let raw_l2tx = packed::RawL2Transaction::from_slice(&raw_l2tx_bytes)?;
-
-    let sender_id: u32 = raw_l2tx.from_id().unpack();
-    let opt_mock_account = match registry_address_opt {
-        None if 0 == sender_id => return Err(invalid_param_err("No registry address")),
-        Some(json_bytes) if 0 == sender_id => {
-            let script_address = RegistryAddress::from_slice(json_bytes.as_bytes())
-                .map(|r| (ctx.polyjuice_tx_ctx.eth.to_account_script(&r), r))
-                .ok_or_else(|| invalid_param_err("Invalid registry address"))?;
-            Some(script_address)
-        }
-        // sender id isn't 0
-        Some(_) | None => None,
-    };
 
     let db = ctx.store.begin_transaction();
 
@@ -1038,37 +1008,9 @@ async fn execute_raw_l2transaction(
         });
     }
 
-    fn restore_tx_sender<S: State + CodeStore>(
-        opt_mock_account: Option<(Script, RegistryAddress)>,
-        raw_tx: RawL2Transaction,
-        state: &mut MemExecuteTxStateTree<S>,
-    ) -> Result<RawL2Transaction> {
-        match opt_mock_account {
-            Some((account_script, registry_address)) => {
-                log::debug!(
-                    "[RPC] mock account {:x} for {:x}",
-                    registry_address.address.pack(),
-                    raw_tx.hash().pack()
-                );
-
-                let sender_id = state.mock_account(registry_address, account_script)?;
-                let tx_hash = raw_tx.hash();
-                let new_raw_tx = raw_tx.as_builder().from_id(sender_id.pack()).build();
-
-                log::debug!(
-                    "[RPC] new tx hash from {:x} to {:x}",
-                    tx_hash.pack(),
-                    new_raw_tx.hash().pack()
-                );
-
-                Ok(new_raw_tx)
-            }
-            None => Ok(raw_tx),
-        }
-    }
-
     // execute tx in task
     let mut run_result = tokio::task::spawn_blocking(move || {
+        let eth_ctx = &ctx.polyjuice_tx_ctx.eth;
         let chain_view = {
             let tip_block_hash = db.get_last_valid_tip_block_hash()?;
             ChainView::new(&db, tip_block_hash)
@@ -1078,7 +1020,18 @@ async fn execute_raw_l2transaction(
             Some(block_number) => {
                 let hist_state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
                 let mut state = MemExecuteTxStateTree::new(hist_state);
-                let raw_l2tx = restore_tx_sender(opt_mock_account, raw_l2tx, &mut state)?;
+                let maybe_raw_l2tx = eth_ctx.mock_sender_if_not_exists_from_raw_registery(
+                    raw_l2tx,
+                    registry_address_opt,
+                    &mut state,
+                );
+                let raw_l2tx = match maybe_raw_l2tx {
+                    Ok(raw_tx) => raw_tx,
+                    Err(err) => {
+                        log::warn!("[tx from zero] mock {:x} sender {}", tx_hash.pack(), err);
+                        bail!("unregistered EOA account");
+                    }
+                };
 
                 ctx.generator.unchecked_execute_transaction(
                     &chain_view,
@@ -1091,7 +1044,18 @@ async fn execute_raw_l2transaction(
             None => {
                 let state = mem_state_snap.state()?;
                 let mut state = MemExecuteTxStateTree::new(state);
-                let raw_l2tx = restore_tx_sender(opt_mock_account, raw_l2tx, &mut state)?;
+                let maybe_raw_l2tx = eth_ctx.mock_sender_if_not_exists_from_raw_registery(
+                    raw_l2tx,
+                    registry_address_opt,
+                    &mut state,
+                );
+                let raw_l2tx = match maybe_raw_l2tx {
+                    Ok(raw_tx) => raw_tx,
+                    Err(err) => {
+                        log::warn!("[tx from zero] mock {:x} sender {}", tx_hash.pack(), err);
+                        bail!("unregistered EOA account");
+                    }
+                };
 
                 ctx.generator.unchecked_execute_transaction(
                     &chain_view,
@@ -1139,6 +1103,11 @@ async fn submit_l2transaction(
     mem_pool_state: Data<Arc<MemPoolState>>,
     ctx: Data<SubmitTransactionContext>,
 ) -> Result<JsonH256, RpcError> {
+    let mem_pool = match ctx.mem_pool.as_ref() {
+        Some(mem_pool) => Arc::clone(mem_pool),
+        None => return Err(mem_pool_is_disabled_err()),
+    };
+
     let l2tx_bytes = l2tx.into_bytes();
     let mut tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
     let tx_hash = tx.hash().into();
@@ -1162,9 +1131,8 @@ async fn submit_l2transaction(
         rate_limiter.put(sender_id, Instant::now());
     }
 
+    // check sender's nonce
     {
-        // check sender's nonce
-
         // fetch mem-pool state
         let snap = ctx.mem_pool_state.load();
         let tree = snap.state()?;
@@ -1190,79 +1158,21 @@ async fn submit_l2transaction(
                 data: None,
             });
         }
-
-        // create sender account
-        if sender_id == 0 && tx_nonce == 0 {
-            let eth_ctx = &ctx.polyjuice_tx_ctx.eth;
-            let account_creator = match eth_ctx.opt_account_creator {
-                Some(ref creator) => creator,
-                None => return Err(anyhow!("sender must be registered EOA").into()),
-            };
-
-            let sender = eth_ctx.recover_sender(&tree, &tx)?;
-            let account_id = match sender {
-                PolyjuiceTxEthSender::Registered { account_id, .. } => account_id,
-                PolyjuiceTxEthSender::Unregistered {
-                    registry_address,
-                    account_script,
-                } => {
-                    let account_script_hash: H256 = account_script.hash().into();
-
-                    let create_tx =
-                        account_creator.build_batch_create_tx(&tree, vec![account_script])?;
-                    log::info!(
-                        "[polyjuice sender creator] create eth account {:x} for tx {:x}",
-                        registry_address.address.pack(),
-                        tx_hash
-                    );
-
-                    {
-                        log::debug!("[polyjuice sender creator] acquire mem_pool");
-                        let t = Instant::now();
-                        let mut mem_pool = match ctx.mem_pool.as_ref() {
-                            Some(mem_pool) => mem_pool.lock().await,
-                            None => return Err(mem_pool_is_disabled_err()),
-                        };
-                        log::debug!(
-                            "[polyjuice sender creator] unlock mem_pool {}ms",
-                            t.elapsed().as_millis()
-                        );
-
-                        if let Err(err) = mem_pool.push_transaction(create_tx).await {
-                            log::warn!(
-                                "[polyjuice sender creator] create eth account {:x} for tx {:x} {}",
-                                registry_address.address.pack(),
-                                tx_hash,
-                                err
-                            );
-                            return Err(anyhow!("sender must be registered EOA").into());
-                        }
-                    }
-
-                    tree.get_account_id_by_script_hash(&account_script_hash)?
-                        .ok_or_else(|| {
-                            anyhow!(
-                                "tx {:x} sender account {:x} id not found",
-                                tx_hash,
-                                registry_address.address.pack(),
-                            )
-                        })?
-                }
-            };
-
-            let raw_tx = tx.raw().as_builder().from_id(account_id.pack()).build();
-            tx = tx.as_builder().raw(raw_tx).build();
-
-            let origin_tx_hash = tx_hash_json;
-            tx_hash_json = to_jsonh256(tx.hash().into());
-
-            log::debug!(
-                "[polyjuice sender creator] new tx hash from {:x} to {:x}",
-                origin_tx_hash,
-                tx_hash
-            );
-        }
     }
+
+    // Create account if not exists
+    let eth_ctx = &ctx.polyjuice_tx_ctx.eth;
+    tx = match eth_ctx
+        .create_sender_account_if_not_exists(tx, &ctx.mem_pool_state, mem_pool)
+        .await
+    {
+        Ok(tx) => tx,
+        Err(err) => {
+            log::warn!("[tx from zero] create {:x} sender {}", tx_hash, err);
+            return Err(invalid_param_err("unregistered EOA account"));
+        }
+    };
+    tx_hash_json = to_jsonh256(tx.hash().into());
 
     let permit = submit_tx.try_reserve().map_err(|err| match err {
         mpsc::error::TrySendError::Closed(_) => RpcError::Provided {

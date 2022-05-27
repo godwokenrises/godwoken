@@ -37,7 +37,7 @@ use gw_rpc_client::{
     indexer_client::CKBIndexerClient, rpc_client::RPCClient,
 };
 use gw_rpc_server::{
-    polyjuice_tx::{EthContext, PolyjuiceTxContext},
+    polyjuice_tx::{eth_context::EthContext, PolyjuiceTxContext},
     registry::{Registry, RegistryArgs},
     server::start_jsonrpc_server,
 };
@@ -822,13 +822,13 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     // RPC registry
     let eth_context = {
-        log::info!("[polyjuice sender creator] use block producer wallet");
+        log::info!("[tx from zero] use block producer wallet");
 
         let block_producer_wallet = config
             .block_producer
             .map(|config| Wallet::from_config(&config.wallet_config).with_context(|| "init wallet"))
             .transpose()?;
-        EthContext::create(&generator, block_producer_wallet)?
+        EthContext::create(generator.rollup_context(), block_producer_wallet)?
     };
     let args = RegistryArgs {
         store,
