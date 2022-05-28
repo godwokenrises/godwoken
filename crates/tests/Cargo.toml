@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-gw-types = { path = "../types" }
+gw-types = { path = "../types", features = ["std", "deprecated"] }
 gw-common = { path = "../common" }
 gw-config = { path = "../config" }
 gw-db = { path = "../db" }
