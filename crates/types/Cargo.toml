@@ -9,6 +9,7 @@ edition = "2018"
 [features]
 default = ["std"]
 std = ["molecule/std", "sparse-merkle-tree/std", "ckb-fixed-hash", "ckb-types"]
+deprecated = []
 
 [dependencies]
 molecule = { version = "0.7.2", default-features = false }

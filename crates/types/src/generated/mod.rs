@@ -22,6 +22,10 @@ mod omni_lock;
 #[allow(clippy::all)]
 mod xudt_rce;
 
+#[cfg(feature = "deprecated")]
+#[allow(clippy::all)]
+mod deprecated;
+
 pub mod packed {
     pub use molecule::prelude::{Byte, ByteReader};
 
@@ -33,4 +37,7 @@ pub mod packed {
     pub use super::omni_lock::*;
     #[cfg(feature = "std")]
     pub use super::store::*;
+
+    #[cfg(feature = "deprecated")]
+    pub use super::deprecated::*;
 }
