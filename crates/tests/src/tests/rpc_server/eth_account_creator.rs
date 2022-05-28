@@ -2,18 +2,18 @@
 
 use anyhow::Result;
 use ckb_types::prelude::{Builder, Entity};
-use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
+use gw_common::state::State;
 use gw_rpc_server::polyjuice_tx::{
     eth_account_creator::EthAccountCreator, eth_context::EthAccountContext,
     eth_sender::PolyjuiceTxEthSender,
 };
 use gw_types::{
     packed::{RawL2Transaction, Script},
-    prelude::{Pack, Unpack},
+    prelude::Pack,
 };
 
 use crate::testing_tool::{
-    chain::{setup_chain, ETH_ACCOUNT_LOCK_CODE_HASH},
+    chain::{TestChain, ETH_ACCOUNT_LOCK_CODE_HASH},
     eth_wallet::EthWallet,
     polyjuice::{PolyjuiceAccount, PolyjuiceArgsBuilder},
 };
@@ -23,46 +23,35 @@ async fn test_eth_account_creator() {
     let _ = env_logger::builder().is_test(true).try_init();
 
     let rollup_type_script = Script::default();
-    let rollup_script_hash: H256 = rollup_type_script.hash().into();
+    let chain = TestChain::setup(rollup_type_script).await;
 
-    let chain = setup_chain(rollup_type_script.clone()).await;
-    let chain_id = {
-        let config = &chain.generator().rollup_context().rollup_config;
-        config.chain_id().unpack()
-    };
-
-    let mem_pool_state = {
-        let mem_pool = chain.mem_pool().as_ref().unwrap();
-        mem_pool.lock().await.mem_pool_state()
-    };
+    let mem_pool_state = chain.mem_pool_state().await;
     let snap = mem_pool_state.load();
     let mut state = snap.state().unwrap();
 
-    let creator_wallet = EthWallet::random(rollup_script_hash);
+    let creator_wallet = EthWallet::random(chain.rollup_type_hash());
     creator_wallet
         .create_account(&mut state, 10000u128.into())
         .unwrap();
 
-    let polyjuice_account = PolyjuiceAccount::create(rollup_script_hash, &mut state).unwrap();
+    let polyjuice_account = PolyjuiceAccount::create(chain.rollup_type_hash(), &mut state).unwrap();
     state.submit_tree_to_mem_block();
 
     let account_ctx = EthAccountContext::new(
-        chain_id,
-        rollup_script_hash,
+        chain.chain_id(),
+        chain.rollup_type_hash(),
         (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
     );
     let eth_account_creator =
         EthAccountCreator::create(&account_ctx, creator_wallet.inner).unwrap();
 
-    let eth_eoa_count = 5;
-    let eth_eoa_wallet: Vec<_> = (0..eth_eoa_count)
-        .map(|_| EthWallet::random(rollup_script_hash))
+    let new_users_count = 5;
+    let new_users_wallet: Vec<_> = (0..new_users_count)
+        .map(|_| EthWallet::random(chain.rollup_type_hash()))
         .collect();
 
-    for wallet in eth_eoa_wallet.iter() {
-        wallet
-            .mint_sudt(&mut state, CKB_SUDT_ACCOUNT_ID, 1u128.into())
-            .unwrap();
+    for wallet in new_users_wallet.iter() {
+        wallet.mint_ckb_sudt(&mut state, 1u128.into()).unwrap();
     }
 
     let polyjuice_create_args = PolyjuiceArgsBuilder::default()
@@ -71,14 +60,14 @@ async fn test_eth_account_creator() {
         .finish();
 
     let raw_tx = RawL2Transaction::new_builder()
-        .chain_id(chain_id.pack())
+        .chain_id(chain.chain_id().pack())
         .from_id(0u32.pack())
         .to_id(polyjuice_account.id.pack())
         .nonce(0u32.pack())
         .args(polyjuice_create_args.pack())
         .build();
 
-    let txs = eth_eoa_wallet
+    let txs = new_users_wallet
         .iter()
         .map(|wallet| wallet.sign_polyjuice_tx(&state, raw_tx.clone()))
         .collect::<Result<Vec<_>>>()
@@ -88,33 +77,27 @@ async fn test_eth_account_creator() {
         .iter()
         .filter_map(
             |tx| match PolyjuiceTxEthSender::recover(&account_ctx, &state, tx).ok() {
-                Some(PolyjuiceTxEthSender::Unregistered { account_script, .. }) => {
-                    Some(account_script)
-                }
+                Some(PolyjuiceTxEthSender::New { account_script, .. }) => Some(account_script),
                 _ => None,
             },
         )
         .collect::<Vec<_>>();
-    assert_eq!(recovered_account_scripts.len(), eth_eoa_wallet.len());
+    assert_eq!(recovered_account_scripts.len(), new_users_wallet.len());
 
     let batch_create_tx = eth_account_creator
         .build_batch_create_tx(&state, recovered_account_scripts)
         .unwrap();
 
     {
-        let opt_mem_pool = chain.mem_pool().as_ref();
-        let mut mem_pool = opt_mem_pool.unwrap().lock().await;
+        let mut mem_pool = chain.mem_pool().await;
         mem_pool.push_transaction(batch_create_tx).await.unwrap();
     }
 
-    for wallet in eth_eoa_wallet {
-        let opt_eoa_account_script_hash = state
-            .get_script_hash_by_registry_address(&wallet.registry_address)
+    for wallet in new_users_wallet {
+        let opt_user_script_hash = state
+            .get_script_hash_by_registry_address(wallet.reg_address())
             .unwrap();
 
-        assert_eq!(
-            opt_eoa_account_script_hash,
-            Some(wallet.account_script().hash().into())
-        );
+        assert_eq!(opt_user_script_hash, Some(wallet.account_script_hash()));
     }
 }
