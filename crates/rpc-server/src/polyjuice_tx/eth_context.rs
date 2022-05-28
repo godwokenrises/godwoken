@@ -14,7 +14,7 @@ use gw_types::{
 use gw_utils::wallet::Wallet;
 use tokio::sync::Mutex;
 
-use crate::execute_tx_state::MemExecuteTxStateTree;
+use crate::mem_execute_tx_state::MemExecuteTxStateTree;
 
 use super::{eth_account_creator::EthAccountCreator, eth_sender::PolyjuiceTxEthSender};
 
@@ -105,8 +105,8 @@ impl EthContext {
 
         let tx_hash = tx.hash().pack();
         let account_id = match self.recover_sender(&state, &tx)? {
-            PolyjuiceTxEthSender::Registered { account_id, .. } => account_id,
-            PolyjuiceTxEthSender::Unregistered {
+            PolyjuiceTxEthSender::Exist { account_id, .. } => account_id,
+            PolyjuiceTxEthSender::New {
                 registry_address,
                 account_script,
             } => {
@@ -172,8 +172,8 @@ impl EthContext {
 
         let tx_hash = tx.hash().pack();
         let account_id = match self.recover_sender(state, &tx)? {
-            PolyjuiceTxEthSender::Registered { account_id, .. } => account_id,
-            PolyjuiceTxEthSender::Unregistered {
+            PolyjuiceTxEthSender::Exist { account_id, .. } => account_id,
+            PolyjuiceTxEthSender::New {
                 account_script,
                 registry_address,
             } => {

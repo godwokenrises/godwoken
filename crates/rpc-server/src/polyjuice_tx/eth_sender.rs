@@ -19,11 +19,11 @@ use super::eth_context::EthAccountContext;
 pub type EthEOAScript = Script;
 
 pub enum PolyjuiceTxEthSender {
-    Unregistered {
+    New {
         registry_address: RegistryAddress,
         account_script: EthEOAScript,
     },
-    Registered {
+    Exist {
         registry_address: RegistryAddress,
         account_id: u32,
     },
@@ -57,7 +57,7 @@ impl PolyjuiceTxEthSender {
                         )
                     })?;
 
-                Ok(Self::Registered {
+                Ok(Self::Exist {
                     registry_address,
                     account_id,
                 })
@@ -68,7 +68,7 @@ impl PolyjuiceTxEthSender {
                     bail!("{:x} insufficient balance", registry_address.address.pack());
                 }
 
-                Ok(Self::Unregistered {
+                Ok(Self::New {
                     registry_address,
                     account_script,
                 })
