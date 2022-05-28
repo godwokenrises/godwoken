@@ -69,7 +69,7 @@ impl LocalCellsManager {
             let cell_info = CellInfo {
                 out_point: out_point.clone(),
                 output: output.to_entity(),
-                data: Bytes::copy_from_slice(output_data.as_slice()),
+                data: Bytes::copy_from_slice(output_data.raw_data()),
             };
             self.local_live_cells.insert(out_point, cell_info);
         }

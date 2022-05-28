@@ -23,11 +23,10 @@ use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
-    offchain::{CellInfo, CollectedCustodianCells, DepositInfo, InputCellInfo, RollupContext},
+    offchain::{CollectedCustodianCells, DepositInfo, InputCellInfo, RollupContext},
     packed::{
-        CellDep, CellInput, CellOutput, GlobalState, L2Block, OutPoint, RollupAction,
-        RollupActionUnion, RollupSubmitBlock, Script, Transaction, WithdrawalRequestExtra,
-        WitnessArgs,
+        CellDep, CellInput, CellOutput, GlobalState, L2Block, RollupAction, RollupActionUnion,
+        RollupSubmitBlock, Transaction, WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::*,
 };
@@ -448,10 +447,7 @@ impl BlockProducer {
     }
 
     #[instrument(skip_all, fields(block = args.block.raw().number().unpack()))]
-    pub async fn compose_submit_tx(
-        &self,
-        args: ComposeSubmitTxArgs<'_>,
-    ) -> Result<(Transaction, CellInfo)> {
+    pub async fn compose_submit_tx(&self, args: ComposeSubmitTxArgs<'_>) -> Result<(Transaction)> {
         let ComposeSubmitTxArgs {
             deposit_cells,
             finalized_custodians,
@@ -565,8 +561,6 @@ impl BlockProducer {
                 .expect("capacity overflow");
             dummy.as_builder().capacity(capacity.pack()).build()
         };
-        let rollup_cell_output = output.clone();
-        let rollup_cell_output_data = output_data.clone();
         tx_skeleton.outputs_mut().push((output, output_data));
 
         // deposit cells
@@ -703,20 +697,8 @@ impl BlockProducer {
         // sign
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
         // TODO: check tx size witnesses size.
-        let tx_hash = tx.hash();
         log::debug!("final tx size: {}", tx.as_slice().len());
-        Ok((
-            tx,
-            CellInfo {
-                output: rollup_cell_output,
-                data: rollup_cell_output_data,
-                out_point: OutPoint::new_builder()
-                    .tx_hash(tx_hash.pack())
-                    // Rollup cell is the first output.
-                    .index(0u32.pack())
-                    .build(),
-            },
-        ))
+        Ok(tx)
     }
 }
 

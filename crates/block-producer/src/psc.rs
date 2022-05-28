@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 use gw_chain::chain::Chain;
 use gw_common::H256;
 use gw_mem_pool::pool::MemPool;
@@ -89,7 +89,7 @@ impl ProduceSubmitConfirm {
             local_count,
             submitted_count,
             // TODO: make this configurable.
-            local_limit: 5,
+            local_limit: 1,
             submitted_limit: 3,
         })
     }
@@ -293,7 +293,7 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
                     idx as u32,
                 ))?
                 .ok_or_else(|| anyhow!("get withdrawal"))?;
-            anyhow::ensure!(extra.hash() == w.hash());
+            ensure!(extra.hash() == w.hash());
             withdrawal_extras.push(extra);
         }
         let deposit_cells: Vec<DepositInfo> = snap
@@ -321,7 +321,7 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
             withdrawal_extras,
             local_cells_manager: &*local_cells_manager,
         };
-        let (tx, next_rollup_cell) = ctx.block_producer.compose_submit_tx(args).await?;
+        let tx = ctx.block_producer.compose_submit_tx(args).await?;
 
         let store_tx = ctx.store.begin_transaction();
         store_tx.set_submit_tx(block_number, &tx.as_reader())?;
@@ -362,16 +362,16 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
     if let Err(e) = ctx.rpc_client.send_transaction(&tx).await {
         if e.to_string().contains("TransactionFailedToResolve") {
             if let Err(e) = check_tx_input(&ctx.rpc_client, &tx).await {
-                log::error!("tx input error: {:?}", e);
+                log::warn!("tx input error: {:?}", e);
             } else {
-                log::error!("but tx input is all live");
+                log::warn!("TransactionFailedToResolve, but check_tx_input is Ok");
             }
         } else {
-            log::error!("send tx {:?}", e);
+            log::warn!("send tx: {:?}", e);
         }
         return Err(e);
     }
-    log::info!("transaction sent");
+    log::info!("tx sent");
     Ok(NumberHash::new_builder()
         .block_hash(block_hash.pack())
         .number(block_number.pack())
@@ -388,30 +388,26 @@ async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<(
             .ckb
             .get_transaction_status(tx.hash().into())
             .await?;
-        match status {
-            Some(TxStatus::Pending) | Some(TxStatus::Proposed) => {}
+        let should_resend = match status {
+            Some(TxStatus::Pending) | Some(TxStatus::Proposed) => false,
             Some(TxStatus::Committed) => break Ok(()),
-            Some(TxStatus::Rejected) => {
-                // TODO.
-            }
-            Some(TxStatus::Unknown) | None => {
-                // Resend the transaction if get_transaction returns null after 20 seconds.
-                if last_sent.elapsed() > Duration::from_secs(20) {
-                    log::info!("resend transaction 0x{}", hex::encode(tx.hash()));
-                    if let Err(e) = rpc_client.send_transaction(tx).await {
-                        if e.to_string().contains("TransactionFailedToResolve") {
-                            if let Err(e) = check_tx_input(rpc_client, tx).await {
-                                log::error!("tx input error: {:?}", e);
-                            } else {
-                                log::error!("but tx input is all live");
-                            }
-                        } else {
-                            log::error!("send tx {:?}", e);
-                        }
+            Some(TxStatus::Rejected) => true,
+            Some(TxStatus::Unknown) | None => last_sent.elapsed() > Duration::from_secs(20),
+        };
+        if should_resend {
+            log::info!("resend transaction 0x{}", hex::encode(tx.hash()));
+            if let Err(e) = rpc_client.send_transaction(tx).await {
+                if e.to_string().contains("TransactionFailedToResolve") {
+                    if let Err(e) = check_tx_input(rpc_client, tx).await {
+                        log::warn!("tx input error: {:?}", e);
+                    } else {
+                        log::warn!("TransactionFailedToResolve, but tx input is all live");
                     }
-                    last_sent = Instant::now();
+                } else {
+                    log::warn!("send tx {:?}", e);
                 }
             }
+            last_sent = Instant::now();
         }
     }
 }
@@ -468,7 +464,7 @@ fn test_greater_since() {
     }
 }
 
-async fn check_cell(rpc_client: &RPCClient, out_point: OutPoint) -> Result<()> {
+async fn check_cell(rpc_client: &RPCClient, out_point: &OutPoint) -> Result<()> {
     let block_number = rpc_client
         .ckb
         .get_transaction_block_number(out_point.tx_hash().unpack())
@@ -476,20 +472,16 @@ async fn check_cell(rpc_client: &RPCClient, out_point: OutPoint) -> Result<()> {
         .ok_or_else(|| anyhow!("transaction not committed"))?;
     let mut opt_block = rpc_client.get_block_by_number(block_number).await?;
     // Search later blocks to see who consumed this cell.
-    loop {
+    for _ in 0..100 {
         if let Some(block) = opt_block {
             for tx in block.transactions() {
                 if tx
                     .raw()
                     .inputs()
                     .into_iter()
-                    .any(|i| i.previous_output() == out_point)
+                    .any(|i| i.previous_output().eq(out_point))
                 {
-                    bail!(
-                        "OutPoint {:?} is consumed by tx 0x{}",
-                        out_point,
-                        hex::encode(tx.hash())
-                    );
+                    bail!("consumed by tx 0x{}", hex::encode(tx.hash()));
                 }
             }
             opt_block = rpc_client
@@ -499,6 +491,7 @@ async fn check_cell(rpc_client: &RPCClient, out_point: OutPoint) -> Result<()> {
             return Ok(());
         }
     }
+    bail!("didn't find consuming tx in 100 blocks");
 }
 
 async fn check_tx_input(rpc_client: &RPCClient, tx: &Transaction) -> Result<()> {
@@ -510,7 +503,9 @@ async fn check_tx_input(rpc_client: &RPCClient, tx: &Transaction) -> Result<()> 
             .await?
             .map(|c| c.status);
         if status != Some(CellStatus::Live) {
-            check_cell(rpc_client, out_point).await?;
+            check_cell(rpc_client, &out_point)
+                .await
+                .with_context(|| format!("checking out point {:?}", &out_point))?;
         }
     }
     Ok(())

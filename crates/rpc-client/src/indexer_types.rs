@@ -1,7 +1,7 @@
 // This file contains types that are copied over from ckb-indexer project.
 
 use ckb_fixed_hash::H256;
-use ckb_types::prelude::{Builder, Entity};
+use ckb_types::prelude::Entity;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{
     BlockNumber, CellOutput, JsonBytes, OutPoint, Script, Uint32, Uint64,
 };
@@ -82,7 +82,9 @@ pub struct Cell {
 impl Cell {
     pub fn info(self) -> CellInfo {
         CellInfo {
-            out_point: gw_types::packed::OutPoint::new_builder().build(),
+            out_point: gw_types::packed::OutPoint::new_unchecked(
+                ckb_types::packed::OutPoint::from(self.out_point).as_bytes(),
+            ),
             data: self.output_data.into_bytes(),
             output: gw_types::packed::CellOutput::new_unchecked(
                 ckb_types::packed::CellOutput::from(self.output).as_bytes(),
