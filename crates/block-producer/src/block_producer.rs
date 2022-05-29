@@ -447,7 +447,7 @@ impl BlockProducer {
     }
 
     #[instrument(skip_all, fields(block = args.block.raw().number().unpack()))]
-    pub async fn compose_submit_tx(&self, args: ComposeSubmitTxArgs<'_>) -> Result<(Transaction)> {
+    pub async fn compose_submit_tx(&self, args: ComposeSubmitTxArgs<'_>) -> Result<Transaction> {
         let ComposeSubmitTxArgs {
             deposit_cells,
             finalized_custodians,
@@ -565,6 +565,7 @@ impl BlockProducer {
 
         // deposit cells
         for deposit in &deposit_cells {
+            log::info!("using deposit cell {:?}", deposit.cell.out_point);
             let input = CellInput::new_builder()
                 .previous_output(deposit.cell.out_point.clone())
                 .build();

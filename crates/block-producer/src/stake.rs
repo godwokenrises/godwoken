@@ -69,7 +69,6 @@ pub async fn generate(
     )
     .await?
     {
-        log::info!("using stake cell input: {:?}", unlocked_stake.out_point);
         let stake_lock_dep = contracts_dep.stake_cell_lock.clone();
 
         let stake_cell = CellOutput::new_builder()

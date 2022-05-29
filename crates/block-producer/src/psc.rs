@@ -82,6 +82,12 @@ impl ProduceSubmitConfirm {
             last_submitted,
             last_confirmed
         );
+        context
+            .chain
+            .lock()
+            .await
+            .complete_initial_syncing()
+            .await?;
         let local_count = last_valid - last_submitted;
         let submitted_count = last_submitted - last_confirmed;
         Ok(Self {
@@ -89,8 +95,8 @@ impl ProduceSubmitConfirm {
             local_count,
             submitted_count,
             // TODO: make this configurable.
-            local_limit: 1,
-            submitted_limit: 3,
+            local_limit: 5,
+            submitted_limit: 5,
         })
     }
 
@@ -246,8 +252,14 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
         .set_block_collected_custodian_cells(number, &finalized_custodians.pack().as_reader())?;
 
     store_tx.commit()?;
-
-    let local_cells_manager = ctx.local_cells_manager.lock().await;
+    // Lock collected deposits and custodians.
+    let mut local_cells_manager = ctx.local_cells_manager.lock().await;
+    for d in deposit_cells {
+        local_cells_manager.lock_cell(d.cell.out_point);
+    }
+    for c in finalized_custodians.cells_info {
+        local_cells_manager.lock_cell(c.out_point);
+    }
     ctx.mem_pool
         .lock()
         .await
@@ -378,19 +390,17 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
         .build())
 }
 
-// TODO: use wait_tx_confirmed.
 async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<()> {
     log::info!("waiting for tx 0x{}", hex::encode(tx.hash()));
     let mut last_sent = Instant::now();
     loop {
-        tokio::time::sleep(Duration::from_secs(3)).await;
         let status = rpc_client
             .ckb
             .get_transaction_status(tx.hash().into())
             .await?;
         let should_resend = match status {
             Some(TxStatus::Pending) | Some(TxStatus::Proposed) => false,
-            Some(TxStatus::Committed) => break Ok(()),
+            Some(TxStatus::Committed) => break,
             Some(TxStatus::Rejected) => true,
             Some(TxStatus::Unknown) | None => last_sent.elapsed() > Duration::from_secs(20),
         };
@@ -409,7 +419,22 @@ async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<(
             }
             last_sent = Instant::now();
         }
+        tokio::time::sleep(Duration::from_secs(1)).await;
     }
+    // Wait for indexer syncing the L1 block.
+    let block_number = rpc_client
+        .ckb
+        .get_transaction_block_number(tx.hash().into())
+        .await?
+        .ok_or_else(|| anyhow!("get tx block hash"))?;
+    loop {
+        let tip = rpc_client.get_tip().await?;
+        if tip.number().unpack() >= block_number {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    Ok(())
 }
 
 async fn sync_next_block(context: &PSCContext) -> Result<NumberHash> {

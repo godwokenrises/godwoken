@@ -95,7 +95,6 @@ pub async fn fill_tx_fee_with_local(
         tx_skeleton
             .inputs_mut()
             .extend(cells.into_iter().map(|cell| {
-                log::info!("using payment cell {:?}", cell.out_point);
                 let input = CellInput::new_builder()
                     .previous_output(cell.out_point.clone())
                     .build();
