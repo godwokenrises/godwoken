@@ -74,7 +74,19 @@ impl ProduceSubmitConfirm {
                 let tx = store_tx.get_submit_tx(b).expect("submit tx");
                 local_cells_manager.apply_tx(&tx.as_reader());
             }
-            // TODO: mark deposits and collected custodian cells in local blocks as dead.
+            for b in last_submitted + 1..=last_valid {
+                let deposits = store_tx
+                    .get_block_deposit_info_vec(b)
+                    .expect("deposit info");
+                let deposits = deposits.into_iter().map(|d| d.cell());
+                let custodians = store_tx
+                    .get_block_collected_custodian_cells(b)
+                    .expect("custodian cells");
+                let custodians = custodians.cells_info().into_iter();
+                for c in deposits.chain(custodians) {
+                    local_cells_manager.lock_cell(c.out_point());
+                }
+            }
         }
         log::info!(
             "last valid: {}, last_submitted: {}, last_confirmed: {}",
