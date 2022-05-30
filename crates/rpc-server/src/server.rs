@@ -22,21 +22,16 @@ pub async fn start_jsonrpc_server(
     let rpc_server = registry.build_rpc_server()?;
 
     let listener = TcpListener::bind(listen_addr).await?;
-    let listener_ref = socket2::SockRef::from(&listener);
-    // Set TCP keepalive options with socket2 because tokio/hyper does not support setting interval/retries (yet).
-    let keepalive = socket2::TcpKeepalive::new()
-        .with_time(Duration::from_secs(10))
-        .with_interval(Duration::from_secs(5))
-        .with_retries(3);
-    // TCP keepalive options set on listening sockets are inhereted by accepted sockets (at least on linux and FreeBSD).
-    listener_ref.set_tcp_keepalive(&keepalive)?;
 
     // Format the full address.
     let url = format!("http://{}", listener.local_addr()?);
     log::info!("JSONRPC server listening on {}", url);
 
+    let mut incoming = AddrIncoming::from_listener(listener)?;
+    incoming.set_keepalive(Some(Duration::from_secs(10)));
+
     // Start a hyper server.
-    let server = Server::builder(AddrIncoming::from_listener(listener)?)
+    let server = Server::builder(incoming)
         .tcp_nodelay(true)
         .serve(make_service_fn(move |_| {
             let rpc_server = Arc::clone(&rpc_server);
