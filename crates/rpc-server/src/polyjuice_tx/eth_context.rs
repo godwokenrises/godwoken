@@ -6,7 +6,7 @@ use gw_mem_pool::pool::MemPool;
 use gw_store::mem_pool_state::MemPoolState;
 use gw_traits::CodeStore;
 use gw_types::{
-    core::{AllowedEoaType, ScriptHashType},
+    core::{AllowedContractType, AllowedEoaType, ScriptHashType},
     offchain::RollupContext,
     packed::{L2Transaction, RawL2Transaction, Script},
     prelude::{Builder, Entity, Pack, Unpack},
@@ -30,14 +30,21 @@ pub struct EthAccountContext {
     pub chain_id: u64,
     pub rollup_script_hash: H256,
     pub eth_lock_code_hash: H256,
+    pub polyjuice_validator_code_hash: H256,
 }
 
 impl EthAccountContext {
-    pub fn new(chain_id: u64, rollup_script_hash: H256, eth_lock_code_hash: H256) -> Self {
+    pub fn new(
+        chain_id: u64,
+        rollup_script_hash: H256,
+        eth_lock_code_hash: H256,
+        polyjuice_validator_code_hash: H256,
+    ) -> Self {
         Self {
             chain_id,
             rollup_script_hash,
             eth_lock_code_hash,
+            polyjuice_validator_code_hash,
         }
     }
 
@@ -76,9 +83,28 @@ impl EthContext {
                 })
                 .ok_or_else(|| anyhow!("eth lock code hash not found"))?
         };
+        let polyjuice_validator_code_hash = {
+            let allowed_contract_type_hashes =
+                rollup_context.rollup_config.allowed_contract_type_hashes();
+            allowed_contract_type_hashes
+                .as_reader()
+                .iter()
+                .find_map(|type_hash| {
+                    if type_hash.type_().to_entity() == AllowedContractType::Polyjuice.into() {
+                        Some(type_hash.hash().unpack())
+                    } else {
+                        None
+                    }
+                })
+                .ok_or_else(|| anyhow!("polyjuice validator code hash not found"))?
+        };
 
-        let account_context =
-            EthAccountContext::new(chain_id, rollup_script_hash, eth_lock_code_hash);
+        let account_context = EthAccountContext::new(
+            chain_id,
+            rollup_script_hash,
+            eth_lock_code_hash,
+            polyjuice_validator_code_hash,
+        );
         let opt_account_creator = creator_wallet
             .map(|wallet| EthAccountCreator::create(&account_context, wallet))
             .transpose()?;

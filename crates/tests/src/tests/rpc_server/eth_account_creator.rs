@@ -13,7 +13,7 @@ use gw_types::{
 };
 
 use crate::testing_tool::{
-    chain::{TestChain, ETH_ACCOUNT_LOCK_CODE_HASH},
+    chain::{TestChain, ETH_ACCOUNT_LOCK_CODE_HASH, POLYJUICE_VALIDATOR_CODE_HASH},
     eth_wallet::EthWallet,
     polyjuice::{PolyjuiceAccount, PolyjuiceArgsBuilder},
 };
@@ -41,6 +41,7 @@ async fn test_eth_account_creator() {
         chain.chain_id(),
         chain.rollup_type_hash(),
         (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
+        (*POLYJUICE_VALIDATOR_CODE_HASH).into(),
     );
     let eth_account_creator =
         EthAccountCreator::create(&account_ctx, creator_wallet.inner).unwrap();

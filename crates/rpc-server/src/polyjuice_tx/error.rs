@@ -7,6 +7,8 @@ pub enum PolyjuiceTxSenderRecoverError {
     ChainId,
     #[error("to script not found")]
     ToScriptNotFound,
+    #[error("not a polyjuice tx")]
+    NotPolyjuiceTx,
     #[error("invalid signature {0}")]
     InvalidSignature(anyhow::Error),
     #[error("{:x} insufficient ckb balance, expect {expect} got {got}", .registry_address.address.pack())]

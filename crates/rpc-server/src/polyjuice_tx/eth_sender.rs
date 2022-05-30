@@ -3,6 +3,7 @@ use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     registry_address::RegistryAddress,
     state::State,
+    H256,
 };
 use gw_generator::account_lock_manage::{secp256k1::Secp256k1Eth, LockAlgorithm};
 use gw_traits::CodeStore;
@@ -39,7 +40,7 @@ impl PolyjuiceTxEthSender {
     ) -> Result<Self, PolyjuiceTxSenderRecoverError> {
         let sig = tx.signature().unpack();
 
-        let registry_address = recover_registry_address(ctx.chain_id, state, &tx.raw(), &sig)?;
+        let registry_address = recover_registry_address(ctx, state, &tx.raw(), &sig)?;
         let account_script = ctx.to_account_script(&registry_address);
 
         match state.get_script_hash_by_registry_address(&registry_address)? {
@@ -82,12 +83,12 @@ impl PolyjuiceTxEthSender {
 
 #[instrument(skip_all)]
 fn recover_registry_address(
-    chain_id: u64,
+    ctx: &EthAccountContext,
     state: &(impl State + CodeStore),
     raw_tx: &RawL2Transaction,
     signature: &Bytes,
 ) -> Result<RegistryAddress, PolyjuiceTxSenderRecoverError> {
-    if raw_tx.chain_id().unpack() != chain_id {
+    if raw_tx.chain_id().unpack() != ctx.chain_id {
         return Err(PolyjuiceTxSenderRecoverError::ChainId);
     }
 
@@ -104,8 +105,11 @@ fn recover_registry_address(
     let to_script = state
         .get_script(&to_script_hash)
         .ok_or(PolyjuiceTxSenderRecoverError::ToScriptNotFound)?;
+    if Unpack::<H256>::unpack(&to_script.code_hash()) != ctx.polyjuice_validator_code_hash {
+        return Err(PolyjuiceTxSenderRecoverError::NotPolyjuiceTx);
+    }
 
-    let message = Secp256k1Eth::polyjuice_tx_signing_message(chain_id, raw_tx, &to_script)
+    let message = Secp256k1Eth::polyjuice_tx_signing_message(ctx.chain_id, raw_tx, &to_script)
         .map_err(PolyjuiceTxSenderRecoverError::InvalidSignature)?;
     let eth_address = Secp256k1Eth::default()
         .recover(message, signature)

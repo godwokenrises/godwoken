@@ -258,6 +258,20 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     let expected_err = PolyjuiceTxSenderRecoverError::ToScriptNotFound;
     assert!(err.to_string().contains(&expected_err.to_string()));
 
+    // Not polyjuice tx
+    let bad_to_id_deploy_tx = {
+        let raw_tx = balance_tx.raw().as_builder().to_id(1u32.pack()).build();
+        balance_tx.clone().as_builder().raw(raw_tx).build()
+    };
+    let err = rpc_server
+        .execute_l2transaction(&bad_to_id_deploy_tx)
+        .await
+        .unwrap_err();
+    eprintln!("err {}", err);
+
+    let expected_err = PolyjuiceTxSenderRecoverError::NotPolyjuiceTx;
+    assert!(err.to_string().contains(&expected_err.to_string()));
+
     // Invalid signature
     let bad_sig_deploy_tx = balance_tx
         .clone()
