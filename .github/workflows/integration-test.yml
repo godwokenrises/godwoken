@@ -3,7 +3,7 @@ name: Dispatch integration test from PR
 on:
   issue_comment:
     types: [created]
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize]
 
 jobs:
@@ -63,6 +63,14 @@ jobs:
     if: github.event.pull_request
     runs-on: ubuntu-latest
     steps:
+      - name: Query author repository permissions
+        uses: octokit/request-action@v2.x
+        id: user_permission
+        with:
+          route: GET /repos/${{ github.repository }}/collaborators/${{ github.event.sender.login }}/permission
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Generate gw-bot token
         id: generate_gw_bot_token
         uses: wow-actions/use-app-token@v1
@@ -70,7 +78,8 @@ jobs:
           app_id: ${{ secrets.GW_BOT_APP_ID }}
           private_key: ${{ secrets.GW_BOT_PRIVATE_KEY }}
 
-      - name: Dispatch from pull request
+      - name: Dispatch from pull request if user does have correct permission
+        if: contains('admin write', fromJson(steps.user_permission.outputs.data).permission)
         uses: actions/github-script@v6
         id: dispatch
         with:
