@@ -2,7 +2,7 @@ use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 use gw_config::P2PNetworkConfig;
-use socket2::{SockRef, TcpKeepalive};
+use socket2::SockRef;
 use tentacle::{
     async_trait,
     builder::ServiceBuilder,
@@ -42,12 +42,6 @@ impl P2PNetwork {
                 let sock_ref = SockRef::from(&socket);
                 sock_ref.set_reuse_address(true)?;
                 sock_ref.set_nodelay(true)?;
-                sock_ref.set_tcp_keepalive(
-                    &TcpKeepalive::new()
-                        .with_interval(Duration::from_secs(15))
-                        .with_time(Duration::from_secs(5))
-                        .with_retries(3),
-                )?;
                 Ok(socket)
             })
             // TODO: allow config keypair.
