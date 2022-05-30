@@ -14,10 +14,14 @@ use gw_types::{
 };
 use gw_utils::wallet::Wallet;
 use tokio::sync::Mutex;
+use tracing::instrument;
 
 use crate::mem_execute_tx_state::MemExecuteTxStateTree;
 
-use super::{eth_account_creator::EthAccountCreator, eth_sender::PolyjuiceTxEthSender};
+use super::{
+    error::PolyjuiceTxSenderRecoverError, eth_account_creator::EthAccountCreator,
+    eth_sender::PolyjuiceTxEthSender,
+};
 
 pub const MIN_RECOVER_CKB_BALANCE: u128 = 21000;
 
@@ -87,12 +91,13 @@ impl EthContext {
         Ok(ctx)
     }
 
+    #[instrument(skip_all)]
     pub async fn create_sender_account_if_not_exists(
         &self,
         tx: L2Transaction,
         snap: &MemPoolState,
         mem_pool: Arc<Mutex<MemPool>>,
-    ) -> Result<L2Transaction> {
+    ) -> Result<L2Transaction, PolyjuiceTxSenderRecoverError> {
         let sender_id: u32 = tx.raw().from_id().unpack();
         if 0 != sender_id {
             return Ok(tx);
@@ -100,7 +105,11 @@ impl EthContext {
 
         let account_creator = match self.opt_account_creator {
             Some(ref creator) => creator,
-            None => bail!("no account creator"),
+            None => {
+                return Err(PolyjuiceTxSenderRecoverError::Internal(anyhow!(
+                    "no account creator"
+                )))
+            }
         };
 
         let snap = snap.load();
@@ -167,7 +176,7 @@ impl EthContext {
         &self,
         tx: L2Transaction,
         state: &mut MemExecuteTxStateTree<S>,
-    ) -> Result<L2Transaction> {
+    ) -> Result<L2Transaction, PolyjuiceTxSenderRecoverError> {
         let sender_id: u32 = tx.raw().from_id().unpack();
         if 0 != sender_id {
             return Ok(tx);
@@ -245,7 +254,7 @@ impl EthContext {
         state: &(impl State + CodeStore),
         tx: &L2Transaction,
         min_ckb_balance: U256,
-    ) -> Result<PolyjuiceTxEthSender> {
+    ) -> Result<PolyjuiceTxEthSender, PolyjuiceTxSenderRecoverError> {
         PolyjuiceTxEthSender::recover(&self.account_context, state, tx, min_ckb_balance)
     }
 }

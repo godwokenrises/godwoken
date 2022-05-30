@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
@@ -63,10 +63,7 @@ use tokio::sync::{mpsc, Mutex};
 use tracing::instrument;
 
 use crate::in_queue_request_map::{InQueueRequestHandle, InQueueRequestMap};
-use crate::{
-    mem_execute_tx_state::MemExecuteTxStateTree,
-    polyjuice_tx::{PolyjuiceTxContext, ERR_UNREGISTERED_EOA_ACCOUNT},
-};
+use crate::{mem_execute_tx_state::MemExecuteTxStateTree, polyjuice_tx::PolyjuiceTxContext};
 
 static PROFILER_GUARD: Lazy<tokio::sync::Mutex<Option<ProfilerGuard>>> =
     Lazy::new(|| tokio::sync::Mutex::new(None));
@@ -880,14 +877,7 @@ async fn execute_l2transaction(
 
         // Mock sender account if not exists
         let eth_ctx = &ctx.polyjuice_tx_ctx.eth;
-        let tx_hash = tx.hash().pack();
-        let tx = match eth_ctx.mock_sender_if_not_exists(tx, &mut state) {
-            Ok(tx) => tx,
-            Err(err) => {
-                log::warn!("[tx from zero] mock {:x} sender {}", tx_hash, err);
-                bail!(ERR_UNREGISTERED_EOA_ACCOUNT);
-            }
-        };
+        let tx = eth_ctx.mock_sender_if_not_exists(tx, &mut state)?;
 
         // tx basic verification
         TransactionVerifier::new(&state, ctx.generator.rollup_context()).verify(&tx)?;
@@ -1023,18 +1013,11 @@ async fn execute_raw_l2transaction(
             Some(block_number) => {
                 let hist_state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
                 let mut state = MemExecuteTxStateTree::new(hist_state);
-                let maybe_raw_l2tx = eth_ctx.mock_sender_if_not_exists_from_raw_registery(
+                let raw_l2tx = eth_ctx.mock_sender_if_not_exists_from_raw_registery(
                     raw_l2tx,
                     registry_address_opt,
                     &mut state,
-                );
-                let raw_l2tx = match maybe_raw_l2tx {
-                    Ok(raw_tx) => raw_tx,
-                    Err(err) => {
-                        log::warn!("[tx from zero] mock {:x} sender {}", tx_hash.pack(), err);
-                        bail!(ERR_UNREGISTERED_EOA_ACCOUNT);
-                    }
-                };
+                )?;
 
                 ctx.generator.unchecked_execute_transaction(
                     &chain_view,
@@ -1047,18 +1030,11 @@ async fn execute_raw_l2transaction(
             None => {
                 let state = mem_state_snap.state()?;
                 let mut state = MemExecuteTxStateTree::new(state);
-                let maybe_raw_l2tx = eth_ctx.mock_sender_if_not_exists_from_raw_registery(
+                let raw_l2tx = eth_ctx.mock_sender_if_not_exists_from_raw_registery(
                     raw_l2tx,
                     registry_address_opt,
                     &mut state,
-                );
-                let raw_l2tx = match maybe_raw_l2tx {
-                    Ok(raw_tx) => raw_tx,
-                    Err(err) => {
-                        log::warn!("[tx from zero] mock {:x} sender {}", tx_hash.pack(), err);
-                        bail!(ERR_UNREGISTERED_EOA_ACCOUNT);
-                    }
-                };
+                )?;
 
                 ctx.generator.unchecked_execute_transaction(
                     &chain_view,
@@ -1113,8 +1089,6 @@ async fn submit_l2transaction(
 
     let l2tx_bytes = l2tx.into_bytes();
     let mut tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
-    let tx_hash = tx.hash().into();
-    let mut tx_hash_json = to_jsonh256(tx_hash);
 
     // check rate limit
     if let Some(rate_limiter) = ctx.rate_limiter.as_ref() {
@@ -1169,17 +1143,11 @@ async fn submit_l2transaction(
 
     // Create account if not exists
     let eth_ctx = &ctx.polyjuice_tx_ctx.eth;
-    tx = match eth_ctx
+    let tx = eth_ctx
         .create_sender_account_if_not_exists(tx, &ctx.mem_pool_state, mem_pool)
-        .await
-    {
-        Ok(tx) => tx,
-        Err(err) => {
-            log::warn!("[tx from zero] create {:x} sender {}", tx_hash, err);
-            return Err(invalid_param_err(ERR_UNREGISTERED_EOA_ACCOUNT));
-        }
-    };
-    tx_hash_json = to_jsonh256(tx.hash().into());
+        .await?;
+    let tx_hash = tx.hash().into();
+    let tx_hash_json = to_jsonh256(tx_hash);
 
     let permit = submit_tx.try_reserve().map_err(|err| match err {
         mpsc::error::TrySendError::Closed(_) => RpcError::Provided {

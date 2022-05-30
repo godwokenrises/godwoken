@@ -1,10 +1,11 @@
+use anyhow::anyhow;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, h256_ext::H256Ext, registry_address::RegistryAddress,
     state::State, H256,
 };
 use gw_rpc_server::polyjuice_tx::{
-    eth_context::MIN_RECOVER_CKB_BALANCE, ERR_UNREGISTERED_EOA_ACCOUNT,
+    error::PolyjuiceTxSenderRecoverError, eth_context::MIN_RECOVER_CKB_BALANCE,
 };
 use gw_types::{
     bytes::Bytes,
@@ -198,7 +199,9 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .args(deploy_args.pack())
         .build();
 
-    let deploy_tx = deployer_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
+    let deploy_tx = deployer_wallet
+        .sign_polyjuice_tx(&state, raw_tx.clone())
+        .unwrap();
     let deploy_tx_hash: H256 = deploy_tx.hash().into();
 
     {
@@ -209,15 +212,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();
     assert_eq!(system_log.status_code, 0);
 
-    // Insufficient balance
-    let snap = mem_pool_state.load();
-    let mut state = snap.state().unwrap();
-
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
-    let balance = MIN_RECOVER_CKB_BALANCE.saturating_sub(1000).into();
-    test_wallet.mint_ckb_sudt(&mut state, balance).unwrap();
-    state.submit_tree_to_mem_block();
-
     let erc20_contract_account_id = system_log.contract_account_id(&state).unwrap();
     let balance_args = SudtErc20ArgsBuilder::balance_of(test_wallet.reg_address()).finish();
     let raw_tx = RawL2Transaction::new_builder()
@@ -227,14 +222,77 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .nonce(0u32.pack())
         .args(balance_args.pack())
         .build();
+    let balance_tx = test_wallet
+        .sign_polyjuice_tx(&state, raw_tx.clone())
+        .unwrap();
 
-    let balance_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
+    // Mismatch chain id
+    let bad_chain_id_raw_tx = raw_tx
+        .clone()
+        .as_builder()
+        .chain_id(chain.chain_id().saturating_add(1).pack())
+        .build();
+    let bad_chain_id_deploy_tx = test_wallet
+        .sign_polyjuice_tx(&state, bad_chain_id_raw_tx)
+        .unwrap();
+    let err = rpc_server
+        .execute_l2transaction(&bad_chain_id_deploy_tx)
+        .await
+        .unwrap_err();
+    eprintln!("err {}", err);
+
+    let expected_err = PolyjuiceTxSenderRecoverError::ChainId;
+    assert!(err.to_string().contains(&expected_err.to_string()));
+
+    // To script not found
+    let bad_to_id_deploy_tx = {
+        let raw_tx = balance_tx.raw().as_builder().to_id(99999u32.pack()).build();
+        balance_tx.clone().as_builder().raw(raw_tx).build()
+    };
+    let err = rpc_server
+        .execute_l2transaction(&bad_to_id_deploy_tx)
+        .await
+        .unwrap_err();
+    eprintln!("err {}", err);
+
+    let expected_err = PolyjuiceTxSenderRecoverError::ToScriptNotFound;
+    assert!(err.to_string().contains(&expected_err.to_string()));
+
+    // Invalid signature
+    let bad_sig_deploy_tx = balance_tx
+        .clone()
+        .as_builder()
+        .signature(b"bad signature".pack())
+        .build();
+    let err = rpc_server
+        .execute_l2transaction(&bad_sig_deploy_tx)
+        .await
+        .unwrap_err();
+    eprintln!("err {}", err);
+
+    let expected_err = PolyjuiceTxSenderRecoverError::InvalidSignature(anyhow!(""));
+    assert!(err.to_string().contains(&expected_err.to_string()));
+
+    // Insufficient balance
+    let snap = mem_pool_state.load();
+    let mut state = snap.state().unwrap();
+
+    let balance = MIN_RECOVER_CKB_BALANCE.saturating_sub(1000).into();
+    test_wallet.mint_ckb_sudt(&mut state, balance).unwrap();
+    state.submit_tree_to_mem_block();
+
     let err = rpc_server
         .execute_l2transaction(&balance_tx)
         .await
         .unwrap_err();
     eprintln!("err {}", err);
-    assert!(err.to_string().contains(ERR_UNREGISTERED_EOA_ACCOUNT));
+
+    let expected_err = PolyjuiceTxSenderRecoverError::InsufficientCkbBalance {
+        registry_address: test_wallet.reg_address().to_owned(),
+        expect: MIN_RECOVER_CKB_BALANCE.into(),
+        got: balance,
+    };
+    assert!(err.to_string().contains(&expected_err.to_string()));
 
     // Registered to different script
     let snap = mem_pool_state.load();
@@ -249,5 +307,10 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .await
         .unwrap_err();
     eprintln!("err {}", err);
-    assert!(err.to_string().contains(ERR_UNREGISTERED_EOA_ACCOUNT));
+
+    let expected_err = PolyjuiceTxSenderRecoverError::DifferentScript {
+        registry_address: test_wallet.registry_address,
+        script_hash: H256::one(),
+    };
+    assert!(err.to_string().contains(&expected_err.to_string()));
 }

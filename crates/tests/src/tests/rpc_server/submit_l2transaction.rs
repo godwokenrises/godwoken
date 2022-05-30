@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use anyhow::anyhow;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
@@ -8,7 +9,7 @@ use gw_common::{
     H256,
 };
 use gw_rpc_server::polyjuice_tx::{
-    eth_context::MIN_RECOVER_CKB_BALANCE, ERR_UNREGISTERED_EOA_ACCOUNT,
+    error::PolyjuiceTxSenderRecoverError, eth_context::MIN_RECOVER_CKB_BALANCE,
 };
 use gw_types::{
     packed::{RawL2Transaction, Script},
@@ -253,7 +254,55 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .await
         .unwrap_err();
     eprintln!("err {}", err);
-    assert!(err.to_string().contains(ERR_UNREGISTERED_EOA_ACCOUNT));
+
+    let expected_err = PolyjuiceTxSenderRecoverError::Internal(anyhow!("no account creator"));
+    assert!(err.to_string().contains(&expected_err.to_string()));
+
+    // Mismatch chain id
+    let bad_chain_id_raw_tx = raw_tx
+        .clone()
+        .as_builder()
+        .chain_id(chain.chain_id().saturating_add(1).pack())
+        .build();
+    let bad_chain_id_deploy_tx = deployer_wallet
+        .sign_polyjuice_tx(&state, bad_chain_id_raw_tx)
+        .unwrap();
+    let err = rpc_server
+        .submit_l2transaction(&bad_chain_id_deploy_tx)
+        .await
+        .unwrap_err();
+    eprintln!("err {}", err);
+
+    let expected_err = PolyjuiceTxSenderRecoverError::ChainId;
+    assert!(err.to_string().contains(&expected_err.to_string()));
+
+    // To script not found
+    let bad_to_id_deploy_tx = {
+        let raw_tx = deploy_tx.raw().as_builder().to_id(99999u32.pack()).build();
+        deploy_tx.clone().as_builder().raw(raw_tx).build()
+    };
+    let err = rpc_server
+        .submit_l2transaction(&bad_to_id_deploy_tx)
+        .await
+        .unwrap_err();
+    eprintln!("err {}", err);
+
+    let expected_err = PolyjuiceTxSenderRecoverError::ToScriptNotFound;
+    assert!(err.to_string().contains(&expected_err.to_string()));
+
+    // Invalid signature
+    let bad_sig_deploy_tx = deploy_tx
+        .as_builder()
+        .signature(b"bad signature".pack())
+        .build();
+    let err = rpc_server
+        .submit_l2transaction(&bad_sig_deploy_tx)
+        .await
+        .unwrap_err();
+    eprintln!("err {}", err);
+
+    let expected_err = PolyjuiceTxSenderRecoverError::InvalidSignature(anyhow!(""));
+    assert!(err.to_string().contains(&expected_err.to_string()));
 
     // Insufficient balance
     let snap = mem_pool_state.load();
@@ -264,22 +313,19 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     test_wallet.mint_ckb_sudt(&mut state, balance).unwrap();
     state.submit_tree_to_mem_block();
 
-    let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18).finish();
-    let raw_tx = RawL2Transaction::new_builder()
-        .chain_id(chain.chain_id().pack())
-        .from_id(0u32.pack())
-        .to_id(polyjuice_account.id.pack())
-        .nonce(0u32.pack())
-        .args(deploy_args.pack())
-        .build();
-
     let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
     let err = rpc_server
         .submit_l2transaction(&deploy_tx)
         .await
         .unwrap_err();
     eprintln!("err {}", err);
-    assert!(err.to_string().contains(ERR_UNREGISTERED_EOA_ACCOUNT));
+
+    let expected_err = PolyjuiceTxSenderRecoverError::InsufficientCkbBalance {
+        registry_address: test_wallet.reg_address().to_owned(),
+        expect: MIN_RECOVER_CKB_BALANCE.into(),
+        got: balance,
+    };
+    assert!(err.to_string().contains(&expected_err.to_string()));
 
     // Registered to different script
     let snap = mem_pool_state.load();
@@ -297,7 +343,12 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .await
         .unwrap_err();
     eprintln!("err {}", err);
-    assert!(err.to_string().contains(ERR_UNREGISTERED_EOA_ACCOUNT));
+
+    let expected_err = PolyjuiceTxSenderRecoverError::DifferentScript {
+        registry_address: test_wallet.reg_address().to_owned(),
+        script_hash: H256::one(),
+    };
+    assert!(err.to_string().contains(&expected_err.to_string()));
 
     // Account has tx history (nonce isn't zero)
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
