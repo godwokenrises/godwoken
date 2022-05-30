@@ -11,14 +11,14 @@ use gw_types::packed::Script;
 
 pub struct MemExecuteTxStateTree<S: State> {
     readonly_state: S,
-    result: RunResult,
+    overlay: RunResult,
 }
 
 impl<S: State + CodeStore> MemExecuteTxStateTree<S> {
     pub fn new(readonly_state: S) -> Self {
         Self {
             readonly_state,
-            result: Default::default(),
+            overlay: Default::default(),
         }
     }
 
@@ -43,26 +43,26 @@ impl<S: State + CodeStore> MemExecuteTxStateTree<S> {
 
 impl<S: State + CodeStore> State for MemExecuteTxStateTree<S> {
     fn get_raw(&self, key: &H256) -> Result<H256, StateError> {
-        match self.result.write.write_values.get(key) {
+        match self.overlay.write.write_values.get(key) {
             Some(value) => Ok(*value),
             None => self.readonly_state.get_raw(key),
         }
     }
 
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), StateError> {
-        self.result.write.write_values.insert(key, value);
+        self.overlay.write.write_values.insert(key, value);
         Ok(())
     }
 
     fn get_account_count(&self) -> Result<u32, StateError> {
-        match self.result.write.account_count {
+        match self.overlay.write.account_count {
             Some(count) => Ok(count),
             None => self.readonly_state.get_account_count(),
         }
     }
 
     fn set_account_count(&mut self, count: u32) -> Result<(), StateError> {
-        self.result.write.account_count = Some(count);
+        self.overlay.write.account_count = Some(count);
         Ok(())
     }
 
@@ -74,22 +74,22 @@ impl<S: State + CodeStore> State for MemExecuteTxStateTree<S> {
 
 impl<S: State + CodeStore> CodeStore for MemExecuteTxStateTree<S> {
     fn insert_script(&mut self, script_hash: H256, script: Script) {
-        self.result.write.new_scripts.insert(script_hash, script);
+        self.overlay.write.new_scripts.insert(script_hash, script);
     }
 
     fn get_script(&self, script_hash: &H256) -> Option<Script> {
-        match self.result.write.new_scripts.get(script_hash) {
+        match self.overlay.write.new_scripts.get(script_hash) {
             Some(script) => Some(script.to_owned()),
             None => self.readonly_state.get_script(script_hash),
         }
     }
 
     fn insert_data(&mut self, data_hash: H256, code: Bytes) {
-        self.result.write.write_data.insert(data_hash, code);
+        self.overlay.write.write_data.insert(data_hash, code);
     }
 
     fn get_data(&self, data_hash: &H256) -> Option<Bytes> {
-        match self.result.write.write_data.get(data_hash) {
+        match self.overlay.write.write_data.get(data_hash) {
             Some(data) => Some(data.to_owned()),
             None => self.readonly_state.get_data(data_hash),
         }
