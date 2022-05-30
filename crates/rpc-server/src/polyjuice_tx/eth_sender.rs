@@ -35,6 +35,7 @@ impl PolyjuiceTxEthSender {
         ctx: &EthAccountContext,
         state: &(impl State + CodeStore),
         tx: &L2Transaction,
+        min_ckb_balance: U256,
     ) -> Result<Self> {
         let sig = tx.signature().unpack();
 
@@ -43,7 +44,7 @@ impl PolyjuiceTxEthSender {
 
         match state.get_script_hash_by_registry_address(&registry_address)? {
             Some(script_hash) if script_hash != account_script.hash().into() => bail!(
-                "eth address {:x} is registered to script {:x}",
+                "{:x} is registered to script {:x}",
                 registry_address.address.pack(),
                 script_hash.pack()
             ),
@@ -51,10 +52,7 @@ impl PolyjuiceTxEthSender {
                 let account_id = state
                     .get_account_id_by_script_hash(&account_script_hash)?
                     .ok_or_else(|| {
-                        anyhow!(
-                            "eth address {:x} account id not found",
-                            registry_address.address.pack()
-                        )
+                        anyhow!("{:x} account id not found", registry_address.address.pack())
                     })?;
 
                 Ok(Self::Exist {
@@ -64,8 +62,13 @@ impl PolyjuiceTxEthSender {
             }
             None => {
                 let ckb_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &registry_address)?;
-                if U256::zero() == ckb_balance {
-                    bail!("{:x} insufficient balance", registry_address.address.pack());
+                if ckb_balance < min_ckb_balance {
+                    bail!(
+                        "{:x} insufficient balance, expect {} got {}",
+                        registry_address.address.pack(),
+                        min_ckb_balance,
+                        ckb_balance
+                    );
                 }
 
                 Ok(Self::New {

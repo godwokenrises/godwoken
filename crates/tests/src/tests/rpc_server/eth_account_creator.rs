@@ -75,12 +75,12 @@ async fn test_eth_account_creator() {
 
     let recovered_account_scripts = txs
         .iter()
-        .filter_map(
-            |tx| match PolyjuiceTxEthSender::recover(&account_ctx, &state, tx).ok() {
+        .filter_map(|tx| {
+            match PolyjuiceTxEthSender::recover(&account_ctx, &state, tx, 0u8.into()).ok() {
                 Some(PolyjuiceTxEthSender::New { account_script, .. }) => Some(account_script),
                 _ => None,
-            },
-        )
+            }
+        })
         .collect::<Vec<_>>();
     assert_eq!(recovered_account_scripts.len(), new_users_wallet.len());
 

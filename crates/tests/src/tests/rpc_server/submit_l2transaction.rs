@@ -7,7 +7,9 @@ use gw_common::{
     state::State,
     H256,
 };
-use gw_rpc_server::polyjuice_tx::ERR_UNREGISTERED_EOA_ACCOUNT;
+use gw_rpc_server::polyjuice_tx::{
+    eth_context::MIN_RECOVER_CKB_BALANCE, ERR_UNREGISTERED_EOA_ACCOUNT,
+};
 use gw_types::{
     packed::{RawL2Transaction, Script},
     prelude::Pack,
@@ -226,8 +228,8 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .unwrap();
 
     let polyjuice_account = PolyjuiceAccount::create(chain.rollup_type_hash(), &mut state).unwrap();
-    let test_wallet = EthWallet::random(chain.rollup_type_hash());
-    test_wallet
+    let deployer_wallet = EthWallet::random(chain.rollup_type_hash());
+    deployer_wallet
         .create_account(&mut state, 1000000u128.into())
         .unwrap();
     state.submit_tree_to_mem_block();
@@ -243,7 +245,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .args(deploy_args.pack())
         .build();
 
-    let deploy_tx = test_wallet
+    let deploy_tx = deployer_wallet
         .sign_polyjuice_tx(&state, raw_tx.clone())
         .unwrap();
     let err = rpc_server_no_creator
@@ -253,8 +255,24 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     eprintln!("err {}", err);
     assert!(err.to_string().contains(ERR_UNREGISTERED_EOA_ACCOUNT));
 
-    // No ckb balance
+    // Insufficient balance
+    let snap = mem_pool_state.load();
+    let mut state = snap.state().unwrap();
+
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
+    let balance: U256 = MIN_RECOVER_CKB_BALANCE.saturating_sub(1000).into();
+    test_wallet.mint_ckb_sudt(&mut state, balance).unwrap();
+    state.submit_tree_to_mem_block();
+
+    let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18).finish();
+    let raw_tx = RawL2Transaction::new_builder()
+        .chain_id(chain.chain_id().pack())
+        .from_id(0u32.pack())
+        .to_id(polyjuice_account.id.pack())
+        .nonce(0u32.pack())
+        .args(deploy_args.pack())
+        .build();
+
     let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
     let err = rpc_server
         .submit_l2transaction(&deploy_tx)
@@ -263,7 +281,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     eprintln!("err {}", err);
     assert!(err.to_string().contains(ERR_UNREGISTERED_EOA_ACCOUNT));
 
-    // Already mapped to different script hash
+    // Registered to different script
     let snap = mem_pool_state.load();
     let mut state = snap.state().unwrap();
 
@@ -281,7 +299,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     eprintln!("err {}", err);
     assert!(err.to_string().contains(ERR_UNREGISTERED_EOA_ACCOUNT));
 
-    // Account has tx history
+    // Account has tx history (nonce isn't zero)
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
     let test_account_id = test_wallet
         .create_account(&mut state, 10000000u128.into())

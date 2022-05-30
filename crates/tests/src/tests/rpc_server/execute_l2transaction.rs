@@ -3,7 +3,9 @@ use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, h256_ext::H256Ext, registry_address::RegistryAddress,
     state::State, H256,
 };
-use gw_rpc_server::polyjuice_tx::ERR_UNREGISTERED_EOA_ACCOUNT;
+use gw_rpc_server::polyjuice_tx::{
+    eth_context::MIN_RECOVER_CKB_BALANCE, ERR_UNREGISTERED_EOA_ACCOUNT,
+};
 use gw_types::{
     bytes::Bytes,
     packed::{RawL2Transaction, Script},
@@ -207,8 +209,14 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();
     assert_eq!(system_log.status_code, 0);
 
-    // No ckb balance
+    // Insufficient balance
+    let snap = mem_pool_state.load();
+    let mut state = snap.state().unwrap();
+
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
+    let balance = MIN_RECOVER_CKB_BALANCE.saturating_sub(1000).into();
+    test_wallet.mint_ckb_sudt(&mut state, balance).unwrap();
+    state.submit_tree_to_mem_block();
 
     let erc20_contract_account_id = system_log.contract_account_id(&state).unwrap();
     let balance_args = SudtErc20ArgsBuilder::balance_of(test_wallet.reg_address()).finish();
@@ -228,12 +236,9 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     eprintln!("err {}", err);
     assert!(err.to_string().contains(ERR_UNREGISTERED_EOA_ACCOUNT));
 
-    // Already mapped to different script hash
+    // Registered to different script
     let snap = mem_pool_state.load();
     let mut state = snap.state().unwrap();
-
-    let test_balance: U256 = 99999u128.into();
-    test_wallet.mint_ckb_sudt(&mut state, test_balance).unwrap();
     state
         .mapping_registry_address_to_script_hash(test_wallet.reg_address().to_owned(), H256::one())
         .unwrap();

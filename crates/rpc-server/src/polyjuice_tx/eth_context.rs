@@ -10,6 +10,7 @@ use gw_types::{
     offchain::RollupContext,
     packed::{L2Transaction, RawL2Transaction, Script},
     prelude::{Builder, Entity, Pack, Unpack},
+    U256,
 };
 use gw_utils::wallet::Wallet;
 use tokio::sync::Mutex;
@@ -17,6 +18,8 @@ use tokio::sync::Mutex;
 use crate::mem_execute_tx_state::MemExecuteTxStateTree;
 
 use super::{eth_account_creator::EthAccountCreator, eth_sender::PolyjuiceTxEthSender};
+
+pub const MIN_RECOVER_CKB_BALANCE: u128 = 21000;
 
 #[derive(Clone)]
 pub struct EthAccountContext {
@@ -104,7 +107,7 @@ impl EthContext {
         let state = snap.state()?;
 
         let tx_hash = tx.hash().pack();
-        let account_id = match self.recover_sender(&state, &tx)? {
+        let account_id = match self.recover_sender(&state, &tx, MIN_RECOVER_CKB_BALANCE.into())? {
             PolyjuiceTxEthSender::Exist { account_id, .. } => account_id,
             PolyjuiceTxEthSender::New {
                 registry_address,
@@ -171,7 +174,7 @@ impl EthContext {
         }
 
         let tx_hash = tx.hash().pack();
-        let account_id = match self.recover_sender(state, &tx)? {
+        let account_id = match self.recover_sender(state, &tx, MIN_RECOVER_CKB_BALANCE.into())? {
             PolyjuiceTxEthSender::Exist { account_id, .. } => account_id,
             PolyjuiceTxEthSender::New {
                 account_script,
@@ -241,7 +244,8 @@ impl EthContext {
         &self,
         state: &(impl State + CodeStore),
         tx: &L2Transaction,
+        min_ckb_balance: U256,
     ) -> Result<PolyjuiceTxEthSender> {
-        PolyjuiceTxEthSender::recover(&self.account_context, state, tx)
+        PolyjuiceTxEthSender::recover(&self.account_context, state, tx, min_ckb_balance)
     }
 }
