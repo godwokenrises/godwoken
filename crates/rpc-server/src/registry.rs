@@ -394,7 +394,7 @@ fn req_to_entry(
             let receiver: u32 = tx.raw().to_id().unpack();
             let script_hash = state.get_script_hash(receiver)?;
             let backend_type = generator
-                .load_backend(state, &script_hash)
+                .load_backend(0, state, &script_hash)
                 .ok_or_else(|| anyhow!("can't find backend for receiver: {}", receiver))?
                 .backend_type;
             FeeEntry::from_tx(tx, fee_config, backend_type, order)
@@ -1360,7 +1360,10 @@ async fn compute_l2_sudt_script_hash(
 
 fn get_backend_info(generator: Arc<Generator>) -> Vec<BackendInfo> {
     generator
-        .get_backends()
+        .backend_manage()
+        .get_backends_at_height(0)
+        .expect("backends")
+        .1
         .values()
         .map(|b| {
             let mut validator_code_hash = [0u8; 32];

@@ -20,7 +20,7 @@ pub enum Trace {
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     pub node_mode: NodeMode,
-    pub backends: Vec<BackendConfig>,
+    pub backend_switches: Vec<BackendSwitchConfig>,
     pub genesis: GenesisConfig,
     pub chain: ChainConfig,
     pub rpc_client: RPCClientConfig,
@@ -194,6 +194,12 @@ impl Default for BackendType {
     fn default() -> Self {
         BackendType::Unknown
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BackendSwitchConfig {
+    pub switch_height: u64,
+    pub backends: Vec<BackendConfig>,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]

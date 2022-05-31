@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_types::prelude::{Builder, Entity};
-use gw_config::Config;
+use gw_config::{BackendType, Config};
 use gw_types::{
     core::ScriptHashType,
     packed::{CreateAccount, Fee, L2Transaction, MetaContractArgs, RawL2Transaction, Script},
@@ -81,7 +81,12 @@ pub async fn create_sudt_account(
 
     // sudt contract
     let l2_script = {
-        let l2_validator_script_hash = &config.backends[1].validator_script_type_hash;
+        let l2_validator_script_hash = &config.backend_switches[0]
+            .backends
+            .iter()
+            .find(|b| b.backend_type == BackendType::Sudt)
+            .expect("sudt")
+            .validator_script_type_hash;
         build_l2_sudt_script(rollup_type_hash, l2_validator_script_hash, &sudt_type_hash)
     };
     let l2_script_hash = l2_script.hash();

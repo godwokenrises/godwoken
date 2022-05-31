@@ -5,7 +5,7 @@ use gw_block_producer::produce_block::{
 };
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
 use gw_common::{blake2b::new_blake2b, H256};
-use gw_config::{BackendConfig, ChainConfig, GenesisConfig, MemPoolConfig};
+use gw_config::{BackendConfig, BackendSwitchConfig, ChainConfig, GenesisConfig, MemPoolConfig};
 use gw_generator::{
     account_lock_manage::{
         always_success::AlwaysSuccess, secp256k1::Secp256k1Eth, AccountLockManage,
@@ -175,7 +175,7 @@ pub const DEFAULT_FINALITY_BLOCKS: u64 = 6;
 pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
     let sudt_validator_script_type_hash: [u8; 32] =
         rollup_config.l2_sudt_validator_script_type_hash().unpack();
-    let configs = vec![
+    let backends = vec![
         BackendConfig {
             validator_path: META_VALIDATOR_PATH.into(),
             generator_path: META_GENERATOR_PATH.into(),
@@ -195,7 +195,11 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
             backend_type: gw_config::BackendType::EthAddrReg,
         },
     ];
-    BackendManage::from_config(configs).expect("default backend")
+    BackendManage::from_config(vec![BackendSwitchConfig {
+        switch_height: 0,
+        backends,
+    }])
+    .expect("default backend")
 }
 
 pub async fn setup_chain(rollup_type_script: Script) -> Chain {

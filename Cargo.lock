@@ -2040,6 +2040,7 @@ dependencies = [
  "rlp",
  "secp256k1 0.20.3",
  "sha3",
+ "tempfile",
  "thiserror",
  "tokio",
  "tracing",

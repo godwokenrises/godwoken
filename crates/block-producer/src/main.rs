@@ -5,7 +5,7 @@ static GLOBAL_ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 use anyhow::{Context, Result};
 use clap::{App, Arg, SubCommand};
 use gw_block_producer::{db_block_validator, runner, trace};
-use gw_config::Config;
+use gw_config::{BackendSwitchConfig, Config};
 use gw_version::Version;
 use std::{env, fs, path::Path};
 
@@ -27,7 +27,10 @@ fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
 
 fn generate_example_config<P: AsRef<Path>>(path: P) -> Result<()> {
     let mut config = Config::default();
-    config.backends.push(Default::default());
+    config.backend_switches.push(BackendSwitchConfig {
+        switch_height: 0,
+        backends: Default::default(),
+    });
     config.block_producer = Some(Default::default());
     let content = toml::to_string_pretty(&config)?;
     fs::write(path, content)?;
