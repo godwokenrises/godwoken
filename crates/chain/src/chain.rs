@@ -260,8 +260,6 @@ impl Chain {
                     "[complete_initial_syncing] unlock mem-pool {}ms",
                     t.elapsed().as_millis()
                 );
-                mem_pool.notify_new_tip(tip_block_hash).await?;
-                mem_pool.mem_pool_state().set_completed_initial_syncing();
             }
         }
         self.complete_initial_syncing = true;

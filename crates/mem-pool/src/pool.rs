@@ -658,14 +658,8 @@ impl MemPool {
                 }
             }
 
-            self.prepare_next_mem_block(
-                &db,
-                &mut mem_state,
-                withdrawals_iter,
-                txs_iter,
-                local_cells_manager,
-            )
-            .await?;
+            self.prepare_next_mem_block(&db, &mut mem_state, withdrawals, txs, local_cells_manager)
+                .await?;
         }
 
         // store mem state
@@ -731,7 +725,6 @@ impl MemPool {
         state: &mut MemStateTree<'_>,
         withdrawals: Vec<WithdrawalRequestExtra>,
         txs: Vec<L2Transaction>,
-        withdrawals: WithdrawalIter,
         local_cells_manager: &LocalCellsManager,
     ) -> Result<()> {
         // check order of inputs
