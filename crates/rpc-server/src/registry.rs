@@ -11,6 +11,7 @@ use gw_generator::{
     error::TransactionError, sudt::build_l2_sudt_script,
     verification::transaction::TransactionVerifier, ArcSwap, Generator,
 };
+use gw_jsonrpc_types::godwoken::L2WithdrawalCommittedInfo;
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint32},
@@ -1122,30 +1123,29 @@ async fn get_withdrawal(
     }
     if let Some(withdrawal_info) = db.get_withdrawal_info(&withdrawal_hash)? {
         if let Some(withdrawal) = db.get_withdrawal_by_key(&withdrawal_info.key())? {
+            let withdrawal_opt = match verbose {
+                GetWithdrawalVerbose::OnlyStatus => None,
+                GetWithdrawalVerbose::WithdrawalWithStatus => Some(withdrawal.into()),
+            };
             let l2_block_number: u64 = withdrawal_info.block_number().unpack();
             let l2_block_hash =
                 packed::Byte32::from_slice(&withdrawal_info.key().as_slice()[..32])?.unpack();
             let l2_withdrawal_index: u32 =
                 packed::Uint32::from_slice(&withdrawal_info.key().as_slice()[32..36])?.unpack();
-            if let Some(committed_info) = db.get_l2block_committed_info(&l2_block_hash)? {
-                let l1_block_number = committed_info.number().unpack();
-                let l1_block_hash = committed_info.block_hash();
-                let l1_transaction_hash = committed_info.transaction_hash();
-                let withdrawal_opt = match verbose {
-                    GetWithdrawalVerbose::OnlyStatus => None,
-                    GetWithdrawalVerbose::WithdrawalWithStatus => Some(withdrawal.into()),
-                };
-                return Ok(Some(WithdrawalWithStatus {
-                    status: WithdrawalStatus::Committed,
-                    withdrawal: withdrawal_opt,
-                    l2_block_number: Some(l2_block_number),
-                    l2_block_hash: Some(to_jsonh256(l2_block_hash)),
-                    l2_withdrawal_index: Some(l2_withdrawal_index),
-                    l1_block_number: Some(l1_block_number),
-                    l1_block_hash: Some(l1_block_hash.unpack()),
-                    l1_transaction_hash: Some(l1_transaction_hash.unpack()),
-                }));
-            }
+            let l2_committed_info = Some(L2WithdrawalCommittedInfo {
+                block_number: l2_block_number.into(),
+                block_hash: to_jsonh256(l2_block_hash),
+                withdrawal_index: l2_withdrawal_index.into(),
+            });
+            let l1_committed_info = db
+                .get_l2block_committed_info(&l2_block_hash)?
+                .map(Into::into);
+            return Ok(Some(WithdrawalWithStatus {
+                status: WithdrawalStatus::Committed,
+                withdrawal: withdrawal_opt,
+                l2_committed_info,
+                l1_committed_info,
+            }));
         }
     }
     Ok(None)
