@@ -442,7 +442,7 @@ impl BaseInitComponents {
         }
         let rollup_config_hash: H256 = rollup_config.hash().into();
         let generator = {
-            let backend_manage = BackendManage::from_config(config.backends.clone())
+            let backend_manage = BackendManage::from_config(config.backend_switches.clone())
                 .with_context(|| "config backends")?;
             let mut account_lock_manage = AccountLockManage::default();
             let allowed_eoa_type_hashes = rollup_config.as_reader().allowed_eoa_type_hashes();
