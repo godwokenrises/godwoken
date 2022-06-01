@@ -896,7 +896,7 @@ Request
     "id": 42,
     "jsonrpc": "2.0",
     "method": "gw_get_withdrawal",
-    "params": ["0x3c4772eeef6d2c43b4ead9db7c049202d1f0b9e1bb075d08da1ab821e42a6859"]
+    "params": ["0x73ebba534729fb5e3bae139903494cd05b3e3d75e437eab3e6ee4fc646fb6e6c"]
 }
 ```
 
@@ -904,32 +904,42 @@ Response
 
 ``` json
 {
-    "jsonrpc": "2.0",
-    "id": 42,
-    "result": {
-        "withdrawal": {
-            "request": {
-                "raw": {
-                    "nonce": "0x0",
-                    "capacity": "0x9502f9000",
-                    "amount": "0x0",
-                    "sudt_script_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-                    "account_script_hash": "0x2a4504af3dccb71910d4fd70074de7a6aaea1f3140c97572155a2969e8a1aa16",
-                    "registry_id": "0x2",
-                    "owner_lock_hash": "0x651e4345ce3a3a7c4fcb1f78dc8fac799836da84ac8bf7d6e09f63b428875317",
-                    "chain_id": "0x116e9",
-                    "fee": "0x0"
-                },
-                "signature": "0x361815da3468b2cd03999252d8f0c16242fa5d619e37dd25259c146fd40c71c51ebd564eb7ee54ba83dbb78ba9ecfbbd6adc06aa426ada1ca96af66711d9a4f71c"
+   "id" : 2,
+   "jsonrpc" : "2.0",
+   "result" : {
+      "l1_committed_info" : {
+         "block_hash" : "0x35b938ef94ca3f347fffed86d1958a975919a1804277278ea622b298ac953fd2",
+         "number" : "0x3921",
+         "transaction_hash" : "0xc8db73e3bc609ee0019e65c2ea646f6a2a9cefcae6d8f4716c2c61cf0f81d0f3"
+      },
+      "l2_committed_info" : {
+         "block_hash" : "0x4a7fc82fe76ec036500a20c07152d78caf429633b96ae553c84e05875373f21a",
+         "block_number" : "0x101d",
+         "withdrawal_index" : "0x0"
+      },
+      "status" : "committed",
+      "withdrawal" : {
+         "owner_lock" : {
+            "args" : "0xa1db2eef3f29f3ef6f86c8d2a0772c705c449f4a",
+            "code_hash" : "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8",
+            "hash_type" : "type"
+         },
+         "request" : {
+            "raw" : {
+               "account_script_hash" : "0x04250fe2cb3cfe5d9a9f353b0a5b2f5a5bbd92b8c828563f7e45f7fa41ee6254",
+               "amount" : "0x0",
+               "capacity" : "0x746a528800",
+               "chain_id" : "0x116e8",
+               "fee" : "0x3e8",
+               "nonce" : "0x0",
+               "owner_lock_hash" : "0x90f95b4a388b6c1a4a220917def9438265f02460bdea1b17d2314163f14b9f39",
+               "registry_id" : "0x2",
+               "sudt_script_hash" : "0x0000000000000000000000000000000000000000000000000000000000000000"
             },
-            "owner_lock": {
-                "code_hash": "0x79f90bb5e892d80dd213439eeab551120eb417678824f282b4ffb5f21bad2e1e",
-                "hash_type": "type",
-                "args": "0x019e18f89a2c541c259b40464fe9f1c8760722797200"
-            }
-        },
-        "status": "committed"
-    }
+            "signature" : "0x3623f0dc43cc35064df1c3b37bc4c6c8af3f64d9f6d86f60f5a8dc028055c22a20f36cd3137dc1de16ba78779d39a0583e645161a0426dcc2aa92c8c176335161b"
+         }
+      }
+   }
 }
 ```
 
@@ -1641,6 +1651,8 @@ Variable-length binary encoded as a 0x-prefixed hex string in JSON.
 *   `withdrawal`: [`WithdrawalRequestExtra`](#type-withdrawalrequestextra) `|` `null`
 
 *   `status`: `pending` `|` `committed`
+* `l1_committed_info`: [`L2BlockCommittedInfo`](#type-l2blockcommittedinfo)
+* `l2_committed_info`: [`L2WithdrawalCommittedInfo`](#type-l2withdrawalcommittedinfo)
 
 
 ### Type `WithdrawalRequestExtra`
@@ -1689,6 +1701,18 @@ Variable-length binary encoded as a 0x-prefixed hex string in JSON.
 
 *   `fee`: [`Uint128`](#type-uint128)
 
+
+### Type `L2WithdrawalCommittedInfo`
+
+#### Fields
+
+`L2WithdrawalCommittedInfo` is a JSON object with the following fields, represents the layer2 withdrawal committed information.
+
+*   `block_number`: [`Uint64`](#type-uint64)
+
+*   `block_hash`: [`H256`](#type-h256)
+
+*   `withdrawal_index`: [`Uint32`](#type-uint32)
 
 ### Type `L2BlockCommittedInfo`
 
