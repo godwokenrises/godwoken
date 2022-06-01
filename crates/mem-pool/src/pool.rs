@@ -13,7 +13,7 @@ use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, registry_address::RegistryAddress,
     state::State, H256,
 };
-use gw_config::{MemPoolConfig, NodeMode};
+use gw_config::{MemBlockConfig, MemPoolConfig, NodeMode};
 use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_generator::{
     constants::L2TX_MAX_CYCLES,
@@ -52,7 +52,6 @@ use tokio::sync::{broadcast, Mutex};
 use tracing::instrument;
 
 use crate::{
-    constants::{MAX_MEM_BLOCK_TXS, MAX_MEM_BLOCK_WITHDRAWALS},
     custodian::AvailableCustodians,
     mem_block::MemBlock,
     restore_manager::RestoreManager,
@@ -103,6 +102,7 @@ pub struct MemPool {
     mem_pool_state: Arc<MemPoolState>,
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     new_tip_publisher: broadcast::Sender<(H256, u64)>,
+    mem_block_config: MemBlockConfig,
 }
 
 pub struct MemPoolCreateArgs {
@@ -197,6 +197,7 @@ impl MemPool {
             mem_pool_state,
             dynamic_config_manager,
             new_tip_publisher,
+            mem_block_config: config.mem_block,
         };
         mem_pool.restore_pending_withdrawals().await?;
 
@@ -259,7 +260,7 @@ impl MemPool {
     }
 
     pub fn is_mem_txs_full(&self, expect_slots: usize) -> bool {
-        self.mem_block.txs().len().saturating_add(expect_slots) > MAX_MEM_BLOCK_TXS
+        self.mem_block.txs().len().saturating_add(expect_slots) > self.mem_block_config.max_txs
     }
 
     pub fn pending_restored_tx_hashes(&mut self) -> &mut VecDeque<H256> {
@@ -294,10 +295,10 @@ impl MemPool {
 
         // reject if mem block is full
         // TODO: we can use the pool as a buffer
-        if self.mem_block.txs().len() >= MAX_MEM_BLOCK_TXS {
+        if self.mem_block.txs().len() >= self.mem_block_config.max_txs {
             return Err(anyhow!(
                 "Mem block is full, MAX_MEM_BLOCK_TXS: {}",
-                MAX_MEM_BLOCK_TXS
+                self.mem_block_config.max_txs
             ));
         }
 
@@ -645,13 +646,13 @@ impl MemPool {
                 withdrawals.retain(|w| filter_withdrawals(&mem_state, w));
 
                 // package withdrawals
-                if withdrawals.len() < MAX_MEM_BLOCK_WITHDRAWALS {
+                if withdrawals.len() < self.mem_block_config.max_withdrawals {
                     for entry in self.pending().values() {
                         if let Some(withdrawal) = entry.withdrawals.first() {
                             if filter_withdrawals(&mem_state, withdrawal) {
                                 withdrawals.push(withdrawal.clone());
                             }
-                            if withdrawals.len() >= MAX_MEM_BLOCK_WITHDRAWALS {
+                            if withdrawals.len() >= self.mem_block_config.max_withdrawals {
                                 break;
                             }
                         }
