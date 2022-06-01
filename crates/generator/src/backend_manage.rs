@@ -95,12 +95,12 @@ impl BackendManage {
     fn compile_backend(&mut self, backend: &Backend) {
         self.aot_codes.0.insert(
             backend.validator_script_type_hash,
-            self.aot_compile(backend.generator, 0)
+            self.aot_compile(&backend.generator, 0)
                 .expect("Ahead-of-time compile"),
         );
         self.aot_codes.1.insert(
             backend.validator_script_type_hash,
-            self.aot_compile(backend.generator, 1)
+            self.aot_compile(&backend.generator, 1)
                 .expect("Ahead-of-time compile"),
         );
     }

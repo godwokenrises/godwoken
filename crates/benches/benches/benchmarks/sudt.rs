@@ -2,7 +2,7 @@ use criterion::*;
 use gw_common::{
     builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, state::State, H256,
 };
-use gw_config::BackendConfig;
+use gw_config::{BackendConfig, BackendSwitchConfig};
 use gw_generator::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage,
     constants::L2TX_MAX_CYCLES, dummy_state::DummyState, error::TransactionError, traits::StateExt,
@@ -47,7 +47,11 @@ fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
             backend_type: gw_config::BackendType::Sudt,
         },
     ];
-    BackendManage::from_config(configs).expect("default backend")
+    BackendManage::from_config(vec![BackendSwitchConfig {
+        switch_height: 0,
+        backends: configs,
+    }])
+    .expect("default backend")
 }
 
 struct DummyChainStore;
