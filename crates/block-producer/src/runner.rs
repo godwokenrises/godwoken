@@ -577,8 +577,11 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 let offchain_mock_context = base
                     .init_offchain_mock_context(block_producer_config)
                     .await?;
-                let mem_pool_provider =
-                    DefaultMemPoolProvider::new(base.rpc_client.clone(), base.store.clone());
+                let mem_pool_provider = DefaultMemPoolProvider::new(
+                    base.rpc_client.clone(),
+                    base.store.clone(),
+                    config.mem_pool.mem_block.clone(),
+                );
                 let pg_pool = match config.web3_indexer.as_ref() {
                     Some(web3_indexer_config) => {
                         let mut opts: PgConnectOptions =

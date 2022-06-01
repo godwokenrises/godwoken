@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
+use gw_config::MemBlockConfig;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
@@ -12,7 +13,7 @@ use gw_types::{
 use tracing::instrument;
 
 use crate::{
-    constants::{MAX_MEM_BLOCK_DEPOSITS, MIN_CKB_DEPOSIT_CAPACITY, MIN_SUDT_DEPOSIT_CAPACITY},
+    constants::{MIN_CKB_DEPOSIT_CAPACITY, MIN_SUDT_DEPOSIT_CAPACITY},
     custodian::query_finalized_custodians,
     traits::MemPoolProvider,
 };
@@ -21,11 +22,16 @@ pub struct DefaultMemPoolProvider {
     /// RPC client
     rpc_client: RPCClient,
     store: Store,
+    mem_block_config: MemBlockConfig,
 }
 
 impl DefaultMemPoolProvider {
-    pub fn new(rpc_client: RPCClient, store: Store) -> Self {
-        DefaultMemPoolProvider { rpc_client, store }
+    pub fn new(rpc_client: RPCClient, store: Store, mem_block_config: MemBlockConfig) -> Self {
+        DefaultMemPoolProvider {
+            rpc_client,
+            store,
+            mem_block_config,
+        }
     }
 }
 
@@ -75,7 +81,7 @@ impl MemPoolProvider for DefaultMemPoolProvider {
         let rpc_client = self.rpc_client.clone();
         rpc_client
             .query_deposit_cells(
-                MAX_MEM_BLOCK_DEPOSITS,
+                self.mem_block_config.max_deposits,
                 MIN_CKB_DEPOSIT_CAPACITY,
                 MIN_SUDT_DEPOSIT_CAPACITY,
             )
