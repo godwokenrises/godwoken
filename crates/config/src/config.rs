@@ -291,6 +291,7 @@ pub struct MemPoolConfig {
     pub restore_path: PathBuf,
     pub publish: Option<PublishMemPoolConfig>,
     pub subscribe: Option<SubscribeMemPoolConfig>,
+    #[serde(default)]
     pub mem_block: MemBlockConfig,
 }
 
