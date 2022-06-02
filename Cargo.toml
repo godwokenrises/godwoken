@@ -17,7 +17,6 @@ members = [
   "crates/rpc-ws-server",
   "crates/tools",
   "crates/tests",
-  "crates/web3-indexer",
   "crates/benches",
   "crates/version",
   "crates/utils",

@@ -50,12 +50,7 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::{genesis_info::CKBGenesisInfo, since::EpochNumberWithFraction, wallet::Wallet};
-use gw_web3_indexer::Web3Indexer;
 use semver::Version;
-use sqlx::{
-    postgres::{PgConnectOptions, PgPoolOptions},
-    ConnectOptions,
-};
 use std::{
     collections::HashMap,
     net::{SocketAddr, ToSocketAddrs},
@@ -569,7 +564,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
     }
     let base = BaseInitComponents::init(&config, skip_config_check).await?;
-    let (mem_pool, wallet, offchain_mock_context, pg_pool, err_receipt_notify_ctrl) =
+    let (mem_pool, wallet, offchain_mock_context, err_receipt_notify_ctrl) =
         match config.block_producer.as_ref() {
             Some(block_producer_config) => {
                 let wallet = Wallet::from_config(&block_producer_config.wallet_config)
@@ -579,20 +574,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     .await?;
                 let mem_pool_provider =
                     DefaultMemPoolProvider::new(base.rpc_client.clone(), base.store.clone());
-                let pg_pool = match config.web3_indexer.as_ref() {
-                    Some(web3_indexer_config) => {
-                        let mut opts: PgConnectOptions =
-                            web3_indexer_config.database_url.parse()?;
-                        opts.log_statements(log::LevelFilter::Debug)
-                            .log_slow_statements(log::LevelFilter::Warn, Duration::from_secs(5));
-                        let pool = PgPoolOptions::new()
-                            .max_connections(5)
-                            .connect_with(opts)
-                            .await?;
-                        Some(pool)
-                    }
-                    None => None,
-                };
                 let notify_controller = {
                     let opt_ws_listen = config.rpc_server.err_receipt_ws_listen.as_ref();
                     opt_ws_listen.map(|_| NotifyService::new().start())
@@ -625,11 +606,10 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     Some(mem_pool),
                     Some(wallet),
                     Some(offchain_mock_context),
-                    pg_pool,
                     notify_controller,
                 )
             }
-            None => (None, None, None, None, None),
+            None => (None, None, None, None),
         };
 
     let BaseInitComponents {
@@ -665,40 +645,12 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         .with_context(|| "create chain")?,
     ));
 
-    // create web3 indexer
-    let web3_indexer = match config.web3_indexer {
-        Some(web3_indexer_config) => {
-            let pool = pg_pool.unwrap();
-            let polyjuce_type_script_hash = web3_indexer_config.polyjuice_script_type_hash;
-            let eth_account_lock_hash = web3_indexer_config.eth_account_lock_hash;
-            let tron_account_lock_hash = web3_indexer_config.tron_account_lock_hash;
-            let web3_indexer = Web3Indexer::new(
-                pool,
-                config
-                    .genesis
-                    .rollup_config
-                    .l2_sudt_validator_script_type_hash,
-                polyjuce_type_script_hash,
-                config.genesis.rollup_type_hash,
-                eth_account_lock_hash,
-                tron_account_lock_hash,
-            );
-            // fix missing genesis block
-            log::info!("Check web3 indexing...");
-            web3_indexer.store_genesis(&store).await?;
-            web3_indexer.fix_missing_blocks(&store).await?;
-            Some(web3_indexer)
-        }
-        None => None,
-    };
-
     // create chain updater
     let chain_updater = ChainUpdater::new(
         Arc::clone(&chain),
         rpc_client.clone(),
         rollup_context.clone(),
         rollup_type_script.clone(),
-        web3_indexer,
     );
 
     let (block_producer, challenger, test_mode_control, withdrawal_unlocker, cleaner) = match config

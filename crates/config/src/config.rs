@@ -28,7 +28,6 @@ pub struct Config {
     #[serde(default)]
     pub debug: DebugConfig,
     pub block_producer: Option<BlockProducerConfig>,
-    pub web3_indexer: Option<Web3IndexerConfig>,
     #[serde(default)]
     pub offchain_validator: Option<OffChainValidatorConfig>,
     #[serde(default)]
@@ -231,14 +230,6 @@ impl Default for DebugConfig {
             enable_debug_rpc: false,
         }
     }
-}
-
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Web3IndexerConfig {
-    pub database_url: String,
-    pub polyjuice_script_type_hash: H256,
-    pub eth_account_lock_hash: H256,
-    pub tron_account_lock_hash: Option<H256>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
