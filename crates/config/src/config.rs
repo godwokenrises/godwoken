@@ -282,6 +282,14 @@ pub struct MemPoolConfig {
     pub restore_path: PathBuf,
     pub publish: Option<PublishMemPoolConfig>,
     pub subscribe: Option<SubscribeMemPoolConfig>,
+    pub mem_block: MemBlockConfig,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MemBlockConfig {
+    pub max_deposits: usize,
+    pub max_withdrawals: usize,
+    pub max_txs: usize,
 }
 
 // Field default value for backward config file compitability
@@ -298,6 +306,17 @@ impl Default for MemPoolConfig {
             restore_path: default_restore_path(),
             publish: None,
             subscribe: None,
+            mem_block: MemBlockConfig::default(),
+        }
+    }
+}
+
+impl Default for MemBlockConfig {
+    fn default() -> Self {
+        Self {
+            max_deposits: 100,
+            max_withdrawals: 100,
+            max_txs: 1000,
         }
     }
 }

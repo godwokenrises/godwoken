@@ -1,9 +1,3 @@
-/// MAX deposits in the mem block
-pub const MAX_MEM_BLOCK_DEPOSITS: usize = 100;
-/// MAX withdrawals in the mem block
-pub const MAX_MEM_BLOCK_WITHDRAWALS: usize = 100;
-/// MAX withdrawals in the mem block
-pub const MAX_MEM_BLOCK_TXS: usize = 2000;
 /// MIN CKB deposit capacity, calculated from custodian cell size
 pub const MIN_CKB_DEPOSIT_CAPACITY: u64 = 298_00000000;
 /// MIN Simple UDT deposit capacity, calculated from custodian cell size + simple UDT script

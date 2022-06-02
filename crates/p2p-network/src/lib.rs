@@ -1,7 +1,8 @@
-use std::{collections::HashSet, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 use gw_config::P2PNetworkConfig;
+use gw_utils::exponential_backoff::ExponentialBackoff;
 use socket2::SockRef;
 use tentacle::{
     async_trait,
@@ -16,7 +17,7 @@ use tentacle::{
     ProtocolId, SubstreamReadPart,
 };
 
-const RECONNECT_DURATION: Duration = Duration::from_secs(5);
+const RECONNECT_BASE_DURATION: Duration = Duration::from_secs(2);
 
 /// Wrapper for tentacle Service. Automatcially reconnect dial addresses.
 pub struct P2PNetwork {
@@ -30,12 +31,12 @@ impl P2PNetwork {
         PS::Item: Into<ProtocolMeta>,
     {
         #[allow(clippy::mutable_key_type)]
-        let mut dial = HashSet::with_capacity(config.dial.len());
+        let mut dial_backoff = HashMap::with_capacity(config.dial.len());
         for d in &config.dial {
             let address: MultiAddr = d.parse().context("parse dial address")?;
-            dial.insert(address);
+            dial_backoff.insert(address, ExponentialBackoff::new(RECONNECT_BASE_DURATION));
         }
-        let dial_vec: Vec<MultiAddr> = dial.iter().cloned().collect();
+        let dial_vec: Vec<MultiAddr> = dial_backoff.keys().cloned().collect();
         let mut builder = ServiceBuilder::new()
             .forever(true)
             .tcp_config(|socket| {
@@ -49,7 +50,7 @@ impl P2PNetwork {
         for p in protocols {
             builder = builder.insert_protocol(p.into());
         }
-        let mut service = builder.build(SHandle { dial });
+        let mut service = builder.build(SHandle { dial_backoff });
         let control = service.control().clone();
         // Send dial in another task to avoid deadlock.
         if !dial_vec.is_empty() {
@@ -84,7 +85,7 @@ impl P2PNetwork {
 
 // Implement ServiceHandle to handle tentacle events.
 struct SHandle {
-    dial: HashSet<MultiAddr>,
+    dial_backoff: HashMap<MultiAddr, ExponentialBackoff>,
 }
 
 #[async_trait]
@@ -94,33 +95,50 @@ impl ServiceHandle for SHandle {
     async fn handle_error(&mut self, context: &mut ServiceContext, error: ServiceError) {
         log::info!("service error: {:?}", error);
         if let ServiceError::DialerError { address, error: _ } = error {
-            // Reconnect in a newly spawned task so that we don't block the whole tentacle service.
-            let control = context.control().clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(RECONNECT_DURATION).await;
-                log::info!("dial {}", address);
-                let _ = control.dial(address, TargetProtocol::All).await;
-            });
+            if let Some(backoff) = self.dial_backoff.get_mut(&address) {
+                let sleep = backoff.next_sleep();
+                // Reconnect in a newly spawned task so that we don't block the whole tentacle service.
+                let control = context.control().clone();
+                tokio::spawn(async move {
+                    tokio::time::sleep(sleep).await;
+                    log::info!("dial {}", address);
+                    let _ = control.dial(address, TargetProtocol::All).await;
+                });
+            }
         }
     }
 
     async fn handle_event(&mut self, context: &mut ServiceContext, event: ServiceEvent) {
         log::info!("service event: {:?}", event);
-        if let ServiceEvent::SessionClose { session_context } = event {
-            // session_context.address is like /ip4/127.0.0.1/tcp/32874/p2p/QmaFyRtib8rAULAq8tZEnFj2XcoLjtNPpymJmUZXxP3Z1k, we want to keep only stuff before /p2p.
-            let address = session_context
-                .address
-                .iter()
-                .take_while(|x| !matches!(x, Protocol::P2P(_)))
-                .collect();
-            if self.dial.contains(&address) {
-                let control = context.control().clone();
-                tokio::spawn(async move {
-                    tokio::time::sleep(RECONNECT_DURATION).await;
-                    log::info!("dial {}", address);
-                    let _ = control.dial(address, TargetProtocol::All).await;
-                });
+        match event {
+            ServiceEvent::SessionClose { session_context } => {
+                // session_context.address is like /ip4/127.0.0.1/tcp/32874/p2p/QmaFyRtib8rAULAq8tZEnFj2XcoLjtNPpymJmUZXxP3Z1k, we want to keep only stuff before /p2p.
+                let address = session_context
+                    .address
+                    .iter()
+                    .take_while(|x| !matches!(x, Protocol::P2P(_)))
+                    .collect();
+                if let Some(backoff) = self.dial_backoff.get_mut(&address) {
+                    let sleep = backoff.next_sleep();
+                    let control = context.control().clone();
+                    tokio::spawn(async move {
+                        tokio::time::sleep(sleep).await;
+                        log::info!("dial {}", address);
+                        let _ = control.dial(address, TargetProtocol::All).await;
+                    });
+                }
             }
+            ServiceEvent::SessionOpen { session_context } => {
+                let address = session_context
+                    .address
+                    .iter()
+                    .take_while(|x| !matches!(x, Protocol::P2P(_)))
+                    .collect();
+                if let Some(backoff) = self.dial_backoff.get_mut(&address) {
+                    backoff.reset();
+                }
+            }
+            _ => (),
         }
     }
 }

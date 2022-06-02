@@ -33,8 +33,8 @@ use gw_mem_pool::{
 };
 use gw_p2p_network::P2PNetwork;
 use gw_rpc_client::{
-    ckb_client::CKBClient, contract::ContractsCellDepManager, indexer_client::CKBIndexerClient,
-    rpc_client::RPCClient,
+    ckb_client::CKBClient, contract::ContractsCellDepManager, error::RPCRequestError,
+    indexer_client::CKBIndexerClient, rpc_client::RPCClient,
 };
 use gw_rpc_server::{
     registry::{Registry, RegistryArgs},
@@ -49,7 +49,10 @@ use gw_types::{
     packed::{Byte32, CellDep, NumberHash, RollupConfig, Script},
     prelude::*,
 };
-use gw_utils::{genesis_info::CKBGenesisInfo, since::EpochNumberWithFraction, wallet::Wallet};
+use gw_utils::{
+    exponential_backoff::ExponentialBackoff, genesis_info::CKBGenesisInfo,
+    since::EpochNumberWithFraction, wallet::Wallet,
+};
 use semver::Version;
 use std::{
     collections::HashMap,
@@ -300,7 +303,7 @@ impl ChainTask {
         }
     }
 
-    async fn run(mut self) -> Result<()> {
+    async fn run(&mut self, backoff: &mut ExponentialBackoff) -> Result<()> {
         // get tip
         let (mut tip_number, mut tip_hash) = {
             let tip = self.rpc_client.get_tip().await?;
@@ -327,6 +330,7 @@ impl ChainTask {
                 tip_hash = _tip_hash;
                 last_event_time = Instant::now();
             }
+            backoff.reset();
             tokio::time::sleep(self.poll_interval).await;
         }
     }
@@ -572,8 +576,11 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 let offchain_mock_context = base
                     .init_offchain_mock_context(block_producer_config)
                     .await?;
-                let mem_pool_provider =
-                    DefaultMemPoolProvider::new(base.rpc_client.clone(), base.store.clone());
+                let mem_pool_provider = DefaultMemPoolProvider::new(
+                    base.rpc_client.clone(),
+                    base.store.clone(),
+                    config.mem_pool.mem_block.clone(),
+                );
                 let notify_controller = {
                     let opt_ws_listen = config.rpc_server.err_receipt_ws_listen.as_ref();
                     opt_ws_listen.map(|_| NotifyService::new().start())
@@ -871,15 +878,22 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                         withdrawal_unlocker,
                         cleaner,
                     };
-                    let chain_task = ChainTask::create(
+                    let mut backoff = ExponentialBackoff::new(Duration::from_secs(1));
+                    let mut chain_task = ChainTask::create(
                         rpc_client,
                         Duration::from_secs(3),
                         ctx,
                         shutdown_send,
                         shutdown_event_recv,
                     );
-                    if let Err(err) = chain_task.run().await {
-                        log::error!("chain polling loop exit unexpected, error: {}", err);
+                    while let Err(err) = chain_task.run(&mut backoff).await {
+                        if err.is::<RPCRequestError>() {
+                            log::error!("chain polling loop request error, will retry: {}", err);
+                            tokio::time::sleep(backoff.next_sleep()).await;
+                        } else {
+                            log::error!("chain polling loop exit unexpected, error: {}", err);
+                            break;
+                        }
                     }
                 });
             }
@@ -1092,7 +1106,6 @@ fn is_hardfork_switch_eq(l: &HardForkSwitch, r: &HardForkSwitch) -> bool {
 
 fn is_l1_query_error(err: &anyhow::Error) -> bool {
     use crate::poller::QueryL1TxError;
-    use gw_rpc_client::error::RPCRequestError;
 
     // TODO: filter rpc request method?
     err.downcast_ref::<RPCRequestError>().is_some()
