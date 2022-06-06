@@ -25,7 +25,6 @@ use gw_types::{
     },
     prelude::*,
 };
-use gw_web3_indexer::indexer::Web3Indexer;
 use serde_json::json;
 use std::{
     collections::{HashMap, HashSet},
@@ -58,7 +57,6 @@ pub struct ChainUpdater {
     last_tx_hash: Option<H256>,
     rollup_context: RollupContext,
     rollup_type_script: ckb_types::packed::Script,
-    web3_indexer: Option<Web3Indexer>,
     initialized: bool,
     sync_monitor: TaskMonitor,
 }
@@ -69,7 +67,6 @@ impl ChainUpdater {
         rpc_client: RPCClient,
         rollup_context: RollupContext,
         rollup_type_script: Script,
-        web3_indexer: Option<Web3Indexer>,
     ) -> ChainUpdater {
         let rollup_type_script =
             ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
@@ -88,7 +85,6 @@ impl ChainUpdater {
             rollup_context,
             rollup_type_script,
             last_tx_hash: None,
-            web3_indexer,
             initialized: false,
             sync_monitor,
         }
@@ -315,17 +311,6 @@ impl ChainUpdater {
             updates: vec![update],
         };
         self.chain.lock().await.sync(sync_param).await?;
-
-        // TODO sync missed block
-        match &self.web3_indexer {
-            Some(indexer) => {
-                let store = { self.chain.lock().await.store().to_owned() };
-                if let Err(err) = indexer.store(&store, &tx).await {
-                    log::error!("Web3 indexer store failed: {:?}", err);
-                }
-            }
-            None => {}
-        }
 
         Ok(())
     }

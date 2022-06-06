@@ -195,12 +195,6 @@ async fn main() -> Result<()> {
                 )
                 .arg(arg_privkey_path.clone())
                 .arg(
-                    Arg::with_name("database-url")
-                        .short("d")
-                        .takes_value(true)
-                        .help("The web3 store database url"),
-                )
-                .arg(
                     Arg::with_name("block-producer-address")
                         .long("block-producer-address")
                         .takes_value(true)
@@ -939,7 +933,6 @@ async fn main() -> Result<()> {
             let user_rollup_config_path = Path::new(m.value_of("user-rollup-config-path").unwrap());
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
-            let database_url = m.value_of("database-url");
             let scripts_config_path =
                 Path::new(m.value_of("scripts-deployment-config-path").unwrap());
             let server_url = m.value_of("rpc-server-url").unwrap().to_string();
@@ -980,7 +973,6 @@ async fn main() -> Result<()> {
                 privkey_path,
                 ckb_url,
                 indexer_url,
-                database_url,
                 server_url,
                 user_rollup_config: &user_rollup_config,
                 omni_lock_config: &omni_lock_config,

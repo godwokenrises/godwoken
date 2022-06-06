@@ -12,9 +12,9 @@ use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_config::{
     BackendConfig, BackendSwitchConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config,
     ConsensusConfig, ContractTypeScriptConfig, GenesisConfig, NodeMode, RPCClientConfig,
-    RPCServerConfig, RegistryAddressConfig, StoreConfig, WalletConfig, Web3IndexerConfig,
+    RPCServerConfig, RegistryAddressConfig, StoreConfig, WalletConfig,
 };
-use gw_jsonrpc_types::godwoken::{AllowedEoaType, L2BlockCommittedInfo};
+use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 use gw_rpc_client::ckb_client::CKBClient;
 use gw_types::{core::ScriptHashType, packed::Script, prelude::*};
 use std::collections::HashMap;
@@ -27,7 +27,6 @@ pub struct GenerateNodeConfigArgs<'a> {
     pub privkey_path: &'a Path,
     pub ckb_url: String,
     pub indexer_url: String,
-    pub database_url: Option<&'a str>,
     pub build_scripts_result: &'a BuildScriptsResult,
     pub server_url: String,
     pub user_rollup_config: &'a UserRollupConfig,
@@ -43,7 +42,6 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         privkey_path,
         ckb_url,
         indexer_url,
-        database_url,
         build_scripts_result,
         server_url,
         user_rollup_config,
@@ -230,24 +228,6 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         rollup_config,
         secp_data_dep,
     };
-    let allowed_eoa_type_hashes = &genesis.rollup_config.allowed_eoa_type_hashes;
-    let eth_account_lock_type_hash = allowed_eoa_type_hashes
-        .iter()
-        .find(|th| th.type_ == AllowedEoaType::Eth)
-        .ok_or_else(|| anyhow!("No allowed EoA type hashes in the rollup config"))?;
-    let tron_account_lock_type_hash = allowed_eoa_type_hashes
-        .iter()
-        .find(|th| th.type_ == AllowedEoaType::Tron);
-
-    let web3_indexer = database_url.map(|database_url| Web3IndexerConfig {
-        database_url: database_url.to_owned(),
-        polyjuice_script_type_hash: scripts_deployment
-            .polyjuice_validator
-            .script_type_hash
-            .clone(),
-        eth_account_lock_hash: eth_account_lock_type_hash.hash.to_owned(),
-        tron_account_lock_hash: tron_account_lock_type_hash.map(|th| th.hash.to_owned()),
-    });
 
     let config: Config = Config {
         backend_switches,
@@ -257,7 +237,6 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         rpc_server,
         consensus,
         block_producer,
-        web3_indexer,
         node_mode,
         debug: Default::default(),
         offchain_validator: Default::default(),

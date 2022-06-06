@@ -167,7 +167,6 @@ pub async fn setup(args: SetupArgs<'_>) {
             privkey_path: &privkey_path,
             ckb_url: ckb_rpc_url.to_string(),
             indexer_url: indexer_url.to_string(),
-            database_url: None,
             build_scripts_result: &build_scripts_result,
             server_url: server_url.to_string(),
             user_rollup_config: &rollup_config,
