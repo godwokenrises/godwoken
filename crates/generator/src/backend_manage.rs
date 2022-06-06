@@ -1,6 +1,6 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use gw_common::H256;
-use gw_config::{BackendConfig, BackendType};
+use gw_config::{BackendConfig, BackendSwitchConfig, BackendType};
 use gw_types::bytes::Bytes;
 use std::{collections::HashMap, fs};
 
@@ -17,7 +17,7 @@ pub struct Backend {
 
 #[derive(Default)]
 pub struct BackendManage {
-    backends: HashMap<H256, Backend>,
+    backend_switches: Vec<(u64, HashMap<H256, Backend>)>,
     /// define here not in backends,
     /// so we don't need to implement the trait `Clone` of AotCode
     #[cfg(has_asm)]
@@ -25,64 +25,99 @@ pub struct BackendManage {
 }
 
 impl BackendManage {
-    pub fn from_config(configs: Vec<BackendConfig>) -> Result<Self> {
+    pub fn from_config(configs: Vec<BackendSwitchConfig>) -> Result<Self> {
         let mut backend_manage: BackendManage = Default::default();
-
         for config in configs {
-            backend_manage.register_backend_config(config)?;
+            backend_manage.register_backend_switch(config, true)?;
         }
 
         Ok(backend_manage)
     }
 
-    pub fn register_backend_config(&mut self, config: BackendConfig) -> Result<()> {
-        let BackendConfig {
-            validator_path,
-            generator_path,
-            validator_script_type_hash,
-            backend_type,
-        } = config;
-        let validator = fs::read(&validator_path)
-            .with_context(|| format!("load validator from {}", validator_path.to_string_lossy()))?
-            .into();
-        let generator = fs::read(&generator_path)
-            .with_context(|| format!("load generator from {}", generator_path.to_string_lossy()))?
-            .into();
-        let validator_script_type_hash = {
-            let hash: [u8; 32] = validator_script_type_hash.into();
-            hash.into()
-        };
-        let backend = Backend {
-            validator,
-            generator,
-            validator_script_type_hash,
-            backend_type,
-        };
-        self.register_backend(backend);
+    fn register_backend_switch(
+        &mut self,
+        config: BackendSwitchConfig,
+        #[allow(unused_variables)] compile: bool,
+    ) -> Result<()> {
+        if let Some((height, _backends)) = self.backend_switches.last() {
+            if config.switch_height <= *height {
+                bail!("BackendSwitchConfig with switch_height {} is less or equals to the last switch_height {}", config.switch_height, height);
+            }
+        }
+        // inherit backends
+        let mut backends = self
+            .backend_switches
+            .last()
+            .map(|(_height, backends)| backends)
+            .cloned()
+            .unwrap_or_default();
+
+        // register backends
+        for config in config.backends {
+            let BackendConfig {
+                validator_path,
+                generator_path,
+                validator_script_type_hash,
+                backend_type,
+            } = config;
+            let validator = fs::read(&validator_path)
+                .with_context(|| {
+                    format!("load validator from {}", validator_path.to_string_lossy())
+                })?
+                .into();
+            let generator = fs::read(&generator_path)
+                .with_context(|| {
+                    format!("load generator from {}", generator_path.to_string_lossy())
+                })?
+                .into();
+            let validator_script_type_hash = {
+                let hash: [u8; 32] = validator_script_type_hash.into();
+                hash.into()
+            };
+            let backend = Backend {
+                validator,
+                generator,
+                validator_script_type_hash,
+                backend_type,
+            };
+            #[cfg(has_asm)]
+            if compile {
+                self.compile_backend(&backend);
+            }
+            backends.insert(backend.validator_script_type_hash, backend);
+        }
+
+        self.backend_switches.push((config.switch_height, backends));
         Ok(())
     }
 
-    pub fn register_backend(&mut self, backend: Backend) {
-        #[cfg(has_asm)]
-        {
-            self.aot_codes.0.insert(
-                backend.validator_script_type_hash,
-                self.aot_compile(&backend.generator, 0)
-                    .expect("Ahead-of-time compile"),
-            );
-            self.aot_codes.1.insert(
-                backend.validator_script_type_hash,
-                self.aot_compile(&backend.generator, 1)
-                    .expect("Ahead-of-time compile"),
-            );
-        }
-
-        self.backends
-            .insert(backend.validator_script_type_hash, backend);
+    #[cfg(has_asm)]
+    fn compile_backend(&mut self, backend: &Backend) {
+        self.aot_codes.0.insert(
+            backend.validator_script_type_hash,
+            self.aot_compile(&backend.generator, 0)
+                .expect("Ahead-of-time compile"),
+        );
+        self.aot_codes.1.insert(
+            backend.validator_script_type_hash,
+            self.aot_compile(&backend.generator, 1)
+                .expect("Ahead-of-time compile"),
+        );
     }
 
-    pub fn get_backend(&self, code_hash: &H256) -> Option<&Backend> {
-        self.backends.get(code_hash)
+    pub fn get_backends_at_height(
+        &self,
+        block_number: u64,
+    ) -> Option<&(u64, HashMap<H256, Backend>)> {
+        self.backend_switches
+            .iter()
+            .rev()
+            .find(|(height, _)| block_number >= *height)
+    }
+
+    pub fn get_backend(&self, block_number: u64, code_hash: &H256) -> Option<&Backend> {
+        self.get_backends_at_height(block_number)
+            .and_then(|(_number, backends)| backends.get(code_hash))
     }
 
     #[cfg(has_asm)]
@@ -114,8 +149,139 @@ impl BackendManage {
             }
         }
     }
+}
 
-    pub fn get_backends(&self) -> &HashMap<H256, Backend> {
-        &self.backends
+#[cfg(test)]
+mod tests {
+    use gw_config::{BackendConfig, BackendSwitchConfig, BackendType};
+
+    use super::BackendManage;
+
+    #[test]
+    fn test_get_backend() {
+        let mut m = BackendManage::default();
+        // prepare fake binaries
+        let dir = tempfile::tempdir().unwrap().into_path();
+        let sudt_v0 = dir.join("sudt_v0");
+        let sudt_v1 = dir.join("sudt_v1");
+        let meta_v0 = dir.join("meta_v0");
+        let addr_v0 = dir.join("addr_v0");
+        std::fs::write(&sudt_v0, "sudt_v0").unwrap();
+        std::fs::write(&sudt_v1, "sudt_v1").unwrap();
+        std::fs::write(&meta_v0, "meta_v0").unwrap();
+        std::fs::write(&addr_v0, "addr_v0").unwrap();
+
+        let config = BackendSwitchConfig {
+            switch_height: 1,
+            backends: vec![
+                BackendConfig {
+                    validator_script_type_hash: [42u8; 32].into(),
+                    backend_type: BackendType::Sudt,
+                    generator_path: format!("{}/sudt_v0", dir.to_string_lossy()).into(),
+                    validator_path: format!("{}/sudt_v0", dir.to_string_lossy()).into(),
+                },
+                BackendConfig {
+                    validator_script_type_hash: [43u8; 32].into(),
+                    backend_type: BackendType::EthAddrReg,
+                    generator_path: format!("{}/addr_v0", dir.to_string_lossy()).into(),
+                    validator_path: format!("{}/addr_v0", dir.to_string_lossy()).into(),
+                },
+            ],
+        };
+        m.register_backend_switch(config, false).unwrap();
+        assert!(m.get_backends_at_height(0).is_none(), "no backends at 0");
+        assert!(
+            m.get_backend(1, &[42u8; 32].into()).is_some(),
+            "get backend at 1"
+        );
+        assert!(
+            m.get_backend(100, &[42u8; 32].into()).is_some(),
+            "get backend at 100"
+        );
+        assert!(
+            m.get_backend(0, &[43u8; 32].into()).is_none(),
+            "get backend at 0"
+        );
+        assert!(
+            m.get_backend(1, &[43u8; 32].into()).is_some(),
+            "get backend at 1"
+        );
+        assert!(
+            m.get_backend(100, &[43u8; 32].into()).is_some(),
+            "get backend at 100"
+        );
+
+        let config = BackendSwitchConfig {
+            switch_height: 5,
+            backends: vec![
+                BackendConfig {
+                    validator_script_type_hash: [41u8; 32].into(),
+                    backend_type: BackendType::Meta,
+                    generator_path: format!("{}/meta_v0", dir.to_string_lossy()).into(),
+                    validator_path: format!("{}/meta_v0", dir.to_string_lossy()).into(),
+                },
+                BackendConfig {
+                    validator_script_type_hash: [42u8; 32].into(),
+                    backend_type: BackendType::Sudt,
+                    generator_path: format!("{}/sudt_v1", dir.to_string_lossy()).into(),
+                    validator_path: format!("{}/sudt_v1", dir.to_string_lossy()).into(),
+                },
+            ],
+        };
+        m.register_backend_switch(config, false).unwrap();
+        assert!(m.get_backends_at_height(0).is_none(), "no backends at 0");
+        // sudt
+        assert_eq!(
+            m.get_backend(4, &[42u8; 32].into())
+                .unwrap()
+                .generator
+                .to_vec(),
+            b"sudt_v0".to_vec(),
+        );
+        assert_eq!(
+            m.get_backend(5, &[42u8; 32].into())
+                .unwrap()
+                .generator
+                .to_vec(),
+            b"sudt_v1".to_vec(),
+        );
+        assert_eq!(
+            m.get_backend(42, &[42u8; 32].into())
+                .unwrap()
+                .generator
+                .to_vec(),
+            b"sudt_v1".to_vec(),
+        );
+        // meta
+        assert!(m.get_backend(1, &[41u8; 32].into()).is_none());
+        assert_eq!(
+            m.get_backend(5, &[41u8; 32].into())
+                .unwrap()
+                .generator
+                .to_vec(),
+            b"meta_v0".to_vec(),
+        );
+        assert_eq!(
+            m.get_backend(42, &[41u8; 32].into())
+                .unwrap()
+                .generator
+                .to_vec(),
+            b"meta_v0".to_vec(),
+        );
+        // addr
+        assert_eq!(
+            m.get_backend(1, &[43u8; 32].into())
+                .unwrap()
+                .generator
+                .to_vec(),
+            b"addr_v0".to_vec(),
+        );
+        assert_eq!(
+            m.get_backend(42, &[43u8; 32].into())
+                .unwrap()
+                .generator
+                .to_vec(),
+            b"addr_v0".to_vec(),
+        );
     }
 }

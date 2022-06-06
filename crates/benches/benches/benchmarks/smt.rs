@@ -8,7 +8,7 @@ use gw_common::{
     state::State,
     H256,
 };
-use gw_config::{BackendConfig, GenesisConfig, StoreConfig};
+use gw_config::{BackendConfig, BackendSwitchConfig, GenesisConfig, StoreConfig};
 use gw_db::{schema::COLUMNS, RocksDB};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
@@ -160,7 +160,11 @@ impl BenchExecutionEnvironment {
                     backend_type: gw_config::BackendType::Sudt,
                 },
             ];
-            BackendManage::from_config(configs).expect("bench backend")
+            BackendManage::from_config(vec![BackendSwitchConfig {
+                switch_height: 0,
+                backends: configs,
+            }])
+            .expect("bench backend")
         };
 
         let account_lock_manage = {

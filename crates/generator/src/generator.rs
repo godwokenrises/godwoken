@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::atomic::Ordering::SeqCst,
-    time::Instant,
-};
+use std::{collections::HashSet, sync::atomic::Ordering::SeqCst, time::Instant};
 
 use crate::{
     account_lock_manage::AccountLockManage,
@@ -544,6 +540,7 @@ impl Generator {
     #[instrument(skip_all, fields(script_hash = %script_hash.pack()))]
     pub fn load_backend<S: State + CodeStore>(
         &self,
+        block_number: u64,
         state: &S,
         script_hash: &H256,
     ) -> Option<Backend> {
@@ -558,7 +555,8 @@ impl Generator {
                 if script.hash_type() == ScriptHashType::Type.into() {
                     let code_hash: [u8; 32] = script.code_hash().unpack();
                     log::debug!("load_backend by code_hash: {}", hex::encode(code_hash));
-                    self.backend_manage.get_backend(&code_hash.into())
+                    self.backend_manage
+                        .get_backend(block_number, &code_hash.into())
                 } else {
                     log::error!(
                         "Found a invalid account script which hash_type is data: {:?}",
@@ -598,7 +596,7 @@ impl Generator {
         let account_id = raw_tx.to_id().unpack();
         let script_hash = state.get_script_hash(account_id)?;
         let backend = self
-            .load_backend(state, &script_hash)
+            .load_backend(block_info.number().unpack(), state, &script_hash)
             .ok_or(TransactionError::BackendNotFound { script_hash })?;
 
         let run_result: RunResult =
@@ -606,8 +604,8 @@ impl Generator {
         self.handle_run_result(state, block_info, raw_tx, run_result)
     }
 
-    pub fn get_backends(&self) -> &HashMap<H256, Backend> {
-        self.backend_manage.get_backends()
+    pub fn backend_manage(&self) -> &BackendManage {
+        &self.backend_manage
     }
 
     // check and handle run_result before return

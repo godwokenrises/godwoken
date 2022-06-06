@@ -20,7 +20,7 @@ pub enum Trace {
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     pub node_mode: NodeMode,
-    pub backends: Vec<BackendConfig>,
+    pub backend_switches: Vec<BackendSwitchConfig>,
     pub genesis: GenesisConfig,
     pub chain: ChainConfig,
     pub rpc_client: RPCClientConfig,
@@ -195,6 +195,12 @@ impl Default for BackendType {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BackendSwitchConfig {
+    pub switch_height: u64,
+    pub backends: Vec<BackendConfig>,
+}
+
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BackendConfig {
     pub validator_path: PathBuf,
@@ -282,6 +288,7 @@ pub struct MemPoolConfig {
     pub restore_path: PathBuf,
     pub publish: Option<PublishMemPoolConfig>,
     pub subscribe: Option<SubscribeMemPoolConfig>,
+    #[serde(default)]
     pub mem_block: MemBlockConfig,
 }
 

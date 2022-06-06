@@ -10,9 +10,9 @@ use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_config::{
-    BackendConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config, ConsensusConfig,
-    ContractTypeScriptConfig, GenesisConfig, NodeMode, RPCClientConfig, RPCServerConfig,
-    RegistryAddressConfig, StoreConfig, WalletConfig,
+    BackendConfig, BackendSwitchConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config,
+    ConsensusConfig, ContractTypeScriptConfig, GenesisConfig, NodeMode, RPCClientConfig,
+    RPCServerConfig, RegistryAddressConfig, StoreConfig, WalletConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 use gw_rpc_client::ckb_client::CKBClient;
@@ -176,6 +176,10 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
             backend_type: gw_config::BackendType::EthAddrReg,
         },
     ];
+    let backend_switches = vec![BackendSwitchConfig {
+        switch_height: 0,
+        backends,
+    }];
 
     let store = StoreConfig {
         path: "".into(),
@@ -226,7 +230,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
     };
 
     let config: Config = Config {
-        backends,
+        backend_switches,
         genesis,
         chain,
         rpc_client,
