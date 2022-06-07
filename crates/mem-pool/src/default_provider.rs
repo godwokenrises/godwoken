@@ -1,13 +1,13 @@
 use std::time::Duration;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use gw_config::MemBlockConfig;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
-    offchain::{CellWithStatus, CollectedCustodianCells, DepositInfo, RollupContext},
-    packed::{OutPoint, WithdrawalRequest},
+    offchain::{CellWithStatus, DepositInfo, FinalizedCustodianCapacity},
+    packed::OutPoint,
     prelude::*,
 };
 use gw_utils::local_cells::LocalCellsManager;
@@ -99,23 +99,18 @@ impl MemPoolProvider for DefaultMemPoolProvider {
     }
 
     #[instrument(skip_all)]
-    async fn query_available_custodians(
-        &self,
-        withdrawals: Vec<WithdrawalRequest>,
-        last_finalized_block_number: u64,
-        rollup_context: RollupContext,
-        local_cells_manager: &LocalCellsManager,
-    ) -> Result<CollectedCustodianCells> {
-        let db = self.store.begin_transaction();
-        let r = query_finalized_custodians(
-            &self.rpc_client,
-            &db,
-            withdrawals.clone().into_iter(),
-            &rollup_context,
-            last_finalized_block_number,
-            local_cells_manager,
-        )
-        .await?;
-        Ok(r.expect_any())
+    fn query_block_deposit_custodians(&self, block: u64) -> Result<FinalizedCustodianCapacity> {
+        if block > 0 {
+            // TODO: migration should fetch previous block submit transactions.
+            let tx = self
+                .store
+                .get_submit_tx(block)
+                .ok_or_else(|| anyhow!("get submit tx"))?;
+            let mut lc = LocalCellsManager::default();
+            lc.apply_tx(&tx.as_reader());
+            query_block_deposit_custodians(&lc, &self.rpc_client.rollup_context, block)
+        } else {
+            Ok(Default::default())
+        }
     }
 }

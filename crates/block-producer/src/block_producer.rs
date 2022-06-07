@@ -23,7 +23,7 @@ use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
-    offchain::{CollectedCustodianCells, DepositInfo, InputCellInfo, RollupContext},
+    offchain::{DepositInfo, InputCellInfo, RollupContext},
     packed::{
         CellDep, CellInput, CellOutput, GlobalState, L2Block, RollupAction, RollupActionUnion,
         RollupSubmitBlock, Transaction, WithdrawalRequestExtra, WitnessArgs,
@@ -121,11 +121,7 @@ impl BlockProducer {
     }
 
     #[instrument(skip_all, fields(retry_count = retry_count))]
-    pub async fn produce_next_block(
-        &self,
-        retry_count: usize,
-        local_cells_manager: &LocalCellsManager,
-    ) -> Result<ProduceBlockResult> {
+    pub async fn produce_next_block(&self, retry_count: usize) -> Result<ProduceBlockResult> {
         if let Some(ref tests_control) = self.tests_control {
             match tests_control.payload().await {
                 Some(TestModePayload::None) => tests_control.clear_none().await?,
@@ -135,7 +131,7 @@ impl BlockProducer {
         }
 
         // get txs & withdrawal requests from mem pool
-        let (finalized_custodians, block_param) = {
+        let block_param = {
             let (mem_block, post_block_state) = {
                 let t = Instant::now();
                 log::debug!(target: "produce-block", "acquire mem-pool",);
@@ -154,35 +150,19 @@ impl BlockProducer {
             };
 
             let t = Instant::now();
-            let tip_block_number = mem_block.block_info().number().unpack().saturating_sub(1);
-            let (finalized_custodians, produce_block_param) =
-                generate_produce_block_param(&self.store, mem_block, post_block_state)?;
-
-            let finalized_custodians = {
-                let last_finalized_block_number = {
-                    let context = self.generator.rollup_context();
-                    context.last_finalized_block_number(tip_block_number)
-                };
-                let query = query_mergeable_custodians(
-                    local_cells_manager,
-                    &self.rpc_client,
-                    finalized_custodians.unwrap_or_default(),
-                    last_finalized_block_number,
-                );
-                query.await?.expect_any()
-            };
-            log::debug!(
-                target: "produce-block",
-                "finalized custodians {:?}",
-                finalized_custodians.cells_info.len()
-            );
+            let produce_block_param = generate_produce_block_param(
+                &self.store,
+                self.generator.rollup_context(),
+                mem_block,
+                post_block_state,
+            )?;
 
             log::debug!(
                 target: "produce-block",
                 "generate produce block param {}ms",
                 t.elapsed().as_millis()
             );
-            (finalized_custodians, produce_block_param)
+            produce_block_param
         };
 
         // produce block
@@ -196,7 +176,6 @@ impl BlockProducer {
             reverted_block_root,
             rollup_config_hash: self.rollup_config_hash,
             block_param,
-            finalized_custodians,
         };
         let db = self.store.begin_transaction();
         produce_block(&db, &self.generator, param)
@@ -206,7 +185,6 @@ impl BlockProducer {
     pub async fn compose_submit_tx(&self, args: ComposeSubmitTxArgs<'_>) -> Result<Transaction> {
         let ComposeSubmitTxArgs {
             deposit_cells,
-            finalized_custodians,
             block,
             global_state,
             since,
@@ -357,6 +335,27 @@ impl BlockProducer {
             .outputs_mut()
             .push((generated_stake.output, generated_stake.output_data));
 
+        let last_finalized_block_number = self
+            .generator
+            .rollup_context()
+            .last_finalized_block_number(block.raw().number().unpack() - 1);
+        let finalized_custodians = gw_mem_pool::custodian::query_finalized_custodians(
+            rpc_client,
+            &self.store.get_snapshot(),
+            withdrawal_extras.iter().map(|w| w.request()),
+            rollup_context,
+            last_finalized_block_number,
+            local_cells_manager,
+        )
+        .await?
+        .expect_any();
+        log::info!(
+            "block {}, last finalized: {}, capacity: {}",
+            block.raw().number().unpack(),
+            last_finalized_block_number,
+            finalized_custodians.capacity,
+        );
+
         // withdrawal cells
         let map_withdrawal_extras = withdrawal_extras.into_iter().map(|w| (w.hash().into(), w));
         if let Some(generated_withdrawal_cells) = crate::withdrawal::generate(
@@ -461,7 +460,6 @@ impl BlockProducer {
 
 pub struct ComposeSubmitTxArgs<'a> {
     pub deposit_cells: Vec<DepositInfo>,
-    pub finalized_custodians: CollectedCustodianCells,
     pub block: L2Block,
     pub global_state: GlobalState,
     pub since: Since,

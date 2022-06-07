@@ -14,7 +14,10 @@ use gw_store::traits::chain_store::ChainStore;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupContext, WithdrawalsAmount},
+    offchain::{
+        CellInfo, CollectedCustodianCells, DepositInfo, FinalizedCustodianCapacity, RollupContext,
+        WithdrawalsAmount,
+    },
     packed::{
         CellOutput, CustodianLockArgs, CustodianLockArgsReader, DepositLockArgs, Script,
         WithdrawalRequest,
@@ -22,7 +25,8 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::local_cells::{
-    collect_local_and_indexer_cells, CollectLocalAndIndexerCursor, LocalCellsManager,
+    collect_local_and_indexer_cells, collect_local_cells, CollectLocalAndIndexerCursor,
+    LocalCellsManager,
 };
 use tracing::instrument;
 
@@ -96,6 +100,15 @@ impl<'a> From<&'a CollectedCustodianCells> for AvailableCustodians {
     }
 }
 
+impl<'a> From<&'a FinalizedCustodianCapacity> for AvailableCustodians {
+    fn from(collected: &'a FinalizedCustodianCapacity) -> Self {
+        AvailableCustodians {
+            capacity: collected.capacity,
+            sudt: collected.sudt.clone(),
+        }
+    }
+}
+
 pub fn sum_withdrawals<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> WithdrawalsAmount {
     reqs.fold(
         WithdrawalsAmount::default(),
@@ -121,6 +134,84 @@ pub fn sum_withdrawals<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> 
             total_amount
         }
     )
+}
+
+/// Query custodian cells whose deposit block number == block from local cells manager.
+pub fn query_block_deposit_custodians(
+    lc: &LocalCellsManager,
+    rollup_context: &RollupContext,
+    block: u64,
+) -> Result<FinalizedCustodianCapacity> {
+    // TODO: reduce code duplication.
+    let parse_sudt_amount = |cell: &CellInfo| -> Result<u128> {
+        if cell.output.type_().is_none() {
+            bail!("no a sudt cell");
+        }
+
+        gw_types::packed::Uint128::from_slice(cell.data.as_ref())
+            .map(|a| a.unpack())
+            .map_err(|e| anyhow!("invalid sudt amount {}", e))
+    };
+
+    let custodian_lock = Script::new_builder()
+        .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+        .hash_type(ScriptHashType::Type.into())
+        .args(rollup_context.rollup_script_hash.as_slice().pack())
+        .build();
+
+    let search_key = SearchKey::with_lock(custodian_lock);
+
+    let cells = collect_local_cells(lc, &search_key);
+
+    let mut collected = FinalizedCustodianCapacity::default();
+
+    for cell in cells {
+        let args = cell.output.as_reader().lock().args().raw_data();
+        let custodian_lock_args = match CustodianLockArgsReader::from_slice(&args[32..]) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+
+        if custodian_lock_args.deposit_block_number().unpack() != block {
+            continue;
+        }
+
+        // Collect sudt
+        if let Some(sudt_type_script) = cell.output.type_().to_opt() {
+            // Invalid custodian type script
+            let l1_sudt_script_type_hash = rollup_context.rollup_config.l1_sudt_script_type_hash();
+            if sudt_type_script.code_hash() != l1_sudt_script_type_hash
+                || sudt_type_script.hash_type() != ScriptHashType::Type.into()
+            {
+                continue;
+            }
+
+            let sudt_type_hash = sudt_type_script.hash();
+            if sudt_type_hash != CKB_SUDT_SCRIPT_ARGS {
+                let sudt_amount = match parse_sudt_amount(cell) {
+                    Ok(amount) => amount,
+                    Err(_) => {
+                        log::error!("invalid sudt amount, out_point: {:?}", cell.out_point);
+                        continue;
+                    }
+                };
+
+                let (collected_amount, type_script) = {
+                    collected
+                        .sudt
+                        .entry(sudt_type_hash)
+                        .or_insert((0, Script::default()))
+                };
+                *collected_amount = collected_amount.saturating_add(sudt_amount);
+                *type_script = sudt_type_script;
+            }
+        }
+
+        collected.capacity = collected
+            .capacity
+            .saturating_add(cell.output.capacity().unpack().into());
+    }
+    Ok(collected)
 }
 
 #[instrument(skip_all, fields(last_finalized_block_number = last_finalized_block_number))]

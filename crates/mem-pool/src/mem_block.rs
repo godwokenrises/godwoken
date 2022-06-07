@@ -5,7 +5,7 @@ use gw_common::{
 };
 use gw_types::{
     bytes::Bytes,
-    offchain::{CollectedCustodianCells, DepositInfo},
+    offchain::{DepositInfo, FinalizedCustodianCapacity},
     packed::{self, AccountMerkleState, BlockInfo, L2Block},
     prelude::*,
 };
@@ -24,8 +24,8 @@ pub struct MemBlock {
     txs_set: HashSet<H256>,
     /// Finalized withdrawals
     withdrawals: Vec<H256>,
-    /// Finalized custodians to produce finalized withdrawals
-    finalized_custodians: Option<CollectedCustodianCells>,
+    /// Finalized Custodians CKB and SUDT capacity **before** any withdrawals.
+    finalized_custodian_capacity: FinalizedCustodianCapacity,
     /// Withdrawals set
     withdrawals_set: HashSet<H256>,
     /// Finalized withdrawals
@@ -104,7 +104,7 @@ impl MemBlock {
         self.txs_set.clear();
         self.withdrawals.clear();
         self.withdrawals_set.clear();
-        self.finalized_custodians = None;
+        self.finalized_custodian_capacity = Default::default();
         self.deposits.clear();
         self.state_checkpoints.clear();
         self.txs_prev_state_checkpoint = None;
@@ -153,12 +153,12 @@ impl MemBlock {
         }
     }
 
-    pub(crate) fn set_finalized_custodians(
+    pub(crate) fn set_finalized_custodian_capacity(
         &mut self,
-        finalized_custodians: CollectedCustodianCells,
+        finalized_custodian_capacity: FinalizedCustodianCapacity,
     ) {
-        assert!(self.finalized_custodians.is_none());
-        self.finalized_custodians = Some(finalized_custodians);
+        assert!(self.finalized_custodian_capacity.is_empty());
+        self.finalized_custodian_capacity = finalized_custodian_capacity;
     }
 
     pub(crate) fn push_deposits(
@@ -230,12 +230,12 @@ impl MemBlock {
         &self.withdrawals
     }
 
-    pub fn finalized_custodians(&self) -> Option<&CollectedCustodianCells> {
-        self.finalized_custodians.as_ref()
+    pub fn finalized_custodians(&self) -> &FinalizedCustodianCapacity {
+        &self.finalized_custodian_capacity
     }
 
-    pub fn take_finalized_custodians(&mut self) -> Option<CollectedCustodianCells> {
-        self.finalized_custodians.take()
+    pub fn take_finalized_custodians_capacity(&mut self) -> FinalizedCustodianCapacity {
+        std::mem::take(&mut self.finalized_custodian_capacity)
     }
 
     pub fn withdrawals_set(&self) -> &HashSet<H256> {
@@ -347,7 +347,7 @@ impl MemBlock {
 
         assert!(new_mem_block.state_checkpoints.is_empty());
         assert!(new_mem_block.withdrawals.is_empty());
-        assert!(new_mem_block.finalized_custodians.is_none());
+        assert!(new_mem_block.finalized_custodian_capacity.is_empty());
         assert!(new_mem_block.deposits.is_empty());
         assert!(new_mem_block.txs.is_empty());
         assert!(new_mem_block.touched_keys.is_empty());
@@ -365,7 +365,7 @@ impl MemBlock {
             new_mem_block.push_withdrawal(*hash, post_state.clone(), touched_keys.clone());
             packaged_states.push(post_state);
         }
-        new_mem_block.finalized_custodians = self.finalized_custodians.clone();
+        new_mem_block.finalized_custodian_capacity = self.finalized_custodian_capacity.clone();
 
         let deposits = self.deposits.iter().take(deposits_count).cloned();
         let deposit_post_states = self.deposit_post_states.iter().take(deposits_count);
@@ -416,7 +416,7 @@ impl MemBlock {
             .block_producer(self.block_producer.to_bytes().pack())
             .txs(self.txs.pack())
             .withdrawals(self.withdrawals.pack())
-            .finalized_custodians(self.finalized_custodians.pack())
+            .finalized_custodians(self.finalized_custodian_capacity.pack())
             .deposits(self.deposits.pack())
             .state_checkpoints(self.state_checkpoints.pack())
             .txs_prev_state_checkpoint(self.txs_prev_state_checkpoint.pack())
@@ -447,9 +447,7 @@ impl MemBlock {
             return Diff("withdrawals");
         }
 
-        if self.finalized_custodians.pack().as_slice()
-            != other.finalized_custodians.pack().as_slice()
-        {
+        if self.finalized_custodian_capacity != other.finalized_custodian_capacity {
             return Diff("finalized custodians");
         }
 

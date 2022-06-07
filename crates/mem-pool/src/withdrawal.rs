@@ -3,7 +3,7 @@ use gw_common::H256;
 use gw_generator::generator::WithdrawalCellError;
 use gw_types::{
     bytes::Bytes,
-    offchain::RollupContext,
+    offchain::{FinalizedCustodianCapacity, RollupContext},
     packed::{CellOutput, L2Block, Script, WithdrawalRequest, WithdrawalRequestExtra},
     prelude::*,
 };
@@ -75,6 +75,17 @@ impl<'a> Generator<'a> {
             ckb_custodian,
             sudt_custodians,
             withdrawals: Default::default(),
+        }
+    }
+
+    pub fn remaining_capacity(self) -> FinalizedCustodianCapacity {
+        FinalizedCustodianCapacity {
+            capacity: self.ckb_custodian.capacity,
+            sudt: self
+                .sudt_custodians
+                .into_iter()
+                .map(|(k, v)| (k, (v.balance, v.script)))
+                .collect(),
         }
     }
 

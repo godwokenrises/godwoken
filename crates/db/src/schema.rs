@@ -59,17 +59,11 @@ pub const COLUMN_WITHDRAWAL: Col = 33;
 /// Column store withdrawal extra information
 pub const COLUMN_WITHDRAWAL_INFO: Col = 34;
 /// block number (in big endian for natural ordering) -> block submit L1 tx
-///
-/// Only txs for recent blocks are kept.
 pub const COLUMN_BLOCK_SUBMIT_TX: Col = 35;
 /// block number (in big endian) -> deposit info vec.
-///
-/// Only recent blocks are kept.
 pub const COLUMN_BLOCK_DEPOSIT_INFO_VEC: Col = 36;
-/// block number (in big endian) -> CollectedCustodianCells
-///
-/// Only recent blocks are kept.
-pub const COLUMN_BLOCK_COLLECTED_CUSTODIAN_CELLS: Col = 37;
+/// block number (in big endian) -> FinalizedCustodianCapacity.
+pub const COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY: Col = 37;
 
 /// chain id
 pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";

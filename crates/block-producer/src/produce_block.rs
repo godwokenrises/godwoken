@@ -2,7 +2,7 @@
 //! Block producer assemble several Godwoken components into a single executor.
 //! A block producer can act without the ability of produce block.
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use gw_common::{
     h256_ext::H256Ext,
     merkle_utils::{calculate_ckb_merkle_root, calculate_state_checkpoint, ckb_merkle_leaf_hash},
@@ -19,7 +19,7 @@ use gw_store::{
 };
 use gw_types::{
     core::Status,
-    offchain::{BlockParam, CollectedCustodianCells, DepositInfo},
+    offchain::{BlockParam, DepositInfo, FinalizedCustodianCapacity, RollupContext},
     packed::{
         AccountMerkleState, BlockMerkleState, GlobalState, L2Block, RawL2Block, SubmitTransactions,
         SubmitWithdrawals, WithdrawalRequestExtra,
@@ -34,7 +34,7 @@ pub struct ProduceBlockResult {
     pub global_state: GlobalState,
     pub deposit_cells: Vec<DepositInfo>,
     pub withdrawal_extras: Vec<WithdrawalRequestExtra>,
-    pub finalized_custodians: CollectedCustodianCells,
+    pub remaining_capacity: FinalizedCustodianCapacity,
 }
 
 pub struct ProduceBlockParam {
@@ -42,7 +42,6 @@ pub struct ProduceBlockParam {
     pub reverted_block_root: H256,
     pub rollup_config_hash: H256,
     pub block_param: BlockParam,
-    pub finalized_custodians: CollectedCustodianCells,
 }
 
 /// Produce block
@@ -59,7 +58,6 @@ pub fn produce_block(
         stake_cell_owner_lock_hash,
         reverted_block_root,
         rollup_config_hash,
-        finalized_custodians,
         block_param:
             BlockParam {
                 number,
@@ -75,6 +73,7 @@ pub fn produce_block(
                 kv_state,
                 kv_state_proof,
                 post_merkle_state,
+                remaining_capacity,
             },
     } = param;
 
@@ -175,7 +174,7 @@ pub fn produce_block(
         global_state,
         deposit_cells: deposits,
         withdrawal_extras: withdrawals,
-        finalized_custodians,
+        remaining_capacity,
     })
 }
 
@@ -183,15 +182,20 @@ pub fn produce_block(
 #[instrument(skip_all, fields(mem_block = mem_block.block_info().number().unpack()))]
 pub fn generate_produce_block_param(
     store: &Store,
+    rollup_context: &RollupContext,
     mut mem_block: MemBlock,
     post_merkle_state: AccountMerkleState,
-) -> Result<(Option<CollectedCustodianCells>, BlockParam)> {
+) -> Result<BlockParam> {
     let db = store.begin_transaction();
     let tip_block_number = mem_block.block_info().number().unpack().saturating_sub(1);
     let tip_block_hash = {
         let opt = db.get_block_hash_by_number(tip_block_number)?;
         opt.ok_or_else(|| anyhow!("[produce block] tip block {} not found", tip_block_number))?
     };
+
+    let custodian_capacity = mem_block.take_finalized_custodians_capacity();
+    let mut generator =
+        gw_mem_pool::withdrawal::Generator::new(rollup_context, (&custodian_capacity).into());
 
     // generate kv state & merkle proof from tip state
     let chain_state = db.state_tree(StateContext::ReadOnly)?;
@@ -248,6 +252,15 @@ pub fn generate_produce_block_param(
     let parent_block = db
         .get_block(&tip_block_hash)?
         .ok_or_else(|| anyhow!("can't found tip block"))?;
+
+    // check and calc remaining custodians.
+    let dummy_block = L2Block::default();
+    for w in &withdrawals {
+        generator
+            .include_and_verify(w, &dummy_block)
+            .context("include_and_verify")?;
+    }
+    let remaining_capacity = generator.remaining_capacity();
 
     // check output block state consistent
     {
@@ -322,6 +335,7 @@ pub fn generate_produce_block_param(
         post_merkle_state,
         kv_state,
         kv_state_proof,
+        remaining_capacity,
     };
 
     log::debug!(
@@ -331,5 +345,5 @@ pub fn generate_produce_block_param(
         mem_block.state_checkpoints().len(),
     );
 
-    Ok((mem_block.take_finalized_custodians(), param))
+    Ok(param)
 }

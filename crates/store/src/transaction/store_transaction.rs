@@ -8,11 +8,11 @@ use gw_common::h256_ext::H256Ext;
 use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, H256};
 use gw_db::schema::{
     Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ASSET_SCRIPT,
-    COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK, COLUMN_BLOCK_COLLECTED_CUSTODIAN_CELLS,
-    COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
-    COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD,
-    COLUMN_BLOCK_STATE_REVERSE_RECORD, COLUMN_BLOCK_SUBMIT_TX, COLUMN_INDEX,
-    COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_MEM_POOL_TRANSACTION,
+    COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSIT_INFO_VEC,
+    COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
+    COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY, COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF,
+    COLUMN_BLOCK_STATE_RECORD, COLUMN_BLOCK_STATE_REVERSE_RECORD, COLUMN_BLOCK_SUBMIT_TX,
+    COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_MEM_POOL_TRANSACTION,
     COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
     COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF,
     COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
@@ -303,9 +303,6 @@ impl StoreTransaction {
             &block_number.to_be_bytes(),
             tx.as_slice(),
         )?;
-        if block_number >= 50 {
-            self.delete(COLUMN_BLOCK_SUBMIT_TX, &(block_number - 50).to_be_bytes())?;
-        }
         Ok(())
     }
 
@@ -319,31 +316,19 @@ impl StoreTransaction {
             &block_number.to_be_bytes(),
             deposit_info_vec.as_slice(),
         )?;
-        if block_number >= 50 {
-            self.delete(
-                COLUMN_BLOCK_DEPOSIT_INFO_VEC,
-                &(block_number - 50).to_be_bytes(),
-            )?;
-        }
         Ok(())
     }
 
-    pub fn set_block_collected_custodian_cells(
+    pub fn set_block_post_finalized_custodian_capacity(
         &self,
         block_number: u64,
-        collected_custodian_cells: &packed::CollectedCustodianCellsReader,
+        finalized_custodian_capacity: &packed::FinalizedCustodianCapacityReader,
     ) -> Result<(), Error> {
         self.insert_raw(
-            COLUMN_BLOCK_COLLECTED_CUSTODIAN_CELLS,
+            COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY,
             &block_number.to_be_bytes(),
-            collected_custodian_cells.as_slice(),
+            finalized_custodian_capacity.as_slice(),
         )?;
-        if block_number >= 50 {
-            self.delete(
-                COLUMN_BLOCK_COLLECTED_CUSTODIAN_CELLS,
-                &(block_number - 50).to_be_bytes(),
-            )?;
-        }
         Ok(())
     }
 

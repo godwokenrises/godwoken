@@ -6,8 +6,8 @@ use gw_common::H256;
 use gw_db::error::Error;
 use gw_db::schema::{
     COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
-    COLUMN_BLOCK_COLLECTED_CUSTODIAN_CELLS, COLUMN_BLOCK_DEPOSIT_INFO_VEC,
-    COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_SUBMIT_TX, COLUMN_INDEX,
+    COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
+    COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY, COLUMN_BLOCK_SUBMIT_TX, COLUMN_INDEX,
     COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_MEM_POOL_TRANSACTION,
     COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
     COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
@@ -17,12 +17,11 @@ use gw_db::schema::{
     META_REVERTED_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
 };
 use gw_types::offchain::global_state_from_slice;
-use gw_types::packed::{NumberHash, NumberHashReader};
+use gw_types::packed::{FinalizedCustodianCapacity, NumberHash, NumberHashReader};
 use gw_types::{
     from_box_should_be_ok,
     packed::{
-        self, ChallengeTarget, CollectedCustodianCells, DepositInfoVec, Script, Transaction,
-        TransactionKey, WithdrawalKey,
+        self, ChallengeTarget, DepositInfoVec, Script, Transaction, TransactionKey, WithdrawalKey,
     },
     prelude::*,
 };
@@ -125,16 +124,16 @@ pub trait ChainStore: KVStoreRead {
         Some(from_box_should_be_ok!(packed::DepositInfoVecReader, data))
     }
 
-    fn get_block_collected_custodian_cells(
+    fn get_block_post_finalized_custodian_capacity(
         &self,
         block_number: u64,
-    ) -> Option<CollectedCustodianCells> {
+    ) -> Option<FinalizedCustodianCapacity> {
         let data = self.get(
-            COLUMN_BLOCK_COLLECTED_CUSTODIAN_CELLS,
+            COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY,
             &block_number.to_be_bytes(),
         )?;
         Some(from_box_should_be_ok!(
-            packed::CollectedCustodianCellsReader,
+            packed::FinalizedCustodianCapacityReader,
             data
         ))
     }

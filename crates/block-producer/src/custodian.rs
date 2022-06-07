@@ -1,3 +1,5 @@
+#![allow(clippy::mutable_key_type)]
+
 use std::collections::HashSet;
 
 use anyhow::{anyhow, bail, Result};

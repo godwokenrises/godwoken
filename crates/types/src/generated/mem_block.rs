@@ -1696,8 +1696,8 @@ impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for SudtCustodianVecReaderItera
     }
 }
 #[derive(Clone)]
-pub struct CellInfoVec(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for CellInfoVec {
+pub struct FinalizedCustodianCapacity(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for FinalizedCustodianCapacity {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -1706,350 +1706,15 @@ impl ::core::fmt::LowerHex for CellInfoVec {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for CellInfoVec {
+impl ::core::fmt::Debug for FinalizedCustodianCapacity {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for CellInfoVec {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} [", Self::NAME)?;
-        for i in 0..self.len() {
-            if i == 0 {
-                write!(f, "{}", self.get_unchecked(i))?;
-            } else {
-                write!(f, ", {}", self.get_unchecked(i))?;
-            }
-        }
-        write!(f, "]")
-    }
-}
-impl ::core::default::Default for CellInfoVec {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![4, 0, 0, 0];
-        CellInfoVec::new_unchecked(v.into())
-    }
-}
-impl CellInfoVec {
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn item_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn len(&self) -> usize {
-        self.item_count()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-    pub fn get(&self, idx: usize) -> Option<CellInfo> {
-        if idx >= self.len() {
-            None
-        } else {
-            Some(self.get_unchecked(idx))
-        }
-    }
-    pub fn get_unchecked(&self, idx: usize) -> CellInfo {
-        let slice = self.as_slice();
-        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
-        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
-        if idx == self.len() - 1 {
-            CellInfo::new_unchecked(self.0.slice(start..))
-        } else {
-            let end_idx = start_idx + molecule::NUMBER_SIZE;
-            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
-            CellInfo::new_unchecked(self.0.slice(start..end))
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> CellInfoVecReader<'r> {
-        CellInfoVecReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for CellInfoVec {
-    type Builder = CellInfoVecBuilder;
-    const NAME: &'static str = "CellInfoVec";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        CellInfoVec(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        CellInfoVecReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        CellInfoVecReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder().extend(self.into_iter())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct CellInfoVecReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for CellInfoVecReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for CellInfoVecReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for CellInfoVecReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} [", Self::NAME)?;
-        for i in 0..self.len() {
-            if i == 0 {
-                write!(f, "{}", self.get_unchecked(i))?;
-            } else {
-                write!(f, ", {}", self.get_unchecked(i))?;
-            }
-        }
-        write!(f, "]")
-    }
-}
-impl<'r> CellInfoVecReader<'r> {
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn item_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn len(&self) -> usize {
-        self.item_count()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-    pub fn get(&self, idx: usize) -> Option<CellInfoReader<'r>> {
-        if idx >= self.len() {
-            None
-        } else {
-            Some(self.get_unchecked(idx))
-        }
-    }
-    pub fn get_unchecked(&self, idx: usize) -> CellInfoReader<'r> {
-        let slice = self.as_slice();
-        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
-        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
-        if idx == self.len() - 1 {
-            CellInfoReader::new_unchecked(&self.as_slice()[start..])
-        } else {
-            let end_idx = start_idx + molecule::NUMBER_SIZE;
-            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
-            CellInfoReader::new_unchecked(&self.as_slice()[start..end])
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for CellInfoVecReader<'r> {
-    type Entity = CellInfoVec;
-    const NAME: &'static str = "CellInfoVecReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        CellInfoVecReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
-        }
-        let total_size = molecule::unpack_number(slice) as usize;
-        if slice_len != total_size {
-            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
-        }
-        if slice_len == molecule::NUMBER_SIZE {
-            return Ok(());
-        }
-        if slice_len < molecule::NUMBER_SIZE * 2 {
-            return ve!(
-                Self,
-                TotalSizeNotMatch,
-                molecule::NUMBER_SIZE * 2,
-                slice_len
-            );
-        }
-        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
-        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        if slice_len < offset_first {
-            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
-        }
-        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
-            .chunks_exact(molecule::NUMBER_SIZE)
-            .map(|x| molecule::unpack_number(x) as usize)
-            .collect();
-        offsets.push(total_size);
-        if offsets.windows(2).any(|i| i[0] > i[1]) {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        for pair in offsets.windows(2) {
-            let start = pair[0];
-            let end = pair[1];
-            CellInfoReader::verify(&slice[start..end], compatible)?;
-        }
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct CellInfoVecBuilder(pub(crate) Vec<CellInfo>);
-impl CellInfoVecBuilder {
-    pub fn set(mut self, v: Vec<CellInfo>) -> Self {
-        self.0 = v;
-        self
-    }
-    pub fn push(mut self, v: CellInfo) -> Self {
-        self.0.push(v);
-        self
-    }
-    pub fn extend<T: ::core::iter::IntoIterator<Item = CellInfo>>(mut self, iter: T) -> Self {
-        for elem in iter {
-            self.0.push(elem);
-        }
-        self
-    }
-}
-impl molecule::prelude::Builder for CellInfoVecBuilder {
-    type Entity = CellInfoVec;
-    const NAME: &'static str = "CellInfoVecBuilder";
-    fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (self.0.len() + 1)
-            + self
-                .0
-                .iter()
-                .map(|inner| inner.as_slice().len())
-                .sum::<usize>()
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        let item_count = self.0.len();
-        if item_count == 0 {
-            writer.write_all(&molecule::pack_number(
-                molecule::NUMBER_SIZE as molecule::Number,
-            ))?;
-        } else {
-            let (total_size, offsets) = self.0.iter().fold(
-                (
-                    molecule::NUMBER_SIZE * (item_count + 1),
-                    Vec::with_capacity(item_count),
-                ),
-                |(start, mut offsets), inner| {
-                    offsets.push(start);
-                    (start + inner.as_slice().len(), offsets)
-                },
-            );
-            writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
-            for offset in offsets.into_iter() {
-                writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
-            }
-            for inner in self.0.iter() {
-                writer.write_all(inner.as_slice())?;
-            }
-        }
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        CellInfoVec::new_unchecked(inner.into())
-    }
-}
-pub struct CellInfoVecIterator(CellInfoVec, usize, usize);
-impl ::core::iter::Iterator for CellInfoVecIterator {
-    type Item = CellInfo;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.1 >= self.2 {
-            None
-        } else {
-            let ret = self.0.get_unchecked(self.1);
-            self.1 += 1;
-            Some(ret)
-        }
-    }
-}
-impl ::core::iter::ExactSizeIterator for CellInfoVecIterator {
-    fn len(&self) -> usize {
-        self.2 - self.1
-    }
-}
-impl ::core::iter::IntoIterator for CellInfoVec {
-    type Item = CellInfo;
-    type IntoIter = CellInfoVecIterator;
-    fn into_iter(self) -> Self::IntoIter {
-        let len = self.len();
-        CellInfoVecIterator(self, 0, len)
-    }
-}
-impl<'r> CellInfoVecReader<'r> {
-    pub fn iter<'t>(&'t self) -> CellInfoVecReaderIterator<'t, 'r> {
-        CellInfoVecReaderIterator(&self, 0, self.len())
-    }
-}
-pub struct CellInfoVecReaderIterator<'t, 'r>(&'t CellInfoVecReader<'r>, usize, usize);
-impl<'t: 'r, 'r> ::core::iter::Iterator for CellInfoVecReaderIterator<'t, 'r> {
-    type Item = CellInfoReader<'t>;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.1 >= self.2 {
-            None
-        } else {
-            let ret = self.0.get_unchecked(self.1);
-            self.1 += 1;
-            Some(ret)
-        }
-    }
-}
-impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for CellInfoVecReaderIterator<'t, 'r> {
-    fn len(&self) -> usize {
-        self.2 - self.1
-    }
-}
-#[derive(Clone)]
-pub struct CollectedCustodianCells(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for CollectedCustodianCells {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for CollectedCustodianCells {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for CollectedCustodianCells {
+impl ::core::fmt::Display for FinalizedCustodianCapacity {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "cells_info", self.cells_info())?;
-        write!(f, ", {}: {}", "capacity", self.capacity())?;
+        write!(f, "{}: {}", "capacity", self.capacity())?;
         write!(f, ", {}: {}", "sudt", self.sudt())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -2058,17 +1723,17 @@ impl ::core::fmt::Display for CollectedCustodianCells {
         write!(f, " }}")
     }
 }
-impl ::core::default::Default for CollectedCustodianCells {
+impl ::core::default::Default for FinalizedCustodianCapacity {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            40, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 36, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0,
+            32, 0, 0, 0, 12, 0, 0, 0, 28, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            4, 0, 0, 0,
         ];
-        CollectedCustodianCells::new_unchecked(v.into())
+        FinalizedCustodianCapacity::new_unchecked(v.into())
     }
 }
-impl CollectedCustodianCells {
-    pub const FIELD_COUNT: usize = 3;
+impl FinalizedCustodianCapacity {
+    pub const FIELD_COUNT: usize = 2;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -2085,37 +1750,31 @@ impl CollectedCustodianCells {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn cells_info(&self) -> CellInfoVec {
+    pub fn capacity(&self) -> Uint128 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        CellInfoVec::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn capacity(&self) -> Uint128 {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
         Uint128::new_unchecked(self.0.slice(start..end))
     }
     pub fn sudt(&self) -> SudtCustodianVec {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
+        let start = molecule::unpack_number(&slice[8..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
+            let end = molecule::unpack_number(&slice[12..]) as usize;
             SudtCustodianVec::new_unchecked(self.0.slice(start..end))
         } else {
             SudtCustodianVec::new_unchecked(self.0.slice(start..))
         }
     }
-    pub fn as_reader<'r>(&'r self) -> CollectedCustodianCellsReader<'r> {
-        CollectedCustodianCellsReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> FinalizedCustodianCapacityReader<'r> {
+        FinalizedCustodianCapacityReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for CollectedCustodianCells {
-    type Builder = CollectedCustodianCellsBuilder;
-    const NAME: &'static str = "CollectedCustodianCells";
+impl molecule::prelude::Entity for FinalizedCustodianCapacity {
+    type Builder = FinalizedCustodianCapacityBuilder;
+    const NAME: &'static str = "FinalizedCustodianCapacity";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        CollectedCustodianCells(data)
+        FinalizedCustodianCapacity(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -2124,24 +1783,24 @@ impl molecule::prelude::Entity for CollectedCustodianCells {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        CollectedCustodianCellsReader::from_slice(slice).map(|reader| reader.to_entity())
+        FinalizedCustodianCapacityReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        CollectedCustodianCellsReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        FinalizedCustodianCapacityReader::from_compatible_slice(slice)
+            .map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
-            .cells_info(self.cells_info())
             .capacity(self.capacity())
             .sudt(self.sudt())
     }
 }
 #[derive(Clone, Copy)]
-pub struct CollectedCustodianCellsReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for CollectedCustodianCellsReader<'r> {
+pub struct FinalizedCustodianCapacityReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for FinalizedCustodianCapacityReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -2150,16 +1809,15 @@ impl<'r> ::core::fmt::LowerHex for CollectedCustodianCellsReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for CollectedCustodianCellsReader<'r> {
+impl<'r> ::core::fmt::Debug for FinalizedCustodianCapacityReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for CollectedCustodianCellsReader<'r> {
+impl<'r> ::core::fmt::Display for FinalizedCustodianCapacityReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "cells_info", self.cells_info())?;
-        write!(f, ", {}: {}", "capacity", self.capacity())?;
+        write!(f, "{}: {}", "capacity", self.capacity())?;
         write!(f, ", {}: {}", "sudt", self.sudt())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -2168,8 +1826,8 @@ impl<'r> ::core::fmt::Display for CollectedCustodianCellsReader<'r> {
         write!(f, " }}")
     }
 }
-impl<'r> CollectedCustodianCellsReader<'r> {
-    pub const FIELD_COUNT: usize = 3;
+impl<'r> FinalizedCustodianCapacityReader<'r> {
+    pub const FIELD_COUNT: usize = 2;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -2186,37 +1844,31 @@ impl<'r> CollectedCustodianCellsReader<'r> {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn cells_info(&self) -> CellInfoVecReader<'r> {
+    pub fn capacity(&self) -> Uint128Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        CellInfoVecReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn capacity(&self) -> Uint128Reader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
         Uint128Reader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn sudt(&self) -> SudtCustodianVecReader<'r> {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
+        let start = molecule::unpack_number(&slice[8..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
+            let end = molecule::unpack_number(&slice[12..]) as usize;
             SudtCustodianVecReader::new_unchecked(&self.as_slice()[start..end])
         } else {
             SudtCustodianVecReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for CollectedCustodianCellsReader<'r> {
-    type Entity = CollectedCustodianCells;
-    const NAME: &'static str = "CollectedCustodianCellsReader";
+impl<'r> molecule::prelude::Reader<'r> for FinalizedCustodianCapacityReader<'r> {
+    type Entity = FinalizedCustodianCapacity;
+    const NAME: &'static str = "FinalizedCustodianCapacityReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        CollectedCustodianCellsReader(slice)
+        FinalizedCustodianCapacityReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -2258,24 +1910,18 @@ impl<'r> molecule::prelude::Reader<'r> for CollectedCustodianCellsReader<'r> {
         if offsets.windows(2).any(|i| i[0] > i[1]) {
             return ve!(Self, OffsetsNotMatch);
         }
-        CellInfoVecReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        Uint128Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        SudtCustodianVecReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        Uint128Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        SudtCustodianVecReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
-pub struct CollectedCustodianCellsBuilder {
-    pub(crate) cells_info: CellInfoVec,
+pub struct FinalizedCustodianCapacityBuilder {
     pub(crate) capacity: Uint128,
     pub(crate) sudt: SudtCustodianVec,
 }
-impl CollectedCustodianCellsBuilder {
-    pub const FIELD_COUNT: usize = 3;
-    pub fn cells_info(mut self, v: CellInfoVec) -> Self {
-        self.cells_info = v;
-        self
-    }
+impl FinalizedCustodianCapacityBuilder {
+    pub const FIELD_COUNT: usize = 2;
     pub fn capacity(mut self, v: Uint128) -> Self {
         self.capacity = v;
         self
@@ -2285,20 +1931,17 @@ impl CollectedCustodianCellsBuilder {
         self
     }
 }
-impl molecule::prelude::Builder for CollectedCustodianCellsBuilder {
-    type Entity = CollectedCustodianCells;
-    const NAME: &'static str = "CollectedCustodianCellsBuilder";
+impl molecule::prelude::Builder for FinalizedCustodianCapacityBuilder {
+    type Entity = FinalizedCustodianCapacity;
+    const NAME: &'static str = "FinalizedCustodianCapacityBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.cells_info.as_slice().len()
             + self.capacity.as_slice().len()
             + self.sudt.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
         let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
-        offsets.push(total_size);
-        total_size += self.cells_info.as_slice().len();
         offsets.push(total_size);
         total_size += self.capacity.as_slice().len();
         offsets.push(total_size);
@@ -2307,7 +1950,6 @@ impl molecule::prelude::Builder for CollectedCustodianCellsBuilder {
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
-        writer.write_all(self.cells_info.as_slice())?;
         writer.write_all(self.capacity.as_slice())?;
         writer.write_all(self.sudt.as_slice())?;
         Ok(())
@@ -2316,173 +1958,7 @@ impl molecule::prelude::Builder for CollectedCustodianCellsBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        CollectedCustodianCells::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
-pub struct CollectedCustodianCellsOpt(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for CollectedCustodianCellsOpt {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for CollectedCustodianCellsOpt {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for CollectedCustodianCellsOpt {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        if let Some(v) = self.to_opt() {
-            write!(f, "{}(Some({}))", Self::NAME, v)
-        } else {
-            write!(f, "{}(None)", Self::NAME)
-        }
-    }
-}
-impl ::core::default::Default for CollectedCustodianCellsOpt {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![];
-        CollectedCustodianCellsOpt::new_unchecked(v.into())
-    }
-}
-impl CollectedCustodianCellsOpt {
-    pub fn is_none(&self) -> bool {
-        self.0.is_empty()
-    }
-    pub fn is_some(&self) -> bool {
-        !self.0.is_empty()
-    }
-    pub fn to_opt(&self) -> Option<CollectedCustodianCells> {
-        if self.is_none() {
-            None
-        } else {
-            Some(CollectedCustodianCells::new_unchecked(self.0.clone()))
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> CollectedCustodianCellsOptReader<'r> {
-        CollectedCustodianCellsOptReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for CollectedCustodianCellsOpt {
-    type Builder = CollectedCustodianCellsOptBuilder;
-    const NAME: &'static str = "CollectedCustodianCellsOpt";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        CollectedCustodianCellsOpt(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        CollectedCustodianCellsOptReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        CollectedCustodianCellsOptReader::from_compatible_slice(slice)
-            .map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder().set(self.to_opt())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct CollectedCustodianCellsOptReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for CollectedCustodianCellsOptReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for CollectedCustodianCellsOptReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for CollectedCustodianCellsOptReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        if let Some(v) = self.to_opt() {
-            write!(f, "{}(Some({}))", Self::NAME, v)
-        } else {
-            write!(f, "{}(None)", Self::NAME)
-        }
-    }
-}
-impl<'r> CollectedCustodianCellsOptReader<'r> {
-    pub fn is_none(&self) -> bool {
-        self.0.is_empty()
-    }
-    pub fn is_some(&self) -> bool {
-        !self.0.is_empty()
-    }
-    pub fn to_opt(&self) -> Option<CollectedCustodianCellsReader<'r>> {
-        if self.is_none() {
-            None
-        } else {
-            Some(CollectedCustodianCellsReader::new_unchecked(
-                self.as_slice(),
-            ))
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for CollectedCustodianCellsOptReader<'r> {
-    type Entity = CollectedCustodianCellsOpt;
-    const NAME: &'static str = "CollectedCustodianCellsOptReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        CollectedCustodianCellsOptReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        if !slice.is_empty() {
-            CollectedCustodianCellsReader::verify(&slice[..], compatible)?;
-        }
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct CollectedCustodianCellsOptBuilder(pub(crate) Option<CollectedCustodianCells>);
-impl CollectedCustodianCellsOptBuilder {
-    pub fn set(mut self, v: Option<CollectedCustodianCells>) -> Self {
-        self.0 = v;
-        self
-    }
-}
-impl molecule::prelude::Builder for CollectedCustodianCellsOptBuilder {
-    type Entity = CollectedCustodianCellsOpt;
-    const NAME: &'static str = "CollectedCustodianCellsOptBuilder";
-    fn expected_length(&self) -> usize {
-        self.0
-            .as_ref()
-            .map(|ref inner| inner.as_slice().len())
-            .unwrap_or(0)
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        self.0
-            .as_ref()
-            .map(|ref inner| writer.write_all(inner.as_slice()))
-            .unwrap_or(Ok(()))
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        CollectedCustodianCellsOpt::new_unchecked(inner.into())
+        FinalizedCustodianCapacity::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
@@ -3096,12 +2572,13 @@ impl ::core::fmt::Display for MemBlock {
 impl ::core::default::Default for MemBlock {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            140, 0, 0, 0, 44, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 56, 0, 0, 0, 60, 0,
-            0, 0, 64, 0, 0, 0, 64, 0, 0, 0, 100, 0, 0, 0, 136, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 36, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 28, 0, 0, 0, 0,
+            172, 0, 0, 0, 44, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 88, 0, 0, 0, 92, 0,
+            0, 0, 96, 0, 0, 0, 96, 0, 0, 0, 132, 0, 0, 0, 168, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 32, 0, 0, 0, 12, 0, 0, 0, 28, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 36, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 28,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0,
+            0, 0, 0, 0, 0,
         ];
         MemBlock::new_unchecked(v.into())
     }
@@ -3142,11 +2619,11 @@ impl MemBlock {
         let end = molecule::unpack_number(&slice[16..]) as usize;
         Byte32Vec::new_unchecked(self.0.slice(start..end))
     }
-    pub fn finalized_custodians(&self) -> CollectedCustodianCellsOpt {
+    pub fn finalized_custodians(&self) -> FinalizedCustodianCapacity {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
         let end = molecule::unpack_number(&slice[20..]) as usize;
-        CollectedCustodianCellsOpt::new_unchecked(self.0.slice(start..end))
+        FinalizedCustodianCapacity::new_unchecked(self.0.slice(start..end))
     }
     pub fn deposits(&self) -> DepositInfoVec {
         let slice = self.as_slice();
@@ -3309,11 +2786,11 @@ impl<'r> MemBlockReader<'r> {
         let end = molecule::unpack_number(&slice[16..]) as usize;
         Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn finalized_custodians(&self) -> CollectedCustodianCellsOptReader<'r> {
+    pub fn finalized_custodians(&self) -> FinalizedCustodianCapacityReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
         let end = molecule::unpack_number(&slice[20..]) as usize;
-        CollectedCustodianCellsOptReader::new_unchecked(&self.as_slice()[start..end])
+        FinalizedCustodianCapacityReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn deposits(&self) -> DepositInfoVecReader<'r> {
         let slice = self.as_slice();
@@ -3408,7 +2885,7 @@ impl<'r> molecule::prelude::Reader<'r> for MemBlockReader<'r> {
         BytesReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         Byte32VecReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         Byte32VecReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        CollectedCustodianCellsOptReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
+        FinalizedCustodianCapacityReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         DepositInfoVecReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
         Byte32VecReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
         Byte32OptReader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
@@ -3423,7 +2900,7 @@ pub struct MemBlockBuilder {
     pub(crate) block_producer: Bytes,
     pub(crate) txs: Byte32Vec,
     pub(crate) withdrawals: Byte32Vec,
-    pub(crate) finalized_custodians: CollectedCustodianCellsOpt,
+    pub(crate) finalized_custodians: FinalizedCustodianCapacity,
     pub(crate) deposits: DepositInfoVec,
     pub(crate) state_checkpoints: Byte32Vec,
     pub(crate) txs_prev_state_checkpoint: Byte32Opt,
@@ -3445,7 +2922,7 @@ impl MemBlockBuilder {
         self.withdrawals = v;
         self
     }
-    pub fn finalized_custodians(mut self, v: CollectedCustodianCellsOpt) -> Self {
+    pub fn finalized_custodians(mut self, v: FinalizedCustodianCapacity) -> Self {
         self.finalized_custodians = v;
         self
     }

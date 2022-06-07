@@ -1,3 +1,5 @@
+#![allow(clippy::mutable_key_type)]
+
 use std::{sync::Arc, time::Duration};
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
@@ -7,7 +9,7 @@ use gw_mem_pool::pool::MemPool;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
-    offchain::{CellStatus, CollectedCustodianCells, DepositInfo, TxStatus},
+    offchain::{CellStatus, DepositInfo, TxStatus},
     packed::{GlobalState, NumberHash, OutPoint, Transaction, WithdrawalKey},
     prelude::*,
 };
@@ -79,11 +81,7 @@ impl ProduceSubmitConfirm {
                     .get_block_deposit_info_vec(b)
                     .expect("deposit info");
                 let deposits = deposits.into_iter().map(|d| d.cell());
-                let custodians = store_tx
-                    .get_block_collected_custodian_cells(b)
-                    .expect("custodian cells");
-                let custodians = custodians.cells_info().into_iter();
-                for c in deposits.chain(custodians) {
+                for c in deposits {
                     local_cells_manager.lock_cell(c.out_point());
                 }
             }
@@ -107,7 +105,9 @@ impl ProduceSubmitConfirm {
             local_count,
             submitted_count,
             // TODO: make this configurable.
-            local_limit: 5,
+            //
+            // Make sure that local_limit <= finality_blocks.
+            local_limit: 3,
             submitted_limit: 5,
         })
     }
@@ -207,20 +207,15 @@ async fn run(mut state: ProduceSubmitConfirm) -> Result<()> {
 
 /// Produce and save local block.
 async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
-    let local_cells_manager = ctx.local_cells_manager.lock().await;
     // TODO: check block and retry.
     let ProduceBlockResult {
         block,
         global_state,
         withdrawal_extras,
         deposit_cells,
-        finalized_custodians,
-    } = ctx
-        .block_producer
-        .produce_next_block(0, &local_cells_manager)
-        .await?;
-    // TODO: lock consumed deposit and custodian cells. Add output custodian promise.
-    drop(local_cells_manager);
+        remaining_capacity,
+    } = ctx.block_producer.produce_next_block(0).await?;
+
     let number: u64 = block.raw().number().unpack();
     let block_hash: H256 = block.hash().into();
 
@@ -258,19 +253,23 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
         block_withdrawals,
     );
 
-    // Save additional information for composing the submit tx later.
+    // Save deposit cells for composing the submit tx later.
     store_tx.set_block_deposit_info_vec(number, &deposit_cells.pack().as_reader())?;
-    store_tx
-        .set_block_collected_custodian_cells(number, &finalized_custodians.pack().as_reader())?;
+    log::info!(
+        "save capacity: block: {}, capacity: {}",
+        number,
+        remaining_capacity.capacity
+    );
+    store_tx.set_block_post_finalized_custodian_capacity(
+        number,
+        &remaining_capacity.pack().as_reader(),
+    )?;
 
     store_tx.commit()?;
     // Lock collected deposits and custodians.
     let mut local_cells_manager = ctx.local_cells_manager.lock().await;
     for d in deposit_cells {
         local_cells_manager.lock_cell(d.cell.out_point);
-    }
-    for c in finalized_custodians.cells_info {
-        local_cells_manager.lock_cell(c.out_point);
     }
     ctx.mem_pool
         .lock()
@@ -327,18 +326,12 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
         let global_state: GlobalState = snap
             .get_block_post_global_state(&block_hash)?
             .ok_or_else(|| anyhow!("failed to get block global_state"))?;
-        let finalized_custodians: CollectedCustodianCells = snap
-            .get_block_collected_custodian_cells(block_number)
-            .ok_or_else(|| anyhow!("failed to get block collected custodian cells"))?
-            .as_reader()
-            .unpack();
         drop(snap);
 
         let local_cells_manager = ctx.local_cells_manager.lock().await;
 
         let args = ComposeSubmitTxArgs {
             deposit_cells,
-            finalized_custodians,
             block,
             global_state,
             since,

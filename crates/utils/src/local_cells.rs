@@ -1,3 +1,5 @@
+#![allow(clippy::mutable_key_type)]
+
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
@@ -158,6 +160,15 @@ pub async fn collect_local_and_indexer_cells(
         }
         CollectLocalAndIndexerCursor::Ended => Ok(Vec::new()),
     }
+}
+
+pub fn collect_local_cells<'a>(
+    local_cells_manager: &'a LocalCellsManager,
+    search_key: &'a SearchKey,
+) -> impl Iterator<Item = &'a CellInfo> + 'a {
+    local_cells_manager
+        .local_live()
+        .filter(move |c| satisfy_search(search_key, *c))
 }
 
 /// Check that a cell satisfy a SearchKey, in the same way as ckb-indexer,

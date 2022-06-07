@@ -32,7 +32,7 @@ use gw_store::{
 };
 use gw_traits::CodeStore;
 use gw_types::{
-    offchain::{CellStatus, CellWithStatus, DepositInfo},
+    offchain::{CellStatus, CellWithStatus, DepositInfo, FinalizedCustodianCapacity},
     packed::{
         AccountMerkleState, BlockInfo, L2Block, L2Transaction, Script, TxReceipt,
         WithdrawalRequest, WithdrawalRequestExtra,
@@ -63,6 +63,7 @@ use crate::{
     },
     traits::MemPoolProvider,
     types::EntryList,
+    withdrawal::Generator as WithdrawalGenerator,
 };
 
 #[derive(Debug, Default)]
@@ -362,6 +363,33 @@ impl MemPool {
         Ok(())
     }
 
+    fn collect_finalized_custodian_capacity(&self) -> Result<FinalizedCustodianCapacity> {
+        let tip = self.current_tip.1;
+        if tip == 0 {
+            return Ok(Default::default());
+        }
+        let c: FinalizedCustodianCapacity = self
+            .store
+            .get_block_post_finalized_custodian_capacity(tip)
+            .ok_or_else(|| anyhow!("failed to get last block post finalized custodian capacity"))?
+            .as_reader()
+            .unpack();
+        let last_finalized = self
+            .generator
+            .rollup_context()
+            .last_finalized_block_number(tip);
+        let c1 = self
+            .provider
+            .query_block_deposit_custodians(last_finalized)?;
+        log::info!(
+            "next block: {}, last finalized: {}, capacity: {}",
+            self.current_tip.1 + 1,
+            last_finalized,
+            c.capacity + c1.capacity
+        );
+        Ok(c + c1)
+    }
+
     // Withdrawal request verification
     // TODO: duplicate withdrawal check
     #[instrument(skip_all)]
@@ -374,7 +402,12 @@ impl MemPool {
         self.generator
             .check_withdrawal_signature(state, withdrawal)?;
 
-        // TODO: verify remaining amount.
+        let finalized_custodian_capacity = self.collect_finalized_custodian_capacity()?;
+        let withdrawal_generator = WithdrawalGenerator::new(
+            self.generator.rollup_context(),
+            (&finalized_custodian_capacity).into(),
+        );
+        withdrawal_generator.verify_remained_amount(&withdrawal.request())?;
 
         // withdrawal basic verification
         let db = self.store.begin_transaction();
@@ -658,7 +691,7 @@ impl MemPool {
                 }
             }
 
-            self.prepare_next_mem_block(&db, &mut mem_state, withdrawals, txs, local_cells_manager)
+            self.prepare_next_mem_block(&db, &mut mem_state, withdrawals, txs)
                 .await?;
         }
 
@@ -725,7 +758,6 @@ impl MemPool {
         state: &mut MemStateTree<'_>,
         withdrawals: Vec<WithdrawalRequestExtra>,
         txs: Vec<L2Transaction>,
-        local_cells_manager: &LocalCellsManager,
     ) -> Result<()> {
         // check order of inputs
         {
@@ -747,7 +779,7 @@ impl MemPool {
         }
         // Handle state before txs
         // withdrawal
-        self.finalize_withdrawals(state, withdrawals.clone(), local_cells_manager)
+        self.finalize_withdrawals(state, withdrawals.clone())
             .await?;
         // deposits
         let deposit_cells = self.pending_deposits.clone();
@@ -922,32 +954,16 @@ impl MemPool {
         &mut self,
         state: &mut MemStateTree<'_>,
         withdrawals: Vec<WithdrawalRequestExtra>,
-        local_cells_manager: &LocalCellsManager,
     ) -> Result<()> {
         // check mem block state
         assert!(self.mem_block.withdrawals().is_empty());
         assert!(self.mem_block.state_checkpoints().is_empty());
         assert!(self.mem_block.deposits().is_empty());
-        assert!(self.mem_block.finalized_custodians().is_none());
+        assert!(self.mem_block.finalized_custodians().is_empty());
         assert!(self.mem_block.txs().is_empty());
 
         let max_withdrawal_capacity = std::u128::MAX;
-        let finalized_custodians = {
-            // query withdrawals from ckb-indexer
-            let last_finalized_block_number = self
-                .generator
-                .rollup_context()
-                .last_finalized_block_number(self.current_tip.1);
-            self.provider
-                .query_available_custodians(
-                    withdrawals.iter().map(|w| w.request()).collect(),
-                    last_finalized_block_number,
-                    self.generator.rollup_context().to_owned(),
-                    local_cells_manager,
-                )
-                .await?
-        };
-
+        let finalized_custodians = self.collect_finalized_custodian_capacity()?;
         let available_custodians = AvailableCustodians::from(&finalized_custodians);
         let asset_scripts: HashMap<H256, Script> = {
             let sudt_value = available_custodians.sudt.values();
@@ -1035,7 +1051,7 @@ impl MemPool {
         }
         state.submit_tree_to_mem_block();
         self.mem_block
-            .set_finalized_custodians(finalized_custodians);
+            .set_finalized_custodian_capacity(finalized_custodians);
 
         // remove unused withdrawals
         log::info!(
@@ -1197,9 +1213,7 @@ impl MemPool {
         let withdrawals = withdrawals.into_iter().map(Into::into).collect();
         let mem_store = self.mem_pool_state().load();
         let mut state = mem_store.state()?;
-        // TODO: this may be problematic.
-        self.finalize_withdrawals(&mut state, withdrawals, &LocalCellsManager::default())
-            .await?;
+        self.finalize_withdrawals(&mut state, withdrawals).await?;
         self.finalize_deposits(&mut state, deposits).await?;
 
         db.commit()?;
@@ -1290,7 +1304,7 @@ mod test {
     use gw_common::merkle_utils::calculate_state_checkpoint;
     use gw_common::registry_address::RegistryAddress;
     use gw_common::H256;
-    use gw_types::offchain::{CollectedCustodianCells, DepositInfo};
+    use gw_types::offchain::{DepositInfo, FinalizedCustodianCapacity};
     use gw_types::packed::{AccountMerkleState, BlockInfo, DepositRequest};
     use gw_types::prelude::{Builder, Entity, Pack, Unpack};
 
@@ -1329,10 +1343,7 @@ mod test {
             (0..deposits_count).map(|_| vec![random_hash()]).collect();
         let deposits_state: Vec<_> = { (0..deposits_count).map(|_| random_state()) }.collect();
 
-        let finalized_custodians = CollectedCustodianCells {
-            capacity: rand::random::<u128>(),
-            ..Default::default()
-        };
+        let finalized_custodians = FinalizedCustodianCapacity::default();
 
         // Random txs
         let txs_count = 500;
@@ -1348,7 +1359,7 @@ mod test {
             {
                 mem_block.push_withdrawal(hash, state, touched_keys.into_iter());
             }
-            mem_block.set_finalized_custodians(finalized_custodians.clone());
+            mem_block.set_finalized_custodian_capacity(finalized_custodians.clone());
 
             let txs_prev_state_checkpoint = {
                 let state = deposits_state.last().unwrap();
@@ -1416,7 +1427,7 @@ mod test {
                 post_states.push(state);
             }
 
-            expected.set_finalized_custodians(finalized_custodians.clone());
+            expected.set_finalized_custodian_capacity(finalized_custodians.clone());
 
             (expected, post_states.last().unwrap().to_owned())
         };
