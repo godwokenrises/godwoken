@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use anyhow::anyhow;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
@@ -8,11 +7,9 @@ use gw_common::{
     state::State,
     H256,
 };
-use gw_rpc_server::polyjuice_tx::{
-    error::PolyjuiceTxSenderRecoverError, eth_context::MIN_RECOVER_CKB_BALANCE,
-};
+use gw_rpc_server::polyjuice_tx::eth_context::MIN_RECOVER_CKB_BALANCE;
 use gw_types::{
-    packed::{RawL2Transaction, Script},
+    packed::{Fee, RawL2Transaction, SUDTArgs, SUDTTransfer, Script},
     prelude::Pack,
     U256,
 };
@@ -54,7 +51,11 @@ async fn test_polyjuice_erc20_tx() {
         .build();
 
     let deploy_tx = creator_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
-    let deploy_tx_hash = rpc_server.submit_l2transaction(&deploy_tx).await.unwrap();
+    let deploy_tx_hash = rpc_server
+        .submit_l2transaction(&deploy_tx)
+        .await
+        .unwrap()
+        .unwrap();
     wait_tx_committed(&chain, &deploy_tx_hash, Duration::from_secs(30))
         .await
         .unwrap();
@@ -76,7 +77,11 @@ async fn test_polyjuice_erc20_tx() {
         .build();
 
     let transfer_tx = creator_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
-    let transfer_tx_hash = rpc_server.submit_l2transaction(&transfer_tx).await.unwrap();
+    let transfer_tx_hash = rpc_server
+        .submit_l2transaction(&transfer_tx)
+        .await
+        .unwrap()
+        .unwrap();
     wait_tx_committed(&chain, &transfer_tx_hash, Duration::from_secs(30))
         .await
         .unwrap();
@@ -127,8 +132,13 @@ async fn test_polyjuice_tx_from_id_zero() {
 
     let mem_block_txs_count = chain.mem_pool().await.mem_block().txs().len();
 
+    let deploy_tx_hash = {
+        let id = state.get_account_count().unwrap();
+        let raw = raw_tx.clone().as_builder().from_id(id.pack()).build();
+        raw.hash().into()
+    };
     let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
-    let deploy_tx_hash = rpc_server.submit_l2transaction(&deploy_tx).await.unwrap();
+    rpc_server.submit_l2transaction(&deploy_tx).await.unwrap();
     wait_tx_committed(&chain, &deploy_tx_hash, Duration::from_secs(30))
         .await
         .unwrap();
@@ -169,7 +179,7 @@ async fn test_polyjuice_tx_from_id_zero() {
 
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
     let balance: U256 = 1000000u128.into();
-    test_wallet.create_account(&mut state, balance).unwrap();
+    let expected_id = test_wallet.create_account(&mut state, balance).unwrap();
     state.submit_tree_to_mem_block();
 
     let mem_block_txs_count = chain.mem_pool().await.mem_block().txs().len();
@@ -183,8 +193,13 @@ async fn test_polyjuice_tx_from_id_zero() {
         .args(deploy_args.pack())
         .build();
 
+    let deploy_tx_hash = {
+        let id = expected_id;
+        let raw = raw_tx.clone().as_builder().from_id(id.pack()).build();
+        raw.hash().into()
+    };
     let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
-    let deploy_tx_hash = rpc_server.submit_l2transaction(&deploy_tx).await.unwrap();
+    rpc_server.submit_l2transaction(&deploy_tx).await.unwrap();
     wait_tx_committed(&chain, &deploy_tx_hash, Duration::from_secs(30))
         .await
         .unwrap();
@@ -230,10 +245,12 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
 
     let polyjuice_account = PolyjuiceAccount::create(chain.rollup_type_hash(), &mut state).unwrap();
     let deployer_wallet = EthWallet::random(chain.rollup_type_hash());
-    deployer_wallet
+    let deployer_id = deployer_wallet
         .create_account(&mut state, 1000000u128.into())
         .unwrap();
     state.submit_tree_to_mem_block();
+
+    let expected_txs_count = chain.mem_pool().await.mem_block().txs().len();
 
     // No creator wallet setup
     let rpc_server_no_creator = RPCServer::build(&chain, None).await.unwrap();
@@ -255,8 +272,8 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .unwrap_err();
     eprintln!("err {}", err);
 
-    let expected_err = PolyjuiceTxSenderRecoverError::Internal(anyhow!("no account creator"));
-    assert!(err.to_string().contains(&expected_err.to_string()));
+    let expected_err = "tx from zero is disabled";
+    assert!(err.to_string().contains(&expected_err));
 
     // Mismatch chain id
     let bad_chain_id_raw_tx = raw_tx
@@ -267,56 +284,60 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     let bad_chain_id_deploy_tx = deployer_wallet
         .sign_polyjuice_tx(&state, bad_chain_id_raw_tx)
         .unwrap();
-    let err = rpc_server
+    rpc_server
         .submit_l2transaction(&bad_chain_id_deploy_tx)
         .await
-        .unwrap_err();
-    eprintln!("err {}", err);
-
-    let expected_err = PolyjuiceTxSenderRecoverError::ChainId;
-    assert!(err.to_string().contains(&expected_err.to_string()));
+        .unwrap();
 
     // To script not found
     let bad_to_id_deploy_tx = {
         let raw_tx = deploy_tx.raw().as_builder().to_id(99999u32.pack()).build();
         deploy_tx.clone().as_builder().raw(raw_tx).build()
     };
-    let err = rpc_server
+    rpc_server
         .submit_l2transaction(&bad_to_id_deploy_tx)
         .await
-        .unwrap_err();
-    eprintln!("err {}", err);
-
-    let expected_err = PolyjuiceTxSenderRecoverError::ToScriptNotFound;
-    assert!(err.to_string().contains(&expected_err.to_string()));
+        .unwrap();
 
     // Not polyjuice tx
+    let test_wallet = EthWallet::random(chain.rollup_type_hash());
     let bad_to_id_deploy_tx = {
-        let raw_tx = deploy_tx.raw().as_builder().to_id(1u32.pack()).build();
+        let sudt_transfer = SUDTTransfer::new_builder()
+            .to_address(test_wallet.reg_address().to_bytes().pack())
+            .amount(U256::one().pack())
+            .fee(
+                Fee::new_builder()
+                    .registry_id(ETH_REGISTRY_ACCOUNT_ID.pack())
+                    .amount(1u128.pack())
+                    .build(),
+            )
+            .build();
+        let sudt_args = SUDTArgs::new_builder().set(sudt_transfer).build();
+
+        let raw_tx = RawL2Transaction::new_builder()
+            .from_id(0u32.pack())
+            .to_id(1u32.pack())
+            .nonce(0u32.pack())
+            .args(sudt_args.as_bytes().pack())
+            .build();
+
         deploy_tx.clone().as_builder().raw(raw_tx).build()
     };
-    let err = rpc_server
+    rpc_server
         .submit_l2transaction(&bad_to_id_deploy_tx)
         .await
-        .unwrap_err();
-    eprintln!("err {}", err);
-
-    let expected_err = PolyjuiceTxSenderRecoverError::NotPolyjuiceTx;
-    assert!(err.to_string().contains(&expected_err.to_string()));
+        .unwrap();
 
     // Invalid signature
     let bad_sig_deploy_tx = deploy_tx
+        .clone()
         .as_builder()
         .signature(b"bad signature".pack())
         .build();
-    let err = rpc_server
+    rpc_server
         .submit_l2transaction(&bad_sig_deploy_tx)
         .await
-        .unwrap_err();
-    eprintln!("err {}", err);
-
-    let expected_err = PolyjuiceTxSenderRecoverError::InvalidSignature(anyhow!(""));
-    assert!(err.to_string().contains(&expected_err.to_string()));
+        .unwrap();
 
     // Insufficient balance
     let snap = mem_pool_state.load();
@@ -327,24 +348,19 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     test_wallet.mint_ckb_sudt(&mut state, balance).unwrap();
     state.submit_tree_to_mem_block();
 
-    let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
-    let err = rpc_server
-        .submit_l2transaction(&deploy_tx)
+    let insufficient_balance_deploy_tx = test_wallet
+        .sign_polyjuice_tx(&state, raw_tx.clone())
+        .unwrap();
+    rpc_server
+        .submit_l2transaction(&insufficient_balance_deploy_tx)
         .await
-        .unwrap_err();
-    eprintln!("err {}", err);
-
-    let expected_err = PolyjuiceTxSenderRecoverError::InsufficientCkbBalance {
-        registry_address: test_wallet.reg_address().to_owned(),
-        expect: MIN_RECOVER_CKB_BALANCE.into(),
-        got: balance,
-    };
-    assert!(err.to_string().contains(&expected_err.to_string()));
+        .unwrap();
 
     // Registered to different script
     let snap = mem_pool_state.load();
     let mut state = snap.state().unwrap();
 
+    let test_wallet = EthWallet::random(chain.rollup_type_hash());
     let balance: U256 = 9999999u128.into();
     test_wallet.mint_ckb_sudt(&mut state, balance).unwrap();
     state
@@ -352,17 +368,11 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .unwrap();
     state.submit_tree_to_mem_block();
 
-    let err = rpc_server
-        .submit_l2transaction(&deploy_tx)
+    let different_script_deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
+    rpc_server
+        .submit_l2transaction(&different_script_deploy_tx)
         .await
-        .unwrap_err();
-    eprintln!("err {}", err);
-
-    let expected_err = PolyjuiceTxSenderRecoverError::DifferentScript {
-        registry_address: test_wallet.reg_address().to_owned(),
-        script_hash: H256::one(),
-    };
-    assert!(err.to_string().contains(&expected_err.to_string()));
+        .unwrap();
 
     // Account has tx history (nonce isn't zero)
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
@@ -381,12 +391,34 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .args(deploy_args.pack())
         .build();
 
-    let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
+    let bad_deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
     let err = rpc_server
-        .submit_l2transaction(&deploy_tx)
+        .submit_l2transaction(&bad_deploy_tx)
         .await
         .unwrap_err();
     eprintln!("err {}", err);
 
     assert!(err.to_string().contains("invalid nonce"));
+
+    // Use valid tx to check fee queue
+    let deploy_tx = {
+        let id = deployer_id;
+        let raw = deploy_tx.raw().as_builder().from_id(id.pack()).build();
+        deploy_tx.as_builder().raw(raw).build()
+    };
+    let tx_hash = rpc_server
+        .submit_l2transaction(&deploy_tx)
+        .await
+        .unwrap()
+        .unwrap();
+    wait_tx_committed(&chain, &tx_hash, Duration::from_secs(30))
+        .await
+        .unwrap();
+
+    let txs_count = chain.mem_pool().await.mem_block().txs().len();
+    assert_eq!(
+        expected_txs_count + 1,
+        txs_count,
+        "unrecoverable txs should not be committed"
+    );
 }

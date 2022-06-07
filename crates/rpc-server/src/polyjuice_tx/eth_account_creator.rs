@@ -46,9 +46,8 @@ impl EthAccountCreator {
     pub fn build_batch_create_tx<'a>(
         &self,
         state: &impl State,
-        eoa_scripts: impl IntoIterator<Item = EthEOAScript>,
+        eoa_scripts: Vec<EthEOAScript>,
     ) -> Result<L2Transaction> {
-        let eoa_scripts = eoa_scripts.into_iter().collect();
         let creator_account_id = state
             .get_account_id_by_script_hash(&self.creator_script_hash)?
             .ok_or_else(|| anyhow!("[tx from zero] creator account id not found"))?;

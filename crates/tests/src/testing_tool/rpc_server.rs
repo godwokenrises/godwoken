@@ -102,7 +102,7 @@ impl RPCServer {
         Self::build_from_registry_args(registry_args).await
     }
 
-    pub async fn submit_l2transaction(&self, tx: &L2Transaction) -> Result<H256> {
+    pub async fn submit_l2transaction(&self, tx: &L2Transaction) -> Result<Option<H256>> {
         let params = {
             let bytes = JsonBytes::from_bytes(tx.as_bytes());
             serde_json::to_value(&(bytes,))?
@@ -114,8 +114,8 @@ impl RPCServer {
             .with_params(params)
             .finish();
 
-        let tx_hash: Byte32 = self.handle_single_request(req).await?;
-        Ok(tx_hash.0.into())
+        let tx_hash: Option<Byte32> = self.handle_single_request(req).await?;
+        Ok(tx_hash.map(|h| h.0.into()))
     }
 
     pub async fn execute_l2transaction(&self, tx: &L2Transaction) -> Result<RunResult> {

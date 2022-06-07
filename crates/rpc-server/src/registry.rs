@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
+use gw_common::blake2b::new_blake2b;
 use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
 use gw_common::{state::State, H256};
 use gw_config::{
@@ -45,6 +46,7 @@ use gw_traits::CodeStore;
 use gw_types::offchain::RollupContext;
 use gw_types::packed::RawL2Transaction;
 use gw_types::{
+    bytes::Bytes,
     packed::{self, BlockInfo, Byte32, L2Transaction, RollupConfig, WithdrawalRequestExtra},
     prelude::*,
     U256,
@@ -149,7 +151,6 @@ pub struct SubmitTransactionContext {
     rate_limiter: Option<SendTransactionRateLimiter>,
     rate_limit_config: Option<RPCRateLimit>,
     polyjuice_tx_ctx: Arc<PolyjuiceTxContext>,
-    mem_pool: MemPool,
 }
 
 pub struct RegistryArgs<T> {
@@ -233,6 +234,7 @@ impl Registry {
             None
         };
         let (submit_tx, submit_rx) = mpsc::channel(RequestSubmitter::MAX_CHANNEL_SIZE);
+        let polyjuice_tx_ctx = Arc::new(polyjuice_tx_ctx);
         if let Some(mem_pool) = mem_pool.as_ref().to_owned() {
             let submitter = RequestSubmitter {
                 mem_pool: Arc::clone(mem_pool),
@@ -242,6 +244,7 @@ impl Registry {
                 generator: generator.clone(),
                 mem_pool_state: mem_pool_state.clone(),
                 store: store.clone(),
+                polyjuice_tx_ctx: Arc::clone(&polyjuice_tx_ctx),
             };
             tokio::spawn(submitter.in_background());
         }
@@ -266,7 +269,7 @@ impl Registry {
             last_submitted_tx_hash,
             mem_pool_state,
             in_queue_request_map,
-            polyjuice_tx_ctx: Arc::new(polyjuice_tx_ctx),
+            polyjuice_tx_ctx,
         }
     }
 
@@ -292,7 +295,6 @@ impl Registry {
                 rate_limiter: send_transaction_rate_limiter,
                 rate_limit_config: self.send_tx_rate_limit,
                 polyjuice_tx_ctx: self.polyjuice_tx_ctx.clone(),
-                mem_pool: self.mem_pool.clone(),
             }))
             .with_data(Data::new(self.mem_pool.clone()))
             .with_data(Data(self.generator.clone()))
@@ -418,6 +420,7 @@ struct RequestSubmitter {
     generator: Arc<Generator>,
     mem_pool_state: Arc<MemPoolState>,
     store: Store,
+    polyjuice_tx_ctx: Arc<PolyjuiceTxContext>,
 }
 
 #[instrument(skip_all, fields(req_kind = req.kind()))]
@@ -576,6 +579,16 @@ impl RequestSubmitter {
             };
 
             if !items.is_empty() {
+                // recover accounts for polyjuice tx from id zero
+                let eth_ctx = &self.polyjuice_tx_ctx.eth;
+                let txs_from_zero = items
+                    .iter()
+                    .filter_map(|(entry, _handle)| match entry.item {
+                        FeeItem::Tx(ref tx) if 0 == entry.sender => Some(tx),
+                        _ => None,
+                    });
+                let recovered_senders = eth_ctx.recover_sender_accounts(txs_from_zero, &state);
+
                 log::debug!("[Mem-pool background job] acquire mem_pool",);
                 let t = Instant::now();
                 let mut mem_pool = self.mem_pool.lock().await;
@@ -583,11 +596,39 @@ impl RequestSubmitter {
                     "[Mem-pool background job] unlock mem_pool {}ms",
                     t.elapsed().as_millis()
                 );
+
+                if let Err(err) = match recovered_senders.build_create_tx(eth_ctx, &state) {
+                    Ok(Some(create_accounts_tx)) => {
+                        mem_pool.push_transaction(create_accounts_tx).await
+                    }
+                    Ok(None) => Ok(()),
+                    Err(err) => Err(err),
+                } {
+                    log::info!("[tx from zero] create account {}", err);
+                }
+
+                let snap = self.mem_pool_state.load();
+                let state = snap.state().expect("get mem state");
+
                 // Note: don't change `_handle` to `_`. The request should be
                 // removed from the in queue request map after pushed to mem
                 // pool.
                 for (entry, _handle) in items {
                     let maybe_ok = match entry.item.clone() {
+                        FeeItem::Tx(tx) if 0 == entry.sender => {
+                            let sig: Bytes = tx.signature().unpack();
+                            let sender_id = match recovered_senders.get_account_id(&sig, &state) {
+                                Ok(id) => id,
+                                Err(err) => {
+                                    log::info!("[from tx zero] {:x} {}", tx.hash().pack(), err);
+                                    continue;
+                                }
+                            };
+
+                            let raw_tx = tx.raw().as_builder().from_id(sender_id.pack()).build();
+                            let tx = tx.as_builder().raw(raw_tx).build();
+                            mem_pool.push_transaction(tx).await
+                        }
                         FeeItem::Tx(tx) => mem_pool.push_transaction(tx).await,
                         FeeItem::Withdrawal(withdrawal) => {
                             mem_pool.push_withdrawal_request(withdrawal).await
@@ -1081,14 +1122,25 @@ async fn submit_l2transaction(
     rate_limit_config: Data<Option<RPCRateLimit>>,
     mem_pool_state: Data<Arc<MemPoolState>>,
     ctx: Data<SubmitTransactionContext>,
-) -> Result<JsonH256, RpcError> {
-    let mem_pool = match ctx.mem_pool.as_ref() {
-        Some(mem_pool) => Arc::clone(mem_pool),
-        None => return Err(mem_pool_is_disabled_err()),
-    };
-
+) -> Result<Option<JsonH256>, RpcError> {
     let l2tx_bytes = l2tx.into_bytes();
-    let mut tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
+    let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
+    let tx_hash: H256 = tx.hash().into();
+
+    let sender_id: u32 = tx.raw().from_id().unpack();
+    if 0 == sender_id && ctx.polyjuice_tx_ctx.eth.opt_account_creator.is_none() {
+        return Err(RpcError::Provided {
+            code: METHOD_NOT_AVAILABLE_ERR_CODE,
+            message: "tx from zero is disabled",
+        });
+    }
+
+    // Return None for tx from zero because its from id will be updated after account creation.
+    let tx_hash_json = if 0 == sender_id {
+        None
+    } else {
+        Some(to_jsonh256(tx.hash().into()))
+    };
 
     // check rate limit
     if let Some(rate_limiter) = ctx.rate_limiter.as_ref() {
@@ -1114,8 +1166,6 @@ async fn submit_l2transaction(
         let snap = ctx.mem_pool_state.load();
         let tree = snap.state()?;
 
-        // sender_id
-        let sender_id = tx.raw().from_id().unpack();
         let tx_nonce: u32 = tx.raw().nonce().unpack();
         let sender_nonce: u32 = if 0 == sender_id {
             0
@@ -1141,14 +1191,6 @@ async fn submit_l2transaction(
         }
     }
 
-    // Create account if not exists
-    let eth_ctx = &ctx.polyjuice_tx_ctx.eth;
-    let tx = eth_ctx
-        .create_sender_account_if_not_exists(tx, &ctx.mem_pool_state, mem_pool)
-        .await?;
-    let tx_hash = tx.hash().into();
-    let tx_hash_json = to_jsonh256(tx_hash);
-
     let permit = submit_tx.try_reserve().map_err(|err| match err {
         mpsc::error::TrySendError::Closed(_) => RpcError::Provided {
             code: INTERNAL_ERROR_ERR_CODE,
@@ -1160,12 +1202,22 @@ async fn submit_l2transaction(
         },
     })?;
 
+    let tx_hash_in_queue = match tx_hash_json {
+        Some(_) => tx_hash,
+        None => {
+            let mut hasher = new_blake2b();
+            hasher.update(tx.signature().as_slice());
+            let mut hash = [0u8; 32];
+            hasher.finalize(&mut hash);
+            H256::from(hash)
+        }
+    };
     let request = Request::Tx(tx);
     // Use permit to insert before send so that remove won't happen before insert.
     if let Some(handle) = in_queue_request_map
         .as_ref()
         .expect("in_queue_request_map")
-        .insert(tx_hash, request.clone())
+        .insert(tx_hash_in_queue, request.clone())
     {
         // Send if the request wasn't already in the map.
         permit.send((handle, request));

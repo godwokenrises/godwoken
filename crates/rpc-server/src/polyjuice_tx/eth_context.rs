@@ -1,11 +1,10 @@
-use std::{sync::Arc, time::Instant};
+use std::collections::HashMap;
 
 use anyhow::{anyhow, bail, Result};
 use gw_common::{registry_address::RegistryAddress, state::State, H256};
-use gw_mem_pool::pool::MemPool;
-use gw_store::mem_pool_state::MemPoolState;
 use gw_traits::CodeStore;
 use gw_types::{
+    bytes::Bytes,
     core::{AllowedContractType, AllowedEoaType, ScriptHashType},
     offchain::RollupContext,
     packed::{L2Transaction, RawL2Transaction, Script},
@@ -13,7 +12,6 @@ use gw_types::{
     U256,
 };
 use gw_utils::wallet::Wallet;
-use tokio::sync::Mutex;
 use tracing::instrument;
 
 use crate::mem_execute_tx_state::MemExecuteTxStateTree;
@@ -57,6 +55,53 @@ impl EthAccountContext {
             .hash_type(ScriptHashType::Type.into())
             .args(args.pack())
             .build()
+    }
+}
+
+pub struct RecoveredSenders {
+    sig_senders: HashMap<Bytes, PolyjuiceTxEthSender>,
+}
+
+impl RecoveredSenders {
+    pub fn build_create_tx(
+        &self,
+        ctx: &EthContext,
+        state: &(impl State + CodeStore),
+    ) -> Result<Option<L2Transaction>> {
+        let account_creator = match ctx.opt_account_creator {
+            Some(ref creator) => creator,
+            None => bail!("no account creator"),
+        };
+
+        let filter_new_accounts = self.sig_senders.values().filter_map(|sender| match sender {
+            PolyjuiceTxEthSender::New { account_script, .. } => Some(account_script.to_owned()),
+            _ => None,
+        });
+
+        let new_account_scripts = filter_new_accounts.collect::<Vec<_>>();
+        if new_account_scripts.is_empty() {
+            return Ok(None);
+        }
+
+        log::info!(
+            "[tx from zero] create accounts {}",
+            new_account_scripts.len()
+        );
+
+        let tx = account_creator.build_batch_create_tx(state, new_account_scripts)?;
+        Ok(Some(tx))
+    }
+
+    pub fn get_account_id(&self, sig: &Bytes, state: &impl State) -> Result<u32> {
+        let account_script_hash = match self.sig_senders.get(sig) {
+            Some(PolyjuiceTxEthSender::Exist { account_id, .. }) => return Ok(*account_id),
+            Some(PolyjuiceTxEthSender::New { account_script, .. }) => account_script.hash().into(),
+            None => bail!("no sender recovered"),
+        };
+
+        state
+            .get_account_id_by_script_hash(&account_script_hash)?
+            .ok_or_else(|| anyhow!("account id not found"))
     }
 }
 
@@ -118,84 +163,29 @@ impl EthContext {
     }
 
     #[instrument(skip_all)]
-    pub async fn create_sender_account_if_not_exists(
+    pub fn recover_sender_accounts<'a>(
         &self,
-        tx: L2Transaction,
-        snap: &MemPoolState,
-        mem_pool: Arc<Mutex<MemPool>>,
-    ) -> Result<L2Transaction, PolyjuiceTxSenderRecoverError> {
-        let sender_id: u32 = tx.raw().from_id().unpack();
-        if 0 != sender_id {
-            return Ok(tx);
-        }
-
-        let account_creator = match self.opt_account_creator {
-            Some(ref creator) => creator,
-            None => {
-                return Err(PolyjuiceTxSenderRecoverError::Internal(anyhow!(
-                    "no account creator"
-                )))
+        txs_from_zero: impl Iterator<Item = &'a L2Transaction>,
+        state: &(impl State + CodeStore),
+    ) -> RecoveredSenders {
+        let sig_senders = txs_from_zero.filter_map(|tx| {
+            let sender_id: u32 = tx.raw().from_id().unpack();
+            if 0 != sender_id {
+                return None;
             }
-        };
 
-        let snap = snap.load();
-        let state = snap.state()?;
-
-        let tx_hash = tx.hash().pack();
-        let account_id = match self.recover_sender(&state, &tx, MIN_RECOVER_CKB_BALANCE.into())? {
-            PolyjuiceTxEthSender::Exist { account_id, .. } => account_id,
-            PolyjuiceTxEthSender::New {
-                registry_address,
-                account_script,
-            } => {
-                let account_script_hash: H256 = account_script.hash().into();
-
-                // Create account
-                let create_tx =
-                    account_creator.build_batch_create_tx(&state, vec![account_script])?;
-                let create_tx_hash = create_tx.hash().pack();
-
-                log::info!(
-                    "[tx from zero] create eth account {:x} for tx {:x}",
-                    registry_address.address.pack(),
-                    tx_hash
-                );
-
-                {
-                    log::debug!("[tx from zero] acquire mem_pool");
-                    let t = Instant::now();
-                    let mut mem_pool = mem_pool.lock().await;
-                    log::debug!(
-                        "[tx from zero] unlock mem_pool {}ms",
-                        t.elapsed().as_millis()
-                    );
-
-                    mem_pool.push_transaction(create_tx).await?;
+            match self.recover_sender(state, tx, MIN_RECOVER_CKB_BALANCE.into()) {
+                Ok(sender) => Some((tx.signature().unpack(), sender)),
+                Err(err) => {
+                    log::info!("[tx from zero] recover {:x} {}", tx.hash().pack(), err);
+                    None
                 }
-
-                state
-                    .get_account_id_by_script_hash(&account_script_hash)?
-                    .ok_or_else(|| {
-                        anyhow!(
-                            "create tx {:x} for {:x} failed",
-                            create_tx_hash,
-                            registry_address.address.pack()
-                        )
-                    })?
             }
-        };
+        });
 
-        let raw_tx = tx.raw().as_builder().from_id(account_id.pack()).build();
-        let tx = tx.as_builder().raw(raw_tx).build();
-
-        log::debug!(
-            "[tx from zero] change tx {:x} sender to {} hash {:x}",
-            tx_hash,
-            account_id,
-            tx.hash().pack()
-        );
-
-        Ok(tx)
+        RecoveredSenders {
+            sig_senders: sig_senders.collect(),
+        }
     }
 
     pub fn mock_sender_if_not_exists<S: State + CodeStore>(
