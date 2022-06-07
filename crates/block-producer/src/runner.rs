@@ -51,13 +51,7 @@ use gw_types::{
 };
 use gw_utils::{
     exponential_backoff::ExponentialBackoff, genesis_info::CKBGenesisInfo,
-    since::EpochNumberWithFraction, wallet::Wallet, local_cells::LocalCellsManager
-};
-use gw_web3_indexer::Web3Indexer;
-use semver::Version;
-use sqlx::{
-    postgres::{PgConnectOptions, PgPoolOptions},
-    ConnectOptions,
+    local_cells::LocalCellsManager, since::EpochNumberWithFraction, wallet::Wallet,
 };
 use semver::Version;
 use std::{

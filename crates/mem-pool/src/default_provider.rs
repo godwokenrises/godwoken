@@ -15,7 +15,7 @@ use tracing::instrument;
 
 use crate::{
     constants::{MIN_CKB_DEPOSIT_CAPACITY, MIN_SUDT_DEPOSIT_CAPACITY},
-    custodian::query_finalized_custodians,
+    custodian::query_block_deposit_custodians,
     traits::MemPoolProvider,
 };
 
