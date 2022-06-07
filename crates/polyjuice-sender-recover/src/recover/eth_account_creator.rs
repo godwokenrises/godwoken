@@ -12,7 +12,7 @@ use gw_types::prelude::{Builder, Entity, Pack};
 use gw_utils::wallet::Wallet;
 use tracing::instrument;
 
-use super::eth_context::EthAccountContext;
+use super::eth_recover::EthAccountContext;
 use super::eth_sender::EthEOAScript;
 
 const META_CONTRACT_ACCOUNT_ID: u32 = RESERVED_ACCOUNT_ID;

@@ -24,6 +24,7 @@ gw-rpc-client = { path = "../rpc-client" }
 gw-ckb-hardfork = { path = "../ckb-hardfork" }
 gw-dynamic-config = { path = "../dynamic-config"}
 gw-eoa-mapping = { path = "../eoa-mapping" }
+gw-polyjuice-sender-recover = { path = "../polyjuice-sender-recover" }
 anyhow = "1.0"
 blake2b-rs = "0.2"
 ckb-vm = { version = "=0.20.0-rc5", features = ["detect-asm"] }

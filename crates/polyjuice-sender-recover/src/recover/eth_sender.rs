@@ -15,7 +15,7 @@ use gw_types::{
 };
 use tracing::instrument;
 
-use super::{error::PolyjuiceTxSenderRecoverError, eth_context::EthAccountContext};
+use super::{error::PolyjuiceTxSenderRecoverError, eth_recover::EthAccountContext};
 
 pub type EthEOAScript = Script;
 

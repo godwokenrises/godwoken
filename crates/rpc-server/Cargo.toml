@@ -20,6 +20,7 @@ gw-mem-pool = { path = "../mem-pool" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-version = { path = "../version" }
 gw-utils = { path = "../utils" }
+gw-polyjuice-sender-recover = { path = "../polyjuice-sender-recover" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-dynamic-config = { path = "../dynamic-config"}
 faster-hex = "0.4"
@@ -44,4 +45,3 @@ jemalloc-ctl = { package = "tikv-jemalloc-ctl", version = "0.4.2" }
 jemalloc-sys = { package = "tikv-jemalloc-sys", version = "0.4.2" }
 errno = "*"
 tracing = { version = "0.1", features = ["attributes"] }
-thiserror = "1.0"

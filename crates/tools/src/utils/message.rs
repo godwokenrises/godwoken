@@ -46,7 +46,7 @@ pub fn generate_eip712_message_to_sign(
 ) -> H256 {
     let chain_id = raw_l2transaction.chain_id().unpack();
     let typed_tx = eip712::types::L2Transaction::from_raw(
-        raw_l2transaction,
+        &raw_l2transaction,
         sender_address,
         receiver_script_hash,
     )

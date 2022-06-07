@@ -34,6 +34,9 @@ use gw_mem_pool::{
         types::{FeeEntry, FeeItem},
     },
 };
+use gw_polyjuice_sender_recover::{
+    mem_execute_tx_state::MemExecuteTxStateTree, recover::PolyjuiceSenderRecover,
+};
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{
     chain_view::ChainView,
@@ -65,7 +68,6 @@ use tokio::sync::{mpsc, Mutex};
 use tracing::instrument;
 
 use crate::in_queue_request_map::{InQueueRequestHandle, InQueueRequestMap};
-use crate::{mem_execute_tx_state::MemExecuteTxStateTree, polyjuice_tx::PolyjuiceTxContext};
 
 static PROFILER_GUARD: Lazy<tokio::sync::Mutex<Option<ProfilerGuard>>> =
     Lazy::new(|| tokio::sync::Mutex::new(None));
@@ -142,7 +144,7 @@ pub struct ExecutionTransactionContext {
     generator: Arc<Generator>,
     store: Store,
     mem_pool_state: Arc<MemPoolState>,
-    polyjuice_tx_ctx: Arc<PolyjuiceTxContext>,
+    polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
 }
 
 pub struct SubmitTransactionContext {
@@ -150,7 +152,7 @@ pub struct SubmitTransactionContext {
     mem_pool_state: Arc<MemPoolState>,
     rate_limiter: Option<SendTransactionRateLimiter>,
     rate_limit_config: Option<RPCRateLimit>,
-    polyjuice_tx_ctx: Arc<PolyjuiceTxContext>,
+    polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
 }
 
 pub struct RegistryArgs<T> {
@@ -168,7 +170,7 @@ pub struct RegistryArgs<T> {
     pub consensus_config: ConsensusConfig,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     pub last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
-    pub polyjuice_tx_ctx: PolyjuiceTxContext,
+    pub polyjuice_sender_recover: PolyjuiceSenderRecover,
 }
 
 pub struct Registry {
@@ -190,7 +192,7 @@ pub struct Registry {
     last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
     mem_pool_state: Arc<MemPoolState>,
     in_queue_request_map: Option<Arc<InQueueRequestMap>>,
-    polyjuice_tx_ctx: Arc<PolyjuiceTxContext>,
+    polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
 }
 
 impl Registry {
@@ -213,7 +215,7 @@ impl Registry {
             consensus_config,
             dynamic_config_manager,
             last_submitted_tx_hash,
-            polyjuice_tx_ctx,
+            polyjuice_sender_recover,
         } = args;
 
         let backend_info = get_backend_info(generator.clone());
@@ -234,7 +236,7 @@ impl Registry {
             None
         };
         let (submit_tx, submit_rx) = mpsc::channel(RequestSubmitter::MAX_CHANNEL_SIZE);
-        let polyjuice_tx_ctx = Arc::new(polyjuice_tx_ctx);
+        let polyjuice_sender_recover = Arc::new(polyjuice_sender_recover);
         if let Some(mem_pool) = mem_pool.as_ref().to_owned() {
             let submitter = RequestSubmitter {
                 mem_pool: Arc::clone(mem_pool),
@@ -244,7 +246,7 @@ impl Registry {
                 generator: generator.clone(),
                 mem_pool_state: mem_pool_state.clone(),
                 store: store.clone(),
-                polyjuice_tx_ctx: Arc::clone(&polyjuice_tx_ctx),
+                polyjuice_sender_recover: Arc::clone(&polyjuice_sender_recover),
             };
             tokio::spawn(submitter.in_background());
         }
@@ -269,7 +271,7 @@ impl Registry {
             last_submitted_tx_hash,
             mem_pool_state,
             in_queue_request_map,
-            polyjuice_tx_ctx,
+            polyjuice_sender_recover,
         }
     }
 
@@ -287,14 +289,14 @@ impl Registry {
                 generator: self.generator.clone(),
                 store: self.store.clone(),
                 mem_pool_state: self.mem_pool_state.clone(),
-                polyjuice_tx_ctx: self.polyjuice_tx_ctx.clone(),
+                polyjuice_sender_recover: self.polyjuice_sender_recover.clone(),
             }))
             .with_data(Data::new(SubmitTransactionContext {
                 submit_tx: self.submit_tx,
                 mem_pool_state: self.mem_pool_state.clone(),
                 rate_limiter: send_transaction_rate_limiter,
                 rate_limit_config: self.send_tx_rate_limit,
-                polyjuice_tx_ctx: self.polyjuice_tx_ctx.clone(),
+                polyjuice_sender_recover: self.polyjuice_sender_recover.clone(),
             }))
             .with_data(Data::new(self.mem_pool.clone()))
             .with_data(Data(self.generator.clone()))
@@ -309,7 +311,7 @@ impl Registry {
             .with_data(Data::new(self.consensus_config))
             .with_data(Data::new(self.node_mode))
             .with_data(Data::new(self.in_queue_request_map))
-            .with_data(Data::new((self.polyjuice_tx_ctx, self.mem_pool)))
+            .with_data(Data::new((self.polyjuice_sender_recover, self.mem_pool)))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -420,7 +422,7 @@ struct RequestSubmitter {
     generator: Arc<Generator>,
     mem_pool_state: Arc<MemPoolState>,
     store: Store,
-    polyjuice_tx_ctx: Arc<PolyjuiceTxContext>,
+    polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
 }
 
 #[instrument(skip_all, fields(req_kind = req.kind()))]
@@ -580,14 +582,14 @@ impl RequestSubmitter {
 
             if !items.is_empty() {
                 // recover accounts for polyjuice tx from id zero
-                let eth_ctx = &self.polyjuice_tx_ctx.eth;
+                let eth_recover = &self.polyjuice_sender_recover.eth;
                 let txs_from_zero = items
                     .iter()
                     .filter_map(|(entry, _handle)| match entry.item {
                         FeeItem::Tx(ref tx) if 0 == entry.sender => Some(tx),
                         _ => None,
                     });
-                let recovered_senders = eth_ctx.recover_sender_accounts(txs_from_zero, &state);
+                let recovered_senders = eth_recover.recover_sender_accounts(txs_from_zero, &state);
 
                 log::debug!("[Mem-pool background job] acquire mem_pool",);
                 let t = Instant::now();
@@ -597,7 +599,7 @@ impl RequestSubmitter {
                     t.elapsed().as_millis()
                 );
 
-                if let Err(err) = match recovered_senders.build_create_tx(eth_ctx, &state) {
+                if let Err(err) = match recovered_senders.build_create_tx(eth_recover, &state) {
                     Ok(Some(create_accounts_tx)) => {
                         mem_pool.push_transaction(create_accounts_tx).await
                     }
@@ -625,8 +627,16 @@ impl RequestSubmitter {
                                 }
                             };
 
+                            let org_hash = tx.hash();
                             let raw_tx = tx.raw().as_builder().from_id(sender_id.pack()).build();
                             let tx = tx.as_builder().raw(raw_tx).build();
+                            log::info!(
+                                "[from tx zero] update tx {:x} from id to {}, hash to {:x}",
+                                org_hash.pack(),
+                                sender_id,
+                                tx.hash().pack()
+                            );
+
                             mem_pool.push_transaction(tx).await
                         }
                         FeeItem::Tx(tx) => mem_pool.push_transaction(tx).await,
@@ -917,8 +927,8 @@ async fn execute_l2transaction(
         let mut state = MemExecuteTxStateTree::new(mem_state);
 
         // Mock sender account if not exists
-        let eth_ctx = &ctx.polyjuice_tx_ctx.eth;
-        let tx = eth_ctx.mock_sender_if_not_exists(tx, &mut state)?;
+        let eth_recover = &ctx.polyjuice_sender_recover.eth;
+        let tx = eth_recover.mock_sender_if_not_exists(tx, &mut state)?;
 
         // tx basic verification
         TransactionVerifier::new(&state, ctx.generator.rollup_context()).verify(&tx)?;
@@ -1044,7 +1054,7 @@ async fn execute_raw_l2transaction(
 
     // execute tx in task
     let mut run_result = tokio::task::spawn_blocking(move || {
-        let eth_ctx = &ctx.polyjuice_tx_ctx.eth;
+        let eth_recover = &ctx.polyjuice_sender_recover.eth;
         let chain_view = {
             let tip_block_hash = db.get_last_valid_tip_block_hash()?;
             ChainView::new(&db, tip_block_hash)
@@ -1054,7 +1064,7 @@ async fn execute_raw_l2transaction(
             Some(block_number) => {
                 let hist_state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
                 let mut state = MemExecuteTxStateTree::new(hist_state);
-                let raw_l2tx = eth_ctx.mock_sender_if_not_exists_from_raw_registery(
+                let raw_l2tx = eth_recover.mock_sender_if_not_exists_from_raw_registery(
                     raw_l2tx,
                     registry_address_opt,
                     &mut state,
@@ -1071,7 +1081,7 @@ async fn execute_raw_l2transaction(
             None => {
                 let state = mem_state_snap.state()?;
                 let mut state = MemExecuteTxStateTree::new(state);
-                let raw_l2tx = eth_ctx.mock_sender_if_not_exists_from_raw_registery(
+                let raw_l2tx = eth_recover.mock_sender_if_not_exists_from_raw_registery(
                     raw_l2tx,
                     registry_address_opt,
                     &mut state,
@@ -1128,7 +1138,8 @@ async fn submit_l2transaction(
     let tx_hash: H256 = tx.hash().into();
 
     let sender_id: u32 = tx.raw().from_id().unpack();
-    if 0 == sender_id && ctx.polyjuice_tx_ctx.eth.opt_account_creator.is_none() {
+    let eth_recover = &ctx.polyjuice_sender_recover.eth;
+    if 0 == sender_id && eth_recover.opt_account_creator.is_none() {
         return Err(RpcError::Provided {
             code: METHOD_NOT_AVAILABLE_ERR_CODE,
             message: "tx from zero is disabled",

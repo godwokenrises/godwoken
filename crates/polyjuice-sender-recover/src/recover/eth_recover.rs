@@ -14,14 +14,12 @@ use gw_types::{
 use gw_utils::wallet::Wallet;
 use tracing::instrument;
 
-use crate::mem_execute_tx_state::MemExecuteTxStateTree;
+use crate::{constants::MIN_TRANSACTION_FEE, mem_execute_tx_state::MemExecuteTxStateTree};
 
 use super::{
     error::PolyjuiceTxSenderRecoverError, eth_account_creator::EthAccountCreator,
     eth_sender::PolyjuiceTxEthSender,
 };
-
-pub const MIN_RECOVER_CKB_BALANCE: u128 = 21000;
 
 #[derive(Clone)]
 pub struct EthAccountContext {
@@ -65,7 +63,7 @@ pub struct RecoveredSenders {
 impl RecoveredSenders {
     pub fn build_create_tx(
         &self,
-        ctx: &EthContext,
+        ctx: &EthRecover,
         state: &(impl State + CodeStore),
     ) -> Result<Option<L2Transaction>> {
         let account_creator = match ctx.opt_account_creator {
@@ -105,12 +103,12 @@ impl RecoveredSenders {
     }
 }
 
-pub struct EthContext {
+pub struct EthRecover {
     pub account_context: EthAccountContext,
     pub opt_account_creator: Option<EthAccountCreator>,
 }
 
-impl EthContext {
+impl EthRecover {
     pub fn create(rollup_context: &RollupContext, creator_wallet: Option<Wallet>) -> Result<Self> {
         let chain_id = rollup_context.rollup_config.chain_id().unpack();
         let rollup_script_hash = rollup_context.rollup_script_hash;
@@ -154,7 +152,7 @@ impl EthContext {
             .map(|wallet| EthAccountCreator::create(&account_context, wallet))
             .transpose()?;
 
-        let ctx = EthContext {
+        let ctx = EthRecover {
             account_context,
             opt_account_creator,
         };
@@ -174,7 +172,7 @@ impl EthContext {
                 return None;
             }
 
-            match self.recover_sender(state, tx, MIN_RECOVER_CKB_BALANCE.into()) {
+            match self.recover_sender(state, tx, MIN_TRANSACTION_FEE.into()) {
                 Ok(sender) => Some((tx.signature().unpack(), sender)),
                 Err(err) => {
                     log::info!("[tx from zero] recover {:x} {}", tx.hash().pack(), err);
@@ -199,7 +197,7 @@ impl EthContext {
         }
 
         let tx_hash = tx.hash().pack();
-        let account_id = match self.recover_sender(state, &tx, MIN_RECOVER_CKB_BALANCE.into())? {
+        let account_id = match self.recover_sender(state, &tx, MIN_TRANSACTION_FEE.into())? {
             PolyjuiceTxEthSender::Exist { account_id, .. } => account_id,
             PolyjuiceTxEthSender::New {
                 account_script,

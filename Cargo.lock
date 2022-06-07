@@ -1718,6 +1718,7 @@ dependencies = [
  "gw-jsonrpc-types",
  "gw-mem-pool",
  "gw-p2p-network",
+ "gw-polyjuice-sender-recover",
  "gw-rpc-client",
  "gw-rpc-server",
  "gw-store",
@@ -1973,6 +1974,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "gw-polyjuice-sender-recover"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gw-common",
+ "gw-generator",
+ "gw-traits",
+ "gw-types",
+ "gw-utils",
+ "log",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "gw-replay-chain"
 version = "0.1.0"
 dependencies = [
@@ -2058,6 +2074,7 @@ dependencies = [
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
+ "gw-polyjuice-sender-recover",
  "gw-rpc-client",
  "gw-store",
  "gw-traits",
@@ -2073,7 +2090,6 @@ dependencies = [
  "serde",
  "serde_json",
  "socket2",
- "thiserror",
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
  "tokio",
@@ -2126,6 +2142,7 @@ dependencies = [
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
+ "gw-polyjuice-sender-recover",
  "gw-rpc-client",
  "gw-rpc-server",
  "gw-store",

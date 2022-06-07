@@ -3,8 +3,8 @@
 use anyhow::Result;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::state::State;
-use gw_rpc_server::polyjuice_tx::{
-    eth_account_creator::EthAccountCreator, eth_context::EthAccountContext,
+use gw_polyjuice_sender_recover::recover::{
+    eth_account_creator::EthAccountCreator, eth_recover::EthAccountContext,
     eth_sender::PolyjuiceTxEthSender,
 };
 use gw_types::{

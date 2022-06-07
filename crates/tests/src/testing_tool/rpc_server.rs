@@ -11,13 +11,11 @@ use gw_jsonrpc_types::{
     ckb_jsonrpc_types::{Byte32, JsonBytes, Uint64},
     godwoken::RunResult,
 };
+use gw_polyjuice_sender_recover::recover::PolyjuiceSenderRecover;
 use gw_rpc_client::{
     ckb_client::CKBClient, indexer_client::CKBIndexerClient, rpc_client::RPCClient,
 };
-use gw_rpc_server::{
-    polyjuice_tx::{eth_context::EthContext, PolyjuiceTxContext},
-    registry::{Registry, RegistryArgs},
-};
+use gw_rpc_server::registry::{Registry, RegistryArgs};
 use gw_types::{
     bytes::Bytes,
     packed::{L2Transaction, RawL2Transaction, Script},
@@ -63,8 +61,8 @@ impl RPCServer {
             )
         };
 
-        let eth_ctx = EthContext::create(generator.rollup_context(), creator_wallet).unwrap();
-        let polyjuice_tx_ctx = PolyjuiceTxContext::new(eth_ctx);
+        let polyjuice_sender_recover =
+            PolyjuiceSenderRecover::create(generator.rollup_context(), creator_wallet).unwrap();
 
         RegistryArgs {
             store,
@@ -81,7 +79,7 @@ impl RPCServer {
             consensus_config: Default::default(),
             dynamic_config_manager: Default::default(),
             last_submitted_tx_hash: None,
-            polyjuice_tx_ctx,
+            polyjuice_sender_recover,
         }
     }
 
