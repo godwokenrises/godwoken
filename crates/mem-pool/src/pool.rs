@@ -445,11 +445,47 @@ impl MemPool {
         mem_block.repackage(withdrawals_count, deposits_count, txs_count)
     }
 
-    /// Reset
+    /// Reset pool
+    ///
+    /// For Full node and Test node:
     /// this method reset the current state of the mem pool
     /// discarded txs & withdrawals will be reinject to pool
+    ///
+    /// For ReadOnly node:
+    /// This function only update the current tip.
+    /// The state reset of readonly only happend when receives states from publisher, see `refresh_mem_block`
     #[instrument(skip_all, fields(old_tip = old_tip.map(|h| display(h.pack())), new_tip = new_tip.map(|h| display(h.pack()))))]
     async fn reset(&mut self, old_tip: Option<H256>, new_tip: Option<H256>) -> Result<()> {
+        match self.node_mode {
+            NodeMode::FullNode | NodeMode::Test => self.reset_full(old_tip, new_tip).await,
+            NodeMode::ReadOnly => self.reset_read_only(old_tip, new_tip).await,
+        }
+    }
+
+    /// Only **ReadOnly** node.
+    /// update current tip.
+    #[instrument(skip_all)]
+    async fn reset_read_only(
+        &mut self,
+        _old_tip: Option<H256>,
+        new_tip: Option<H256>,
+    ) -> Result<()> {
+        let new_tip = match new_tip {
+            Some(block_hash) => block_hash,
+            None => {
+                log::debug!("reset new tip to last valid tip block");
+                self.store.get_last_valid_tip_block_hash()?
+            }
+        };
+        let new_tip_block = self.store.get_block(&new_tip)?.expect("new tip block");
+        self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
+        Ok(())
+    }
+
+    /// Only **Full** node and **Test** node.
+    /// reset mem pool state
+    #[instrument(skip_all)]
+    async fn reset_full(&mut self, old_tip: Option<H256>, new_tip: Option<H256>) -> Result<()> {
         let mut reinject_txs = Default::default();
         let mut reinject_withdrawals = Default::default();
         // read block from db
@@ -546,13 +582,8 @@ impl MemPool {
 
         let db = self.store.begin_transaction();
 
-        if self.node_mode != NodeMode::ReadOnly {
-            // check pending deposits
-            self.refresh_deposit_cells(&db, new_tip).await?;
-        } else {
-            self.pending_deposits.clear();
-        }
-
+        // check pending deposits
+        self.refresh_deposit_cells(&db, new_tip).await?;
         // estimate next l2block timestamp
         let estimated_timestamp = {
             let estimated = self.provider.estimate_next_blocktime().await?;
@@ -616,53 +647,49 @@ impl MemPool {
         self.remove_unexecutables(&mut mem_state, &db).await?;
 
         log::info!("[mem-pool] reset reinject txs: {} mem-block txs: {} reinject withdrawals: {} mem-block withdrawals: {}", reinject_txs.len(), mem_block_txs.len(), reinject_withdrawals.len(), mem_block_withdrawals.len());
-        if self.node_mode != NodeMode::ReadOnly {
-            // re-inject txs
-            let txs = reinject_txs.into_iter().chain(mem_block_txs).collect();
-            let is_mem_pool_recovery = old_tip.is_none();
+        // re-inject txs
+        let txs = reinject_txs.into_iter().chain(mem_block_txs).collect();
+        let is_mem_pool_recovery = old_tip.is_none();
 
-            // re-inject withdrawals
-            let mut withdrawals: Vec<_> = reinject_withdrawals.into_iter().collect();
-            if is_mem_pool_recovery {
-                // recovery mem block withdrawals
-                withdrawals.extend(mem_block_withdrawals);
-            } else {
-                // packages more withdrawals
-                fn filter_withdrawals(
-                    state: &MemStateTree<'_>,
-                    withdrawal: &WithdrawalRequestExtra,
-                ) -> bool {
-                    let id = state
-                        .get_account_id_by_script_hash(
-                            &withdrawal.raw().account_script_hash().unpack(),
-                        )
-                        .expect("get id")
-                        .expect("id exist");
-                    let nonce = state.get_nonce(id).expect("get nonce");
-                    let expected_nonce: u32 = withdrawal.raw().nonce().unpack();
-                    // ignore withdrawal mismatch the nonce
-                    nonce == expected_nonce
-                }
-                withdrawals.retain(|w| filter_withdrawals(&mem_state, w));
+        // re-inject withdrawals
+        let mut withdrawals: Vec<_> = reinject_withdrawals.into_iter().collect();
+        if is_mem_pool_recovery {
+            // recovery mem block withdrawals
+            withdrawals.extend(mem_block_withdrawals);
+        } else {
+            // packages more withdrawals
+            fn filter_withdrawals(
+                state: &MemStateTree<'_>,
+                withdrawal: &WithdrawalRequestExtra,
+            ) -> bool {
+                let id = state
+                    .get_account_id_by_script_hash(&withdrawal.raw().account_script_hash().unpack())
+                    .expect("get id")
+                    .expect("id exist");
+                let nonce = state.get_nonce(id).expect("get nonce");
+                let expected_nonce: u32 = withdrawal.raw().nonce().unpack();
+                // ignore withdrawal mismatch the nonce
+                nonce == expected_nonce
+            }
+            withdrawals.retain(|w| filter_withdrawals(&mem_state, w));
 
-                // package withdrawals
-                if withdrawals.len() < self.mem_block_config.max_withdrawals {
-                    for entry in self.pending().values() {
-                        if let Some(withdrawal) = entry.withdrawals.first() {
-                            if filter_withdrawals(&mem_state, withdrawal) {
-                                withdrawals.push(withdrawal.clone());
-                            }
-                            if withdrawals.len() >= self.mem_block_config.max_withdrawals {
-                                break;
-                            }
+            // package withdrawals
+            if withdrawals.len() < self.mem_block_config.max_withdrawals {
+                for entry in self.pending().values() {
+                    if let Some(withdrawal) = entry.withdrawals.first() {
+                        if filter_withdrawals(&mem_state, withdrawal) {
+                            withdrawals.push(withdrawal.clone());
+                        }
+                        if withdrawals.len() >= self.mem_block_config.max_withdrawals {
+                            break;
                         }
                     }
                 }
             }
-
-            self.prepare_next_mem_block(&db, &mut mem_state, withdrawals, txs)
-                .await?;
         }
+
+        self.prepare_next_mem_block(&db, &mut mem_state, withdrawals, txs)
+            .await?;
 
         // store mem state
         self.mem_pool_state.store(Arc::new(mem_store));
@@ -1181,19 +1208,28 @@ impl MemPool {
         if next_block_number != current_tip_block_number + 1 {
             return Ok(None);
         }
-        let db = self.store.begin_transaction();
-        let tip_block = db.get_last_valid_tip_block()?;
+        let snapshot = self.store.get_snapshot();
+        let tip_block = snapshot.get_last_valid_tip_block()?;
 
+        // update mem block
         let post_merkle_state = tip_block.raw().post_account();
         let mem_block = MemBlock::new(block_info, post_merkle_state);
         self.mem_block = mem_block;
 
         let withdrawals = withdrawals.into_iter().map(Into::into).collect();
-        let mem_store = self.mem_pool_state().load();
-        let mut state = mem_store.state()?;
-        self.finalize_withdrawals(&mut state, withdrawals).await?;
-        self.finalize_deposits(&mut state, deposits).await?;
+        let mem_store = MemStore::new(snapshot);
+        mem_store.update_mem_pool_block_info(self.mem_block.block_info())?;
+        let mut mem_state = mem_store.state()?;
 
+        // remove from pending
+        let db = self.store.begin_transaction();
+        self.remove_unexecutables(&mut mem_state, &db).await?;
+        self.finalize_withdrawals(&mut mem_state, withdrawals)
+            .await?;
+        self.finalize_deposits(&mut mem_state, deposits).await?;
+
+        // update mem state
+        self.mem_pool_state.store(Arc::new(mem_store));
         db.commit()?;
 
         let mem_block = &self.mem_block;
