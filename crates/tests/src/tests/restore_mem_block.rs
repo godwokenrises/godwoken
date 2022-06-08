@@ -23,7 +23,7 @@ use gw_rpc_client::rpc_client::RPCClient;
 use gw_rpc_server::registry::{Registry, RegistryArgs};
 use gw_store::state::state_db::StateContext;
 use gw_types::core::ScriptHashType;
-use gw_types::offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupContext};
+use gw_types::offchain::{CellInfo, DepositInfo, FinalizedCustodianCapacity, RollupContext};
 use gw_types::packed::{
     CellOutput, DepositLockArgs, DepositRequest, Fee, L2BlockCommittedInfo, L2Transaction,
     OutPoint, RawL2Transaction, RawWithdrawalRequest, SUDTArgs, SUDTTransfer, Script,
@@ -31,6 +31,7 @@ use gw_types::packed::{
 };
 use gw_types::prelude::Pack;
 use gw_types::U256;
+use gw_utils::local_cells::LocalCellsManager;
 
 const CKB: u64 = 100000000;
 
@@ -162,9 +163,8 @@ async fn test_restore_mem_block() {
     };
 
     // Push withdrawals, deposits and txs
-    let finalized_custodians = CollectedCustodianCells {
+    let finalized_custodians = FinalizedCustodianCapacity {
         capacity: ((withdrawal_count + 2) as u64 * WITHDRAWAL_CAPACITY) as u128,
-        cells_info: vec![Default::default()],
         ..Default::default()
     };
     {
@@ -173,13 +173,16 @@ async fn test_restore_mem_block() {
         let provider = DummyMemPoolProvider {
             deposit_cells: random_deposits.clone(),
             fake_blocktime: Duration::from_millis(0),
-            collected_custodians: finalized_custodians.clone(),
+            deposit_custodians: finalized_custodians.clone(),
         };
         mem_pool.set_provider(Box::new(provider));
         for withdrawal in random_withdrawals.clone() {
             mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
         }
-        mem_pool.reset_mem_block().await.unwrap();
+        mem_pool
+            .reset_mem_block(&LocalCellsManager::default())
+            .await
+            .unwrap();
         for tx in random_txs.clone() {
             mem_pool.push_transaction(tx).await.unwrap();
         }
@@ -197,7 +200,7 @@ async fn test_restore_mem_block() {
     let provider = DummyMemPoolProvider {
         deposit_cells: vec![], // IMPORTANT: Remove deposits, previous deposits in mem block should be recovered and used
         fake_blocktime: Duration::from_millis(0),
-        collected_custodians: finalized_custodians,
+        deposit_custodians: finalized_custodians,
     };
     let chain = restart_chain(&chain, rollup_type_script.clone(), Some(provider)).await;
     {

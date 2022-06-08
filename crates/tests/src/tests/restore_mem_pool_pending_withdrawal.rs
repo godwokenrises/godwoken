@@ -10,12 +10,13 @@ use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
 use gw_common::H256;
-use gw_types::offchain::CollectedCustodianCells;
+use gw_types::offchain::FinalizedCustodianCapacity;
 use gw_types::packed::{
     CellOutput, DepositRequest, L2BlockCommittedInfo, RawWithdrawalRequest, Script,
     WithdrawalRequest, WithdrawalRequestExtra,
 };
 use gw_types::prelude::Pack;
+use gw_utils::local_cells::LocalCellsManager;
 
 const ACCOUNTS_COUNT: usize = 20;
 const CKB: u64 = 100000000;
@@ -121,9 +122,8 @@ async fn test_restore_mem_pool_pending_withdrawal() {
     }
 
     // Push withdrawals
-    let finalized_custodians = CollectedCustodianCells {
+    let finalized_custodians = FinalizedCustodianCapacity {
         capacity: ((ACCOUNTS_COUNT + 2) as u64 * WITHDRAWAL_CAPACITY) as u128,
-        cells_info: vec![Default::default()],
         ..Default::default()
     };
     {
@@ -132,14 +132,17 @@ async fn test_restore_mem_pool_pending_withdrawal() {
         let provider = DummyMemPoolProvider {
             deposit_cells: vec![],
             fake_blocktime: Duration::from_millis(0),
-            collected_custodians: finalized_custodians.clone(),
+            deposit_custodians: finalized_custodians.clone(),
         };
         mem_pool.set_provider(Box::new(provider));
 
         for withdrawal in mem_block_withdrawals.clone() {
             mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
         }
-        mem_pool.reset_mem_block().await.unwrap();
+        mem_pool
+            .reset_mem_block(&LocalCellsManager::default())
+            .await
+            .unwrap();
 
         for withdrawal in pending_withdrawals.clone() {
             mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
@@ -162,7 +165,7 @@ async fn test_restore_mem_pool_pending_withdrawal() {
     let provider = DummyMemPoolProvider {
         deposit_cells: vec![],
         fake_blocktime: Duration::from_millis(0),
-        collected_custodians: finalized_custodians,
+        deposit_custodians: finalized_custodians,
     };
     let mut chain = restart_chain(&chain, rollup_type_script.clone(), Some(provider)).await;
 
@@ -228,7 +231,10 @@ async fn test_restore_mem_pool_pending_withdrawal() {
 
     let mem_pool = chain.mem_pool().as_ref().unwrap();
     let mut mem_pool = mem_pool.lock().await;
-    mem_pool.reset_mem_block().await.unwrap();
+    mem_pool
+        .reset_mem_block(&LocalCellsManager::default())
+        .await
+        .unwrap();
 
     let mem_block = mem_pool.mem_block();
     assert_eq!(mem_block.withdrawals().len(), pending_withdrawals.len());

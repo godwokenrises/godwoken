@@ -20,7 +20,7 @@ use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
     bytes::Bytes,
     core::{AllowedContractType, AllowedEoaType, ScriptHashType},
-    offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupContext},
+    offchain::{CellInfo, DepositInfo, FinalizedCustodianCapacity, RollupContext},
     packed::{
         AllowedTypeHash, CellOutput, DepositLockArgs, DepositRequest, L2BlockCommittedInfo,
         RawTransaction, RollupAction, RollupActionUnion, RollupConfig, RollupSubmitBlock, Script,
@@ -464,7 +464,7 @@ pub async fn construct_block_with_timestamp(
     let generator = chain.generator();
     let rollup_config_hash = (*chain.rollup_config_hash()).into();
 
-    let mut collected_custodians = CollectedCustodianCells {
+    let mut block_deposit_custodians = FinalizedCustodianCapacity {
         capacity: u128::MAX,
         ..Default::default()
     };
@@ -475,7 +475,7 @@ pub async fn construct_block_with_timestamp(
         }
 
         let sudt_script_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
-        collected_custodians
+        block_deposit_custodians
             .sudt
             .insert(sudt_script_hash, (std::u128::MAX, Script::default()));
     }
@@ -520,29 +520,35 @@ pub async fn construct_block_with_timestamp(
     let provider = DummyMemPoolProvider {
         deposit_cells,
         fake_blocktime: Duration::from_millis(timestamp),
-        collected_custodians: collected_custodians.clone(),
+        deposit_custodians: block_deposit_custodians.clone(),
     };
     mem_pool.set_provider(Box::new(provider));
     // refresh mem block
     if refresh_mem_pool {
-        mem_pool.reset_mem_block().await?;
+        mem_pool.reset_mem_block(&Default::default()).await?;
     }
     let provider = DummyMemPoolProvider {
         deposit_cells: Vec::default(),
         fake_blocktime: Duration::from_millis(0),
-        collected_custodians,
+        deposit_custodians: block_deposit_custodians,
     };
     mem_pool.set_provider(Box::new(provider));
 
     let (mem_block, post_merkle_state) = mem_pool.output_mem_block(&OutputParam::default());
-    let (custodians, block_param) =
-        generate_produce_block_param(chain.store(), mem_block, post_merkle_state)?;
+    let block_param = generate_produce_block_param(
+        chain.store(),
+        &RollupContext {
+            rollup_script_hash: Default::default(),
+            rollup_config: Default::default(),
+        },
+        mem_block,
+        post_merkle_state,
+    )?;
     let param = ProduceBlockParam {
         stake_cell_owner_lock_hash,
         rollup_config_hash,
         reverted_block_root: H256::default(),
         block_param,
-        finalized_custodians: custodians.unwrap_or_default(),
     };
     produce_block(&db, generator, param)
 }

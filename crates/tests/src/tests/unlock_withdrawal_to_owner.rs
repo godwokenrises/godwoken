@@ -25,7 +25,9 @@ use gw_common::H256;
 use gw_config::ContractsCellDep;
 use gw_types::bytes::Bytes;
 use gw_types::core::{AllowedEoaType, DepType, ScriptHashType};
-use gw_types::offchain::{CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext};
+use gw_types::offchain::{
+    CellInfo, CollectedCustodianCells, FinalizedCustodianCapacity, InputCellInfo, RollupContext,
+};
 use gw_types::packed::{
     AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositRequest,
     GlobalState, L2BlockCommittedInfo, OutPoint, RawWithdrawalRequest, RollupAction,
@@ -33,6 +35,7 @@ use gw_types::packed::{
     WithdrawalRequestExtra, WitnessArgs,
 };
 use gw_types::prelude::{Pack, PackVec, Unpack};
+use gw_utils::local_cells::LocalCellsManager;
 use gw_utils::transaction_skeleton::TransactionSkeleton;
 
 const CKB: u64 = 100000000;
@@ -263,9 +266,8 @@ async fn test_build_unlock_to_owner_tx() {
     };
 
     // Push withdrawals
-    let finalized_custodians = CollectedCustodianCells {
+    let finalized_custodians = FinalizedCustodianCapacity {
         capacity: ((accounts.len() as u128 + 1) * WITHDRAWAL_CAPACITY as u128),
-        cells_info: vec![Default::default()],
         sudt: HashMap::from_iter([(
             sudt_script.hash(),
             (
@@ -281,7 +283,7 @@ async fn test_build_unlock_to_owner_tx() {
         let provider = DummyMemPoolProvider {
             deposit_cells: vec![],
             fake_blocktime: Duration::from_millis(0),
-            collected_custodians: finalized_custodians.clone(),
+            deposit_custodians: finalized_custodians.clone(),
         };
         mem_pool.set_provider(Box::new(provider));
 
@@ -289,7 +291,10 @@ async fn test_build_unlock_to_owner_tx() {
             mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
         }
 
-        mem_pool.reset_mem_block().await.unwrap();
+        mem_pool
+            .reset_mem_block(&LocalCellsManager::default())
+            .await
+            .unwrap();
         assert_eq!(mem_pool.mem_block().withdrawals().len(), accounts.len());
     }
 
@@ -316,7 +321,11 @@ async fn test_build_unlock_to_owner_tx() {
     };
     let generated_withdrawals = gw_block_producer::withdrawal::generate(
         &rollup_context,
-        finalized_custodians.clone(),
+        CollectedCustodianCells {
+            cells_info: vec![Default::default()],
+            capacity: finalized_custodians.capacity,
+            sudt: finalized_custodians.sudt.clone(),
+        },
         &withdrawal_block_result.block,
         &contracts_dep,
         &withdrawal_extras.collect(),
@@ -545,7 +554,10 @@ async fn test_build_unlock_to_owner_tx() {
         // Reset finalized custodian should stale all withdrawals
         let provider = DummyMemPoolProvider::default();
         mem_pool.set_provider(Box::new(provider));
-        mem_pool.reset_mem_block().await.unwrap();
+        mem_pool
+            .reset_mem_block(&LocalCellsManager::default())
+            .await
+            .unwrap();
         construct_block_with_timestamp(&chain, &mut mem_pool, vec![], BLOCK_TIMESTAMP2, true)
             .await
             .unwrap()
