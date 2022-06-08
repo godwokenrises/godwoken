@@ -308,7 +308,7 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
 
     // Transfer for test
     let to_wallet = EthWallet::random(chain.rollup_type_hash());
-    let transfer_amount: U256 = 10000u128.into();
+    let transfer_amount: U256 = 40000u128.into();
     assert!(post_block1_balance > transfer_amount);
 
     let transfer_args =

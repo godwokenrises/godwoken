@@ -18,7 +18,7 @@ impl SudtErc20ArgsBuilder {
 
         PolyjuiceArgsBuilder::default()
             .create(true)
-            .gas_limit(122000)
+            .gas_limit(270000)
             .gas_price(1)
             .value(0)
             .data(data)
@@ -37,13 +37,12 @@ impl SudtErc20ArgsBuilder {
         };
 
         PolyjuiceArgsBuilder::default()
-            .gas_limit(20000)
+            .gas_limit(40000)
             .gas_price(1)
             .value(0)
             .data(data)
     }
 
-    #[allow(dead_code)]
     pub fn balance_of(registry_address: &RegistryAddress) -> PolyjuiceArgsBuilder {
         let address = hex::encode(&abi_encode_eth_address(registry_address));
         let data = {
@@ -52,7 +51,7 @@ impl SudtErc20ArgsBuilder {
         };
 
         PolyjuiceArgsBuilder::default()
-            .gas_limit(20000)
+            .gas_limit(40000)
             .gas_price(1)
             .value(0)
             .data(data)
