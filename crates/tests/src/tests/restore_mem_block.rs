@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::testing_tool::chain::{
-    build_sync_tx, chain_generator, construct_block, restart_chain, setup_chain,
+    apply_block_result, chain_generator, construct_block, restart_chain, setup_chain,
 };
 use crate::testing_tool::common::random_always_success_script;
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
@@ -10,7 +10,6 @@ use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 use ckb_types::prelude::{Builder, Entity};
 use ckb_vm::Bytes;
 use gw_block_producer::test_mode_control::TestModeControl;
-use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::{state::State, H256};
@@ -25,9 +24,9 @@ use gw_store::state::state_db::StateContext;
 use gw_types::core::ScriptHashType;
 use gw_types::offchain::{CellInfo, DepositInfo, FinalizedCustodianCapacity, RollupContext};
 use gw_types::packed::{
-    CellOutput, DepositLockArgs, DepositRequest, Fee, L2BlockCommittedInfo, L2Transaction,
-    OutPoint, RawL2Transaction, RawWithdrawalRequest, SUDTArgs, SUDTTransfer, Script,
-    WithdrawalRequest, WithdrawalRequestExtra,
+    CellOutput, DepositLockArgs, DepositRequest, Fee, L2Transaction, OutPoint, RawL2Transaction,
+    RawWithdrawalRequest, SUDTArgs, SUDTTransfer, Script, WithdrawalRequest,
+    WithdrawalRequestExtra,
 };
 use gw_types::prelude::Pack;
 use gw_types::U256;
@@ -41,9 +40,6 @@ async fn test_restore_mem_block() {
 
     let rollup_type_script = Script::default();
     let rollup_script_hash: H256 = rollup_type_script.hash().into();
-    let rollup_cell = CellOutput::new_builder()
-        .type_(Some(rollup_type_script.clone()).pack())
-        .build();
     let mut chain = setup_chain(rollup_type_script.clone()).await;
 
     // Deposit 20 accounts
@@ -68,24 +64,13 @@ async fn test_restore_mem_block() {
             .await
             .unwrap()
     };
-    let apply_deposits = L1Action {
-        context: L1ActionContext::SubmitBlock {
-            l2block: block_result.block.clone(),
-            deposit_requests: deposits.collect(),
-            deposit_asset_scripts: Default::default(),
-            withdrawals: Default::default(),
-        },
-        transaction: build_sync_tx(rollup_cell, block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(1u64.pack())
-            .build(),
-    };
-    let param = SyncParam {
-        updates: vec![apply_deposits],
-        reverts: Default::default(),
-    };
-    chain.sync(param).await.unwrap();
-    assert!(chain.last_sync_event().is_success());
+    apply_block_result(
+        &mut chain,
+        block_result,
+        deposits.collect(),
+        Default::default(),
+    )
+    .await;
 
     // Generate random withdrawals, deposits, txs
     const WITHDRAWAL_CAPACITY: u64 = 1000 * CKB;

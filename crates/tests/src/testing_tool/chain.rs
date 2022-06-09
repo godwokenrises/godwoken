@@ -3,7 +3,7 @@
 use gw_block_producer::produce_block::{
     generate_produce_block_param, produce_block, ProduceBlockParam, ProduceBlockResult,
 };
-use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
+use gw_chain::chain::Chain;
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BackendConfig, BackendSwitchConfig, ChainConfig, GenesisConfig, MemPoolConfig};
 use gw_generator::{
@@ -22,9 +22,8 @@ use gw_types::{
     core::{AllowedContractType, AllowedEoaType, ScriptHashType},
     offchain::{CellInfo, DepositInfo, FinalizedCustodianCapacity, RollupContext},
     packed::{
-        AllowedTypeHash, CellOutput, DepositLockArgs, DepositRequest, L2BlockCommittedInfo,
-        RawTransaction, RollupAction, RollupActionUnion, RollupConfig, RollupSubmitBlock, Script,
-        Transaction, WitnessArgs,
+        AllowedTypeHash, CellOutput, DepositLockArgs, DepositRequest, RawTransaction, RollupAction,
+        RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, Transaction, WitnessArgs,
     },
     prelude::*,
 };
@@ -410,32 +409,37 @@ pub fn build_sync_tx(
 
 pub async fn apply_block_result(
     chain: &mut Chain,
-    rollup_cell: CellOutput,
     block_result: ProduceBlockResult,
     deposit_requests: Vec<DepositRequest>,
     deposit_asset_scripts: HashSet<Script>,
 ) {
-    let l2block = block_result.block.clone();
-    let withdrawals = block_result.withdrawal_extras.clone();
-    let transaction = build_sync_tx(rollup_cell, block_result);
-    let l2block_committed_info = L2BlockCommittedInfo::default();
-
-    let update = L1Action {
-        context: L1ActionContext::SubmitBlock {
-            l2block,
+    let number = block_result.block.raw().number().unpack();
+    let hash = block_result.block.hash();
+    let store_tx = chain.store().begin_transaction();
+    chain
+        .update_local(
+            &store_tx,
+            block_result.block,
             deposit_requests,
             deposit_asset_scripts,
-            withdrawals,
-        },
-        transaction,
-        l2block_committed_info,
-    };
-    let param = SyncParam {
-        updates: vec![update],
-        reverts: Default::default(),
-    };
-    chain.sync(param).await.unwrap();
-    assert!(chain.last_sync_event().is_success());
+            block_result.withdrawal_extras,
+            block_result.global_state,
+        )
+        .await
+        .unwrap();
+    store_tx
+        .set_block_post_finalized_custodian_capacity(
+            number,
+            &block_result.remaining_capacity.pack().as_reader(),
+        )
+        .unwrap();
+    store_tx.commit().unwrap();
+    let mem_pool = chain.mem_pool();
+    let mut mem_pool = mem_pool.as_deref().unwrap().lock().await;
+    mem_pool
+        .notify_new_tip(hash.into(), &Default::default())
+        .await
+        .unwrap();
 }
 
 pub async fn construct_block(
@@ -465,7 +469,8 @@ pub async fn construct_block_with_timestamp(
     let rollup_config_hash = (*chain.rollup_config_hash()).into();
 
     let mut block_deposit_custodians = FinalizedCustodianCapacity {
-        capacity: u128::MAX,
+        // Divide 1024 to avoid overflow.
+        capacity: u128::MAX / 1024,
         ..Default::default()
     };
     for withdrawal_hash in mem_pool.mem_block().withdrawals().iter() {
@@ -477,7 +482,7 @@ pub async fn construct_block_with_timestamp(
         let sudt_script_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
         block_deposit_custodians
             .sudt
-            .insert(sudt_script_hash, (std::u128::MAX, Script::default()));
+            .insert(sudt_script_hash, (std::u128::MAX / 1024, Script::default()));
     }
 
     let deposit_lock_type_hash = generator

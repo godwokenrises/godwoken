@@ -389,7 +389,6 @@ impl MemPool {
         );
         Ok(c + c1)
     }
-
     // Withdrawal request verification
     // TODO: duplicate withdrawal check
     #[instrument(skip_all)]

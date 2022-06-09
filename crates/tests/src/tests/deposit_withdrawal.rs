@@ -22,8 +22,7 @@ use gw_store::state::state_db::StateContext;
 use gw_types::{
     core::ScriptHashType,
     packed::{
-        CellOutput, DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest,
-        WithdrawalRequestExtra,
+        DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest, WithdrawalRequestExtra,
     },
     prelude::*,
     U256,
@@ -31,7 +30,7 @@ use gw_types::{
 
 use std::{collections::HashSet, iter::FromIterator};
 
-async fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) -> Result<()> {
+async fn produce_empty_block(chain: &mut Chain) -> Result<()> {
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
@@ -40,13 +39,12 @@ async fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) -> Resu
     let asset_scripts = HashSet::new();
 
     // deposit
-    apply_block_result(chain, rollup_cell, block_result, vec![], asset_scripts).await;
+    apply_block_result(chain, block_result, vec![], asset_scripts).await;
     Ok(())
 }
 
 async fn deposite_to_chain(
     chain: &mut Chain,
-    rollup_cell: CellOutput,
     user_script: Script,
     capacity: u64,
     sudt_script_hash: H256, // To allow deposit ckb only
@@ -72,20 +70,12 @@ async fn deposite_to_chain(
     };
 
     // deposit
-    apply_block_result(
-        chain,
-        rollup_cell,
-        block_result,
-        deposit_requests,
-        asset_scripts,
-    )
-    .await;
+    apply_block_result(chain, block_result, deposit_requests, asset_scripts).await;
     Ok(())
 }
 
 async fn withdrawal_from_chain(
     chain: &mut Chain,
-    rollup_cell: CellOutput,
     user_script_hash: H256,
     capacity: u64,
     sudt_script_hash: H256,
@@ -117,7 +107,7 @@ async fn withdrawal_from_chain(
     };
 
     // deposit
-    apply_block_result(chain, rollup_cell, block_result, Vec::new(), HashSet::new()).await;
+    apply_block_result(chain, block_result, Vec::new(), HashSet::new()).await;
     Ok(())
 }
 
@@ -137,13 +127,9 @@ async fn test_deposit_and_withdrawal() {
         })
         .build();
     let user_script_hash = user_script.hash();
-    let rollup_cell = CellOutput::new_builder()
-        .type_(Some(rollup_type_script).pack())
-        .build();
     // deposit
     deposite_to_chain(
         &mut chain,
-        rollup_cell.clone(),
         user_script,
         capacity,
         H256::zero(),
@@ -192,9 +178,7 @@ async fn test_deposit_and_withdrawal() {
 
     // wait for deposit finalize
     for _ in 0..DEFAULT_FINALITY_BLOCKS {
-        produce_empty_block(&mut chain, rollup_cell.clone())
-            .await
-            .unwrap();
+        produce_empty_block(&mut chain).await.unwrap();
     }
     // check tx pool state
     {
@@ -223,7 +207,6 @@ async fn test_deposit_and_withdrawal() {
     let withdraw_capacity = 322_00000000u64;
     withdrawal_from_chain(
         &mut chain,
-        rollup_cell,
         user_script_hash,
         withdraw_capacity,
         H256::zero(),
@@ -280,9 +263,6 @@ async fn test_deposit_u128_overflow() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
     let mut chain = setup_chain(rollup_type_script.clone()).await;
-    let rollup_cell = CellOutput::new_builder()
-        .type_(Some(rollup_type_script).pack())
-        .build();
 
     let sudt_script = Script::new_builder()
         .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
@@ -309,7 +289,6 @@ async fn test_deposit_u128_overflow() {
 
     deposite_to_chain(
         &mut chain,
-        rollup_cell.clone(),
         alice_script,
         capacity,
         sudt_script_hash,
@@ -332,7 +311,6 @@ async fn test_deposit_u128_overflow() {
 
     deposite_to_chain(
         &mut chain,
-        rollup_cell.clone(),
         bob_script.clone(),
         capacity,
         sudt_script_hash,
@@ -426,13 +404,9 @@ async fn test_overdraft() {
         })
         .build();
     let user_script_hash = user_script.hash();
-    let rollup_cell = CellOutput::new_builder()
-        .type_(Some(rollup_type_script).pack())
-        .build();
     // deposit
     deposite_to_chain(
         &mut chain,
-        rollup_cell.clone(),
         user_script,
         capacity,
         H256::zero(),
@@ -446,7 +420,6 @@ async fn test_overdraft() {
     let withdraw_capacity = 600_00000000u64;
     let err = withdrawal_from_chain(
         &mut chain,
-        rollup_cell,
         user_script_hash.into(),
         withdraw_capacity,
         H256::zero(),
@@ -494,13 +467,9 @@ async fn test_deposit_faked_ckb() {
             args.pack()
         })
         .build();
-    let rollup_cell = CellOutput::new_builder()
-        .type_(Some(rollup_type_script).pack())
-        .build();
     // deposit
     let err = deposite_to_chain(
         &mut chain,
-        rollup_cell,
         user_script,
         capacity,
         H256::zero(),
