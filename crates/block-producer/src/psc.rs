@@ -105,8 +105,6 @@ impl ProduceSubmitConfirm {
             local_count,
             submitted_count,
             // TODO: make this configurable.
-            //
-            // Make sure that local_limit <= finality_blocks.
             local_limit: 3,
             submitted_limit: 5,
         })

@@ -283,7 +283,6 @@ async fn test_build_unlock_to_owner_tx() {
         let provider = DummyMemPoolProvider {
             deposit_cells: vec![],
             fake_blocktime: Duration::from_millis(0),
-            deposit_custodians: finalized_custodians.clone(),
         };
         mem_pool.set_provider(Box::new(provider));
 

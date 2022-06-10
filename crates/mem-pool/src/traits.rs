@@ -3,7 +3,7 @@ use std::time::Duration;
 use anyhow::Result;
 use async_trait::async_trait;
 use gw_types::{
-    offchain::{CellWithStatus, DepositInfo, ErrorTxReceipt, FinalizedCustodianCapacity},
+    offchain::{CellWithStatus, DepositInfo, ErrorTxReceipt},
     packed::OutPoint,
 };
 use gw_utils::local_cells::LocalCellsManager;
@@ -15,8 +15,6 @@ pub trait MemPoolProvider {
         &self,
         local_cells_manager: &LocalCellsManager,
     ) -> Result<Vec<DepositInfo>>;
-    /// Query custodian cells whose deposit block number == block.
-    fn query_block_deposit_custodians(&self, block: u64) -> Result<FinalizedCustodianCapacity>;
     async fn get_cell(&self, out_point: OutPoint) -> Result<Option<CellWithStatus>>;
 }
 

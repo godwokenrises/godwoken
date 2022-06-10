@@ -51,7 +51,6 @@ async fn test_repackage_mem_block() {
     let provider = DummyMemPoolProvider {
         deposit_cells,
         fake_blocktime: Duration::from_millis(0),
-        deposit_custodians: Default::default(),
     };
     mem_pool.set_provider(Box::new(provider));
     mem_pool.reset_mem_block(&Default::default()).await.unwrap();

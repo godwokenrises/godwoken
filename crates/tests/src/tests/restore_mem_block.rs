@@ -22,7 +22,7 @@ use gw_rpc_client::rpc_client::RPCClient;
 use gw_rpc_server::registry::{Registry, RegistryArgs};
 use gw_store::state::state_db::StateContext;
 use gw_types::core::ScriptHashType;
-use gw_types::offchain::{CellInfo, DepositInfo, FinalizedCustodianCapacity, RollupContext};
+use gw_types::offchain::{CellInfo, DepositInfo, RollupContext};
 use gw_types::packed::{
     CellOutput, DepositLockArgs, DepositRequest, Fee, L2Transaction, OutPoint, RawL2Transaction,
     RawWithdrawalRequest, SUDTArgs, SUDTTransfer, Script, WithdrawalRequest,
@@ -148,17 +148,12 @@ async fn test_restore_mem_block() {
     };
 
     // Push withdrawals, deposits and txs
-    let finalized_custodians = FinalizedCustodianCapacity {
-        capacity: ((withdrawal_count + 2) as u64 * WITHDRAWAL_CAPACITY) as u128,
-        ..Default::default()
-    };
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
         let provider = DummyMemPoolProvider {
             deposit_cells: random_deposits.clone(),
             fake_blocktime: Duration::from_millis(0),
-            deposit_custodians: finalized_custodians.clone(),
         };
         mem_pool.set_provider(Box::new(provider));
         for withdrawal in random_withdrawals.clone() {
@@ -185,7 +180,6 @@ async fn test_restore_mem_block() {
     let provider = DummyMemPoolProvider {
         deposit_cells: vec![], // IMPORTANT: Remove deposits, previous deposits in mem block should be recovered and used
         fake_blocktime: Duration::from_millis(0),
-        deposit_custodians: finalized_custodians,
     };
     let chain = restart_chain(&chain, rollup_type_script.clone(), Some(provider)).await;
     {

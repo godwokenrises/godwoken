@@ -18,7 +18,7 @@ use gw_generator::{
     sudt::build_l2_sudt_script,
     Error,
 };
-use gw_store::state::state_db::StateContext;
+use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore};
 use gw_types::{
     core::ScriptHashType,
     packed::{
@@ -43,6 +43,7 @@ async fn produce_empty_block(chain: &mut Chain) -> Result<()> {
     Ok(())
 }
 
+/// Deposit, produce new block and update chain.
 async fn deposite_to_chain(
     chain: &mut Chain,
     user_script: Script,
@@ -180,6 +181,16 @@ async fn test_deposit_and_withdrawal() {
     for _ in 0..DEFAULT_FINALITY_BLOCKS {
         produce_empty_block(&mut chain).await.unwrap();
     }
+
+    // Check remaining ckb capacity.
+    let tip = chain.local_state().tip().raw().number().unpack();
+    let cap = chain
+        .store()
+        .get_block_post_finalized_custodian_capacity(tip)
+        .unwrap();
+    // Tip block should have 0 capacity. Next block can collect finalized deposit capacity.
+    assert_eq!(cap.capacity().unpack(), 0);
+
     // check tx pool state
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap().lock().await;
@@ -215,6 +226,18 @@ async fn test_deposit_and_withdrawal() {
     .await
     .unwrap();
     // check status
+
+    // Check remaining ckb capacity.
+    let tip = chain.local_state().tip().raw().number().unpack();
+    let cap = chain
+        .store()
+        .get_block_post_finalized_custodian_capacity(tip)
+        .unwrap();
+    assert_eq!(
+        cap.capacity().unpack(),
+        (capacity - withdraw_capacity).into()
+    );
+
     let db = chain.store().begin_transaction();
     let tree = db.state_tree(StateContext::ReadOnly).unwrap();
     let ckb_balance2 = tree
@@ -415,6 +438,8 @@ async fn test_overdraft() {
     )
     .await
     .unwrap();
+
+    // TODO: test need fix: deposit enough CKB for different account and wait finalized blocks.
 
     // withdrawal
     let withdraw_capacity = 600_00000000u64;

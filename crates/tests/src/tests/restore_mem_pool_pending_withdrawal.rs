@@ -10,7 +10,6 @@ use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
 use gw_common::H256;
-use gw_types::offchain::FinalizedCustodianCapacity;
 use gw_types::packed::{
     CellOutput, DepositRequest, L2BlockCommittedInfo, RawWithdrawalRequest, Script,
     WithdrawalRequest, WithdrawalRequestExtra,
@@ -122,17 +121,12 @@ async fn test_restore_mem_pool_pending_withdrawal() {
     }
 
     // Push withdrawals
-    let finalized_custodians = FinalizedCustodianCapacity {
-        capacity: ((ACCOUNTS_COUNT + 2) as u64 * WITHDRAWAL_CAPACITY) as u128,
-        ..Default::default()
-    };
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
         let provider = DummyMemPoolProvider {
             deposit_cells: vec![],
             fake_blocktime: Duration::from_millis(0),
-            deposit_custodians: finalized_custodians.clone(),
         };
         mem_pool.set_provider(Box::new(provider));
 
@@ -165,7 +159,6 @@ async fn test_restore_mem_pool_pending_withdrawal() {
     let provider = DummyMemPoolProvider {
         deposit_cells: vec![],
         fake_blocktime: Duration::from_millis(0),
-        deposit_custodians: finalized_custodians,
     };
     let mut chain = restart_chain(&chain, rollup_type_script.clone(), Some(provider)).await;
 

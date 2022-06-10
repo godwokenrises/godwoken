@@ -525,7 +525,6 @@ pub async fn construct_block_with_timestamp(
     let provider = DummyMemPoolProvider {
         deposit_cells,
         fake_blocktime: Duration::from_millis(timestamp),
-        deposit_custodians: block_deposit_custodians.clone(),
     };
     mem_pool.set_provider(Box::new(provider));
     // refresh mem block
@@ -535,7 +534,6 @@ pub async fn construct_block_with_timestamp(
     let provider = DummyMemPoolProvider {
         deposit_cells: Vec::default(),
         fake_blocktime: Duration::from_millis(0),
-        deposit_custodians: block_deposit_custodians,
     };
     mem_pool.set_provider(Box::new(provider));
 

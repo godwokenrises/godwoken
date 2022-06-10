@@ -1,12 +1,12 @@
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use gw_config::MemBlockConfig;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
-    offchain::{CellWithStatus, DepositInfo, FinalizedCustodianCapacity},
+    offchain::{CellWithStatus, DepositInfo},
     packed::OutPoint,
     prelude::*,
 };
@@ -15,7 +15,6 @@ use tracing::instrument;
 
 use crate::{
     constants::{MIN_CKB_DEPOSIT_CAPACITY, MIN_SUDT_DEPOSIT_CAPACITY},
-    custodian::query_block_deposit_custodians,
     traits::MemPoolProvider,
 };
 
@@ -96,21 +95,5 @@ impl MemPoolProvider for DefaultMemPoolProvider {
     #[instrument(skip_all)]
     async fn get_cell(&self, out_point: OutPoint) -> Result<Option<CellWithStatus>> {
         self.rpc_client.get_cell(out_point).await
-    }
-
-    #[instrument(skip_all)]
-    fn query_block_deposit_custodians(&self, block: u64) -> Result<FinalizedCustodianCapacity> {
-        if block > 0 {
-            // TODO: migration should fetch previous block submit transactions.
-            let tx = self
-                .store
-                .get_submit_tx(block)
-                .ok_or_else(|| anyhow!("get submit tx"))?;
-            let mut lc = LocalCellsManager::default();
-            lc.apply_tx(&tx.as_reader());
-            query_block_deposit_custodians(&lc, &self.rpc_client.rollup_context, block)
-        } else {
-            Ok(Default::default())
-        }
     }
 }

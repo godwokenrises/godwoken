@@ -363,13 +363,14 @@ impl MemPool {
         Ok(())
     }
 
+    // TODO: optimization: collect on reset and cache.
     fn collect_finalized_custodian_capacity(&self) -> Result<FinalizedCustodianCapacity> {
         let tip = self.current_tip.1;
         if tip == 0 {
             return Ok(Default::default());
         }
-        let c: FinalizedCustodianCapacity = self
-            .store
+        let snap = self.store.get_snapshot();
+        let mut c: FinalizedCustodianCapacity = snap
             .get_block_post_finalized_custodian_capacity(tip)
             .ok_or_else(|| anyhow!("failed to get last block post finalized custodian capacity"))?
             .as_reader()
@@ -378,16 +379,25 @@ impl MemPool {
             .generator
             .rollup_context()
             .last_finalized_block_number(tip);
-        let c1 = self
-            .provider
-            .query_block_deposit_custodians(last_finalized)?;
-        log::info!(
-            "next block: {}, last finalized: {}, capacity: {}",
-            self.current_tip.1 + 1,
-            last_finalized,
-            c.capacity + c1.capacity
-        );
-        Ok(c + c1)
+        if last_finalized > 0 {
+            let last_finalized_block_hash = snap
+                .get_block_hash_by_number(last_finalized)?
+                .expect("block hash");
+            let last_finalized_deposits = snap
+                .get_block_deposit_requests(&last_finalized_block_hash)?
+                .expect("block deposit requests");
+            for d in last_finalized_deposits {
+                c.capacity += u128::from(d.capacity().unpack());
+                let amount = d.amount().unpack();
+                if amount > 0 {
+                    let hash = d.sudt_script_hash().unpack();
+                    let sudt_pointer = c.sudt.entry(hash).or_default();
+                    sudt_pointer.0 += amount;
+                    sudt_pointer.1 = d.script();
+                }
+            }
+        }
+        Ok(c)
     }
     // Withdrawal request verification
     // TODO: duplicate withdrawal check
