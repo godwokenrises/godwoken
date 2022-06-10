@@ -664,44 +664,59 @@ impl MemPool {
             withdrawals.extend(mem_block_withdrawals);
         } else {
             // packages more withdrawals
-            fn filter_withdrawals(
-                state: &MemStateTree<'_>,
-                withdrawal: &WithdrawalRequestExtra,
-            ) -> bool {
-                let id = state
-                    .get_account_id_by_script_hash(&withdrawal.raw().account_script_hash().unpack())
-                    .expect("get id")
-                    .expect("id exist");
-                let nonce = state.get_nonce(id).expect("get nonce");
-                let expected_nonce: u32 = withdrawal.raw().nonce().unpack();
-                // ignore withdrawal mismatch the nonce
-                nonce == expected_nonce
-            }
-            withdrawals.retain(|w| filter_withdrawals(&mem_state, w));
-
-            // package withdrawals
-            if withdrawals.len() < self.mem_block_config.max_withdrawals {
-                for entry in self.pending().values() {
-                    if let Some(withdrawal) = entry.withdrawals.first() {
-                        if filter_withdrawals(&mem_state, withdrawal) {
-                            withdrawals.push(withdrawal.clone());
-                        }
-                        if withdrawals.len() >= self.mem_block_config.max_withdrawals {
-                            break;
-                        }
-                    }
-                }
-            }
+            self.try_package_more_withdrawals(&mut mem_state, &mut withdrawals);
         }
 
-        self.prepare_next_mem_block(&db, &mut mem_state, withdrawals, txs)
-            .await?;
+        self.prepare_next_mem_block(
+            &db,
+            &mut mem_state,
+            withdrawals,
+            self.pending_deposits.clone(),
+            txs,
+        )
+        .await?;
 
         // store mem state
         self.mem_pool_state.store(Arc::new(mem_store));
         db.commit()?;
 
         Ok(())
+    }
+
+    fn try_package_more_withdrawals(
+        &self,
+        mem_state: &MemStateTree<'_>,
+        withdrawals: &mut Vec<WithdrawalRequestExtra>,
+    ) {
+        // packages mem withdrawals
+        fn filter_withdrawals(
+            state: &MemStateTree<'_>,
+            withdrawal: &WithdrawalRequestExtra,
+        ) -> bool {
+            let id = state
+                .get_account_id_by_script_hash(&withdrawal.raw().account_script_hash().unpack())
+                .expect("get id")
+                .expect("id exist");
+            let nonce = state.get_nonce(id).expect("get nonce");
+            let expected_nonce: u32 = withdrawal.raw().nonce().unpack();
+            // ignore withdrawal mismatch the nonce
+            nonce == expected_nonce
+        }
+        withdrawals.retain(|w| filter_withdrawals(&mem_state, w));
+
+        // package withdrawals
+        if withdrawals.len() < self.mem_block_config.max_withdrawals {
+            for entry in self.pending().values() {
+                if let Some(withdrawal) = entry.withdrawals.first() {
+                    if filter_withdrawals(&mem_state, withdrawal) {
+                        withdrawals.push(withdrawal.clone());
+                    }
+                    if withdrawals.len() >= self.mem_block_config.max_withdrawals {
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     /// Discard unexecutables from pending.
@@ -759,6 +774,7 @@ impl MemPool {
         db: &StoreTransaction,
         state: &mut MemStateTree<'_>,
         withdrawals: Vec<WithdrawalRequestExtra>,
+        deposit_cells: Vec<DepositInfo>,
         txs: Vec<L2Transaction>,
     ) -> Result<()> {
         // check order of inputs
@@ -784,7 +800,6 @@ impl MemPool {
         self.finalize_withdrawals(state, withdrawals.clone())
             .await?;
         // deposits
-        let deposit_cells = self.pending_deposits.clone();
         self.finalize_deposits(state, deposit_cells.clone()).await?;
 
         // Register eth eoa mapping
@@ -1197,7 +1212,7 @@ impl MemPool {
     pub(crate) async fn refresh_mem_block(
         &mut self,
         block_info: BlockInfo,
-        withdrawals: Vec<WithdrawalRequestExtra>,
+        mut withdrawals: Vec<WithdrawalRequestExtra>,
         deposits: Vec<DepositInfo>,
     ) -> Result<Option<u64>> {
         let next_block_number = block_info.number().unpack();
@@ -1217,12 +1232,22 @@ impl MemPool {
         let snapshot = self.store.get_snapshot();
         let tip_block = snapshot.get_last_valid_tip_block()?;
 
+        // mem block txs
+        let mem_block_txs: Vec<_> = {
+            let mut txs = Vec::with_capacity(self.mem_block.txs().len());
+            for tx_hash in self.mem_block.txs() {
+                if let Some(tx) = snapshot.get_mem_pool_transaction(&tx_hash)? {
+                    txs.push(tx);
+                }
+            }
+            txs
+        };
+
         // update mem block
         let post_merkle_state = tip_block.raw().post_account();
         let mem_block = MemBlock::new(block_info, post_merkle_state);
         self.mem_block = mem_block;
 
-        let withdrawals = withdrawals.into_iter().map(Into::into).collect();
         let mem_store = MemStore::new(snapshot);
         mem_store.update_mem_pool_block_info(self.mem_block.block_info())?;
         let mut mem_state = mem_store.state()?;
@@ -1230,9 +1255,11 @@ impl MemPool {
         // remove from pending
         let db = self.store.begin_transaction();
         self.remove_unexecutables(&mut mem_state, &db).await?;
-        self.finalize_withdrawals(&mut mem_state, withdrawals)
+
+        // prepare next mem block
+        self.try_package_more_withdrawals(&mut mem_state, &mut withdrawals);
+        self.prepare_next_mem_block(&db, &mut mem_state, withdrawals, deposits, mem_block_txs)
             .await?;
-        self.finalize_deposits(&mut mem_state, deposits).await?;
 
         // update mem state
         self.mem_pool_state.store(Arc::new(mem_store));
