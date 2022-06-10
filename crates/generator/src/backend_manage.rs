@@ -1,5 +1,5 @@
 use anyhow::{bail, Context, Result};
-use gw_common::H256;
+use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BackendConfig, BackendSwitchConfig, BackendType};
 use gw_types::bytes::Bytes;
 use std::{collections::HashMap, fs};
@@ -15,9 +15,48 @@ pub struct Backend {
     pub backend_type: BackendType,
 }
 
+impl Backend {
+    pub fn checksum(&self) -> BackendCheckSum {
+        let validator = {
+            let mut hasher = new_blake2b();
+            hasher.update(&self.validator);
+            let mut buf = [0u8; 32];
+            hasher.finalize(&mut buf);
+            buf
+        };
+        let generator = {
+            let mut hasher = new_blake2b();
+            hasher.update(&self.generator);
+            let mut buf = [0u8; 32];
+            hasher.finalize(&mut buf);
+            buf
+        };
+
+        BackendCheckSum {
+            validator,
+            generator,
+        }
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct BackendCheckSum {
+    pub validator: [u8; 32],
+    pub generator: [u8; 32],
+}
+
+impl std::fmt::Debug for BackendCheckSum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BackendCheckSum")
+            .field("validator", &hex::encode(&self.validator))
+            .field("generator", &hex::encode(&self.generator))
+            .finish()
+    }
+}
+
 #[derive(Default)]
 pub struct BackendManage {
-    backend_switches: Vec<(u64, HashMap<H256, Backend>)>,
+    backend_switches: Vec<(u64, HashMap<H256, (Backend, BackendCheckSum)>)>,
     /// define here not in backends,
     /// so we don't need to implement the trait `Clone` of AotCode
     #[cfg(has_asm)]
@@ -52,6 +91,8 @@ impl BackendManage {
             .cloned()
             .unwrap_or_default();
 
+        let switch_height = config.switch_height;
+
         // register backends
         for config in config.backends {
             let BackendConfig {
@@ -84,7 +125,16 @@ impl BackendManage {
             if compile {
                 self.compile_backend(&backend);
             }
-            backends.insert(backend.validator_script_type_hash, backend);
+            let checksum = backend.checksum();
+
+            log::debug!(
+                "registry backend {:?}({:?}) at height {}",
+                backend.backend_type,
+                checksum,
+                switch_height
+            );
+
+            backends.insert(backend.validator_script_type_hash, (backend, checksum));
         }
 
         self.backend_switches.push((config.switch_height, backends));
@@ -108,7 +158,7 @@ impl BackendManage {
     pub fn get_backends_at_height(
         &self,
         block_number: u64,
-    ) -> Option<&(u64, HashMap<H256, Backend>)> {
+    ) -> Option<&(u64, HashMap<H256, (Backend, BackendCheckSum)>)> {
         self.backend_switches
             .iter()
             .rev()
@@ -118,6 +168,15 @@ impl BackendManage {
     pub fn get_backend(&self, block_number: u64, code_hash: &H256) -> Option<&Backend> {
         self.get_backends_at_height(block_number)
             .and_then(|(_number, backends)| backends.get(code_hash))
+            .map(|(backend, checksum)| {
+                log::debug!(
+                    "get backend {:?}({:?}) at height {}",
+                    backend.backend_type,
+                    checksum,
+                    block_number
+                );
+                backend
+            })
     }
 
     #[cfg(has_asm)]
