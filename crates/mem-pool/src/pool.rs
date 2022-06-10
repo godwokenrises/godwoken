@@ -479,6 +479,12 @@ impl MemPool {
         };
         let new_tip_block = self.store.get_block(&new_tip)?.expect("new tip block");
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
+
+        // Publish new tip.
+        let _ = self.new_tip_publisher.send(self.current_tip);
+        if let Some(ref publish) = self.mem_pool_publish_service {
+            publish.new_tip(self.current_tip).await;
+        }
         Ok(())
     }
 
