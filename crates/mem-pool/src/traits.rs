@@ -3,9 +3,7 @@ use std::time::Duration;
 use anyhow::Result;
 use async_trait::async_trait;
 use gw_types::{
-    offchain::{
-        CellWithStatus, CollectedCustodianCells, DepositInfo, ErrorTxReceipt, RollupContext,
-    },
+    offchain::{CellWithStatus, CollectedCustodianCells, DepositInfo, RollupContext},
     packed::{OutPoint, WithdrawalRequest},
 };
 
@@ -20,9 +18,4 @@ pub trait MemPoolProvider {
         rollup_context: RollupContext,
     ) -> Result<CollectedCustodianCells>;
     async fn get_cell(&self, out_point: OutPoint) -> Result<Option<CellWithStatus>>;
-}
-
-#[async_trait]
-pub trait MemPoolErrorTxHandler {
-    async fn handle_error_receipt(&mut self, receipt: ErrorTxReceipt) -> Result<()>;
 }
