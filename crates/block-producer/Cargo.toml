@@ -24,7 +24,6 @@ gw-mem-pool = { path = "../mem-pool" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-rpc-server = { path = "../rpc-server" }
 gw-rpc-client = { path = "../rpc-client" }
-gw-rpc-ws-server = { path = "../rpc-ws-server" }
 gw-utils = { path = "../utils" }
 gw-version = { path = "../version" }
 gw-ckb-hardfork = { path = "../ckb-hardfork" }

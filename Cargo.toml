@@ -14,7 +14,6 @@ members = [
   "crates/jsonrpc-types",
   "crates/rpc-server",
   "crates/rpc-client",
-  "crates/rpc-ws-server",
   "crates/tools",
   "crates/tests",
   "crates/benches",
