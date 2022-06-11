@@ -1365,9 +1365,9 @@ fn get_backend_info(generator: Arc<Generator>) -> Vec<BackendInfo> {
         .expect("backends")
         .1
         .values()
-        .map(|(b, checksum)| BackendInfo {
-            validator_code_hash: checksum.validator.into(),
-            generator_code_hash: checksum.generator.into(),
+        .map(|b| BackendInfo {
+            validator_code_hash: ckb_fixed_hash::H256(b.checksum.validator.into()),
+            generator_code_hash: ckb_fixed_hash::H256(b.checksum.generator.into()),
             validator_script_type_hash: ckb_fixed_hash::H256(b.validator_script_type_hash.into()),
             backend_type: to_rpc_backend_type(&b.backend_type),
         })
