@@ -69,8 +69,7 @@ async fn test_repackage_mem_block() {
 
     let (mem_block, post_merkle_state) = mem_pool.output_mem_block(&OutputParam::default());
     let block_param =
-        generate_produce_block_param(chain.store(), rollup_context, mem_block, post_merkle_state)
-            .unwrap();
+        generate_produce_block_param(chain.store(), mem_block, post_merkle_state).unwrap();
 
     let deposit_cells = block_param.deposits.clone();
 

@@ -24,7 +24,7 @@ pub struct MemBlock {
     txs_set: HashSet<H256>,
     /// Finalized withdrawals
     withdrawals: Vec<H256>,
-    /// Finalized Custodians CKB and SUDT capacity **before** any withdrawals.
+    /// Remaining CKB and SUDT capacity.
     finalized_custodian_capacity: FinalizedCustodianCapacity,
     /// Withdrawals set
     withdrawals_set: HashSet<H256>,

@@ -981,7 +981,7 @@ impl MemPool {
         let mut total_withdrawal_capacity: u128 = 0;
         let mut withdrawal_verifier = crate::withdrawal::Generator::new(
             self.generator.rollup_context(),
-            finalized_custodians.clone(),
+            finalized_custodians,
         );
         // start track withdrawal
         state.tracker_mut().enable();
@@ -1057,7 +1057,7 @@ impl MemPool {
         }
         state.submit_tree_to_mem_block();
         self.mem_block
-            .set_finalized_custodian_capacity(finalized_custodians);
+            .set_finalized_custodian_capacity(withdrawal_verifier.remaining_capacity());
 
         // remove unused withdrawals
         log::info!(

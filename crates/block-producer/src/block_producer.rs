@@ -131,39 +131,32 @@ impl BlockProducer {
         }
 
         // get txs & withdrawal requests from mem pool
-        let block_param = {
-            let (mem_block, post_block_state) = {
-                let t = Instant::now();
-                log::debug!(target: "produce-block", "acquire mem-pool",);
-                let mem_pool = self.mem_pool.lock().await;
-                log::debug!(
-                    target: "produce-block", "unlock mem-pool {}ms",
-                    t.elapsed().as_millis()
-                );
-                let t = Instant::now();
-                let r = mem_pool.output_mem_block(&OutputParam::new(retry_count));
-                log::debug!(
-                    target: "produce-block", "output mem block {}ms",
-                    t.elapsed().as_millis()
-                );
-                r
-            };
-
+        let (mut mem_block, post_block_state) = {
             let t = Instant::now();
-            let produce_block_param = generate_produce_block_param(
-                &self.store,
-                self.generator.rollup_context(),
-                mem_block,
-                post_block_state,
-            )?;
-
+            log::debug!(target: "produce-block", "acquire mem-pool",);
+            let mem_pool = self.mem_pool.lock().await;
             log::debug!(
-                target: "produce-block",
-                "generate produce block param {}ms",
+                target: "produce-block", "unlock mem-pool {}ms",
                 t.elapsed().as_millis()
             );
-            produce_block_param
+            let t = Instant::now();
+            let r = mem_pool.output_mem_block(&OutputParam::new(retry_count));
+            log::debug!(
+                target: "produce-block", "output mem block {}ms",
+                t.elapsed().as_millis()
+            );
+            r
         };
+
+        let remaining_capacity = mem_block.take_finalized_custodians_capacity();
+        let t = Instant::now();
+        let block_param = generate_produce_block_param(&self.store, mem_block, post_block_state)?;
+
+        log::debug!(
+            target: "produce-block",
+            "generate produce block param {}ms",
+            t.elapsed().as_millis()
+        );
 
         // produce block
         let reverted_block_root: H256 = {
@@ -178,7 +171,9 @@ impl BlockProducer {
             block_param,
         };
         let db = self.store.begin_transaction();
-        produce_block(&db, &self.generator, param)
+        let mut result = produce_block(&db, &self.generator, param)?;
+        result.remaining_capacity = remaining_capacity;
+        Ok(result)
     }
 
     #[instrument(skip_all, fields(block = args.block.raw().number().unpack()))]

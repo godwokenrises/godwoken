@@ -2,7 +2,7 @@
 //! Block producer assemble several Godwoken components into a single executor.
 //! A block producer can act without the ability of produce block.
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use gw_common::{
     h256_ext::H256Ext,
     merkle_utils::{calculate_ckb_merkle_root, calculate_state_checkpoint, ckb_merkle_leaf_hash},
@@ -19,7 +19,7 @@ use gw_store::{
 };
 use gw_types::{
     core::Status,
-    offchain::{BlockParam, DepositInfo, FinalizedCustodianCapacity, RollupContext},
+    offchain::{BlockParam, DepositInfo, FinalizedCustodianCapacity},
     packed::{
         AccountMerkleState, BlockMerkleState, GlobalState, L2Block, RawL2Block, SubmitTransactions,
         SubmitWithdrawals, WithdrawalRequestExtra,
@@ -73,7 +73,6 @@ pub fn produce_block(
                 kv_state,
                 kv_state_proof,
                 post_merkle_state,
-                remaining_capacity,
             },
     } = param;
 
@@ -174,7 +173,7 @@ pub fn produce_block(
         global_state,
         deposit_cells: deposits,
         withdrawal_extras: withdrawals,
-        remaining_capacity,
+        remaining_capacity: Default::default(),
     })
 }
 
@@ -182,8 +181,7 @@ pub fn produce_block(
 #[instrument(skip_all, fields(mem_block = mem_block.block_info().number().unpack()))]
 pub fn generate_produce_block_param(
     store: &Store,
-    rollup_context: &RollupContext,
-    mut mem_block: MemBlock,
+    mem_block: MemBlock,
     post_merkle_state: AccountMerkleState,
 ) -> Result<BlockParam> {
     let db = store.begin_transaction();
@@ -192,9 +190,6 @@ pub fn generate_produce_block_param(
         let opt = db.get_block_hash_by_number(tip_block_number)?;
         opt.ok_or_else(|| anyhow!("[produce block] tip block {} not found", tip_block_number))?
     };
-
-    let custodian_capacity = mem_block.take_finalized_custodians_capacity();
-    let mut generator = gw_mem_pool::withdrawal::Generator::new(rollup_context, custodian_capacity);
 
     // generate kv state & merkle proof from tip state
     let chain_state = db.state_tree(StateContext::ReadOnly)?;
@@ -251,15 +246,6 @@ pub fn generate_produce_block_param(
     let parent_block = db
         .get_block(&tip_block_hash)?
         .ok_or_else(|| anyhow!("can't found tip block"))?;
-
-    // check and calc remaining custodians.
-    let dummy_block = L2Block::default();
-    for w in &withdrawals {
-        generator
-            .include_and_verify(w, &dummy_block)
-            .context("include_and_verify")?;
-    }
-    let remaining_capacity = generator.remaining_capacity();
 
     // check output block state consistent
     {
@@ -334,7 +320,6 @@ pub fn generate_produce_block_param(
         post_merkle_state,
         kv_state,
         kv_state_proof,
-        remaining_capacity,
     };
 
     log::debug!(

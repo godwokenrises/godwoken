@@ -21,7 +21,6 @@ pub struct BlockParam {
     pub post_merkle_state: AccountMerkleState,
     pub kv_state: Vec<(H256, H256)>,
     pub kv_state_proof: Vec<u8>,
-    pub remaining_capacity: FinalizedCustodianCapacity,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

@@ -16,11 +16,11 @@ use gw_generator::{
 };
 
 use gw_mem_pool::pool::{MemPool, MemPoolCreateArgs, OutputParam};
-use gw_store::{traits::chain_store::ChainStore, Store};
+use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     core::{AllowedContractType, AllowedEoaType, ScriptHashType},
-    offchain::{CellInfo, DepositInfo, FinalizedCustodianCapacity, RollupContext},
+    offchain::{CellInfo, DepositInfo, RollupContext},
     packed::{
         AllowedTypeHash, CellOutput, DepositLockArgs, DepositRequest, RawTransaction, RollupAction,
         RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, Transaction, WitnessArgs,
@@ -468,23 +468,6 @@ pub async fn construct_block_with_timestamp(
     let generator = chain.generator();
     let rollup_config_hash = (*chain.rollup_config_hash()).into();
 
-    let mut block_deposit_custodians = FinalizedCustodianCapacity {
-        // Divide 1024 to avoid overflow.
-        capacity: u128::MAX / 1024,
-        ..Default::default()
-    };
-    for withdrawal_hash in mem_pool.mem_block().withdrawals().iter() {
-        let req = db.get_mem_pool_withdrawal(withdrawal_hash)?.unwrap();
-        if 0 == req.raw().amount().unpack() {
-            continue;
-        }
-
-        let sudt_script_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
-        block_deposit_custodians
-            .sudt
-            .insert(sudt_script_hash, (std::u128::MAX / 1024, Script::default()));
-    }
-
     let deposit_lock_type_hash = generator
         .rollup_context()
         .rollup_config
@@ -537,21 +520,17 @@ pub async fn construct_block_with_timestamp(
     };
     mem_pool.set_provider(Box::new(provider));
 
-    let (mem_block, post_merkle_state) = mem_pool.output_mem_block(&OutputParam::default());
-    let block_param = generate_produce_block_param(
-        chain.store(),
-        &RollupContext {
-            rollup_script_hash: Default::default(),
-            rollup_config: Default::default(),
-        },
-        mem_block,
-        post_merkle_state,
-    )?;
+    let (mut mem_block, post_merkle_state) = mem_pool.output_mem_block(&OutputParam::default());
+    let remaining_capacity = mem_block.take_finalized_custodians_capacity();
+    let block_param = generate_produce_block_param(chain.store(), mem_block, post_merkle_state)?;
     let param = ProduceBlockParam {
         stake_cell_owner_lock_hash,
         rollup_config_hash,
         reverted_block_root: H256::default(),
         block_param,
     };
-    produce_block(&db, generator, param)
+    produce_block(&db, generator, param).map(|mut r| {
+        r.remaining_capacity = remaining_capacity;
+        r
+    })
 }
