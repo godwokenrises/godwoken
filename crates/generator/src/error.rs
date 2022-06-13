@@ -155,6 +155,8 @@ pub enum TransactionError {
     NoCost,
     #[error("Nonce Overflow")]
     NonceOverflow,
+    #[error("Intrinsic gas")]
+    IntrinsicGas,
 }
 
 impl From<VMError> for TransactionError {

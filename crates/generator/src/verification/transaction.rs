@@ -65,22 +65,28 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
             .state
             .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &sender_script_hash)?
             .ok_or(AccountError::RegistryAddressNotFound)?;
+        // get balance
         let balance = self
             .state
             .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &sender_address)?;
-        // get balance
-        let tx_cost = {
-            let tx_type = get_tx_type(self.rollup_context, self.state, &tx.raw())?;
-            let typed_tx = TypedRawTransaction::from_tx(tx.raw(), tx_type)
-                .ok_or(AccountError::UnknownScript)?;
-            // reject txs has no cost, these transaction can only be execute without modify state tree
-            typed_tx
-                .cost()
-                .map(Into::into)
-                .ok_or(TransactionError::NoCost)?
-        };
+        let tx_type = get_tx_type(self.rollup_context, self.state, &tx.raw())?;
+        let typed_tx =
+            TypedRawTransaction::from_tx(tx.raw(), tx_type).ok_or(AccountError::UnknownScript)?;
+        // reject txs has no cost, these transaction can only be execute without modify state tree
+        let tx_cost = typed_tx
+            .cost()
+            .map(Into::into)
+            .ok_or(TransactionError::NoCost)?;
         if balance < tx_cost {
             return Err(TransactionError::InsufficientBalance.into());
+        }
+        // Intrinsic Gas
+        if let TypedRawTransaction::Polyjuice(tx) = typed_tx {
+            let p = tx.parser().ok_or(TransactionError::IntrinsicGas)?;
+            let intrinsic_gas = tx.intrinsic_gas().ok_or(TransactionError::IntrinsicGas)?;
+            if p.gas() < intrinsic_gas {
+                return Err(TransactionError::IntrinsicGas.into());
+            }
         }
 
         Ok(())
