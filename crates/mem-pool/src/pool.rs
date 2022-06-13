@@ -661,7 +661,7 @@ impl MemPool {
             withdrawals.extend(mem_block_withdrawals);
         } else {
             // packages more withdrawals
-            self.try_package_more_withdrawals(&mut mem_state, &mut withdrawals);
+            self.try_package_more_withdrawals(&mem_state, &mut withdrawals);
         }
 
         self.prepare_next_mem_block(
@@ -698,13 +698,13 @@ impl MemPool {
             let expected_nonce: u32 = withdrawal.raw().nonce().unpack();
             expected_nonce >= nonce
         }
-        withdrawals.retain(|w| filter_withdrawals(&mem_state, w));
+        withdrawals.retain(|w| filter_withdrawals(mem_state, w));
 
         // package withdrawals
         if withdrawals.len() < self.mem_block_config.max_withdrawals {
             for entry in self.pending().values() {
                 if let Some(withdrawal) = entry.withdrawals.first() {
-                    if filter_withdrawals(&mem_state, withdrawal) {
+                    if filter_withdrawals(mem_state, withdrawal) {
                         withdrawals.push(withdrawal.clone());
                     }
                     if withdrawals.len() >= self.mem_block_config.max_withdrawals {
@@ -1242,7 +1242,7 @@ impl MemPool {
         let mem_block_txs: Vec<_> = {
             let mut txs = Vec::with_capacity(self.mem_block.txs().len());
             for tx_hash in self.mem_block.txs() {
-                if let Some(tx) = snapshot.get_mem_pool_transaction(&tx_hash)? {
+                if let Some(tx) = snapshot.get_mem_pool_transaction(tx_hash)? {
                     txs.push(tx);
                 }
             }
@@ -1263,7 +1263,7 @@ impl MemPool {
         self.remove_unexecutables(&mut mem_state, &db).await?;
 
         // prepare next mem block
-        self.try_package_more_withdrawals(&mut mem_state, &mut withdrawals);
+        self.try_package_more_withdrawals(&mem_state, &mut withdrawals);
         self.prepare_next_mem_block(&db, &mut mem_state, withdrawals, deposits, mem_block_txs)
             .await?;
 
