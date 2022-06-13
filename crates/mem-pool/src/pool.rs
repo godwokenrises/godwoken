@@ -482,9 +482,6 @@ impl MemPool {
 
         // Publish new tip.
         let _ = self.new_tip_publisher.send(self.current_tip);
-        if let Some(ref publish) = self.mem_pool_publish_service {
-            publish.new_tip(self.current_tip).await;
-        }
         Ok(())
     }
 
