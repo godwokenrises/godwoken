@@ -1,6 +1,7 @@
 pub mod exponential_backoff;
 pub mod fee;
 pub mod genesis_info;
+pub mod polyjuice_parser;
 pub mod script_log;
 pub mod since;
 pub mod transaction_skeleton;
