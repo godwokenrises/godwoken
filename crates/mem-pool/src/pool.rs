@@ -696,8 +696,7 @@ impl MemPool {
                 .expect("id exist");
             let nonce = state.get_nonce(id).expect("get nonce");
             let expected_nonce: u32 = withdrawal.raw().nonce().unpack();
-            // ignore withdrawal mismatch the nonce
-            nonce == expected_nonce
+            expected_nonce >= nonce
         }
         withdrawals.retain(|w| filter_withdrawals(&mem_state, w));
 
