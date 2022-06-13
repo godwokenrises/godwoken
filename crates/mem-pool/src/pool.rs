@@ -772,8 +772,18 @@ impl MemPool {
         state: &mut MemStateTree<'_>,
         withdrawals: Vec<WithdrawalRequestExtra>,
         deposit_cells: Vec<DepositInfo>,
-        txs: Vec<L2Transaction>,
+        mut txs: Vec<L2Transaction>,
     ) -> Result<()> {
+        // remove txs nonce is lower than current state
+        fn filter_tx(state: &MemStateTree<'_>, tx: &L2Transaction) -> bool {
+            let raw_tx = tx.raw();
+            let nonce = state
+                .get_nonce(raw_tx.from_id().unpack())
+                .expect("get nonce");
+            let expected_nonce: u32 = raw_tx.nonce().unpack();
+            expected_nonce >= nonce
+        }
+        txs.retain(|tx| filter_tx(state, tx));
         // check order of inputs
         {
             let mut id_to_nonce: HashMap<u32, u32> = HashMap::default();
