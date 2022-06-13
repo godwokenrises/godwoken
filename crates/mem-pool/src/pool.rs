@@ -53,7 +53,6 @@ use tokio::sync::{broadcast, Mutex};
 use tracing::instrument;
 
 use crate::{
-    custodian::AvailableCustodians,
     mem_block::MemBlock,
     restore_manager::RestoreManager,
     sync::{
@@ -391,9 +390,8 @@ impl MemPool {
                 let amount = d.amount().unpack();
                 if amount > 0 {
                     let hash = d.sudt_script_hash().unpack();
-                    let sudt_pointer = c.sudt.entry(hash).or_default();
-                    sudt_pointer.0 += amount;
-                    sudt_pointer.1 = d.script();
+                    c.checked_add_sudt(hash, amount, d.script())
+                        .expect("add sudt amount overflow");
                 }
             }
         }
@@ -414,7 +412,7 @@ impl MemPool {
         let finalized_custodian_capacity = self.collect_finalized_custodian_capacity()?;
         let withdrawal_generator = WithdrawalGenerator::new(
             self.generator.rollup_context(),
-            (&finalized_custodian_capacity).into(),
+            finalized_custodian_capacity,
         );
         withdrawal_generator.verify_remained_amount(&withdrawal.request())?;
 
@@ -973,9 +971,8 @@ impl MemPool {
 
         let max_withdrawal_capacity = std::u128::MAX;
         let finalized_custodians = self.collect_finalized_custodian_capacity()?;
-        let available_custodians = AvailableCustodians::from(&finalized_custodians);
         let asset_scripts: HashMap<H256, Script> = {
-            let sudt_value = available_custodians.sudt.values();
+            let sudt_value = finalized_custodians.sudt.values();
             sudt_value.map(|(_, script)| (script.hash().into(), script.to_owned()))
         }
         .collect();
@@ -984,7 +981,7 @@ impl MemPool {
         let mut total_withdrawal_capacity: u128 = 0;
         let mut withdrawal_verifier = crate::withdrawal::Generator::new(
             self.generator.rollup_context(),
-            available_custodians,
+            finalized_custodians.clone(),
         );
         // start track withdrawal
         state.tracker_mut().enable();

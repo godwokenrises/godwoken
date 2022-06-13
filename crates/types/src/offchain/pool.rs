@@ -5,7 +5,7 @@ use sparse_merkle_tree::H256;
 
 use crate::packed::{AccountMerkleState, L2Block, L2Transaction, Script, WithdrawalRequestExtra};
 
-use super::DepositInfo;
+use super::{CollectedCustodianCells, DepositInfo};
 
 pub struct BlockParam {
     pub number: u64,
@@ -34,28 +34,36 @@ impl FinalizedCustodianCapacity {
     pub fn is_empty(&self) -> bool {
         self.capacity == 0 && self.sudt.is_empty()
     }
-}
 
-impl core::ops::Add<FinalizedCustodianCapacity> for FinalizedCustodianCapacity {
-    type Output = FinalizedCustodianCapacity;
-
-    fn add(self, rhs: FinalizedCustodianCapacity) -> Self::Output {
-        let mut sudt = self.sudt;
-        for (h, (amount, script)) in rhs.sudt {
-            match sudt.entry(h) {
-                Entry::Occupied(mut occupied) => {
-                    let pointer = occupied.get_mut();
-                    pointer.0 += amount;
-                    pointer.1 = script;
-                }
-                Entry::Vacant(vacant) => {
-                    vacant.insert((amount, script));
-                }
+    /// Add sudt amount with overflow check.
+    ///
+    /// Returns new amount of the sudt if not overflow.
+    pub fn checked_add_sudt(
+        &mut self,
+        hash: [u8; 32],
+        amount: u128,
+        script: Script,
+    ) -> Option<u128> {
+        match self.sudt.entry(hash) {
+            Entry::Occupied(mut e) => {
+                let pointer = e.get_mut();
+                pointer.0 = pointer.0.checked_add(amount)?;
+                pointer.1 = script;
+                Some(pointer.0)
+            }
+            Entry::Vacant(v) => {
+                v.insert((amount, script));
+                Some(amount)
             }
         }
-        FinalizedCustodianCapacity {
-            capacity: self.capacity + rhs.capacity,
-            sudt,
+    }
+}
+
+impl From<CollectedCustodianCells> for FinalizedCustodianCapacity {
+    fn from(c: CollectedCustodianCells) -> Self {
+        Self {
+            capacity: c.capacity,
+            sudt: c.sudt,
         }
     }
 }

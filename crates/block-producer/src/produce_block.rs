@@ -194,8 +194,7 @@ pub fn generate_produce_block_param(
     };
 
     let custodian_capacity = mem_block.take_finalized_custodians_capacity();
-    let mut generator =
-        gw_mem_pool::withdrawal::Generator::new(rollup_context, (&custodian_capacity).into());
+    let mut generator = gw_mem_pool::withdrawal::Generator::new(rollup_context, custodian_capacity);
 
     // generate kv state & merkle proof from tip state
     let chain_state = db.state_tree(StateContext::ReadOnly)?;

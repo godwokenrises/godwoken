@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    time::Instant,
-};
+use std::{collections::HashSet, time::Instant};
 
 use anyhow::{anyhow, bail, Result};
 use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
@@ -83,30 +80,6 @@ pub fn to_custodian_cell(
     }
 
     Ok((output, data))
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct AvailableCustodians {
-    pub capacity: u128,
-    pub sudt: HashMap<[u8; 32], (u128, Script)>,
-}
-
-impl<'a> From<&'a CollectedCustodianCells> for AvailableCustodians {
-    fn from(collected: &'a CollectedCustodianCells) -> Self {
-        AvailableCustodians {
-            capacity: collected.capacity,
-            sudt: collected.sudt.clone(),
-        }
-    }
-}
-
-impl<'a> From<&'a FinalizedCustodianCapacity> for AvailableCustodians {
-    fn from(collected: &'a FinalizedCustodianCapacity) -> Self {
-        AvailableCustodians {
-            capacity: collected.capacity,
-            sudt: collected.sudt.clone(),
-        }
-    }
 }
 
 pub fn sum_withdrawals<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> WithdrawalsAmount {
