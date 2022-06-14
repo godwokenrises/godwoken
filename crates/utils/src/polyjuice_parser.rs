@@ -1,5 +1,8 @@
 use gw_types::{bytes::Bytes, packed::RawL2Transaction, prelude::*};
 
+/// The data structure of the Polyjuice transaction arguments
+///
+/// see: https://github.com/nervosnetwork/godwoken-polyjuice/blob/main/README.md#polyjuice-arguments
 pub struct PolyjuiceParser(Bytes);
 
 impl PolyjuiceParser {
