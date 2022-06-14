@@ -55,8 +55,10 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
 use tracing::instrument;
+
+use crate::in_queue_request_map::{InQueueRequestHandle, InQueueRequestMap};
 
 static PROFILER_GUARD: Lazy<tokio::sync::Mutex<Option<ProfilerGuard>>> =
     Lazy::new(|| tokio::sync::Mutex::new(None));
@@ -160,7 +162,7 @@ pub struct Registry {
     mem_pool_config: MemPoolConfig,
     backend_info: Vec<BackendInfo>,
     node_mode: NodeMode,
-    submit_tx: async_channel::Sender<Request>,
+    submit_tx: mpsc::Sender<(InQueueRequestHandle, Request)>,
     rpc_client: RPCClient,
     send_tx_rate_limit: Option<RPCRateLimit>,
     server_config: RPCServerConfig,
@@ -169,6 +171,7 @@ pub struct Registry {
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
     mem_pool_state: Arc<MemPoolState>,
+    in_queue_request_map: Arc<InQueueRequestMap>,
 }
 
 impl Registry {
@@ -205,12 +208,13 @@ impl Registry {
                 true,
             )),
         };
-        let (submit_tx, submit_rx) = async_channel::bounded(RequestSubmitter::MAX_CHANNEL_SIZE);
+        let in_queue_request_map = Arc::new(InQueueRequestMap::default());
+        let (submit_tx, submit_rx) = mpsc::channel(RequestSubmitter::MAX_CHANNEL_SIZE);
         if let Some(mem_pool) = mem_pool.as_ref().to_owned() {
             let submitter = RequestSubmitter {
                 mem_pool: Arc::clone(mem_pool),
                 submit_rx,
-                queue: Arc::new(Mutex::new(FeeQueue::new())),
+                queue: FeeQueue::new(),
                 dynamic_config_manager: dynamic_config_manager.clone(),
                 generator: generator.clone(),
                 mem_pool_state: mem_pool_state.clone(),
@@ -238,6 +242,7 @@ impl Registry {
             dynamic_config_manager,
             last_submitted_tx_hash,
             mem_pool_state,
+            in_queue_request_map,
         }
     }
 
@@ -271,6 +276,7 @@ impl Registry {
             .with_data(Data::new(self.chain_config))
             .with_data(Data::new(self.consensus_config))
             .with_data(Data::new(self.node_mode))
+            .with_data(Data::new(self.in_queue_request_map))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -296,6 +302,7 @@ impl Registry {
             )
             .with_method("gw_get_data", get_data)
             .with_method("gw_get_transaction", get_transaction)
+            .with_method("gw_is_request_in_queue", is_request_in_queue)
             .with_method("gw_get_transaction_receipt", get_transaction_receipt)
             .with_method("gw_get_withdrawal", get_withdrawal)
             .with_method("gw_execute_l2transaction", execute_l2transaction)
@@ -350,7 +357,8 @@ impl Registry {
     }
 }
 
-enum Request {
+#[derive(Clone)]
+pub(crate) enum Request {
     Tx(L2Transaction),
     Withdrawal(WithdrawalRequestExtra),
 }
@@ -373,8 +381,8 @@ impl Request {
 
 struct RequestSubmitter {
     mem_pool: Arc<Mutex<gw_mem_pool::pool::MemPool>>,
-    submit_rx: async_channel::Receiver<Request>,
-    queue: Arc<Mutex<FeeQueue>>,
+    submit_rx: mpsc::Receiver<(InQueueRequestHandle, Request)>,
+    queue: FeeQueue<InQueueRequestHandle>,
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     generator: Arc<Generator>,
     mem_pool_state: Arc<MemPoolState>,
@@ -419,7 +427,7 @@ impl RequestSubmitter {
     const MAX_BATCH_SIZE: usize = 20;
     const INTERVAL_MS: Duration = Duration::from_millis(100);
 
-    async fn in_background(self) {
+    async fn in_background(mut self) {
         // First mem pool reinject txs
         {
             let db = self.store.begin_transaction();
@@ -466,21 +474,16 @@ impl RequestSubmitter {
             }
 
             // mem-pool can process more txs
-            let mut queue = self.queue.lock().await;
+            let queue = &mut self.queue;
 
             // wait next tx if queue is empty
             if queue.is_empty() {
                 // blocking current task until we receive a tx
-                let req = match self.submit_rx.recv().await {
-                    Ok(req) => req,
-                    Err(_) if self.submit_rx.is_closed() => {
+                let (handle, req) = match self.submit_rx.recv().await {
+                    Some(req) => req,
+                    None => {
                         log::error!("rpc submit tx is closed");
                         return;
-                    }
-                    Err(err) => {
-                        log::debug!("rpc submit rx err {}", err);
-                        tokio::time::sleep(Self::INTERVAL_MS).await;
-                        continue;
                     }
                 };
                 let snap = self.mem_pool_state.load();
@@ -491,7 +494,7 @@ impl RequestSubmitter {
                 let fee_config = dynamic_config_manager.get_fee_config();
                 match req_to_entry(fee_config, self.generator.clone(), req, &state, queue.len()) {
                     Ok(entry) => {
-                        queue.add(entry);
+                        queue.add(entry, handle);
                     }
                     Err(err) => {
                         log::error!(
@@ -507,14 +510,14 @@ impl RequestSubmitter {
             // push txs to fee priority queue
             let snap = self.mem_pool_state.load();
             let state = snap.state().expect("get mem state");
-            while let Ok(req) = self.submit_rx.try_recv() {
+            while let Ok((handle, req)) = self.submit_rx.try_recv() {
                 let kind = req.kind();
                 let hash = req.hash();
                 let dynamic_config_manager = self.dynamic_config_manager.load();
                 let fee_config = dynamic_config_manager.get_fee_config();
                 match req_to_entry(fee_config, self.generator.clone(), req, &state, queue.len()) {
                     Ok(entry) => {
-                        queue.add(entry);
+                        queue.add(entry, handle);
                     }
                     Err(err) => {
                         log::error!(
@@ -540,8 +543,6 @@ impl RequestSubmitter {
                     continue;
                 }
             };
-            // release lock
-            drop(queue);
 
             if !items.is_empty() {
                 log::debug!("[Mem-pool background job] acquire mem_pool",);
@@ -551,7 +552,10 @@ impl RequestSubmitter {
                     "[Mem-pool background job] unlock mem_pool {}ms",
                     t.elapsed().as_millis()
                 );
-                for entry in items {
+                // Note: don't change `_handle` to `_`. The request should be
+                // removed from the in queue request map after pushed to mem
+                // pool.
+                for (entry, _handle) in items {
                     let maybe_ok = match entry.item.clone() {
                         FeeItem::Tx(tx) => mem_pool.push_transaction(tx).await,
                         FeeItem::Withdrawal(withdrawal) => {
@@ -602,6 +606,7 @@ impl TryFrom<u8> for GetTxVerbose {
 async fn get_transaction(
     Params(param): Params<GetTxParams>,
     store: Data<Store>,
+    in_queue_request_map: Data<Arc<InQueueRequestMap>>,
 ) -> Result<Option<L2TransactionWithStatus>, RpcError> {
     let (tx_hash, verbose) = match param {
         GetTxParams::Default((tx_hash,)) => (to_h256(tx_hash), GetTxVerbose::TxWithStatus),
@@ -612,6 +617,13 @@ async fn get_transaction(
             (to_h256(tx_hash), verbose)
         }
     };
+
+    if let Some(tx) = in_queue_request_map.get_transaction(&tx_hash) {
+        return Ok(Some(L2TransactionWithStatus {
+            transaction: matches!(verbose, GetTxVerbose::TxWithStatus).then(|| tx.into()),
+            status: L2TransactionStatus::Pending,
+        }));
+    }
     let db = store.get_snapshot();
     let tx_opt;
     let status;
@@ -636,6 +648,15 @@ async fn get_transaction(
             status,
         },
     }))
+}
+
+async fn is_request_in_queue(
+    Params((hash,)): Params<(JsonH256,)>,
+    in_queue_request_map: Data<Arc<InQueueRequestMap>>,
+) -> Result<bool, RpcError> {
+    let hash = to_h256(hash);
+
+    Ok(in_queue_request_map.contains(&hash))
 }
 
 async fn get_block_committed_info(
@@ -919,17 +940,23 @@ async fn execute_raw_l2transaction(
     Ok(run_result.into())
 }
 
+// TODO: refactor complex type.
+#[allow(clippy::type_complexity)]
 #[instrument(skip_all)]
 async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
-    submit_tx: Data<async_channel::Sender<Request>>,
+    (in_queue_request_map, submit_tx): (
+        Data<Arc<InQueueRequestMap>>,
+        Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
+    ),
     rate_limiter: Data<Option<SendTransactionRateLimiter>>,
     rate_limit_config: Data<Option<RPCRateLimit>>,
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<JsonH256, RpcError> {
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
-    let tx_hash = to_jsonh256(tx.hash().into());
+    let tx_hash = tx.hash().into();
+    let tx_hash_json = to_jsonh256(tx_hash);
 
     // check rate limit
     if let Some(rate_limiter) = rate_limiter.as_ref() {
@@ -976,30 +1003,38 @@ async fn submit_l2transaction(
         }
     }
 
-    if let Err(err) = submit_tx.try_send(Request::Tx(tx)) {
-        if err.is_full() {
-            return Err(RpcError::Provided {
-                code: BUSY_ERR_CODE,
-                message: "mem pool service busy",
-            });
-        }
-        if err.is_closed() {
-            return Err(RpcError::Provided {
-                code: INTERNAL_ERROR_ERR_CODE,
-                message: "internal error, unavailable",
-            });
-        }
+    let permit = submit_tx.try_reserve().map_err(|err| match err {
+        mpsc::error::TrySendError::Closed(_) => RpcError::Provided {
+            code: INTERNAL_ERROR_ERR_CODE,
+            message: "internal error, unavailable",
+        },
+        mpsc::error::TrySendError::Full(_) => RpcError::Provided {
+            code: BUSY_ERR_CODE,
+            message: "mem pool service busy",
+        },
+    })?;
+
+    let request = Request::Tx(tx);
+    // Use permit to insert before send so that remove won't happen before insert.
+    if let Some(handle) = in_queue_request_map.insert(tx_hash, request.clone()) {
+        // Send if the request wasn't already in the map.
+        permit.send((handle, request));
     }
 
-    Ok(tx_hash)
+    Ok(tx_hash_json)
 }
 
+// TODO: refactor complex type.
+#[allow(clippy::type_complexity)]
 #[instrument(skip_all)]
 async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
     generator: Data<Generator>,
     store: Data<Store>,
-    submit_tx: Data<async_channel::Sender<Request>>,
+    (in_queue_request_map, submit_tx): (
+        Data<Arc<InQueueRequestMap>>,
+        Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
+    ),
     rpc_client: Data<RPCClient>,
 ) -> Result<JsonH256, RpcError> {
     let withdrawal_bytes = withdrawal_request.into_bytes();
@@ -1048,19 +1083,22 @@ async fn submit_withdrawal_request(
         }
     }
 
-    if let Err(err) = submit_tx.try_send(Request::Withdrawal(withdrawal)) {
-        if err.is_full() {
-            return Err(RpcError::Provided {
-                code: BUSY_ERR_CODE,
-                message: "mem pool service busy",
-            });
-        }
-        if err.is_closed() {
-            return Err(RpcError::Provided {
-                code: INTERNAL_ERROR_ERR_CODE,
-                message: "internal error, unavailable",
-            });
-        }
+    let permit = submit_tx.try_reserve().map_err(|err| match err {
+        mpsc::error::TrySendError::Closed(_) => RpcError::Provided {
+            code: INTERNAL_ERROR_ERR_CODE,
+            message: "internal error, unavailable",
+        },
+        mpsc::error::TrySendError::Full(_) => RpcError::Provided {
+            code: BUSY_ERR_CODE,
+            message: "mem pool service busy",
+        },
+    })?;
+
+    let request = Request::Withdrawal(withdrawal);
+    // Use permit to insert before send so that remove won't happen before insert.
+    if let Some(handle) = in_queue_request_map.insert(withdrawal_hash.into(), request.clone()) {
+        // Send if the request wasn't already in the map.
+        permit.send((handle, request));
     }
 
     Ok(withdrawal_hash.into())
@@ -1095,6 +1133,7 @@ impl TryFrom<u8> for GetWithdrawalVerbose {
 async fn get_withdrawal(
     Params(param): Params<GetWithdrawalParams>,
     store: Data<Store>,
+    in_queue_request_map: Data<Arc<InQueueRequestMap>>,
 ) -> Result<Option<WithdrawalWithStatus>, RpcError> {
     let (withdrawal_hash, verbose) = match param {
         GetWithdrawalParams::Default((withdrawal_hash,)) => (
@@ -1109,6 +1148,14 @@ async fn get_withdrawal(
         }
     };
 
+    if let Some(w) = in_queue_request_map.get_withdrawal(&withdrawal_hash) {
+        return Ok(Some(WithdrawalWithStatus {
+            withdrawal: matches!(verbose, GetWithdrawalVerbose::WithdrawalWithStatus)
+                .then(|| w.into()),
+            status: WithdrawalStatus::Pending,
+            ..Default::default()
+        }));
+    }
     let db = store.get_snapshot();
     if let Some(withdrawal) = db.get_mem_pool_withdrawal(&withdrawal_hash)? {
         let withdrawal_opt = match verbose {

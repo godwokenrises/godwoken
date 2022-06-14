@@ -2030,15 +2030,11 @@ name = "gw-rpc-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-channel",
- "async-jsonrpc-client",
  "async-trait",
  "bytes",
  "ckb-crypto",
  "ckb-fixed-hash",
  "ckb-types",
- "clap",
- "env_logger",
  "errno",
  "faster-hex 0.4.1",
  "futures",
@@ -2067,7 +2063,6 @@ dependencies = [
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
  "tokio",
- "toml",
  "tracing",
 ]
 
