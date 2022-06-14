@@ -943,6 +943,41 @@ Response
 }
 ```
 
+### Method `gw_is_request_in_queue`
+
+- params:
+  - `hash`: [`H256`](#type-h256) - Transaction/Withdrawal Hash
+- result: [`bool`]
+
+Returns whether the request (transaction or withdrawal) is in the fee queue.
+
+Requests go through the fee queue before they are pushed to the mem pool.
+
+Only supported on full nodes.
+
+#### Examples
+
+Request
+
+```json
+{
+  "id": 42,
+  "jsonrpc": "2.0",
+  "method": "gw_is_request_in_queue",
+  "params": ["0x57c521ce4282fcf075862089d1bef4096723395ace63b4c0b8b9af5fa"]
+}
+```
+
+Response
+
+```json
+{
+  "id": 42,
+  "jsonrpc": "2.0",
+  "result": true
+}
+```
+
 ### Method `gw_execute_l2transaction`
 * params:
     * `l2tx`: [`SerializedL2Transaction`](#type-serializedmoleculeschema) - Serialized L2 Transaction

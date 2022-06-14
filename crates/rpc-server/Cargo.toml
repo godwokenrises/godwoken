@@ -24,13 +24,8 @@ faster-hex = "0.4"
 ckb-crypto = "0.100.0"
 ckb-fixed-hash = "0.100.0"
 ckb-types = "0.100.0"
-toml = "0.5"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-async-channel = "1.4"
-async-jsonrpc-client = { version = "0.3.0", default-features = false, features = ["http-tokio"] }
-clap = "2.33.3"
-env_logger = "0.8.3"
 futures = "0.3.13"
 hyper = { version = "0.14", features = ["server"] }
 jsonrpc-v2 = { version = "0.10.0", default-features = false, features = ["hyper-integration", "easy-errors"] }
