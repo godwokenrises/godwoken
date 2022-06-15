@@ -12,6 +12,7 @@ use gw_types::core::Status;
 use gw_types::offchain::{global_state_from_slice, CellInfo, InputCellInfo, TxStatus};
 use gw_types::packed::{CellDep, CellInput, Transaction, WitnessArgs};
 use gw_types::prelude::Unpack;
+use tracing::instrument;
 
 use std::collections::HashSet;
 use std::convert::TryFrom;
@@ -72,6 +73,7 @@ impl Cleaner {
         }
     }
 
+    #[instrument(skip_all, name = "cleaner handle_event")]
     pub async fn handle_event(&self, _event: ChainEvent) -> Result<()> {
         if matches!(self.query_rollup_status().await?, Status::Halting) {
             return Ok(());
