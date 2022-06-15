@@ -152,3 +152,23 @@ pub fn parse_log(item: &LogItem) -> Result<GwLog> {
         _ => Err(anyhow!("invalid log service flag: {}", service_flag)),
     }
 }
+
+pub fn generate_polyjuice_system_log(
+    account_id: u32,
+    gas_used: u64,
+    cumulative_gas_used: u64,
+    created_address: [u8; 20],
+    status_code: u32,
+) -> LogItem {
+    let service_flag: u8 = GW_LOG_POLYJUICE_SYSTEM;
+    let mut data = [0u8; 40];
+    data[0..8].copy_from_slice(&gas_used.to_le_bytes());
+    data[8..16].copy_from_slice(&cumulative_gas_used.to_le_bytes());
+    data[16..36].copy_from_slice(&created_address);
+    data[36..40].copy_from_slice(&status_code.to_le_bytes());
+    LogItem::new_builder()
+        .account_id(account_id.pack())
+        .service_flag(service_flag.into())
+        .data(data.pack())
+        .build()
+}

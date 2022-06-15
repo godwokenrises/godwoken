@@ -29,6 +29,7 @@ use gw_common::{
     },
     H256,
 };
+use gw_config::BackendType;
 use gw_store::{state::state_db::StateContext, transaction::StoreTransaction};
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
@@ -46,7 +47,7 @@ use ckb_vm::{DefaultMachineBuilder, SupportMachine};
 
 #[cfg(not(has_asm))]
 use ckb_vm::TraceMachine;
-use gw_utils::script_log::GW_LOG_POLYJUICE_SYSTEM;
+use gw_utils::script_log::{generate_polyjuice_system_log, GW_LOG_POLYJUICE_SYSTEM};
 use tracing::instrument;
 
 pub struct ApplyBlockArgs {
@@ -127,9 +128,12 @@ impl Generator {
         max_cycles: u64,
         backend: Backend,
     ) -> Result<RunResult, TransactionError> {
+        const INVALID_CYCLES_EXIT_CODE: i8 = -1;
+
         let mut run_result = RunResult::default();
         let used_cycles;
         let exit_code;
+        let mut appended_log = None;
 
         {
             let t = Instant::now();
@@ -170,8 +174,34 @@ impl Generator {
             let mut machine = TraceMachine::new(default_machine);
 
             machine.load_program(&backend.generator, &[])?;
-            exit_code = machine.run()?;
-            used_cycles = machine.machine.cycles();
+            match machine.run() {
+                Ok(_exit_code) => {
+                    exit_code = _exit_code;
+                    used_cycles = machine.machine.cycles();
+                }
+                Err(ckb_vm::error::Error::InvalidCycles) => {
+                    exit_code = INVALID_CYCLES_EXIT_CODE;
+                    used_cycles = max_cycles;
+                    if backend.backend_type == BackendType::Polyjuice {
+                        // generate a system log for polyjuice tx
+                        let polyjuice_tx =
+                            crate::typed_transaction::types::PolyjuiceTx::new(raw_tx.to_owned());
+                        let p = polyjuice_tx.parser().ok_or(TransactionError::NoCost)?;
+                        let gas = p.gas();
+                        appended_log = Some(generate_polyjuice_system_log(
+                            raw_tx.to_id().unpack(),
+                            gas,
+                            gas,
+                            Default::default(),
+                            0,
+                        ));
+                    }
+                }
+                Err(err) => {
+                    // unexpected VM error
+                    return Err(err.into());
+                }
+            }
             log::debug!(
                 "[execute tx] VM machine_run time: {}ms, exit code: {} used_cycles: {}",
                 t.elapsed().as_millis(),
@@ -181,6 +211,9 @@ impl Generator {
         }
         run_result.used_cycles = used_cycles;
         run_result.exit_code = exit_code;
+        if let Some(log) = appended_log {
+            run_result.write.logs.push(log);
+        }
 
         Ok(run_result)
     }
