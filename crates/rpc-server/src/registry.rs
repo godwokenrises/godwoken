@@ -171,7 +171,7 @@ pub struct Registry {
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
     mem_pool_state: Arc<MemPoolState>,
-    in_queue_request_map: Arc<InQueueRequestMap>,
+    in_queue_request_map: Option<Arc<InQueueRequestMap>>,
 }
 
 impl Registry {
@@ -208,7 +208,11 @@ impl Registry {
                 true,
             )),
         };
-        let in_queue_request_map = Arc::new(InQueueRequestMap::default());
+        let in_queue_request_map = if matches!(node_mode, NodeMode::FullNode | NodeMode::Test) {
+            Some(Arc::new(InQueueRequestMap::default()))
+        } else {
+            None
+        };
         let (submit_tx, submit_rx) = mpsc::channel(RequestSubmitter::MAX_CHANNEL_SIZE);
         if let Some(mem_pool) = mem_pool.as_ref().to_owned() {
             let submitter = RequestSubmitter {
@@ -302,7 +306,6 @@ impl Registry {
             )
             .with_method("gw_get_data", get_data)
             .with_method("gw_get_transaction", get_transaction)
-            .with_method("gw_is_request_in_queue", is_request_in_queue)
             .with_method("gw_get_transaction_receipt", get_transaction_receipt)
             .with_method("gw_get_withdrawal", get_withdrawal)
             .with_method("gw_execute_l2transaction", execute_l2transaction)
@@ -320,7 +323,8 @@ impl Registry {
         if self.node_mode != NodeMode::ReadOnly {
             server = server
                 .with_method("gw_submit_l2transaction", submit_l2transaction)
-                .with_method("gw_submit_withdrawal_request", submit_withdrawal_request);
+                .with_method("gw_submit_withdrawal_request", submit_withdrawal_request)
+                .with_method("gw_is_request_in_queue", is_request_in_queue);
         }
 
         if let Some(last_submitted_tx_hash) = self.last_submitted_tx_hash {
@@ -606,7 +610,7 @@ impl TryFrom<u8> for GetTxVerbose {
 async fn get_transaction(
     Params(param): Params<GetTxParams>,
     store: Data<Store>,
-    in_queue_request_map: Data<Arc<InQueueRequestMap>>,
+    in_queue_request_map: Data<Option<Arc<InQueueRequestMap>>>,
 ) -> Result<Option<L2TransactionWithStatus>, RpcError> {
     let (tx_hash, verbose) = match param {
         GetTxParams::Default((tx_hash,)) => (to_h256(tx_hash), GetTxVerbose::TxWithStatus),
@@ -618,7 +622,10 @@ async fn get_transaction(
         }
     };
 
-    if let Some(tx) = in_queue_request_map.get_transaction(&tx_hash) {
+    if let Some(tx) = in_queue_request_map
+        .as_deref()
+        .and_then(|m| m.get_transaction(&tx_hash))
+    {
         return Ok(Some(L2TransactionWithStatus {
             transaction: matches!(verbose, GetTxVerbose::TxWithStatus).then(|| tx.into()),
             status: L2TransactionStatus::Pending,
@@ -652,11 +659,13 @@ async fn get_transaction(
 
 async fn is_request_in_queue(
     Params((hash,)): Params<(JsonH256,)>,
-    in_queue_request_map: Data<Arc<InQueueRequestMap>>,
+    in_queue_request_map: Data<Option<Arc<InQueueRequestMap>>>,
 ) -> Result<bool, RpcError> {
     let hash = to_h256(hash);
 
-    Ok(in_queue_request_map.contains(&hash))
+    Ok(in_queue_request_map
+        .as_deref()
+        .map_or(false, |m| m.contains(&hash)))
 }
 
 async fn get_block_committed_info(
@@ -946,7 +955,7 @@ async fn execute_raw_l2transaction(
 async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     (in_queue_request_map, submit_tx): (
-        Data<Arc<InQueueRequestMap>>,
+        Data<Option<Arc<InQueueRequestMap>>>,
         Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
     ),
     rate_limiter: Data<Option<SendTransactionRateLimiter>>,
@@ -1016,7 +1025,11 @@ async fn submit_l2transaction(
 
     let request = Request::Tx(tx);
     // Use permit to insert before send so that remove won't happen before insert.
-    if let Some(handle) = in_queue_request_map.insert(tx_hash, request.clone()) {
+    if let Some(handle) = in_queue_request_map
+        .as_ref()
+        .expect("in_queue_request_map")
+        .insert(tx_hash, request.clone())
+    {
         // Send if the request wasn't already in the map.
         permit.send((handle, request));
     }
@@ -1032,7 +1045,7 @@ async fn submit_withdrawal_request(
     generator: Data<Generator>,
     store: Data<Store>,
     (in_queue_request_map, submit_tx): (
-        Data<Arc<InQueueRequestMap>>,
+        Data<Option<Arc<InQueueRequestMap>>>,
         Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
     ),
     rpc_client: Data<RPCClient>,
@@ -1096,7 +1109,11 @@ async fn submit_withdrawal_request(
 
     let request = Request::Withdrawal(withdrawal);
     // Use permit to insert before send so that remove won't happen before insert.
-    if let Some(handle) = in_queue_request_map.insert(withdrawal_hash.into(), request.clone()) {
+    if let Some(handle) = in_queue_request_map
+        .as_ref()
+        .expect("in_queue_request_map")
+        .insert(withdrawal_hash.into(), request.clone())
+    {
         // Send if the request wasn't already in the map.
         permit.send((handle, request));
     }
@@ -1133,7 +1150,7 @@ impl TryFrom<u8> for GetWithdrawalVerbose {
 async fn get_withdrawal(
     Params(param): Params<GetWithdrawalParams>,
     store: Data<Store>,
-    in_queue_request_map: Data<Arc<InQueueRequestMap>>,
+    in_queue_request_map: Data<Option<Arc<InQueueRequestMap>>>,
 ) -> Result<Option<WithdrawalWithStatus>, RpcError> {
     let (withdrawal_hash, verbose) = match param {
         GetWithdrawalParams::Default((withdrawal_hash,)) => (
@@ -1148,7 +1165,10 @@ async fn get_withdrawal(
         }
     };
 
-    if let Some(w) = in_queue_request_map.get_withdrawal(&withdrawal_hash) {
+    if let Some(w) = in_queue_request_map
+        .as_deref()
+        .and_then(|m| m.get_withdrawal(&withdrawal_hash))
+    {
         return Ok(Some(WithdrawalWithStatus {
             withdrawal: matches!(verbose, GetWithdrawalVerbose::WithdrawalWithStatus)
                 .then(|| w.into()),
