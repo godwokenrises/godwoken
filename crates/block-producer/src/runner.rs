@@ -65,6 +65,7 @@ use tokio::{
     spawn,
     sync::{broadcast, mpsc, Mutex},
 };
+use tracing::{info_span, instrument};
 
 const MIN_CKB_VERSION: &str = "0.40.0";
 const EVENT_TIMEOUT_SECONDS: u64 = 30;
@@ -76,6 +77,21 @@ struct ChainTaskContext {
     withdrawal_unlocker: Option<FinalizedWithdrawalUnlocker>,
     cleaner: Option<Arc<Cleaner>>,
 }
+
+struct ChainTaskRunStatus {
+    opt_tip_number_hash: Option<(u64, H256)>,
+    last_event_time: Instant,
+}
+
+impl Default for ChainTaskRunStatus {
+    fn default() -> Self {
+        ChainTaskRunStatus {
+            opt_tip_number_hash: None,
+            last_event_time: Instant::now(),
+        }
+    }
+}
+
 struct ChainTask {
     rpc_client: RPCClient,
     poll_interval: Duration,
@@ -137,6 +153,7 @@ impl ChainTask {
         }
     }
 
+    #[instrument(skip_all, fields(tip_number = tip_number, tip_hash = %tip_hash.pack()))]
     async fn sync_next(
         &self,
         tip_number: u64,
@@ -303,36 +320,31 @@ impl ChainTask {
         }
     }
 
-    async fn run(&mut self, backoff: &mut ExponentialBackoff) -> Result<()> {
+    // How to get tip_number and tip_hash only once? then loop chain task run only?
+    #[instrument(skip_all, err(Debug))]
+    async fn run(&mut self, status: &ChainTaskRunStatus) -> Result<ChainTaskRunStatus> {
         // get tip
-        let (mut tip_number, mut tip_hash) = {
-            let tip = self.rpc_client.get_tip().await?;
-            let tip_number: u64 = tip.number().unpack();
-            let tip_hash: H256 = tip.block_hash().unpack();
-            (tip_number, tip_hash)
+        let (tip_number, tip_hash) = match status.opt_tip_number_hash {
+            Some((number, hash)) => (number, hash),
+            None => {
+                let tip = self.rpc_client.get_tip().await?;
+                let tip_number: u64 = tip.number().unpack();
+                let tip_hash: H256 = tip.block_hash().unpack();
+                (tip_number, tip_hash)
+            }
         };
 
-        let mut last_event_time = Instant::now();
+        let opt_tip_number_hash = self
+            .metrics_monitor
+            .instrument(self.sync_next(tip_number, tip_hash, &status.last_event_time))
+            .await?;
 
-        loop {
-            // Exit if shutdown event is received.
-            if self.shutdown_event.try_recv().is_ok() {
-                log::info!("ChainTask existed successfully");
-                return Ok(());
-            }
+        let updated_status = ChainTaskRunStatus {
+            opt_tip_number_hash: opt_tip_number_hash.or(status.opt_tip_number_hash.to_owned()),
+            last_event_time: Instant::now(),
+        };
 
-            if let Some((_tip_number, _tip_hash)) = self
-                .metrics_monitor
-                .instrument(self.sync_next(tip_number, tip_hash, &last_event_time))
-                .await?
-            {
-                tip_number = _tip_number;
-                tip_hash = _tip_hash;
-                last_event_time = Instant::now();
-            }
-            backoff.reset();
-            tokio::time::sleep(self.poll_interval).await;
-        }
+        Ok(updated_status)
     }
 }
 
@@ -886,13 +898,45 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                         shutdown_send,
                         shutdown_event_recv,
                     );
-                    while let Err(err) = chain_task.run(&mut backoff).await {
-                        if err.is::<RPCRequestError>() {
-                            log::error!("chain polling loop request error, will retry: {}", err);
-                            tokio::time::sleep(backoff.next_sleep()).await;
-                        } else {
-                            log::error!("chain polling loop exit unexpected, error: {}", err);
-                            break;
+
+                    let mut run_status = ChainTaskRunStatus::default();
+                    loop {
+                        // Exit if shutdown event is received.
+                        if chain_task.shutdown_event.try_recv().is_ok() {
+                            log::info!("ChainTask existed successfully");
+                            return;
+                        }
+
+                        let chain_task_run_span = info_span!("chain_task_run");
+                        let _run_guard = chain_task_run_span.enter();
+
+                        match chain_task.run(&run_status).await {
+                            Ok(updated_status) => {
+                                run_status = updated_status;
+                                backoff.reset();
+
+                                let interval_sleep_span = info_span!("chain_task interval sleep");
+                                let _guard = interval_sleep_span.enter();
+                                tokio::time::sleep(chain_task.poll_interval).await;
+                            }
+                            Err(err) if err.is::<RPCRequestError>() => {
+                                // Reset status and refresh tip number hash
+                                run_status = ChainTaskRunStatus::default();
+                                let backoff_sleep = backoff.next_sleep();
+                                log::error!(
+                                    "chain polling loop request error, will retry in {}s: {}",
+                                    backoff_sleep.as_secs(),
+                                    err
+                                );
+
+                                let backoff_sleep_span = info_span!("chain_task backoff sleep");
+                                let _guard = backoff_sleep_span.enter();
+                                tokio::time::sleep(backoff_sleep).await;
+                            }
+                            Err(err) => {
+                                log::error!("chain polling loop exit unexpected, error: {}", err);
+                                break;
+                            }
                         }
                     }
                 });
