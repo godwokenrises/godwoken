@@ -340,7 +340,8 @@ impl ChainTask {
             .await?;
 
         let updated_status = ChainTaskRunStatus {
-            opt_tip_number_hash: opt_tip_number_hash.or(status.opt_tip_number_hash.to_owned()),
+            opt_tip_number_hash: opt_tip_number_hash
+                .or_else(|| status.opt_tip_number_hash.to_owned()),
             last_event_time: Instant::now(),
         };
 
