@@ -165,7 +165,7 @@ impl BlockProducer {
         self.last_submitted_tx_hash.clone()
     }
 
-    #[instrument(skip_all, fields(event = %event))]
+    #[instrument(skip_all, name = "block producer handle_event")]
     pub async fn handle_event(&mut self, event: ChainEvent) -> Result<()> {
         if let Some(ref tests_control) = self.tests_control {
             match tests_control.payload().await {
