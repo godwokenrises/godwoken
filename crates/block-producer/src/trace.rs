@@ -38,6 +38,7 @@ pub fn init(trace: Option<Trace>) -> Result<ShutdownGuard> {
             let jaeger_layer = {
                 let tracer = opentelemetry_jaeger::new_pipeline()
                     .with_service_name("godwoken")
+                    .with_auto_split_batch(true)
                     .install_batch(opentelemetry::runtime::Tokio)?;
                 tracing_opentelemetry::layer().with_tracer(tracer)
             };

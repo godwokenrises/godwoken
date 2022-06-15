@@ -15,6 +15,7 @@ use gw_types::{
     bytes::Bytes,
     packed::{L2Transaction, RawL2Transaction, Script},
 };
+use gw_utils::polyjuice_parser::PolyjuiceParser;
 use lazy_static::lazy_static;
 use secp256k1::recovery::{RecoverableSignature, RecoveryId};
 use sha3::{Digest, Keccak256};
@@ -376,30 +377,14 @@ fn calc_godwoken_signing_message(
 }
 
 fn try_assemble_polyjuice_args(raw_tx: RawL2Transaction, receiver_script: Script) -> Option<Bytes> {
-    let args: Bytes = raw_tx.args().unpack();
-    if args.len() < 52 {
-        return None;
-    }
-    if args[0..7] != b"\xFF\xFF\xFFPOLY"[..] {
-        return None;
-    }
+    let parser = PolyjuiceParser::from_raw_l2_tx(&raw_tx)?;
     let mut stream = rlp::RlpStream::new();
     stream.begin_unbounded_list();
     let nonce: u32 = raw_tx.nonce().unpack();
     stream.append(&nonce);
-    let gas_price = {
-        let mut data = [0u8; 16];
-        data.copy_from_slice(&args[16..32]);
-        u128::from_le_bytes(data)
-    };
-    stream.append(&gas_price);
-    let gas_limit = {
-        let mut data = [0u8; 8];
-        data.copy_from_slice(&args[8..16]);
-        u64::from_le_bytes(data)
-    };
-    stream.append(&gas_limit);
-    let to = if args[7] == 3 {
+    stream.append(&parser.gas_price());
+    stream.append(&parser.gas());
+    let to = if parser.is_create() {
         // 3 for EVMC_CREATE
         vec![0u8; 0]
     } else {
@@ -418,21 +403,8 @@ fn try_assemble_polyjuice_args(raw_tx: RawL2Transaction, receiver_script: Script
         to
     };
     stream.append(&to);
-    let value = {
-        let mut data = [0u8; 16];
-        data.copy_from_slice(&args[32..48]);
-        u128::from_le_bytes(data)
-    };
-    stream.append(&value);
-    let payload_length = {
-        let mut data = [0u8; 4];
-        data.copy_from_slice(&args[48..52]);
-        u32::from_le_bytes(data)
-    } as usize;
-    if args.len() != 52 + payload_length {
-        return None;
-    }
-    stream.append(&args[52..52 + payload_length].to_vec());
+    stream.append(&parser.value());
+    stream.append(&parser.data().to_vec());
     stream.append(&raw_tx.chain_id().unpack());
     stream.append(&0u8);
     stream.append(&0u8);

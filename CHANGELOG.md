@@ -6,7 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+- Automatically create account for undeposited sender [#710](https://github.com/nervosnetwork/godwoken/pull/710)
+
+## [v1.2.0-rc1] - 2020-06-11
+
 - Support packaging failed transactions into layer2 block [#684](https://github.com/nervosnetwork/godwoken/pull/684)
+- Support upgrade backend executable binaries [#713](https://github.com/nervosnetwork/godwoken/pull/713)
+- Support new option `max_txs`, `max_deposits` and `max_withdrawals` in config file, these options controls the maximum number of each items in a block [#714](https://github.com/nervosnetwork/godwoken/pull/714)
+- Return committed info on withdrawal query RPC [#706](https://github.com/nervosnetwork/godwoken/pull/706)
+
+## [v1.1.4] - 2020-05-30
+- Improve the withdrawal packaging performance [#701](https://github.com/nervosnetwork/godwoken/pull/701)
+- Improve the performance of deposits [#703](https://github.com/nervosnetwork/godwoken/pull/703)
 
 ## [v1.1.0-beta](https://github.com/nervosnetwork/godwoken-docker-prebuilds/pkgs/container/godwoken-prebuilds/21567994?tag=v1.1.0-beta) - 2022-05-08
 

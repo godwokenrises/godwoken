@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
-use gw_common::{blake2b::new_blake2b, state::State, H256};
+use gw_common::{state::State, H256};
 use gw_config::{
     ChainConfig, ConsensusConfig, FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit,
     RPCServerConfig,
@@ -1316,23 +1316,11 @@ fn get_backend_info(generator: Arc<Generator>) -> Vec<BackendInfo> {
         .expect("backends")
         .1
         .values()
-        .map(|b| {
-            let mut validator_code_hash = [0u8; 32];
-            let mut hasher = new_blake2b();
-            hasher.update(&b.validator);
-            hasher.finalize(&mut validator_code_hash);
-            let mut generator_code_hash = [0u8; 32];
-            let mut hasher = new_blake2b();
-            hasher.update(&b.generator);
-            hasher.finalize(&mut generator_code_hash);
-            BackendInfo {
-                validator_code_hash: validator_code_hash.into(),
-                generator_code_hash: generator_code_hash.into(),
-                validator_script_type_hash: ckb_fixed_hash::H256(
-                    b.validator_script_type_hash.into(),
-                ),
-                backend_type: to_rpc_backend_type(&b.backend_type),
-            }
+        .map(|b| BackendInfo {
+            validator_code_hash: ckb_fixed_hash::H256(b.checksum.validator.into()),
+            generator_code_hash: ckb_fixed_hash::H256(b.checksum.generator.into()),
+            validator_script_type_hash: ckb_fixed_hash::H256(b.validator_script_type_hash.into()),
+            backend_type: to_rpc_backend_type(&b.backend_type),
         })
         .collect()
 }

@@ -157,7 +157,7 @@ impl Generator {
             #[cfg(has_asm)]
             let aot_code_opt = self
                 .backend_manage
-                .get_aot_code(&backend.validator_script_type_hash, global_vm_version);
+                .get_aot_code(&backend.checksum.generator, global_vm_version);
             #[cfg(has_asm)]
             if aot_code_opt.is_none() {
                 log::warn!("[machine_run] Not AOT mode!");
@@ -689,17 +689,17 @@ impl Generator {
                     {
                         run_result.write.logs.push(log);
                     }
-                    let args = tx.extract_tx_args().ok_or(TransactionError::NoCost)?;
+                    let parser = tx.parser().ok_or(TransactionError::NoCost)?;
                     let gas_used = match read_polyjuice_gas_used(&run_result) {
                         Some(gas_used) => gas_used,
                         None => {
                             log::warn!(
                                 "[gw-generator] failed to parse gas_used, use gas_limit instead"
                             );
-                            args.gas_limit
+                            parser.gas()
                         }
                     };
-                    gw_types::U256::from(gas_used).checked_mul(args.gas_price.into())
+                    gw_types::U256::from(gas_used).checked_mul(parser.gas_price().into())
                 }
             }
             .ok_or(TransactionError::NoCost)?;

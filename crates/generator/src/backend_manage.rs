@@ -1,5 +1,5 @@
 use anyhow::{bail, Context, Result};
-use gw_common::H256;
+use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BackendConfig, BackendSwitchConfig, BackendType};
 use gw_types::bytes::Bytes;
 use std::{collections::HashMap, fs};
@@ -7,12 +7,67 @@ use std::{collections::HashMap, fs};
 #[cfg(has_asm)]
 use crate::types::vm::AotCode;
 
+#[derive(Default, Clone)]
+pub struct BackendCheckSum {
+    pub validator: H256,
+    pub generator: H256,
+}
+
+impl std::fmt::Debug for BackendCheckSum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BackendCheckSum")
+            .field("validator", &hex::encode(self.validator.as_slice()))
+            .field("generator", &hex::encode(self.generator.as_slice()))
+            .finish()
+    }
+}
+
 #[derive(Clone)]
 pub struct Backend {
     pub validator: Bytes,
     pub generator: Bytes,
     pub validator_script_type_hash: H256,
     pub backend_type: BackendType,
+    pub checksum: BackendCheckSum,
+}
+
+impl Backend {
+    pub fn new(
+        backend_type: BackendType,
+        validator_script_type_hash: H256,
+        validator: Bytes,
+        generator: Bytes,
+    ) -> Self {
+        let checksum = {
+            let validator = {
+                let mut hasher = new_blake2b();
+                hasher.update(&validator);
+                let mut buf = [0u8; 32];
+                hasher.finalize(&mut buf);
+                buf.into()
+            };
+            let generator = {
+                let mut hasher = new_blake2b();
+                hasher.update(&generator);
+                let mut buf = [0u8; 32];
+                hasher.finalize(&mut buf);
+                buf.into()
+            };
+
+            BackendCheckSum {
+                validator,
+                generator,
+            }
+        };
+
+        Self {
+            validator,
+            generator,
+            validator_script_type_hash,
+            backend_type,
+            checksum,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -52,6 +107,8 @@ impl BackendManage {
             .cloned()
             .unwrap_or_default();
 
+        let switch_height = config.switch_height;
+
         // register backends
         for config in config.backends {
             let BackendConfig {
@@ -74,16 +131,24 @@ impl BackendManage {
                 let hash: [u8; 32] = validator_script_type_hash.into();
                 hash.into()
             };
-            let backend = Backend {
+            let backend = Backend::new(
+                backend_type,
+                validator_script_type_hash,
                 validator,
                 generator,
-                validator_script_type_hash,
-                backend_type,
-            };
+            );
             #[cfg(has_asm)]
             if compile {
                 self.compile_backend(&backend);
             }
+
+            log::debug!(
+                "registry backend {:?}({:?}) at height {}",
+                backend.backend_type,
+                backend.checksum,
+                switch_height
+            );
+
             backends.insert(backend.validator_script_type_hash, backend);
         }
 
@@ -94,12 +159,12 @@ impl BackendManage {
     #[cfg(has_asm)]
     fn compile_backend(&mut self, backend: &Backend) {
         self.aot_codes.0.insert(
-            backend.validator_script_type_hash,
+            backend.checksum.generator,
             self.aot_compile(&backend.generator, 0)
                 .expect("Ahead-of-time compile"),
         );
         self.aot_codes.1.insert(
-            backend.validator_script_type_hash,
+            backend.checksum.generator,
             self.aot_compile(&backend.generator, 1)
                 .expect("Ahead-of-time compile"),
         );
@@ -118,6 +183,15 @@ impl BackendManage {
     pub fn get_backend(&self, block_number: u64, code_hash: &H256) -> Option<&Backend> {
         self.get_backends_at_height(block_number)
             .and_then(|(_number, backends)| backends.get(code_hash))
+            .map(|backend| {
+                log::debug!(
+                    "get backend {:?}({:?}) at height {}",
+                    backend.backend_type,
+                    backend.checksum,
+                    block_number
+                );
+                backend
+            })
     }
 
     #[cfg(has_asm)]
@@ -140,6 +214,11 @@ impl BackendManage {
     /// get aot_code according to special VM version
     #[cfg(has_asm)]
     pub(crate) fn get_aot_code(&self, code_hash: &H256, vm_version: u32) -> Option<&AotCode> {
+        log::debug!(
+            "get_aot_code hash: {} version: {}",
+            hex::encode(code_hash.as_slice()),
+            vm_version
+        );
         match vm_version {
             0 => self.aot_codes.0.get(code_hash),
             1 => self.aot_codes.1.get(code_hash),

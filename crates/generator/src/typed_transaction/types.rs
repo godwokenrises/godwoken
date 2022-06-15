@@ -8,6 +8,7 @@ use gw_types::{
     prelude::*,
     U256,
 };
+use gw_utils::polyjuice_parser::PolyjuiceParser;
 
 /// Types Transaction
 pub enum TypedRawTransaction {
@@ -123,64 +124,57 @@ impl SimpleUDTTx {
     }
 }
 
-pub struct PolyjuiceTxArgs {
-    pub value: u128,
-    pub gas_price: u128,
-    pub gas_limit: u64,
-}
-
 pub struct PolyjuiceTx(RawL2Transaction);
 impl PolyjuiceTx {
-    pub fn extract_tx_args(&self) -> Option<PolyjuiceTxArgs> {
-        let args: Bytes = self.0.args().unpack();
-        if args.len() < 52 {
-            log::error!(
-                "[gw-generator] parse PolyjuiceTx error, wrong args.len expected: >= 52, actual: {}",
-                args.len()
-            );
-            return None;
-        }
-        if args[0..7] != b"\xFF\xFF\xFFPOLY"[..] {
-            log::error!("[gw-generator] parse PolyjuiceTx error, invalid args",);
-            return None;
-        }
-
-        // parse gas price, gas limit, value
-        let gas_price = {
-            let mut data = [0u8; 16];
-            data.copy_from_slice(&args[16..32]);
-            u128::from_le_bytes(data)
-        };
-        let gas_limit = {
-            let mut data = [0u8; 8];
-            data.copy_from_slice(&args[8..16]);
-            u64::from_le_bytes(data)
-        };
-
-        let value = {
-            let mut data = [0u8; 16];
-            data.copy_from_slice(&args[32..48]);
-            u128::from_le_bytes(data)
-        };
-        Some(PolyjuiceTxArgs {
-            value,
-            gas_price,
-            gas_limit,
-        })
+    pub fn parser(&self) -> Option<PolyjuiceParser> {
+        PolyjuiceParser::from_raw_l2_tx(&self.0)
     }
 
     /// Total cost of a tx, sender's balance must sufficient to pay Cost(value + gas_price * gas_limit)
     pub fn cost(&self) -> Option<U256> {
-        match self.extract_tx_args() {
-            Some(PolyjuiceTxArgs {
-                value,
-                gas_price,
-                gas_limit,
-            }) => {
-                let cost = value.checked_add(gas_price.checked_mul(gas_limit.into())?)?;
+        match self.parser() {
+            Some(parser) => {
+                let cost = parser
+                    .value()
+                    .checked_add(parser.gas_price().checked_mul(parser.gas().into())?)?;
                 cost.try_into().ok()
             }
             None => None,
         }
+    }
+
+    /// Intrinsic gas
+    pub fn intrinsic_gas(&self) -> Option<u64> {
+        // Minimal gas of a normal transaction
+        const MIN_TX_GAS: u64 = 21000;
+        // Minimal gas of a transaction that creates a contract
+        const MIN_CONTRACT_CREATION_TX_GAS: u64 = 53000;
+        // Gas per byte of non zero data attached to a transaction
+        const DATA_NONE_ZERO_GAS: u64 = 16;
+        // Gas per byte of data attached to a transaction
+        const DATA_ZERO_GAS: u64 = 4;
+
+        let p = self.parser()?;
+
+        // Set the starting gas for the raw transaction
+        let mut gas = if p.is_create() {
+            MIN_CONTRACT_CREATION_TX_GAS
+        } else {
+            MIN_TX_GAS
+        };
+        if p.data_size() > 0 {
+            let mut non_zeros = 0u64;
+            for &b in p.data() {
+                if b != 0 {
+                    non_zeros += 1;
+                }
+            }
+            // nonzero bytes gas
+            gas = gas.checked_add(non_zeros.checked_mul(DATA_NONE_ZERO_GAS)?)?;
+            let zeros = p.data_size() as u64 - non_zeros;
+            // zero bytes gas
+            gas = gas.checked_add(zeros.checked_mul(DATA_ZERO_GAS)?)?;
+        }
+        Some(gas)
     }
 }

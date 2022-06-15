@@ -40,7 +40,6 @@ use gw_rpc_server::{
     registry::{Registry, RegistryArgs},
     server::start_jsonrpc_server,
 };
-use gw_rpc_ws_server::{notify_controller::NotifyService, server::start_jsonrpc_ws_server};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
@@ -488,56 +487,46 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
     }
     let base = BaseInitComponents::init(&config, skip_config_check).await?;
-    let (mem_pool, wallet, offchain_mock_context, err_receipt_notify_ctrl) =
-        match config.block_producer.as_ref() {
-            Some(block_producer_config) => {
-                let wallet = Wallet::from_config(&block_producer_config.wallet_config)
-                    .with_context(|| "init wallet")?;
-                let offchain_mock_context = base
-                    .init_offchain_mock_context(block_producer_config)
-                    .await?;
-                let mem_pool_provider = DefaultMemPoolProvider::new(
-                    base.rpc_client.clone(),
-                    base.store.clone(),
-                    config.mem_pool.mem_block.clone(),
+    let (mem_pool, wallet, offchain_mock_context) = match config.block_producer.as_ref() {
+        Some(block_producer_config) => {
+            let wallet = Wallet::from_config(&block_producer_config.wallet_config)
+                .with_context(|| "init wallet")?;
+            let offchain_mock_context = base
+                .init_offchain_mock_context(block_producer_config)
+                .await?;
+            let mem_pool_provider = DefaultMemPoolProvider::new(
+                base.rpc_client.clone(),
+                base.store.clone(),
+                config.mem_pool.mem_block.clone(),
+            );
+            let mem_pool = {
+                let block_producer = RegistryAddress::new(
+                    block_producer_config.block_producer.registry_id,
+                    block_producer_config
+                        .block_producer
+                        .address
+                        .as_bytes()
+                        .to_vec(),
                 );
-                let notify_controller = {
-                    let opt_ws_listen = config.rpc_server.err_receipt_ws_listen.as_ref();
-                    opt_ws_listen.map(|_| NotifyService::new().start())
+                let args = MemPoolCreateArgs {
+                    block_producer,
+                    store: base.store.clone(),
+                    generator: base.generator.clone(),
+                    provider: Box::new(mem_pool_provider),
+                    config: config.mem_pool.clone(),
+                    node_mode: config.node_mode,
+                    dynamic_config_manager: base.dynamic_config_manager.clone(),
                 };
-                let mem_pool = {
-                    let block_producer = RegistryAddress::new(
-                        block_producer_config.block_producer.registry_id,
-                        block_producer_config
-                            .block_producer
-                            .address
-                            .as_bytes()
-                            .to_vec(),
-                    );
-                    let args = MemPoolCreateArgs {
-                        block_producer,
-                        store: base.store.clone(),
-                        generator: base.generator.clone(),
-                        provider: Box::new(mem_pool_provider),
-                        config: config.mem_pool.clone(),
-                        node_mode: config.node_mode,
-                        dynamic_config_manager: base.dynamic_config_manager.clone(),
-                    };
-                    Arc::new(Mutex::new(
-                        MemPool::create(args)
-                            .await
-                            .with_context(|| "create mem-pool")?,
-                    ))
-                };
-                (
-                    Some(mem_pool),
-                    Some(wallet),
-                    Some(offchain_mock_context),
-                    notify_controller,
-                )
-            }
-            None => (None, None, None, None),
-        };
+                Arc::new(Mutex::new(
+                    MemPool::create(args)
+                        .await
+                        .with_context(|| "create mem-pool")?,
+                ))
+            };
+            (Some(mem_pool), Some(wallet), Some(offchain_mock_context))
+        }
+        None => (None, None, None),
+    };
 
     let BaseInitComponents {
         rollup_config,
@@ -845,46 +834,11 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
     });
 
-    let mut rpc_ws_task = None;
-    if let Some(notify_controller) = err_receipt_notify_ctrl {
-        let rpc_ws_addr = {
-            let ws_listen = config.rpc_server.err_receipt_ws_listen.as_ref();
-            ws_listen.expect("err receipt ws listen").to_owned()
-        };
-        let ws_shutdown_send = shutdown_send.clone();
-        let sub_shutdown = shutdown_event.subscribe();
-        rpc_ws_task = Some(spawn(async move {
-            if let Err(err) = start_jsonrpc_ws_server(
-                &rpc_ws_addr,
-                notify_controller.clone(),
-                ws_shutdown_send,
-                sub_shutdown,
-            )
-            .await
-            {
-                log::error!("Error running JSONRPC WebSockert server: {:?}", err);
-            }
-            notify_controller.stop();
-        }));
-    }
-
-    match rpc_ws_task {
-        Some(rpc_ws_task) => {
-            tokio::select! {
-                _ = sigint_or_sigterm() => { },
-                _ = chain_task => {},
-                _ = rpc_ws_task => {},
-                _ = rpc_task => {},
-            }
-        }
-        None => {
-            tokio::select! {
-                _ = sigint_or_sigterm() => { },
-                _ = chain_task => {},
-                _ = rpc_task => {},
-            };
-        }
-    }
+    tokio::select! {
+        _ = sigint_or_sigterm() => { },
+        _ = chain_task => {},
+        _ = rpc_task => {},
+    };
 
     //If any task is out of running, broadcast shutdown event.
     log::info!("send shutdown event");
