@@ -16,7 +16,6 @@ pub const SCRIPT_BUILD_DIR_PATH: &str = "scripts-build/";
 pub const SCRIPTS_DIR_PATH: &str = "scripts/";
 const GODWOKEN_SCRIPTS: &str = "godwoken-scripts";
 const GODWOKEN_POLYJUICE: &str = "godwoken-polyjuice";
-const CLERKB: &str = "clerkb";
 
 arg_enum! {
     #[derive(Debug)]
@@ -38,79 +37,47 @@ struct ScriptsBuildConfig {
 impl Default for ScriptsBuildConfig {
     fn default() -> Self {
         ScriptsBuildConfig {
-            prebuild_image: PathBuf::from("nervos/godwoken-prebuilds:v0.6.7-rc1"),
+            prebuild_image: PathBuf::from("ghcr.io/nervosnetwork/godwoken-prebuilds:1.2.0-rc1"),
             repos: ReposUrl {
                 godwoken_scripts: Url::parse(
-                    "https://github.com/nervosnetwork/godwoken-scripts#v0.8.4-rc1",
+                    "https://github.com/nervosnetwork/godwoken-scripts#v1.1.0-beta",
                 )
                 .expect("url parse"),
                 godwoken_polyjuice: Url::parse(
-                    "https://github.com/nervosnetwork/godwoken-polyjuice#v0.8.8",
+                    "https://github.com/nervosnetwork/godwoken-polyjuice#v1.1.5-beta",
                 )
                 .expect("url parse"),
-                clerkb: Url::parse("https://github.com/nervosnetwork/clerkb#v0.4.0")
-                    .expect("url parse"),
             },
             scripts: [
-                (
-                    "always_success",
-                    "godwoken-scripts/build/release/always-success",
-                ),
-                (
-                    "custodian_lock",
-                    "godwoken-scripts/build/release/custodian-lock",
-                ),
-                (
-                    "deposit_lock",
-                    "godwoken-scripts/build/release/deposit-lock",
-                ),
-                (
-                    "withdrawal_lock",
-                    "godwoken-scripts/build/release/withdrawal-lock",
-                ),
-                (
-                    "challenge_lock",
-                    "godwoken-scripts/build/release/challenge-lock",
-                ),
-                ("stake_lock", "godwoken-scripts/build/release/stake-lock"),
-                (
-                    "tron_account_lock",
-                    "godwoken-scripts/build/release/tron-account-lock",
-                ),
-                (
-                    "state_validator",
-                    "godwoken-scripts/build/release/state-validator",
-                ),
-                (
-                    "eth_account_lock",
-                    "godwoken-scripts/build/release/eth-account-lock",
-                ),
-                (
-                    "l2_sudt_generator",
-                    "godwoken-scripts/c/build/sudt-generator",
-                ),
-                (
-                    "l2_sudt_validator",
-                    "godwoken-scripts/c/build/sudt-validator",
-                ),
+                ("always_success", "godwoken-scripts/always-success"),
+                ("custodian_lock", "godwoken-scripts/custodian-lock"),
+                ("deposit_lock", "godwoken-scripts/deposit-lock"),
+                ("withdrawal_lock", "godwoken-scripts/withdrawal-lock"),
+                ("challenge_lock", "godwoken-scripts/challenge-lock"),
+                ("stake_lock", "godwoken-scripts/stake-lock"),
+                ("state_validator", "godwoken-scripts/state-validator"),
+                ("eth_account_lock", "godwoken-scripts/eth-account-lock"),
+                ("l2_sudt_generator", "godwoken-scripts/sudt-generator"),
+                ("l2_sudt_validator", "godwoken-scripts/sudt-validator"),
                 (
                     "meta_contract_generator",
-                    "godwoken-scripts/c/build/meta-contract-generator",
+                    "godwoken-scripts/meta-contract-generator",
                 ),
                 (
                     "meta_contract_validator",
-                    "godwoken-scripts/c/build/meta-contract-validator",
+                    "godwoken-scripts/meta-contract-validator",
                 ),
-                ("polyjuice_generator", "godwoken-polyjuice/build/generator"),
-                ("polyjuice_validator", "godwoken-polyjuice/build/validator"),
                 (
                     "eth_addr_reg_generator",
-                    "godwoken-polyjuice/build/eth_addr_reg_generator",
+                    "godwoken-scripts/eth-addr-reg-generator",
                 ),
                 (
                     "eth_addr_reg_validator",
-                    "godwoken-polyjuice/build/eth_addr_reg_validator",
+                    "godwoken-scripts/eth-addr-reg-validator",
                 ),
+                ("omni_lock", "godwoken-scripts/omni_lock"),
+                ("polyjuice_generator", "godwoken-polyjuice/generator.aot"),
+                ("polyjuice_validator", "godwoken-polyjuice/validator"),
             ]
             .iter()
             .map(|(k, v)| {
@@ -131,7 +98,6 @@ impl Default for ScriptsBuildConfig {
 struct ReposUrl {
     godwoken_scripts: Url,
     godwoken_polyjuice: Url,
-    clerkb: Url,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
@@ -235,15 +201,8 @@ fn prepare_scripts_in_build_mode(
         repos_dir,
         GODWOKEN_POLYJUICE,
     );
-    run_pull_code(
-        scripts_build_config.repos.clerkb.clone(),
-        true,
-        repos_dir,
-        CLERKB,
-    );
     build_godwoken_scripts(repos_dir, GODWOKEN_SCRIPTS);
     build_godwoken_polyjuice(repos_dir, GODWOKEN_POLYJUICE);
-    build_clerkb(repos_dir, CLERKB);
     collect_scripts_to_target(repos_dir, target_dir, &scripts_build_config.scripts);
 }
 
@@ -342,12 +301,6 @@ fn build_godwoken_scripts(repos_dir: &Path, repo_name: &str) {
 
 fn build_godwoken_polyjuice(repos_dir: &Path, repo_name: &str) {
     let target_dir = repos_dir.join(repo_name).display().to_string();
-    utils::transaction::run("make", vec!["-C", &target_dir, "all-via-docker"]).expect("run make");
-}
-
-fn build_clerkb(repos_dir: &Path, repo_name: &str) {
-    let target_dir = repos_dir.join(repo_name).display().to_string();
-    utils::transaction::run("yarn", vec!["--cwd", &target_dir]).expect("run yarn");
     utils::transaction::run("make", vec!["-C", &target_dir, "all-via-docker"]).expect("run make");
 }
 
