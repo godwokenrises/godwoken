@@ -29,7 +29,6 @@ use gw_common::{
     },
     H256,
 };
-use gw_config::BackendType;
 use gw_store::{state::state_db::StateContext, transaction::StoreTransaction};
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
@@ -133,8 +132,6 @@ impl Generator {
         let mut run_result = RunResult::default();
         let used_cycles;
         let exit_code;
-        let mut appended_log = None;
-
         {
             let t = Instant::now();
             let global_vm_version = GLOBAL_VM_VERSION.load(SeqCst);
@@ -182,20 +179,6 @@ impl Generator {
                 Err(ckb_vm::error::Error::InvalidCycles) => {
                     exit_code = INVALID_CYCLES_EXIT_CODE;
                     used_cycles = max_cycles;
-                    if backend.backend_type == BackendType::Polyjuice {
-                        // generate a system log for polyjuice tx
-                        let polyjuice_tx =
-                            crate::typed_transaction::types::PolyjuiceTx::new(raw_tx.to_owned());
-                        let p = polyjuice_tx.parser().ok_or(TransactionError::NoCost)?;
-                        let gas = p.gas();
-                        appended_log = Some(generate_polyjuice_system_log(
-                            raw_tx.to_id().unpack(),
-                            gas,
-                            gas,
-                            Default::default(),
-                            0,
-                        ));
-                    }
                 }
                 Err(err) => {
                     // unexpected VM error
@@ -211,9 +194,6 @@ impl Generator {
         }
         run_result.used_cycles = used_cycles;
         run_result.exit_code = exit_code;
-        if let Some(log) = appended_log {
-            run_result.write.logs.push(log);
-        }
 
         Ok(run_result)
     }
@@ -721,6 +701,19 @@ impl Generator {
                         .filter(|log| log.service_flag() == GW_LOG_POLYJUICE_SYSTEM.into())
                     {
                         run_result.write.logs.push(log);
+                    } else {
+                        // generate a system log for polyjuice tx
+                        let polyjuice_tx =
+                            crate::typed_transaction::types::PolyjuiceTx::new(raw_tx.to_owned());
+                        let p = polyjuice_tx.parser().ok_or(TransactionError::NoCost)?;
+                        let gas = p.gas();
+                        run_result.write.logs.push(generate_polyjuice_system_log(
+                            raw_tx.to_id().unpack(),
+                            gas,
+                            gas,
+                            Default::default(),
+                            0,
+                        ));
                     }
                     let parser = tx.parser().ok_or(TransactionError::NoCost)?;
                     let gas_used = match read_polyjuice_gas_used(&run_result) {
