@@ -1,4 +1,4 @@
-use ckb_fixed_hash::H256;
+use ckb_fixed_hash::{H160, H256};
 use ckb_jsonrpc_types::{CellDep, Script};
 use gw_config::GenesisConfig;
 use serde::{Deserialize, Serialize};
@@ -70,7 +70,7 @@ pub struct ScriptsDeploymentResult {
 pub struct OmniLockConfig {
     pub cell_dep: CellDep,
     pub script_type_hash: H256,
-    pub pubkey_h160: Option<[u8; 20]>,
+    pub pubkey_h160: Option<H160>,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
