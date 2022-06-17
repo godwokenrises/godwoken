@@ -1,28 +1,29 @@
 use std::{
+    borrow::Borrow,
     convert::TryInto,
+    hash::{Hash, Hasher},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, RwLock,
     },
 };
 
-use crate::snapshot::StoreSnapshot;
-use arc_swap::{ArcSwap, Guard};
-use std::{collections::HashMap, sync::RwLock};
-
 use anyhow::Result;
+use arc_swap::ArcSwap;
 use gw_common::{smt::SMT, H256};
 use gw_db::{
     error::Error,
-    schema::{Col, COLUMNS, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_META},
+    schema::{Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_META},
 };
 use gw_types::{
     from_box_should_be_ok, packed,
     prelude::{Entity, FromSliceShouldBeOk, Pack, Unpack},
 };
+use im::HashMap;
 
 use crate::{
     smt::smt_store::SMTStore,
+    snapshot::StoreSnapshot,
     state::mem_state_db::MemStateTree,
     traits::{
         chain_store::ChainStore,
@@ -49,9 +50,15 @@ impl MemPoolState {
         }
     }
 
-    /// Provides a temporary borrow of snapshot
-    pub fn load(&self) -> Guard<Arc<MemStore>> {
-        self.store.load()
+    /// Create a snapshot of the current state.
+    ///
+    /// Each `MemStore` loaded will be independent — updates on one `MemStore`
+    /// won't be seen by other `MemStore`s.
+    ///
+    /// Note that updates will not be stored in `MemPoolState` unless you call
+    /// [`store`].
+    pub fn load(&self) -> MemStore {
+        MemStore::clone(&self.store.load())
     }
 
     /// Replaces the snapshot inside this instance.
@@ -68,24 +75,26 @@ impl MemPoolState {
     }
 }
 
+#[derive(Clone)]
 enum Value<T> {
     Exist(T),
     Deleted,
 }
 
-type MemColumn = HashMap<Vec<u8>, Value<Vec<u8>>>;
+type ColumnsKeyValueMap = HashMap<(u8, Vec<u8>), Value<Vec<u8>>>;
 
 pub struct MemStore {
-    inner: StoreSnapshot,
-    mem: Vec<RwLock<MemColumn>>,
+    inner: Arc<StoreSnapshot>,
+    // (column, key) -> value.
+    mem: RwLock<ColumnsKeyValueMap>,
 }
 
 impl MemStore {
-    pub fn new(inner: StoreSnapshot) -> Self {
-        let mut mem = Vec::with_capacity(COLUMNS as usize);
-        mem.resize_with(COLUMNS as usize, || RwLock::new(HashMap::default()));
-
-        Self { inner, mem }
+    pub fn new(inner: impl Into<Arc<StoreSnapshot>>) -> Self {
+        Self {
+            inner: inner.into(),
+            mem: RwLock::new(HashMap::new()),
+        }
     }
 
     pub fn state(&self) -> Result<MemStateTree<'_>> {
@@ -155,11 +164,9 @@ impl KVStoreRead for MemStore {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
         match self
             .mem
-            .get(col as usize)
-            .expect("can't found column")
             .read()
             .expect("get read lock failed")
-            .get(key)
+            .get(&(col, key) as &dyn Key)
         {
             Some(Value::Exist(v)) => Some(v.clone().into_boxed_slice()),
             Some(Value::Deleted) => None,
@@ -171,23 +178,71 @@ impl KVStoreRead for MemStore {
 impl KVStoreWrite for MemStore {
     fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
         self.mem
-            .get(col as usize)
-            .expect("can't found column")
             .write()
             .expect("get write lock failed")
-            .insert(key.to_vec(), Value::Exist(value.to_vec()));
+            .insert((col, key.into()), Value::Exist(value.to_vec()));
         Ok(())
     }
 
     fn delete(&self, col: Col, key: &[u8]) -> Result<(), Error> {
         self.mem
-            .get(col as usize)
-            .expect("can't found column")
             .write()
             .expect("get write lock failed")
-            .insert(key.to_vec(), Value::Deleted);
+            .insert((col, key.into()), Value::Deleted);
         Ok(())
     }
 }
 
 impl KVStore for MemStore {}
+
+impl Clone for MemStore {
+    /// Make a clone of the store. This is cheap.
+    ///
+    /// Modifications on the clone will NOT be seen on this store.
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            mem: RwLock::new(self.mem.read().unwrap().clone()),
+        }
+    }
+}
+
+// So that we can query a ColumnsKeyValueMap with (u8, &[u8]), without temporary
+// allocation.
+//
+// https://stackoverflow.com/questions/36480845/how-to-avoid-temporary-allocations-when-using-a-complex-key-for-a-hashmap/50478038#50478038
+trait Key {
+    fn to_key(&self) -> (u8, &[u8]);
+}
+
+impl Hash for dyn Key + '_ {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.to_key().hash(state)
+    }
+}
+
+impl PartialEq for dyn Key + '_ {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_key() == other.to_key()
+    }
+}
+
+impl Eq for dyn Key + '_ {}
+
+impl Key for (u8, Vec<u8>) {
+    fn to_key(&self) -> (u8, &[u8]) {
+        (self.0, &self.1[..])
+    }
+}
+
+impl<'a> Key for (u8, &'a [u8]) {
+    fn to_key(&self) -> (u8, &[u8]) {
+        *self
+    }
+}
+
+impl<'a> Borrow<dyn Key + 'a> for (u8, Vec<u8>) {
+    fn borrow(&self) -> &(dyn Key + 'a) {
+        self
+    }
+}

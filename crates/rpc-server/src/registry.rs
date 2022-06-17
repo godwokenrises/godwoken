@@ -835,6 +835,8 @@ async fn execute_raw_l2transaction(
 
     let db = ctx.store.begin_transaction();
 
+    let mem_state_snap = ctx.mem_pool_state.load();
+
     let block_info = match block_number_opt {
         Some(block_number) => {
             let block_hash = match db.get_block_hash_by_number(block_number)? {
@@ -855,9 +857,7 @@ async fn execute_raw_l2transaction(
                 .number(number.pack())
                 .build()
         }
-        None => ctx
-            .mem_pool_state
-            .load()
+        None => mem_state_snap
             .get_mem_pool_block_info()?
             .expect("get mem pool block info"),
     };
@@ -885,8 +885,7 @@ async fn execute_raw_l2transaction(
                 )?
             }
             None => {
-                let snap = ctx.mem_pool_state.load();
-                let state = snap.state()?;
+                let state = mem_state_snap.state()?;
                 ctx.generator.unchecked_execute_transaction(
                     &chain_view,
                     &state,
