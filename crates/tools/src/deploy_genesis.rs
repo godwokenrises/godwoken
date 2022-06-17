@@ -432,8 +432,8 @@ pub async fn deploy_rollup_cell(args: DeployRollupCellArgs<'_>) -> Result<Rollup
     let (rollup_output, rollup_data): (ckb_packed::CellOutput, Bytes) = {
         let data = genesis_with_global_state.global_state.as_bytes();
         let omni_lock = {
-            let pubkey_h160 = match omni_lock_config.pubkey_h160 {
-                Some(h160) => Bytes::copy_from_slice(&h160),
+            let pubkey_h160 = match omni_lock_config.pubkey_h160.as_ref() {
+                Some(h160) => Bytes::copy_from_slice(h160.as_bytes()),
                 // Use pubkey from deploy privkey
                 None => ckb_packed::Script::from(&owner_address_payload)
                     .args()
