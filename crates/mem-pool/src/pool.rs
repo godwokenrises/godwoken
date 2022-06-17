@@ -208,6 +208,7 @@ impl MemPool {
         // update mem block info
         let snap = mem_pool.mem_pool_state().load();
         snap.update_mem_pool_block_info(mem_pool.mem_block.block_info())?;
+        mem_pool.mem_pool_state().store(snap.into());
         // set tip
         mem_pool.reset(None, Some(tip.0)).await?;
         // clear stored mem blocks
@@ -280,6 +281,7 @@ impl MemPool {
         let mut state = snap.state()?;
         self.push_transaction_with_db(&db, &mut state, tx).await?;
         db.commit()?;
+        self.mem_pool_state.store(snap.into());
         Ok(())
     }
 

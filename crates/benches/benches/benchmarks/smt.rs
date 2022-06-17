@@ -259,6 +259,7 @@ impl BenchExecutionEnvironment {
             }
             transfer_count -= 1;
         }
+        self.mem_pool_state.store(snap.into());
 
         let snap = self.mem_pool_state.load();
         let state = snap.state().unwrap();
