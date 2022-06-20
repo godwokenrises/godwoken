@@ -103,6 +103,7 @@ pub struct MemPool {
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     new_tip_publisher: broadcast::Sender<(H256, u64)>,
     mem_block_config: MemBlockConfig,
+    has_p2p_sync: bool,
 }
 
 pub struct MemPoolCreateArgs {
@@ -113,6 +114,7 @@ pub struct MemPoolCreateArgs {
     pub config: MemPoolConfig,
     pub node_mode: NodeMode,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
+    pub has_p2p_sync: bool,
 }
 
 impl Drop for MemPool {
@@ -135,6 +137,7 @@ impl MemPool {
             config,
             node_mode,
             dynamic_config_manager,
+            has_p2p_sync,
         } = args;
         let pending = Default::default();
 
@@ -198,6 +201,7 @@ impl MemPool {
             dynamic_config_manager,
             new_tip_publisher,
             mem_block_config: config.mem_block,
+            has_p2p_sync,
         };
         mem_pool.restore_pending_withdrawals().await?;
 
@@ -447,13 +451,19 @@ impl MemPool {
 
     /// Reset pool
     ///
-    /// For Full node and Test node:
-    /// this method reset the current state of the mem pool
-    /// discarded txs & withdrawals will be reinject to pool
+    /// - For Full node and Test node:
     ///
-    /// For ReadOnly node:
-    /// This function only update the current tip.
-    /// The state reset of readonly only happend when receives states from publisher, see `refresh_mem_block`
+    ///   This method reset the current state of the mem pool.
+    ///   Discarded txs & withdrawals will be reinject to pool.
+    ///
+    /// - For ReadOnly nodes without P2P sync:
+    ///
+    ///   This method resets the current state of the mem pool.
+    ///
+    /// - For ReadOnly nodes with P2P sync:
+    ///
+    ///   This function only update the current tip.
+    ///   The state reset of readonly only happend when receives states from publisher, see `refresh_mem_block`
     #[instrument(skip_all, fields(old_tip = old_tip.map(|h| display(h.pack())), new_tip = new_tip.map(|h| display(h.pack()))))]
     async fn reset(&mut self, old_tip: Option<H256>, new_tip: Option<H256>) -> Result<()> {
         match self.node_mode {
@@ -479,8 +489,18 @@ impl MemPool {
         };
         let new_tip_block = self.store.get_block(&new_tip)?.expect("new tip block");
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
+        if !self.has_p2p_sync {
+            // For read only nodes that does not have P2P mem-pool syncing, just
+            // reset mem block and mem pool state. Mem block will be mostly
+            // empty and not in sync with full node anyway, so we skip
+            // re-injecting discarded txs/withdrawals.
+            let snapshot = self.store.get_snapshot();
+            self.mem_block.reset(&new_tip_block, Duration::ZERO);
+            let mem_store = MemStore::new(snapshot);
+            mem_store.update_mem_pool_block_info(self.mem_block.block_info())?;
+            self.mem_pool_state.store(Arc::new(mem_store));
+        }
 
-        // Publish new tip.
         let _ = self.new_tip_publisher.send(self.current_tip);
         Ok(())
     }
