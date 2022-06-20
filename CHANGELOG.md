@@ -3,10 +3,13 @@ Documentation of all notable changes to the Godwoken related projects.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com).
 
-
 ## [Unreleased]
 
 - Automatically create account for undeposited sender [#710](https://github.com/nervosnetwork/godwoken/pull/710)
+
+## [v1.2.2] - 2022-06-20
+- Improve block producer chain task tracing [#732](https://github.com/nervosnetwork/godwoken/pull/732)
+- fix: readonly nodes without p2p sync [#737](https://github.com/nervosnetwork/godwoken/pull/737)
 
 ## [v1.2.1-rc1] - 2022-06-15
 - Refresh readonly mem-pool when receives new mem-block [#721](https://github.com/nervosnetwork/godwoken/pull/721)
