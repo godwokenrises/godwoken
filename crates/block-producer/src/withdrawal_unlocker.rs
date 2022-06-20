@@ -16,6 +16,7 @@ use gw_utils::fee::fill_tx_fee;
 use gw_utils::genesis_info::CKBGenesisInfo;
 use gw_utils::transaction_skeleton::TransactionSkeleton;
 use gw_utils::wallet::Wallet;
+use tracing::instrument;
 
 use crate::types::ChainEvent;
 use crate::utils;
@@ -50,6 +51,7 @@ impl FinalizedWithdrawalUnlocker {
         }
     }
 
+    #[instrument(skip_all, name = "withdrawal unlocker handle_event")]
     pub async fn handle_event(&mut self, _event: &ChainEvent) -> Result<()> {
         let unlocked = &self.unlocked_set;
         let rpc_client = &self.unlocker.rpc_client;
