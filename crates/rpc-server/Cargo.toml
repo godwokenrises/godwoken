@@ -18,6 +18,7 @@ gw-generator = { path = "../generator" }
 gw-mem-pool = { path = "../mem-pool" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-version = { path = "../version" }
+gw-utils = { path = "../utils" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-dynamic-config = { path = "../dynamic-config"}
 faster-hex = "0.4"

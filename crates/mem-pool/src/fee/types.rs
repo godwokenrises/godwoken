@@ -181,6 +181,7 @@ fn parse_l2tx_fee_rate(
             let meta_args = MetaContractArgs::from_slice(raw_l2tx_args.as_ref())?;
             let fee = match meta_args.to_enum() {
                 MetaContractArgsUnion::CreateAccount(args) => args.fee().amount().unpack(),
+                MetaContractArgsUnion::BatchCreateEthAccounts(args) => args.fee().amount().unpack(),
             };
             let cycles_limit: u64 = fee_config.meta_cycles_limit;
 
