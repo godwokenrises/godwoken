@@ -691,15 +691,15 @@ async fn get_block(
 
 async fn get_block_by_number(
     Params((block_number,)): Params<(gw_jsonrpc_types::ckb_jsonrpc_types::Uint64,)>,
-    store: Data<Store>,
+    mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<Option<L2BlockView>> {
     let block_number = block_number.value();
-    let db = store.get_snapshot();
-    let block_hash = match db.get_block_hash_by_number(block_number)? {
+    let snap = mem_pool_state.load();
+    let block_hash = match snap.get_block_hash_by_number(block_number)? {
         Some(hash) => hash,
         None => return Ok(None),
     };
-    let block_opt = db.get_block(&block_hash)?.map(|block| {
+    let block_opt = snap.get_block(&block_hash)?.map(|block| {
         let block_view: L2BlockView = block.into();
         block_view
     });
@@ -708,16 +708,16 @@ async fn get_block_by_number(
 
 async fn get_block_hash(
     Params((block_number,)): Params<(gw_jsonrpc_types::ckb_jsonrpc_types::Uint64,)>,
-    store: Data<Store>,
+    mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<Option<JsonH256>> {
     let block_number = block_number.value();
-    let db = store.get_snapshot();
+    let db = mem_pool_state.load();
     let hash_opt = db.get_block_hash_by_number(block_number)?.map(to_jsonh256);
     Ok(hash_opt)
 }
 
-async fn get_tip_block_hash(store: Data<Store>) -> Result<JsonH256> {
-    let tip_block_hash = store.get_snapshot().get_last_valid_tip_block_hash()?;
+async fn get_tip_block_hash(mem_pool_state: Data<Arc<MemPoolState>>) -> Result<JsonH256> {
+    let tip_block_hash = mem_pool_state.load().get_last_valid_tip_block_hash()?;
     Ok(to_jsonh256(tip_block_hash))
 }
 
