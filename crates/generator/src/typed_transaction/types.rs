@@ -126,6 +126,9 @@ impl SimpleUDTTx {
 
 pub struct PolyjuiceTx(RawL2Transaction);
 impl PolyjuiceTx {
+    pub fn new(raw_tx: RawL2Transaction) -> Self {
+        Self(raw_tx)
+    }
     pub fn parser(&self) -> Option<PolyjuiceParser> {
         PolyjuiceParser::from_raw_l2_tx(&self.0)
     }

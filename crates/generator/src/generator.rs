@@ -46,7 +46,7 @@ use ckb_vm::{DefaultMachineBuilder, SupportMachine};
 
 #[cfg(not(has_asm))]
 use ckb_vm::TraceMachine;
-use gw_utils::script_log::GW_LOG_POLYJUICE_SYSTEM;
+use gw_utils::script_log::{generate_polyjuice_system_log, GW_LOG_POLYJUICE_SYSTEM};
 use tracing::instrument;
 
 pub struct ApplyBlockArgs {
@@ -127,10 +127,11 @@ impl Generator {
         max_cycles: u64,
         backend: Backend,
     ) -> Result<RunResult, TransactionError> {
+        const INVALID_CYCLES_EXIT_CODE: i8 = -1;
+
         let mut run_result = RunResult::default();
         let used_cycles;
         let exit_code;
-
         {
             let t = Instant::now();
             let global_vm_version = GLOBAL_VM_VERSION.load(SeqCst);
@@ -170,8 +171,20 @@ impl Generator {
             let mut machine = TraceMachine::new(default_machine);
 
             machine.load_program(&backend.generator, &[])?;
-            exit_code = machine.run()?;
-            used_cycles = machine.machine.cycles();
+            match machine.run() {
+                Ok(_exit_code) => {
+                    exit_code = _exit_code;
+                    used_cycles = machine.machine.cycles();
+                }
+                Err(ckb_vm::error::Error::InvalidCycles) => {
+                    exit_code = INVALID_CYCLES_EXIT_CODE;
+                    used_cycles = max_cycles;
+                }
+                Err(err) => {
+                    // unexpected VM error
+                    return Err(err.into());
+                }
+            }
             log::debug!(
                 "[execute tx] VM machine_run time: {}ms, exit code: {} used_cycles: {}",
                 t.elapsed().as_millis(),
@@ -688,6 +701,19 @@ impl Generator {
                         .filter(|log| log.service_flag() == GW_LOG_POLYJUICE_SYSTEM.into())
                     {
                         run_result.write.logs.push(log);
+                    } else {
+                        // generate a system log for polyjuice tx
+                        let polyjuice_tx =
+                            crate::typed_transaction::types::PolyjuiceTx::new(raw_tx.to_owned());
+                        let p = polyjuice_tx.parser().ok_or(TransactionError::NoCost)?;
+                        let gas = p.gas();
+                        run_result.write.logs.push(generate_polyjuice_system_log(
+                            raw_tx.to_id().unpack(),
+                            gas,
+                            gas,
+                            Default::default(),
+                            0,
+                        ));
                     }
                     let parser = tx.parser().ok_or(TransactionError::NoCost)?;
                     let gas_used = match read_polyjuice_gas_used(&run_result) {

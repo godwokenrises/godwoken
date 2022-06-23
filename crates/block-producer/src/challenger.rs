@@ -37,6 +37,7 @@ use gw_utils::genesis_info::CKBGenesisInfo;
 use gw_utils::transaction_skeleton::TransactionSkeleton;
 use gw_utils::wallet::Wallet;
 use tokio::sync::Mutex;
+use tracing::instrument;
 
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
@@ -110,6 +111,7 @@ impl Challenger {
         }
     }
 
+    #[instrument(skip_all, name = "challenger handle_event")]
     pub async fn handle_event(&mut self, event: ChainEvent) -> Result<()> {
         if let Some(ref tests_control) = self.tests_control {
             match tests_control.payload().await {

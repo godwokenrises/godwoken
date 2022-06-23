@@ -93,7 +93,7 @@ impl ChainUpdater {
     }
 
     // Start syncing
-    #[instrument(skip_all, fields(event = %_event))]
+    #[instrument(skip_all, name = "chain updater handle_event")]
     pub async fn handle_event(&mut self, _event: ChainEvent) -> Result<()> {
         let initial_syncing = !self.initialized;
         // Always start from last valid tip on l1
