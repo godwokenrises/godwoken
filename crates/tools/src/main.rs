@@ -1126,7 +1126,6 @@ async fn main() -> Result<()> {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let amount = m.value_of("amount").unwrap();
             let fee = m.value_of("fee").unwrap();
-            let registry_id = m.value_of("eth-registry-id").unwrap().parse().unwrap();
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
@@ -1144,7 +1143,6 @@ async fn main() -> Result<()> {
                 sudt_id,
                 amount,
                 fee,
-                registry_id,
                 config_path,
                 scripts_deployment_path,
             )
