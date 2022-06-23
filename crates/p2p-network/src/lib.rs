@@ -41,7 +41,6 @@ impl P2PNetwork {
             .forever(true)
             .tcp_config(|socket| {
                 let sock_ref = SockRef::from(&socket);
-                sock_ref.set_reuse_address(true)?;
                 sock_ref.set_nodelay(true)?;
                 Ok(socket)
             })

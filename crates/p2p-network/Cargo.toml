@@ -14,7 +14,7 @@ tokio = "1.15"
 anyhow = "1.0"
 log = "0.4"
 async-trait = "0.1"
-tentacle = { version = "0.4.0-beta.4", features = ["unstable"] }
+tentacle = { version = "0.4.0", features = ["unstable"] }
 socket2 = { version = "0.4.4", features = ["all"] }
 
 [dev-dependencies]
