@@ -399,8 +399,8 @@ mod tests {
     }
 
     #[test]
-    fn test_domain_seperator_encoding() {
-        let domain_seperator = EIP712Domain {
+    fn test_domain_separator_encoding() {
+        let domain_separator = EIP712Domain {
             name: "Ether Mail".to_string(),
             version: "1".to_string(),
             chain_id: 1,
@@ -414,7 +414,7 @@ mod tests {
             },
             salt: None,
         };
-        let domain_hash = domain_seperator.hash_struct();
+        let domain_hash = domain_separator.hash_struct();
         assert_eq!(
             hex::encode(domain_hash),
             "f2cee375fa42b42143804025fc449deafd50cc031ca257e0b194a650a912090f"
