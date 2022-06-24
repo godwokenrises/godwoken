@@ -88,7 +88,6 @@ pub async fn transfer(
         raw_l2transaction.to_owned(),
         sender_registry_address,
         gw_common::H256::from(to_script_hash),
-        chain_id,
     );
     let signature = eth_sign(&message, privkey)?;
 
