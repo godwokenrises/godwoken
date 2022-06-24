@@ -1,11 +1,11 @@
 pub mod block_producer;
+pub mod chain_updater;
 pub mod challenger;
 pub mod cleaner;
 pub mod custodian;
 pub mod db_block_validator;
 pub mod debugger;
 pub mod deposit;
-pub mod poller;
 pub mod produce_block;
 pub(crate) mod psc;
 pub mod replay_block;

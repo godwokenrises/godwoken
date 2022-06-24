@@ -592,7 +592,11 @@ impl Chain {
     }
 
     /// revert a layer1 action
-    fn revert_l1action(&mut self, db: &StoreTransaction, action: RevertedL1Action) -> Result<()> {
+    pub fn revert_l1action(
+        &mut self,
+        db: &StoreTransaction,
+        action: RevertedL1Action,
+    ) -> Result<()> {
         let RevertedL1Action {
             prev_global_state,
             context,

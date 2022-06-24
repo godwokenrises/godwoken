@@ -1,25 +1,15 @@
 #![allow(clippy::mutable_key_type)]
 
-// TODO: update this for decouple producing and submitting.
-
-use crate::types::ChainEvent;
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::Params as ClientParams;
 use ckb_fixed_hash::H256;
-use gw_chain::chain::{
-    Chain, ChallengeCell, L1Action, L1ActionContext, RevertL1ActionContext, RevertedL1Action,
-    SyncParam,
-};
-use gw_jsonrpc_types::ckb_jsonrpc_types::{BlockNumber, HeaderView, Uint32};
-use gw_rpc_client::{
-    indexer_types::{Order, Pagination, ScriptType, SearchKey, SearchKeyFilter, Tx},
-    rpc_client::RPCClient,
-};
-use gw_store::traits::chain_store::ChainStore;
+use gw_chain::chain::{Chain, ChallengeCell, L1Action, L1ActionContext, SyncParam};
+use gw_jsonrpc_types::ckb_jsonrpc_types::HeaderView;
+use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::{RollupContext, TxStatus},
+    offchain::RollupContext,
     packed::{
         CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, DepositLockArgs,
         DepositRequest, L2Block, L2BlockCommittedInfo, OutPoint, RollupAction, RollupActionUnion,
@@ -31,10 +21,8 @@ use serde_json::json;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
-    time::Duration,
 };
 use tokio::sync::Mutex;
-use tokio_metrics::TaskMonitor;
 use tracing::instrument;
 
 #[derive(thiserror::Error, Debug)]
@@ -56,11 +44,8 @@ impl QueryL1TxError {
 pub struct ChainUpdater {
     chain: Arc<Mutex<Chain>>,
     rpc_client: RPCClient,
-    last_tx_hash: Option<H256>,
     rollup_context: RollupContext,
     rollup_type_script: ckb_types::packed::Script,
-    initialized: bool,
-    sync_monitor: TaskMonitor,
 }
 
 impl ChainUpdater {
@@ -72,116 +57,17 @@ impl ChainUpdater {
     ) -> ChainUpdater {
         let rollup_type_script =
             ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
-        let sync_monitor = TaskMonitor::new();
-        let _sync_monitor = sync_monitor.clone();
-        tokio::spawn(async move {
-            for interval in _sync_monitor.intervals() {
-                log::info!("sync_task: {:?}", interval);
-                tokio::time::sleep(Duration::from_secs(30)).await;
-            }
-        });
 
         ChainUpdater {
             chain,
             rpc_client,
             rollup_context,
             rollup_type_script,
-            last_tx_hash: None,
-            initialized: false,
-            sync_monitor,
         }
-    }
-
-    // Start syncing
-    #[instrument(skip_all, name = "chain updater handle_event")]
-    pub async fn handle_event(&mut self, _event: ChainEvent) -> Result<()> {
-        let initial_syncing = !self.initialized;
-        // Always start from last valid tip on l1
-        if !self.initialized {
-            self.revert_to_valid_tip_on_l1().await?;
-            self.initialized = true;
-        }
-
-        let sync_monitor = self.sync_monitor.clone();
-        sync_monitor.instrument(self.try_sync()).await?;
-
-        if initial_syncing {
-            // Start notify mem pool after synced
-            self.chain.lock().await.complete_initial_syncing().await?;
-        }
-
-        Ok(())
     }
 
     #[instrument(skip_all)]
-    pub async fn try_sync(&mut self) -> anyhow::Result<()> {
-        // TODO.
-        let valid_tip_l1_block_number = 0;
-        let search_key = SearchKey {
-            script: self.rollup_type_script.clone().into(),
-            script_type: ScriptType::Type,
-            filter: Some(SearchKeyFilter {
-                script: None,
-                output_data_len_range: None,
-                output_capacity_range: None,
-                block_range: Some([
-                    BlockNumber::from(valid_tip_l1_block_number + 1),
-                    BlockNumber::from(u64::max_value()),
-                ]),
-            }),
-        };
-        let order = Order::Asc;
-        let limit = Uint32::from(1000);
-
-        // TODO: the syncing logic here works under the assumption that a single
-        // L1 CKB block can contain at most one L2 Godwoken block. The logic
-        // here needs revising, once we relax this constraint for more performance.
-        let mut last_cursor = None;
-        loop {
-            let txs: Pagination<Tx> = self
-                .rpc_client
-                .indexer
-                .request(
-                    "get_transactions",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(last_cursor),
-                    ])),
-                )
-                .await?;
-            if txs.objects.is_empty() {
-                break;
-            }
-            last_cursor = Some(txs.last_cursor);
-
-            log::debug!("[sync revert] poll transactions: {}", txs.objects.len());
-            self.update(&txs.objects).await?;
-        }
-
-        Ok(())
-    }
-
-    #[instrument(skip_all)]
-    pub async fn update(&mut self, txs: &[Tx]) -> anyhow::Result<()> {
-        for tx in txs.iter() {
-            self.update_single(&tx.tx_hash).await?;
-            self.last_tx_hash = Some(tx.tx_hash.clone());
-        }
-
-        Ok(())
-    }
-
-    #[instrument(skip_all)]
-    async fn update_single(&mut self, tx_hash: &H256) -> anyhow::Result<()> {
-        if let Some(last_tx_hash) = &self.last_tx_hash {
-            if last_tx_hash == tx_hash {
-                log::info!("[sync revert] known last tx hash, skip {}", tx_hash);
-                return Ok(());
-            }
-        }
-
+    pub async fn update_single(&self, tx_hash: &H256) -> anyhow::Result<()> {
         let tx_with_status = self
             .rpc_client
             .ckb
@@ -264,106 +150,6 @@ impl ChainUpdater {
             updates: vec![update],
         };
         self.chain.lock().await.sync(sync_param).await?;
-
-        Ok(())
-    }
-
-    #[instrument(skip_all)]
-    async fn find_l2block_on_l1(&self, committed_info: L2BlockCommittedInfo) -> Result<bool> {
-        let rpc_client = &self.rpc_client;
-        let tx_hash: gw_common::H256 =
-            From::<[u8; 32]>::from(committed_info.transaction_hash().unpack());
-        let tx_status = rpc_client.ckb.get_transaction_status(tx_hash).await?;
-        if !matches!(tx_status, Some(TxStatus::Committed)) {
-            return Ok(false);
-        }
-
-        let block_hash: [u8; 32] = committed_info.block_hash().unpack();
-        let l1_block_hash = rpc_client.ckb.get_transaction_block_hash(tx_hash).await?;
-        Ok(l1_block_hash == Some(block_hash))
-    }
-
-    #[instrument(skip_all)]
-    async fn revert_to_valid_tip_on_l1(&mut self) -> Result<()> {
-        let db = { self.chain.lock().await.store().begin_transaction() };
-        let mut revert_l1_actions = Vec::new();
-
-        // First rewind to last valid tip
-        let last_valid_tip_block_hash = db.get_last_valid_tip_block_hash()?;
-        let last_valid_tip_global_state = db
-            .get_block_post_global_state(&last_valid_tip_block_hash)?
-            .expect("valid tip global status should exists");
-        let last_valid_tip_committed_info = db
-            .get_l2block_committed_info(&last_valid_tip_block_hash)?
-            .expect("valid tip committed info should exists");
-        let rewind_to_last_valid_tip = RevertedL1Action {
-            prev_global_state: last_valid_tip_global_state,
-            l2block_committed_info: last_valid_tip_committed_info.clone(),
-            context: RevertL1ActionContext::RewindToLastValidTip,
-        };
-        revert_l1_actions.push(rewind_to_last_valid_tip);
-
-        // Revert until last valid block on l1 found
-        let mut local_valid_committed_info = last_valid_tip_committed_info;
-        let mut local_valid_block = db.get_last_valid_tip_block()?;
-        let from_block_number = local_valid_block.raw().number().unpack();
-        loop {
-            if self
-                .find_l2block_on_l1(local_valid_committed_info.clone())
-                .await?
-            {
-                break;
-            }
-            log::debug!(
-                "[sync revert] revert valid {} l2 block from {} l1 block",
-                local_valid_block.raw().number().unpack(),
-                local_valid_committed_info.number().unpack()
-            );
-
-            let parent_valid_block_hash: [u8; 32] =
-                local_valid_block.raw().parent_block_hash().unpack();
-            let parent_valid_global_state = db
-                .get_block_post_global_state(&parent_valid_block_hash.into())?
-                .expect("valid tip global status should exists");
-            let parent_valid_committed_info = db
-                .get_l2block_committed_info(&parent_valid_block_hash.into())?
-                .expect("valid block l2 committed info should exists");
-            let revert_submit_valid_block = RevertedL1Action {
-                prev_global_state: parent_valid_global_state,
-                l2block_committed_info: parent_valid_committed_info.clone(),
-                context: RevertL1ActionContext::SubmitValidBlock {
-                    l2block: local_valid_block,
-                },
-            };
-            revert_l1_actions.push(revert_submit_valid_block);
-
-            local_valid_committed_info = parent_valid_committed_info;
-            local_valid_block = db
-                .get_block(&parent_valid_block_hash.into())?
-                .expect("valid block should exists");
-        }
-
-        {
-            let param = SyncParam {
-                reverts: revert_l1_actions,
-                updates: vec![],
-            };
-            self.chain.lock().await.sync(param).await?;
-        }
-
-        // Also revert last tx hash
-        let local_tip_committed_info = db
-            .get_l2block_committed_info(&db.get_tip_block_hash()?)?
-            .expect("tip committed info should exists");
-        let local_tip_committed_l1_tx_hash = local_tip_committed_info.transaction_hash().unpack();
-        self.last_tx_hash = Some(local_tip_committed_l1_tx_hash);
-        log::debug!("[sync revert] revert last l1 tx to {:?}", self.last_tx_hash);
-
-        let end_block_number = local_valid_block.raw().number().unpack();
-        log::debug!(
-            "[sync revert] total revert {} l2 blocks",
-            from_block_number - end_block_number
-        );
 
         Ok(())
     }

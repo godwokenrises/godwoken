@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use crate::error::RPCRequestError;
-use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
+use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter, Tx};
 use crate::utils::{to_result, DEFAULT_HTTP_TIMEOUT, DEFAULT_QUERY_LIMIT};
 use anyhow::Result;
 use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
@@ -68,6 +68,25 @@ impl CKBIndexerClient {
     ) -> Result<Pagination<Cell>> {
         self.request(
             "get_cells",
+            Some(ClientParams::Array(vec![
+                json!(search_key),
+                json!(order),
+                json!(limit.unwrap_or_else(|| (DEFAULT_QUERY_LIMIT as u32).into())),
+                json!(cursor),
+            ])),
+        )
+        .await
+    }
+
+    pub async fn get_transactions(
+        &self,
+        search_key: &SearchKey,
+        order: &Order,
+        limit: Option<Uint32>,
+        cursor: &Option<JsonBytes>,
+    ) -> Result<Pagination<Tx>> {
+        self.request(
+            "get_transactions",
             Some(ClientParams::Array(vec![
                 json!(search_key),
                 json!(order),

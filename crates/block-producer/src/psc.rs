@@ -3,14 +3,18 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
-use gw_chain::chain::Chain;
+use gw_chain::chain::{Chain, RevertedL1Action};
 use gw_common::H256;
+use gw_jsonrpc_types::ckb_jsonrpc_types::BlockNumber;
 use gw_mem_pool::pool::MemPool;
-use gw_rpc_client::rpc_client::RPCClient;
-use gw_store::{traits::chain_store::ChainStore, Store};
+use gw_rpc_client::{
+    indexer_types::{Order, SearchKey, SearchKeyFilter},
+    rpc_client::RPCClient,
+};
+use gw_store::{traits::chain_store::ChainStore, transaction::StoreTransaction, Store};
 use gw_types::{
     offchain::{CellStatus, DepositInfo, TxStatus},
-    packed::{GlobalState, NumberHash, OutPoint, Transaction, WithdrawalKey},
+    packed::{GlobalState, NumberHash, OutPoint, Script, Transaction, WithdrawalKey},
     prelude::*,
 };
 use gw_utils::{local_cells::LocalCellsManager, since::Since};
@@ -18,6 +22,7 @@ use tokio::{sync::Mutex, time::Instant};
 
 use crate::{
     block_producer::{BlockProducer, ComposeSubmitTxArgs},
+    chain_updater::ChainUpdater,
     produce_block::ProduceBlockResult,
 };
 
@@ -39,6 +44,8 @@ pub struct PSCContext {
     // Use mutex to make rust happy. Actually we won't refresh or access this at
     // the same time.
     pub local_cells_manager: Mutex<LocalCellsManager>,
+    pub chain_updater: ChainUpdater,
+    pub rollup_type_script: Script,
 }
 
 impl ProduceSubmitConfirm {
@@ -131,7 +138,7 @@ async fn run(mut state: ProduceSubmitConfirm) -> Result<()> {
                 timer.as_mut().reset(Instant::now() + Duration::from_secs(3));
                 log::info!("producing next block");
                 if let Err(e) = produce_local_block(&state.context).await {
-                    log::warn!("failed to produce local block: {:?}", e);
+                    log::warn!("failed to produce local block: {:#}", e);
                 } else {
                     state.local_count += 1;
                 }
@@ -176,7 +183,7 @@ async fn run(mut state: ProduceSubmitConfirm) -> Result<()> {
                     match submit_next_block(&context).await {
                         Ok(nh) => break nh,
                         Err(err) => {
-                            log::warn!("failed to submit next block: {:?}", err);
+                            log::warn!("failed to submit next block: {:#}", err);
                             // TOOO: backoff.
                             tokio::time::sleep(Duration::from_secs(20)).await;
                         }
@@ -274,8 +281,6 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
         .await
         .notify_new_tip(block_hash, &local_cells_manager)
         .await?;
-
-    // TODO??: update built-in web3_indexer
 
     Ok(())
 }
@@ -455,7 +460,6 @@ async fn sync_next_block(context: &PSCContext) -> Result<NumberHash> {
     drop(snap);
     poll_tx_confirmed(&context.rpc_client, &tx).await?;
     log::info!("block {} confirmed", block_number);
-    // TODO: wait for ckb-indexer sync this block.
     context.local_cells_manager.lock().await.confirm_tx(&tx);
     Ok(NumberHash::new_builder()
         .block_hash(block_hash.pack())
@@ -536,5 +540,158 @@ async fn check_tx_input(rpc_client: &RPCClient, tx: &Transaction) -> Result<()> 
                 .with_context(|| format!("checking out point {:?}", &out_point))?;
         }
     }
+    Ok(())
+}
+
+/// Sync with L1.
+///
+/// Will reset last confirmed, last submitted and last valid blocks.
+async fn sync_l1(psc: &PSCContext) -> Result<()> {
+    let store_tx = psc.store.begin_transaction();
+    let last_confirmed_local = store_tx
+        .get_last_confirmed_block_number_hash()
+        .ok_or_else(|| anyhow!("get last confirmed"))?;
+    let mut last_confirmed_l1 = last_confirmed_local.number().unpack();
+    // Find last known block on L1.
+    loop {
+        log::info!("checking L2 block {last_confirmed_l1} on L1");
+        let tx = psc
+            .store
+            .get_submit_tx(last_confirmed_l1)
+            .ok_or_else(|| anyhow!("get submit tx"))?;
+        match psc
+            .rpc_client
+            .ckb
+            .get_transaction_status(tx.hash().into())
+            .await?
+        {
+            Some(TxStatus::Committed) => {
+                log::info!("L2 block {last_confirmed_l1} is on L1");
+                break;
+            }
+            // Any other status or None means the tx is no longer confirmed on L1.
+            _ => {}
+        }
+        last_confirmed_l1 -= 1;
+        if last_confirmed_l1 == 0 {
+            break;
+        }
+    }
+    // Update last confirmed L1 block.
+    if last_confirmed_l1 != last_confirmed_local.number().unpack() {
+        log::info!("update last confirmed block to {last_confirmed_l1}");
+        let hash = store_tx
+            .get_block_hash_by_number(last_confirmed_l1)?
+            .ok_or_else(|| anyhow!("get block hash"))?;
+        let nh = NumberHash::new_builder()
+            .number(last_confirmed_l1.pack())
+            .block_hash(hash.pack())
+            .build();
+        store_tx.set_last_confirmed_block_number_hash(&nh.as_reader())?;
+    }
+
+    let reverted = sync_l1_unknown(psc, &store_tx, last_confirmed_l1).await?;
+    if !reverted {
+        // TODO: sync/check submitted/local blocks.
+    }
+
+    Ok(())
+}
+
+// Sync unknown blocks from L1.
+//
+// Returns whether there are actually any unknown blocks synced from L1.
+//
+// Although a L2 fork is highly unlikely, it is not impossible, due to e.g.
+// accidentally running two godwoken full nodes.
+async fn sync_l1_unknown(
+    psc: &PSCContext,
+    store_tx: &StoreTransaction,
+    last_confirmed: u64,
+) -> Result<bool> {
+    log::info!("syncing unknown L2 blocks from L1");
+
+    // Get submission transactions, if there are unknown transactions, revert, update.
+    let tx = store_tx
+        .get_submit_tx(last_confirmed)
+        .ok_or_else(|| anyhow!("get submit tx"))?;
+    let start_l1_block = psc
+        .rpc_client
+        .ckb
+        .get_transaction_block_number(tx.hash().into())
+        .await?
+        .ok_or_else(|| anyhow!("get transaction block number"))?;
+    let search_key =
+        SearchKey::with_type(psc.rollup_type_script.clone()).with_filter(Some(SearchKeyFilter {
+            block_range: Some([
+                // Start from the same block containing the last confirmed tx,
+                // because there may be other transactions in the same block.
+                BlockNumber::from(start_l1_block),
+                BlockNumber::from(u64::max_value()),
+            ]),
+            ..Default::default()
+        }));
+    let mut last_cursor = None;
+    let mut last_tx_hash = tx.hash().into();
+    let mut reverted = false;
+    loop {
+        let txs = psc
+            .rpc_client
+            .indexer
+            .get_transactions(&search_key, &Order::Asc, None, &last_cursor)
+            .await?;
+        if txs.objects.is_empty() {
+            break;
+        }
+        last_cursor = Some(txs.last_cursor);
+
+        for tx in txs.objects {
+            // We may get duplicated transactions when we get the last confirmed
+            // transaction, or because we get every transaction twice because it
+            // has both input and output rollup cell.
+            if tx.tx_hash != last_tx_hash {
+                if !reverted {
+                    log::info!("L2 fork detected, reverting to L2 block {last_confirmed}");
+                    revert(psc, store_tx, last_confirmed).await?;
+                    // Commit transaction because chain_updater.update_single will open and commit new transactions.
+                    store_tx.commit()?;
+                    reverted = true;
+                }
+                last_tx_hash = tx.tx_hash.clone();
+                log::info!("updating block from submission tx {}", tx.tx_hash);
+                psc.chain_updater.update_single(&tx.tx_hash).await?;
+            }
+        }
+    }
+
+    Ok(reverted)
+}
+
+/// Revert L2 blocks.
+async fn revert(
+    psc: &PSCContext,
+    store_tx: &StoreTransaction,
+    revert_to_last_valid: u64,
+) -> Result<()> {
+    let mut chain = psc.chain.lock().await;
+    loop {
+        let block = store_tx.get_last_valid_tip_block()?;
+        let block_number = block.raw().number().unpack();
+        if block_number <= revert_to_last_valid {
+            break;
+        }
+        let prev_global_state = store_tx
+            .get_block_post_global_state(&block.raw().parent_block_hash().unpack())?
+            .ok_or_else(|| anyhow!("get parent global state"))?;
+        let action = RevertedL1Action {
+            prev_global_state,
+            context: gw_chain::chain::RevertL1ActionContext::SubmitValidBlock { l2block: block },
+            // This is not used.
+            l2block_committed_info: Default::default(),
+        };
+        log::info!("reverting L2 block {}", block_number);
+        chain.revert_l1action(store_tx, action)?;
+    }
+
     Ok(())
 }

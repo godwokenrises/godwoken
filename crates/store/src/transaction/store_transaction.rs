@@ -306,6 +306,10 @@ impl StoreTransaction {
         Ok(())
     }
 
+    pub fn delete_submit_tx(&self, block_number: u64) -> Result<(), Error> {
+        self.delete(COLUMN_BLOCK_SUBMIT_TX, &block_number.to_be_bytes())
+    }
+
     pub fn set_block_deposit_info_vec(
         &self,
         block_number: u64,
@@ -460,6 +464,9 @@ impl StoreTransaction {
 
     /// Delete block from DB
     ///
+    /// Will update last confirmed / last submitted block to parent block if the
+    /// current value points to the deleted block.
+    ///
     /// # Panics
     ///
     /// If the block is not the “last valid tip block”.
@@ -508,20 +515,28 @@ impl StoreTransaction {
         )?;
         self.set_last_valid_tip_block_hash(&parent_block_hash)?;
 
+        let parent_number_hash = NumberHash::new_builder()
+            .number(parent_number.pack())
+            .block_hash(parent_block_hash.pack())
+            .build();
         // Update last confirmed block to parent if the current last confirmed block is this block.
         if self
             .get_last_confirmed_block_number_hash()
             .map(|nh| nh.number().unpack())
             == Some(block_number)
         {
-            let parent_number_hash = NumberHash::new_builder()
-                .number(parent_number.pack())
-                .block_hash(parent_block_hash.pack())
-                .build();
-            self.set_last_confirmed_block_number_hash(&parent_number_hash.as_reader())?
+            self.set_last_confirmed_block_number_hash(&parent_number_hash.as_reader())?;
+        }
+        // Update last submitted block to parent if the current last submitted block is this block.
+        if self
+            .get_last_submitted_block_number_hash()
+            .map(|nh| nh.number().unpack())
+            == Some(block_number)
+        {
+            self.set_last_submitted_block_number_hash(&parent_number_hash.as_reader())?;
         }
 
-        // TODO??: update block submit tx and last submitted block.
+        self.delete_submit_tx(block_number)?;
 
         Ok(())
     }

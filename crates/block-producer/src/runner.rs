@@ -1,5 +1,6 @@
 use crate::{
     block_producer::{BlockProducer, BlockProducerCreateArgs},
+    chain_updater::ChainUpdater,
     challenger::{Challenger, ChallengerNewArgs},
     cleaner::Cleaner,
     psc::{PSCContext, ProduceSubmitConfirm},
@@ -70,7 +71,6 @@ const MIN_CKB_VERSION: &str = "0.40.0";
 const EVENT_TIMEOUT_SECONDS: u64 = 30;
 
 struct ChainTaskContext {
-    // chain_updater: ChainUpdater,
     challenger: Option<Challenger>,
     withdrawal_unlocker: Option<FinalizedWithdrawalUnlocker>,
     cleaner: Option<Arc<Cleaner>>,
@@ -260,7 +260,8 @@ impl ChainTask {
             }
         };
 
-        let opt_tip_number_hash = self.sync_next(tip_number, tip_hash, &status.last_event_time)
+        let opt_tip_number_hash = self
+            .sync_next(tip_number, tip_hash, &status.last_event_time)
             .await?;
 
         let updated_status = ChainTaskRunStatus {
@@ -575,12 +576,12 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     ));
 
     // create chain updater
-    // let chain_updater = ChainUpdater::new(
-    //     Arc::clone(&chain),
-    //     rpc_client.clone(),
-    //     rollup_context.clone(),
-    //     rollup_type_script.clone(),
-    // );
+    let chain_updater = ChainUpdater::new(
+        Arc::clone(&chain),
+        rpc_client.clone(),
+        rollup_context.clone(),
+        rollup_type_script.clone(),
+    );
 
     let (block_producer, challenger, test_mode_control, withdrawal_unlocker, cleaner) = match config
         .node_mode
@@ -788,6 +789,8 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
             chain: chain.clone(),
             mem_pool,
             local_cells_manager: Mutex::new(LocalCellsManager::default()),
+            chain_updater,
+            rollup_type_script,
         }))
         .await
         .context("create ProduceSubmitConfirm")?;
@@ -1047,7 +1050,7 @@ fn is_hardfork_switch_eq(l: &HardForkSwitch, r: &HardForkSwitch) -> bool {
 }
 
 fn is_l1_query_error(err: &anyhow::Error) -> bool {
-    use crate::poller::QueryL1TxError;
+    use crate::chain_updater::QueryL1TxError;
 
     // TODO: filter rpc request method?
     err.downcast_ref::<RPCRequestError>().is_some()
