@@ -82,10 +82,22 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
         }
         // Intrinsic Gas
         if let TypedRawTransaction::Polyjuice(tx) = typed_tx {
-            let p = tx.parser().ok_or(TransactionError::IntrinsicGas)?;
-            let intrinsic_gas = tx.intrinsic_gas().ok_or(TransactionError::IntrinsicGas)?;
+            let p = tx
+                .parser()
+                .ok_or_else(|| TransactionError::IntrinsicGas("parser".into()))?;
+            let intrinsic_gas = tx
+                .intrinsic_gas()
+                .ok_or_else(|| TransactionError::IntrinsicGas("intrinsic gas".into()))?;
             if p.gas() < intrinsic_gas {
-                return Err(TransactionError::IntrinsicGas.into());
+                return Err(TransactionError::IntrinsicGas(
+                    format!(
+                        "gas < intrinsic_gas, gas: {}, intrinsic gas: {}",
+                        p.gas(),
+                        intrinsic_gas
+                    )
+                    .into(),
+                )
+                .into());
             }
         }
 
