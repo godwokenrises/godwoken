@@ -31,6 +31,7 @@ use deploy_genesis::DeployRollupCellArgs;
 use dump_tx::ChallengeBlock;
 use generate_config::GenerateNodeConfigArgs;
 use godwoken_rpc::GodwokenRpcClient;
+use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
 use std::{
@@ -514,14 +515,6 @@ async fn main() -> Result<()> {
                         .required(false)
                         .default_value("0")
                         .help("transfer fee"),
-                )
-                .arg(
-                    Arg::with_name("registry-id")
-                        .long("registry-id")
-                        .takes_value(true)
-                        .required(false)
-                        .default_value("0")
-                        .help("transfer fee from which registry?"),
                 )
                 .arg(
                     Arg::with_name("l1-sudt-type-hash")
@@ -1181,7 +1174,6 @@ async fn main() -> Result<()> {
         ("create-sudt-account", Some(m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let fee = m.value_of("fee").unwrap();
-            let registry_id = m.value_of("registry-id").unwrap().parse().unwrap();
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
@@ -1228,7 +1220,7 @@ async fn main() -> Result<()> {
                 fee,
                 &config,
                 &scripts_deployment,
-                registry_id,
+                ETH_REGISTRY_ACCOUNT_ID,
                 quiet,
             )
             .await
