@@ -223,6 +223,19 @@ async fn main() -> Result<()> {
                         .default_value("localhost:8119")
                         .required(true)
                         .help("The URL of rpc server"),
+                )
+                .arg(
+                    Arg::with_name("p2p-listen")
+                        .long("p2p-listen")
+                        .takes_value(true)
+                        .help("P2P network listen multiaddr, e.g. /ip4/1.2.3.4/tcp/443")
+                )
+                .arg(
+                    Arg::with_name("p2p-dial")
+                        .long("p2p-dial")
+                        .takes_value(true)
+                        .multiple(true)
+                        .help("P2P network dial addresses, e.g. /dns4/godwoken/tcp/443")
                 ),
         )
         .subcommand(
@@ -936,6 +949,13 @@ async fn main() -> Result<()> {
                     .to_string()
                     .trim_start_matches("0x"),
             )?;
+            let p2p_listen = m.value_of("p2p-listen").map(|l| l.to_string());
+            let p2p_dial = m
+                .values_of("p2p-dial")
+                .into_iter()
+                .flatten()
+                .map(|v| v.to_string())
+                .collect();
 
             let rollup_result: RollupDeploymentResult = {
                 let content = std::fs::read(genesis_path)?;
@@ -971,6 +991,8 @@ async fn main() -> Result<()> {
                 omni_lock_config: &omni_lock_config,
                 node_mode: gw_config::NodeMode::ReadOnly,
                 block_producer_address,
+                p2p_listen,
+                p2p_dial,
             };
 
             match generate_config::generate_node_config(args).await {

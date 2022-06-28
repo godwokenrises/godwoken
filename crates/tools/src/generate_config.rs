@@ -11,8 +11,8 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_config::{
     BackendConfig, BackendSwitchConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config,
-    ConsensusConfig, ContractTypeScriptConfig, GenesisConfig, NodeMode, RPCClientConfig,
-    RPCServerConfig, RegistryAddressConfig, StoreConfig, WalletConfig,
+    ConsensusConfig, ContractTypeScriptConfig, GenesisConfig, NodeMode, P2PNetworkConfig,
+    RPCClientConfig, RPCServerConfig, RegistryAddressConfig, StoreConfig, WalletConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 use gw_rpc_client::ckb_client::CKBClient;
@@ -33,6 +33,8 @@ pub struct GenerateNodeConfigArgs<'a> {
     pub omni_lock_config: &'a OmniLockConfig,
     pub node_mode: NodeMode,
     pub block_producer_address: Vec<u8>,
+    pub p2p_listen: Option<String>,
+    pub p2p_dial: Vec<String>,
 }
 
 pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Config> {
@@ -48,6 +50,8 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         omni_lock_config,
         node_mode,
         block_producer_address,
+        p2p_listen,
+        p2p_dial,
     } = args;
 
     let mut rpc_client = HttpRpcClient::new(ckb_url.to_string());
@@ -228,6 +232,14 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         rollup_config,
         secp_data_dep,
     };
+    let p2p_network_config = if !p2p_dial.is_empty() || p2p_listen.is_some() {
+        Some(P2PNetworkConfig {
+            listen: p2p_listen,
+            dial: p2p_dial,
+        })
+    } else {
+        None
+    };
 
     let config: Config = Config {
         backend_switches,
@@ -247,7 +259,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         trace: None,
         reload_config_github_url: None,
         dynamic_config: Default::default(),
-        p2p_network_config: None,
+        p2p_network_config,
     };
 
     Ok(config)
