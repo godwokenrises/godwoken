@@ -1093,6 +1093,13 @@ async fn submit_withdrawal_request(
                 data: None,
             });
         }
+        if let Err(err) = withdrawal_generator.verified_output(&withdrawal, &Default::default()) {
+            return Err(RpcError::Full {
+                code: INVALID_REQUEST,
+                message: err.to_string(),
+                data: None,
+            });
+        }
     }
 
     let permit = submit_tx.try_reserve().map_err(|err| match err {
