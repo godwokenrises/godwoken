@@ -19,7 +19,7 @@ use gw_types::{
 use tentacle::{
     builder::MetaBuilder,
     error::SendErrorKind,
-    service::{ProtocolMeta, ServiceAsyncControl},
+    service::{ProtocolMeta, ServiceAsyncControl, TargetSession},
     SessionId, SubstreamReadPart,
 };
 use tokio::sync::{broadcast, Mutex};
@@ -111,13 +111,7 @@ impl Publisher {
         tracing::info!(tip = %HashAndNumber::from(new_tip), "publishing new tip");
         let mut shared = self.shared.lock().await;
         shared.buffer.handle_new_tip(new_tip, &msg);
-        for s in &shared.subscribers {
-            warn_result(
-                self.control
-                    .send_message_to(*s, P2P_MEM_BLOCK_SYNC_PROTOCOL, msg.as_bytes())
-                    .await,
-            );
-        }
+        self.broadcast(&shared.subscribers, msg).await;
     }
 
     pub(crate) async fn publish(&mut self, msg: RefreshMemBlockMessageUnion) {
@@ -138,13 +132,18 @@ impl Publisher {
         let msg = P2PSyncMessage::new_builder().set(msg).build();
         let mut shared = self.shared.lock().await;
         shared.buffer.push(msg.clone());
-        for s in &shared.subscribers {
-            warn_result(
-                self.control
-                    .send_message_to(*s, P2P_MEM_BLOCK_SYNC_PROTOCOL, msg.as_bytes())
-                    .await,
-            );
-        }
+        self.broadcast(&shared.subscribers, msg).await;
+    }
+
+    async fn broadcast(&self, subscribers: &HashSet<SessionId>, msg: P2PSyncMessage) {
+        let target = TargetSession::Multi(Box::new(
+            subscribers.iter().cloned().collect::<Vec<_>>().into_iter(),
+        ));
+        warn_result(
+            self.control
+                .filter_broadcast(target, P2P_MEM_BLOCK_SYNC_PROTOCOL, msg.as_bytes())
+                .await,
+        );
     }
 }
 

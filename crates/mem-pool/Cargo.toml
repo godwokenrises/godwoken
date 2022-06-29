@@ -27,7 +27,7 @@ log = "0.4"
 hex = "0.4"
 async-trait = "0.1"
 tracing = { version = "0.1", features = ["attributes"] }
-tentacle = { version = "0.4.0-beta.4", features = ["unstable"] }
+tentacle = "0.4.0"
 
 [dev-dependencies]
 tempfile = "3.2"

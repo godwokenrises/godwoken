@@ -1,7 +1,7 @@
 use crate::account::{eth_sign, privkey_to_l2_script_hash, read_privkey};
 use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::types::ScriptsDeploymentResult;
-use crate::utils::message::generate_transaction_message_to_sign;
+use crate::utils::message::generate_eip712_message_to_sign;
 use crate::utils::transaction::{read_config, wait_for_l2_tx};
 use anyhow::Result;
 use ckb_jsonrpc_types::JsonBytes;
@@ -22,7 +22,6 @@ pub async fn transfer(
     sudt_id: u32,
     amount: &str,
     fee: &str,
-    registry_id: u32,
     config_path: &Path,
     scripts_deployment_path: &Path,
 ) -> Result<()> {
@@ -48,6 +47,8 @@ pub async fn transfer(
         .await?;
     let from_id = from_id.expect("from id not found!");
 
+    let chain_id: u64 = config.genesis.rollup_config.chain_id.into();
+
     let nonce = godwoken_rpc_client.get_nonce(from_id).await?;
 
     let to_addr = hex::decode(to.trim_start_matches("0x"))?;
@@ -59,7 +60,7 @@ pub async fn transfer(
         .amount(GwPack::pack(&amount))
         .fee(
             Fee::new_builder()
-                .registry_id(GwPack::pack(&registry_id))
+                .registry_id(GwPack::pack(&ETH_REGISTRY_ACCOUNT_ID))
                 .amount(GwPack::pack(&fee))
                 .build(),
         )
@@ -72,16 +73,21 @@ pub async fn transfer(
         .to_id(GwPack::pack(&sudt_id))
         .nonce(GwPack::pack(&nonce))
         .args(GwPack::pack(&sudt_args.as_bytes()))
+        .chain_id(chain_id.pack())
         .build();
 
     let sender_script_hash = godwoken_rpc_client.get_script_hash(from_id).await?;
+    let sender_registry_address = godwoken_rpc_client
+        .get_registry_address_by_script_hash(&sender_script_hash)
+        .await?
+        .expect("registry address");
     let receiver_script_hash = godwoken_rpc_client.get_script_hash(sudt_id).await?;
-
-    let message = generate_transaction_message_to_sign(
-        &raw_l2transaction,
-        rollup_type_hash,
-        &sender_script_hash,
-        &receiver_script_hash,
+    let mut to_script_hash: [u8; 32] = [0; 32];
+    to_script_hash.copy_from_slice(receiver_script_hash.pack().as_slice());
+    let message = generate_eip712_message_to_sign(
+        raw_l2transaction.to_owned(),
+        sender_registry_address,
+        gw_common::H256::from(to_script_hash),
     );
     let signature = eth_sign(&message, privkey)?;
 
@@ -93,8 +99,7 @@ pub async fn transfer(
     log::info!("l2 transaction: {}", l2_transaction);
 
     let bytes = JsonBytes::from_bytes(l2_transaction.as_bytes());
-    let tx_hash = tokio::runtime::Handle::current()
-        .block_on(godwoken_rpc_client.submit_l2transaction(bytes))?;
+    let tx_hash = godwoken_rpc_client.submit_l2transaction(bytes).await?;
 
     log::info!("tx_hash: 0x{}", faster_hex::hex_string(tx_hash.as_bytes())?);
 

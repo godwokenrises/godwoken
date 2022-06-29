@@ -12,7 +12,7 @@ use crate::{
     account::{eth_sign, privkey_to_l2_script_hash},
     godwoken_rpc::GodwokenRpcClient,
     types::ScriptsDeploymentResult,
-    utils::{message::generate_transaction_message_to_sign, transaction::wait_for_l2_tx},
+    utils::{message::generate_eip712_message_to_sign, transaction::wait_for_l2_tx},
 };
 use gw_types::prelude::Pack as GwPack;
 
@@ -116,28 +116,39 @@ pub async fn create_sudt_account(
         .build();
 
     let args = MetaContractArgs::new_builder().set(create_account).build();
+    let chain_id: u64 = config.genesis.rollup_config.chain_id.into();
 
     let account_raw_l2_transaction = RawL2Transaction::new_builder()
         .from_id(from_id.pack())
         .to_id(0u32.pack())
         .nonce(nonce.pack())
         .args(args.as_bytes().pack())
+        .chain_id(chain_id.pack())
         .build();
 
-    let sender_script_hash = rpc_client
-        .get_script_hash(from_id)
-        .await
-        .map_err(|err| anyhow!("{}", err))?;
-    let receiver_script_hash = rpc_client
-        .get_script_hash(0)
-        .await
-        .map_err(|err| anyhow!("{}", err))?;
+    let sender_address = {
+        let sender_script_hash = rpc_client
+            .get_script_hash(from_id)
+            .await
+            .map_err(|err| anyhow!("{}", err))?;
+        rpc_client
+            .get_registry_address_by_script_hash(&sender_script_hash)
+            .await?
+            .expect("sender address")
+    };
+    let receiver_script_hash: gw_common::H256 = {
+        let hash = rpc_client
+            .get_script_hash(0)
+            .await
+            .map_err(|err| anyhow!("{}", err))?;
+        let b: [u8; 32] = hash.into();
+        b.into()
+    };
 
-    let message = generate_transaction_message_to_sign(
-        &account_raw_l2_transaction,
-        rollup_type_hash,
-        &sender_script_hash,
-        &receiver_script_hash,
+    let message = generate_eip712_message_to_sign(
+        account_raw_l2_transaction.clone(),
+        sender_address,
+        receiver_script_hash,
     );
 
     let signature = eth_sign(&message, pk.to_owned()).map_err(|err| anyhow!("{}", err))?;
@@ -159,11 +170,20 @@ pub async fn create_sudt_account(
         .await
         .map_err(|err| anyhow!("{}", err))?;
 
-    let account_id = rpc_client
-        .get_account_id_by_script_hash(l2_script_hash.into())
-        .await
-        .map_err(|err| anyhow!("{}", err))?
-        .expect("Simple UDT account id not exist!");
+    let account_id;
+    loop {
+        if let Some(id) = rpc_client
+            .get_account_id_by_script_hash(l2_script_hash.into())
+            .await
+            .map_err(|err| anyhow!("{}", err))?
+        {
+            account_id = id;
+            break;
+        }
+        if !quiet {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
+    }
 
     if !quiet {
         log::info!("Simple UDT account id: {}", account_id);

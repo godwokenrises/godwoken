@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use ckb_vm::Error as VMError;
 use gw_common::{error::Error as StateError, sparse_merkle_tree::error::Error as SMTError, H256};
 use gw_types::packed::Byte32;
@@ -155,8 +157,8 @@ pub enum TransactionError {
     NoCost,
     #[error("Nonce Overflow")]
     NonceOverflow,
-    #[error("Intrinsic gas")]
-    IntrinsicGas,
+    #[error("Intrinsic gas: {0}")]
+    IntrinsicGas(Cow<'static, str>),
 }
 
 impl From<VMError> for TransactionError {

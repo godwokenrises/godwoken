@@ -228,7 +228,7 @@ impl LockAlgorithm for Secp256k1Eth {
             to_script_hash,
         )
         .map_err(|err| {
-            LockAlgorithmError::InvalidSignature(format!("Invlid l2 transaction format {}", err))
+            LockAlgorithmError::InvalidSignature(format!("Invalid l2 transaction format {}", err))
         })?;
         let message = typed_tx.eip712_message(Self::domain_with_chain_id(chain_id).hash_struct());
         self.verify_alone(
@@ -251,7 +251,7 @@ impl LockAlgorithm for Secp256k1Eth {
             address,
         )
         .map_err(|err| {
-            LockAlgorithmError::InvalidSignature(format!("Invlid withdrawal format {}", err))
+            LockAlgorithmError::InvalidSignature(format!("Invalid withdrawal format {}", err))
         })?;
         let message = typed_message.eip712_message(
             Self::domain_with_chain_id(withdrawal.raw().chain_id().unpack()).hash_struct(),

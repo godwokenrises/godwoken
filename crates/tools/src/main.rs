@@ -31,6 +31,7 @@ use deploy_genesis::DeployRollupCellArgs;
 use dump_tx::ChallengeBlock;
 use generate_config::GenerateNodeConfigArgs;
 use godwoken_rpc::GodwokenRpcClient;
+use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
 use std::{
@@ -222,6 +223,19 @@ async fn main() -> Result<()> {
                         .default_value("localhost:8119")
                         .required(true)
                         .help("The URL of rpc server"),
+                )
+                .arg(
+                    Arg::with_name("p2p-listen")
+                        .long("p2p-listen")
+                        .takes_value(true)
+                        .help("P2P network listen multiaddr, e.g. /ip4/1.2.3.4/tcp/443")
+                )
+                .arg(
+                    Arg::with_name("p2p-dial")
+                        .long("p2p-dial")
+                        .takes_value(true)
+                        .multiple(true)
+                        .help("P2P network dial addresses, e.g. /dns4/godwoken/tcp/443")
                 ),
         )
         .subcommand(
@@ -514,14 +528,6 @@ async fn main() -> Result<()> {
                         .required(false)
                         .default_value("0")
                         .help("transfer fee"),
-                )
-                .arg(
-                    Arg::with_name("registry-id")
-                        .long("registry-id")
-                        .takes_value(true)
-                        .required(false)
-                        .default_value("0")
-                        .help("transfer fee from which registry?"),
                 )
                 .arg(
                     Arg::with_name("l1-sudt-type-hash")
@@ -943,6 +949,13 @@ async fn main() -> Result<()> {
                     .to_string()
                     .trim_start_matches("0x"),
             )?;
+            let p2p_listen = m.value_of("p2p-listen").map(|l| l.to_string());
+            let p2p_dial = m
+                .values_of("p2p-dial")
+                .into_iter()
+                .flatten()
+                .map(|v| v.to_string())
+                .collect();
 
             let rollup_result: RollupDeploymentResult = {
                 let content = std::fs::read(genesis_path)?;
@@ -978,6 +991,8 @@ async fn main() -> Result<()> {
                 omni_lock_config: &omni_lock_config,
                 node_mode: gw_config::NodeMode::ReadOnly,
                 block_producer_address,
+                p2p_listen,
+                p2p_dial,
             };
 
             match generate_config::generate_node_config(args).await {
@@ -1126,7 +1141,6 @@ async fn main() -> Result<()> {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let amount = m.value_of("amount").unwrap();
             let fee = m.value_of("fee").unwrap();
-            let registry_id = m.value_of("eth-registry-id").unwrap().parse().unwrap();
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
@@ -1144,7 +1158,6 @@ async fn main() -> Result<()> {
                 sudt_id,
                 amount,
                 fee,
-                registry_id,
                 config_path,
                 scripts_deployment_path,
             )
@@ -1183,7 +1196,6 @@ async fn main() -> Result<()> {
         ("create-sudt-account", Some(m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let fee = m.value_of("fee").unwrap();
-            let registry_id = m.value_of("registry-id").unwrap().parse().unwrap();
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
@@ -1230,7 +1242,7 @@ async fn main() -> Result<()> {
                 fee,
                 &config,
                 &scripts_deployment,
-                registry_id,
+                ETH_REGISTRY_ACCOUNT_ID,
                 quiet,
             )
             .await

@@ -24,10 +24,10 @@ pub trait EIP712Encode {
         hasher.finalize().into()
     }
 
-    fn eip712_message(&self, domain_seperator: [u8; 32]) -> [u8; 32] {
+    fn eip712_message(&self, domain_separator: [u8; 32]) -> [u8; 32] {
         let mut hasher = Keccak256::new();
         hasher.update(b"\x19\x01");
-        hasher.update(&domain_seperator);
+        hasher.update(&domain_separator);
         hasher.update(&self.hash_struct());
         hasher.finalize().into()
     }
