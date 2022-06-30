@@ -1,12 +1,14 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
+use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
 use gw_common::{state::State, H256};
 use gw_config::{
     ChainConfig, ConsensusConfig, FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit,
     RPCServerConfig,
 };
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
+use gw_generator::utils::get_tx_type;
 use gw_generator::{
     error::TransactionError, sudt::build_l2_sudt_script,
     verification::transaction::TransactionVerifier, ArcSwap, Generator,
@@ -40,6 +42,8 @@ use gw_store::{
     CfMemStat, Store,
 };
 use gw_traits::CodeStore;
+use gw_types::offchain::RollupContext;
+use gw_types::packed::RawL2Transaction;
 use gw_types::{
     packed::{self, BlockInfo, Byte32, L2Transaction, RollupConfig, WithdrawalRequestExtra},
     prelude::*,
@@ -770,6 +774,35 @@ async fn get_transaction_receipt(
         .map(Into::into))
 }
 
+fn verify_sender_balance<S: State + CodeStore>(
+    ctx: &RollupContext,
+    state: &S,
+    raw_tx: &RawL2Transaction,
+) -> Result<()> {
+    use gw_generator::typed_transaction::types::TypedRawTransaction;
+
+    let sender_id: u32 = raw_tx.from_id().unpack();
+    // verify balance
+    let sender_script_hash = state.get_script_hash(sender_id)?;
+    let sender_address = state
+        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &sender_script_hash)?
+        .ok_or_else(|| anyhow!("Can't find address for sender: {}", sender_id))?;
+    // get balance
+    let balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &sender_address)?;
+    let tx_type = get_tx_type(ctx, state, raw_tx)?;
+    let typed_tx = TypedRawTransaction::from_tx(raw_tx.to_owned(), tx_type)
+        .ok_or_else(|| anyhow!("Unknown type of transaction {:?}", tx_type))?;
+    // reject txs has no cost, these transaction can only be execute without modify state tree
+    let tx_cost = typed_tx
+        .cost()
+        .map(Into::into)
+        .ok_or(TransactionError::NoCost)?;
+    if balance < tx_cost {
+        return Err(TransactionError::InsufficientBalance.into());
+    }
+    Ok(())
+}
+
 #[instrument(skip_all)]
 async fn execute_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
@@ -797,6 +830,20 @@ async fn execute_l2transaction(
         .build();
 
     let tx_hash = tx.hash();
+
+    // check sender's balance
+    {
+        let snap = ctx.mem_pool_state.load();
+        let state = snap.state()?;
+        if let Err(err) = verify_sender_balance(ctx.generator.rollup_context(), &state, &tx.raw()) {
+            return Err(RpcError::Full {
+                code: INVALID_REQUEST,
+                message: format!("check balance err: {}", err),
+                data: None,
+            });
+        }
+    }
+
     let mut run_result = tokio::task::spawn_blocking(move || {
         let db = ctx.store.get_snapshot();
         let tip_block_hash = db.get_last_valid_tip_block_hash()?;
@@ -895,6 +942,26 @@ async fn execute_raw_l2transaction(
     let execute_l2tx_max_cycles = mem_pool_config.execute_l2tx_max_cycles;
     let tx_hash: H256 = raw_l2tx.hash().into();
     let block_number: u64 = block_info.number().unpack();
+
+    // check sender's balance
+    let check_balance_result = match block_number_opt {
+        Some(block_number) => {
+            let state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
+            verify_sender_balance(ctx.generator.rollup_context(), &state, &raw_l2tx)
+        }
+        None => {
+            let snap = ctx.mem_pool_state.load();
+            let state = snap.state()?;
+            verify_sender_balance(ctx.generator.rollup_context(), &state, &raw_l2tx)
+        }
+    };
+    if let Err(err) = check_balance_result {
+        return Err(RpcError::Full {
+            code: INVALID_REQUEST,
+            message: format!("check balance err: {}", err),
+            data: None,
+        });
+    }
 
     // execute tx in task
     let mut run_result = tokio::task::spawn_blocking(move || {
