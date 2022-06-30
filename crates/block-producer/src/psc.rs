@@ -1,6 +1,6 @@
 #![allow(clippy::mutable_key_type)]
 
-use std::{sync::Arc, time::Duration};
+use std::{fmt::Display, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use gw_chain::chain::{Chain, RevertedL1Action};
@@ -17,7 +17,7 @@ use gw_types::{
     packed::{GlobalState, NumberHash, OutPoint, Script, Transaction, WithdrawalKey},
     prelude::*,
 };
-use gw_utils::{local_cells::LocalCellsManager, since::Since};
+use gw_utils::{abort_on_drop::AbortOnDropHandle, local_cells::LocalCellsManager, since::Since};
 use tokio::{sync::Mutex, time::Instant};
 
 use crate::{
@@ -60,7 +60,7 @@ impl ProduceSubmitConfirm {
         // Set to last_valid because if it is None, it means we are
         // migrating from the version that does not decouple producing and
         // submitting or it's a new chain.
-        let last_submitted = match store_tx.get_last_submitted_block_number_hash() {
+        match store_tx.get_last_submitted_block_number_hash() {
             Some(b) => b.number().unpack(),
             None => {
                 store_tx
@@ -68,7 +68,7 @@ impl ProduceSubmitConfirm {
                 last_valid
             }
         };
-        let last_confirmed = match store_tx.get_last_confirmed_block_number_hash() {
+        match store_tx.get_last_confirmed_block_number_hash() {
             Some(b) => b.number().unpack(),
             None => {
                 store_tx
@@ -77,16 +77,28 @@ impl ProduceSubmitConfirm {
             }
         };
         store_tx.commit()?;
+        sync_l1(&context).await?;
+        // Get again because they may have changed after syncing with L1.
+        let snap = context.store.get_snapshot();
+        let last_valid = snap.get_last_valid_tip_block()?.raw().number().unpack();
+        let last_submitted = snap
+            .get_last_submitted_block_number_hash()
+            .expect("get last submitted")
+            .number()
+            .unpack();
+        let last_confirmed = snap
+            .get_last_confirmed_block_number_hash()
+            .expect("get last confirmed")
+            .number()
+            .unpack();
         {
             let mut local_cells_manager = context.local_cells_manager.lock().await;
             for b in last_confirmed + 1..=last_submitted {
-                let tx = store_tx.get_submit_tx(b).expect("submit tx");
+                let tx = snap.get_submit_tx(b).expect("submit tx");
                 local_cells_manager.apply_tx(&tx.as_reader());
             }
             for b in last_submitted + 1..=last_valid {
-                let deposits = store_tx
-                    .get_block_deposit_info_vec(b)
-                    .expect("deposit info");
+                let deposits = snap.get_block_deposit_info_vec(b).expect("deposit info");
                 let deposits = deposits.into_iter().map(|d| d.cell());
                 for c in deposits {
                     local_cells_manager.lock_cell(c.out_point());
@@ -117,25 +129,75 @@ impl ProduceSubmitConfirm {
         })
     }
 
-    pub async fn run(self) -> Result<()> {
-        run(self).await
+    /// Run the producing, submitting and confirming loop.
+    pub async fn run(mut self) -> Result<()> {
+        loop {
+            match run(&mut self).await {
+                Ok(()) => return Ok(()),
+                Err(e) if e.is::<DeadCellError>() => {
+                    log::warn!("Error: {:#}", e);
+
+                    let error_block = e.downcast::<BlockContext>()?.0;
+                    {
+                        let store_tx = self.context.store.begin_transaction();
+                        revert(&self.context, &store_tx, error_block - 1).await?;
+                        store_tx.commit()?;
+                    }
+
+                    sync_l1(&self.context).await?;
+
+                    // Reset local_count, submitted_count and local_cells_manager.
+                    let snap = self.context.store.get_snapshot();
+                    let last_valid = snap.get_last_valid_tip_block()?.raw().number().unpack();
+                    let last_submitted = snap
+                        .get_last_submitted_block_number_hash()
+                        .expect("get last submitted")
+                        .number()
+                        .unpack();
+                    let last_confirmed = snap
+                        .get_last_confirmed_block_number_hash()
+                        .expect("get last confirmed")
+                        .number()
+                        .unpack();
+                    {
+                        let mut local_cells_manager = self.context.local_cells_manager.lock().await;
+                        local_cells_manager.reset();
+                        for b in last_confirmed + 1..=last_submitted {
+                            let tx = snap.get_submit_tx(b).expect("submit tx");
+                            local_cells_manager.apply_tx(&tx.as_reader());
+                        }
+                        for b in last_submitted + 1..=last_valid {
+                            let deposits =
+                                snap.get_block_deposit_info_vec(b).expect("deposit info");
+                            let deposits = deposits.into_iter().map(|d| d.cell());
+                            for c in deposits {
+                                local_cells_manager.lock_cell(c.out_point());
+                            }
+                        }
+                    }
+                    self.local_count = last_valid - last_submitted;
+                    self.submitted_count = last_submitted - last_confirmed;
+                }
+                Err(e) => return Err(e),
+            }
+        }
     }
 }
 
-/// Run the producing, submitting and confirming loop.
-async fn run(mut state: ProduceSubmitConfirm) -> Result<()> {
+async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
     let mut submitting = false;
-    let mut submit_handle = tokio::spawn(async { NumberHash::default() });
+    let submit_handle = tokio::spawn(async { anyhow::Ok(NumberHash::default()) });
+    let mut submit_handle = AbortOnDropHandle::from(submit_handle);
     let mut syncing = false;
-    let mut sync_handle = tokio::spawn(async { NumberHash::default() });
-    let timer = tokio::time::sleep(Duration::from_secs(0));
-    tokio::pin!(timer);
+    let sync_handle = tokio::spawn(async { anyhow::Ok(NumberHash::default()) });
+    let mut sync_handle = AbortOnDropHandle::from(sync_handle);
+    let mut interval = tokio::time::interval(Duration::from_secs(3));
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tokio::select! {
             // Produce a new local block if the produce timer has expired and
             // there are not too many local blocks.
-            _ = &mut timer, if state.local_count < state.local_limit => {
-                timer.as_mut().reset(Instant::now() + Duration::from_secs(3));
+            _ = interval.tick(), if state.local_count < state.local_limit => {
                 log::info!("producing next block");
                 if let Err(e) = produce_local_block(&state.context).await {
                     log::warn!("failed to produce local block: {:#}", e);
@@ -150,7 +212,7 @@ async fn run(mut state: ProduceSubmitConfirm) -> Result<()> {
                     Err(err) if err.is_panic() => bail!("submit task panic: {:?}", err.into_panic()),
                     Ok(nh) => {
                         let store_tx = state.context.store.begin_transaction();
-                        store_tx.set_last_submitted_block_number_hash(&nh.as_reader())?;
+                        store_tx.set_last_submitted_block_number_hash(&nh?.as_reader())?;
                         store_tx.commit()?;
                         state.submitted_count += 1;
                         state.local_count -= 1;
@@ -165,9 +227,8 @@ async fn run(mut state: ProduceSubmitConfirm) -> Result<()> {
                     Err(err) if err.is_panic() => bail!("sync task panic: {:?}", err.into_panic()),
                     Ok(nh) => {
                         let store_tx = state.context.store.begin_transaction();
-                        store_tx.set_last_confirmed_block_number_hash(&nh.as_reader())?;
+                        store_tx.set_last_confirmed_block_number_hash(&nh?.as_reader())?;
                         store_tx.commit()?;
-                        // TODO: update L2 block committed info.
                         state.submitted_count -= 1;
                     }
                     _ => {}
@@ -178,34 +239,40 @@ async fn run(mut state: ProduceSubmitConfirm) -> Result<()> {
         if !submitting && state.local_count > 0 && state.submitted_count < state.submitted_limit {
             submitting = true;
             let context = state.context.clone();
-            submit_handle = tokio::spawn(async move {
+            submit_handle.replace_with(tokio::spawn(async move {
                 loop {
                     match submit_next_block(&context).await {
-                        Ok(nh) => break nh,
+                        Ok(nh) => return Ok(nh),
                         Err(err) => {
+                            if err.is::<DeadCellError>() {
+                                return Err(err);
+                            }
                             log::warn!("failed to submit next block: {:#}", err);
                             // TOOO: backoff.
                             tokio::time::sleep(Duration::from_secs(20)).await;
                         }
                     }
                 }
-            });
+            }));
         }
         if !syncing && state.submitted_count > 0 {
             syncing = true;
             let context = state.context.clone();
-            sync_handle = tokio::spawn(async move {
+            sync_handle.replace_with(tokio::spawn(async move {
                 loop {
                     match sync_next_block(&context).await {
-                        Ok(nh) => break nh,
+                        Ok(nh) => break Ok(nh),
                         Err(err) => {
-                            log::warn!("failed to confirm next block: {:?}", err);
+                            if err.is::<DeadCellError>() {
+                                return Err(err);
+                            }
+                            log::warn!("failed to confirm next block: {:#}", err);
                             // TOOO: backoff.
                             tokio::time::sleep(Duration::from_secs(3)).await;
                         }
                     }
                 }
-            });
+            }));
         }
     }
 }
@@ -365,32 +432,20 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
         match median_gte(&ctx.rpc_client, since_millis).await {
             Ok(_) => break,
             Err(err) => {
-                log::info!("wait for median >= {}: {:?}", since_millis, err);
+                log::info!("wait for median >= {}: {:#}", since_millis, err);
                 tokio::time::sleep(Duration::from_secs(3)).await;
             }
         }
     }
 
-    // TODO: Some error can be ignored. Some error we cannot recover from, e.g.
-    // a deposit cell is dead after an L1 reorg. We may need to re-generate the
-    // block in such cases.
     log::info!(
         "sending transaction 0x{} to submit block {}",
         hex::encode(tx.hash()),
         block_number
     );
-    if let Err(e) = ctx.rpc_client.send_transaction(&tx).await {
-        if e.to_string().contains("TransactionFailedToResolve") {
-            if let Err(e) = check_tx_input(&ctx.rpc_client, &tx).await {
-                log::warn!("tx input error: {:?}", e);
-            } else {
-                log::warn!("TransactionFailedToResolve, but check_tx_input is Ok");
-            }
-        } else {
-            log::warn!("send tx: {:?}", e);
-        }
-        return Err(e);
-    }
+    send_transaction_or_check_inputs(&ctx.rpc_client, &tx)
+        .await
+        .context(BlockContext(block_number))?;
     log::info!("tx sent");
     Ok(NumberHash::new_builder()
         .block_hash(block_hash.pack())
@@ -414,17 +469,7 @@ async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<(
         };
         if should_resend {
             log::info!("resend transaction 0x{}", hex::encode(tx.hash()));
-            if let Err(e) = rpc_client.send_transaction(tx).await {
-                if e.to_string().contains("TransactionFailedToResolve") {
-                    if let Err(e) = check_tx_input(rpc_client, tx).await {
-                        log::warn!("tx input error: {:?}", e);
-                    } else {
-                        log::warn!("TransactionFailedToResolve, but tx input is all live");
-                    }
-                } else {
-                    log::warn!("send tx {:?}", e);
-                }
-            }
+            send_transaction_or_check_inputs(rpc_client, tx).await?;
             last_sent = Instant::now();
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
@@ -458,7 +503,9 @@ async fn sync_next_block(context: &PSCContext) -> Result<NumberHash> {
         .expect("block hash");
     let tx = snap.get_submit_tx(block_number).expect("get submit tx");
     drop(snap);
-    poll_tx_confirmed(&context.rpc_client, &tx).await?;
+    poll_tx_confirmed(&context.rpc_client, &tx)
+        .await
+        .context(BlockContext(block_number))?;
     log::info!("block {} confirmed", block_number);
     context.local_cells_manager.lock().await.confirm_tx(&tx);
     Ok(NumberHash::new_builder()
@@ -513,7 +560,8 @@ async fn check_cell(rpc_client: &RPCClient, out_point: &OutPoint) -> Result<()> 
                     .into_iter()
                     .any(|i| i.previous_output().eq(out_point))
                 {
-                    bail!("consumed by tx 0x{}", hex::encode(tx.hash()));
+                    bail!(anyhow::Error::new(DeadCellError)
+                        .context(format!("consumed by tx 0x{}", hex::encode(tx.hash()))))
                 }
             }
             opt_block = rpc_client
@@ -523,8 +571,47 @@ async fn check_cell(rpc_client: &RPCClient, out_point: &OutPoint) -> Result<()> 
             return Ok(());
         }
     }
-    bail!("didn't find consuming tx in 100 blocks");
+    // Transaction is on chain, but cell is not live, so it is dead.
+    bail!(DeadCellError);
 }
+
+/// Send transaction.
+///
+/// Will check input cells if sending fails with `TransactionFailedToResolve`.
+/// If any input cell is dead, the error returned will be a `DeadCellError`.
+async fn send_transaction_or_check_inputs(
+    rpc_client: &RPCClient,
+    tx: &Transaction,
+) -> anyhow::Result<()> {
+    if let Err(mut err) = rpc_client.send_transaction(tx).await {
+        let msg = err.to_string();
+        if msg.contains("TransactionFailedToResolve") {
+            if let Err(e) = check_tx_input(rpc_client, tx).await {
+                err = err.context(e);
+            }
+            Err(err)
+        } else if msg.contains("PoolRejectedDuplicatedTransaction") {
+            Ok(())
+        } else {
+            Err(err)
+        }
+    } else {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct BlockContext(u64);
+
+impl Display for BlockContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "block {}", self.0)
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("dead cell")]
+struct DeadCellError;
 
 async fn check_tx_input(rpc_client: &RPCClient, tx: &Transaction) -> Result<()> {
     // Check inputs.
@@ -534,10 +621,13 @@ async fn check_tx_input(rpc_client: &RPCClient, tx: &Transaction) -> Result<()> 
             .get_cell(out_point.clone())
             .await?
             .map(|c| c.status);
-        if status != Some(CellStatus::Live) {
-            check_cell(rpc_client, &out_point)
-                .await
-                .with_context(|| format!("checking out point {:?}", &out_point))?;
+        match status {
+            Some(CellStatus::Live) => {}
+            _ => {
+                check_cell(rpc_client, &out_point)
+                    .await
+                    .with_context(|| format!("checking out point {}", &out_point))?;
+            }
         }
     }
     Ok(())
@@ -559,18 +649,14 @@ async fn sync_l1(psc: &PSCContext) -> Result<()> {
             .store
             .get_submit_tx(last_confirmed_l1)
             .ok_or_else(|| anyhow!("get submit tx"))?;
-        match psc
+        if let Some(TxStatus::Committed) = psc
             .rpc_client
             .ckb
             .get_transaction_status(tx.hash().into())
             .await?
         {
-            Some(TxStatus::Committed) => {
-                log::info!("L2 block {last_confirmed_l1} is on L1");
-                break;
-            }
-            // Any other status or None means the tx is no longer confirmed on L1.
-            _ => {}
+            log::info!("L2 block {last_confirmed_l1} is on L1");
+            break;
         }
         last_confirmed_l1 -= 1;
         if last_confirmed_l1 == 0 {
@@ -590,10 +676,7 @@ async fn sync_l1(psc: &PSCContext) -> Result<()> {
         store_tx.set_last_confirmed_block_number_hash(&nh.as_reader())?;
     }
 
-    let reverted = sync_l1_unknown(psc, &store_tx, last_confirmed_l1).await?;
-    if !reverted {
-        // TODO: sync/check submitted/local blocks.
-    }
+    sync_l1_unknown(psc, &store_tx, last_confirmed_l1).await?;
 
     Ok(())
 }
@@ -608,7 +691,7 @@ async fn sync_l1_unknown(
     psc: &PSCContext,
     store_tx: &StoreTransaction,
     last_confirmed: u64,
-) -> Result<bool> {
+) -> Result<()> {
     log::info!("syncing unknown L2 blocks from L1");
 
     // Get submission transactions, if there are unknown transactions, revert, update.
@@ -664,7 +747,7 @@ async fn sync_l1_unknown(
         }
     }
 
-    Ok(reverted)
+    Ok(())
 }
 
 /// Revert L2 blocks.

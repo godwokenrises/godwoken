@@ -2239,6 +2239,7 @@ dependencies = [
  "rand 0.8.5",
  "secp256k1 0.21.2",
  "sha3",
+ "tokio",
 ]
 
 [[package]]
