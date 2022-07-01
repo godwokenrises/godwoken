@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 - Automatically create account for undeposited sender [#710](https://github.com/nervosnetwork/godwoken/pull/710)
 
+## [v1.3.0-rc1] - 2022-07-01
+
+- Fix gw-tools `transfer` command [#744](https://github.com/nervosnetwork/godwoken/pull/744)
+- Fix gw-tools `create-sudt-account` command [#747](https://github.com/nervosnetwork/godwoken/pull/747)
+- Return error if withdrawal capacity is lower than minimal withdrawal capacity [#748](https://github.com/nervosnetwork/godwoken/pull/748)
+- Check sender's balance before execute transaction [#750](https://github.com/nervosnetwork/godwoken/pull/750)
+
 ## [v1.2.2] - 2022-06-20
 - Improve block producer chain task tracing [#732](https://github.com/nervosnetwork/godwoken/pull/732)
 - fix: readonly nodes without p2p sync [#737](https://github.com/nervosnetwork/godwoken/pull/737)
