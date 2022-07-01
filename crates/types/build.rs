@@ -58,6 +58,7 @@ fn main() {
             "omni_lock",
             "xudt_rce",
             "deprecated",
+            "exported_block",
         ]);
     }
 }
