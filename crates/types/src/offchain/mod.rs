@@ -1,4 +1,5 @@
 mod error_receipt;
+mod exported_block;
 mod extension;
 mod mem_block;
 mod pool;
@@ -7,6 +8,7 @@ mod rpc;
 mod run_result;
 
 pub use error_receipt::*;
+pub use exported_block::*;
 pub use extension::global_state_from_slice;
 pub use mem_block::*;
 pub use pool::*;

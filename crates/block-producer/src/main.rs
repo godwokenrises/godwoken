@@ -4,7 +4,14 @@ static GLOBAL_ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 use anyhow::{Context, Result};
 use clap::{App, Arg, SubCommand};
-use gw_block_producer::{db_block_validator, runner, trace};
+use gw_block_producer::{
+    db_block_validator, runner,
+    subcommand::{
+        export_block::{ExportArgs, ExportBlock},
+        import_block::{ImportArgs, ImportBlock},
+    },
+    trace,
+};
 use gw_config::{BackendSwitchConfig, Config};
 use gw_version::Version;
 use std::{env, fs, path::Path};
@@ -12,11 +19,15 @@ use std::{env, fs, path::Path};
 const COMMAND_RUN: &str = "run";
 const COMMAND_EXAMPLE_CONFIG: &str = "generate-example-config";
 const COMMAND_VERIFY_DB_BLOCK: &str = "verify-db-block";
+const COMMAND_EXPORT_BLOCK: &str = "export-block";
+const COMMAND_IMPORT_BLOCK: &str = "import-block";
 const ARG_OUTPUT_PATH: &str = "output-path";
 const ARG_CONFIG: &str = "config";
 const ARG_SKIP_CONFIG_CHECK: &str = "skip-config-check";
 const ARG_FROM_BLOCK: &str = "from-block";
 const ARG_TO_BLOCK: &str = "to-block";
+const ARG_SHOW_PROGRESS: &str = "show-progress";
+const ARG_SOURCE_PATH: &str = "source-path";
 
 fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
     let content = fs::read(&path)
@@ -37,6 +48,7 @@ fn generate_example_config<P: AsRef<Path>>(path: P) -> Result<()> {
     Ok(())
 }
 
+// TODO: @zeroqn update clap to v3
 async fn run_cli() -> Result<()> {
     let version = Version::current().to_string();
     let app = App::new("Godwoken")
@@ -97,6 +109,72 @@ async fn run_cli() -> Result<()> {
                         .help("To block number"),
                 )
                 .display_order(2),
+        )
+        .subcommand(
+            SubCommand::with_name(COMMAND_EXPORT_BLOCK)
+                .about("Export history blocks in db")
+                .arg(
+                    Arg::with_name(ARG_CONFIG)
+                        .short("c")
+                        .takes_value(true)
+                        .required(true)
+                        .default_value("./config.toml")
+                        .help("The config file path"),
+                )
+                .arg(
+                    Arg::with_name(ARG_OUTPUT_PATH)
+                        .short("o")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The output file for exported blocks"),
+                )
+                .arg(
+                    Arg::with_name(ARG_FROM_BLOCK)
+                        .short("f")
+                        .takes_value(true)
+                        .help("From block number"),
+                )
+                .arg(
+                    Arg::with_name(ARG_TO_BLOCK)
+                        .short("t")
+                        .takes_value(true)
+                        .help("To block number"),
+                )
+                .arg(
+                    Arg::with_name(ARG_SHOW_PROGRESS)
+                        .short("p")
+                        .required(false)
+                        .takes_value(false)
+                        .help("Show progress bar"),
+                )
+                .display_order(3),
+        )
+        .subcommand(
+            SubCommand::with_name(COMMAND_IMPORT_BLOCK)
+                .about("Import block from source file")
+                .arg(
+                    Arg::with_name(ARG_CONFIG)
+                        .short("c")
+                        .takes_value(true)
+                        .required(true)
+                        .default_value("./config.toml")
+                        .help("The config file path"),
+                )
+                .arg(
+                    Arg::with_name(ARG_SOURCE_PATH)
+                        .short("s")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The source file for exported blocks"),
+                )
+                .arg(
+                    Arg::with_name(ARG_SHOW_PROGRESS)
+                        .short("p")
+                        .required(false)
+                        .takes_value(false)
+                        .help("Show progress bar"),
+                )
+                .display_order(4),
         );
 
     // handle subcommands
@@ -120,6 +198,38 @@ async fn run_cli() -> Result<()> {
             let from_block: Option<u64> = m.value_of(ARG_FROM_BLOCK).map(str::parse).transpose()?;
             let to_block: Option<u64> = m.value_of(ARG_TO_BLOCK).map(str::parse).transpose()?;
             db_block_validator::verify(config, from_block, to_block).await?;
+        }
+        (COMMAND_EXPORT_BLOCK, Some(m)) => {
+            let config_path = m.value_of(ARG_CONFIG).unwrap();
+            let config = read_config(&config_path)?;
+            let _guard = trace::init(None)?;
+            let output = m.value_of(ARG_OUTPUT_PATH).unwrap().into();
+            let from_block: Option<u64> = m.value_of(ARG_FROM_BLOCK).map(str::parse).transpose()?;
+            let to_block: Option<u64> = m.value_of(ARG_TO_BLOCK).map(str::parse).transpose()?;
+            let show_progress = m.is_present(ARG_SHOW_PROGRESS);
+
+            let args = ExportArgs {
+                config,
+                output,
+                from_block,
+                to_block,
+                show_progress,
+            };
+            ExportBlock::create(args).await?.execute()?;
+        }
+        (COMMAND_IMPORT_BLOCK, Some(m)) => {
+            let config_path = m.value_of(ARG_CONFIG).unwrap();
+            let config = read_config(&config_path)?;
+            let _guard = trace::init(None)?;
+            let source = m.value_of(ARG_SOURCE_PATH).unwrap().into();
+            let show_progress = m.is_present(ARG_SHOW_PROGRESS);
+
+            let args = ImportArgs {
+                config,
+                source,
+                show_progress,
+            };
+            ImportBlock::create(args).await?.execute()?;
         }
         _ => {
             // default command: start a Godwoken node

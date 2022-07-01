@@ -26,10 +26,16 @@ mod xudt_rce;
 #[allow(clippy::all)]
 mod deprecated;
 
+#[cfg(feature = "std")]
+#[allow(clippy::all)]
+mod exported_block;
+
 pub mod packed {
     pub use molecule::prelude::{Byte, ByteReader};
 
     pub use super::blockchain::*;
+    #[cfg(feature = "std")]
+    pub use super::exported_block::*;
     pub use super::godwoken::*;
     #[cfg(feature = "std")]
     pub use super::mem_block::*;
