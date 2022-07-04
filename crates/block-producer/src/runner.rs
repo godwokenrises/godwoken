@@ -228,11 +228,15 @@ impl ChainTask {
                         log::error!("[polling] challenger event: {} error: {}", event, err);
                         return Ok(None);
                     }
-                    bail!(
-                        "Error occurred when polling challenger, event: {}, error: {}",
-                        event,
-                        err
-                    );
+                    if err.to_string().contains("TransactionFailedToResolve") {
+                        log::info!("[polling] challenger outdated rollup status, wait update");
+                    } else {
+                        bail!(
+                            "Error occurred when polling challenger, event: {}, error: {}",
+                            event,
+                            err
+                        );
+                    }
                 }
             }
 

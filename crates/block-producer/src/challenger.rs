@@ -61,6 +61,7 @@ pub struct Challenger {
     debug_config: DebugConfig,
     offchain_mock_context: OffChainMockContext,
     contracts_dep_manager: ContractsCellDepManager,
+    last_submit_tx: Option<H256>,
 }
 
 pub struct ChallengerNewArgs {
@@ -108,6 +109,7 @@ impl Challenger {
             cleaner,
             offchain_mock_context,
             contracts_dep_manager,
+            last_submit_tx: None,
         }
     }
 
@@ -120,6 +122,18 @@ impl Challenger {
                     | Some(TestModePayload::None) => (),
                     Some(TestModePayload::BadBlock { .. }) // Payload not match (BadBlock for block producer)
                         | None => return Ok(()), // Wait payload
+            }
+        }
+
+        if let Some(last_submit_tx) = self.last_submit_tx {
+            let ckb_client = &self.rpc_client.ckb;
+            let tx_status = ckb_client.get_transaction_status(last_submit_tx).await?;
+            match tx_status {
+                Some(TxStatus::Pending) | Some(TxStatus::Proposed) => return Ok(()),
+                _ => {
+                    log::debug!("last challenger submit tx {:?}", tx_status);
+                    self.last_submit_tx = None;
+                }
             }
         }
 
@@ -187,7 +201,7 @@ impl Challenger {
     }
 
     async fn challenge_block(
-        &self,
+        &mut self,
         rollup_state: RollupState,
         context: ChallengeContext,
     ) -> Result<()> {
@@ -247,11 +261,13 @@ impl Challenger {
 
         let tx_hash = self.rpc_client.send_transaction(&tx).await?;
         log::info!("Challenge block {} in tx {}", block_numer, to_hex(&tx_hash));
+        self.last_submit_tx = Some(tx_hash);
+
         Ok(())
     }
 
     async fn cancel_challenge(
-        &self,
+        &mut self,
         rollup_state: RollupState,
         challenge_cell: ChallengeCell,
         context: VerifyContext,
@@ -356,6 +372,7 @@ impl Challenger {
             Ok(tx_hash) => {
                 self.cleaner.watch_verifier(verifier, Some(tx_hash)).await;
                 log::info!("Cancel challenge in tx {}", to_hex(&tx_hash));
+                self.last_submit_tx = Some(tx_hash);
             }
             Err(err) => {
                 self.cleaner.watch_verifier(verifier, None).await;
@@ -367,7 +384,7 @@ impl Challenger {
     }
 
     async fn revert(
-        &self,
+        &mut self,
         rollup_state: RollupState,
         challenge_cell: ChallengeCell,
         context: RevertContext,
@@ -493,6 +510,7 @@ impl Challenger {
 
         let tx_hash = self.rpc_client.send_transaction(&tx).await?;
         log::info!("Revert block in tx {}", to_hex(&tx_hash));
+        self.last_submit_tx = Some(tx_hash);
 
         Ok(())
     }
