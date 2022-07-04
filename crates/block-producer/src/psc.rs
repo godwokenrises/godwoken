@@ -769,8 +769,6 @@ async fn revert(
         let action = RevertedL1Action {
             prev_global_state,
             context: gw_chain::chain::RevertL1ActionContext::SubmitValidBlock { l2block: block },
-            // This is not used.
-            l2block_committed_info: Default::default(),
         };
         log::info!("reverting L2 block {}", block_number);
         chain.revert_l1action(store_tx, action)?;

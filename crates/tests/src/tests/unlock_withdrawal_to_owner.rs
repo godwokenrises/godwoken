@@ -30,9 +30,9 @@ use gw_types::offchain::{
 };
 use gw_types::packed::{
     AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositRequest,
-    GlobalState, L2BlockCommittedInfo, OutPoint, RawWithdrawalRequest, RollupAction,
-    RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, StakeLockArgs, WithdrawalRequest,
-    WithdrawalRequestExtra, WitnessArgs,
+    GlobalState, OutPoint, RawWithdrawalRequest, RollupAction, RollupActionUnion, RollupConfig,
+    RollupSubmitBlock, Script, StakeLockArgs, WithdrawalRequest, WithdrawalRequestExtra,
+    WitnessArgs,
 };
 use gw_types::prelude::{Pack, PackVec, Unpack};
 use gw_utils::local_cells::LocalCellsManager;
@@ -222,9 +222,6 @@ async fn test_build_unlock_to_owner_tx() {
             withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.output.clone(), deposit_block_result.clone()),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(1u64.pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![apply_deposits],

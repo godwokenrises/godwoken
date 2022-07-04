@@ -8,9 +8,8 @@ use gw_db::schema::{
     COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
     COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
     COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY, COLUMN_BLOCK_SUBMIT_TX, COLUMN_INDEX,
-    COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_MEM_POOL_TRANSACTION,
-    COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
-    COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
+    COLUMN_MEM_POOL_TRANSACTION, COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL,
+    COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
     COLUMN_TRANSACTION_RECEIPT, COLUMN_WITHDRAWAL, COLUMN_WITHDRAWAL_INFO, META_BLOCK_SMT_ROOT_KEY,
     META_CHAIN_ID_KEY, META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY,
     META_LAST_SUBMITTED_BLOCK_NUMBER_HASH_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
@@ -248,19 +247,6 @@ pub trait ChainStore: KVStoreRead {
         Ok(self
             .get(COLUMN_WITHDRAWAL, withdrawal_key.as_slice())
             .map(|slice| from_box_should_be_ok!(packed::WithdrawalRequestExtraReader, slice)))
-    }
-
-    fn get_l2block_committed_info(
-        &self,
-        block_hash: &H256,
-    ) -> Result<Option<packed::L2BlockCommittedInfo>, Error> {
-        match self.get(COLUMN_L2BLOCK_COMMITTED_INFO, block_hash.as_slice()) {
-            Some(slice) => Ok(Some(from_box_should_be_ok!(
-                packed::L2BlockCommittedInfoReader,
-                slice
-            ))),
-            None => Ok(None),
-        }
     }
 
     fn get_block_deposit_requests(

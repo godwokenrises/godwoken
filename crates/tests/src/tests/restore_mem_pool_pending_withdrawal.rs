@@ -11,8 +11,8 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
 use gw_common::H256;
 use gw_types::packed::{
-    CellOutput, DepositRequest, L2BlockCommittedInfo, RawWithdrawalRequest, Script,
-    WithdrawalRequest, WithdrawalRequestExtra,
+    CellOutput, DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest,
+    WithdrawalRequestExtra,
 };
 use gw_types::prelude::Pack;
 use gw_utils::local_cells::LocalCellsManager;
@@ -62,9 +62,6 @@ async fn test_restore_mem_pool_pending_withdrawal() {
             withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(1u64.pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![apply_deposits],
@@ -211,9 +208,6 @@ async fn test_restore_mem_pool_pending_withdrawal() {
             withdrawals: block_withdrawals,
         },
         transaction: build_sync_tx(rollup_cell, block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(2u64.pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![apply_mem_block_withdrawals],

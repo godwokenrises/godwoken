@@ -119,6 +119,5 @@ cfg_if::cfg_if! {
         impl_std_eq!(OutPoint);
         impl_std_eq!(WitnessArgs);
         impl_std_eq!(TxReceipt);
-        impl_std_eq!(L2BlockCommittedInfo);
     }
 }

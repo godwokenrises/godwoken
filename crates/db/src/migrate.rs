@@ -4,7 +4,7 @@
 use crate::{
     error::Error,
     read_only_db::{self, ReadOnlyDB},
-    schema::{COLUMN_META, META_TIP_BLOCK_HASH_KEY},
+    schema::{COLUMN_META, META_TIP_BLOCK_HASH_KEY, REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO},
     Result,
 };
 use std::{cmp::Ordering, collections::BTreeMap};
@@ -109,11 +109,11 @@ impl Migration for DefaultMigration {
     }
 }
 
-struct AddLastSubmittedAndConfirmedBlocksMigration;
+struct DecoupleBlockProducingSubmissionAndConfirmationMigration;
 
-impl Migration for AddLastSubmittedAndConfirmedBlocksMigration {
-    fn migrate(&self, db: RocksDB) -> Result<RocksDB> {
-        // The actual migration happens when PSCState is first created.
+impl Migration for DecoupleBlockProducingSubmissionAndConfirmationMigration {
+    fn migrate(&self, mut db: RocksDB) -> Result<RocksDB> {
+        db.drop_cf(REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO)?;
         Ok(db)
     }
     fn version(&self) -> &str {
@@ -132,7 +132,9 @@ fn init_migration_factory() -> MigrationFactory {
     let mut factory = MigrationFactory::create();
     let migration = DefaultMigration;
     factory.insert(Box::new(migration));
-    factory.insert(Box::new(AddLastSubmittedAndConfirmedBlocksMigration));
+    factory.insert(Box::new(
+        DecoupleBlockProducingSubmissionAndConfirmationMigration,
+    ));
     factory
 }
 

@@ -22,8 +22,8 @@ use gw_types::{
     offchain::global_state_from_slice,
     packed::{
         BlockMerkleState, Byte32, CellInput, CellOutput, ChallengeTarget, ChallengeWitness,
-        DepositRequest, GlobalState, L2Block, L2BlockCommittedInfo, RawL2Block, RollupConfig,
-        Script, Transaction, WithdrawalRequestExtra,
+        DepositRequest, GlobalState, L2Block, RawL2Block, RollupConfig, Script, Transaction,
+        WithdrawalRequestExtra,
     },
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
@@ -70,8 +70,6 @@ pub enum L1ActionContext {
 pub struct L1Action {
     /// transaction
     pub transaction: Transaction,
-    /// l2block committed info
-    pub l2block_committed_info: L2BlockCommittedInfo,
     pub context: L1ActionContext,
 }
 
@@ -85,8 +83,6 @@ pub enum RevertL1ActionContext {
 pub struct RevertedL1Action {
     /// input global state
     pub prev_global_state: GlobalState,
-    /// l2block committed info
-    pub l2block_committed_info: L2BlockCommittedInfo,
     pub context: RevertL1ActionContext,
 }
 
@@ -305,8 +301,8 @@ impl Chain {
     fn update_l1action(&mut self, db: &StoreTransaction, action: L1Action) -> Result<()> {
         let L1Action {
             transaction,
-            l2block_committed_info,
             context,
+            ..
         } = action;
         let global_state = parse_global_state(&transaction, &self.rollup_type_script_hash)?;
         let status = {
@@ -345,7 +341,7 @@ impl Chain {
                     }
 
                     if let Some(ref target) = self.challenge_target {
-                        db.insert_bad_block(&l2block, &l2block_committed_info, &global_state)?;
+                        db.insert_bad_block(&l2block, &global_state)?;
                         log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
 
                         let global_block_root: H256 = global_state.block().merkle_root().unpack();
@@ -372,7 +368,7 @@ impl Chain {
                         let block_number = l2block.raw().number().unpack();
                         log::warn!("bad block #{} found, rollback db", block_number,);
 
-                        db.insert_bad_block(&l2block, &l2block_committed_info, &global_state)?;
+                        db.insert_bad_block(&l2block, &global_state)?;
                         log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
 
                         let global_block_root: H256 = global_state.block().merkle_root().unpack();

@@ -914,32 +914,6 @@ pub struct L2BlockCommittedInfo {
     pub transaction_hash: H256,
 }
 
-impl From<L2BlockCommittedInfo> for packed::L2BlockCommittedInfo {
-    fn from(json: L2BlockCommittedInfo) -> packed::L2BlockCommittedInfo {
-        let L2BlockCommittedInfo {
-            number,
-            block_hash,
-            transaction_hash,
-        } = json;
-        packed::L2BlockCommittedInfo::new_builder()
-            .number(u64::from(number).pack())
-            .block_hash(block_hash.pack())
-            .transaction_hash(transaction_hash.pack())
-            .build()
-    }
-}
-
-impl From<packed::L2BlockCommittedInfo> for L2BlockCommittedInfo {
-    fn from(data: packed::L2BlockCommittedInfo) -> L2BlockCommittedInfo {
-        let number: u64 = data.number().unpack();
-        L2BlockCommittedInfo {
-            number: number.into(),
-            block_hash: data.block_hash().unpack(),
-            transaction_hash: data.transaction_hash().unpack(),
-        }
-    }
-}
-
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum AllowedEoaType {

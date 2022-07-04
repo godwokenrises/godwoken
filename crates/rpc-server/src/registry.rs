@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{state::State, H256};
@@ -628,16 +628,34 @@ async fn get_transaction(
 
 async fn get_block_committed_info(
     Params((block_hash,)): Params<(JsonH256,)>,
+    rpc_client: Data<RPCClient>,
     store: Data<Store>,
 ) -> Result<Option<L2BlockCommittedInfo>> {
-    let block_hash = to_h256(block_hash);
-    let db = store.get_snapshot();
-    let committed_info = match db.get_l2block_committed_info(&block_hash)? {
-        Some(committed_info) => committed_info,
-        None => return Ok(None),
-    };
-
-    Ok(Some(committed_info.into()))
+    if let Some(number) = store.get_block_number(&to_h256(block_hash))? {
+        let tx = store.get_submit_tx(number).context("get submit tx")?;
+        let transaction_hash = tx.hash();
+        let opt_block_hash = rpc_client
+            .ckb
+            .get_transaction_block_hash(transaction_hash.into())
+            .await?;
+        if let Some(block_hash) = opt_block_hash {
+            let number = rpc_client
+                .get_header(block_hash.into())
+                .await?
+                .context("get block header")?
+                .inner
+                .number;
+            Ok(Some(L2BlockCommittedInfo {
+                number,
+                block_hash: block_hash.into(),
+                transaction_hash: transaction_hash.into(),
+            }))
+        } else {
+            Ok(None)
+        }
+    } else {
+        Ok(None)
+    }
 }
 
 async fn get_block(
@@ -1045,6 +1063,7 @@ impl TryFrom<u8> for GetWithdrawalVerbose {
 async fn get_withdrawal(
     Params(param): Params<GetWithdrawalParams>,
     store: Data<Store>,
+    rpc_client: Data<RPCClient>,
 ) -> Result<Option<WithdrawalWithStatus>, RpcError> {
     let (withdrawal_hash, verbose) = match param {
         GetWithdrawalParams::Default((withdrawal_hash,)) => (
@@ -1087,9 +1106,9 @@ async fn get_withdrawal(
                 block_hash: to_jsonh256(l2_block_hash),
                 withdrawal_index: l2_withdrawal_index.into(),
             });
-            let l1_committed_info = db
-                .get_l2block_committed_info(&l2_block_hash)?
-                .map(Into::into);
+            let l1_committed_info =
+                get_block_committed_info(Params((to_jsonh256(l2_block_hash),)), rpc_client, store)
+                    .await?;
             return Ok(Some(WithdrawalWithStatus {
                 status: WithdrawalStatus::Committed,
                 withdrawal: withdrawal_opt,
@@ -1534,8 +1553,18 @@ async fn get_node_info(
     })
 }
 
-async fn get_last_submitted_info(_store: Data<Store>) -> Result<LastL2BlockCommittedInfo> {
-    todo!()
+async fn get_last_submitted_info(store: Data<Store>) -> Result<LastL2BlockCommittedInfo> {
+    let last_submitted = store
+        .get_last_submitted_block_number_hash()
+        .context("get last submitted block")?
+        .number()
+        .unpack();
+    let tx = store
+        .get_submit_tx(last_submitted)
+        .context("get submission tx")?;
+    Ok(LastL2BlockCommittedInfo {
+        transaction_hash: tx.hash().into(),
+    })
 }
 
 async fn get_fee_config(

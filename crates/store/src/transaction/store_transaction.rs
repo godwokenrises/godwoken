@@ -12,12 +12,11 @@ use gw_db::schema::{
     COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
     COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY, COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF,
     COLUMN_BLOCK_STATE_RECORD, COLUMN_BLOCK_STATE_REVERSE_RECORD, COLUMN_BLOCK_SUBMIT_TX,
-    COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_MEM_POOL_TRANSACTION,
-    COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
-    COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF,
-    COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
-    COLUMN_TRANSACTION_RECEIPT, COLUMN_WITHDRAWAL, COLUMN_WITHDRAWAL_INFO, META_BLOCK_SMT_ROOT_KEY,
-    META_CHAIN_ID_KEY, META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY,
+    COLUMN_INDEX, COLUMN_MEM_POOL_TRANSACTION, COLUMN_MEM_POOL_TRANSACTION_RECEIPT,
+    COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_BRANCH,
+    COLUMN_REVERTED_BLOCK_SMT_LEAF, COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION,
+    COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT, COLUMN_WITHDRAWAL, COLUMN_WITHDRAWAL_INFO,
+    META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY, META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY,
     META_LAST_SUBMITTED_BLOCK_NUMBER_HASH_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
     META_REVERTED_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
 };
@@ -279,7 +278,6 @@ impl StoreTransaction {
             META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY,
             number_hash.as_slice(),
         )
-        // TODO??: update block committed info.
     }
 
     pub fn set_last_submitted_block_number_hash(
@@ -348,16 +346,13 @@ impl StoreTransaction {
     pub fn insert_bad_block(
         &self,
         block: &packed::L2Block,
-        committed_info: &packed::L2BlockCommittedInfo,
         global_state: &packed::GlobalState,
     ) -> Result<(), Error> {
         let block_hash = block.hash();
         let block_number = block.raw().number();
 
-        let committed_info = committed_info.as_slice();
         let global_state = global_state.as_slice();
 
-        self.insert_raw(COLUMN_L2BLOCK_COMMITTED_INFO, &block_hash, committed_info)?;
         self.insert_raw(COLUMN_BLOCK_GLOBAL_STATE, &block_hash, global_state)?;
 
         self.insert_raw(COLUMN_BLOCK, &block_hash, block.as_slice())?;

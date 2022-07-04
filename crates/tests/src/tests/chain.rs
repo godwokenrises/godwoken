@@ -23,8 +23,7 @@ use gw_types::{
     core::{ScriptHashType, Status},
     packed::{
         BlockMerkleState, CellInput, CellOutput, DepositRequest, GlobalState, L2Block,
-        L2BlockCommittedInfo, RawWithdrawalRequest, Script, SubmitWithdrawals, WithdrawalRequest,
-        WithdrawalRequestExtra,
+        RawWithdrawalRequest, Script, SubmitWithdrawals, WithdrawalRequest, WithdrawalRequestExtra,
     },
     prelude::*,
 };
@@ -46,9 +45,6 @@ async fn produce_a_block(
     };
     let l2block = block_result.block.clone();
     let transaction = build_sync_tx(rollup_cell, block_result);
-    let l2block_committed_info = L2BlockCommittedInfo::new_builder()
-        .number(expected_tip.pack())
-        .build();
 
     let update = L1Action {
         context: L1ActionContext::SubmitBlock {
@@ -58,7 +54,6 @@ async fn produce_a_block(
             withdrawals: Default::default(),
         },
         transaction,
-        l2block_committed_info,
     };
     let param = SyncParam {
         updates: vec![update],
@@ -216,9 +211,6 @@ async fn test_layer1_fork() {
                 withdrawals: Default::default(),
             },
             transaction: build_sync_tx(rollup_cell.clone(), block_result),
-            l2block_committed_info: L2BlockCommittedInfo::new_builder()
-                .number(1u64.pack())
-                .build(),
         }
     };
     // update block 1
@@ -251,9 +243,6 @@ async fn test_layer1_fork() {
             withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(1u64.pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![action1],
@@ -291,9 +280,6 @@ async fn test_layer1_fork() {
             withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell, block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(2u64.pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![action2],
@@ -313,14 +299,9 @@ async fn test_layer1_fork() {
             .get_block_post_global_state(&tip_block_parent_hash)
             .unwrap()
             .unwrap();
-        let l2block_committed_info = db
-            .get_l2block_committed_info(&tip_block_parent_hash)
-            .unwrap()
-            .unwrap();
         let context = RevertL1ActionContext::SubmitValidBlock { l2block: tip_block };
         RevertedL1Action {
             prev_global_state,
-            l2block_committed_info,
             context,
         }
     };
@@ -331,16 +312,11 @@ async fn test_layer1_fork() {
             .get_block_post_global_state(&tip_grandpa_block_hash)
             .unwrap()
             .unwrap();
-        let l2block_committed_info = db
-            .get_l2block_committed_info(&tip_grandpa_block_hash)
-            .unwrap()
-            .unwrap();
         let context = RevertL1ActionContext::SubmitValidBlock {
             l2block: tip_parent_block,
         };
         RevertedL1Action {
             prev_global_state,
-            l2block_committed_info,
             context,
         }
     };
@@ -418,9 +394,6 @@ async fn test_layer1_revert() {
             withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(1u64.pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![action1],
@@ -458,9 +431,6 @@ async fn test_layer1_revert() {
             withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell, block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(2u64.pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![action2.clone()],
@@ -481,7 +451,6 @@ async fn test_layer1_revert() {
             let prev_global_state = GlobalState::default();
             let L1Action {
                 transaction: _,
-                l2block_committed_info,
                 context,
             } = action;
             let l2block = match context {
@@ -491,7 +460,6 @@ async fn test_layer1_revert() {
             let context = RevertL1ActionContext::SubmitValidBlock { l2block };
             RevertedL1Action {
                 prev_global_state,
-                l2block_committed_info,
                 context,
             }
         })
@@ -767,9 +735,6 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(1u64.pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![action1],
@@ -843,9 +808,6 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             withdrawals: bad_block_result.withdrawal_extras.clone(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), bad_block_result.clone()),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number((DEFAULT_FINALITY_BLOCKS + 2u64).pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![update_bad_block],
@@ -885,9 +847,6 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             witness: challenge_context.witness,
         },
         transaction: build_sync_tx(rollup_cell.clone(), bad_block_result.clone()),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number((DEFAULT_FINALITY_BLOCKS + 3u64).pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![challenge_bad_block],
@@ -931,9 +890,6 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             reverted_blocks: vec![reverted_block_result.block.raw()],
         },
         transaction: build_sync_tx(rollup_cell.clone(), reverted_block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number((DEFAULT_FINALITY_BLOCKS + 3u64).pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![revert_bad_block],
@@ -951,12 +907,8 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
     let last_valid_tip_global_state = db
         .get_block_post_global_state(&last_valid_tip_block_hash)
         .unwrap();
-    let last_valid_tip_committed_info = db
-        .get_l2block_committed_info(&last_valid_tip_block_hash)
-        .unwrap();
     let rewind = RevertedL1Action {
         prev_global_state: last_valid_tip_global_state.clone().unwrap(),
-        l2block_committed_info: last_valid_tip_committed_info.unwrap(),
         context: RevertL1ActionContext::RewindToLastValidTip,
     };
     let param = SyncParam {
@@ -1001,9 +953,6 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell, block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number((DEFAULT_FINALITY_BLOCKS + 4u64).pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![new_block],
@@ -1025,16 +974,9 @@ async fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) {
             .await
             .unwrap()
     };
-    let db = chain.store().begin_transaction();
-    let tip_block_hash = db.get_tip_block_hash().unwrap();
-    let tip_committed_info = db.get_l2block_committed_info(&tip_block_hash).unwrap();
-    let l1_number = tip_committed_info.unwrap().number().unpack();
 
     let l2block = block_result.block.clone();
     let transaction = build_sync_tx(rollup_cell, block_result);
-    let l2block_committed_info = L2BlockCommittedInfo::new_builder()
-        .number((l1_number + 1).pack())
-        .build();
 
     let update = L1Action {
         context: L1ActionContext::SubmitBlock {
@@ -1044,7 +986,6 @@ async fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) {
             withdrawals: Default::default(),
         },
         transaction,
-        l2block_committed_info,
     };
     let param = SyncParam {
         updates: vec![update],

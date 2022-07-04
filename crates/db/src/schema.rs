@@ -16,8 +16,8 @@ pub const COLUMN_BLOCK_GLOBAL_STATE: Col = 4;
 pub const COLUMN_TRANSACTION: Col = 5;
 /// Column store transaction receipt
 pub const COLUMN_TRANSACTION_RECEIPT: Col = 6;
-/// Column store l2 block committed info
-pub const COLUMN_L2BLOCK_COMMITTED_INFO: Col = 7;
+/// Column store l2 block committed info. No longer used.
+pub const REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO: Col = 7;
 /// Column store transaction extra information
 pub const COLUMN_TRANSACTION_INFO: Col = 8;
 /// Column account SMT branch

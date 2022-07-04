@@ -12,8 +12,8 @@ use gw_types::{
     offchain::RollupContext,
     packed::{
         CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, DepositLockArgs,
-        DepositRequest, L2Block, L2BlockCommittedInfo, OutPoint, RollupAction, RollupActionUnion,
-        Script, Transaction, WithdrawalRequestExtra, WitnessArgs, WitnessArgsReader,
+        DepositRequest, L2Block, OutPoint, RollupAction, RollupActionUnion, Script, Transaction,
+        WithdrawalRequestExtra, WitnessArgs, WitnessArgsReader,
     },
     prelude::*,
 };
@@ -96,14 +96,9 @@ impl ChainUpdater {
         let header_view = header_view.ok_or_else(|| {
             QueryL1TxError::new(tx_hash, anyhow!("cannot locate block {}", block_hash))
         })?;
-        let l2block_committed_info = L2BlockCommittedInfo::new_builder()
-            .number(header_view.inner.number.value().pack())
-            .block_hash(block_hash.0.pack())
-            .transaction_hash(tx_hash.pack())
-            .build();
         log::debug!(
             "[sync revert] receive new l2 block from {} l1 block tx hash {:?}",
-            l2block_committed_info.number().unpack(),
+            header_view.inner.number.value(),
             tx_hash,
         );
 
@@ -142,7 +137,6 @@ impl ChainUpdater {
 
         let update = L1Action {
             transaction: tx.clone(),
-            l2block_committed_info,
             context,
         };
         let sync_param = SyncParam {
