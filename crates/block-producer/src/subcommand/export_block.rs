@@ -84,16 +84,11 @@ impl ExportBlock {
             .open(self.output)?;
 
         let mut writer = io::BufWriter::new(f);
-        let mut buf = Vec::new();
         for block_number in self.from_block..=self.to_block {
             let exported_block = gw_utils::export_block::export_block(&self.store, block_number)?;
             let packed: packed::ExportedBlock = exported_block.into();
 
-            buf.resize(packed.as_slice().len() * 2, 0);
-            faster_hex::hex_encode(packed.as_slice(), &mut buf)?;
-
-            writer.write_all(&buf)?;
-            writer.write_all(b"\n")?;
+            writer.write_all(packed.as_slice())?;
 
             if let Some(ref progress_bar) = self.progress_bar {
                 progress_bar.inc(1)
