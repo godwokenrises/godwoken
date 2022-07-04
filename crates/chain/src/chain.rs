@@ -818,7 +818,7 @@ impl Chain {
     /// Sync chain from layer1
     pub async fn sync(&mut self, param: SyncParam) -> Result<()> {
         let db = self.store.begin_transaction();
-        let is_revert_happend = !param.reverts.is_empty();
+        let is_l1_revert_happend = !param.reverts.is_empty();
         // revert layer1 actions
         if !param.reverts.is_empty() {
             // revert
@@ -826,6 +826,7 @@ impl Chain {
                 self.revert_l1action(&db, reverted_action)?;
             }
         }
+        let has_bad_block_before_update = self.challenge_target.is_some();
 
         // update layer1 actions
         log::debug!(target: "sync-block", "sync {} actions", param.updates.len());
@@ -841,10 +842,14 @@ impl Chain {
 
         db.commit()?;
 
+        // Should reset mem pool after bad block is reverted. Deposit cell may pass cancel timeout
+        // and get reclaimed. Finalized custodians may be merged in bad block submit tx and this
+        // will not be reverted.
+        let is_bad_block_reverted = has_bad_block_before_update && self.challenge_target.is_none();
         let tip_block_hash: H256 = self.local_state.tip.hash().into();
         if let Some(mem_pool) = &self.mem_pool {
             if matches!(self.last_sync_event, SyncEvent::Success)
-                && (is_revert_happend || self.complete_initial_syncing)
+                && (is_l1_revert_happend || is_bad_block_reverted || self.complete_initial_syncing)
             {
                 // update mem pool state
                 log::debug!(target: "sync-block", "acquire mem-pool",);
