@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::fs;
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, ErrorKind};
 use std::path::PathBuf;
 
 use anyhow::{anyhow, bail, Result};
@@ -69,36 +69,29 @@ impl ImportBlock {
         let snap = store.get_snapshot();
 
         let f = fs::File::open(&self.source)?;
-        let lines = io::BufReader::new(f).lines();
-        let mut buf = Vec::new();
-        let mut blocks_with_len = lines
-            .map(|maybe_line| {
-                let line = maybe_line?;
-                let len = line.as_bytes().len();
-
-                buf.resize(len.saturating_div(2), 0);
-                faster_hex::hex_decode(line.as_bytes(), &mut buf)?;
-
-                let packed = packed::ExportedBlock::from_slice(&buf)?;
-                Result::<_, anyhow::Error>::Ok((ExportedBlock::from(packed), len))
-            })
-            .peekable();
+        let mut block_iter = ExportedBlockReader {
+            file: io::BufReader::new(f),
+            buf: Vec::with_capacity(packed::ExportedBlock::default().total_size() * 2),
+        }
+        .peekable();
 
         // Check exists parent blocks in db
         let (first_block, _len) = {
-            let maybe_block = blocks_with_len
-                .peek()
-                .ok_or_else(|| anyhow!("empty file"))?;
-            maybe_block.as_ref().map_err(|err| anyhow!("{}", err))?
+            let b = block_iter.peek().ok_or_else(|| anyhow!("empty file"))?;
+            b.as_ref().map_err(|err| anyhow!("first block {}", err))?
         };
         if 0 != first_block.block_number() {
             check_parent_blocks(&snap, first_block)?;
         }
 
         // Seek to first new block
+        let mut next_block = first_block.block_number().saturating_sub(1);
         let mut new_block = None;
-        for maybe_block in blocks_with_len.by_ref() {
-            let (block, len) = maybe_block?;
+        for maybe_block in block_iter.by_ref() {
+            let (block, len) =
+                maybe_block.map_err(|err| anyhow!("read block {} {}", next_block, err))?;
+            next_block += 1;
+
             match snap.get_block_hash_by_number(block.block_number())? {
                 Some(block_hash_in_db) if block.block_hash() == block_hash_in_db => {
                     check_block(store, &block)?;
@@ -117,13 +110,19 @@ impl ImportBlock {
 
         // Insert new blocks
         while let Some((block, len)) = new_block.take() {
-            insert_block(&mut self.chain, block)?;
+            let block_number = block.block_number();
+            insert_block(&mut self.chain, block)
+                .map_err(|err| anyhow!("insert block {} {}", block_number, err))?;
 
             if let Some(ref progress_bar) = self.progress_bar {
                 progress_bar.inc(len as u64)
             }
 
-            new_block = blocks_with_len.next().transpose()?;
+            new_block = {
+                let b = block_iter.next().transpose();
+                b.map_err(|err| anyhow!("read block {} {}", next_block, err))?
+            };
+            next_block += 1;
         }
 
         if let Some(ref progress_bar) = self.progress_bar {
@@ -132,6 +131,40 @@ impl ImportBlock {
 
         Ok(())
     }
+}
+
+struct ExportedBlockReader<File: BufRead> {
+    file: File,
+    buf: Vec<u8>,
+}
+
+impl<File: BufRead> Iterator for ExportedBlockReader<File> {
+    type Item = Result<(ExportedBlock, usize)>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        read_block(&mut self.file, &mut self.buf).transpose()
+    }
+}
+
+fn read_block(
+    reader: &mut impl std::io::Read,
+    buf: &mut Vec<u8>,
+) -> Result<Option<(ExportedBlock, usize)>> {
+    let mut full_size_buf = [0u8; 4];
+    if let Err(err) = reader.read_exact(&mut full_size_buf) {
+        match err.kind() {
+            ErrorKind::UnexpectedEof if full_size_buf == [0u8; 4] => return Ok(None),
+            _ => bail!(err),
+        }
+    }
+
+    let full_size = u32::from_le_bytes(full_size_buf) as usize;
+    buf.resize(full_size, 0);
+    buf[..4].copy_from_slice(&full_size_buf[..4]);
+    reader.read_exact(&mut buf[4..full_size])?;
+
+    let packed = packed::ExportedBlock::from_slice(&buf[..full_size])?;
+    Ok(Some((packed.into(), full_size)))
 }
 
 fn check_parent_blocks(snap: &impl ChainStore, block: &ExportedBlock) -> Result<()> {
