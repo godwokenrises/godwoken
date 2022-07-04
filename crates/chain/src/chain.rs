@@ -254,7 +254,10 @@ impl Chain {
         if let Some(mem_pool) = &self.mem_pool {
             if !self.complete_initial_syncing {
                 // Do first notify
-                let tip_block_hash: H256 = self.local_state.tip.hash().into();
+                let tip_block_hash: H256 = match self.challenge_target {
+                    Some(_) => self.store().get_last_valid_tip_block_hash()?,
+                    None => self.local_state.tip.hash().into(),
+                };
 
                 log::debug!("[complete_initial_syncing] acquire mem-pool",);
                 let t = Instant::now();
