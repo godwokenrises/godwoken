@@ -58,9 +58,23 @@ impl ExportBlock {
             None
         };
 
+        let output = {
+            let mut output = args.output;
+            let mut file_name = output
+                .file_name()
+                .ok_or_else(|| anyhow!("no file name in path"))?
+                .to_os_string();
+
+            file_name.push(format!("_{:x}", args.config.genesis.rollup_type_hash));
+            file_name.push(format!("_{}_{}", from_block, to_block));
+
+            output.set_file_name(file_name);
+            output
+        };
+
         let export_block = ExportBlock {
             store,
-            output: args.output,
+            output,
             from_block,
             to_block,
             progress_bar,
