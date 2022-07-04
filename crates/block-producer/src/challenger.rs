@@ -215,6 +215,7 @@ impl Challenger {
         let rollup_deps = vec![
             contracts_dep.rollup_cell_type.clone().into(),
             self.config.rollup_config_cell_dep.clone().into(),
+            contracts_dep.omni_lock.clone().into(),
         ];
         let rollup_output = (
             rollup_state.rollup_output(),
@@ -446,6 +447,7 @@ impl Challenger {
         let rollup_deps = vec![
             contracts_dep.rollup_cell_type.clone().into(),
             self.config.rollup_config_cell_dep.clone().into(),
+            contracts_dep.omni_lock.clone().into(),
         ];
         let rollup_output = (
             rollup_state.rollup_output(),
@@ -535,6 +537,7 @@ impl Challenger {
         let rollup_deps = vec![
             contracts_dep.rollup_cell_type.clone().into(),
             self.config.rollup_config_cell_dep.clone().into(),
+            contracts_dep.omni_lock.clone().into(),
         ];
         let rollup_output = (
             rollup_state.rollup_output(),
