@@ -32,7 +32,7 @@ use gw_store::{
 };
 use gw_traits::CodeStore;
 use gw_types::{
-    offchain::{CellStatus, CellWithStatus, DepositInfo},
+    offchain::DepositInfo,
     packed::{
         AccountMerkleState, BlockInfo, L2Block, L2Transaction, Script, TxReceipt,
         WithdrawalRequest, WithdrawalRequestExtra,
@@ -607,7 +607,7 @@ impl MemPool {
 
         let db = self.store.begin_transaction();
 
-        // check pending deposits
+        // refresh pending deposits
         self.refresh_deposit_cells(&db, new_tip).await?;
         // estimate next l2block timestamp
         let estimated_timestamp = {
@@ -857,7 +857,7 @@ impl MemPool {
         Ok(())
     }
 
-    /// expire if pending deposits is handled by new l2block
+    /// refresh pending deposits
     #[instrument(skip_all)]
     async fn refresh_deposit_cells(
         &mut self,
@@ -871,41 +871,6 @@ impl MemPool {
             .into_iter()
             .collect();
 
-        // check expire
-        let mut force_expired = false;
-        for deposit in &self.pending_deposits {
-            // check is handled by current block
-            if processed_deposit_requests.contains(&deposit.request) {
-                force_expired = true;
-                break;
-            }
-        }
-
-        // check whether the deposited cells are live
-        if !force_expired {
-            for deposit in &self.pending_deposits {
-                match self
-                    .provider
-                    .get_cell(deposit.cell.out_point.clone())
-                    .await?
-                {
-                    Some(CellWithStatus {
-                        status: CellStatus::Live,
-                        ..
-                    }) => {}
-                    _ => {
-                        force_expired = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if force_expired {
-            log::debug!("[mem-pool] forced clear pending deposits");
-            self.pending_deposits.clear();
-        }
-
         // refresh
         let snap = self.mem_pool_state.load();
         let state = snap.state()?;
@@ -917,39 +882,26 @@ impl MemPool {
             new_tip_block.raw().post_account().count().unpack()
         };
 
-        // we can safely expire pending deposits if the number of account doesn't change or mem block txs is empty
-        // in these situation more deposits do not affects mem-pool account's id
-        let safe_expired = self.pending_deposits.is_empty()
-            && (mem_account_count == tip_account_count || self.mem_block.txs().is_empty());
-        if safe_expired {
-            log::debug!(
-                    "[mem-pool] safely refresh pending deposits, mem_account_count: {}, tip_account_count: {}",
-                    mem_account_count,
-                    tip_account_count
-                );
-            let cells = self.provider.collect_deposit_cells().await?;
-            self.pending_deposits = {
-                let cells = cells
-                    .into_iter()
-                    .filter(|di| !processed_deposit_requests.contains(&di.request));
-                crate::deposit::sanitize_deposit_cells(
-                    self.generator.rollup_context(),
-                    cells.collect(),
-                    &state,
-                )
-            };
-            log::debug!(
-                "[mem-pool] refreshed deposits: {}",
-                self.pending_deposits.len()
-            );
-        } else {
-            log::debug!(
-                    "[mem-pool] skip pending deposits, pending deposits: {}, mem_account_count: {}, tip_account_count: {}",
-                    self.pending_deposits.len(),
-                    mem_account_count,
-                    tip_account_count
-                );
-        }
+        log::debug!(
+            "[mem-pool] refresh pending deposits, mem_account_count: {}, tip_account_count: {}",
+            mem_account_count,
+            tip_account_count
+        );
+        let cells = self.provider.collect_deposit_cells().await?;
+        self.pending_deposits = {
+            let cells = cells
+                .into_iter()
+                .filter(|di| !processed_deposit_requests.contains(&di.request));
+            crate::deposit::sanitize_deposit_cells(
+                self.generator.rollup_context(),
+                cells.collect(),
+                &state,
+            )
+        };
+        log::debug!(
+            "[mem-pool] refreshed deposits: {}",
+            self.pending_deposits.len()
+        );
 
         Ok(())
     }
