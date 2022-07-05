@@ -191,7 +191,8 @@ fn check_parent_blocks(snap: &impl ChainStore, block: &ExportedBlock) -> Result<
 }
 
 fn check_block(store: &Store, block: &ExportedBlock) -> Result<()> {
-    let db_block = gw_utils::export_block::export_block(store, block.block_number())?;
+    let snap = store.get_snapshot();
+    let db_block = gw_utils::export_block::export_block(&snap, Some(store), block.block_number())?;
     if &db_block != block {
         bail!("diff block {}", block.block_number());
     }
