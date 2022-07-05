@@ -7,6 +7,7 @@ use crate::{
     prelude::{Entity, Unpack},
 };
 
+#[derive(Debug)]
 pub struct ExportedBlock {
     pub block: L2Block,
     pub committed_info: L2BlockCommittedInfo,
