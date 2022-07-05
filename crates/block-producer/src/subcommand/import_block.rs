@@ -20,6 +20,7 @@ pub struct ImportArgs {
     pub config: Config,
     pub source: PathBuf,
     pub read_batch: Option<usize>,
+    pub to_block: Option<u64>,
     pub show_progress: bool,
 }
 
@@ -27,6 +28,7 @@ pub struct ImportBlock {
     chain: Chain,
     source: PathBuf,
     read_batch: usize,
+    to_block: Option<u64>,
     progress_bar: Option<ProgressBar>,
 }
 
@@ -59,6 +61,7 @@ impl ImportBlock {
             chain,
             source: args.source,
             read_batch: args.read_batch.unwrap_or(DEFAULT_READ_BATCH),
+            to_block: args.to_block,
             progress_bar,
         };
 
@@ -128,14 +131,14 @@ impl ImportBlock {
 
         // Read blocks in background
         let (tx, rx) = std::sync::mpsc::sync_channel(self.read_batch);
+        let to_block = self.to_block;
         let read_in_background = std::thread::spawn(move || {
             for maybe_new_block in block_iter {
-                let has_err = maybe_new_block.is_err();
-                tx.send(maybe_new_block).expect("send block in background");
-
-                if has_err {
-                    return;
-                }
+                match maybe_new_block.as_ref() {
+                    Err(_) => return,
+                    Ok((block, _size)) if Some(block.block_number()) > to_block => return,
+                    Ok(_) => tx.send(maybe_new_block).expect("send block in background"),
+                };
             }
         });
 
