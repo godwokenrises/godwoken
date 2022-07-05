@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use gw_common::H256;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
@@ -6,9 +6,12 @@ use gw_types::{
     prelude::{Pack, Unpack},
 };
 
-pub fn export_block(store: &Store, block_number: u64) -> Result<ExportedBlock> {
-    let snap = store.get_snapshot();
-
+// pub fn export_block(store: &Store, block_number: u64) -> Result<ExportedBlock> {
+pub fn export_block(
+    snap: &impl ChainStore,
+    store: Option<&Store>,
+    block_number: u64,
+) -> Result<ExportedBlock> {
     let block_hash = snap
         .get_block_hash_by_number(block_number)?
         .ok_or_else(|| anyhow!("block {} not found", block_number))?;
@@ -56,7 +59,19 @@ pub fn export_block(store: &Store, block_number: u64) -> Result<ExportedBlock> {
         extra_reqs.collect::<Result<Vec<_>>>()?
     };
 
-    let bad_block_hashes = get_bad_block_hashes(store, block_number)?;
+    let reverted_block_root: H256 = post_global_state.reverted_block_root().unpack();
+    let bad_block_hashes = if reverted_block_root.is_zero() {
+        None
+    } else {
+        let store = match store {
+            Some(s) => s,
+            None => bail!(
+                "export block {} with non-zero reverted block root from readonly db",
+                block_number
+            ),
+        };
+        get_bad_block_hashes(store, block_number)?
+    };
 
     let exported_block = ExportedBlock {
         block,

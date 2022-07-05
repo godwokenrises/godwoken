@@ -215,7 +215,7 @@ async fn run_cli() -> Result<()> {
                 to_block,
                 show_progress,
             };
-            ExportBlock::create(args).await?.execute()?;
+            ExportBlock::create(args)?.execute()?;
         }
         (COMMAND_IMPORT_BLOCK, Some(m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
