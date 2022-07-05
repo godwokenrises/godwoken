@@ -1725,7 +1725,6 @@ dependencies = [
  "ckb-types",
  "clap",
  "console-subscriber",
- "faster-hex 0.6.1",
  "futures",
  "gw-chain",
  "gw-challenge",
