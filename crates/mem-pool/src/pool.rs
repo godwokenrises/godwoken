@@ -607,8 +607,13 @@ impl MemPool {
 
         let db = self.store.begin_transaction();
 
+        let is_mem_pool_recovery = old_tip.is_none();
+
         // refresh pending deposits
-        self.refresh_deposit_cells(&db, new_tip).await?;
+        if !is_mem_pool_recovery {
+            self.refresh_deposit_cells(&db, new_tip).await?;
+        }
+
         // estimate next l2block timestamp
         let estimated_timestamp = {
             let estimated = self.provider.estimate_next_blocktime().await?;
@@ -674,7 +679,6 @@ impl MemPool {
         log::info!("[mem-pool] reset reinject txs: {} mem-block txs: {} reinject withdrawals: {} mem-block withdrawals: {}", reinject_txs.len(), mem_block_txs.len(), reinject_withdrawals.len(), mem_block_withdrawals.len());
         // re-inject txs
         let txs = reinject_txs.into_iter().chain(mem_block_txs).collect();
-        let is_mem_pool_recovery = old_tip.is_none();
 
         // re-inject withdrawals
         let mut withdrawals: Vec<_> = reinject_withdrawals.into_iter().collect();
