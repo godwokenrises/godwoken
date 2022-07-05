@@ -56,6 +56,15 @@ impl FinalizedCustodianCapacity {
             }
         }
     }
+
+    /// Sub sudt amount with overflow check.
+    ///
+    /// Returns new amount of the sudt if not overflow.
+    pub fn checked_sub_sudt(&mut self, hash: [u8; 32], amount: u128) -> Option<u128> {
+        let pointer = self.sudt.get_mut(&hash)?;
+        pointer.0 = pointer.0.checked_sub(amount)?;
+        Some(pointer.0)
+    }
 }
 
 impl From<CollectedCustodianCells> for FinalizedCustodianCapacity {

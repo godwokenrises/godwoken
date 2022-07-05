@@ -19,7 +19,7 @@ use gw_store::{
 use gw_types::{
     bytes::Bytes,
     core::Status,
-    offchain::global_state_from_slice,
+    offchain::{global_state_from_slice, FinalizedCustodianCapacity},
     packed::{
         BlockMerkleState, Byte32, CellInput, CellOutput, ChallengeTarget, ChallengeWitness,
         DepositRequest, GlobalState, L2Block, RawL2Block, RollupConfig, Script, Transaction,
@@ -302,7 +302,6 @@ impl Chain {
         let L1Action {
             transaction,
             context,
-            ..
         } = action;
         let global_state = parse_global_state(&transaction, &self.rollup_type_script_hash)?;
         let status = {
@@ -355,6 +354,8 @@ impl Chain {
                         return Ok(SyncEvent::BadBlock { context });
                     }
 
+                    let withdrawals_clone = withdrawals.clone();
+
                     if let Some(challenge_target) = self.process_block(
                         db,
                         l2block.clone(),
@@ -388,6 +389,61 @@ impl Chain {
                         Ok(SyncEvent::BadBlock { context })
                     } else {
                         let block_number = l2block.raw().number().unpack();
+                        // TODO: store block deposit info vec.
+
+                        // Store remaining finalized custodians.
+                        //
+                        // Remaining finalized custodians = parent block
+                        // remaining finalized custodians + just finalized
+                        // deposits - this block withdrawals
+                        let mut finalized_custodians = if block_number > 1 {
+                            db.get_block_post_finalized_custodian_capacity(block_number - 1)
+                                .context("get parent block remaining finalized custodians")?
+                                .as_reader()
+                                .unpack()
+                        } else {
+                            FinalizedCustodianCapacity::default()
+                        };
+                        let last_finalized_block = self
+                            .generator
+                            .rollup_context()
+                            .last_finalized_block_number(block_number - 1);
+                        let last_finalized_block_hash = db
+                            .get_block_hash_by_number(last_finalized_block)?
+                            .context("get block hash")?;
+                        let deposits = db
+                            .get_block_deposit_requests(&last_finalized_block_hash)?
+                            .context("get deposit requests")?;
+                        for deposit in deposits {
+                            finalized_custodians.capacity = finalized_custodians
+                                .capacity
+                                .checked_add(deposit.capacity().unpack().into())
+                                .context("add capacity overflow")?;
+                            finalized_custodians
+                                .checked_add_sudt(
+                                    deposit.sudt_script_hash().unpack(), // XXX: is this correct.
+                                    deposit.amount().unpack(),
+                                    deposit.script(),
+                                )
+                                .context("add sudt overflow")?;
+                        }
+                        for w in withdrawals_clone {
+                            finalized_custodians.capacity = finalized_custodians
+                                .capacity
+                                .checked_sub(w.raw().capacity().unpack().into())
+                                .context("withdrawal not enough capacity")?;
+                            finalized_custodians
+                                .checked_sub_sudt(
+                                    w.request().raw().sudt_script_hash().unpack(),
+                                    w.request().raw().amount().unpack(),
+                                )
+                                .context("withdrawal not enough sudt amount")?;
+                        }
+                        db.set_block_post_finalized_custodian_capacity(
+                            block_number,
+                            &finalized_custodians.pack().as_reader(),
+                        )?;
+
                         log::info!("sync new block #{} success", block_number);
 
                         Ok(SyncEvent::Success)
@@ -851,6 +907,9 @@ impl Chain {
         Ok(())
     }
 
+    /// Store a new local block.
+    ///
+    /// Note that this does not store block deposit requests or finalized custodian.
     pub async fn update_local(
         &mut self,
         store_tx: &StoreTransaction,

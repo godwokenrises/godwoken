@@ -9,7 +9,7 @@ use crate::{
     test_mode_control::TestModeControl,
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use gw_chain::chain::Chain;
 use gw_common::{h256_ext::H256Ext, H256};
 use gw_config::BlockProducerConfig;
@@ -188,7 +188,7 @@ impl BlockProducer {
 
         let rollup_cell = query_rollup_cell(local_cells_manager, &self.rpc_client)
             .await?
-            .ok_or_else(|| anyhow!("rollup cell not found"))?;
+            .context("rollup cell not found")?;
 
         let rollup_context = self.generator.rollup_context();
         let omni_lock_code_hash = self.contracts_dep_manager.load_scripts().omni_lock.hash();

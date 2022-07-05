@@ -321,6 +321,10 @@ impl StoreTransaction {
         Ok(())
     }
 
+    pub fn delete_block_deposit_info_vec(&self, block_number: u64) -> Result<(), Error> {
+        self.delete(COLUMN_BLOCK_DEPOSIT_INFO_VEC, &block_number.to_be_bytes())
+    }
+
     pub fn set_block_post_finalized_custodian_capacity(
         &self,
         block_number: u64,
@@ -332,6 +336,16 @@ impl StoreTransaction {
             finalized_custodian_capacity.as_slice(),
         )?;
         Ok(())
+    }
+
+    pub fn delete_block_post_finalized_custodian_capacity(
+        &self,
+        block_number: u64,
+    ) -> Result<(), Error> {
+        self.delete(
+            COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY,
+            &block_number.to_be_bytes(),
+        )
     }
 
     pub fn set_reverted_block_smt_root(&self, root: H256) -> Result<(), Error> {
@@ -532,6 +546,8 @@ impl StoreTransaction {
         }
 
         self.delete_submit_tx(block_number)?;
+        self.delete_block_deposit_info_vec(block_number)?;
+        self.delete_block_post_finalized_custodian_capacity(block_number)?;
 
         Ok(())
     }

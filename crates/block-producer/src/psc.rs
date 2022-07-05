@@ -2,7 +2,7 @@
 
 use std::{fmt::Display, sync::Arc, time::Duration};
 
-use anyhow::{anyhow, bail, ensure, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use gw_chain::chain::{Chain, RevertedL1Action};
 use gw_common::H256;
 use gw_jsonrpc_types::ckb_jsonrpc_types::BlockNumber;
@@ -364,10 +364,8 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
     // L2 block hash to submit.
     let block_hash = snap
         .get_block_hash_by_number(block_number)?
-        .ok_or_else(|| anyhow!("failed to get next block hash"))?;
-    let block = snap
-        .get_block(&block_hash)?
-        .ok_or_else(|| anyhow!("get_block"))?;
+        .context("failed to get next block hash")?;
+    let block = snap.get_block(&block_hash)?.context("get_block")?;
     let timestamp_millis = block.raw().timestamp().unpack();
     // Godwoken scripts require that previous block timestamp < block timestamp < since:
     // https://github.com/nervosnetwork/godwoken-scripts/blob/d983fb351410eb6fbe02bb298af909193aeb5f22/contracts/state-validator/src/verifications/submit_block.rs#L707-L726
@@ -385,17 +383,17 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
                     block_hash.pack(),
                     idx as u32,
                 ))?
-                .ok_or_else(|| anyhow!("get withdrawal"))?;
+                .context("get withdrawal")?;
             ensure!(extra.hash() == w.hash());
             withdrawal_extras.push(extra);
         }
         let deposit_cells: Vec<DepositInfo> = snap
             .get_block_deposit_info_vec(block_number)
-            .ok_or_else(|| anyhow!("failed to get deposit info vec"))?
+            .context("get deposit info vec")?
             .unpack();
         let global_state: GlobalState = snap
             .get_block_post_global_state(&block_hash)?
-            .ok_or_else(|| anyhow!("failed to get block global_state"))?;
+            .context("get block global_state")?;
         drop(snap);
 
         let local_cells_manager = ctx.local_cells_manager.lock().await;
@@ -479,7 +477,7 @@ async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<(
         .ckb
         .get_transaction_block_number(tx.hash().into())
         .await?
-        .ok_or_else(|| anyhow!("get tx block hash"))?;
+        .context("get tx block hash")?;
     loop {
         let tip = rpc_client.get_tip().await?;
         if tip.number().unpack() >= block_number {
@@ -548,7 +546,7 @@ async fn check_cell(rpc_client: &RPCClient, out_point: &OutPoint) -> Result<()> 
         .ckb
         .get_transaction_block_number(out_point.tx_hash().unpack())
         .await?
-        .ok_or_else(|| anyhow!("transaction not committed"))?;
+        .context("transaction not committed")?;
     let mut opt_block = rpc_client.get_block_by_number(block_number).await?;
     // Search later blocks to see who consumed this cell.
     for _ in 0..100 {
@@ -640,7 +638,7 @@ async fn sync_l1(psc: &PSCContext) -> Result<()> {
     let store_tx = psc.store.begin_transaction();
     let last_confirmed_local = store_tx
         .get_last_confirmed_block_number_hash()
-        .ok_or_else(|| anyhow!("get last confirmed"))?;
+        .context("get last confirmed")?;
     let mut last_confirmed_l1 = last_confirmed_local.number().unpack();
     // Find last known block on L1.
     loop {
@@ -648,7 +646,7 @@ async fn sync_l1(psc: &PSCContext) -> Result<()> {
         let tx = psc
             .store
             .get_submit_tx(last_confirmed_l1)
-            .ok_or_else(|| anyhow!("get submit tx"))?;
+            .context("get submit tx")?;
         if let Some(TxStatus::Committed) = psc
             .rpc_client
             .ckb
@@ -668,7 +666,7 @@ async fn sync_l1(psc: &PSCContext) -> Result<()> {
         log::info!("update last confirmed block to {last_confirmed_l1}");
         let hash = store_tx
             .get_block_hash_by_number(last_confirmed_l1)?
-            .ok_or_else(|| anyhow!("get block hash"))?;
+            .context("get block hash")?;
         let nh = NumberHash::new_builder()
             .number(last_confirmed_l1.pack())
             .block_hash(hash.pack())
@@ -697,13 +695,13 @@ async fn sync_l1_unknown(
     // Get submission transactions, if there are unknown transactions, revert, update.
     let tx = store_tx
         .get_submit_tx(last_confirmed)
-        .ok_or_else(|| anyhow!("get submit tx"))?;
+        .context("get submit tx")?;
     let start_l1_block = psc
         .rpc_client
         .ckb
         .get_transaction_block_number(tx.hash().into())
         .await?
-        .ok_or_else(|| anyhow!("get transaction block number"))?;
+        .context("get transaction block number")?;
     let search_key =
         SearchKey::with_type(psc.rollup_type_script.clone()).with_filter(Some(SearchKeyFilter {
             block_range: Some([
@@ -765,7 +763,7 @@ async fn revert(
         }
         let prev_global_state = store_tx
             .get_block_post_global_state(&block.raw().parent_block_hash().unpack())?
-            .ok_or_else(|| anyhow!("get parent global state"))?;
+            .context("get parent global state")?;
         let action = RevertedL1Action {
             prev_global_state,
             context: gw_chain::chain::RevertL1ActionContext::SubmitValidBlock { l2block: block },
