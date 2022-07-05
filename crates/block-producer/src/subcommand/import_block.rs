@@ -14,15 +14,19 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::runner::BaseInitComponents;
 
+pub const DEFAULT_READ_BATCH: usize = 500;
+
 pub struct ImportArgs {
     pub config: Config,
     pub source: PathBuf,
+    pub read_batch: Option<usize>,
     pub show_progress: bool,
 }
 
 pub struct ImportBlock {
     chain: Chain,
     source: PathBuf,
+    read_batch: usize,
     progress_bar: Option<ProgressBar>,
 }
 
@@ -54,6 +58,7 @@ impl ImportBlock {
         let import_block = ImportBlock {
             chain,
             source: args.source,
+            read_batch: args.read_batch.unwrap_or(DEFAULT_READ_BATCH),
             progress_bar,
         };
 
@@ -121,7 +126,20 @@ impl ImportBlock {
             bail!("diff parent block {}", db_tip_block_number);
         }
 
-        for maybe_new_block in block_iter {
+        // Read blocks in background
+        let (tx, rx) = std::sync::mpsc::sync_channel(self.read_batch);
+        let read_in_background = std::thread::spawn(move || {
+            for maybe_new_block in block_iter {
+                let has_err = maybe_new_block.is_err();
+                tx.send(maybe_new_block).expect("send block in background");
+
+                if has_err {
+                    return;
+                }
+            }
+        });
+
+        for maybe_new_block in rx.into_iter() {
             let (block, size) = maybe_new_block
                 .map_err(|err| anyhow!("read block {} {}", next_block_number, err))?;
             let block_number = block.block_number();
@@ -139,6 +157,8 @@ impl ImportBlock {
         if let Some(ref progress_bar) = self.progress_bar {
             progress_bar.finish_with_message("done");
         }
+
+        read_in_background.join().expect("join read background");
 
         Ok(())
     }

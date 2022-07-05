@@ -28,6 +28,7 @@ const ARG_FROM_BLOCK: &str = "from-block";
 const ARG_TO_BLOCK: &str = "to-block";
 const ARG_SHOW_PROGRESS: &str = "show-progress";
 const ARG_SOURCE_PATH: &str = "source-path";
+const ARG_READ_BATCH: &str = "read-batch";
 
 fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
     let content = fs::read(&path)
@@ -168,6 +169,12 @@ async fn run_cli() -> Result<()> {
                         .help("The source file for exported blocks"),
                 )
                 .arg(
+                    Arg::with_name(ARG_READ_BATCH)
+                        .short("b")
+                        .takes_value(true)
+                        .help("The read block batch size"),
+                )
+                .arg(
                     Arg::with_name(ARG_SHOW_PROGRESS)
                         .short("p")
                         .required(false)
@@ -222,11 +229,14 @@ async fn run_cli() -> Result<()> {
             let config = read_config(&config_path)?;
             let _guard = trace::init(None)?;
             let source = m.value_of(ARG_SOURCE_PATH).unwrap().into();
+            let read_batch: Option<usize> =
+                m.value_of(ARG_READ_BATCH).map(str::parse).transpose()?;
             let show_progress = m.is_present(ARG_SHOW_PROGRESS);
 
             let args = ImportArgs {
                 config,
                 source,
+                read_batch,
                 show_progress,
             };
             ImportBlock::create(args).await?.execute()?;
