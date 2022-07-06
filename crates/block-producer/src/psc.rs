@@ -8,6 +8,7 @@ use gw_common::H256;
 use gw_jsonrpc_types::ckb_jsonrpc_types::BlockNumber;
 use gw_mem_pool::pool::MemPool;
 use gw_rpc_client::{
+    error::{get_jsonrpc_error_code, CkbRpcError},
     indexer_types::{Order, SearchKey, SearchKeyFilter},
     rpc_client::RPCClient,
 };
@@ -582,13 +583,13 @@ async fn send_transaction_or_check_inputs(
     tx: &Transaction,
 ) -> anyhow::Result<()> {
     if let Err(mut err) = rpc_client.send_transaction(tx).await {
-        let msg = err.to_string();
-        if msg.contains("TransactionFailedToResolve") {
+        let code = get_jsonrpc_error_code(&err);
+        if code == Some(CkbRpcError::TransactionFailedToResolve as i64) {
             if let Err(e) = check_tx_input(rpc_client, tx).await {
                 err = err.context(e);
             }
             Err(err)
-        } else if msg.contains("PoolRejectedDuplicatedTransaction") {
+        } else if code == Some(CkbRpcError::PoolRejectedDuplicatedTransaction as i64) {
             Ok(())
         } else {
             Err(err)

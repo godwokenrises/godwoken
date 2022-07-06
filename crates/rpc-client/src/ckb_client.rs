@@ -4,7 +4,7 @@ use crate::{
     error::RPCRequestError,
     utils::{to_jsonh256, to_result, DEFAULT_HTTP_TIMEOUT},
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
 use gw_common::H256;
 use gw_jsonrpc_types::{
@@ -55,26 +55,15 @@ impl CKBClient {
     #[instrument(skip_all, fields(method = method))]
     pub async fn request<T: DeserializeOwned>(
         &self,
-        method: &str,
+        method: &'static str,
         params: Option<ClientParams>,
     ) -> Result<T> {
         let monitor = self.metrics_monitor.clone();
         let response = monitor
             .instrument(self.client().request(method, params))
             .await
-            .map_err(|err| RPCRequestError::new("ckb client", method.to_string(), err))?;
-        let response_str = response.to_string();
-        match to_result::<T>(response) {
-            Ok(r) => Ok(r),
-            Err(err) => {
-                log::error!(
-                    "[ckb-client] Failed to parse response, method: {}, response: {}",
-                    method,
-                    response_str
-                );
-                Err(err)
-            }
-        }
+            .map_err(|err| RPCRequestError::new("ckb client", method, err))?;
+        to_result(response).with_context(|| format!("ckb-client {method}"))
     }
 
     #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]

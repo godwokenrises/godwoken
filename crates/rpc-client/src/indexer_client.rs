@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::error::RPCRequestError;
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter, Tx};
 use crate::utils::{to_result, DEFAULT_HTTP_TIMEOUT, DEFAULT_QUERY_LIMIT};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
 use ckb_types::prelude::Entity;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{JsonBytes, Uint32};
@@ -38,25 +38,15 @@ impl CKBIndexerClient {
     #[instrument(skip_all, fields(method = method))]
     pub async fn request<T: DeserializeOwned>(
         &self,
-        method: &str,
+        method: &'static str,
         params: Option<ClientParams>,
     ) -> Result<T> {
-        let response =
-            self.client().request(method, params).await.map_err(|err| {
-                RPCRequestError::new("ckb indexer client", method.to_string(), err)
-            })?;
-        let response_str = response.to_string();
-        match to_result(response) {
-            Ok(r) => Ok(r),
-            Err(err) => {
-                log::error!(
-                    "[ckb-indexer-client] Failed to parse response, method: {}, response: {}",
-                    method,
-                    response_str
-                );
-                Err(err)
-            }
-        }
+        let response = self
+            .client()
+            .request(method, params)
+            .await
+            .map_err(|err| RPCRequestError::new("ckb indexer client", method, err))?;
+        to_result(response).with_context(|| format!("ckb-indexer-client {method}"))
     }
 
     pub async fn get_cells(
