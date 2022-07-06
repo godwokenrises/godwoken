@@ -44,14 +44,28 @@ impl ExportBlock {
             StoreReadonly::new(db)
         };
 
+        let db_last_valid_tip_block_number =
+            snap.get_last_valid_tip_block()?.raw().number().unpack();
+
         let from_block = args.from_block.unwrap_or(0);
         let to_block = match args.to_block {
             Some(to) => {
                 snap.get_block_hash_by_number(to)?
                     .ok_or_else(|| anyhow!("{} block not found", to))?;
+
+                // TODO: support export bad block? (change `insert_bad_block` func to also include
+                // deposit requests, deposit asset scripts and withdrawals). then add new arg
+                // --skip-tip-bad-block-check. (also update file name).
+                if to > db_last_valid_tip_block_number {
+                    bail!(
+                        "bad block found, start from block {}",
+                        db_last_valid_tip_block_number + 1
+                    );
+                }
+
                 to
             }
-            None => snap.get_last_valid_tip_block()?.raw().number().unpack(),
+            None => db_last_valid_tip_block_number,
         };
         if from_block > to_block {
             bail!("from {} is bigger than to {}", from_block, to_block);
