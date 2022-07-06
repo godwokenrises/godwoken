@@ -12,6 +12,7 @@ use gw_types::{
 
 use crate::traits::{chain_store::ChainStore, kv_store::KVStoreRead};
 
+#[derive(Clone)]
 pub struct StoreReadonly {
     inner: ReadOnlyDB,
 }

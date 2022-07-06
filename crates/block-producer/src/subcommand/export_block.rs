@@ -32,6 +32,21 @@ pub struct ExportBlock {
 }
 
 impl ExportBlock {
+    pub fn new_unchecked(
+        snap: StoreReadonly,
+        output: PathBuf,
+        from_block: u64,
+        to_block: u64,
+    ) -> Self {
+        ExportBlock {
+            snap,
+            output,
+            from_block,
+            to_block,
+            progress_bar: None,
+        }
+    }
+
     pub fn create(args: ExportArgs) -> Result<Self> {
         let snap = {
             let cf_names = (0..COLUMNS).map(|c| c.to_string());
@@ -102,6 +117,10 @@ impl ExportBlock {
         };
 
         Ok(export_block)
+    }
+
+    pub fn store(&self) -> &StoreReadonly {
+        &self.snap
     }
 
     pub fn execute(self) -> Result<()> {

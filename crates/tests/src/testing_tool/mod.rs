@@ -1,3 +1,4 @@
+pub mod bad_block;
 pub mod chain;
 pub mod common;
 pub mod eth_wallet;
