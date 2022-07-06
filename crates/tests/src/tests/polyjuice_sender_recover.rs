@@ -89,10 +89,14 @@ async fn test_eth_account_creator() {
         .build_batch_create_tx(&state, recovered_account_scripts)
         .unwrap();
 
+    mem_pool_state.store(snap.into());
     {
         let mut mem_pool = chain.mem_pool().await;
         mem_pool.push_transaction(batch_create_tx).await.unwrap();
     }
+
+    let snap = mem_pool_state.load();
+    let state = snap.state().unwrap();
 
     for wallet in new_users_wallet {
         let opt_user_script_hash = state

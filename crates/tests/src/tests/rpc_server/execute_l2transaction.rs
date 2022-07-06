@@ -56,8 +56,9 @@ async fn test_polyjuice_erc20_tx() {
         .nonce(0u32.pack())
         .args(deploy_args.pack())
         .build();
-
     let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
+
+    mem_pool_state.store(snap.into());
     let run_result = rpc_server.execute_l2transaction(&deploy_tx).await.unwrap();
 
     let logs = run_result.logs.into_iter().map(Into::into);
@@ -110,10 +111,14 @@ async fn test_polyjuice_tx_from_id_zero() {
     let deploy_tx = deployer_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
     let deploy_tx_hash: H256 = deploy_tx.hash().into();
 
+    mem_pool_state.store(snap.into());
     {
         let mut mem_pool = chain.mem_pool().await;
         mem_pool.push_transaction(deploy_tx).await.unwrap();
     }
+
+    let snap = mem_pool_state.load();
+    let mut state = snap.state().unwrap();
 
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();
     assert_eq!(system_log.status_code, 0);
@@ -153,8 +158,9 @@ async fn test_polyjuice_tx_from_id_zero() {
         .nonce(0u32.pack())
         .args(balance_args.pack())
         .build();
-
     let balance_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
+
+    mem_pool_state.store(snap.into());
     let run_result = rpc_server.execute_l2transaction(&balance_tx).await.unwrap();
 
     assert_eq!(
@@ -204,6 +210,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .unwrap();
     let deploy_tx_hash: H256 = deploy_tx.hash().into();
 
+    mem_pool_state.store(snap.into());
     {
         let mut mem_pool = chain.mem_pool().await;
         mem_pool.push_transaction(deploy_tx).await.unwrap();
@@ -211,6 +218,9 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
 
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();
     assert_eq!(system_log.status_code, 0);
+
+    let snap = mem_pool_state.load();
+    let state = snap.state().unwrap();
 
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
     let erc20_contract_account_id = system_log.contract_account_id(&state).unwrap();
@@ -294,6 +304,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     let balance = MIN_TRANSACTION_FEE.saturating_sub(1000).into();
     test_wallet.mint_ckb_sudt(&mut state, balance).unwrap();
     state.submit_tree_to_mem_block();
+    mem_pool_state.store(snap.into());
 
     let err = rpc_server
         .execute_l2transaction(&balance_tx)
@@ -315,6 +326,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .mapping_registry_address_to_script_hash(test_wallet.reg_address().to_owned(), H256::one())
         .unwrap();
     state.submit_tree_to_mem_block();
+    mem_pool_state.store(snap.into());
 
     let err = rpc_server
         .execute_l2transaction(&balance_tx)

@@ -62,6 +62,8 @@ async fn test_polyjuice_erc20_tx() {
         .build();
 
     let reg_addr_bytes = test_wallet.reg_address().to_bytes().into();
+    mem_pool_state.store(snap.into());
+
     let run_result = rpc_server
         .execute_raw_l2transaction(&raw_tx, None, Some(reg_addr_bytes))
         .await
@@ -117,6 +119,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     let deploy_tx = deployer_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
     let deploy_tx_hash: H256 = deploy_tx.hash().into();
 
+    mem_pool_state.store(snap.into());
     {
         let mut mem_pool = chain.mem_pool().await;
         mem_pool.push_transaction(deploy_tx).await.unwrap();
@@ -124,6 +127,9 @@ async fn test_polyjuice_tx_from_id_zero() {
 
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();
     assert_eq!(system_log.status_code, 0);
+
+    let snap = mem_pool_state.load();
+    let mut state = snap.state().unwrap();
 
     // Check erc20 balance with existing sender
     let erc20_contract_account_id = system_log.contract_account_id(&state).unwrap();
@@ -153,6 +159,10 @@ async fn test_polyjuice_tx_from_id_zero() {
     test_wallet
         .mint_sudt(&mut state, CKB_SUDT_ACCOUNT_ID, test_balance)
         .unwrap();
+
+    mem_pool_state.store(snap.into());
+    let snap = mem_pool_state.load();
+    let state = snap.state().unwrap();
 
     let erc20_contract_account_id = system_log.contract_account_id(&state).unwrap();
     let balance_args = SudtErc20ArgsBuilder::balance_of(&test_wallet.registry_address).finish();
@@ -251,6 +261,9 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
         mem_pool.push_transaction(deploy_tx).await.unwrap();
     }
 
+    let snap = mem_pool_state.load();
+    let state = snap.state().unwrap();
+
     // Depoly erc20 contract
     let polyjuice_account_id = state
         .get_account_id_by_script_hash(&polyjuice_account.hash().into())
@@ -275,6 +288,9 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
 
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();
     assert_eq!(system_log.status_code, 0);
+
+    let snap = mem_pool_state.load();
+    let state = snap.state().unwrap();
 
     let erc20_contract_account_id = system_log.contract_account_id(&state).unwrap();
     let erc20_contract_script_hash = state.get_script_hash(erc20_contract_account_id).unwrap();
@@ -326,6 +342,9 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
         let mut mem_pool = chain.mem_pool().await;
         mem_pool.push_transaction(transfer_tx).await.unwrap();
     }
+
+    let snap = mem_pool_state.load();
+    let state = snap.state().unwrap();
 
     let to_balance = state
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_wallet.reg_address())
@@ -463,6 +482,7 @@ async fn test_invalid_registry_address() {
     let deploy_tx = deployer_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
     let deploy_tx_hash: H256 = deploy_tx.hash().into();
 
+    mem_pool_state.store(snap.into());
     {
         let mut mem_pool = chain.mem_pool().await;
         mem_pool.push_transaction(deploy_tx).await.unwrap();
@@ -470,6 +490,9 @@ async fn test_invalid_registry_address() {
 
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();
     assert_eq!(system_log.status_code, 0);
+
+    let snap = mem_pool_state.load();
+    let state = snap.state().unwrap();
 
     // No registry address
     let erc20_contract_account_id = system_log.contract_account_id(&state).unwrap();

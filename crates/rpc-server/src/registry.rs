@@ -148,7 +148,8 @@ pub struct ExecutionTransactionContext {
 }
 
 pub struct SubmitTransactionContext {
-    submit_tx: async_channel::Sender<Request>,
+    in_queue_request_map: Option<Arc<InQueueRequestMap>>,
+    submit_tx: mpsc::Sender<(InQueueRequestHandle, Request)>,
     mem_pool_state: Arc<MemPoolState>,
     rate_limiter: Option<SendTransactionRateLimiter>,
     rate_limit_config: Option<RPCRateLimit>,
@@ -292,6 +293,7 @@ impl Registry {
                 polyjuice_sender_recover: self.polyjuice_sender_recover.clone(),
             }))
             .with_data(Data::new(SubmitTransactionContext {
+                in_queue_request_map: self.in_queue_request_map.clone(),
                 submit_tx: self.submit_tx,
                 mem_pool_state: self.mem_pool_state.clone(),
                 rate_limiter: send_transaction_rate_limiter,
@@ -311,7 +313,6 @@ impl Registry {
             .with_data(Data::new(self.consensus_config))
             .with_data(Data::new(self.node_mode))
             .with_data(Data::new(self.in_queue_request_map))
-            .with_data(Data::new((self.polyjuice_sender_recover, self.mem_pool)))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -906,7 +907,9 @@ async fn execute_l2transaction(
     let tx_hash = tx.hash();
 
     // check sender's balance
-    {
+    // NOTE: for tx from id 0, it's balance will be verified after mock account
+    let from_id: u32 = tx.raw().from_id().unpack();
+    if 0 != from_id {
         let snap = ctx.mem_pool_state.load();
         let state = snap.state()?;
         if let Err(err) = verify_sender_balance(ctx.generator.rollup_context(), &state, &tx.raw()) {
@@ -929,6 +932,10 @@ async fn execute_l2transaction(
         // Mock sender account if not exists
         let eth_recover = &ctx.polyjuice_sender_recover.eth;
         let tx = eth_recover.mock_sender_if_not_exists(tx, &mut state)?;
+        if 0 == from_id {
+            verify_sender_balance(ctx.generator.rollup_context(), &state, &tx.raw())
+                .map_err(|err| anyhow!("check balance err: {}", err))?;
+        }
 
         // tx basic verification
         TransactionVerifier::new(&state, ctx.generator.rollup_context()).verify(&tx)?;
@@ -1031,30 +1038,34 @@ async fn execute_raw_l2transaction(
     let tx_hash: H256 = raw_l2tx.hash().into();
     let block_number: u64 = block_info.number().unpack();
 
-    // FIXME: check sender' balance for restore tx sender
     // check sender's balance
-    let check_balance_result = match block_number_opt {
-        Some(block_number) => {
-            let state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
-            verify_sender_balance(ctx.generator.rollup_context(), &state, &raw_l2tx)
+    // NOTE: for tx from id zero, its balance will be verified after mock account
+    let from_id: u32 = raw_l2tx.from_id().unpack();
+    if 0 != from_id {
+        let check_balance_result = match block_number_opt {
+            Some(block_number) => {
+                let state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
+                verify_sender_balance(ctx.generator.rollup_context(), &state, &raw_l2tx)
+            }
+            None => {
+                let snap = ctx.mem_pool_state.load();
+                let state = snap.state()?;
+                verify_sender_balance(ctx.generator.rollup_context(), &state, &raw_l2tx)
+            }
+        };
+        if let Err(err) = check_balance_result {
+            return Err(RpcError::Full {
+                code: INVALID_REQUEST,
+                message: format!("check balance err: {}", err),
+                data: None,
+            });
         }
-        None => {
-            let snap = ctx.mem_pool_state.load();
-            let state = snap.state()?;
-            verify_sender_balance(ctx.generator.rollup_context(), &state, &raw_l2tx)
-        }
-    };
-    if let Err(err) = check_balance_result {
-        return Err(RpcError::Full {
-            code: INVALID_REQUEST,
-            message: format!("check balance err: {}", err),
-            data: None,
-        });
     }
 
     // execute tx in task
     let mut run_result = tokio::task::spawn_blocking(move || {
         let eth_recover = &ctx.polyjuice_sender_recover.eth;
+        let rollup_context = ctx.generator.rollup_context();
         let chain_view = {
             let tip_block_hash = db.get_last_valid_tip_block_hash()?;
             ChainView::new(&db, tip_block_hash)
@@ -1069,6 +1080,10 @@ async fn execute_raw_l2transaction(
                     registry_address_opt,
                     &mut state,
                 )?;
+                if 0 == from_id {
+                    verify_sender_balance(rollup_context, &state, &raw_l2tx)
+                        .map_err(|err| anyhow!("check balance err {}", err))?;
+                }
 
                 ctx.generator.unchecked_execute_transaction(
                     &chain_view,
@@ -1086,6 +1101,10 @@ async fn execute_raw_l2transaction(
                     registry_address_opt,
                     &mut state,
                 )?;
+                if 0 == from_id {
+                    verify_sender_balance(rollup_context, &state, &raw_l2tx)
+                        .map_err(|err| anyhow!("check balance err {}", err))?;
+                }
 
                 ctx.generator.unchecked_execute_transaction(
                     &chain_view,
@@ -1124,13 +1143,6 @@ async fn execute_raw_l2transaction(
 #[instrument(skip_all)]
 async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
-    (in_queue_request_map, submit_tx): (
-        Data<Option<Arc<InQueueRequestMap>>>,
-        Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
-    ),
-    rate_limiter: Data<Option<SendTransactionRateLimiter>>,
-    rate_limit_config: Data<Option<RPCRateLimit>>,
-    mem_pool_state: Data<Arc<MemPoolState>>,
     ctx: Data<SubmitTransactionContext>,
 ) -> Result<Option<JsonH256>, RpcError> {
     let l2tx_bytes = l2tx.into_bytes();
@@ -1202,7 +1214,7 @@ async fn submit_l2transaction(
         }
     }
 
-    let permit = submit_tx.try_reserve().map_err(|err| match err {
+    let permit = ctx.submit_tx.try_reserve().map_err(|err| match err {
         mpsc::error::TrySendError::Closed(_) => RpcError::Provided {
             code: INTERNAL_ERROR_ERR_CODE,
             message: "internal error, unavailable",
@@ -1225,7 +1237,8 @@ async fn submit_l2transaction(
     };
     let request = Request::Tx(tx);
     // Use permit to insert before send so that remove won't happen before insert.
-    if let Some(handle) = in_queue_request_map
+    if let Some(handle) = ctx
+        .in_queue_request_map
         .as_ref()
         .expect("in_queue_request_map")
         .insert(tx_hash_in_queue, request.clone())

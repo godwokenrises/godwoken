@@ -74,10 +74,14 @@ async fn test_backward_compatibility() {
         .signature(sign.pack())
         .build();
 
+    mem_pool_state.store(snap.into());
     {
         let mut mem_pool = chain.mem_pool().await;
         mem_pool.push_transaction(create_user_tx).await.unwrap();
     }
+
+    let snap = mem_pool_state.load();
+    let state = snap.state().unwrap();
 
     let opt_user_id = state
         .get_account_id_by_script_hash(&new_user.account_script_hash())
