@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{
+    blake2b::new_blake2b,
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     h256_ext::H256Ext,
     state::State,
@@ -99,6 +100,73 @@ async fn test_polyjuice_erc20_tx() {
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_wallet.reg_address())
         .unwrap();
     assert_eq!(balance, amount);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_in_queue_query_with_signature_hash() {
+    let _ = env_logger::builder().is_test(true).try_init();
+
+    let rollup_type_script = Script::default();
+    let chain = TestChain::setup(rollup_type_script).await;
+
+    let mem_pool_state = chain.mem_pool_state().await;
+    let snap = mem_pool_state.load();
+    let mut state = snap.state().unwrap();
+
+    let creator_wallet = EthWallet::random(chain.rollup_type_hash());
+    creator_wallet
+        .create_account(&mut state, 1000000u128.into())
+        .unwrap();
+    let rpc_server = RPCServer::build(&chain, Some(creator_wallet.inner))
+        .await
+        .unwrap();
+
+    let polyjuice_account = PolyjuiceAccount::create(chain.rollup_type_hash(), &mut state).unwrap();
+
+    let test_wallet = EthWallet::random(chain.rollup_type_hash());
+    let balance: U256 = 1000000u128.into();
+    test_wallet.mint_ckb_sudt(&mut state, balance).unwrap();
+    state.submit_tree_to_mem_block();
+
+    let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18).finish();
+    let raw_tx = RawL2Transaction::new_builder()
+        .chain_id(chain.chain_id().pack())
+        .from_id(0u32.pack())
+        .to_id(polyjuice_account.id.pack())
+        .nonce(0u32.pack())
+        .args(deploy_args.pack())
+        .build();
+
+    let deploy_tx_hash = {
+        let id = state.get_account_count().unwrap();
+        let raw = raw_tx.clone().as_builder().from_id(id.pack()).build();
+        raw.hash().into()
+    };
+    let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
+
+    mem_pool_state.store(snap.into());
+    let signature_hash = {
+        let mut hasher = new_blake2b();
+        hasher.update(deploy_tx.signature().as_slice());
+        let mut hash = [0u8; 32];
+        hasher.finalize(&mut hash);
+        H256::from(hash)
+    };
+
+    rpc_server.submit_l2transaction(&deploy_tx).await.unwrap();
+
+    let is_in_queue = rpc_server
+        .is_request_in_queue(signature_hash)
+        .await
+        .unwrap();
+    assert!(is_in_queue);
+
+    wait_tx_committed(&chain, &deploy_tx_hash, Duration::from_secs(30))
+        .await
+        .unwrap();
+
+    let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();
+    assert_eq!(system_log.status_code, 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]

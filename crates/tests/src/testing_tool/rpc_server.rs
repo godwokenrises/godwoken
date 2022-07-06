@@ -166,6 +166,20 @@ impl RPCServer {
         Ok(run_result)
     }
 
+    pub async fn is_request_in_queue(&self, hash: H256) -> Result<bool> {
+        let fixed_hash = ckb_fixed_hash::H256(hash.into());
+        let params = serde_json::to_value(&(fixed_hash,))?;
+
+        let req = RequestBuilder::default()
+            .with_id(1)
+            .with_method("gw_is_request_in_queue")
+            .with_params(params)
+            .finish();
+
+        let result = self.handle_single_request(req).await?;
+        Ok(result)
+    }
+
     async fn handle_single_request<R: DeserializeOwned>(&self, req: RequestObject) -> Result<R> {
         let ret = match self.inner.handle(req).await {
             ResponseObjects::One(ResponseObject::Result { result, .. }) => {
