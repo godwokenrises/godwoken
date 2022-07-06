@@ -125,6 +125,7 @@ async fn run_cli() -> Result<()> {
                 .arg(
                     Arg::with_name(ARG_OUTPUT_PATH)
                         .short("o")
+                        .long("output-path")
                         .takes_value(true)
                         .required(true)
                         .help("The output file for exported blocks"),
@@ -132,18 +133,21 @@ async fn run_cli() -> Result<()> {
                 .arg(
                     Arg::with_name(ARG_FROM_BLOCK)
                         .short("f")
+                        .long("from-block")
                         .takes_value(true)
                         .help("From block number"),
                 )
                 .arg(
                     Arg::with_name(ARG_TO_BLOCK)
                         .short("t")
+                        .long("to-block")
                         .takes_value(true)
                         .help("To block number"),
                 )
                 .arg(
                     Arg::with_name(ARG_SHOW_PROGRESS)
                         .short("p")
+                        .long("show-progress")
                         .required(false)
                         .takes_value(false)
                         .help("Show progress bar"),
@@ -164,6 +168,7 @@ async fn run_cli() -> Result<()> {
                 .arg(
                     Arg::with_name(ARG_SOURCE_PATH)
                         .short("s")
+                        .long("source-path")
                         .takes_value(true)
                         .required(true)
                         .help("The source file for exported blocks"),
@@ -171,18 +176,21 @@ async fn run_cli() -> Result<()> {
                 .arg(
                     Arg::with_name(ARG_READ_BATCH)
                         .short("b")
+                        .long("read-batch")
                         .takes_value(true)
                         .help("The read block batch size"),
                 )
                 .arg(
                     Arg::with_name(ARG_TO_BLOCK)
                         .short("t")
+                        .long("to-block")
                         .takes_value(true)
                         .help("To block number"),
                 )
                 .arg(
                     Arg::with_name(ARG_SHOW_PROGRESS)
                         .short("p")
+                        .long("show-progress")
                         .required(false)
                         .takes_value(false)
                         .help("Show progress bar"),
