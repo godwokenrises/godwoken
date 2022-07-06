@@ -249,7 +249,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .unwrap_err();
     eprintln!("err {}", err);
 
-    let expected_err = PolyjuiceTxSenderRecoverError::ChainId;
+    let expected_err = PolyjuiceTxSenderRecoverError::InvalidChainId;
     assert!(err.to_string().contains(&expected_err.to_string()));
 
     // To script not found

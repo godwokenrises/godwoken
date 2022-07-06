@@ -68,10 +68,10 @@ impl PolyjuiceTxEthSender {
         match self {
             PolyjuiceTxEthSender::New {
                 registry_address, ..
-            } => &registry_address,
+            } => registry_address,
             PolyjuiceTxEthSender::Exist {
                 registry_address, ..
-            } => &registry_address,
+            } => registry_address,
         }
     }
 }
@@ -84,7 +84,7 @@ fn recover_registry_address(
     signature: &Bytes,
 ) -> Result<RegistryAddress, PolyjuiceTxSenderRecoverError> {
     if raw_tx.chain_id().unpack() != ctx.chain_id {
-        return Err(PolyjuiceTxSenderRecoverError::ChainId);
+        return Err(PolyjuiceTxSenderRecoverError::InvalidChainId);
     }
 
     let to_id: u32 = raw_tx.to_id().unpack();

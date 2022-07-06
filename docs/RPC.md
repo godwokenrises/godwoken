@@ -1038,7 +1038,7 @@ Response
 * params:
     * `raw_l2tx`: [`SerializedRawL2Transaction`](#type-serializedmoleculeschema) - Serialized Raw L2 Transaction
     * `block_number`(optional): [`Uint64`](#type-uint64) - block number, default is tip
-    * `registry_address`(optional): [`SerializedRegistryAddress`](#type-serializedregistryaddress) - Serialized registry address, **required for polyjuice tx from id zero**
+    * `registry_address`(optional): [`SerializedRegistryAddress`](#type-serializedregistryaddress) - Serialized registry address, **required when the `from_id` of a Polyjuice transaction is 0**
 * result: [`RunResult`](#type-runresult)
 
 
@@ -1161,8 +1161,9 @@ Response
 
 Submit layer2 transaction. This RPC may has rate limit.
 
-For polyjuice tx from id zero, this RPC returns `null` because its from id will be updated
-before package.
+When the `from_id` of a Polyjuice transaction is 0, this RPC returns `null` because the transaction `from id` will be updated
+before package. To query in queue status of transation with `from_id` is 0, use transaction's signature hash.
+
 
 #### Examples
 

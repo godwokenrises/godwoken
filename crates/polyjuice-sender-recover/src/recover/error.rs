@@ -4,7 +4,7 @@ use gw_types::prelude::Pack;
 #[derive(thiserror::Error, Debug)]
 pub enum PolyjuiceTxSenderRecoverError {
     #[error("mismatch chain id")]
-    ChainId,
+    InvalidChainId,
     #[error("to script not found")]
     ToScriptNotFound,
     #[error("not a polyjuice tx")]
