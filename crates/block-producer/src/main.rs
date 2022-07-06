@@ -29,6 +29,7 @@ const ARG_TO_BLOCK: &str = "to-block";
 const ARG_SHOW_PROGRESS: &str = "show-progress";
 const ARG_SOURCE_PATH: &str = "source-path";
 const ARG_READ_BATCH: &str = "read-batch";
+const ARG_REWIND_TO_LAST_VALID_TIP: &str = "rewind-to-last-valid-tip";
 
 fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
     let content = fs::read(&path)
@@ -188,6 +189,13 @@ async fn run_cli() -> Result<()> {
                         .help("To block number"),
                 )
                 .arg(
+                    Arg::with_name(ARG_REWIND_TO_LAST_VALID_TIP)
+                        .long("rewind-to-last-valid-tip")
+                        .required(false)
+                        .takes_value(false)
+                        .help("Rewind to last valid tip block before import"),
+                )
+                .arg(
                     Arg::with_name(ARG_SHOW_PROGRESS)
                         .short("p")
                         .long("show-progress")
@@ -246,6 +254,7 @@ async fn run_cli() -> Result<()> {
             let read_batch: Option<usize> =
                 m.value_of(ARG_READ_BATCH).map(str::parse).transpose()?;
             let to_block: Option<u64> = m.value_of(ARG_TO_BLOCK).map(str::parse).transpose()?;
+            let rewind_to_last_valid_tip = m.is_present(ARG_REWIND_TO_LAST_VALID_TIP);
             let show_progress = m.is_present(ARG_SHOW_PROGRESS);
 
             let args = ImportArgs {
@@ -253,9 +262,10 @@ async fn run_cli() -> Result<()> {
                 source,
                 read_batch,
                 to_block,
+                rewind_to_last_valid_tip,
                 show_progress,
             };
-            ImportBlock::create(args).await?.execute()?;
+            ImportBlock::create(args).await?.execute().await?;
         }
         _ => {
             // default command: start a Godwoken node
