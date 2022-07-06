@@ -238,8 +238,11 @@ impl Challenger {
 
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
 
-        self.dry_run_transaction(&tx, "challenge block").await?;
-        utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx).await;
+        if let Err(err) = self.dry_run_transaction(&tx, "challenge block").await {
+            utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx)
+                .await;
+            bail!(err);
+        }
 
         let tx_hash = self.rpc_client.send_transaction(&tx).await?;
         log::info!("Challenge block {} in tx {}", block_numer, to_hex(&tx_hash));
@@ -334,8 +337,11 @@ impl Challenger {
             )
             .await?;
 
-        self.dry_run_transaction(&tx, "cancel challenge").await?;
-        utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx).await;
+        if let Err(err) = self.dry_run_transaction(&tx, "cancel challenge").await {
+            utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx)
+                .await;
+            bail!(err);
+        }
 
         let load_data_inputs = verifier_context.load_data_context.map(|d| d.inputs);
         let verifier = Verifier::new(
@@ -477,8 +483,11 @@ impl Challenger {
 
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
 
-        self.dry_run_transaction(&tx, "revert block").await?;
-        utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx).await;
+        if let Err(err) = self.dry_run_transaction(&tx, "revert block").await {
+            utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx)
+                .await;
+            bail!(err);
+        }
 
         let tx_hash = self.rpc_client.send_transaction(&tx).await?;
         log::info!("Revert block in tx {}", to_hex(&tx_hash));
