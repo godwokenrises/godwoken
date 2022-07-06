@@ -3,13 +3,11 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 
 use anyhow::{anyhow, bail, Result};
-use gw_common::H256;
 use gw_config::Config;
-use gw_db::migrate::open_or_create_db;
 use gw_db::read_only_db::ReadOnlyDB;
 use gw_db::schema::COLUMNS;
 use gw_store::readonly::StoreReadonly;
-use gw_store::{traits::chain_store::ChainStore, Store};
+use gw_store::traits::chain_store::ChainStore;
 use gw_types::packed;
 use gw_types::prelude::{Entity, Unpack};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -25,10 +23,8 @@ pub struct ExportArgs {
 /// ExportBlock
 ///
 /// Support export block from readonly database (don't need to exit node process)
-/// NOTE: only works without reverted blocks changes between from block and to block
 pub struct ExportBlock {
     snap: StoreReadonly,
-    store: Option<Store>,
     output: PathBuf,
     from_block: u64,
     to_block: u64,
@@ -71,29 +67,6 @@ impl ExportBlock {
             bail!("from {} is bigger than to {}", from_block, to_block);
         }
 
-        // We need `Store` to get bad block hashes
-        let store = {
-            let get_reverted_block_root = |block| -> Result<H256> {
-                let hash = snap
-                    .get_block_hash_by_number(block)?
-                    .ok_or_else(|| anyhow!("block hash {} not found", block))?;
-                let state = snap
-                    .get_block_post_global_state(&hash)?
-                    .ok_or_else(|| anyhow!("block {} post global state not found", block))?;
-                Ok(state.reverted_block_root().unpack())
-            };
-
-            let from_reverted_block_root = get_reverted_block_root(from_block)?;
-            let to_reverted_block_root = get_reverted_block_root(to_block)?;
-
-            if from_reverted_block_root == to_reverted_block_root {
-                None
-            } else {
-                let store = Store::new(open_or_create_db(&args.config.store)?);
-                Some(store)
-            }
-        };
-
         let progress_bar = if args.show_progress {
             let bar = ProgressBar::new(to_block.saturating_sub(from_block) + 1);
             bar.set_style(
@@ -122,7 +95,6 @@ impl ExportBlock {
 
         let export_block = ExportBlock {
             snap,
-            store,
             output,
             from_block,
             to_block,
@@ -148,11 +120,7 @@ impl ExportBlock {
 
         let mut writer = io::BufWriter::new(f);
         for block_number in self.from_block..=self.to_block {
-            let exported_block = gw_utils::export_block::export_block(
-                &self.snap,
-                self.store.as_ref(),
-                block_number,
-            )?;
+            let exported_block = gw_utils::export_block::export_block(&self.snap, block_number)?;
             let packed: packed::ExportedBlock = exported_block.into();
 
             writer.write_all(packed.as_slice())?;

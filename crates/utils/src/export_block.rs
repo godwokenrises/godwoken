@@ -3,8 +3,8 @@ use std::io::{ErrorKind, Read, Seek, SeekFrom};
 use anyhow::{anyhow, bail, Result};
 use gw_common::{h256_ext::H256Ext, H256};
 use gw_store::{
-    state::state_db::StateContext, traits::chain_store::ChainStore, transaction::StoreTransaction,
-    Store,
+    readonly::StoreReadonly, state::state_db::StateContext, traits::chain_store::ChainStore,
+    transaction::StoreTransaction,
 };
 use gw_types::{
     bytes::Bytes,
@@ -14,11 +14,7 @@ use gw_types::{
 };
 
 // pub fn export_block(store: &Store, block_number: u64) -> Result<ExportedBlock> {
-pub fn export_block(
-    snap: &impl ChainStore,
-    store: Option<&Store>,
-    block_number: u64,
-) -> Result<ExportedBlock> {
+pub fn export_block(snap: &StoreReadonly, block_number: u64) -> Result<ExportedBlock> {
     let block_hash = snap
         .get_block_hash_by_number(block_number)?
         .ok_or_else(|| anyhow!("block {} not found", block_number))?;
@@ -66,19 +62,7 @@ pub fn export_block(
         extra_reqs.collect::<Result<Vec<_>>>()?
     };
 
-    let reverted_block_root: H256 = post_global_state.reverted_block_root().unpack();
-    let bad_block_hashes = if reverted_block_root.is_zero() {
-        None
-    } else {
-        let store = match store {
-            Some(s) => s,
-            None => bail!(
-                "export block {} with non-zero reverted block root from readonly db",
-                block_number
-            ),
-        };
-        get_bad_block_hashes(store, block_number)?
-    };
+    let bad_block_hashes = get_bad_block_hashes(snap, block_number)?;
 
     let exported_block = ExportedBlock {
         block,
@@ -194,7 +178,7 @@ pub fn insert_bad_block_hashes(
     Ok(())
 }
 
-pub fn check_db_post_state(
+pub fn check_block_post_state(
     tx_db: &StoreTransaction,
     block_number: u64,
     post_global_state: &GlobalState,
@@ -236,27 +220,24 @@ pub fn check_db_post_state(
     Ok(())
 }
 
-fn get_bad_block_hashes(store: &Store, block_number: u64) -> Result<Option<Vec<Vec<H256>>>> {
-    let tx_db = store.begin_transaction();
-
+fn get_bad_block_hashes(snap: &StoreReadonly, block_number: u64) -> Result<Option<Vec<Vec<H256>>>> {
     let parent_reverted_block_root = {
         let parent_block_number = block_number.saturating_sub(1);
-        get_block_reverted_block_root(&tx_db, parent_block_number)?
+        get_block_reverted_block_root(snap, parent_block_number)?
     };
-    let mut reverted_block_root = get_block_reverted_block_root(&tx_db, block_number)?;
+    let reverted_block_root = get_block_reverted_block_root(snap, block_number)?;
     if reverted_block_root == parent_reverted_block_root {
         return Ok(None);
     }
 
     let mut bad_block_hashes = Vec::with_capacity(2);
-    while reverted_block_root != parent_reverted_block_root {
-        let reverted_block_hashes = tx_db
-            .get_reverted_block_hashes_by_root(&reverted_block_root)?
-            .ok_or_else(|| anyhow!("block {} reverted block hashes not found", block_number))?;
-        bad_block_hashes.push(reverted_block_hashes.clone());
+    let reverted_root_iter = snap.iter_reverted_block_smt_root(reverted_block_root);
+    for (reverted_block_root, reverted_block_hashes) in reverted_root_iter {
+        if reverted_block_root == parent_reverted_block_root {
+            break;
+        }
 
-        tx_db.rewind_reverted_block_smt(reverted_block_hashes)?;
-        reverted_block_root = tx_db.get_reverted_block_smt_root()?;
+        bad_block_hashes.push(reverted_block_hashes);
     }
 
     bad_block_hashes.reverse();

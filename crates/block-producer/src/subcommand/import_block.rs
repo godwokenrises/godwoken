@@ -9,7 +9,9 @@ use gw_config::Config;
 use gw_store::traits::chain_store::ChainStore;
 use gw_types::offchain::ExportedBlock;
 use gw_types::prelude::Unpack;
-use gw_utils::export_block::{check_db_post_state, insert_bad_block_hashes, ExportedBlockReader};
+use gw_utils::export_block::{
+    check_block_post_state, insert_bad_block_hashes, ExportedBlockReader,
+};
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::runner::BaseInitComponents;
@@ -182,7 +184,7 @@ fn insert_block(chain: &mut Chain, exported: ExportedBlock) -> Result<()> {
         insert_bad_block_hashes(&tx_db, bad_block_hashes_vec)?;
     }
 
-    check_db_post_state(&tx_db, block_number, &exported.post_global_state)?;
+    check_block_post_state(&tx_db, block_number, &exported.post_global_state)?;
 
     tx_db.commit()?;
 
