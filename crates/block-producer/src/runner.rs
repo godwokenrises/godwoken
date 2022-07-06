@@ -10,6 +10,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Context, Result};
 use ckb_types::core::hardfork::HardForkSwitch;
+use futures::future::OptionFuture;
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainMockContextBuildArgs};
 use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH, GLOBAL_VM_VERSION};
@@ -696,9 +697,9 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
     };
 
-    //Graceful shutdown event. If all the shutdown_sends get dropped, then we can shutdown gracefully.
-    let (shutdown_send, mut shutdown_recv) = mpsc::channel(1);
-    //Broadcase shutdown event.
+    // Wait for graceful shutdown complete.
+    let (shutdown_completed_send, mut shutdown_completed_recv) = mpsc::channel(1);
+    // Broadcast shutdown event.
     let (shutdown_event, shutdown_event_recv) = broadcast::channel(1);
 
     // P2P network.
@@ -781,7 +782,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     log::info!("{:?} mode", config.node_mode);
 
-    if let (Some(block_producer), Some(mem_pool)) = (block_producer, mem_pool) {
+    let psc_task = if let (Some(block_producer), Some(mem_pool)) = (block_producer, mem_pool) {
         let psc_state = ProduceSubmitConfirm::init(Arc::new(PSCContext {
             store: store.clone(),
             block_producer,
@@ -795,20 +796,31 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         .await
         .context("create ProduceSubmitConfirm")?;
 
-        // TODO: graceful shutdown. And avoid blocking, does this task (and task it spawns) block?
-        tokio::spawn(async move {
-            if let Err(e) = psc_state.run().await {
+        // TODO: Avoid blocking.
+        let shutdown_completed_send = shutdown_completed_send.clone();
+        let mut shutdown_event_recv = shutdown_event.subscribe();
+        Some(tokio::spawn(async move {
+            let result = tokio::select! {
+                _ = shutdown_event_recv.recv() => return,
+                result = psc_state.run() => result,
+            };
+            if let Err(e) = result {
                 log::error!("ProduceSubmitConfirm error: {:?}", e);
             }
-        });
-    }
+            drop(shutdown_completed_send);
+        }))
+    } else {
+        None
+    };
+    let has_psc_task = psc_task.is_some();
+    let psc_task = OptionFuture::from(psc_task);
 
     let (chain_task_ended_tx, chain_task) = tokio::sync::oneshot::channel::<()>();
     let rt_handle = tokio::runtime::Handle::current();
     std::thread::Builder::new()
         .name("chain-task".into())
         .spawn({
-            let shutdown_send = shutdown_send.clone();
+            let shutdown_send = shutdown_completed_send.clone();
             move || {
                 rt_handle.block_on(async move {
                     use tracing::Instrument;
@@ -881,7 +893,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         .unwrap();
 
     let sub_shutdown = shutdown_event.subscribe();
-    let rpc_shutdown_send = shutdown_send.clone();
+    let rpc_shutdown_send = shutdown_completed_send.clone();
     let rpc_task = spawn(async move {
         if let Err(err) =
             start_jsonrpc_server(rpc_address, rpc_registry, rpc_shutdown_send, sub_shutdown).await
@@ -891,9 +903,10 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     });
 
     tokio::select! {
-        _ = sigint_or_sigterm() => { },
+        _ = sigint_or_sigterm() => {},
         _ = chain_task => {},
         _ = rpc_task => {},
+        _ = psc_task, if has_psc_task => {},
     };
 
     //If any task is out of running, broadcast shutdown event.
@@ -910,12 +923,12 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     }
 
     // Make sure all the senders are dropped.
-    drop(shutdown_send);
+    drop(shutdown_completed_send);
 
     // When every sender has gone out of scope, the recv call
     // will return with an error. We ignore the error. Just
     // make sure we can hit this line.
-    let _ = shutdown_recv.recv().await;
+    let _ = shutdown_completed_recv.recv().await;
     log::info!("Exiting...");
 
     Ok(())
