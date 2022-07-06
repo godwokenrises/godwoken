@@ -117,14 +117,9 @@ impl ImportBlock {
         }
 
         // Insert new blocks
-        let mut next_block_number = db_tip_block_number + 1;
-        let mut block_iter = block_reader.peekable();
-
-        let (new_block, _size) = {
-            let b = block_iter.peek().ok_or_else(|| anyhow!("no new block"))?;
-            b.as_ref()
-                .map_err(|err| anyhow!("read block {} {}", next_block_number, err))?
-        };
+        let (new_block, _size) = block_reader
+            .peek_block()?
+            .ok_or_else(|| anyhow!("no new block"))?;
         if new_block.parent_block_hash() != db_tip_block.hash().into() {
             bail!("diff parent block {}", db_tip_block_number);
         }
@@ -133,7 +128,7 @@ impl ImportBlock {
         let (tx, rx) = std::sync::mpsc::sync_channel(self.read_batch);
         let to_block = self.to_block;
         let read_in_background = std::thread::spawn(move || {
-            for maybe_new_block in block_iter {
+            for maybe_new_block in block_reader {
                 match maybe_new_block.as_ref() {
                     Err(_) => return,
                     Ok((block, _size)) if Some(block.block_number()) > to_block => return,
@@ -142,6 +137,7 @@ impl ImportBlock {
             }
         });
 
+        let mut next_block_number = db_tip_block_number + 1;
         for maybe_new_block in rx.into_iter() {
             let (block, size) = maybe_new_block
                 .map_err(|err| anyhow!("read block {} {}", next_block_number, err))?;
