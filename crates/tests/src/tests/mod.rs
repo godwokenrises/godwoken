@@ -1,5 +1,6 @@
 mod chain;
 mod deposit_withdrawal;
+mod export_import_block;
 mod mem_block_repackage;
 mod meta_contract_args;
 mod polyjuice_sender_recover;

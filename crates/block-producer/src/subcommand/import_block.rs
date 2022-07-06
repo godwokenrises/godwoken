@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use anyhow::{anyhow, bail, Result};
 use gw_chain::chain::Chain;
 use gw_config::Config;
-use gw_store::traits::chain_store::ChainStore;
+use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::offchain::ExportedBlock;
 use gw_types::prelude::Unpack;
 use gw_utils::export_block::{
@@ -35,6 +35,16 @@ pub struct ImportBlock {
 }
 
 impl ImportBlock {
+    pub fn new_unchecked(chain: Chain, source: PathBuf) -> Self {
+        ImportBlock {
+            chain,
+            source,
+            read_batch: DEFAULT_READ_BATCH,
+            to_block: None,
+            progress_bar: None,
+        }
+    }
+
     pub async fn create(args: ImportArgs) -> Result<Self> {
         let base = BaseInitComponents::init(&args.config, true).await?;
         let chain = Chain::create(
@@ -68,6 +78,10 @@ impl ImportBlock {
         };
 
         Ok(import_block)
+    }
+
+    pub fn store(&self) -> &Store {
+        self.chain.store()
     }
 
     pub fn execute(mut self) -> Result<()> {
