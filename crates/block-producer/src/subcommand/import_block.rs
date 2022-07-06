@@ -133,7 +133,11 @@ impl ImportBlock {
             for maybe_new_block in block_reader {
                 match maybe_new_block.as_ref() {
                     Err(_) => return,
-                    Ok((block, _size)) if Some(block.block_number()) > to_block => return,
+                    Ok((block, _size))
+                        if to_block.is_some() && Some(block.block_number()) > to_block =>
+                    {
+                        return
+                    }
                     Ok(_) => tx.send(maybe_new_block).expect("send block in background"),
                 };
             }
