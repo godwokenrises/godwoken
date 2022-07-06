@@ -105,6 +105,12 @@ impl ProduceSubmitConfirm {
                     local_cells_manager.lock_cell(c.out_point());
                 }
             }
+            context
+                .mem_pool
+                .lock()
+                .await
+                .notify_new_tip(snap.get_last_valid_tip_block_hash()?, &local_cells_manager)
+                .await?;
         }
         log::info!(
             "last valid: {}, last_submitted: {}, last_confirmed: {}",
