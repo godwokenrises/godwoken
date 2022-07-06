@@ -4,7 +4,7 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 use anyhow::{anyhow, bail, Result};
-use gw_chain::chain::Chain;
+use gw_chain::chain::{Chain, RevertL1ActionContext, RevertedL1Action, SyncParam};
 use gw_config::Config;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::offchain::ExportedBlock;
@@ -23,6 +23,7 @@ pub struct ImportArgs {
     pub source: PathBuf,
     pub read_batch: Option<usize>,
     pub to_block: Option<u64>,
+    pub rewind_to_last_valid_tip: bool,
     pub show_progress: bool,
 }
 
@@ -31,6 +32,7 @@ pub struct ImportBlock {
     source: PathBuf,
     read_batch: usize,
     to_block: Option<u64>,
+    rewind_to_last_valid_tip: bool,
     progress_bar: Option<ProgressBar>,
 }
 
@@ -41,6 +43,7 @@ impl ImportBlock {
             source,
             read_batch: DEFAULT_READ_BATCH,
             to_block: None,
+            rewind_to_last_valid_tip: false,
             progress_bar: None,
         }
     }
@@ -74,6 +77,7 @@ impl ImportBlock {
             source: args.source,
             read_batch: args.read_batch.unwrap_or(DEFAULT_READ_BATCH),
             to_block: args.to_block,
+            rewind_to_last_valid_tip: args.rewind_to_last_valid_tip,
             progress_bar,
         };
 
@@ -84,14 +88,35 @@ impl ImportBlock {
         self.chain.store()
     }
 
-    pub fn execute(mut self) -> Result<()> {
+    pub async fn execute(mut self) -> Result<()> {
         let store = self.chain.store();
         store.check_state()?;
 
         let last_valid_tip_block_hash = store.get_last_valid_tip_block_hash()?;
         let tip_block_hash = store.get_tip_block_hash()?;
-        if last_valid_tip_block_hash != tip_block_hash {
+        if last_valid_tip_block_hash != tip_block_hash && !self.rewind_to_last_valid_tip {
             bail!("database with tip bad block");
+        }
+
+        if self.rewind_to_last_valid_tip {
+            let last_valid_tip_post_global_state = store
+                .get_block_post_global_state(&last_valid_tip_block_hash)?
+                .ok_or_else(|| anyhow!("last valid tip post global state not found"))?;
+            let last_valid_tip_committed_info = store
+                .get_l2block_committed_info(&last_valid_tip_block_hash)?
+                .ok_or_else(|| anyhow!("last valid tip committed info not found"))?;
+            let rewind_to_last_valid_tip = RevertedL1Action {
+                prev_global_state: last_valid_tip_post_global_state,
+                l2block_committed_info: last_valid_tip_committed_info.clone(),
+                context: RevertL1ActionContext::RewindToLastValidTip,
+            };
+
+            let param = SyncParam {
+                reverts: vec![rewind_to_last_valid_tip],
+                updates: vec![],
+            };
+            self.chain.sync(param).await?;
+            println!("rewind success")
         }
 
         self.read_from_mol()

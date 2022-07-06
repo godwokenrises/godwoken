@@ -222,7 +222,7 @@ async fn test_export_import_block() {
     };
     let import_block = ImportBlock::new_unchecked(import_chain, export_path);
     let import_store = import_block.store().clone();
-    import_block.execute().unwrap();
+    import_block.execute().await.unwrap();
 
     // Check imported store state
     let tip_block_hash = export_store.get_tip_block_hash().unwrap();
@@ -519,7 +519,7 @@ async fn test_export_import_block() {
     };
     let import_block = ImportBlock::new_unchecked(import_chain, export_path);
     let import_store = import_block.store().clone();
-    import_block.execute().unwrap();
+    import_block.execute().await.unwrap();
 
     // Check imported store state
     let tip_block_hash = export_store.get_tip_block_hash().unwrap();
