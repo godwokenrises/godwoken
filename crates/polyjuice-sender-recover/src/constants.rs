@@ -1,1 +1,0 @@
-pub const MIN_TRANSACTION_FEE: u128 = 21000;

@@ -1,9 +1,6 @@
 use anyhow::anyhow;
 use gw_common::{
-    builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
-    registry_address::RegistryAddress,
-    state::State,
-    H256,
+    builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, state::State, H256,
 };
 use gw_generator::account_lock_manage::{secp256k1::Secp256k1Eth, LockAlgorithm};
 use gw_traits::CodeStore;
@@ -11,7 +8,6 @@ use gw_types::{
     bytes::Bytes,
     packed::{L2Transaction, RawL2Transaction, Script},
     prelude::{Pack, Unpack},
-    U256,
 };
 use tracing::instrument;
 
@@ -36,7 +32,6 @@ impl PolyjuiceTxEthSender {
         ctx: &EthAccountContext,
         state: &(impl State + CodeStore),
         tx: &L2Transaction,
-        min_ckb_balance: U256,
     ) -> Result<Self, PolyjuiceTxSenderRecoverError> {
         let sig = tx.signature().unpack();
 
@@ -62,21 +57,21 @@ impl PolyjuiceTxEthSender {
                     ))),
                 }
             }
-            None => {
-                let ckb_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &registry_address)?;
-                if ckb_balance < min_ckb_balance {
-                    return Err(PolyjuiceTxSenderRecoverError::InsufficientCkbBalance {
-                        registry_address,
-                        expect: min_ckb_balance,
-                        got: ckb_balance,
-                    });
-                }
+            None => Ok(Self::New {
+                registry_address,
+                account_script,
+            }),
+        }
+    }
 
-                Ok(Self::New {
-                    registry_address,
-                    account_script,
-                })
-            }
+    pub fn registry_address(&self) -> &RegistryAddress {
+        match self {
+            PolyjuiceTxEthSender::New {
+                registry_address, ..
+            } => &registry_address,
+            PolyjuiceTxEthSender::Exist {
+                registry_address, ..
+            } => &registry_address,
         }
     }
 }

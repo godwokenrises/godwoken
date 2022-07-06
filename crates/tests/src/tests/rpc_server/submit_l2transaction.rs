@@ -7,7 +7,6 @@ use gw_common::{
     state::State,
     H256,
 };
-use gw_polyjuice_sender_recover::constants::MIN_TRANSACTION_FEE;
 use gw_types::{
     packed::{Fee, RawL2Transaction, SUDTArgs, SUDTTransfer, Script},
     prelude::Pack,
@@ -366,7 +365,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     let mut state = snap.state().unwrap();
 
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
-    let balance: U256 = MIN_TRANSACTION_FEE.saturating_sub(1000).into();
+    let balance: U256 = 100u32.into();
     test_wallet.mint_ckb_sudt(&mut state, balance).unwrap();
     state.submit_tree_to_mem_block();
 

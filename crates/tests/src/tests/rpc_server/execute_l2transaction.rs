@@ -4,9 +4,7 @@ use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, h256_ext::H256Ext, registry_address::RegistryAddress,
     state::State, H256,
 };
-use gw_polyjuice_sender_recover::{
-    constants::MIN_TRANSACTION_FEE, recover::error::PolyjuiceTxSenderRecoverError,
-};
+use gw_polyjuice_sender_recover::recover::error::PolyjuiceTxSenderRecoverError;
 use gw_types::{
     bytes::Bytes,
     packed::{RawL2Transaction, Script},
@@ -301,7 +299,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     let snap = mem_pool_state.load();
     let mut state = snap.state().unwrap();
 
-    let balance = MIN_TRANSACTION_FEE.saturating_sub(1000).into();
+    let balance = 100u32.into();
     test_wallet.mint_ckb_sudt(&mut state, balance).unwrap();
     state.submit_tree_to_mem_block();
     mem_pool_state.store(snap.into());
@@ -312,12 +310,8 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .unwrap_err();
     eprintln!("err {}", err);
 
-    let expected_err = PolyjuiceTxSenderRecoverError::InsufficientCkbBalance {
-        registry_address: test_wallet.reg_address().to_owned(),
-        expect: MIN_TRANSACTION_FEE.into(),
-        got: balance,
-    };
-    assert!(err.to_string().contains(&expected_err.to_string()));
+    let expected_err = "check balance err";
+    assert!(err.to_string().contains(&expected_err));
 
     // Registered to different script
     let snap = mem_pool_state.load();

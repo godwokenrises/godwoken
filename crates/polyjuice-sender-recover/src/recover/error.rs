@@ -1,5 +1,5 @@
 use gw_common::{registry_address::RegistryAddress, H256};
-use gw_types::{prelude::Pack, U256};
+use gw_types::prelude::Pack;
 
 #[derive(thiserror::Error, Debug)]
 pub enum PolyjuiceTxSenderRecoverError {
@@ -11,12 +11,6 @@ pub enum PolyjuiceTxSenderRecoverError {
     NotPolyjuiceTx,
     #[error("invalid signature {0}")]
     InvalidSignature(anyhow::Error),
-    #[error("{:x} insufficient ckb balance, expect {expect} got {got}", .registry_address.address.pack())]
-    InsufficientCkbBalance {
-        registry_address: RegistryAddress,
-        expect: U256,
-        got: U256,
-    },
     #[error("{:x} is registered to script {:x}", .registry_address.address.pack(), .script_hash.pack())]
     DifferentScript {
         registry_address: RegistryAddress,

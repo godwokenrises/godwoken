@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use anyhow::{anyhow, bail, Result};
-use gw_common::{registry_address::RegistryAddress, state::State, H256};
+use gw_common::{
+    builtins::CKB_SUDT_ACCOUNT_ID, registry_address::RegistryAddress, state::State, H256,
+};
+use gw_generator::typed_transaction::types::TypedRawTransaction;
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
@@ -9,12 +12,11 @@ use gw_types::{
     offchain::RollupContext,
     packed::{L2Transaction, RawL2Transaction, Script},
     prelude::{Builder, Entity, Pack, Unpack},
-    U256,
 };
 use gw_utils::wallet::Wallet;
 use tracing::instrument;
 
-use crate::{constants::MIN_TRANSACTION_FEE, mem_execute_tx_state::MemExecuteTxStateTree};
+use crate::mem_execute_tx_state::MemExecuteTxStateTree;
 
 use super::{
     error::PolyjuiceTxSenderRecoverError, eth_account_creator::EthAccountCreator,
@@ -172,7 +174,24 @@ impl EthRecover {
                 return None;
             }
 
-            match self.recover_sender(state, tx, MIN_TRANSACTION_FEE.into()) {
+            // Don't create account for insufficient balance
+            let recover_and_check_balance = |tx| -> _ {
+                let sender = self.recover_sender(state, tx)?;
+                let typed_tx =
+                    TypedRawTransaction::from_tx(tx.raw(), AllowedContractType::Polyjuice)
+                        .ok_or_else(|| anyhow!("unknown tx type"))?;
+                let tx_cost = typed_tx.cost().ok_or_else(|| anyhow!("no cost"))?;
+                let balance =
+                    state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, sender.registry_address())?;
+
+                if balance < tx_cost {
+                    bail!("insufficient balance")
+                }
+
+                Ok(sender)
+            };
+
+            match recover_and_check_balance(tx) {
                 Ok(sender) => Some((tx.signature().unpack(), sender)),
                 Err(err) => {
                     log::info!("[tx from zero] recover {:x} {}", tx.hash().pack(), err);
@@ -197,7 +216,7 @@ impl EthRecover {
         }
 
         let tx_hash = tx.hash().pack();
-        let account_id = match self.recover_sender(state, &tx, MIN_TRANSACTION_FEE.into())? {
+        let account_id = match self.recover_sender(state, &tx)? {
             PolyjuiceTxEthSender::Exist { account_id, .. } => account_id,
             PolyjuiceTxEthSender::New {
                 account_script,
@@ -267,8 +286,7 @@ impl EthRecover {
         &self,
         state: &(impl State + CodeStore),
         tx: &L2Transaction,
-        min_ckb_balance: U256,
     ) -> Result<PolyjuiceTxEthSender, PolyjuiceTxSenderRecoverError> {
-        PolyjuiceTxEthSender::recover(&self.account_context, state, tx, min_ckb_balance)
+        PolyjuiceTxEthSender::recover(&self.account_context, state, tx)
     }
 }
