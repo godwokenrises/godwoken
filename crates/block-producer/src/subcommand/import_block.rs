@@ -173,7 +173,7 @@ fn insert_block(chain: &mut Chain, exported: ExportedBlock) -> Result<()> {
     let tx_db = chain.store().begin_transaction();
     let block_number = exported.block_number();
 
-    chain.process_block(
+    if let Some(_challenge_target) = chain.process_block(
         &tx_db,
         exported.block,
         exported.committed_info,
@@ -181,7 +181,9 @@ fn insert_block(chain: &mut Chain, exported: ExportedBlock) -> Result<()> {
         exported.deposit_requests,
         HashSet::from_iter(exported.deposit_asset_scripts),
         exported.withdrawals,
-    )?;
+    )? {
+        bail!("bad block")
+    }
 
     // Update reverted blocks smt
     if let Some(bad_block_hashes_vec) = exported.bad_block_hashes {
