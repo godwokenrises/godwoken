@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail, Result};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, registry_address::RegistryAddress, state::State, H256,
 };
-use gw_generator::typed_transaction::types::TypedRawTransaction;
+use gw_generator::{error::TransactionError, typed_transaction::types::TypedRawTransaction};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
@@ -180,12 +180,12 @@ impl EthRecover {
                 let typed_tx =
                     TypedRawTransaction::from_tx(tx.raw(), AllowedContractType::Polyjuice)
                         .ok_or_else(|| anyhow!("unknown tx type"))?;
-                let tx_cost = typed_tx.cost().ok_or_else(|| anyhow!("no cost"))?;
+                let tx_cost = typed_tx.cost().ok_or(TransactionError::NoCost)?;
                 let balance =
                     state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, sender.registry_address())?;
 
                 if balance < tx_cost {
-                    bail!("insufficient balance")
+                    bail!(TransactionError::InsufficientBalance)
                 }
 
                 Ok(sender)
