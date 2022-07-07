@@ -1,10 +1,13 @@
 #![allow(clippy::mutable_key_type)]
 
-use anyhow::{anyhow, Result};
-use async_jsonrpc_client::Params as ClientParams;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
+
+use anyhow::{anyhow, Context, Result};
 use ckb_fixed_hash::H256;
 use gw_chain::chain::{Chain, ChallengeCell, L1Action, L1ActionContext, SyncParam};
-use gw_jsonrpc_types::ckb_jsonrpc_types::HeaderView;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::{
     bytes::Bytes,
@@ -16,11 +19,6 @@ use gw_types::{
         WithdrawalRequestExtra, WitnessArgs, WitnessArgsReader,
     },
     prelude::*,
-};
-use serde_json::json;
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
 };
 use tokio::sync::Mutex;
 use tracing::instrument;
@@ -68,39 +66,12 @@ impl ChainUpdater {
 
     #[instrument(skip_all)]
     pub async fn update_single(&self, tx_hash: &H256) -> anyhow::Result<()> {
-        let tx_with_status = self
+        let tx = self
             .rpc_client
             .ckb
-            .get_transaction_with_status(tx_hash.0.into())
+            .get_transaction(tx_hash.0.into())
             .await?
-            .ok_or_else(|| QueryL1TxError::new(tx_hash, anyhow!("cannot locate tx")))?;
-        let tx = {
-            let tx: ckb_types::packed::Transaction = tx_with_status
-                .transaction
-                .ok_or_else(|| QueryL1TxError::new(tx_hash, anyhow!("cannot locate tx")))?
-                .inner
-                .into();
-            Transaction::new_unchecked(tx.as_bytes())
-        };
-        let block_hash = tx_with_status.tx_status.block_hash.ok_or_else(|| {
-            QueryL1TxError::new(tx_hash, anyhow!("tx is not committed on chain!"))
-        })?;
-        let header_view: Option<HeaderView> = self
-            .rpc_client
-            .ckb
-            .request(
-                "get_header",
-                Some(ClientParams::Array(vec![json!(block_hash)])),
-            )
-            .await?;
-        let header_view = header_view.ok_or_else(|| {
-            QueryL1TxError::new(tx_hash, anyhow!("cannot locate block {}", block_hash))
-        })?;
-        log::debug!(
-            "[sync revert] receive new l2 block from {} l1 block tx hash {:?}",
-            header_view.inner.number.value(),
-            tx_hash,
-        );
+            .context("get transaction")?;
 
         let rollup_action = self.extract_rollup_action(&tx)?;
         let context = match rollup_action.to_enum() {

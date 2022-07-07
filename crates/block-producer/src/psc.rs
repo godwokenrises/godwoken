@@ -693,35 +693,45 @@ async fn sync_l1_unknown(
             ..Default::default()
         }));
     let mut last_cursor = None;
-    let mut last_tx_hash = tx.hash().into();
+    let last_confirmed_tx_hash = tx.hash().into();
+    let mut seen_last_confirmed = false;
     let mut reverted = false;
     loop {
-        let txs = psc
+        let mut txs = psc
             .rpc_client
             .indexer
             .get_transactions(&search_key, &Order::Asc, None, &last_cursor)
             .await?;
+        txs.objects.dedup_by_key(|obj| obj.tx_hash.clone());
         if txs.objects.is_empty() {
             break;
         }
         last_cursor = Some(txs.last_cursor);
 
+        // TODO: skip transactions for blocks <= last sync.
         for tx in txs.objects {
-            // We may get duplicated transactions when we get the last confirmed
-            // transaction, or because we get every transaction twice because it
-            // has both input and output rollup cell.
-            if tx.tx_hash != last_tx_hash {
-                if !reverted {
-                    log::info!("L2 fork detected, reverting to L2 block {last_confirmed}");
-                    revert(psc, store_tx, last_confirmed).await?;
-                    // Commit transaction because chain_updater.update_single will open and commit new transactions.
-                    store_tx.commit()?;
-                    reverted = true;
+            if !seen_last_confirmed {
+                log::info!(
+                    "skipping transaction {}, last confirmed {}",
+                    tx.tx_hash,
+                    last_confirmed_tx_hash
+                );
+                if tx.tx_hash == last_confirmed_tx_hash {
+                    seen_last_confirmed = true;
                 }
-                last_tx_hash = tx.tx_hash.clone();
-                log::info!("updating block from submission tx {}", tx.tx_hash);
-                psc.chain_updater.update_single(&tx.tx_hash).await?;
+                continue;
             }
+
+            log::info!("handling transaction {}", tx.tx_hash);
+            if !reverted {
+                log::info!("L2 fork detected, reverting to L2 block {last_confirmed}");
+                revert(psc, store_tx, last_confirmed).await?;
+                // Commit transaction because chain_updater.update_single will open and commit new transactions.
+                store_tx.commit()?;
+                reverted = true;
+            }
+            psc.chain_updater.update_single(&tx.tx_hash).await?;
+            // TODO: set last submitted/confirmed block.
         }
     }
 

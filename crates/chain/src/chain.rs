@@ -22,8 +22,8 @@ use gw_types::{
     offchain::{global_state_from_slice, FinalizedCustodianCapacity},
     packed::{
         BlockMerkleState, Byte32, CellInput, CellOutput, ChallengeTarget, ChallengeWitness,
-        DepositRequest, GlobalState, L2Block, RawL2Block, RollupConfig, Script, Transaction,
-        WithdrawalRequestExtra,
+        DepositRequest, GlobalState, L2Block, NumberHash, RawL2Block, RollupConfig, Script,
+        Transaction, WithdrawalRequestExtra,
     },
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
@@ -389,6 +389,10 @@ impl Chain {
                         Ok(SyncEvent::BadBlock { context })
                     } else {
                         let block_number = l2block.raw().number().unpack();
+                        let nh = NumberHash::new_builder()
+                            .number(l2block.raw().number())
+                            .block_hash(l2block.hash().pack())
+                            .build();
                         // TODO: store block deposit info vec.
 
                         // Store remaining finalized custodians.
@@ -443,6 +447,8 @@ impl Chain {
                             block_number,
                             &finalized_custodians.pack().as_reader(),
                         )?;
+                        db.set_last_submitted_block_number_hash(&nh.as_reader())?;
+                        db.set_last_confirmed_block_number_hash(&nh.as_reader())?;
 
                         log::info!("sync new block #{} success", block_number);
 
