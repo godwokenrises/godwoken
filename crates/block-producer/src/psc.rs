@@ -51,33 +51,6 @@ pub struct PSCContext {
 
 impl ProduceSubmitConfirm {
     pub async fn init(context: Arc<PSCContext>) -> Result<Self> {
-        let store_tx = context.store.begin_transaction();
-        let last_valid_block = store_tx.get_last_valid_tip_block()?;
-        let last_valid_number_hash = NumberHash::new_builder()
-            .number(last_valid_block.raw().number())
-            .block_hash(last_valid_block.hash().pack())
-            .build();
-        let last_valid = last_valid_block.raw().number().unpack();
-        // Set to last_valid because if it is None, it means we are
-        // migrating from the version that does not decouple producing and
-        // submitting or it's a new chain.
-        match store_tx.get_last_submitted_block_number_hash() {
-            Some(b) => b.number().unpack(),
-            None => {
-                store_tx
-                    .set_last_submitted_block_number_hash(&last_valid_number_hash.as_reader())?;
-                last_valid
-            }
-        };
-        match store_tx.get_last_confirmed_block_number_hash() {
-            Some(b) => b.number().unpack(),
-            None => {
-                store_tx
-                    .set_last_confirmed_block_number_hash(&last_valid_number_hash.as_reader())?;
-                last_valid
-            }
-        };
-        store_tx.commit()?;
         sync_l1(&context).await?;
         // Get again because they may have changed after syncing with L1.
         let snap = context.store.get_snapshot();
