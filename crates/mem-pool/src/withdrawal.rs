@@ -79,7 +79,12 @@ impl<'a> Generator<'a> {
 
     pub fn remaining_capacity(self) -> FinalizedCustodianCapacity {
         FinalizedCustodianCapacity {
-            capacity: self.ckb_custodian.capacity,
+            capacity: self.ckb_custodian.capacity
+                + self
+                    .sudt_custodians
+                    .values()
+                    .map(|v| u128::from(v.capacity))
+                    .sum::<u128>(),
             sudt: self
                 .sudt_custodians
                 .into_iter()

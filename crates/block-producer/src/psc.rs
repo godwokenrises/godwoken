@@ -120,6 +120,7 @@ impl ProduceSubmitConfirm {
                     let error_block = e.downcast::<BlockContext>()?.0;
                     {
                         let store_tx = self.context.store.begin_transaction();
+                        log::info!("revert to block {}", error_block - 1);
                         revert(&self.context, &store_tx, error_block - 1).await?;
                         store_tx.commit()?;
                     }
@@ -565,7 +566,7 @@ async fn send_transaction_or_check_inputs(
         let code = get_jsonrpc_error_code(&err);
         if code == Some(CkbRpcError::TransactionFailedToResolve as i64) {
             if let Err(e) = check_tx_input(rpc_client, tx).await {
-                err = err.context(e);
+                err = e.context(err);
             }
             Err(err)
         } else if code == Some(CkbRpcError::PoolRejectedDuplicatedTransaction as i64) {

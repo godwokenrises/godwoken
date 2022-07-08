@@ -818,7 +818,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 result = psc_state.run() => result,
             };
             if let Err(e) = result {
-                log::error!("ProduceSubmitConfirm error: {:?}", e);
+                log::error!("ProduceSubmitConfirm error: {:#}", e);
             }
             drop(shutdown_completed_send);
         }))

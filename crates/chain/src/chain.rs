@@ -19,7 +19,7 @@ use gw_store::{
 use gw_types::{
     bytes::Bytes,
     core::Status,
-    offchain::{global_state_from_slice, FinalizedCustodianCapacity},
+    offchain::global_state_from_slice,
     packed::{
         BlockMerkleState, Byte32, CellInput, CellOutput, ChallengeTarget, ChallengeWitness,
         DepositRequest, GlobalState, L2Block, NumberHash, RawL2Block, RollupConfig, Script,
@@ -400,14 +400,11 @@ impl Chain {
                         // Remaining finalized custodians = parent block
                         // remaining finalized custodians + just finalized
                         // deposits - this block withdrawals
-                        let mut finalized_custodians = if block_number > 1 {
-                            db.get_block_post_finalized_custodian_capacity(block_number - 1)
-                                .context("get parent block remaining finalized custodians")?
-                                .as_reader()
-                                .unpack()
-                        } else {
-                            FinalizedCustodianCapacity::default()
-                        };
+                        let mut finalized_custodians = db
+                            .get_block_post_finalized_custodian_capacity(block_number - 1)
+                            .context("get parent block remaining finalized custodians")?
+                            .as_reader()
+                            .unpack();
                         let last_finalized_block = self
                             .generator
                             .rollup_context()
