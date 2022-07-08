@@ -641,33 +641,19 @@ async fn sync_l1(psc: &PSCContext) -> Result<()> {
             break;
         }
     }
-    // Update last confirmed L1 block.
-    if last_confirmed_l1 != last_confirmed_local.number().unpack() {
-        log::info!("update last confirmed block to {last_confirmed_l1}");
-        let hash = store_tx
-            .get_block_hash_by_number(last_confirmed_l1)?
-            .context("get block hash")?;
-        let nh = NumberHash::new_builder()
-            .number(last_confirmed_l1.pack())
-            .block_hash(hash.pack())
-            .build();
-        store_tx.set_last_confirmed_block_number_hash(&nh.as_reader())?;
-    }
 
-    sync_l1_unknown(psc, &store_tx, last_confirmed_l1).await?;
+    sync_l1_unknown(psc, store_tx, last_confirmed_l1).await?;
 
     Ok(())
 }
 
 // Sync unknown blocks from L1.
 //
-// Returns whether there are actually any unknown blocks synced from L1.
-//
 // Although a L2 fork is highly unlikely, it is not impossible, due to e.g.
 // accidentally running two godwoken full nodes.
 async fn sync_l1_unknown(
     psc: &PSCContext,
-    store_tx: &StoreTransaction,
+    store_tx: StoreTransaction,
     last_confirmed: u64,
 ) -> Result<()> {
     log::info!("syncing unknown L2 blocks from L1");
@@ -708,31 +694,40 @@ async fn sync_l1_unknown(
         }
         last_cursor = Some(txs.last_cursor);
 
-        // TODO: skip transactions for blocks <= last sync.
         for tx in txs.objects {
             if !seen_last_confirmed {
-                log::info!(
-                    "skipping transaction {}, last confirmed {}",
-                    tx.tx_hash,
-                    last_confirmed_tx_hash
-                );
+                log::info!("skipping transaction {}", tx.tx_hash);
                 if tx.tx_hash == last_confirmed_tx_hash {
                     seen_last_confirmed = true;
                 }
                 continue;
             }
 
-            log::info!("handling transaction {}", tx.tx_hash);
+            log::info!("syncing L1 transaction {}", tx.tx_hash);
+            // TODO: we may get transactions that are submitted but not yet
+            // confirmed from last run. In this case, we should simply mark the
+            // corresponding block as confirmed instead of reverting.
             if !reverted {
                 log::info!("L2 fork detected, reverting to L2 block {last_confirmed}");
-                revert(psc, store_tx, last_confirmed).await?;
+                revert(psc, &store_tx, last_confirmed).await?;
                 // Commit transaction because chain_updater.update_single will open and commit new transactions.
                 store_tx.commit()?;
                 reverted = true;
             }
             psc.chain_updater.update_single(&tx.tx_hash).await?;
-            // TODO: set last submitted/confirmed block.
         }
+    }
+    if !reverted {
+        // Reset last confirmed.
+        let block_hash = store_tx
+            .get_block_hash_by_number(last_confirmed)?
+            .context("get block hash")?;
+        let nh = NumberHash::new_builder()
+            .number(last_confirmed.pack())
+            .block_hash(block_hash.pack())
+            .build();
+        store_tx.set_last_confirmed_block_number_hash(&nh.as_reader())?;
+        store_tx.commit()?;
     }
 
     Ok(())

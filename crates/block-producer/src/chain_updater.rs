@@ -107,7 +107,7 @@ impl ChainUpdater {
         };
 
         let update = L1Action {
-            transaction: tx.clone(),
+            transaction: tx,
             context,
         };
         let sync_param = SyncParam {
