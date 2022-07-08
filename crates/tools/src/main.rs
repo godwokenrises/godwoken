@@ -849,6 +849,13 @@ async fn main() -> Result<()> {
                         .default_value("0")
                         .help("Tip block number"),
                 )
+                .arg(
+                    Arg::with_name("finality-blocks")
+                        .long("finality-blocks")
+                        .takes_value(true)
+                        .default_value("16800")
+                        .help("The number of blocks to finalize the layer2 state"),
+                )
         )
         .subcommand(
             SubCommand::with_name("parse-withdrawal-lock-args")
@@ -1447,6 +1454,7 @@ async fn main() -> Result<()> {
             let min_capacity: u64 = m.value_of("min-capacity").unwrap_or_default().parse()?;
             let tip_block_number: u64 =
                 m.value_of("tip-block-number").unwrap_or_default().parse()?;
+            let finalize_blocks: u64 = m.value_of("finality-blocks").unwrap_or_default().parse()?;
             let rpc_client = CKBIndexerClient::with_url(indexer_rpc_url)?;
 
             let alias: HashMap<ckb_types::bytes::Bytes, String> = [
@@ -1480,7 +1488,7 @@ async fn main() -> Result<()> {
             })
             .collect();
 
-            let last_finalized_block_number = tip_block_number.saturating_sub(450);
+            let last_finalized_block_number = tip_block_number.saturating_sub(finalize_blocks);
 
             let stat = stat::stat_custodian_cells(
                 &rpc_client,
