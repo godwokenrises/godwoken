@@ -77,22 +77,43 @@ pub fn export_block(snap: &StoreReadonly, block_number: u64) -> Result<ExportedB
     Ok(exported_block)
 }
 
-pub fn read_block(reader: &mut impl Read) -> Result<Option<(ExportedBlock, usize)>> {
+pub fn read_block_size(reader: &mut impl Read) -> Result<Option<u32>> {
     let mut full_size_buf = [0u8; 4];
-    if let Err(err) = reader.read_exact(&mut full_size_buf) {
-        match err.kind() {
-            ErrorKind::UnexpectedEof if full_size_buf == [0u8; 4] => return Ok(None),
-            _ => bail!(err),
+
+    let mut n = 0;
+    let mut buf: &mut [u8] = &mut full_size_buf;
+    while n != 4 {
+        match reader.read(buf) {
+            Ok(0) if 0 == n => return Ok(None),
+            Ok(0) => bail!("block corrupted, full size header"),
+            Ok(read) => {
+                n += read;
+                if 4 == n {
+                    break;
+                }
+
+                buf = &mut buf[read..];
+            }
+            Err(ref e) if e.kind() == ErrorKind::Interrupted => {}
+            Err(e) => bail!(e),
         }
     }
 
-    let full_size = u32::from_le_bytes(full_size_buf) as usize;
+    let full_size = u32::from_le_bytes(full_size_buf);
+    Ok(Some(full_size))
+}
+
+pub fn read_block(reader: &mut impl Read) -> Result<Option<(ExportedBlock, usize)>> {
+    let (full_size_bytes, full_size) = match read_block_size(reader)? {
+        Some(size) => (size.to_le_bytes(), size as usize),
+        None => return Ok(None),
+    };
     if full_size <= 4 {
         bail!("block corrupted, full size {}", full_size);
     }
 
     let mut buf = vec![0; full_size];
-    buf[..4].copy_from_slice(&full_size_buf[..4]);
+    buf[..4].copy_from_slice(&full_size_bytes);
     reader.read_exact(&mut buf[4..full_size])?;
 
     packed::ExportedBlockReader::verify(&buf, false)?;
@@ -119,7 +140,6 @@ impl<Reader: Read + Seek> ExportedBlockReader<Reader> {
     pub fn skip_blocks(&mut self, blocks: u64) -> Result<(u64, u64)> {
         let mut count = 0;
         let mut size = 0;
-        let mut full_size_buf = [0u8; 4];
 
         let from_block = match self.peek_block()? {
             Some((block, _size)) => block.block_number(),
@@ -129,16 +149,10 @@ impl<Reader: Read + Seek> ExportedBlockReader<Reader> {
         while count < blocks {
             let pos = self.inner.stream_position()?;
 
-            if let Err(err) = self.inner.read_exact(&mut full_size_buf) {
-                match err.kind() {
-                    ErrorKind::UnexpectedEof if full_size_buf == [0u8; 4] => {
-                        return Ok((count, size))
-                    }
-                    _ => bail!(err),
-                }
-            }
-
-            let full_size = u32::from_le_bytes(full_size_buf);
+            let full_size = match read_block_size(&mut self.inner)? {
+                Some(size) => size,
+                None => return Ok((count, size)),
+            };
             let offset = full_size.saturating_sub(4);
 
             let new_pos = self.inner.seek(SeekFrom::Current(offset as i64))?;
