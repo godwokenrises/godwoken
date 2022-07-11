@@ -1075,7 +1075,7 @@ async fn execute_raw_l2transaction(
             Some(block_number) => {
                 let hist_state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
                 let mut state = MemExecuteTxStateTree::new(hist_state);
-                let raw_l2tx = eth_recover.mock_sender_if_not_exists_from_raw_registery(
+                let raw_l2tx = eth_recover.mock_sender_if_not_exists_from_raw_registry(
                     raw_l2tx,
                     registry_address_opt,
                     &mut state,
@@ -1096,7 +1096,7 @@ async fn execute_raw_l2transaction(
             None => {
                 let state = mem_state_snap.state()?;
                 let mut state = MemExecuteTxStateTree::new(state);
-                let raw_l2tx = eth_recover.mock_sender_if_not_exists_from_raw_registery(
+                let raw_l2tx = eth_recover.mock_sender_if_not_exists_from_raw_registry(
                     raw_l2tx,
                     registry_address_opt,
                     &mut state,

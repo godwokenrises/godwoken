@@ -245,7 +245,7 @@ impl EthRecover {
         Ok(tx)
     }
 
-    pub fn mock_sender_if_not_exists_from_raw_registery<S: State + CodeStore>(
+    pub fn mock_sender_if_not_exists_from_raw_registry<S: State + CodeStore>(
         &self,
         raw_tx: RawL2Transaction,
         opt_registry_address: Option<RegistryAddress>,

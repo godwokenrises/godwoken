@@ -43,7 +43,7 @@ impl EthAccountCreator {
     }
 
     #[instrument(skip_all)]
-    pub fn build_batch_create_tx<'a>(
+    pub fn build_batch_create_tx(
         &self,
         state: &impl State,
         eoa_scripts: Vec<EthEOAScript>,
