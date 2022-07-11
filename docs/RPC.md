@@ -1161,8 +1161,9 @@ Response
 
 Submit layer2 transaction. This RPC may has rate limit.
 
-When the `from_id` of a Polyjuice transaction is 0, this RPC returns `null` because the transaction `from id` will be updated
-before package. To query in queue status of transation with `from_id` is 0, use transaction's signature hash.
+When the `from_id` of a Polyjuice transaction is 0, this RPC returns `null` because the transaction
+`from_id` will be updated before packing. To query the status of a pending transaction with `from_id = 0`,
+please use the hash of the transaction signature as parameter.
 
 
 #### Examples
