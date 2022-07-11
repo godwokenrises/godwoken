@@ -22,8 +22,8 @@ use gw_types::{
     offchain::global_state_from_slice,
     packed::{
         BlockMerkleState, Byte32, CellInput, CellOutput, ChallengeTarget, ChallengeWitness,
-        DepositRequest, GlobalState, L2Block, NumberHash, RawL2Block, RollupConfig, Script,
-        Transaction, WithdrawalRequestExtra,
+        DepositInfoVec, DepositRequest, GlobalState, L2Block, NumberHash, RawL2Block, RollupConfig,
+        Script, Transaction, WithdrawalRequestExtra,
     },
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
@@ -51,7 +51,7 @@ pub enum L1ActionContext {
     SubmitBlock {
         /// deposit requests
         l2block: L2Block,
-        deposit_requests: Vec<DepositRequest>,
+        deposit_info_vec: DepositInfoVec,
         deposit_asset_scripts: HashSet<Script>,
         withdrawals: Vec<WithdrawalRequestExtra>,
     },
@@ -315,7 +315,7 @@ impl Chain {
                     Status::Running,
                     L1ActionContext::SubmitBlock {
                         l2block,
-                        deposit_requests,
+                        deposit_info_vec,
                         deposit_asset_scripts,
                         withdrawals,
                     },
@@ -355,6 +355,13 @@ impl Chain {
                     }
 
                     let withdrawals_clone = withdrawals.clone();
+                    // TODO: optimization: use iterator without collecting. May
+                    // require that DepositInfoVecIterator implements Clone.
+                    let deposit_requests = deposit_info_vec
+                        .clone()
+                        .into_iter()
+                        .map(|i| i.request())
+                        .collect();
 
                     if let Some(challenge_target) = self.process_block(
                         db,
@@ -393,7 +400,6 @@ impl Chain {
                             .number(l2block.raw().number())
                             .block_hash(l2block.hash().pack())
                             .build();
-                        // TODO: store block deposit info vec.
 
                         // Store remaining finalized custodians.
                         //
@@ -447,6 +453,7 @@ impl Chain {
                         db.set_last_submitted_block_number_hash(&nh.as_reader())?;
                         db.set_last_confirmed_block_number_hash(&nh.as_reader())?;
                         db.set_submit_tx(block_number, &transaction.as_reader())?;
+                        db.set_block_deposit_info_vec(block_number, &deposit_info_vec.as_reader())?;
 
                         log::info!("sync new block #{} success", block_number);
 

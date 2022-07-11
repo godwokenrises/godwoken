@@ -14,9 +14,10 @@ use gw_types::{
     core::ScriptHashType,
     offchain::RollupContext,
     packed::{
-        CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, DepositLockArgs,
-        DepositRequest, L2Block, OutPoint, RollupAction, RollupActionUnion, Script, Transaction,
-        WithdrawalRequestExtra, WitnessArgs, WitnessArgsReader,
+        CellInfo, CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, DepositInfo,
+        DepositInfoVec, DepositLockArgs, DepositRequest, L2Block, OutPoint, RollupAction,
+        RollupActionUnion, Script, Transaction, WithdrawalRequestExtra, WitnessArgs,
+        WitnessArgsReader,
     },
     prelude::*,
 };
@@ -77,12 +78,13 @@ impl ChainUpdater {
         let context = match rollup_action.to_enum() {
             RollupActionUnion::RollupSubmitBlock(submitted) => {
                 let l2block = submitted.block();
-                let (requests, asset_type_scripts) = self.extract_deposit_requests(&tx).await?;
+                let (deposit_info_vec, asset_type_scripts) =
+                    self.extract_deposit_requests(&tx).await?;
                 let withdrawals = self.extract_withdrawals(&tx, &l2block).await?;
 
                 L1ActionContext::SubmitBlock {
                     l2block,
-                    deposit_requests: requests,
+                    deposit_info_vec,
                     deposit_asset_scripts: asset_type_scripts,
                     withdrawals,
                 }
@@ -206,8 +208,8 @@ impl ChainUpdater {
     async fn extract_deposit_requests(
         &self,
         tx: &Transaction,
-    ) -> Result<(Vec<DepositRequest>, HashSet<Script>)> {
-        let mut results = vec![];
+    ) -> Result<(DepositInfoVec, HashSet<Script>)> {
+        let mut deposits = DepositInfoVec::new_builder();
         let mut asset_type_scripts = HashSet::new();
         for input in tx.raw().inputs().into_iter() {
             // Load cell denoted by the transaction input
@@ -234,13 +236,23 @@ impl ChainUpdater {
             if let Some(deposit_request) =
                 try_parse_deposit_request(&cell_output, &cell_data.unpack(), &self.rollup_context)
             {
-                results.push(deposit_request);
+                let info = DepositInfo::new_builder()
+                    .cell(
+                        CellInfo::new_builder()
+                            .out_point(input.previous_output())
+                            .data(cell_data)
+                            .output(cell_output.clone())
+                            .build(),
+                    )
+                    .request(deposit_request)
+                    .build();
+                deposits = deposits.push(info);
                 if let Some(type_) = &cell_output.type_().to_opt() {
                     asset_type_scripts.insert(type_.clone());
                 }
             }
         }
-        Ok((results, asset_type_scripts))
+        Ok((deposits.build(), asset_type_scripts))
     }
 
     async fn extract_withdrawals(
