@@ -656,10 +656,11 @@ pub async fn construct_block_with_timestamp(
     let (mem_block, post_merkle_state) = mem_pool.output_mem_block(&OutputParam::default());
     let (_custodians, block_param) =
         generate_produce_block_param(chain.store(), mem_block, post_merkle_state)?;
+    let reverted_block_root = chain.store().get_reverted_block_smt_root().unwrap();
     let param = ProduceBlockParam {
         stake_cell_owner_lock_hash,
         rollup_config_hash,
-        reverted_block_root: H256::default(),
+        reverted_block_root,
         block_param,
     };
     produce_block(&db, generator, param)

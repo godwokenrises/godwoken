@@ -182,10 +182,15 @@ pub fn insert_bad_block_hashes(
 ) -> Result<()> {
     let mut reverted_block_smt = tx_db.reverted_block_smt()?;
     for bad_block_hashes in bad_block_hashes_vec {
+        let prev_smt_root = *reverted_block_smt.root();
         for block_hash in bad_block_hashes.iter() {
             reverted_block_smt.update(*block_hash, H256::one())?;
         }
-        tx_db.set_reverted_block_hashes(reverted_block_smt.root(), bad_block_hashes)?;
+        tx_db.set_reverted_block_hashes(
+            reverted_block_smt.root(),
+            prev_smt_root,
+            bad_block_hashes,
+        )?;
     }
     tx_db.set_reverted_block_smt_root(*reverted_block_smt.root())?;
 

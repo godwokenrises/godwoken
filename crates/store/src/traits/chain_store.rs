@@ -57,6 +57,16 @@ pub trait ChainStore: KVStoreRead {
         Ok(root.into())
     }
 
+    fn get_prev_reverted_block_smt_root(&self, root: &H256) -> Result<Option<H256>, Error> {
+        match self.get(COLUMN_REVERTED_BLOCK_SMT_ROOT, root.as_slice()) {
+            Some(slice) => {
+                let block_hashes = packed::Byte32VecReader::from_slice_should_be_ok(slice.as_ref());
+                Ok(block_hashes.iter().next().map(|h| h.unpack()))
+            }
+            None => Ok(None),
+        }
+    }
+
     fn get_last_valid_tip_block(&self) -> Result<packed::L2Block, Error> {
         let block_hash = self.get_last_valid_tip_block_hash()?;
         let block = self
@@ -248,8 +258,15 @@ pub trait ChainStore: KVStoreRead {
             reverted_block_smt_root.as_slice(),
         ) {
             Some(slice) => {
-                let block_hash = packed::Byte32VecReader::from_slice_should_be_ok(slice.as_ref());
-                Ok(Some(block_hash.unpack()))
+                let mut block_hashes: Vec<_> =
+                    from_box_should_be_ok!(packed::Byte32VecReader, slice).unpack();
+
+                // Remove prev smt root at 0 idx
+                let last_hash_idx = block_hashes.len().saturating_sub(1);
+                block_hashes.swap(0, last_hash_idx);
+                block_hashes.pop();
+
+                Ok(Some(block_hashes))
             }
             None => Ok(None),
         }

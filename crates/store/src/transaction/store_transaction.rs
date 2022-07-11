@@ -103,9 +103,15 @@ impl StoreTransaction {
     pub fn set_reverted_block_hashes(
         &self,
         reverted_block_smt_root: &H256,
-        block_hashes: Vec<H256>,
+        prev_reverted_block_smt_root: H256,
+        mut block_hashes: Vec<H256>,
     ) -> Result<(), Error> {
         assert!(!block_hashes.is_empty(), "set empty reverted block hashes");
+
+        // Prefix block hashes with prev smt root, order of origin block hashes isn't a matter.
+        block_hashes.push(prev_reverted_block_smt_root);
+        let last_hash_idx = block_hashes.len().saturating_sub(1);
+        block_hashes.swap(0, last_hash_idx);
 
         self.insert_raw(
             COLUMN_REVERTED_BLOCK_SMT_ROOT,
