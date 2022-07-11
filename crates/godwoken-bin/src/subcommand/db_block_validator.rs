@@ -1,4 +1,5 @@
 use anyhow::{anyhow, bail, Result};
+use gw_block_producer::runner::BaseInitComponents;
 use gw_challenge::{
     cancel_challenge::LoadDataStrategy,
     context::build_verify_context,
@@ -25,8 +26,6 @@ use std::{
     path::PathBuf,
     sync::Arc,
 };
-
-use crate::runner::BaseInitComponents;
 
 pub async fn verify(config: Config, from_block: Option<u64>, to_block: Option<u64>) -> Result<()> {
     if config.store.path.as_os_str().is_empty() {

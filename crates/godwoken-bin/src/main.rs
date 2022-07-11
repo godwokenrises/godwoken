@@ -4,12 +4,13 @@ static GLOBAL_ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 use anyhow::{Context, Result};
 use clap::{App, Arg, SubCommand};
-use gw_block_producer::{db_block_validator, runner, trace};
+use gw_block_producer::{runner, trace};
 use gw_config::{BackendSwitchConfig, Config};
 use gw_version::Version;
 use std::{env, fs, path::Path};
 
 mod subcommand;
+use subcommand::db_block_validator;
 use subcommand::export_block::{ExportArgs, ExportBlock};
 use subcommand::import_block::{ImportArgs, ImportBlock};
 

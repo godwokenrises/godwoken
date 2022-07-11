@@ -38,7 +38,6 @@ openssl = { version = "0.10", features = ["vendored"] }
 hex = "0.4"
 async-trait = "0.1"
 semver = "1.0"
-rayon = "1.5"
 thiserror = "1.0"
 # For latest tracing
 sentry = { git = "https://github.com/getsentry/sentry-rust", rev = "df694a49595d6890c510d80b85cfbb4b5ae6159a" }
