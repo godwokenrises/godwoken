@@ -11,8 +11,8 @@ use crate::testing_tool::chain::{
 };
 
 use ckb_types::prelude::{Builder, Entity};
+use godwoken_bin::subcommand::{export_block::ExportBlock, import_block::ImportBlock};
 use gw_block_producer::produce_block::ProduceBlockResult;
-use gw_block_producer::subcommand::{export_block::ExportBlock, import_block::ImportBlock};
 use gw_chain::chain::{Chain, ChallengeCell, L1Action, L1ActionContext, SyncEvent, SyncParam};
 use gw_common::H256;
 use gw_config::StoreConfig;

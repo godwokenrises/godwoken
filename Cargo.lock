@@ -1696,6 +1696,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "godwoken-bin"
+version = "1.3.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "gw-block-producer",
+ "gw-chain",
+ "gw-config",
+ "gw-db",
+ "gw-store",
+ "gw-types",
+ "gw-utils",
+ "gw-version",
+ "indicatif",
+ "log",
+ "num_cpus",
+ "tikv-jemallocator",
+ "tokio",
+ "toml",
+]
+
+[[package]]
 name = "gw-benches"
 version = "0.1.0"
 dependencies = [
@@ -1723,7 +1745,6 @@ dependencies = [
  "ckb-crypto",
  "ckb-fixed-hash",
  "ckb-types",
- "clap",
  "console-subscriber",
  "futures",
  "gw-chain",
@@ -1743,12 +1764,9 @@ dependencies = [
  "gw-store",
  "gw-types",
  "gw-utils",
- "gw-version",
  "hex",
- "indicatif",
  "lazy_static",
  "log",
- "num_cpus",
  "openssl",
  "opentelemetry",
  "opentelemetry-jaeger",
@@ -1760,10 +1778,8 @@ dependencies = [
  "serde_json",
  "tentacle",
  "thiserror",
- "tikv-jemallocator",
  "tokio",
  "tokio-metrics",
- "toml",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -2151,6 +2167,7 @@ dependencies = [
  "ckb-vm",
  "ckb-vm-definitions",
  "env_logger",
+ "godwoken-bin",
  "gw-block-producer",
  "gw-chain",
  "gw-ckb-hardfork",
