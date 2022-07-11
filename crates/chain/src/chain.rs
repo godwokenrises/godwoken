@@ -527,6 +527,7 @@ impl Chain {
                     assert_eq!(local_slice, submit_slice);
 
                     // Revert bad blocks
+                    let prev_reverted_block_root = db.get_reverted_block_smt_root()?;
                     db.revert_bad_blocks(&local_reverted_blocks)?;
                     log::debug!("bad blocks reverted");
 
@@ -534,6 +535,7 @@ impl Chain {
                         local_reverted_blocks.iter().map(|b| b.hash().into());
                     db.set_reverted_block_hashes(
                         &db.get_reverted_block_smt_root()?,
+                        prev_reverted_block_root,
                         reverted_block_hashes.collect(),
                     )?;
 

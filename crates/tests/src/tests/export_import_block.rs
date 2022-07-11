@@ -13,7 +13,7 @@ use crate::testing_tool::chain::{
 use ckb_types::prelude::{Builder, Entity};
 use gw_block_producer::produce_block::ProduceBlockResult;
 use gw_block_producer::subcommand::{export_block::ExportBlock, import_block::ImportBlock};
-use gw_chain::chain::{ChallengeCell, L1Action, L1ActionContext, SyncEvent, SyncParam};
+use gw_chain::chain::{Chain, ChallengeCell, L1Action, L1ActionContext, SyncEvent, SyncParam};
 use gw_common::H256;
 use gw_config::StoreConfig;
 use gw_db::{read_only_db::ReadOnlyDB, schema::COLUMNS, RocksDB};
@@ -240,229 +240,19 @@ async fn test_export_import_block() {
     check_block_post_state(&import_tx_db, tip_block_number, &post_global_state).unwrap();
 
     // Test reverted block root
+    generate_and_revert_a_bad_block(&mut chain, &rollup_cell, accounts[0].clone()).await;
 
-    let alice_script = accounts[0].clone();
-    // update bad block
-    let withdrawal = {
-        let owner_lock = Script::default();
-        let raw = RawWithdrawalRequest::new_builder()
-            .capacity((1000 * CKB).pack())
-            .account_script_hash(alice_script.hash().pack())
-            .sudt_script_hash(H256::zero().pack())
-            .owner_lock_hash(owner_lock.hash().pack())
-            .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
-            .build();
-        let withdrawal = WithdrawalRequest::new_builder().raw(raw).build();
-        WithdrawalRequestExtra::new_builder()
-            .request(withdrawal)
-            .owner_lock(owner_lock)
-            .build()
-    };
-    let block_result = {
-        let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = mem_pool.lock().await;
-        mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
-        construct_block(&chain, &mut mem_pool, Vec::default())
-            .await
-            .unwrap()
-    };
-    let bad_block_result = {
-        let ProduceBlockResult {
-            block,
-            global_state,
-            withdrawal_extras,
-        } = block_result.clone();
-        let (bad_block, bad_global_state) =
-            generate_bad_block_using_first_withdrawal(&chain, block, global_state);
-        let withdrawal_extras = withdrawal_extras
-            .into_iter()
-            .enumerate()
-            .map(|(i, withdraw)| {
-                withdraw
-                    .as_builder()
-                    .request(bad_block.withdrawals().get(i).unwrap())
-                    .build()
-            })
-            .collect();
-        ProduceBlockResult {
-            block: bad_block,
-            global_state: bad_global_state,
-            withdrawal_extras,
-        }
-    };
-
-    let update_bad_block = L1Action {
-        context: L1ActionContext::SubmitBlock {
-            l2block: bad_block_result.block.clone(),
-            deposit_requests: vec![],
-            deposit_asset_scripts: Default::default(),
-            withdrawals: bad_block_result.withdrawal_extras.clone(),
-        },
-        transaction: build_sync_tx(rollup_cell.output.clone(), bad_block_result.clone()),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number((2u64).pack())
-            .build(),
-    };
-    let param = SyncParam {
-        updates: vec![update_bad_block],
-        reverts: Default::default(),
-    };
-    chain.sync(param).await.unwrap();
-    assert!(matches!(
-        chain.last_sync_event(),
-        SyncEvent::BadBlock { .. }
-    ));
-
-    let tip_block = chain.store().get_tip_block().unwrap();
-    let tip_block_number: u64 = tip_block.raw().number().unpack();
-    assert_eq!(tip_block_number, 2);
-
-    // challenge bad block
-    let challenge_context = match chain.last_sync_event() {
-        SyncEvent::BadBlock { context } => context.to_owned(),
-        _ => unreachable!(),
-    };
-    let challenge_cell = ChallengeCell {
-        input: CellInput::default(),
-        output: CellOutput::default(),
-        output_data: Bytes::default(),
-    };
-
-    let bad_block_result = {
-        let ProduceBlockResult {
-            block,
-            global_state,
-            withdrawal_extras,
-        } = bad_block_result;
-
-        let global_state = global_state
-            .as_builder()
-            .status(Status::Halting.into())
-            .build();
-
-        ProduceBlockResult {
-            global_state,
-            block,
-            withdrawal_extras,
-        }
-    };
-
-    let challenge_bad_block = L1Action {
-        context: L1ActionContext::Challenge {
-            cell: challenge_cell,
-            target: challenge_context.target,
-            witness: challenge_context.witness,
-        },
-        transaction: build_sync_tx(rollup_cell.output.clone(), bad_block_result.clone()),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number((3u64).pack())
-            .build(),
-    };
-    let param = SyncParam {
-        updates: vec![challenge_bad_block],
-        reverts: Default::default(),
-    };
-    chain.sync(param).await.unwrap();
-    assert!(matches!(
-        chain.last_sync_event(),
-        SyncEvent::WaitChallenge { .. }
-    ));
-
-    // Revert bad block
-    let reverted_block_smt_root = match chain.last_sync_event() {
-        SyncEvent::WaitChallenge { cell: _, context } => context.post_reverted_block_root,
-        _ => unreachable!(),
-    };
-    let db = chain.store().begin_transaction();
-    let last_valid_tip_block_hash = db.get_last_valid_tip_block_hash().unwrap();
-    let last_valid_tip_block = db.get_last_valid_tip_block().unwrap();
-    let block_smt = {
-        let global_state = db
-            .get_block_post_global_state(&last_valid_tip_block_hash)
-            .unwrap();
-        global_state.unwrap().block()
-    };
-    let reverted_block_result = {
-        let ProduceBlockResult {
-            block,
-            global_state,
-            withdrawal_extras,
-        } = bad_block_result;
-
-        let global_state = global_state
-            .as_builder()
-            .status(Status::Running.into())
-            .reverted_block_root(reverted_block_smt_root.pack())
-            .tip_block_hash(last_valid_tip_block_hash.pack())
-            .block(block_smt)
-            .account(last_valid_tip_block.raw().post_account())
-            .build();
-
-        ProduceBlockResult {
-            global_state,
-            block,
-            withdrawal_extras,
-        }
-    };
-
-    let revert_bad_block = L1Action {
-        context: L1ActionContext::Revert {
-            reverted_blocks: vec![reverted_block_result.block.raw()],
-        },
-        transaction: build_sync_tx(rollup_cell.output.clone(), reverted_block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number((4u64).pack())
-            .build(),
-    };
-    let param = SyncParam {
-        updates: vec![revert_bad_block],
-        reverts: Default::default(),
-    };
-    chain.sync(param).await.unwrap();
-    assert!(chain.last_sync_event().is_success());
-
-    let local_reverted_block_smt_root = db.get_reverted_block_smt_root().unwrap();
-    assert_eq!(local_reverted_block_smt_root, reverted_block_smt_root);
+    // Generate bad block at the same block number, test multiple block hashes at block number
+    generate_and_revert_a_bad_block(&mut chain, &rollup_cell, accounts[1].clone()).await;
 
     // Produce new block, new global state with reverted block root updated
-    let block_result = {
-        let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = mem_pool.lock().await;
-        let mut block_result = construct_block(&chain, &mut mem_pool, vec![])
-            .await
-            .unwrap();
+    produce_block(&mut chain, &rollup_cell).await;
 
-        block_result.global_state = block_result
-            .global_state
-            .as_builder()
-            .reverted_block_root(reverted_block_smt_root.pack())
-            .build();
-        block_result
-    };
-    let withdrawals = block_result
-        .block
-        .withdrawals()
-        .into_iter()
-        .map(|w| WithdrawalRequestExtra::new_builder().request(w).build())
-        .collect();
-    let new_block = L1Action {
-        context: L1ActionContext::SubmitBlock {
-            l2block: block_result.block.clone(),
-            deposit_requests: vec![],
-            deposit_asset_scripts: Default::default(),
-            withdrawals,
-        },
-        transaction: build_sync_tx(rollup_cell.output, block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(5u64.pack())
-            .build(),
-    };
-    let param = SyncParam {
-        updates: vec![new_block],
-        reverts: Default::default(),
-    };
-    chain.sync(param).await.unwrap();
-    assert!(chain.last_sync_event().is_success());
+    // Generate bad block again, reverted block iter should work correctly
+    generate_and_revert_a_bad_block(&mut chain, &rollup_cell, accounts[2].clone()).await;
+
+    // Produce new block
+    produce_block(&mut chain, &rollup_cell).await;
 
     // Export block with reverted block root changed
     let export_path = {
@@ -538,6 +328,231 @@ async fn test_export_import_block() {
 
     let import_tx_db = import_store.begin_transaction();
     check_block_post_state(&import_tx_db, tip_block_number, &post_global_state).unwrap();
+}
+
+async fn generate_and_revert_a_bad_block(
+    chain: &mut Chain,
+    rollup_cell: &CellInfo,
+    account_script: Script,
+) {
+    let l1_block_number = chain.local_state().last_synced().number().unpack();
+    let prev_tip_block_number = chain.local_state().tip().raw().number().unpack();
+
+    // update bad block
+    let withdrawal = {
+        let owner_lock = Script::default();
+        let raw = RawWithdrawalRequest::new_builder()
+            .capacity((1000 * CKB).pack())
+            .account_script_hash(account_script.hash().pack())
+            .sudt_script_hash(H256::zero().pack())
+            .owner_lock_hash(owner_lock.hash().pack())
+            .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
+            .build();
+        let withdrawal = WithdrawalRequest::new_builder().raw(raw).build();
+        WithdrawalRequestExtra::new_builder()
+            .request(withdrawal)
+            .owner_lock(owner_lock)
+            .build()
+    };
+    let block_result = {
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock().await;
+        mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
+        construct_block(chain, &mut mem_pool, Vec::default())
+            .await
+            .unwrap()
+    };
+    let bad_block_result = {
+        let ProduceBlockResult {
+            block,
+            global_state,
+            withdrawal_extras,
+        } = block_result.clone();
+        let (bad_block, bad_global_state) =
+            generate_bad_block_using_first_withdrawal(chain, block, global_state);
+        let withdrawal_extras = withdrawal_extras
+            .into_iter()
+            .enumerate()
+            .map(|(i, withdraw)| {
+                withdraw
+                    .as_builder()
+                    .request(bad_block.withdrawals().get(i).unwrap())
+                    .build()
+            })
+            .collect();
+        ProduceBlockResult {
+            block: bad_block,
+            global_state: bad_global_state,
+            withdrawal_extras,
+        }
+    };
+
+    let update_bad_block = L1Action {
+        context: L1ActionContext::SubmitBlock {
+            l2block: bad_block_result.block.clone(),
+            deposit_requests: vec![],
+            deposit_asset_scripts: Default::default(),
+            withdrawals: bad_block_result.withdrawal_extras.clone(),
+        },
+        transaction: build_sync_tx(rollup_cell.output.clone(), bad_block_result.clone()),
+        l2block_committed_info: L2BlockCommittedInfo::new_builder()
+            .number((l1_block_number + 1).pack())
+            .build(),
+    };
+    let param = SyncParam {
+        updates: vec![update_bad_block],
+        reverts: Default::default(),
+    };
+    chain.sync(param).await.unwrap();
+    assert!(matches!(
+        chain.last_sync_event(),
+        SyncEvent::BadBlock { .. }
+    ));
+
+    let tip_block = chain.store().get_tip_block().unwrap();
+    let tip_block_number: u64 = tip_block.raw().number().unpack();
+    assert_eq!(tip_block_number, prev_tip_block_number + 1);
+
+    // challenge bad block
+    let challenge_context = match chain.last_sync_event() {
+        SyncEvent::BadBlock { context } => context.to_owned(),
+        _ => unreachable!(),
+    };
+    let challenge_cell = ChallengeCell {
+        input: CellInput::default(),
+        output: CellOutput::default(),
+        output_data: Bytes::default(),
+    };
+
+    let bad_block_result = {
+        let ProduceBlockResult {
+            block,
+            global_state,
+            withdrawal_extras,
+        } = bad_block_result;
+
+        let global_state = global_state
+            .as_builder()
+            .status(Status::Halting.into())
+            .build();
+
+        ProduceBlockResult {
+            global_state,
+            block,
+            withdrawal_extras,
+        }
+    };
+
+    let challenge_bad_block = L1Action {
+        context: L1ActionContext::Challenge {
+            cell: challenge_cell,
+            target: challenge_context.target,
+            witness: challenge_context.witness,
+        },
+        transaction: build_sync_tx(rollup_cell.output.clone(), bad_block_result.clone()),
+        l2block_committed_info: L2BlockCommittedInfo::new_builder()
+            .number((l1_block_number + 2).pack())
+            .build(),
+    };
+    let param = SyncParam {
+        updates: vec![challenge_bad_block],
+        reverts: Default::default(),
+    };
+    chain.sync(param).await.unwrap();
+    assert!(matches!(
+        chain.last_sync_event(),
+        SyncEvent::WaitChallenge { .. }
+    ));
+
+    // Revert bad block
+    let reverted_block_smt_root = match chain.last_sync_event() {
+        SyncEvent::WaitChallenge { cell: _, context } => context.post_reverted_block_root,
+        _ => unreachable!(),
+    };
+    let db = chain.store().begin_transaction();
+    let last_valid_tip_block_hash = db.get_last_valid_tip_block_hash().unwrap();
+    let last_valid_tip_block = db.get_last_valid_tip_block().unwrap();
+    let block_smt = {
+        let global_state = db
+            .get_block_post_global_state(&last_valid_tip_block_hash)
+            .unwrap();
+        global_state.unwrap().block()
+    };
+    let reverted_block_result = {
+        let ProduceBlockResult {
+            block,
+            global_state,
+            withdrawal_extras,
+        } = bad_block_result;
+
+        let global_state = global_state
+            .as_builder()
+            .status(Status::Running.into())
+            .reverted_block_root(reverted_block_smt_root.pack())
+            .tip_block_hash(last_valid_tip_block_hash.pack())
+            .block(block_smt)
+            .account(last_valid_tip_block.raw().post_account())
+            .build();
+
+        ProduceBlockResult {
+            global_state,
+            block,
+            withdrawal_extras,
+        }
+    };
+
+    let revert_bad_block = L1Action {
+        context: L1ActionContext::Revert {
+            reverted_blocks: vec![reverted_block_result.block.raw()],
+        },
+        transaction: build_sync_tx(rollup_cell.output.clone(), reverted_block_result),
+        l2block_committed_info: L2BlockCommittedInfo::new_builder()
+            .number((l1_block_number + 3).pack())
+            .build(),
+    };
+    let param = SyncParam {
+        updates: vec![revert_bad_block],
+        reverts: Default::default(),
+    };
+    chain.sync(param).await.unwrap();
+    assert!(chain.last_sync_event().is_success());
+
+    let local_reverted_block_smt_root = db.get_reverted_block_smt_root().unwrap();
+    assert_eq!(local_reverted_block_smt_root, reverted_block_smt_root);
+}
+
+async fn produce_block(chain: &mut Chain, rollup_cell: &CellInfo) {
+    let l1_block_number = chain.local_state().last_synced().number().unpack();
+
+    let block_result = {
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block(chain, &mut mem_pool, vec![]).await.unwrap()
+    };
+    let withdrawals = block_result
+        .block
+        .withdrawals()
+        .into_iter()
+        .map(|w| WithdrawalRequestExtra::new_builder().request(w).build())
+        .collect();
+    let new_block = L1Action {
+        context: L1ActionContext::SubmitBlock {
+            l2block: block_result.block.clone(),
+            deposit_requests: vec![],
+            deposit_asset_scripts: Default::default(),
+            withdrawals,
+        },
+        transaction: build_sync_tx(rollup_cell.output.clone(), block_result),
+        l2block_committed_info: L2BlockCommittedInfo::new_builder()
+            .number((l1_block_number + 1).pack())
+            .build(),
+    };
+    let param = SyncParam {
+        updates: vec![new_block],
+        reverts: Default::default(),
+    };
+    chain.sync(param).await.unwrap();
+    assert!(chain.last_sync_event().is_success());
 }
 
 fn random_always_success_script(opt_rollup_script_hash: Option<&H256>) -> Script {
