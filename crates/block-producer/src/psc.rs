@@ -277,7 +277,7 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
 
     // Now update db about the new local L2 block
 
-    let deposit_requests = deposit_cells.iter().map(|d| d.request.clone()).collect();
+    let deposit_info_vec = deposit_cells.pack();
     let deposit_asset_scripts = deposit_cells
         .iter()
         .filter_map(|d| d.cell.output.type_().to_opt())
@@ -291,7 +291,7 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
         .update_local(
             &store_tx,
             block,
-            deposit_requests,
+            deposit_info_vec,
             deposit_asset_scripts,
             withdrawal_extras,
             global_state,
@@ -306,8 +306,6 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
         block_withdrawals,
     );
 
-    // Save deposit cells for composing the submit tx later.
-    store_tx.set_block_deposit_info_vec(number, &deposit_cells.pack().as_reader())?;
     log::info!(
         "save capacity: block: {}, capacity: {}",
         number,

@@ -22,8 +22,8 @@ use gw_types::{
     offchain::global_state_from_slice,
     packed::{
         BlockMerkleState, Byte32, CellInput, CellOutput, ChallengeTarget, ChallengeWitness,
-        DepositInfoVec, DepositRequest, GlobalState, L2Block, NumberHash, RawL2Block, RollupConfig,
-        Script, Transaction, WithdrawalRequestExtra,
+        DepositInfoVec, GlobalState, L2Block, NumberHash, RawL2Block, RollupConfig, Script,
+        Transaction, WithdrawalRequestExtra,
     },
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
@@ -355,19 +355,12 @@ impl Chain {
                     }
 
                     let withdrawals_clone = withdrawals.clone();
-                    // TODO: optimization: use iterator without collecting. May
-                    // require that DepositInfoVecIterator implements Clone.
-                    let deposit_requests = deposit_info_vec
-                        .clone()
-                        .into_iter()
-                        .map(|i| i.request())
-                        .collect();
 
                     if let Some(challenge_target) = self.process_block(
                         db,
                         l2block.clone(),
                         global_state.clone(),
-                        deposit_requests,
+                        deposit_info_vec,
                         deposit_asset_scripts,
                         withdrawals,
                     )? {
@@ -415,13 +408,11 @@ impl Chain {
                             .generator
                             .rollup_context()
                             .last_finalized_block_number(block_number - 1);
-                        let last_finalized_block_hash = db
-                            .get_block_hash_by_number(last_finalized_block)?
-                            .context("get block hash")?;
                         let deposits = db
-                            .get_block_deposit_requests(&last_finalized_block_hash)?
-                            .context("get deposit requests")?;
+                            .get_block_deposit_info_vec(last_finalized_block)
+                            .context("get last finalized block deposit")?;
                         for deposit in deposits {
+                            let deposit = deposit.request();
                             finalized_custodians.capacity = finalized_custodians
                                 .capacity
                                 .checked_add(deposit.capacity().unpack().into())
@@ -453,7 +444,6 @@ impl Chain {
                         db.set_last_submitted_block_number_hash(&nh.as_reader())?;
                         db.set_last_confirmed_block_number_hash(&nh.as_reader())?;
                         db.set_submit_tx(block_number, &transaction.as_reader())?;
-                        db.set_block_deposit_info_vec(block_number, &deposit_info_vec.as_reader())?;
 
                         log::info!("sync new block #{} success", block_number);
 
@@ -925,7 +915,7 @@ impl Chain {
         &mut self,
         store_tx: &StoreTransaction,
         l2_block: L2Block,
-        deposit_requests: Vec<DepositRequest>,
+        deposit_info_vec: DepositInfoVec,
         deposit_asset_scripts: HashSet<Script>,
         withdrawals: Vec<WithdrawalRequestExtra>,
         global_state: GlobalState,
@@ -946,7 +936,7 @@ impl Chain {
             store_tx,
             l2_block,
             global_state,
-            deposit_requests,
+            deposit_info_vec,
             deposit_asset_scripts,
             withdrawals,
         )?;
@@ -967,7 +957,7 @@ impl Chain {
         db: &StoreTransaction,
         l2block: L2Block,
         global_state: GlobalState,
-        deposit_requests: Vec<DepositRequest>,
+        deposit_info_vec: DepositInfoVec,
         deposit_asset_scripts: HashSet<Script>,
         withdrawals: Vec<WithdrawalRequestExtra>,
     ) -> Result<Option<ChallengeTarget>> {
@@ -989,7 +979,7 @@ impl Chain {
         // process l2block
         let args = ApplyBlockArgs {
             l2block: l2block.clone(),
-            deposit_requests: deposit_requests.clone(),
+            deposit_info_vec: deposit_info_vec.clone(),
             withdrawals: withdrawals.clone(),
         };
         let tip_block_hash = self.local_state.tip().hash().into();
@@ -1040,7 +1030,7 @@ impl Chain {
             withdrawal_receipts,
             prev_txs_state,
             tx_receipts,
-            deposit_requests,
+            deposit_info_vec,
             withdrawals,
         )?;
         db.insert_asset_scripts(deposit_asset_scripts)?;

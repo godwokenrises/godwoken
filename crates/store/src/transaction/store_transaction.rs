@@ -9,14 +9,14 @@ use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, H256};
 use gw_db::schema::{
     Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ASSET_SCRIPT,
     COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSIT_INFO_VEC,
-    COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
-    COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY, COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF,
-    COLUMN_BLOCK_STATE_RECORD, COLUMN_BLOCK_STATE_REVERSE_RECORD, COLUMN_BLOCK_SUBMIT_TX,
-    COLUMN_INDEX, COLUMN_MEM_POOL_TRANSACTION, COLUMN_MEM_POOL_TRANSACTION_RECEIPT,
-    COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_BRANCH,
-    COLUMN_REVERTED_BLOCK_SMT_LEAF, COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION,
-    COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT, COLUMN_WITHDRAWAL, COLUMN_WITHDRAWAL_INFO,
-    META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY, META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY,
+    COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY,
+    COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD,
+    COLUMN_BLOCK_STATE_REVERSE_RECORD, COLUMN_BLOCK_SUBMIT_TX, COLUMN_INDEX,
+    COLUMN_MEM_POOL_TRANSACTION, COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL,
+    COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF,
+    COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
+    COLUMN_TRANSACTION_RECEIPT, COLUMN_WITHDRAWAL, COLUMN_WITHDRAWAL_INFO, META_BLOCK_SMT_ROOT_KEY,
+    META_CHAIN_ID_KEY, META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY,
     META_LAST_SUBMITTED_BLOCK_NUMBER_HASH_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
     META_REVERTED_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
 };
@@ -124,7 +124,7 @@ impl StoreTransaction {
         withdrawal_receipts: Vec<WithdrawalReceipt>,
         prev_txs_state: AccountMerkleState,
         tx_receipts: Vec<packed::TxReceipt>,
-        deposit_requests: Vec<packed::DepositRequest>,
+        deposit_info_vec: packed::DepositInfoVec,
         withdrawals: Vec<packed::WithdrawalRequestExtra>,
     ) -> Result<(), Error> {
         debug_assert_eq!(block.transactions().len(), tx_receipts.len());
@@ -136,11 +136,9 @@ impl StoreTransaction {
             &block_hash,
             global_state.as_slice(),
         )?;
-        let deposit_requests_vec: packed::DepositRequestVec = deposit_requests.pack();
-        self.insert_raw(
-            COLUMN_BLOCK_DEPOSIT_REQUESTS,
-            &block_hash,
-            deposit_requests_vec.as_slice(),
+        self.set_block_deposit_info_vec(
+            block.raw().number().unpack(),
+            &deposit_info_vec.as_reader(),
         )?;
 
         // Verify prev tx state and insert

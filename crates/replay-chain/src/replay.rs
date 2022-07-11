@@ -46,8 +46,8 @@ pub fn replay_chain(ctx: ChainContext) -> Result<()> {
             .get_block_post_global_state(&block.raw().parent_block_hash().unpack())?
             .expect("block prev global state");
         let deposit_requests = from_store
-            .get_block_deposit_requests(&block_hash)?
-            .expect("block deposit requests");
+            .get_block_deposit_info_vec(block_number)
+            .expect("block deposit info vec");
         let withdrawals = block
             .withdrawals()
             .into_iter()

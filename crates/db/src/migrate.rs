@@ -4,7 +4,10 @@
 use crate::{
     error::Error,
     read_only_db::{self, ReadOnlyDB},
-    schema::{COLUMN_META, META_TIP_BLOCK_HASH_KEY, REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO},
+    schema::{
+        COLUMN_META, META_TIP_BLOCK_HASH_KEY, REMOVED_COLUMN_BLOCK_DEPOSIT_REQUESTS,
+        REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO,
+    },
     Result,
 };
 use std::{cmp::Ordering, collections::BTreeMap};
@@ -114,6 +117,7 @@ struct DecoupleBlockProducingSubmissionAndConfirmationMigration;
 impl Migration for DecoupleBlockProducingSubmissionAndConfirmationMigration {
     fn migrate(&self, mut db: RocksDB) -> Result<RocksDB> {
         db.drop_cf(REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO)?;
+        db.drop_cf(REMOVED_COLUMN_BLOCK_DEPOSIT_REQUESTS)?;
         Ok(db)
     }
     fn version(&self) -> &str {

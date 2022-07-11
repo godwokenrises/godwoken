@@ -8,7 +8,7 @@
 //! txs & withdrawals again.
 //!
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, registry_address::RegistryAddress,
     state::State, H256,
@@ -380,13 +380,11 @@ impl MemPool {
             .rollup_context()
             .last_finalized_block_number(tip);
         if last_finalized > 0 {
-            let last_finalized_block_hash = snap
-                .get_block_hash_by_number(last_finalized)?
-                .expect("block hash");
             let last_finalized_deposits = snap
-                .get_block_deposit_requests(&last_finalized_block_hash)?
-                .expect("block deposit requests");
-            for d in last_finalized_deposits {
+                .get_block_deposit_info_vec(last_finalized)
+                .context("get last finalized block deposit")?;
+            for i in last_finalized_deposits {
+                let d = i.request();
                 c.capacity += u128::from(d.capacity().unpack());
                 let amount = d.amount().unpack();
                 if amount > 0 {
@@ -905,28 +903,15 @@ impl MemPool {
         new_block_hash: H256,
         local_cells_manager: &LocalCellsManager,
     ) -> Result<()> {
-        // get processed deposit requests
-        let processed_deposit_requests: HashSet<_> = db
-            .get_block_deposit_requests(&new_block_hash)?
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
-
         // check expire
         let mut force_expired = false;
-        for deposit in &self.pending_deposits {
-            // check is handled by current block
-            if processed_deposit_requests.contains(&deposit.request) {
-                force_expired = true;
-                break;
-            }
-        }
 
         // check whether the deposited cells are live
         if !force_expired {
             for deposit in &self.pending_deposits {
                 match self
                     .provider
+                    // TODO: exclude local_cells_manager dead cells.
                     .get_cell(deposit.cell.out_point.clone())
                     .await?
                 {
@@ -974,12 +959,9 @@ impl MemPool {
                 .await?;
             log::debug!("[mem-pool] collected deposit cells: {}", cells.len());
             self.pending_deposits = {
-                let cells = cells
-                    .into_iter()
-                    .filter(|di| !processed_deposit_requests.contains(&di.request));
                 crate::deposit::sanitize_deposit_cells(
                     self.generator.rollup_context(),
-                    cells.collect(),
+                    cells,
                     &state,
                 )
             };

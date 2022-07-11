@@ -33,7 +33,7 @@ pub const COLUMN_SCRIPT: Col = 14;
 /// Column data
 pub const COLUMN_DATA: Col = 15;
 /// Column block deposit requests
-pub const COLUMN_BLOCK_DEPOSIT_REQUESTS: Col = 16;
+pub const REMOVED_COLUMN_BLOCK_DEPOSIT_REQUESTS: Col = 16;
 /// Column mem pool transaction
 pub const COLUMN_MEM_POOL_TRANSACTION_RECEIPT: Col = 17;
 /// Column block state record

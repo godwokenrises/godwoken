@@ -6,7 +6,7 @@ use gw_common::H256;
 use gw_db::error::Error;
 use gw_db::schema::{
     COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
-    COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
+    COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_GLOBAL_STATE,
     COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY, COLUMN_BLOCK_SUBMIT_TX, COLUMN_INDEX,
     COLUMN_MEM_POOL_TRANSACTION, COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL,
     COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
@@ -247,20 +247,6 @@ pub trait ChainStore: KVStoreRead {
         Ok(self
             .get(COLUMN_WITHDRAWAL, withdrawal_key.as_slice())
             .map(|slice| from_box_should_be_ok!(packed::WithdrawalRequestExtraReader, slice)))
-    }
-
-    fn get_block_deposit_requests(
-        &self,
-        block_hash: &H256,
-    ) -> Result<Option<Vec<packed::DepositRequest>>, Error> {
-        match self.get(COLUMN_BLOCK_DEPOSIT_REQUESTS, block_hash.as_slice()) {
-            Some(slice) => Ok(Some(
-                from_box_should_be_ok!(packed::DepositRequestVecReader, slice)
-                    .into_iter()
-                    .collect(),
-            )),
-            None => Ok(None),
-        }
     }
 
     fn get_block_post_global_state(

@@ -31,17 +31,6 @@ pub trait StateExt {
         withdrawal_request: &WithdrawalRequest,
     ) -> Result<WithdrawalReceipt, Error>;
 
-    fn apply_deposit_requests(
-        &mut self,
-        ctx: &RollupContext,
-        deposit_requests: &[DepositRequest],
-    ) -> Result<(), Error> {
-        for request in deposit_requests {
-            self.apply_deposit_request(ctx, request)?;
-        }
-        Ok(())
-    }
-
     fn pay_fee(
         &mut self,
         payer: &RegistryAddress,
