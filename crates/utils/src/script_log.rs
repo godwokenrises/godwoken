@@ -40,9 +40,15 @@ pub enum GwLog {
 }
 
 fn parse_sudt_log_data(data: &[u8]) -> Result<(RegistryAddress, RegistryAddress, U256)> {
+    let data_len_err_msg = "sudt log data too short";
+
     let mut start = 0;
     let mut end = start + {
-        let from_address_byte_size = u32::from_le_bytes(data[4..8].try_into()?);
+        let from_address_byte_size = u32::from_le_bytes(
+            data.get(4..8)
+                .ok_or_else(|| anyhow!(data_len_err_msg))?
+                .try_into()?,
+        );
         if from_address_byte_size == 0 {
             8
         } else {
@@ -50,7 +56,10 @@ fn parse_sudt_log_data(data: &[u8]) -> Result<(RegistryAddress, RegistryAddress,
         }
     };
 
-    let from_address = match RegistryAddress::from_slice(&data[start..end]) {
+    let from_address = match RegistryAddress::from_slice(
+        data.get(start..end)
+            .ok_or_else(|| anyhow!(data_len_err_msg))?,
+    ) {
         Some(registry_address) => registry_address,
         None => {
             return Err(anyhow!("parse from address error"));
@@ -59,7 +68,11 @@ fn parse_sudt_log_data(data: &[u8]) -> Result<(RegistryAddress, RegistryAddress,
 
     start = end;
     end = start + {
-        let to_address_byte_size = u32::from_le_bytes(data[start + 4..start + 8].try_into()?);
+        let to_address_byte_size = u32::from_le_bytes(
+            data.get(start + 4..start + 8)
+                .ok_or_else(|| anyhow!(data_len_err_msg))?
+                .try_into()?,
+        );
         if to_address_byte_size == 0 {
             8
         } else {
@@ -67,7 +80,10 @@ fn parse_sudt_log_data(data: &[u8]) -> Result<(RegistryAddress, RegistryAddress,
         }
     };
 
-    let to_address = match RegistryAddress::from_slice(&data[start..end]) {
+    let to_address = match RegistryAddress::from_slice(
+        data.get(start..end)
+            .ok_or_else(|| anyhow!(data_len_err_msg))?,
+    ) {
         Some(registry_address) => registry_address,
         None => {
             return Err(anyhow!("parse to address error"));
@@ -75,7 +91,10 @@ fn parse_sudt_log_data(data: &[u8]) -> Result<(RegistryAddress, RegistryAddress,
     };
 
     let mut u256_bytes = [0u8; 32];
-    u256_bytes.copy_from_slice(&data[end..(end + 32)]);
+    u256_bytes.copy_from_slice(
+        data.get(end..(end + 32))
+            .ok_or_else(|| anyhow!(data_len_err_msg))?,
+    );
     let amount = U256::from_little_endian(&u256_bytes);
     Ok((from_address, to_address, amount))
 }
