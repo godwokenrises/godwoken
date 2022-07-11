@@ -641,8 +641,48 @@ async fn sync_l1(psc: &PSCContext) -> Result<()> {
         }
     }
 
+    // Try to confirm more blocks. Blocks submitted earlier (before restarting
+    // this godwoken node) may be confirmed now.
+    confirm_blocks(psc, &store_tx, &mut last_confirmed_l1).await?;
+
     sync_l1_unknown(psc, store_tx, last_confirmed_l1).await?;
 
+    Ok(())
+}
+
+async fn confirm_blocks(
+    psc: &PSCContext,
+    store_tx: &StoreTransaction,
+    last_confirmed: &mut u64,
+) -> Result<()> {
+    loop {
+        let next = *last_confirmed + 1;
+        if let Some(tx) = store_tx.get_submit_tx(next) {
+            log::info!("try to confirme block {next}");
+            match psc
+                .rpc_client
+                .ckb
+                .get_transaction_status(tx.hash().into())
+                .await?
+            {
+                Some(TxStatus::Committed) => {
+                    log::info!("block {next} confirmed");
+                    let block_hash = store_tx
+                        .get_block_hash_by_number(next)?
+                        .context("get block hash")?;
+                    let nh = NumberHash::new_builder()
+                        .block_hash(block_hash.pack())
+                        .number(next.pack())
+                        .build();
+                    store_tx.set_last_confirmed_block_number_hash(&nh.as_reader())?;
+                }
+                _ => break,
+            }
+        } else {
+            break;
+        }
+        *last_confirmed = next;
+    }
     Ok(())
 }
 
