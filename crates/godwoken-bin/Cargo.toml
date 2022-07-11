@@ -8,18 +8,25 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
+ckb-types = "0.100.0"
 clap = "2.33.3"
 indicatif = "0.16"
 gw-block-producer = { path = "../block-producer" }
 gw-chain = { path = "../chain" }
+gw-challenge = { path = "../challenge" }
+gw-common = { path = "../common" }
 gw-config = { path = "../config" }
 gw-db = { path = "../db" }
+gw-generator = { path = "../generator" }
+gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-store = { path = "../store" }
 gw-types = { path = "../types" }
 gw-utils = { path = "../utils" }
 gw-version = { path = "../version" }
 log = "0.4.14"
 num_cpus = "1.13.1"
+rayon = "1.5"
+serde_json = "1.0"
 tokio = { version = "1.17", features = ["full", "tracing"] }
 toml = "0.5"
 
