@@ -32,6 +32,8 @@ pub struct ExportBlock {
 }
 
 impl ExportBlock {
+    // Disable warning for bin
+    #[allow(dead_code)]
     pub fn new_unchecked(
         snap: StoreReadonly,
         output: PathBuf,
@@ -119,6 +121,8 @@ impl ExportBlock {
         Ok(export_block)
     }
 
+    // Disable warning for bin
+    #[allow(dead_code)]
     pub fn store(&self) -> &StoreReadonly {
         &self.snap
     }

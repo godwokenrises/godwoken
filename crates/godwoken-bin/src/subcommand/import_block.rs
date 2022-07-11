@@ -4,6 +4,7 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 use anyhow::{anyhow, bail, Result};
+use gw_block_producer::runner::BaseInitComponents;
 use gw_chain::chain::{Chain, RevertL1ActionContext, RevertedL1Action, SyncParam};
 use gw_config::Config;
 use gw_store::{traits::chain_store::ChainStore, Store};
@@ -13,8 +14,6 @@ use gw_utils::export_block::{
     check_block_post_state, insert_bad_block_hashes, ExportedBlockReader,
 };
 use indicatif::{ProgressBar, ProgressStyle};
-
-use crate::runner::BaseInitComponents;
 
 pub const DEFAULT_READ_BATCH: usize = 500;
 
@@ -37,6 +36,8 @@ pub struct ImportBlock {
 }
 
 impl ImportBlock {
+    // Disable warning for bin
+    #[allow(dead_code)]
     pub fn new_unchecked(chain: Chain, source: PathBuf) -> Self {
         ImportBlock {
             chain,
@@ -84,6 +85,8 @@ impl ImportBlock {
         Ok(import_block)
     }
 
+    // Disable warning for bin
+    #[allow(dead_code)]
     pub fn store(&self) -> &Store {
         self.chain.store()
     }
