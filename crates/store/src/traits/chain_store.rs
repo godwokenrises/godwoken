@@ -14,7 +14,7 @@ use gw_db::schema::{
     META_CHAIN_ID_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY, META_REVERTED_BLOCK_SMT_ROOT_KEY,
     META_TIP_BLOCK_HASH_KEY,
 };
-use gw_types::offchain::global_state_from_slice;
+use gw_types::offchain::{global_state_from_slice, SMTRevertedBlockHashes};
 use gw_types::packed::{Script, WithdrawalKey};
 use gw_types::{
     from_box_should_be_ok,
@@ -252,7 +252,7 @@ pub trait ChainStore: KVStoreRead {
     fn get_reverted_block_hashes_by_root(
         &self,
         reverted_block_smt_root: &H256,
-    ) -> Result<Option<Vec<H256>>, Error> {
+    ) -> Result<Option<SMTRevertedBlockHashes>, Error> {
         match self.get(
             COLUMN_REVERTED_BLOCK_SMT_ROOT,
             reverted_block_smt_root.as_slice(),
@@ -264,9 +264,14 @@ pub trait ChainStore: KVStoreRead {
                 // Remove prev smt root at 0 idx
                 let last_hash_idx = block_hashes.len().saturating_sub(1);
                 block_hashes.swap(0, last_hash_idx);
-                block_hashes.pop();
+                let prev_smt_root = block_hashes.pop().expect("prev root");
 
-                Ok(Some(block_hashes))
+                let root_hashes = SMTRevertedBlockHashes {
+                    prev_smt_root,
+                    block_hashes,
+                };
+
+                Ok(Some(root_hashes))
             }
             None => Ok(None),
         }
