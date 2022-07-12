@@ -32,6 +32,7 @@ use gw_mem_pool::{
     sync::p2p,
 };
 use gw_p2p_network::P2PNetwork;
+use gw_polyjuice_sender_recover::recover::PolyjuiceSenderRecover;
 use gw_rpc_client::{
     ckb_client::CKBClient, contract::ContractsCellDepManager, error::RPCRequestError,
     indexer_client::CKBIndexerClient, rpc_client::RPCClient,
@@ -824,6 +825,15 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     };
 
     // RPC registry
+    let polyjuice_sender_recover = {
+        log::info!("[tx from zero] use block producer wallet");
+
+        let block_producer_wallet = config
+            .block_producer
+            .map(|config| Wallet::from_config(&config.wallet_config).with_context(|| "init wallet"))
+            .transpose()?;
+        PolyjuiceSenderRecover::create(generator.rollup_context(), block_producer_wallet)?
+    };
     let args = RegistryArgs {
         store,
         mem_pool,
@@ -841,6 +851,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         last_submitted_tx_hash: block_producer
             .as_ref()
             .map(|bp| bp.last_submitted_tx_hash()),
+        polyjuice_sender_recover,
     };
 
     let rpc_registry = Registry::create(args).await;

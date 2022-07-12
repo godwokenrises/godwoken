@@ -1,26 +1,17 @@
-use std::sync::Arc;
 use std::time::Duration;
 
-use crate::testing_tool::chain::{
-    build_sync_tx, chain_generator, construct_block, restart_chain, setup_chain,
-};
+use crate::testing_tool::chain::{build_sync_tx, construct_block, restart_chain, setup_chain};
 use crate::testing_tool::common::random_always_success_script;
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
+use crate::testing_tool::rpc_server::RPCServer;
 
 use ckb_types::prelude::{Builder, Entity};
 use ckb_vm::Bytes;
-use gw_block_producer::test_mode_control::TestModeControl;
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::{state::State, H256};
-use gw_config::RPCClientConfig;
-use gw_dynamic_config::manager::DynamicConfigManager;
-use gw_generator::ArcSwap;
-use gw_rpc_client::ckb_client::CKBClient;
-use gw_rpc_client::indexer_client::CKBIndexerClient;
-use gw_rpc_client::rpc_client::RPCClient;
-use gw_rpc_server::registry::{Registry, RegistryArgs};
+use gw_rpc_server::registry::Registry;
 use gw_store::state::state_db::StateContext;
 use gw_types::core::ScriptHashType;
 use gw_types::offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupContext};
@@ -219,43 +210,7 @@ async fn test_restore_mem_block() {
     }
 
     let _rpc_server = {
-        let store = chain.store().clone();
-        let mem_pool = chain.mem_pool().clone();
-        let generator = chain_generator(&chain, rollup_type_script.clone());
-        let rollup_config = generator.rollup_context().rollup_config.to_owned();
-        let rollup_context = generator.rollup_context().to_owned();
-        let rpc_client = {
-            let indexer_client =
-                CKBIndexerClient::with_url(&RPCClientConfig::default().indexer_url).unwrap();
-            let ckb_client = CKBClient::with_url(&RPCClientConfig::default().ckb_url).unwrap();
-            let rollup_type_script =
-                ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
-            RPCClient::new(
-                rollup_type_script,
-                rollup_context,
-                ckb_client,
-                indexer_client,
-            )
-        };
-        let dynamic_config_manager =
-            Arc::new(ArcSwap::from_pointee(DynamicConfigManager::default()));
-        let args: RegistryArgs<TestModeControl> = RegistryArgs {
-            store,
-            mem_pool,
-            generator,
-            tests_rpc_impl: None,
-            rollup_config,
-            mem_pool_config: Default::default(),
-            node_mode: Default::default(),
-            rpc_client,
-            send_tx_rate_limit: Default::default(),
-            server_config: Default::default(),
-            chain_config: Default::default(),
-            consensus_config: Default::default(),
-            dynamic_config_manager,
-            last_submitted_tx_hash: None,
-        };
-
+        let args = RPCServer::default_registry_args(&chain, rollup_type_script.clone(), None);
         Registry::create(args).await
     };
 

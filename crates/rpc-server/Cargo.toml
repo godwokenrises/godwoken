@@ -11,6 +11,7 @@ gw-challenge = { path = "../challenge" }
 gw-common = { path = "../common" }
 gw-config = { path = "../config" }
 gw-chain = { path = "../chain" }
+gw-db = { path = "../db" }
 gw-types = { path = "../types" }
 gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
@@ -18,6 +19,8 @@ gw-generator = { path = "../generator" }
 gw-mem-pool = { path = "../mem-pool" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-version = { path = "../version" }
+gw-utils = { path = "../utils" }
+gw-polyjuice-sender-recover = { path = "../polyjuice-sender-recover" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-dynamic-config = { path = "../dynamic-config"}
 faster-hex = "0.4"

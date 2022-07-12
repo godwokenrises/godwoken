@@ -16,20 +16,20 @@ use gw_generator::{
 };
 
 use gw_mem_pool::pool::{MemPool, MemPoolCreateArgs, OutputParam};
-use gw_store::{traits::chain_store::ChainStore, Store};
+use gw_store::{mem_pool_state::MemPoolState, traits::chain_store::ChainStore, Store};
 use gw_types::{
     bytes::Bytes,
     core::{AllowedContractType, AllowedEoaType, ScriptHashType},
     offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupContext},
     packed::{
-        AllowedTypeHash, CellOutput, DepositLockArgs, DepositRequest, L2BlockCommittedInfo,
-        RawTransaction, RollupAction, RollupActionUnion, RollupConfig, RollupSubmitBlock, Script,
-        Transaction, WitnessArgs,
+        AllowedTypeHash, CellOutput, DepositLockArgs, DepositRequest, L2Block,
+        L2BlockCommittedInfo, RawTransaction, RollupAction, RollupActionUnion, RollupConfig,
+        RollupSubmitBlock, Script, Transaction, WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::*,
 };
 use lazy_static::lazy_static;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 
 use std::{collections::HashSet, time::Duration};
 use std::{fs, path::PathBuf, sync::Arc};
@@ -150,6 +150,16 @@ lazy_static! {
         hasher.finalize(&mut buf);
         buf
     };
+    pub static ref POLYJUICE_VALIDATOR_PROGRAM: Bytes = fs::read(&POLYJUICE_VALIDATOR_PATH)
+        .expect("read polyjuice validator program")
+        .into();
+    pub static ref POLYJUICE_VALIDATOR_CODE_HASH: [u8; 32] = {
+        let mut buf = [0u8; 32];
+        let mut hasher = new_blake2b();
+        hasher.update(&POLYJUICE_VALIDATOR_PROGRAM);
+        hasher.finalize(&mut buf);
+        buf
+    };
 }
 
 // meta contract
@@ -170,7 +180,97 @@ pub const ETH_REGISTRY_VALIDATOR_PATH: &str =
 pub const ETH_REGISTRY_GENERATOR_PATH: &str =
     "../../.tmp/binaries/godwoken-scripts/eth-addr-reg-validator";
 
+// polyjuice
+pub const POLYJUICE_VALIDATOR_PATH: &str = "../../.tmp/binaries/godwoken-polyjuice/validator";
+pub const POLYJUICE_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-polyjuice/generator";
+
 pub const DEFAULT_FINALITY_BLOCKS: u64 = 6;
+
+pub struct TestChain {
+    pub l1_committed_block_number: u64,
+    pub rollup_type_script: Script,
+    pub inner: Chain,
+}
+
+impl TestChain {
+    pub async fn setup(rollup_type_script: Script) -> Self {
+        let inner = setup_chain(rollup_type_script.clone()).await;
+
+        Self {
+            l1_committed_block_number: 1,
+            rollup_type_script,
+            inner,
+        }
+    }
+
+    pub fn chain_id(&self) -> u64 {
+        let config = &self.inner.generator().rollup_context().rollup_config;
+        config.chain_id().unpack()
+    }
+
+    pub async fn mem_pool_state(&self) -> Arc<MemPoolState> {
+        let mem_pool = self.inner.mem_pool().as_ref().unwrap().lock().await;
+        mem_pool.mem_pool_state()
+    }
+
+    pub async fn mem_pool(&self) -> MutexGuard<'_, MemPool> {
+        self.inner.mem_pool().as_ref().unwrap().lock().await
+    }
+
+    pub fn rollup_type_hash(&self) -> H256 {
+        self.inner.generator().rollup_context().rollup_script_hash
+    }
+
+    pub fn store(&self) -> &Store {
+        self.inner.store()
+    }
+
+    pub fn last_valid_block(&self) -> L2Block {
+        self.inner
+            .store()
+            .get_snapshot()
+            .get_last_valid_tip_block()
+            .unwrap()
+    }
+
+    pub async fn produce_block(
+        &mut self,
+        deposit_requests: Vec<DepositRequest>,
+        withdrawals: Vec<WithdrawalRequestExtra>,
+    ) -> anyhow::Result<()> {
+        let rollup_cell = CellOutput::new_builder()
+            .type_(Some(self.rollup_type_script.clone()).pack())
+            .build();
+
+        let block_result = {
+            let mut mem_pool = self.mem_pool().await;
+            construct_block(&self.inner, &mut mem_pool, deposit_requests.clone()).await?
+        };
+
+        self.l1_committed_block_number += 1;
+        let update_action = L1Action {
+            context: L1ActionContext::SubmitBlock {
+                l2block: block_result.block.clone(),
+                deposit_requests,
+                deposit_asset_scripts: Default::default(),
+                withdrawals,
+            },
+            transaction: build_sync_tx(rollup_cell, block_result),
+            l2block_committed_info: L2BlockCommittedInfo::new_builder()
+                .number(self.l1_committed_block_number.pack())
+                .build(),
+        };
+        let param = SyncParam {
+            updates: vec![update_action],
+            reverts: Default::default(),
+        };
+
+        self.inner.sync(param).await?;
+        assert!(self.inner.last_sync_event().is_success());
+
+        Ok(())
+    }
+}
 
 pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
     let sudt_validator_script_type_hash: [u8; 32] =
@@ -194,6 +294,12 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
             validator_script_type_hash: (*ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH).into(),
             backend_type: gw_config::BackendType::EthAddrReg,
         },
+        BackendConfig {
+            validator_path: POLYJUICE_VALIDATOR_PATH.into(),
+            generator_path: POLYJUICE_GENERATOR_PATH.into(),
+            validator_script_type_hash: (*POLYJUICE_VALIDATOR_CODE_HASH).into(),
+            backend_type: gw_config::BackendType::Polyjuice,
+        },
     ];
     BackendManage::from_config(vec![BackendSwitchConfig {
         switch_height: 0,
@@ -214,11 +320,16 @@ pub async fn setup_chain(rollup_type_script: Script) -> Chain {
         )
         .allowed_contract_type_hashes(
             vec![
+                AllowedTypeHash::new(AllowedContractType::Meta, META_VALIDATOR_SCRIPT_TYPE_HASH),
+                AllowedTypeHash::new(AllowedContractType::Sudt, *SUDT_VALIDATOR_CODE_HASH),
                 AllowedTypeHash::new(
                     AllowedContractType::EthAddrReg,
                     *ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH,
                 ),
-                AllowedTypeHash::new(AllowedContractType::Sudt, *SUDT_VALIDATOR_CODE_HASH),
+                AllowedTypeHash::new(
+                    AllowedContractType::Polyjuice,
+                    *POLYJUICE_VALIDATOR_CODE_HASH,
+                ),
             ]
             .pack(),
         )

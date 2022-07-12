@@ -1718,6 +1718,7 @@ dependencies = [
  "gw-jsonrpc-types",
  "gw-mem-pool",
  "gw-p2p-network",
+ "gw-polyjuice-sender-recover",
  "gw-rpc-client",
  "gw-rpc-server",
  "gw-store",
@@ -1973,6 +1974,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "gw-polyjuice-sender-recover"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gw-common",
+ "gw-generator",
+ "gw-traits",
+ "gw-types",
+ "gw-utils",
+ "log",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "gw-replay-chain"
 version = "0.1.0"
 dependencies = [
@@ -2053,14 +2069,17 @@ dependencies = [
  "gw-challenge",
  "gw-common",
  "gw-config",
+ "gw-db",
  "gw-dynamic-config",
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
+ "gw-polyjuice-sender-recover",
  "gw-rpc-client",
  "gw-store",
  "gw-traits",
  "gw-types",
+ "gw-utils",
  "gw-version",
  "hyper",
  "jsonrpc-v2",
@@ -2121,7 +2140,9 @@ dependencies = [
  "gw-dynamic-config",
  "gw-eoa-mapping",
  "gw-generator",
+ "gw-jsonrpc-types",
  "gw-mem-pool",
+ "gw-polyjuice-sender-recover",
  "gw-rpc-client",
  "gw-rpc-server",
  "gw-store",
@@ -2129,6 +2150,7 @@ dependencies = [
  "gw-types",
  "gw-utils",
  "hex",
+ "jsonrpc-v2",
  "lazy_static",
  "rand 0.8.5",
  "secp256k1 0.21.2",

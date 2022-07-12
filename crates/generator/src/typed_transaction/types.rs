@@ -74,6 +74,7 @@ impl MetaTx {
 
         match args.to_enum() {
             CreateAccount(args) => Some(args.fee().amount().unpack().into()),
+            BatchCreateEthAccounts(args) => Some(args.fee().amount().unpack().into()),
         }
     }
 

@@ -1038,6 +1038,7 @@ Response
 * params:
     * `raw_l2tx`: [`SerializedRawL2Transaction`](#type-serializedmoleculeschema) - Serialized Raw L2 Transaction
     * `block_number`(optional): [`Uint64`](#type-uint64) - block number, default is tip
+    * `registry_address`(optional): [`SerializedRegistryAddress`](#type-serializedregistryaddress) - Serialized registry address, **required when the `from_id` of a Polyjuice transaction is 0**
 * result: [`RunResult`](#type-runresult)
 
 
@@ -1156,9 +1157,14 @@ Response
 ### Method `gw_submit_l2transaction`
 * params:
     * `l2tx`: [`SerializedL2Transaction`](#type-serializdmoleculeschema) - L2 transaction
-* result: [`H256`](#type-h256)
+* result: [`H256`](#type-h256) `|` `null`
 
 Submit layer2 transaction. This RPC may has rate limit.
+
+When the `from_id` of a Polyjuice transaction is 0, this RPC returns `null` because the transaction
+`from_id` will be updated before packing. To query the status of a pending transaction with `from_id = 0`,
+please use the hash of the transaction signature as parameter.
+
 
 #### Examples
 
