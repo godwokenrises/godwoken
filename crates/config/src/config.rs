@@ -168,6 +168,29 @@ pub struct BlockProducerConfig {
     pub wallet_config: WalletConfig,
     #[serde(default = "default_withdrawal_unlocker_wallet")]
     pub withdrawal_unlocker_wallet_config: Option<WalletConfig>,
+    #[serde(flatten, default)]
+    pub psc_config: PscConfig,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PscConfig {
+    /// Maximum number local blocks. Local blocks are blocks that have not been
+    /// submitted to L1. Default is 3.
+    pub local_limit: u64,
+    /// Maximum number of submitted (but not confirmed) blocks. Default is 3.
+    pub submitted_limit: u64,
+    /// Minimum delay between blocks. Default is 7 seconds.
+    pub block_interval_secs: u64,
+}
+
+impl Default for PscConfig {
+    fn default() -> Self {
+        Self {
+            local_limit: 3,
+            submitted_limit: 3,
+            block_interval_secs: 7,
+        }
+    }
 }
 
 fn default_check_mem_block_before_submit() -> bool {

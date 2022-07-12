@@ -5,6 +5,7 @@ use std::{fmt::Display, sync::Arc, time::Duration};
 use anyhow::{bail, ensure, Context, Result};
 use gw_chain::chain::{Chain, RevertedL1Action};
 use gw_common::H256;
+use gw_config::PscConfig;
 use gw_jsonrpc_types::ckb_jsonrpc_types::BlockNumber;
 use gw_mem_pool::pool::MemPool;
 use gw_rpc_client::{
@@ -31,9 +32,7 @@ use crate::{
 pub struct ProduceSubmitConfirm {
     context: Arc<PSCContext>,
     local_count: u64,
-    local_limit: u64,
     submitted_count: u64,
-    submitted_limit: u64,
 }
 
 pub struct PSCContext {
@@ -47,6 +46,7 @@ pub struct PSCContext {
     pub local_cells_manager: Mutex<LocalCellsManager>,
     pub chain_updater: ChainUpdater,
     pub rollup_type_script: Script,
+    pub psc_config: PscConfig,
 }
 
 impl ProduceSubmitConfirm {
@@ -103,9 +103,6 @@ impl ProduceSubmitConfirm {
             context,
             local_count,
             submitted_count,
-            // TODO: make this configurable.
-            local_limit: 3,
-            submitted_limit: 5,
         })
     }
 
@@ -172,13 +169,14 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
     let mut syncing = false;
     let sync_handle = tokio::spawn(async { anyhow::Ok(NumberHash::default()) });
     let mut sync_handle = AbortOnDropHandle::from(sync_handle);
-    let mut interval = tokio::time::interval(Duration::from_secs(3));
+    let config = &state.context.psc_config;
+    let mut interval = tokio::time::interval(Duration::from_secs(config.block_interval_secs));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tokio::select! {
             // Produce a new local block if the produce timer has expired and
             // there are not too many local blocks.
-            _ = interval.tick(), if state.local_count < state.local_limit => {
+            _ = interval.tick(), if state.local_count < config.local_limit => {
                 log::info!("producing next block");
                 if let Err(e) = produce_local_block(&state.context).await {
                     log::warn!("failed to produce local block: {:#}", e);
@@ -217,7 +215,7 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
             }
             else => {}
         }
-        if !submitting && state.local_count > 0 && state.submitted_count < state.submitted_limit {
+        if !submitting && state.local_count > 0 && state.submitted_count < config.submitted_limit {
             submitting = true;
             let context = state.context.clone();
             submit_handle.replace_with(tokio::spawn(async move {

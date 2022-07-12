@@ -805,6 +805,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
             local_cells_manager: Mutex::new(LocalCellsManager::default()),
             chain_updater,
             rollup_type_script,
+            psc_config: config.block_producer.as_ref().unwrap().psc_config.clone(),
         }))
         .await
         .context("create ProduceSubmitConfirm")?;
