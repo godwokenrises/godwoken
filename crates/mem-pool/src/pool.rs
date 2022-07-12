@@ -961,6 +961,7 @@ impl MemPool {
             self.pending_deposits = {
                 crate::deposit::sanitize_deposit_cells(
                     self.generator.rollup_context(),
+                    &self.mem_block_config,
                     cells,
                     &state,
                 )

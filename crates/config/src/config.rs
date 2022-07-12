@@ -168,7 +168,7 @@ pub struct BlockProducerConfig {
     pub wallet_config: WalletConfig,
     #[serde(default = "default_withdrawal_unlocker_wallet")]
     pub withdrawal_unlocker_wallet_config: Option<WalletConfig>,
-    #[serde(flatten, default)]
+    #[serde(flatten)]
     pub psc_config: PscConfig,
 }
 
@@ -318,6 +318,12 @@ pub struct MemBlockConfig {
     pub max_deposits: usize,
     pub max_withdrawals: usize,
     pub max_txs: usize,
+    /// Only package deposits whose block timeout >= deposit_block_timeout.
+    pub deposit_block_timeout: u64,
+    /// Only package deposits whose timestamp timeout >= deposit_timestamp_timeout.
+    pub deposit_timestamp_timeout: u64,
+    /// Only package deposits whose epoch timeout >= deposit_epoch_timeout.
+    pub deposit_epoch_timeout: u64,
 }
 
 // Field default value for backward config file compitability
@@ -345,6 +351,12 @@ impl Default for MemBlockConfig {
             max_deposits: 100,
             max_withdrawals: 100,
             max_txs: 1000,
+            // 150 blocks, ~20 minutes.
+            deposit_block_timeout: 150,
+            // 20 minutes.
+            deposit_timestamp_timeout: 1_200_000,
+            // 1 epoch, about 4 hours, this option is supposed not actually used, so we simply set a value
+            deposit_epoch_timeout: 1,
         }
     }
 }
