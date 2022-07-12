@@ -705,7 +705,8 @@ impl Chain {
 
                             let reverted_block_hashes = db
                                 .get_reverted_block_hashes_by_root(&current_reverted_block_root)?
-                                .expect("reverted block hashes should exists");
+                                .expect("reverted block hashes should exists")
+                                .block_hashes;
 
                             db.rewind_reverted_block_smt(reverted_block_hashes)?;
                             current_reverted_block_root = db.get_reverted_block_smt_root()?;
@@ -770,7 +771,8 @@ impl Chain {
 
                         let reverted_block_hashes = db
                             .get_reverted_block_hashes_by_root(&current_reverted_block_root)?
-                            .expect("reverted block hashes should exists");
+                            .expect("reverted block hashes should exists")
+                            .block_hashes;
 
                         db.rewind_reverted_block_smt(reverted_block_hashes)?;
                         current_reverted_block_root = db.get_reverted_block_smt_root()?;

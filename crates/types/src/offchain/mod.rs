@@ -6,6 +6,7 @@ mod pool;
 mod rollup_context;
 mod rpc;
 mod run_result;
+mod store;
 
 pub use error_receipt::*;
 pub use exported_block::*;
@@ -15,3 +16,4 @@ pub use pool::*;
 pub use rollup_context::*;
 pub use rpc::*;
 pub use run_result::*;
+pub use store::*;
