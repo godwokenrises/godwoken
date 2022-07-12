@@ -665,14 +665,6 @@ async fn confirm_blocks(
             {
                 Some(TxStatus::Committed) => {
                     log::info!("block {next} confirmed");
-                    let block_hash = store_tx
-                        .get_block_hash_by_number(next)?
-                        .context("get block hash")?;
-                    let nh = NumberHash::new_builder()
-                        .block_hash(block_hash.pack())
-                        .number(next.pack())
-                        .build();
-                    store_tx.set_last_confirmed_block_number_hash(&nh.as_reader())?;
                 }
                 _ => break,
             }
@@ -741,9 +733,6 @@ async fn sync_l1_unknown(
             }
 
             log::info!("syncing L1 transaction {}", tx.tx_hash);
-            // TODO: we may get transactions that are submitted but not yet
-            // confirmed from last run. In this case, we should simply mark the
-            // corresponding block as confirmed instead of reverting.
             if !reverted {
                 log::info!("L2 fork detected, reverting to L2 block {last_confirmed}");
                 revert(psc, &store_tx, last_confirmed).await?;
