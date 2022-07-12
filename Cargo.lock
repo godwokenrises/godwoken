@@ -1898,6 +1898,7 @@ dependencies = [
  "log",
  "rlp",
  "secp256k1 0.20.3",
+ "sentry",
  "sha3",
  "tempfile",
  "thiserror",

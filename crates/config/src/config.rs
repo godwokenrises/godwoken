@@ -45,6 +45,8 @@ pub struct Config {
     pub dynamic_config: DynamicConfig,
     #[serde(default)]
     pub p2p_network_config: Option<P2PNetworkConfig>,
+    #[serde(default)]
+    pub contract_log_config: ContractLogConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -410,4 +412,18 @@ pub struct GithubConfigUrl {
 pub struct DynamicConfig {
     pub fee_config: FeeConfig,
     pub rpc_config: RPCConfig,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ContractLogConfig {
+    Default,       //print contract log in place
+    Redirect,      //print all of the contract logs, send error logs to sentry
+    RedirectError, //only print logs when the tx hit an error, send error logs to sentry
+}
+
+impl Default for ContractLogConfig {
+    fn default() -> Self {
+        ContractLogConfig::Default
+    }
 }
