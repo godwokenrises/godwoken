@@ -162,14 +162,14 @@ pub struct RegistryAddressConfig {
 pub struct BlockProducerConfig {
     #[serde(default = "default_check_mem_block_before_submit")]
     pub check_mem_block_before_submit: bool,
+    #[serde(flatten)]
+    pub psc_config: PscConfig,
     pub block_producer: RegistryAddressConfig,
     pub rollup_config_cell_dep: CellDep,
     pub challenger_config: ChallengerConfig,
     pub wallet_config: WalletConfig,
     #[serde(default = "default_withdrawal_unlocker_wallet")]
     pub withdrawal_unlocker_wallet_config: Option<WalletConfig>,
-    #[serde(flatten)]
-    pub psc_config: PscConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
