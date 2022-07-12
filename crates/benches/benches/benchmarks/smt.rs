@@ -174,7 +174,12 @@ impl BenchExecutionEnvironment {
             manage
         };
 
-        let generator = Generator::new(backend_manage, account_lock_manage, rollup_context);
+        let generator = Generator::new(
+            backend_manage,
+            account_lock_manage,
+            rollup_context,
+            Default::default(),
+        );
 
         Self::init_genesis(&store, &genesis_config, accounts);
         let mem_pool_state = MemPoolState::new(Arc::new(MemStore::new(store.get_snapshot())), true);

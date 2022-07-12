@@ -483,6 +483,7 @@ impl BaseInitComponents {
                 backend_manage,
                 account_lock_manage,
                 rollup_context.clone(),
+                config.contract_log_config.clone(),
             ))
         };
 

@@ -30,6 +30,7 @@ use gw_common::{
     },
     H256,
 };
+use gw_config::ContractLogConfig;
 use gw_store::{state::state_db::StateContext, transaction::StoreTransaction};
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
@@ -103,8 +104,9 @@ impl Generator {
         backend_manage: BackendManage,
         account_lock_manage: AccountLockManage,
         rollup_context: RollupContext,
+        contract_log_config: ContractLogConfig,
     ) -> Self {
-        let redir_log_handler = RedirLogHandler::new();
+        let redir_log_handler = RedirLogHandler::new(contract_log_config);
         Generator {
             backend_manage,
             account_lock_manage,

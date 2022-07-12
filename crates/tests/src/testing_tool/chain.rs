@@ -433,6 +433,7 @@ pub fn chain_generator(chain: &Chain, rollup_type_script: Script) -> Arc<Generat
         backend_manage,
         account_lock_manage,
         rollup_context,
+        Default::default(),
     ))
 }
 
@@ -475,6 +476,7 @@ pub async fn setup_chain_with_account_lock_manage(
         backend_manage,
         account_lock_manage,
         rollup_context,
+        Default::default(),
     ));
     let provider = opt_mem_pool_provider.unwrap_or_default();
     let args = MemPoolCreateArgs {
