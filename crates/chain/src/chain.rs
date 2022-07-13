@@ -1026,7 +1026,7 @@ impl Chain {
         // update chain
         db.insert_block(
             l2block.clone(),
-            global_state,
+            global_state.clone(),
             withdrawal_receipts,
             prev_txs_state,
             tx_receipts,
@@ -1036,6 +1036,7 @@ impl Chain {
         db.insert_asset_scripts(deposit_asset_scripts)?;
         db.attach_block(l2block.clone())?;
         self.local_state.tip = l2block;
+        self.local_state.last_global_state = global_state;
         Ok(None)
     }
 }
