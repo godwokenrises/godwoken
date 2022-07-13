@@ -135,7 +135,7 @@ impl Generator {
     ) -> Result<RunResult, TransactionError> {
         const INVALID_CYCLES_EXIT_CODE: i8 = -1;
 
-        self.redir_log_handler.start(raw_tx.clone());
+        self.redir_log_handler.start(raw_tx);
         let mut run_result = RunResult::default();
         let used_cycles;
         let exit_code;

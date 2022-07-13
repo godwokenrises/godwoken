@@ -1,14 +1,11 @@
 use gw_config::ContractLogConfig;
-use gw_types::{
-    bytes::{BufMut, BytesMut},
-    packed::RawL2Transaction,
-};
+use gw_types::packed::RawL2Transaction;
 use tokio::sync::mpsc;
 
 #[derive(Debug)]
 pub(crate) enum RedirLogMsg {
-    Session(RawL2Transaction),
-    Log(Vec<u8>),
+    Session(String), // tx hash
+    Log(String),
     Flush(i8), //exit code
 }
 pub(crate) struct RedirLogActor {
@@ -24,8 +21,8 @@ impl RedirLogActor {
 
     fn handle_msg(&mut self, msg: RedirLogMsg) {
         match msg {
-            RedirLogMsg::Session(tx) => self.ctx.setup(tx),
-            RedirLogMsg::Log(log) => self.ctx.append_log(&log),
+            RedirLogMsg::Session(tx_hash) => self.ctx.setup(tx_hash),
+            RedirLogMsg::Log(log) => self.ctx.append_log(log),
             RedirLogMsg::Flush(exit_code) => self.ctx.flush(exit_code),
         }
     }
@@ -33,57 +30,46 @@ impl RedirLogActor {
 
 // We can store the whole context of contract execution with tx, logs and exit code.
 struct Context {
-    tx: Option<RawL2Transaction>,
-    sink: BytesMut,
+    buf: String,
     config: ContractLogConfig,
 }
 
 impl Context {
     fn init(config: ContractLogConfig) -> Self {
         Self {
-            tx: None,
-            sink: BytesMut::with_capacity(1024),
+            buf: String::with_capacity(1024),
             config,
         }
     }
 
-    fn setup(&mut self, tx: RawL2Transaction) {
-        self.tx = Some(tx);
+    fn setup(&mut self, tx_hash: String) {
+        self.buf.clear();
+        self.buf.push_str(&tx_hash);
+        self.buf.push('\n');
     }
 
-    fn append_log(&mut self, log: &[u8]) {
-        self.sink.put(log);
-        self.sink.put_u8(b'\n');
+    fn append_log(&mut self, log: String) {
+        self.buf.push_str(&log);
+        self.buf.push('\n');
     }
 
     fn flush(&mut self, exit_code: i8) {
-        if let Ok(s) = std::str::from_utf8(&self.sink) {
-            if self.config == ContractLogConfig::Redirect
-                || (self.config == ContractLogConfig::RedirectError && exit_code != 0)
-            {
-                log::debug!("[contract debug]: {}", s);
-                log::debug!("contract exit code: {}", exit_code);
-            }
-            //send to senty if exit code != 0
-            //format:
-            //  tx_hash
-            //  [contrace logs]
-            //  ...
-            //  exit code: 3
-            if exit_code != 0 {
-                let mut entries: Vec<String> = Vec::with_capacity(3);
-                if let Some(tx) = &self.tx {
-                    let tx_hash = hex::encode(tx.as_reader().hash());
-                    entries.push(tx_hash);
-                }
-                entries.push(s.to_string());
-                entries.push(format!("exit code: {}", exit_code));
-                let msg = entries.join("\n");
-                sentry::capture_message(&msg, sentry::Level::Error);
-            }
+        self.buf.push_str("exit code: ");
+        self.buf.push_str(&exit_code.to_string());
+        if self.config == ContractLogConfig::Redirect
+            || (self.config == ContractLogConfig::RedirectError && exit_code != 0)
+        {
+            log::debug!("[contract debug]: {}", self.buf);
         }
-        self.sink.clear();
-        self.tx = None;
+        //send to senty if exit code != 0
+        //format:
+        //  tx_hash
+        //  [contrace logs]
+        //  ...
+        //  exit code: 3
+        if exit_code != 0 {
+            sentry::capture_message(&self.buf, sentry::Level::Error);
+        }
     }
 }
 
@@ -112,15 +98,15 @@ impl RedirLogHandler {
         Self { sender }
     }
 
-    pub(crate) fn start(&self, tx: RawL2Transaction) {
-        self.send_msg(RedirLogMsg::Session(tx));
+    pub(crate) fn start(&self, tx: &RawL2Transaction) {
+        self.send_msg(RedirLogMsg::Session(hex::encode(tx.as_reader().hash())));
     }
 
     pub(crate) fn flush(&self, exit_code: i8) {
         self.send_msg(RedirLogMsg::Flush(exit_code));
     }
 
-    pub(crate) fn append_log(&self, log: Vec<u8>) {
+    pub(crate) fn append_log(&self, log: String) {
         self.send_msg(RedirLogMsg::Log(log));
     }
 
@@ -143,9 +129,7 @@ impl RedirLogHandler {
             },
             None => {
                 if let RedirLogMsg::Log(log) = msg {
-                    if let Ok(s) = std::str::from_utf8(&log) {
-                        log::debug!("[contract debug]: {}", s);
-                    }
+                    log::debug!("[contract debug]: {}", log);
                 }
             }
         }
@@ -169,11 +153,11 @@ mod tests {
             .build();
 
         let event = sentry::test::with_captured_events(|| {
-            ctx.setup(tx.clone());
-            ctx.append_log(b"debug log");
+            ctx.setup(hex::encode(tx.as_reader().hash()));
+            ctx.append_log("debug log".to_string());
             ctx.flush(1);
         });
-        let target = Some("05bb2c2e17393dea8bd1206a0b2ab104dec2593f1b91be4d764d3904b3a56847\ndebug log\n\nexit code: 1".to_string());
+        let target = Some("05bb2c2e17393dea8bd1206a0b2ab104dec2593f1b91be4d764d3904b3a56847\ndebug log\nexit code: 1".to_string());
         assert_eq!(target, event[0].message);
     }
 

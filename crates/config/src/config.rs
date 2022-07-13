@@ -20,6 +20,7 @@ pub enum Trace {
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     pub node_mode: NodeMode,
+    #[serde(default)]
     pub contract_log_config: ContractLogConfig,
     pub backend_switches: Vec<BackendSwitchConfig>,
     pub genesis: GenesisConfig,
