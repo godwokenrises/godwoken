@@ -152,6 +152,11 @@ impl ProduceSubmitConfirm {
                                 local_cells_manager.lock_cell(c.out_point());
                             }
                         }
+                        let new_tip = snap.get_last_valid_tip_block_hash()?;
+                        let mut mem_pool = self.context.mem_pool.lock().await;
+                        mem_pool
+                            .notify_new_tip(new_tip, &local_cells_manager)
+                            .await?;
                     }
                     self.local_count = last_valid - last_submitted;
                     self.submitted_count = last_submitted - last_confirmed;
