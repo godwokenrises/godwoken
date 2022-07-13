@@ -598,8 +598,8 @@ impl<'a, S: State, C: ChainView> L2Syscalls<'a, S, C> {
             buffer.push(byte);
             addr += 1;
         }
-
-        self.redir_log_handler.append_log(buffer);
+        let s = String::from_utf8(buffer).map_err(|_| VMError::ParseError)?;
+        self.redir_log_handler.append_log(s);
         Ok(())
     }
 }
