@@ -909,9 +909,12 @@ impl MemPool {
         // check whether the deposited cells are live
         if !force_expired {
             for deposit in &self.pending_deposits {
+                if local_cells_manager.is_dead(&deposit.cell.out_point) {
+                    force_expired = true;
+                    break;
+                }
                 match self
                     .provider
-                    // TODO: exclude local_cells_manager dead cells.
                     .get_cell(deposit.cell.out_point.clone())
                     .await?
                 {
