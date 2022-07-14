@@ -851,19 +851,23 @@ impl Chain {
             }
         }
 
-        // update layer1 actions
-        log::debug!(target: "sync-block", "sync {} actions", param.updates.len());
-        for (i, action) in param.updates.into_iter().enumerate() {
-            let t = Instant::now();
-            self.update_l1action(&db, action)?;
-            log::debug!(target: "sync-block", "process {}th action cost {}ms", i, t.elapsed().as_millis());
-            match self.last_sync_event() {
-                SyncEvent::Success => (),
-                _ => db.commit()?,
+        let updates = param.updates;
+        tokio::task::block_in_place(|| {
+            // update layer1 actions
+            log::debug!(target: "sync-block", "sync {} actions", updates.len());
+            for (i, action) in updates.into_iter().enumerate() {
+                let t = Instant::now();
+                self.update_l1action(&db, action)?;
+                log::debug!(target: "sync-block", "process {}th action cost {}ms", i, t.elapsed().as_millis());
+                match self.last_sync_event() {
+                    SyncEvent::Success => (),
+                    _ => db.commit()?,
+                }
             }
-        }
 
-        db.commit()?;
+            db.commit()?;
+            anyhow::Ok(())
+        })?;
 
         let tip_block_hash: H256 = self.local_state.tip.hash().into();
         if let Some(mem_pool) = &self.mem_pool {
