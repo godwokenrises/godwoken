@@ -3,7 +3,6 @@ pub mod chain_updater;
 pub mod challenger;
 pub mod cleaner;
 pub mod custodian;
-pub mod db_block_validator;
 pub mod debugger;
 pub mod deposit;
 pub mod produce_block;

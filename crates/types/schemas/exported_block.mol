@@ -1,0 +1,15 @@
+import blockchain;
+import godwoken;
+import store;
+
+vector Byte32VecVec <Byte32Vec>;
+option Byte32VecVecOpt (Byte32VecVec);
+
+table ExportedBlock {
+    block: L2Block,
+    post_global_state: GlobalState,
+    deposit_requests: DepositRequestVec,
+    deposit_asset_scripts: ScriptVec,
+    withdrawals: WithdrawalRequestExtraVec,
+    bad_block_hashes: Byte32VecVecOpt,
+}

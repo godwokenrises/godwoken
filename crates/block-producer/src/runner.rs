@@ -34,6 +34,7 @@ use gw_mem_pool::{
     sync::p2p,
 };
 use gw_p2p_network::P2PNetwork;
+use gw_polyjuice_sender_recover::recover::PolyjuiceSenderRecover;
 use gw_rpc_client::{
     ckb_client::CKBClient, contract::ContractsCellDepManager, error::RPCRequestError,
     indexer_client::CKBIndexerClient, rpc_client::RPCClient,
@@ -178,11 +179,15 @@ impl ChainTask {
                         log::error!("[polling] challenger event: {} error: {}", event, err);
                         return Ok(None);
                     }
-                    bail!(
-                        "Error occurred when polling challenger, event: {}, error: {}",
-                        event,
-                        err
-                    );
+                    if err.to_string().contains("TransactionFailedToResolve") {
+                        log::info!("[polling] challenger outdated rollup status, wait update");
+                    } else {
+                        bail!(
+                            "Error occurred when polling challenger, event: {}, error: {}",
+                            event,
+                            err
+                        );
+                    }
                 }
             }
 
@@ -412,6 +417,7 @@ impl BaseInitComponents {
                 backend_manage,
                 account_lock_manage,
                 rollup_context.clone(),
+                config.contract_log_config.clone(),
             ))
         };
 
@@ -753,6 +759,16 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     };
 
     // RPC registry
+    let polyjuice_sender_recover = {
+        log::info!("[tx from zero] use block producer wallet");
+
+        let block_producer_wallet = config
+            .block_producer
+            .as_ref()
+            .map(|config| Wallet::from_config(&config.wallet_config).with_context(|| "init wallet"))
+            .transpose()?;
+        PolyjuiceSenderRecover::create(generator.rollup_context(), block_producer_wallet)?
+    };
     let args = RegistryArgs {
         store: store.clone(),
         mem_pool: mem_pool.clone(),
@@ -767,6 +783,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         send_tx_rate_limit: config.dynamic_config.rpc_config.send_tx_rate_limit.clone(),
         server_config: config.rpc_server.clone(),
         dynamic_config_manager,
+        polyjuice_sender_recover,
     };
 
     let rpc_registry = Registry::create(args).await;

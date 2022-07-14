@@ -1,2 +1,2 @@
 pub mod context;
-mod eth_registry;
+pub mod eth_registry;

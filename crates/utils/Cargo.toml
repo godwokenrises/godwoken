@@ -11,6 +11,7 @@ gw-config = { path = "../config" }
 gw-common = { path = "../common" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
+gw-store = { path = "../store" }
 anyhow = "1.0"
 faster-hex = "0.4"
 ckb-crypto = "0.100.0"

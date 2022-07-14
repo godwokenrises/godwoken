@@ -24,12 +24,17 @@ use gw_types::{
 };
 use std::cmp;
 
-use self::error_codes::{
-    GW_ERROR_ACCOUNT_NOT_FOUND, GW_ERROR_DUPLICATED_SCRIPT_HASH, GW_ERROR_INVALID_ACCOUNT_SCRIPT,
-    GW_ERROR_NOT_FOUND, GW_ERROR_RECOVER, GW_ERROR_UNKNOWN_SCRIPT_CODE_HASH, SUCCESS,
+use self::{
+    error_codes::{
+        GW_ERROR_ACCOUNT_NOT_FOUND, GW_ERROR_DUPLICATED_SCRIPT_HASH,
+        GW_ERROR_INVALID_ACCOUNT_SCRIPT, GW_ERROR_NOT_FOUND, GW_ERROR_RECOVER,
+        GW_ERROR_UNKNOWN_SCRIPT_CODE_HASH, SUCCESS,
+    },
+    redir_log::RedirLogHandler,
 };
 
 pub mod error_codes;
+pub(crate) mod redir_log;
 
 /* Constants */
 // 25KB is max ethereum contract code size
@@ -66,6 +71,7 @@ pub(crate) struct L2Syscalls<'a, S, C> {
     pub(crate) raw_tx: &'a RawL2Transaction,
     pub(crate) code_store: &'a dyn CodeStore,
     pub(crate) result: &'a mut RunResult,
+    pub(crate) redir_log_handler: &'a RedirLogHandler,
 }
 
 #[allow(dead_code)]
@@ -592,9 +598,8 @@ impl<'a, S: State, C: ChainView> L2Syscalls<'a, S, C> {
             buffer.push(byte);
             addr += 1;
         }
-
         let s = String::from_utf8(buffer).map_err(|_| VMError::ParseError)?;
-        log::debug!("[contract debug]: {}", s);
+        self.redir_log_handler.append_log(s);
         Ok(())
     }
 }

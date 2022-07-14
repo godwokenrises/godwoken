@@ -1,0 +1,8 @@
+// For backward compitability test
+
+import blockchain;
+import godwoken;
+
+union DeprecatedMetaContractArgs {
+    CreateAccount,
+}

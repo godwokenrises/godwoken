@@ -6,6 +6,7 @@ use crate::{
     constants::{L2TX_MAX_CYCLES, MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
     error::{BlockError, TransactionValidateError, WithdrawalError},
     run_result_state::RunResultState,
+    syscalls::redir_log::RedirLogHandler,
     typed_transaction::types::TypedRawTransaction,
     types::vm::VMVersion,
     utils::get_tx_type,
@@ -29,6 +30,7 @@ use gw_common::{
     },
     H256,
 };
+use gw_config::ContractLogConfig;
 use gw_store::{state::state_db::StateContext, transaction::StoreTransaction};
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
@@ -94,6 +96,7 @@ pub struct Generator {
     backend_manage: BackendManage,
     account_lock_manage: AccountLockManage,
     rollup_context: RollupContext,
+    redir_log_handler: RedirLogHandler,
 }
 
 impl Generator {
@@ -101,11 +104,14 @@ impl Generator {
         backend_manage: BackendManage,
         account_lock_manage: AccountLockManage,
         rollup_context: RollupContext,
+        contract_log_config: ContractLogConfig,
     ) -> Self {
+        let redir_log_handler = RedirLogHandler::new(contract_log_config);
         Generator {
             backend_manage,
             account_lock_manage,
             rollup_context,
+            redir_log_handler,
         }
     }
 
@@ -129,6 +135,7 @@ impl Generator {
     ) -> Result<RunResult, TransactionError> {
         const INVALID_CYCLES_EXIT_CODE: i8 = -1;
 
+        self.redir_log_handler.start(raw_tx);
         let mut run_result = RunResult::default();
         let used_cycles;
         let exit_code;
@@ -151,6 +158,7 @@ impl Generator {
                     account_lock_manage: &self.account_lock_manage,
                     result: &mut run_result,
                     code_store: state,
+                    redir_log_handler: &self.redir_log_handler,
                 }))
                 .instruction_cycle_func(Box::new(instruction_cycles));
             let default_machine = machine_builder.build();
@@ -185,6 +193,7 @@ impl Generator {
                     return Err(err.into());
                 }
             }
+            self.redir_log_handler.flush(exit_code);
             log::debug!(
                 "[execute tx] VM machine_run time: {}ms, exit code: {} used_cycles: {}",
                 t.elapsed().as_millis(),

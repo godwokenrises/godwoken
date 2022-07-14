@@ -242,7 +242,10 @@ impl Chain {
         if let Some(mem_pool) = &self.mem_pool {
             if !self.complete_initial_syncing {
                 // Do first notify
-                let tip_block_hash: H256 = self.local_state.tip.hash().into();
+                let tip_block_hash: H256 = match self.challenge_target {
+                    Some(_) => self.store().get_last_valid_tip_block_hash()?,
+                    None => self.local_state.tip.hash().into(),
+                };
 
                 log::debug!("[complete_initial_syncing] acquire mem-pool",);
                 let t = Instant::now();
@@ -561,6 +564,7 @@ impl Chain {
                     assert_eq!(local_slice, submit_slice);
 
                     // Revert bad blocks
+                    let prev_reverted_block_root = db.get_reverted_block_smt_root()?;
                     db.revert_bad_blocks(&local_reverted_blocks)?;
                     log::debug!("bad blocks reverted");
 
@@ -568,6 +572,7 @@ impl Chain {
                         local_reverted_blocks.iter().map(|b| b.hash().into());
                     db.set_reverted_block_hashes(
                         &db.get_reverted_block_smt_root()?,
+                        prev_reverted_block_root,
                         reverted_block_hashes.collect(),
                     )?;
 
@@ -730,7 +735,8 @@ impl Chain {
 
                             let reverted_block_hashes = db
                                 .get_reverted_block_hashes_by_root(&current_reverted_block_root)?
-                                .expect("reverted block hashes should exists");
+                                .expect("reverted block hashes should exists")
+                                .block_hashes;
 
                             db.rewind_reverted_block_smt(reverted_block_hashes)?;
                             current_reverted_block_root = db.get_reverted_block_smt_root()?;
@@ -795,7 +801,8 @@ impl Chain {
 
                         let reverted_block_hashes = db
                             .get_reverted_block_hashes_by_root(&current_reverted_block_root)?
-                            .expect("reverted block hashes should exists");
+                            .expect("reverted block hashes should exists")
+                            .block_hashes;
 
                         db.rewind_reverted_block_smt(reverted_block_hashes)?;
                         current_reverted_block_root = db.get_reverted_block_smt_root()?;
@@ -842,7 +849,7 @@ impl Chain {
     /// Sync chain from layer1
     pub async fn sync(&mut self, param: SyncParam) -> Result<()> {
         let db = self.store.begin_transaction();
-        let is_revert_happend = !param.reverts.is_empty();
+        let is_l1_revert_happend = !param.reverts.is_empty();
         // revert layer1 actions
         if !param.reverts.is_empty() {
             // revert
@@ -850,6 +857,7 @@ impl Chain {
                 self.revert_l1action(&db, reverted_action)?;
             }
         }
+        let has_bad_block_before_update = self.challenge_target.is_some();
 
         let updates = param.updates;
         tokio::task::block_in_place(|| {
@@ -869,10 +877,14 @@ impl Chain {
             anyhow::Ok(())
         })?;
 
+        // Should reset mem pool after bad block is reverted. Deposit cell may pass cancel timeout
+        // and get reclaimed. Finalized custodians may be merged in bad block submit tx and this
+        // will not be reverted.
+        let is_bad_block_reverted = has_bad_block_before_update && self.challenge_target.is_none();
         let tip_block_hash: H256 = self.local_state.tip.hash().into();
         if let Some(mem_pool) = &self.mem_pool {
             if matches!(self.last_sync_event, SyncEvent::Success)
-                && (is_revert_happend || self.complete_initial_syncing)
+                && (is_l1_revert_happend || is_bad_block_reverted || self.complete_initial_syncing)
             {
                 // update mem pool state
                 log::debug!(target: "sync-block", "acquire mem-pool",);

@@ -1,12 +1,15 @@
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
+use gw_common::blake2b::new_blake2b;
+use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
 use gw_common::{state::State, H256};
 use gw_config::{
     ChainConfig, ConsensusConfig, FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit,
     RPCServerConfig,
 };
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
+use gw_generator::utils::get_tx_type;
 use gw_generator::{
     error::TransactionError, sudt::build_l2_sudt_script,
     verification::transaction::TransactionVerifier, ArcSwap, Generator,
@@ -28,6 +31,9 @@ use gw_mem_pool::fee::{
     queue::FeeQueue,
     types::{FeeEntry, FeeItem},
 };
+use gw_polyjuice_sender_recover::{
+    mem_execute_tx_state::MemExecuteTxStateTree, recover::PolyjuiceSenderRecover,
+};
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{
     chain_view::ChainView,
@@ -37,7 +43,10 @@ use gw_store::{
     CfMemStat, Store,
 };
 use gw_traits::CodeStore;
+use gw_types::offchain::RollupContext;
+use gw_types::packed::RawL2Transaction;
 use gw_types::{
+    bytes::Bytes,
     packed::{self, BlockInfo, Byte32, L2Transaction, RollupConfig, WithdrawalRequestExtra},
     prelude::*,
     U256,
@@ -52,8 +61,10 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
 use tracing::instrument;
+
+use crate::in_queue_request_map::{InQueueRequestHandle, InQueueRequestMap};
 
 static PROFILER_GUARD: Lazy<tokio::sync::Mutex<Option<ProfilerGuard>>> =
     Lazy::new(|| tokio::sync::Mutex::new(None));
@@ -67,6 +78,7 @@ type BoxedTestsRPCImpl = Box<dyn TestModeRPC + Send + Sync>;
 type GwUint64 = gw_jsonrpc_types::ckb_jsonrpc_types::Uint64;
 type GwUint32 = gw_jsonrpc_types::ckb_jsonrpc_types::Uint32;
 type RpcNodeMode = gw_jsonrpc_types::godwoken::NodeMode;
+type RegistryAddressJsonBytes = JsonBytes;
 
 const HEADER_NOT_FOUND_ERR_CODE: i64 = -32000;
 const INVALID_NONCE_ERR_CODE: i64 = -32001;
@@ -129,6 +141,16 @@ pub struct ExecutionTransactionContext {
     generator: Arc<Generator>,
     store: Store,
     mem_pool_state: Arc<MemPoolState>,
+    polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
+}
+
+pub struct SubmitTransactionContext {
+    in_queue_request_map: Option<Arc<InQueueRequestMap>>,
+    submit_tx: mpsc::Sender<(InQueueRequestHandle, Request)>,
+    mem_pool_state: Arc<MemPoolState>,
+    rate_limiter: Option<SendTransactionRateLimiter>,
+    rate_limit_config: Option<RPCRateLimit>,
+    polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
 }
 
 pub struct RegistryArgs<T> {
@@ -145,6 +167,7 @@ pub struct RegistryArgs<T> {
     pub chain_config: ChainConfig,
     pub consensus_config: ConsensusConfig,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
+    pub polyjuice_sender_recover: PolyjuiceSenderRecover,
 }
 
 pub struct Registry {
@@ -156,7 +179,7 @@ pub struct Registry {
     mem_pool_config: MemPoolConfig,
     backend_info: Vec<BackendInfo>,
     node_mode: NodeMode,
-    submit_tx: async_channel::Sender<Request>,
+    submit_tx: mpsc::Sender<(InQueueRequestHandle, Request)>,
     rpc_client: RPCClient,
     send_tx_rate_limit: Option<RPCRateLimit>,
     server_config: RPCServerConfig,
@@ -164,6 +187,8 @@ pub struct Registry {
     consensus_config: ConsensusConfig,
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     mem_pool_state: Arc<MemPoolState>,
+    in_queue_request_map: Option<Arc<InQueueRequestMap>>,
+    polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
 }
 
 impl Registry {
@@ -185,6 +210,7 @@ impl Registry {
             chain_config,
             consensus_config,
             dynamic_config_manager,
+            polyjuice_sender_recover,
         } = args;
 
         let backend_info = get_backend_info(generator.clone());
@@ -199,16 +225,23 @@ impl Registry {
                 true,
             )),
         };
-        let (submit_tx, submit_rx) = async_channel::bounded(RequestSubmitter::MAX_CHANNEL_SIZE);
+        let in_queue_request_map = if matches!(node_mode, NodeMode::FullNode | NodeMode::Test) {
+            Some(Arc::new(InQueueRequestMap::default()))
+        } else {
+            None
+        };
+        let (submit_tx, submit_rx) = mpsc::channel(RequestSubmitter::MAX_CHANNEL_SIZE);
+        let polyjuice_sender_recover = Arc::new(polyjuice_sender_recover);
         if let Some(mem_pool) = mem_pool.as_ref().to_owned() {
             let submitter = RequestSubmitter {
                 mem_pool: Arc::clone(mem_pool),
                 submit_rx,
-                queue: Arc::new(Mutex::new(FeeQueue::new())),
+                queue: FeeQueue::new(),
                 dynamic_config_manager: dynamic_config_manager.clone(),
                 generator: generator.clone(),
                 mem_pool_state: mem_pool_state.clone(),
                 store: store.clone(),
+                polyjuice_sender_recover: Arc::clone(&polyjuice_sender_recover),
             };
             tokio::spawn(submitter.in_background());
         }
@@ -231,6 +264,8 @@ impl Registry {
             consensus_config,
             dynamic_config_manager,
             mem_pool_state,
+            in_queue_request_map,
+            polyjuice_sender_recover,
         }
     }
 
@@ -248,22 +283,29 @@ impl Registry {
                 generator: self.generator.clone(),
                 store: self.store.clone(),
                 mem_pool_state: self.mem_pool_state.clone(),
+                polyjuice_sender_recover: self.polyjuice_sender_recover.clone(),
             }))
-            .with_data(Data::new(self.mem_pool))
+            .with_data(Data::new(SubmitTransactionContext {
+                in_queue_request_map: self.in_queue_request_map.clone(),
+                submit_tx: self.submit_tx,
+                mem_pool_state: self.mem_pool_state.clone(),
+                rate_limiter: send_transaction_rate_limiter,
+                rate_limit_config: self.send_tx_rate_limit,
+                polyjuice_sender_recover: self.polyjuice_sender_recover.clone(),
+            }))
+            .with_data(Data::new(self.mem_pool.clone()))
             .with_data(Data(self.generator.clone()))
             .with_data(Data::new(self.store))
             .with_data(Data::new(self.rollup_config))
             .with_data(Data::new(self.mem_pool_config))
             .with_data(Data::new(self.backend_info))
-            .with_data(Data::new(self.submit_tx))
             .with_data(Data::new(self.rpc_client))
-            .with_data(Data::new(self.send_tx_rate_limit))
-            .with_data(Data::new(send_transaction_rate_limiter))
             .with_data(Data::new(self.dynamic_config_manager.clone()))
             .with_data(Data::new(self.mem_pool_state))
             .with_data(Data::new(self.chain_config))
             .with_data(Data::new(self.consensus_config))
             .with_data(Data::new(self.node_mode))
+            .with_data(Data::new(self.in_queue_request_map))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -307,7 +349,8 @@ impl Registry {
         if self.node_mode != NodeMode::ReadOnly {
             server = server
                 .with_method("gw_submit_l2transaction", submit_l2transaction)
-                .with_method("gw_submit_withdrawal_request", submit_withdrawal_request);
+                .with_method("gw_submit_withdrawal_request", submit_withdrawal_request)
+                .with_method("gw_is_request_in_queue", is_request_in_queue);
         }
 
         // Tests
@@ -338,7 +381,8 @@ impl Registry {
     }
 }
 
-enum Request {
+#[derive(Clone)]
+pub(crate) enum Request {
     Tx(L2Transaction),
     Withdrawal(WithdrawalRequestExtra),
 }
@@ -361,12 +405,13 @@ impl Request {
 
 struct RequestSubmitter {
     mem_pool: Arc<Mutex<gw_mem_pool::pool::MemPool>>,
-    submit_rx: async_channel::Receiver<Request>,
-    queue: Arc<Mutex<FeeQueue>>,
+    submit_rx: mpsc::Receiver<(InQueueRequestHandle, Request)>,
+    queue: FeeQueue<InQueueRequestHandle>,
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     generator: Arc<Generator>,
     mem_pool_state: Arc<MemPoolState>,
     store: Store,
+    polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
 }
 
 #[instrument(skip_all, fields(req_kind = req.kind()))]
@@ -407,7 +452,7 @@ impl RequestSubmitter {
     const MAX_BATCH_SIZE: usize = 20;
     const INTERVAL_MS: Duration = Duration::from_millis(100);
 
-    async fn in_background(self) {
+    async fn in_background(mut self) {
         // First mem pool reinject txs
         {
             let db = self.store.begin_transaction();
@@ -454,21 +499,16 @@ impl RequestSubmitter {
             }
 
             // mem-pool can process more txs
-            let mut queue = self.queue.lock().await;
+            let queue = &mut self.queue;
 
             // wait next tx if queue is empty
             if queue.is_empty() {
                 // blocking current task until we receive a tx
-                let req = match self.submit_rx.recv().await {
-                    Ok(req) => req,
-                    Err(_) if self.submit_rx.is_closed() => {
+                let (handle, req) = match self.submit_rx.recv().await {
+                    Some(req) => req,
+                    None => {
                         log::error!("rpc submit tx is closed");
                         return;
-                    }
-                    Err(err) => {
-                        log::debug!("rpc submit rx err {}", err);
-                        tokio::time::sleep(Self::INTERVAL_MS).await;
-                        continue;
                     }
                 };
                 let snap = self.mem_pool_state.load();
@@ -479,7 +519,7 @@ impl RequestSubmitter {
                 let fee_config = dynamic_config_manager.get_fee_config();
                 match req_to_entry(fee_config, self.generator.clone(), req, &state, queue.len()) {
                     Ok(entry) => {
-                        queue.add(entry);
+                        queue.add(entry, handle);
                     }
                     Err(err) => {
                         log::error!(
@@ -495,14 +535,14 @@ impl RequestSubmitter {
             // push txs to fee priority queue
             let snap = self.mem_pool_state.load();
             let state = snap.state().expect("get mem state");
-            while let Ok(req) = self.submit_rx.try_recv() {
+            while let Ok((handle, req)) = self.submit_rx.try_recv() {
                 let kind = req.kind();
                 let hash = req.hash();
                 let dynamic_config_manager = self.dynamic_config_manager.load();
                 let fee_config = dynamic_config_manager.get_fee_config();
                 match req_to_entry(fee_config, self.generator.clone(), req, &state, queue.len()) {
                     Ok(entry) => {
-                        queue.add(entry);
+                        queue.add(entry, handle);
                     }
                     Err(err) => {
                         log::error!(
@@ -528,10 +568,18 @@ impl RequestSubmitter {
                     continue;
                 }
             };
-            // release lock
-            drop(queue);
 
             if !items.is_empty() {
+                // recover accounts for polyjuice tx from id zero
+                let eth_recover = &self.polyjuice_sender_recover.eth;
+                let txs_from_zero = items
+                    .iter()
+                    .filter_map(|(entry, _handle)| match entry.item {
+                        FeeItem::Tx(ref tx) if 0 == entry.sender => Some(tx),
+                        _ => None,
+                    });
+                let recovered_senders = eth_recover.recover_sender_accounts(txs_from_zero, &state);
+
                 log::debug!("[Mem-pool background job] acquire mem_pool",);
                 let t = Instant::now();
                 let mut mem_pool = self.mem_pool.lock().await;
@@ -539,8 +587,47 @@ impl RequestSubmitter {
                     "[Mem-pool background job] unlock mem_pool {}ms",
                     t.elapsed().as_millis()
                 );
-                for entry in items {
+
+                if let Err(err) = match recovered_senders.build_create_tx(eth_recover, &state) {
+                    Ok(Some(create_accounts_tx)) => {
+                        mem_pool.push_transaction(create_accounts_tx).await
+                    }
+                    Ok(None) => Ok(()),
+                    Err(err) => Err(err),
+                } {
+                    log::info!("[tx from zero] create account {}", err);
+                }
+
+                let snap = self.mem_pool_state.load();
+                let state = snap.state().expect("get mem state");
+
+                // Note: don't change `_handle` to `_`. The request should be
+                // removed from the in queue request map after pushed to mem
+                // pool.
+                for (entry, _handle) in items {
                     let maybe_ok = match entry.item.clone() {
+                        FeeItem::Tx(tx) if 0 == entry.sender => {
+                            let sig: Bytes = tx.signature().unpack();
+                            let sender_id = match recovered_senders.get_account_id(&sig, &state) {
+                                Ok(id) => id,
+                                Err(err) => {
+                                    log::info!("[from tx zero] {:x} {}", tx.hash().pack(), err);
+                                    continue;
+                                }
+                            };
+
+                            let org_hash = tx.hash();
+                            let raw_tx = tx.raw().as_builder().from_id(sender_id.pack()).build();
+                            let tx = tx.as_builder().raw(raw_tx).build();
+                            log::info!(
+                                "[from tx zero] update tx {:x} from id to {}, hash to {:x}",
+                                org_hash.pack(),
+                                sender_id,
+                                tx.hash().pack()
+                            );
+
+                            mem_pool.push_transaction(tx).await
+                        }
                         FeeItem::Tx(tx) => mem_pool.push_transaction(tx).await,
                         FeeItem::Withdrawal(withdrawal) => {
                             mem_pool.push_withdrawal_request(withdrawal).await
@@ -590,6 +677,7 @@ impl TryFrom<u8> for GetTxVerbose {
 async fn get_transaction(
     Params(param): Params<GetTxParams>,
     store: Data<Store>,
+    in_queue_request_map: Data<Option<Arc<InQueueRequestMap>>>,
 ) -> Result<Option<L2TransactionWithStatus>, RpcError> {
     let (tx_hash, verbose) = match param {
         GetTxParams::Default((tx_hash,)) => (to_h256(tx_hash), GetTxVerbose::TxWithStatus),
@@ -600,6 +688,16 @@ async fn get_transaction(
             (to_h256(tx_hash), verbose)
         }
     };
+
+    if let Some(tx) = in_queue_request_map
+        .as_deref()
+        .and_then(|m| m.get_transaction(&tx_hash))
+    {
+        return Ok(Some(L2TransactionWithStatus {
+            transaction: matches!(verbose, GetTxVerbose::TxWithStatus).then(|| tx.into()),
+            status: L2TransactionStatus::Pending,
+        }));
+    }
     let db = store.get_snapshot();
     let tx_opt;
     let status;
@@ -624,6 +722,17 @@ async fn get_transaction(
             status,
         },
     }))
+}
+
+async fn is_request_in_queue(
+    Params((hash,)): Params<(JsonH256,)>,
+    in_queue_request_map: Data<Option<Arc<InQueueRequestMap>>>,
+) -> Result<bool, RpcError> {
+    let hash = to_h256(hash);
+
+    Ok(in_queue_request_map
+        .as_deref()
+        .map_or(false, |m| m.contains(&hash)))
 }
 
 async fn get_block_committed_info(
@@ -749,6 +858,35 @@ async fn get_transaction_receipt(
         .map(Into::into))
 }
 
+fn verify_sender_balance<S: State + CodeStore>(
+    ctx: &RollupContext,
+    state: &S,
+    raw_tx: &RawL2Transaction,
+) -> Result<()> {
+    use gw_generator::typed_transaction::types::TypedRawTransaction;
+
+    let sender_id: u32 = raw_tx.from_id().unpack();
+    // verify balance
+    let sender_script_hash = state.get_script_hash(sender_id)?;
+    let sender_address = state
+        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &sender_script_hash)?
+        .ok_or_else(|| anyhow!("Can't find address for sender: {}", sender_id))?;
+    // get balance
+    let balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &sender_address)?;
+    let tx_type = get_tx_type(ctx, state, raw_tx)?;
+    let typed_tx = TypedRawTransaction::from_tx(raw_tx.to_owned(), tx_type)
+        .ok_or_else(|| anyhow!("Unknown type of transaction {:?}", tx_type))?;
+    // reject txs has no cost, these transaction can only be execute without modify state tree
+    let tx_cost = typed_tx
+        .cost()
+        .map(Into::into)
+        .ok_or(TransactionError::NoCost)?;
+    if balance < tx_cost {
+        return Err(TransactionError::InsufficientBalance.into());
+    }
+    Ok(())
+}
+
 #[instrument(skip_all)]
 async fn execute_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
@@ -776,12 +914,38 @@ async fn execute_l2transaction(
         .build();
 
     let tx_hash = tx.hash();
+
+    // check sender's balance
+    // NOTE: for tx from id 0, it's balance will be verified after mock account
+    let from_id: u32 = tx.raw().from_id().unpack();
+    if 0 != from_id {
+        let snap = ctx.mem_pool_state.load();
+        let state = snap.state()?;
+        if let Err(err) = verify_sender_balance(ctx.generator.rollup_context(), &state, &tx.raw()) {
+            return Err(RpcError::Full {
+                code: INVALID_REQUEST,
+                message: format!("check balance err: {}", err),
+                data: None,
+            });
+        }
+    }
+
     let mut run_result = tokio::task::spawn_blocking(move || {
         let db = ctx.store.get_snapshot();
         let tip_block_hash = db.get_last_valid_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
         let snap = ctx.mem_pool_state.load();
-        let state = snap.state()?;
+        let mem_state = snap.state()?;
+        let mut state = MemExecuteTxStateTree::new(mem_state);
+
+        // Mock sender account if not exists
+        let eth_recover = &ctx.polyjuice_sender_recover.eth;
+        let tx = eth_recover.mock_sender_if_not_exists(tx, &mut state)?;
+        if 0 == from_id {
+            verify_sender_balance(ctx.generator.rollup_context(), &state, &tx.raw())
+                .map_err(|err| anyhow!("check balance err: {}", err))?;
+        }
+
         // tx basic verification
         TransactionVerifier::new(&state, ctx.generator.rollup_context()).verify(&tx)?;
         // verify tx signature
@@ -825,6 +989,7 @@ async fn execute_l2transaction(
 enum ExecuteRawL2TransactionParams {
     Tip((JsonBytes,)),
     Number((JsonBytes, Option<GwUint64>)),
+    PolyjuiceFromIdZero((JsonBytes, Option<GwUint64>, RegistryAddressJsonBytes)),
 }
 
 #[instrument(skip_all)]
@@ -833,11 +998,18 @@ async fn execute_raw_l2transaction(
     mem_pool_config: Data<MemPoolConfig>,
     ctx: Data<ExecutionTransactionContext>,
 ) -> Result<RunResult, RpcError> {
-    let (raw_l2tx, block_number_opt) = match params {
-        ExecuteRawL2TransactionParams::Tip(p) => (p.0, None),
-        ExecuteRawL2TransactionParams::Number(p) => p,
+    let (raw_l2tx, block_number_opt, registry_address_opt) = match params {
+        ExecuteRawL2TransactionParams::Tip(p) => (p.0, None, None),
+        ExecuteRawL2TransactionParams::Number(p) => (p.0, p.1, None),
+        ExecuteRawL2TransactionParams::PolyjuiceFromIdZero(p) => (p.0, p.1, Some(p.2)),
     };
     let block_number_opt = block_number_opt.map(|n| n.value());
+    let registry_address_opt = registry_address_opt
+        .map(|json_bytes| {
+            gw_common::registry_address::RegistryAddress::from_slice(json_bytes.as_bytes())
+                .ok_or_else(|| invalid_param_err("Invalid registry address"))
+        })
+        .transpose()?;
 
     let raw_l2tx_bytes = raw_l2tx.into_bytes();
     let raw_l2tx = packed::RawL2Transaction::from_slice(&raw_l2tx_bytes)?;
@@ -875,8 +1047,34 @@ async fn execute_raw_l2transaction(
     let tx_hash: H256 = raw_l2tx.hash().into();
     let block_number: u64 = block_info.number().unpack();
 
+    // check sender's balance
+    // NOTE: for tx from id zero, its balance will be verified after mock account
+    let from_id: u32 = raw_l2tx.from_id().unpack();
+    if 0 != from_id {
+        let check_balance_result = match block_number_opt {
+            Some(block_number) => {
+                let state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
+                verify_sender_balance(ctx.generator.rollup_context(), &state, &raw_l2tx)
+            }
+            None => {
+                let snap = ctx.mem_pool_state.load();
+                let state = snap.state()?;
+                verify_sender_balance(ctx.generator.rollup_context(), &state, &raw_l2tx)
+            }
+        };
+        if let Err(err) = check_balance_result {
+            return Err(RpcError::Full {
+                code: INVALID_REQUEST,
+                message: format!("check balance err: {}", err),
+                data: None,
+            });
+        }
+    }
+
     // execute tx in task
     let mut run_result = tokio::task::spawn_blocking(move || {
+        let eth_recover = &ctx.polyjuice_sender_recover.eth;
+        let rollup_context = ctx.generator.rollup_context();
         let chain_view = {
             let tip_block_hash = db.get_last_valid_tip_block_hash()?;
             ChainView::new(&db, tip_block_hash)
@@ -884,7 +1082,18 @@ async fn execute_raw_l2transaction(
         // execute tx
         let run_result = match block_number_opt {
             Some(block_number) => {
-                let state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
+                let hist_state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
+                let mut state = MemExecuteTxStateTree::new(hist_state);
+                let raw_l2tx = eth_recover.mock_sender_if_not_exists_from_raw_registry(
+                    raw_l2tx,
+                    registry_address_opt,
+                    &mut state,
+                )?;
+                if 0 == from_id {
+                    verify_sender_balance(rollup_context, &state, &raw_l2tx)
+                        .map_err(|err| anyhow!("check balance err {}", err))?;
+                }
+
                 ctx.generator.unchecked_execute_transaction(
                     &chain_view,
                     &state,
@@ -895,6 +1104,17 @@ async fn execute_raw_l2transaction(
             }
             None => {
                 let state = mem_state_snap.state()?;
+                let mut state = MemExecuteTxStateTree::new(state);
+                let raw_l2tx = eth_recover.mock_sender_if_not_exists_from_raw_registry(
+                    raw_l2tx,
+                    registry_address_opt,
+                    &mut state,
+                )?;
+                if 0 == from_id {
+                    verify_sender_balance(rollup_context, &state, &raw_l2tx)
+                        .map_err(|err| anyhow!("check balance err {}", err))?;
+                }
+
                 ctx.generator.unchecked_execute_transaction(
                     &chain_view,
                     &state,
@@ -927,25 +1147,41 @@ async fn execute_raw_l2transaction(
     Ok(run_result.into())
 }
 
+// TODO: refactor complex type.
+#[allow(clippy::type_complexity)]
 #[instrument(skip_all)]
 async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
-    submit_tx: Data<async_channel::Sender<Request>>,
-    rate_limiter: Data<Option<SendTransactionRateLimiter>>,
-    rate_limit_config: Data<Option<RPCRateLimit>>,
-    mem_pool_state: Data<Arc<MemPoolState>>,
-) -> Result<JsonH256, RpcError> {
+    ctx: Data<SubmitTransactionContext>,
+) -> Result<Option<JsonH256>, RpcError> {
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
-    let tx_hash = to_jsonh256(tx.hash().into());
+    let tx_hash: H256 = tx.hash().into();
+
+    let sender_id: u32 = tx.raw().from_id().unpack();
+    let eth_recover = &ctx.polyjuice_sender_recover.eth;
+    if 0 == sender_id && eth_recover.opt_account_creator.is_none() {
+        return Err(RpcError::Provided {
+            code: METHOD_NOT_AVAILABLE_ERR_CODE,
+            message: "tx from zero is disabled",
+        });
+    }
+
+    // Return None for tx from zero because its from id will be updated after account creation.
+    let tx_hash_json = if 0 == sender_id {
+        None
+    } else {
+        Some(to_jsonh256(tx.hash().into()))
+    };
 
     // check rate limit
-    if let Some(rate_limiter) = rate_limiter.as_ref() {
+    if let Some(rate_limiter) = ctx.rate_limiter.as_ref() {
         let mut rate_limiter = rate_limiter.lock().await;
         let sender_id: u32 = tx.raw().from_id().unpack();
         if let Some(last_touch) = rate_limiter.get(&sender_id) {
             if last_touch.elapsed().as_secs()
-                < rate_limit_config
+                < ctx
+                    .rate_limit_config
                     .as_ref()
                     .map(|c| c.seconds)
                     .unwrap_or_default()
@@ -959,12 +1195,15 @@ async fn submit_l2transaction(
     // check sender's nonce
     {
         // fetch mem-pool state
-        let snap = mem_pool_state.load();
+        let snap = ctx.mem_pool_state.load();
         let tree = snap.state()?;
-        // sender_id
-        let sender_id = tx.raw().from_id().unpack();
-        let sender_nonce: u32 = tree.get_nonce(sender_id)?;
+
         let tx_nonce: u32 = tx.raw().nonce().unpack();
+        let sender_nonce: u32 = if 0 == sender_id {
+            0
+        } else {
+            tree.get_nonce(sender_id)?
+        };
         if sender_nonce != tx_nonce {
             let err = TransactionError::Nonce {
                 account_id: sender_id,
@@ -984,30 +1223,53 @@ async fn submit_l2transaction(
         }
     }
 
-    if let Err(err) = submit_tx.try_send(Request::Tx(tx)) {
-        if err.is_full() {
-            return Err(RpcError::Provided {
-                code: BUSY_ERR_CODE,
-                message: "mem pool service busy",
-            });
+    let permit = ctx.submit_tx.try_reserve().map_err(|err| match err {
+        mpsc::error::TrySendError::Closed(_) => RpcError::Provided {
+            code: INTERNAL_ERROR_ERR_CODE,
+            message: "internal error, unavailable",
+        },
+        mpsc::error::TrySendError::Full(_) => RpcError::Provided {
+            code: BUSY_ERR_CODE,
+            message: "mem pool service busy",
+        },
+    })?;
+
+    let tx_hash_in_queue = match tx_hash_json {
+        Some(_) => tx_hash,
+        None => {
+            let mut hasher = new_blake2b();
+            hasher.update(tx.signature().as_slice());
+            let mut hash = [0u8; 32];
+            hasher.finalize(&mut hash);
+            H256::from(hash)
         }
-        if err.is_closed() {
-            return Err(RpcError::Provided {
-                code: INTERNAL_ERROR_ERR_CODE,
-                message: "internal error, unavailable",
-            });
-        }
+    };
+    let request = Request::Tx(tx);
+    // Use permit to insert before send so that remove won't happen before insert.
+    if let Some(handle) = ctx
+        .in_queue_request_map
+        .as_ref()
+        .expect("in_queue_request_map")
+        .insert(tx_hash_in_queue, request.clone())
+    {
+        // Send if the request wasn't already in the map.
+        permit.send((handle, request));
     }
 
-    Ok(tx_hash)
+    Ok(tx_hash_json)
 }
 
+// TODO: refactor complex type.
+#[allow(clippy::type_complexity)]
 #[instrument(skip_all)]
 async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
     _generator: Data<Generator>,
     _store: Data<Store>,
-    submit_tx: Data<async_channel::Sender<Request>>,
+    (in_queue_request_map, submit_tx): (
+        Data<Option<Arc<InQueueRequestMap>>>,
+        Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
+    ),
     _rpc_client: Data<RPCClient>,
 ) -> Result<JsonH256, RpcError> {
     let withdrawal_bytes = withdrawal_request.into_bytes();
@@ -1016,19 +1278,26 @@ async fn submit_withdrawal_request(
 
     // TODO: verify remaining finalized custodian ckb/sudt capacity.
 
-    if let Err(err) = submit_tx.try_send(Request::Withdrawal(withdrawal)) {
-        if err.is_full() {
-            return Err(RpcError::Provided {
-                code: BUSY_ERR_CODE,
-                message: "mem pool service busy",
-            });
-        }
-        if err.is_closed() {
-            return Err(RpcError::Provided {
-                code: INTERNAL_ERROR_ERR_CODE,
-                message: "internal error, unavailable",
-            });
-        }
+    let permit = submit_tx.try_reserve().map_err(|err| match err {
+        mpsc::error::TrySendError::Closed(_) => RpcError::Provided {
+            code: INTERNAL_ERROR_ERR_CODE,
+            message: "internal error, unavailable",
+        },
+        mpsc::error::TrySendError::Full(_) => RpcError::Provided {
+            code: BUSY_ERR_CODE,
+            message: "mem pool service busy",
+        },
+    })?;
+
+    let request = Request::Withdrawal(withdrawal);
+    // Use permit to insert before send so that remove won't happen before insert.
+    if let Some(handle) = in_queue_request_map
+        .as_ref()
+        .expect("in_queue_request_map")
+        .insert(withdrawal_hash.into(), request.clone())
+    {
+        // Send if the request wasn't already in the map.
+        permit.send((handle, request));
     }
 
     Ok(withdrawal_hash.into())
@@ -1064,6 +1333,7 @@ async fn get_withdrawal(
     Params(param): Params<GetWithdrawalParams>,
     store: Data<Store>,
     rpc_client: Data<RPCClient>,
+    in_queue_request_map: Data<Option<Arc<InQueueRequestMap>>>,
 ) -> Result<Option<WithdrawalWithStatus>, RpcError> {
     let (withdrawal_hash, verbose) = match param {
         GetWithdrawalParams::Default((withdrawal_hash,)) => (
@@ -1078,6 +1348,17 @@ async fn get_withdrawal(
         }
     };
 
+    if let Some(w) = in_queue_request_map
+        .as_deref()
+        .and_then(|m| m.get_withdrawal(&withdrawal_hash))
+    {
+        return Ok(Some(WithdrawalWithStatus {
+            withdrawal: matches!(verbose, GetWithdrawalVerbose::WithdrawalWithStatus)
+                .then(|| w.into()),
+            status: WithdrawalStatus::Pending,
+            ..Default::default()
+        }));
+    }
     let db = store.get_snapshot();
     if let Some(withdrawal) = db.get_mem_pool_withdrawal(&withdrawal_hash)? {
         let withdrawal_opt = match verbose {

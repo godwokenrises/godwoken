@@ -61,6 +61,7 @@ pub struct Challenger {
     debug_config: DebugConfig,
     offchain_mock_context: OffChainMockContext,
     contracts_dep_manager: ContractsCellDepManager,
+    last_submit_tx: Option<H256>,
 }
 
 pub struct ChallengerNewArgs {
@@ -108,6 +109,7 @@ impl Challenger {
             cleaner,
             offchain_mock_context,
             contracts_dep_manager,
+            last_submit_tx: None,
         }
     }
 
@@ -120,6 +122,18 @@ impl Challenger {
                     | Some(TestModePayload::None) => (),
                     Some(TestModePayload::BadBlock { .. }) // Payload not match (BadBlock for block producer)
                         | None => return Ok(()), // Wait payload
+            }
+        }
+
+        if let Some(last_submit_tx) = self.last_submit_tx {
+            let ckb_client = &self.rpc_client.ckb;
+            let tx_status = ckb_client.get_transaction_status(last_submit_tx).await?;
+            match tx_status {
+                Some(TxStatus::Pending) | Some(TxStatus::Proposed) => return Ok(()),
+                _ => {
+                    log::debug!("last challenger submit tx {:?}", tx_status);
+                    self.last_submit_tx = None;
+                }
             }
         }
 
@@ -187,7 +201,7 @@ impl Challenger {
     }
 
     async fn challenge_block(
-        &self,
+        &mut self,
         rollup_state: RollupState,
         context: ChallengeContext,
     ) -> Result<()> {
@@ -215,6 +229,7 @@ impl Challenger {
         let rollup_deps = vec![
             contracts_dep.rollup_cell_type.clone().into(),
             self.config.rollup_config_cell_dep.clone().into(),
+            contracts_dep.omni_lock.clone().into(),
         ];
         let rollup_output = (
             rollup_state.rollup_output(),
@@ -238,16 +253,21 @@ impl Challenger {
 
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
 
-        self.dry_run_transaction(&tx, "challenge block").await?;
-        utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx).await;
+        if let Err(err) = self.dry_run_transaction(&tx, "challenge block").await {
+            utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx)
+                .await;
+            bail!(err);
+        }
 
         let tx_hash = self.rpc_client.send_transaction(&tx).await?;
         log::info!("Challenge block {} in tx {}", block_numer, to_hex(&tx_hash));
+        self.last_submit_tx = Some(tx_hash);
+
         Ok(())
     }
 
     async fn cancel_challenge(
-        &self,
+        &mut self,
         rollup_state: RollupState,
         challenge_cell: ChallengeCell,
         context: VerifyContext,
@@ -334,8 +354,11 @@ impl Challenger {
             )
             .await?;
 
-        self.dry_run_transaction(&tx, "cancel challenge").await?;
-        utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx).await;
+        if let Err(err) = self.dry_run_transaction(&tx, "cancel challenge").await {
+            utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx)
+                .await;
+            bail!(err);
+        }
 
         let load_data_inputs = verifier_context.load_data_context.map(|d| d.inputs);
         let verifier = Verifier::new(
@@ -349,6 +372,7 @@ impl Challenger {
             Ok(tx_hash) => {
                 self.cleaner.watch_verifier(verifier, Some(tx_hash)).await;
                 log::info!("Cancel challenge in tx {}", to_hex(&tx_hash));
+                self.last_submit_tx = Some(tx_hash);
             }
             Err(err) => {
                 self.cleaner.watch_verifier(verifier, None).await;
@@ -360,7 +384,7 @@ impl Challenger {
     }
 
     async fn revert(
-        &self,
+        &mut self,
         rollup_state: RollupState,
         challenge_cell: ChallengeCell,
         context: RevertContext,
@@ -440,6 +464,7 @@ impl Challenger {
         let rollup_deps = vec![
             contracts_dep.rollup_cell_type.clone().into(),
             self.config.rollup_config_cell_dep.clone().into(),
+            contracts_dep.omni_lock.clone().into(),
         ];
         let rollup_output = (
             rollup_state.rollup_output(),
@@ -477,11 +502,15 @@ impl Challenger {
 
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
 
-        self.dry_run_transaction(&tx, "revert block").await?;
-        utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx).await;
+        if let Err(err) = self.dry_run_transaction(&tx, "revert block").await {
+            utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx)
+                .await;
+            bail!(err);
+        }
 
         let tx_hash = self.rpc_client.send_transaction(&tx).await?;
         log::info!("Revert block in tx {}", to_hex(&tx_hash));
+        self.last_submit_tx = Some(tx_hash);
 
         Ok(())
     }
@@ -526,6 +555,7 @@ impl Challenger {
         let rollup_deps = vec![
             contracts_dep.rollup_cell_type.clone().into(),
             self.config.rollup_config_cell_dep.clone().into(),
+            contracts_dep.omni_lock.clone().into(),
         ];
         let rollup_output = (
             rollup_state.rollup_output(),

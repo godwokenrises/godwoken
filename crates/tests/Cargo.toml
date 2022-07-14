@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-gw-types = { path = "../types" }
+gw-types = { path = "../types", features = ["std", "deprecated"] }
 gw-common = { path = "../common" }
 gw-config = { path = "../config" }
 gw-db = { path = "../db" }
@@ -19,10 +19,13 @@ gw-mem-pool = { path = "../mem-pool" }
 gw-utils = { path = "../utils" }
 gw-block-producer = { path = "../block-producer" }
 gw-rpc-server = { path = "../rpc-server" }
+gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-ckb-hardfork = { path = "../ckb-hardfork" }
 gw-dynamic-config = { path = "../dynamic-config"}
 gw-eoa-mapping = { path = "../eoa-mapping" }
+gw-polyjuice-sender-recover = { path = "../polyjuice-sender-recover" }
+godwoken-bin = { path = "../godwoken-bin" }
 anyhow = "1.0"
 blake2b-rs = "0.2"
 ckb-vm = { version = "=0.20.0-rc5", features = ["detect-asm"] }
@@ -48,3 +51,4 @@ tokio = "1.15"
 env_logger = "0.8"
 tempfile = "3"
 async-trait = "0.1"
+jsonrpc-v2 = { version = "0.10.0", default-features = false, features = ["easy-errors"] }

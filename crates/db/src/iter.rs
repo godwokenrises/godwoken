@@ -1,10 +1,12 @@
 //! TODO(doc): @quake
 use crate::db::cf_handle;
+use crate::read_only_db::ReadOnlyDB;
 use crate::schema::Col;
 use crate::{
     internal_error, Result, RocksDB, RocksDBSnapshot, RocksDBTransaction,
     RocksDBTransactionSnapshot,
 };
+use rocksdb::ops::GetColumnFamilys;
 use rocksdb::{ops::IterateCF, ReadOptions};
 pub use rocksdb::{DBIterator as DBIter, Direction, IteratorMode};
 
@@ -54,6 +56,18 @@ impl DBIterator for RocksDBSnapshot {
     fn iter_opt(&self, col: Col, mode: IteratorMode, readopts: &ReadOptions) -> Result<DBIter> {
         let cf = cf_handle(&self.db, col)?;
         self.iterator_cf_opt(cf, mode, readopts)
+            .map_err(internal_error)
+    }
+}
+
+impl DBIterator for ReadOnlyDB {
+    fn iter_opt(&self, col: Col, mode: IteratorMode, readopts: &ReadOptions) -> Result<DBIter> {
+        let cf = self
+            .inner
+            .cf_handle(&col.to_string())
+            .ok_or_else(|| internal_error(format!("column {} not found", col)))?;
+        self.inner
+            .iterator_cf_opt(cf, mode, readopts)
             .map_err(internal_error)
     }
 }

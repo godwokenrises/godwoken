@@ -259,6 +259,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         reload_config_github_url: None,
         dynamic_config: Default::default(),
         p2p_network_config,
+        contract_log_config: Default::default(),
     };
 
     Ok(config)

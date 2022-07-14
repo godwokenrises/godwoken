@@ -24,6 +24,8 @@ members = [
   "crates/replay-chain",
   "crates/dynamic-config",
   "crates/p2p-network",
+  "crates/polyjuice-sender-recover",
+  "crates/godwoken-bin",
 ]
 
 [profile.release]

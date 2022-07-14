@@ -1,6 +1,6 @@
 use anyhow::Result;
 use gw_common::state::State;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 use tracing::instrument;
 
 /// Max queue size
@@ -11,16 +11,16 @@ const DROP_SIZE: usize = 100;
 use super::types::FeeEntry;
 
 /// Txs & withdrawals queue sorted by fee rate
-pub struct FeeQueue {
+pub struct FeeQueue<T> {
     // priority queue to store tx and withdrawal
-    queue: BTreeSet<FeeEntry>,
+    queue: BTreeMap<FeeEntry, T>,
 }
 
-impl FeeQueue {
+impl<T> FeeQueue<T> {
     #[inline]
     pub fn new() -> Self {
         Self {
-            queue: BTreeSet::new(),
+            queue: BTreeMap::new(),
         }
     }
 
@@ -34,9 +34,8 @@ impl FeeQueue {
         self.queue.is_empty()
     }
 
-    /// Add item to queue
     #[instrument(skip_all, fields(count = self.len()))]
-    pub fn add(&mut self, entry: FeeEntry) {
+    pub fn add(&mut self, entry: FeeEntry, handle: T) {
         // push to queue
         log::debug!(
             "QueueLen: {} | add entry: {:?} {}",
@@ -44,11 +43,11 @@ impl FeeQueue {
             entry.item.kind(),
             hex::encode(entry.item.hash().as_slice())
         );
-        self.queue.insert(entry);
+        self.queue.insert(entry, handle);
 
         // drop items if full
         if self.is_full() {
-            if let Some(first_to_keep) = self.queue.iter().nth(DROP_SIZE + 1).cloned() {
+            if let Some(first_to_keep) = self.queue.keys().nth(DROP_SIZE + 1).cloned() {
                 self.queue = self.queue.split_off(&first_to_keep);
             }
             log::debug!(
@@ -64,9 +63,9 @@ impl FeeQueue {
         self.queue.len() > MAX_QUEUE_SIZE
     }
 
-    fn pop_last(&mut self) -> Option<FeeEntry> {
-        if let Some(entry) = self.queue.iter().next_back().cloned() {
-            self.queue.take(&entry)
+    fn pop_last(&mut self) -> Option<(FeeEntry, T)> {
+        if let Some(entry) = self.queue.keys().next_back().cloned() {
+            self.queue.remove_entry(&entry)
         } else {
             None
         }
@@ -74,7 +73,7 @@ impl FeeQueue {
 
     /// Fetch items by fee sort
     #[instrument(skip_all, fields(count = count))]
-    pub fn fetch(&mut self, state: &impl State, count: usize) -> Result<Vec<FeeEntry>> {
+    pub fn fetch(&mut self, state: &impl State, count: usize) -> Result<Vec<(FeeEntry, T)>> {
         // sorted fee items
         let mut fetched_items = Vec::with_capacity(count as usize);
         let mut fetched_senders: HashMap<u32, u32> = Default::default();
@@ -82,7 +81,7 @@ impl FeeQueue {
         let mut future_queue = Vec::default();
 
         // Fetch item from PQ
-        while let Some(entry) = self.pop_last() {
+        while let Some((entry, t)) = self.pop_last() {
             let nonce = match fetched_senders.get(&entry.sender) {
                 Some(&nonce) => nonce,
                 None => state.get_nonce(entry.sender)?,
@@ -92,11 +91,11 @@ impl FeeQueue {
                     // update nonce
                     fetched_senders.insert(entry.sender, nonce.saturating_add(1));
                     // fetch this item
-                    fetched_items.push(entry);
+                    fetched_items.push((entry, t));
                 }
                 std::cmp::Ordering::Greater => {
                     // push item back if it still has change to get fetched
-                    future_queue.push(entry);
+                    future_queue.push((entry, t));
                 }
                 _ => {
                     log::debug!(
@@ -116,10 +115,10 @@ impl FeeQueue {
         }
 
         // Add back future items
-        for entry in future_queue {
+        for (entry, t) in future_queue {
             // Only add back if we fetched another item from the same sender
             if fetched_senders.contains_key(&entry.sender) {
-                self.add(entry);
+                self.add(entry, t);
             } else {
                 log::debug!(
                     "QueueLen: {} | drop future entry: {:?} {} entry_nonce {}",
@@ -142,7 +141,7 @@ impl FeeQueue {
     }
 }
 
-impl Default for FeeQueue {
+impl<T> Default for FeeQueue<T> {
     #[inline]
     fn default() -> Self {
         Self::new()
@@ -224,10 +223,10 @@ mod tests {
             order: queue.len(),
         };
 
-        queue.add(entry1);
-        queue.add(entry2);
-        queue.add(entry3);
-        queue.add(entry4);
+        queue.add(entry1, ());
+        queue.add(entry2, ());
+        queue.add(entry3, ());
+        queue.add(entry4, ());
 
         let mem_store = MemStore::new(snap);
         let tree = mem_store.state().unwrap();
@@ -236,15 +235,15 @@ mod tests {
         {
             let items = queue.fetch(&tree, 3).expect("fetch");
             assert_eq!(items.len(), 3);
-            assert_eq!(items[0].sender, 3);
-            assert_eq!(items[1].sender, 5);
-            assert_eq!(items[2].sender, 2);
+            assert_eq!(items[0].0.sender, 3);
+            assert_eq!(items[1].0.sender, 5);
+            assert_eq!(items[2].0.sender, 2);
         }
         // fetch 3
         {
             let items = queue.fetch(&tree, 3).expect("fetch");
             assert_eq!(items.len(), 1);
-            assert_eq!(items[0].sender, 4);
+            assert_eq!(items[0].0.sender, 4);
         }
         // fetch 3
         {
@@ -282,7 +281,7 @@ mod tests {
             order: queue.len(),
         };
 
-        queue.add(entry1);
+        queue.add(entry1, ());
 
         let entry2 = FeeEntry {
             item: FeeItem::Tx(Default::default()),
@@ -292,7 +291,7 @@ mod tests {
             order: queue.len(),
         };
 
-        queue.add(entry2);
+        queue.add(entry2, ());
 
         let entry3 = FeeEntry {
             item: FeeItem::Tx(Default::default()),
@@ -302,7 +301,7 @@ mod tests {
             order: queue.len(),
         };
 
-        queue.add(entry3);
+        queue.add(entry3, ());
 
         let entry4 = FeeEntry {
             item: FeeItem::Withdrawal(Default::default()),
@@ -312,7 +311,7 @@ mod tests {
             order: queue.len(),
         };
 
-        queue.add(entry4);
+        queue.add(entry4, ());
 
         let mem_store = MemStore::new(snap);
         let tree = mem_store.state().unwrap();
@@ -321,10 +320,10 @@ mod tests {
         {
             let items = queue.fetch(&tree, 5).expect("fetch");
             assert_eq!(items.len(), 4);
-            assert_eq!(items[0].sender, 5);
-            assert_eq!(items[1].sender, 2);
-            assert_eq!(items[2].sender, 3);
-            assert_eq!(items[3].sender, 4);
+            assert_eq!(items[0].0.sender, 5);
+            assert_eq!(items[1].0.sender, 2);
+            assert_eq!(items[2].0.sender, 3);
+            assert_eq!(items[3].0.sender, 4);
         }
     }
 
@@ -372,8 +371,8 @@ mod tests {
             order: queue.len(),
         };
 
-        queue.add(entry1);
-        queue.add(entry2);
+        queue.add(entry1, ());
+        queue.add(entry2, ());
 
         let snap = store.get_snapshot();
         let mem_store = MemStore::new(snap);
@@ -383,8 +382,8 @@ mod tests {
         {
             let items = queue.fetch(&tree, 3).expect("fetch");
             assert_eq!(items.len(), 2);
-            assert_eq!(items[0].item.nonce(), 0);
-            assert_eq!(items[1].item.nonce(), 1);
+            assert_eq!(items[0].0.item.nonce(), 0);
+            assert_eq!(items[1].0.item.nonce(), 1);
         }
     }
     #[test]
@@ -431,8 +430,8 @@ mod tests {
             order: queue.len(),
         };
 
-        queue.add(entry1);
-        queue.add(entry2);
+        queue.add(entry1, ());
+        queue.add(entry2, ());
 
         let snap = store.get_snapshot();
         let mem_store = MemStore::new(snap);
@@ -442,7 +441,7 @@ mod tests {
         {
             let items = queue.fetch(&tree, 3).expect("fetch");
             assert_eq!(items.len(), 1);
-            assert_eq!(items[0].fee, (101 * 1000u64).into());
+            assert_eq!(items[0].0.fee, (101 * 1000u64).into());
             // try fetch remain items
             let items = queue.fetch(&tree, 1).expect("fetch");
             assert_eq!(items.len(), 0);
@@ -481,7 +480,7 @@ mod tests {
                 sender: 2,
                 order: queue.len(),
             };
-            queue.add(entry1);
+            queue.add(entry1, ());
         }
 
         assert_eq!(queue.len(), MAX_QUEUE_SIZE);
@@ -503,7 +502,7 @@ mod tests {
                 sender: 2,
                 order: queue.len(),
             };
-            queue.add(entry1);
+            queue.add(entry1, ());
         }
 
         // we should trigger the drop

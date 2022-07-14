@@ -15,12 +15,12 @@ use gw_db::schema::{
     META_LAST_SUBMITTED_BLOCK_NUMBER_HASH_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
     META_REVERTED_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
 };
-use gw_types::offchain::global_state_from_slice;
-use gw_types::packed::{FinalizedCustodianCapacity, NumberHash, NumberHashReader};
 use gw_types::{
     from_box_should_be_ok,
+    offchain::{global_state_from_slice, SMTRevertedBlockHashes},
     packed::{
-        self, ChallengeTarget, DepositInfoVec, Script, Transaction, TransactionKey, WithdrawalKey,
+        self, ChallengeTarget, DepositInfoVec, FinalizedCustodianCapacity, NumberHash,
+        NumberHashReader, Script, Transaction, TransactionKey, WithdrawalKey,
     },
     prelude::*,
 };
@@ -65,6 +65,16 @@ pub trait ChainStore: KVStoreRead {
         let mut root = [0u8; 32];
         root.copy_from_slice(&slice);
         Ok(root.into())
+    }
+
+    fn get_prev_reverted_block_smt_root(&self, root: &H256) -> Result<Option<H256>, Error> {
+        match self.get(COLUMN_REVERTED_BLOCK_SMT_ROOT, root.as_slice()) {
+            Some(slice) => {
+                let block_hashes = packed::Byte32VecReader::from_slice_should_be_ok(slice.as_ref());
+                Ok(block_hashes.iter().next().map(|h| h.unpack()))
+            }
+            None => Ok(None),
+        }
     }
 
     fn get_last_valid_tip_block(&self) -> Result<packed::L2Block, Error> {
@@ -277,14 +287,26 @@ pub trait ChainStore: KVStoreRead {
     fn get_reverted_block_hashes_by_root(
         &self,
         reverted_block_smt_root: &H256,
-    ) -> Result<Option<Vec<H256>>, Error> {
+    ) -> Result<Option<SMTRevertedBlockHashes>, Error> {
         match self.get(
             COLUMN_REVERTED_BLOCK_SMT_ROOT,
             reverted_block_smt_root.as_slice(),
         ) {
             Some(slice) => {
-                let block_hash = packed::Byte32VecReader::from_slice_should_be_ok(slice.as_ref());
-                Ok(Some(block_hash.unpack()))
+                let mut block_hashes: Vec<_> =
+                    from_box_should_be_ok!(packed::Byte32VecReader, slice).unpack();
+
+                // Remove prev smt root at 0 idx
+                let last_hash_idx = block_hashes.len().saturating_sub(1);
+                block_hashes.swap(0, last_hash_idx);
+                let prev_smt_root = block_hashes.pop().expect("prev root");
+
+                let root_hashes = SMTRevertedBlockHashes {
+                    prev_smt_root,
+                    block_hashes,
+                };
+
+                Ok(Some(root_hashes))
             }
             None => Ok(None),
         }

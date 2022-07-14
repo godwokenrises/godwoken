@@ -48,7 +48,7 @@ fn bench_add_full(b: &mut Bencher) {
             sender: 2,
             order: queue.len(),
         };
-        queue.add(entry1);
+        queue.add(entry1, ());
     }
 
     assert_eq!(queue.len(), MAX_QUEUE_SIZE);
@@ -69,7 +69,7 @@ fn bench_add_full(b: &mut Bencher) {
             sender: 2,
             order: queue.len(),
         };
-        queue.add(entry1);
+        queue.add(entry1, ());
     });
 }
 
@@ -105,7 +105,7 @@ fn bench_add_fetch_20(b: &mut Bencher) {
             sender: 2,
             order: queue.len(),
         };
-        queue.add(entry1);
+        queue.add(entry1, ());
     }
 
     let mem_store = MemStore::new(snap);
@@ -128,7 +128,7 @@ fn bench_add_fetch_20(b: &mut Bencher) {
                 sender: 2,
                 order: queue.len(),
             };
-            queue.add(entry1);
+            queue.add(entry1, ());
         }
         queue.fetch(&tree, 20)
     });

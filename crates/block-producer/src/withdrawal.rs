@@ -37,7 +37,7 @@ pub fn generate(
     contracts_dep: &ContractsCellDep,
     withdrawal_extras: &HashMap<H256, WithdrawalRequestExtra>,
 ) -> Result<Option<GeneratedWithdrawals>> {
-    if block.withdrawals().is_empty() && finalized_custodians.cells_info.is_empty() {
+    if block.withdrawals().is_empty() && finalized_custodians.cells_info.len() <= 1 {
         return Ok(None);
     }
     log::debug!("custodian inputs {:?}", finalized_custodians);
