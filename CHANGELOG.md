@@ -5,7 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.4.0-rc1] - 2022-07-14
+
 - Automatically create account for undeposited sender [#710](https://github.com/nervosnetwork/godwoken/pull/710)
+- Check sender's balance in `execute_raw_l2transaction` RPC [#750](https://github.com/nervosnetwork/godwoken/pull/750)
+- Add export and import block command [#754](https://github.com/nervosnetwork/godwoken/pull/754)
+- Fix gw-tools `stat-custodian-ckb` command [#757](https://github.com/nervosnetwork/godwoken/pull/757)
+- Redirect layer 2 transaction syscall log to sentry [#758](https://github.com/nervosnetwork/godwoken/pull/758)
 
 ## [v1.3.0-rc1] - 2022-07-01
 
