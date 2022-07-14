@@ -343,12 +343,14 @@ impl BlockProducer {
         )
         .await?
         .expect_any();
-        log::info!(
-            "block {}, last finalized: {}, capacity: {}",
-            block.raw().number().unpack(),
+        let finalized_custodians = query_mergeable_custodians(
+            local_cells_manager,
+            rpc_client,
+            finalized_custodians,
             last_finalized_block_number,
-            finalized_custodians.capacity,
-        );
+        )
+        .await?
+        .expect_any();
 
         // withdrawal cells
         let map_withdrawal_extras = withdrawal_extras.into_iter().map(|w| (w.hash().into(), w));

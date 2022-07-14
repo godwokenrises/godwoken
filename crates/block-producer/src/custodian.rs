@@ -32,10 +32,11 @@ pub async fn query_mergeable_custodians(
     }
 
     let query_result = query_mergeable_ckb_custodians(
+        local_cells_manager,
         rpc_client,
         collected_custodians,
         last_finalized_block_number,
-        local_cells_manager,
+        MAX_CUSTODIANS,
     )
     .await?;
     if matches!(query_result, QueryResult::Full(_)) {
@@ -47,27 +48,6 @@ pub async fn query_mergeable_custodians(
         query_result.expect_any(),
         last_finalized_block_number,
         local_cells_manager,
-    )
-    .await
-}
-
-#[instrument(skip_all, fields(last_finalized_block_number = last_finalized_block_number))]
-async fn query_mergeable_ckb_custodians(
-    rpc_client: &RPCClient,
-    collected: CollectedCustodianCells,
-    last_finalized_block_number: u64,
-    local_cells_manager: &LocalCellsManager,
-) -> Result<QueryResult<CollectedCustodianCells>> {
-    if collected.cells_info.len() >= MAX_CUSTODIANS {
-        return Ok(QueryResult::Full(collected));
-    }
-
-    query_mergeable_ckb_custodians_cells(
-        local_cells_manager,
-        rpc_client,
-        collected,
-        last_finalized_block_number,
-        MAX_CUSTODIANS,
     )
     .await
 }
@@ -93,7 +73,7 @@ async fn query_mergeable_sudt_custodians(
     .await
 }
 
-async fn query_mergeable_ckb_custodians_cells(
+async fn query_mergeable_ckb_custodians(
     local_cells_manager: &LocalCellsManager,
     rpc_client: &RPCClient,
     mut collected: CollectedCustodianCells,
