@@ -5,10 +5,10 @@ use crate::{
     error::Error,
     read_only_db::{self, ReadOnlyDB},
     schema::{
-        COLUMN_META, META_TIP_BLOCK_HASH_KEY, REMOVED_COLUMN_BLOCK_DEPOSIT_REQUESTS,
+        COLUMN_BLOCK, COLUMN_META, META_TIP_BLOCK_HASH_KEY, REMOVED_COLUMN_BLOCK_DEPOSIT_REQUESTS,
         REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO,
     },
-    Result,
+    DBIterator, Result,
 };
 use std::{cmp::Ordering, collections::BTreeMap};
 
@@ -116,6 +116,14 @@ struct DecoupleBlockProducingSubmissionAndConfirmationMigration;
 
 impl Migration for DecoupleBlockProducingSubmissionAndConfirmationMigration {
     fn migrate(&self, mut db: RocksDB) -> Result<RocksDB> {
+        if db
+            .iter(COLUMN_BLOCK, rocksdb::IteratorMode::Start)?
+            .next()
+            .is_some()
+        {
+            return Err("Cannot migrate a database with existing data to version 20220517. You have to deploy a new node".to_string().into());
+        }
+
         db.drop_cf(REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO)?;
         db.drop_cf(REMOVED_COLUMN_BLOCK_DEPOSIT_REQUESTS)?;
         Ok(db)
