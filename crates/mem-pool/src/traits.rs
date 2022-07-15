@@ -2,10 +2,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use gw_types::{
-    offchain::{CellWithStatus, DepositInfo},
-    packed::OutPoint,
-};
+use gw_types::offchain::DepositInfo;
 use gw_utils::local_cells::LocalCellsManager;
 
 #[async_trait]
@@ -15,5 +12,4 @@ pub trait MemPoolProvider {
         &self,
         local_cells_manager: &LocalCellsManager,
     ) -> Result<Vec<DepositInfo>>;
-    async fn get_cell(&self, out_point: OutPoint) -> Result<Option<CellWithStatus>>;
 }

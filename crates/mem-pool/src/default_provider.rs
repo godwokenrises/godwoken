@@ -5,11 +5,7 @@ use async_trait::async_trait;
 use gw_config::MemBlockConfig;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{traits::chain_store::ChainStore, Store};
-use gw_types::{
-    offchain::{CellWithStatus, DepositInfo},
-    packed::OutPoint,
-    prelude::*,
-};
+use gw_types::{offchain::DepositInfo, prelude::*};
 use gw_utils::local_cells::LocalCellsManager;
 use tracing::instrument;
 
@@ -90,10 +86,5 @@ impl MemPoolProvider for DefaultMemPoolProvider {
                 local_cells_manager.dead_cells(),
             )
             .await
-    }
-
-    #[instrument(skip_all)]
-    async fn get_cell(&self, out_point: OutPoint) -> Result<Option<CellWithStatus>> {
-        self.rpc_client.get_cell(out_point).await
     }
 }

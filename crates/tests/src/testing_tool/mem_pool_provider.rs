@@ -25,10 +25,4 @@ impl MemPoolProvider for DummyMemPoolProvider {
     ) -> Result<Vec<DepositInfo>> {
         Ok(self.deposit_cells.clone())
     }
-    async fn get_cell(&self, _out_point: OutPoint) -> Result<Option<CellWithStatus>> {
-        Ok(Some(CellWithStatus {
-            cell: Some(Default::default()),
-            status: CellStatus::Live,
-        }))
-    }
 }
