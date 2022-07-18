@@ -1,7 +1,7 @@
 use sparse_merkle_tree::H256;
 
 use crate::{
-    packed::{DepositRequest, GlobalState, L2Block, Script, WithdrawalRequestExtra},
+    packed::{DepositInfoVec, GlobalState, L2Block, Script, WithdrawalRequestExtra},
     prelude::{Entity, Unpack},
 };
 
@@ -9,7 +9,7 @@ use crate::{
 pub struct ExportedBlock {
     pub block: L2Block,
     pub post_global_state: GlobalState,
-    pub deposit_requests: Vec<DepositRequest>,
+    pub deposit_info_vec: DepositInfoVec,
     pub deposit_asset_scripts: Vec<Script>,
     pub withdrawals: Vec<WithdrawalRequestExtra>,
     pub bad_block_hashes: Option<Vec<Vec<H256>>>,
@@ -31,13 +31,10 @@ impl ExportedBlock {
 
 impl PartialEq for ExportedBlock {
     fn eq(&self, other: &Self) -> bool {
-        let self_deposits = self.deposit_requests.iter().map(|d| d.as_slice());
-        let other_deposits = other.deposit_requests.iter().map(|d| d.as_slice());
-
         self.block.as_slice() == other.block.as_slice()
             && self.post_global_state.as_slice() == other.post_global_state.as_slice()
             && self.bad_block_hashes == other.bad_block_hashes
-            && self_deposits.eq(other_deposits)
+            && self.deposit_info_vec.as_slice() == other.deposit_info_vec.as_slice()
     }
 }
 

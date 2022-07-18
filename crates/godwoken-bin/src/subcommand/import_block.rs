@@ -215,7 +215,7 @@ fn insert_block(chain: &mut Chain, exported: ExportedBlock) -> Result<()> {
         &tx_db,
         exported.block,
         exported.post_global_state.clone(),
-        None.unwrap(), // TODO.
+        exported.deposit_info_vec,
         HashSet::from_iter(exported.deposit_asset_scripts),
         exported.withdrawals,
     )? {

@@ -2,6 +2,7 @@
 
 use super::blockchain::*;
 use super::godwoken::*;
+use super::mem_block::*;
 use super::store::*;
 use molecule::prelude::*;
 #[derive(Clone)]
@@ -522,7 +523,7 @@ impl ::core::fmt::Display for ExportedBlock {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "block", self.block())?;
         write!(f, ", {}: {}", "post_global_state", self.post_global_state())?;
-        write!(f, ", {}: {}", "deposit_requests", self.deposit_requests())?;
+        write!(f, ", {}: {}", "deposit_info_vec", self.deposit_info_vec())?;
         write!(
             f,
             ", {}: {}",
@@ -596,11 +597,11 @@ impl ExportedBlock {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         GlobalState::new_unchecked(self.0.slice(start..end))
     }
-    pub fn deposit_requests(&self) -> DepositRequestVec {
+    pub fn deposit_info_vec(&self) -> DepositInfoVec {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         let end = molecule::unpack_number(&slice[16..]) as usize;
-        DepositRequestVec::new_unchecked(self.0.slice(start..end))
+        DepositInfoVec::new_unchecked(self.0.slice(start..end))
     }
     pub fn deposit_asset_scripts(&self) -> ScriptVec {
         let slice = self.as_slice();
@@ -653,7 +654,7 @@ impl molecule::prelude::Entity for ExportedBlock {
         Self::new_builder()
             .block(self.block())
             .post_global_state(self.post_global_state())
-            .deposit_requests(self.deposit_requests())
+            .deposit_info_vec(self.deposit_info_vec())
             .deposit_asset_scripts(self.deposit_asset_scripts())
             .withdrawals(self.withdrawals())
             .bad_block_hashes(self.bad_block_hashes())
@@ -680,7 +681,7 @@ impl<'r> ::core::fmt::Display for ExportedBlockReader<'r> {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "block", self.block())?;
         write!(f, ", {}: {}", "post_global_state", self.post_global_state())?;
-        write!(f, ", {}: {}", "deposit_requests", self.deposit_requests())?;
+        write!(f, ", {}: {}", "deposit_info_vec", self.deposit_info_vec())?;
         write!(
             f,
             ", {}: {}",
@@ -726,11 +727,11 @@ impl<'r> ExportedBlockReader<'r> {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         GlobalStateReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn deposit_requests(&self) -> DepositRequestVecReader<'r> {
+    pub fn deposit_info_vec(&self) -> DepositInfoVecReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         let end = molecule::unpack_number(&slice[16..]) as usize;
-        DepositRequestVecReader::new_unchecked(&self.as_slice()[start..end])
+        DepositInfoVecReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn deposit_asset_scripts(&self) -> ScriptVecReader<'r> {
         let slice = self.as_slice();
@@ -806,7 +807,7 @@ impl<'r> molecule::prelude::Reader<'r> for ExportedBlockReader<'r> {
         }
         L2BlockReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         GlobalStateReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        DepositRequestVecReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        DepositInfoVecReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         ScriptVecReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         WithdrawalRequestExtraVecReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
         Byte32VecVecOptReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
@@ -817,7 +818,7 @@ impl<'r> molecule::prelude::Reader<'r> for ExportedBlockReader<'r> {
 pub struct ExportedBlockBuilder {
     pub(crate) block: L2Block,
     pub(crate) post_global_state: GlobalState,
-    pub(crate) deposit_requests: DepositRequestVec,
+    pub(crate) deposit_info_vec: DepositInfoVec,
     pub(crate) deposit_asset_scripts: ScriptVec,
     pub(crate) withdrawals: WithdrawalRequestExtraVec,
     pub(crate) bad_block_hashes: Byte32VecVecOpt,
@@ -832,8 +833,8 @@ impl ExportedBlockBuilder {
         self.post_global_state = v;
         self
     }
-    pub fn deposit_requests(mut self, v: DepositRequestVec) -> Self {
-        self.deposit_requests = v;
+    pub fn deposit_info_vec(mut self, v: DepositInfoVec) -> Self {
+        self.deposit_info_vec = v;
         self
     }
     pub fn deposit_asset_scripts(mut self, v: ScriptVec) -> Self {
@@ -856,7 +857,7 @@ impl molecule::prelude::Builder for ExportedBlockBuilder {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.block.as_slice().len()
             + self.post_global_state.as_slice().len()
-            + self.deposit_requests.as_slice().len()
+            + self.deposit_info_vec.as_slice().len()
             + self.deposit_asset_scripts.as_slice().len()
             + self.withdrawals.as_slice().len()
             + self.bad_block_hashes.as_slice().len()
@@ -869,7 +870,7 @@ impl molecule::prelude::Builder for ExportedBlockBuilder {
         offsets.push(total_size);
         total_size += self.post_global_state.as_slice().len();
         offsets.push(total_size);
-        total_size += self.deposit_requests.as_slice().len();
+        total_size += self.deposit_info_vec.as_slice().len();
         offsets.push(total_size);
         total_size += self.deposit_asset_scripts.as_slice().len();
         offsets.push(total_size);
@@ -882,7 +883,7 @@ impl molecule::prelude::Builder for ExportedBlockBuilder {
         }
         writer.write_all(self.block.as_slice())?;
         writer.write_all(self.post_global_state.as_slice())?;
-        writer.write_all(self.deposit_requests.as_slice())?;
+        writer.write_all(self.deposit_info_vec.as_slice())?;
         writer.write_all(self.deposit_asset_scripts.as_slice())?;
         writer.write_all(self.withdrawals.as_slice())?;
         writer.write_all(self.bad_block_hashes.as_slice())?;
