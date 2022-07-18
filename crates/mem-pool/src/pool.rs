@@ -18,6 +18,7 @@ use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_generator::{
     constants::L2TX_MAX_CYCLES,
     error::TransactionError,
+    generator::CyclesPool,
     traits::StateExt,
     verification::{transaction::TransactionVerifier, withdrawal::WithdrawalVerifier},
     ArcSwap, Generator,
@@ -104,6 +105,8 @@ pub struct MemPool {
     new_tip_publisher: broadcast::Sender<(H256, u64)>,
     mem_block_config: MemBlockConfig,
     has_p2p_sync: bool,
+    /// Cycles Pool
+    cycles_pool: CyclesPool,
 }
 
 pub struct MemPoolCreateArgs {
@@ -184,6 +187,10 @@ impl MemPool {
         };
 
         let (new_tip_publisher, _) = broadcast::channel(1);
+        let cycles_pool = CyclesPool::new(
+            config.mem_block.max_cycles_limit,
+            config.mem_block.syscall_cycles.clone(),
+        );
 
         let mut mem_pool = MemPool {
             store,
@@ -202,6 +209,7 @@ impl MemPool {
             new_tip_publisher,
             mem_block_config: config.mem_block,
             has_p2p_sync,
+            cycles_pool,
         };
         mem_pool.restore_pending_withdrawals().await?;
 
@@ -225,6 +233,10 @@ impl MemPool {
 
     pub fn mem_pool_state(&self) -> Arc<MemPoolState> {
         self.mem_pool_state.clone()
+    }
+
+    pub fn cycles_pool(&self) -> &CyclesPool {
+        &self.cycles_pool
     }
 
     pub fn restore_manager(&self) -> &RestoreManager {
@@ -282,6 +294,7 @@ impl MemPool {
         self.push_transaction_with_db(&db, &mut state, tx).await?;
         db.commit()?;
         self.mem_pool_state.store(snap.into());
+
         Ok(())
     }
 
@@ -690,6 +703,9 @@ impl MemPool {
             self.try_package_more_withdrawals(&mem_state, &mut withdrawals);
         }
 
+        // To simplify logic, use unlimit to make consistent state.
+        self.cycles_pool = CyclesPool::unlimit_cycles();
+
         self.prepare_next_mem_block(
             &db,
             &mut mem_state,
@@ -698,6 +714,16 @@ impl MemPool {
             txs,
         )
         .await?;
+
+        // Update block cycles
+        let remained_block_cycles = self
+            .mem_block_config
+            .max_cycles_limit
+            .saturating_sub(self.cycles_pool.cycles_used());
+        self.cycles_pool = CyclesPool::new(
+            remained_block_cycles,
+            self.mem_block_config.syscall_cycles.clone(),
+        );
 
         // store mem state
         self.mem_pool_state.store(Arc::new(mem_store));
@@ -834,7 +860,6 @@ impl MemPool {
         // deposits
         self.finalize_deposits(state, deposit_cells.clone()).await?;
 
-        // Register eth eoa mapping
         // Fan-out next mem block to readonly node
         if let Some(handler) = &self.mem_pool_publish_service {
             handler
@@ -1111,13 +1136,16 @@ impl MemPool {
 
         // execute tx
         let raw_tx = tx.raw();
+        let cycles_pool = &mut self.cycles_pool;
+        let generator = Arc::clone(&self.generator);
         let run_result = tokio::task::block_in_place(|| {
-            self.generator.unchecked_execute_transaction(
+            generator.unchecked_execute_transaction(
                 &chain_view,
                 state,
                 block_info,
                 &raw_tx,
                 L2TX_MAX_CYCLES,
+                cycles_pool,
             )
         })?;
 

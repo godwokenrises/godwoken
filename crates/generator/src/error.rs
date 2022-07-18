@@ -159,6 +159,8 @@ pub enum TransactionError {
     NonceOverflow,
     #[error("Intrinsic gas: {0}")]
     IntrinsicGas(Cow<'static, str>),
+    #[error("Cycles limit reached: limit {limit}")]
+    CyclesLimitReached { limit: u64 },
 }
 
 impl From<VMError> for TransactionError {

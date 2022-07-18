@@ -6,6 +6,7 @@ use gw_jsonrpc_types::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    cmp::min,
     collections::{HashMap, HashSet},
     path::PathBuf,
 };
@@ -302,6 +303,14 @@ pub struct MemBlockConfig {
     pub max_deposits: usize,
     pub max_withdrawals: usize,
     pub max_txs: usize,
+    #[serde(default = "default_max_block_cycles_limit")]
+    pub max_cycles_limit: u64,
+    #[serde(default)]
+    pub syscall_cycles: SyscallCyclesConfig,
+}
+
+const fn default_max_block_cycles_limit() -> u64 {
+    u64::MAX
 }
 
 // Field default value for backward config file compitability
@@ -329,6 +338,8 @@ impl Default for MemBlockConfig {
             max_deposits: 100,
             max_withdrawals: 100,
             max_txs: 1000,
+            max_cycles_limit: default_max_block_cycles_limit(),
+            syscall_cycles: Default::default(),
         }
     }
 }
@@ -390,6 +401,15 @@ pub struct FeeConfig {
     pub withdraw_cycles_limit: u64,
 }
 
+impl FeeConfig {
+    pub fn minimal_tx_cycles_limit(&self) -> u64 {
+        min(
+            min(self.meta_cycles_limit, self.sudt_cycles_limit),
+            self.eth_addr_reg_cycles_limit,
+        )
+    }
+}
+
 impl Default for FeeConfig {
     fn default() -> Self {
         // CKB default weight is 1000 / 1000
@@ -430,5 +450,41 @@ pub enum ContractLogConfig {
 impl Default for ContractLogConfig {
     fn default() -> Self {
         ContractLogConfig::Default
+    }
+}
+
+// Cycles config for all db related syscalls
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SyscallCyclesConfig {
+    pub sys_store_cycles: u64,
+    pub sys_load_cycles: u64,
+    pub sys_create_cycles: u64,
+    pub sys_load_account_script_cycles: u64,
+    pub sys_store_data_cycles: u64,
+    pub sys_load_data_cycles: u64,
+    pub sys_get_block_hash_cycles: u64,
+    pub sys_recover_account_cycles: u64,
+    pub sys_log_cycles: u64,
+}
+
+impl SyscallCyclesConfig {
+    pub fn all_zero() -> Self {
+        SyscallCyclesConfig {
+            sys_store_cycles: 0,
+            sys_load_cycles: 0,
+            sys_create_cycles: 0,
+            sys_load_account_script_cycles: 0,
+            sys_store_data_cycles: 0,
+            sys_load_data_cycles: 0,
+            sys_get_block_hash_cycles: 0,
+            sys_recover_account_cycles: 0,
+            sys_log_cycles: 0,
+        }
+    }
+}
+
+impl Default for SyscallCyclesConfig {
+    fn default() -> Self {
+        Self::all_zero()
     }
 }

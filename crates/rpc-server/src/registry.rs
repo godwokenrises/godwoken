@@ -9,6 +9,7 @@ use gw_config::{
     RPCServerConfig,
 };
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
+use gw_generator::generator::CyclesPool;
 use gw_generator::utils::get_tx_type;
 use gw_generator::{
     error::TransactionError, sudt::build_l2_sudt_script,
@@ -27,6 +28,7 @@ use gw_jsonrpc_types::{
     },
     test_mode::TestModePayload,
 };
+use gw_mem_pool::fee::types::FeeItemKind;
 use gw_mem_pool::{
     custodian::AvailableCustodians,
     fee::{
@@ -145,6 +147,7 @@ pub struct ExecutionTransactionContext {
     store: Store,
     mem_pool_state: Arc<MemPoolState>,
     polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
+    mem_pool_config: MemPoolConfig,
 }
 
 pub struct SubmitTransactionContext {
@@ -248,6 +251,7 @@ impl Registry {
                 mem_pool_state: mem_pool_state.clone(),
                 store: store.clone(),
                 polyjuice_sender_recover: Arc::clone(&polyjuice_sender_recover),
+                mem_pool_config: mem_pool_config.clone(),
             };
             tokio::spawn(submitter.in_background());
         }
@@ -291,6 +295,7 @@ impl Registry {
                 store: self.store.clone(),
                 mem_pool_state: self.mem_pool_state.clone(),
                 polyjuice_sender_recover: self.polyjuice_sender_recover.clone(),
+                mem_pool_config: self.mem_pool_config.clone(),
             }))
             .with_data(Data::new(SubmitTransactionContext {
                 in_queue_request_map: self.in_queue_request_map.clone(),
@@ -429,6 +434,7 @@ struct RequestSubmitter {
     mem_pool_state: Arc<MemPoolState>,
     store: Store,
     polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
+    mem_pool_config: MemPoolConfig,
 }
 
 #[instrument(skip_all, fields(req_kind = req.kind()))]
@@ -471,18 +477,27 @@ impl RequestSubmitter {
 
     async fn in_background(mut self) {
         // First mem pool reinject txs
-        {
+        loop {
             let db = self.store.begin_transaction();
             let mut mem_pool = self.mem_pool.lock().await;
 
             log::info!(
-                "reinject mem block txs {}",
+                "try reinject mem block txs {}",
                 mem_pool.pending_restored_tx_hashes().len()
             );
+
             while let Some(hash) = mem_pool.pending_restored_tx_hashes().pop_front() {
                 match db.get_mem_pool_transaction(&hash) {
                     Ok(Some(tx)) => {
                         if let Err(err) = mem_pool.push_transaction(tx).await {
+                            if let Some(TransactionError::CyclesLimitReached { .. }) =
+                                err.downcast_ref::<TransactionError>()
+                            {
+                                log::info!("mem block cycles limit reached, try later");
+                                mem_pool.pending_restored_tx_hashes().push_front(hash);
+                                break;
+                            }
+
                             log::error!("reinject mem block tx {} failed {}", hash.pack(), err);
                         }
                     }
@@ -494,11 +509,22 @@ impl RequestSubmitter {
                     }
                 }
             }
+
+            if !mem_pool.pending_restored_tx_hashes().is_empty() {
+                drop(mem_pool);
+                // Sleep and try later
+                tokio::time::sleep(Self::INTERVAL_MS).await;
+            } else {
+                break;
+            }
         }
 
         loop {
             // check mem block empty slots
             loop {
+                let dynamic_config_manager = self.dynamic_config_manager.load();
+                let fee_config = dynamic_config_manager.get_fee_config();
+
                 log::debug!("[Mem-pool background job] check mem-pool acquire mem_pool",);
                 let t = Instant::now();
                 let mem_pool = self.mem_pool.lock().await;
@@ -507,7 +533,9 @@ impl RequestSubmitter {
                     t.elapsed().as_millis()
                 );
                 // continue to batch process if we have enough mem block slots
-                if !mem_pool.is_mem_txs_full(Self::MAX_BATCH_SIZE) {
+                if !mem_pool.is_mem_txs_full(Self::MAX_BATCH_SIZE)
+                    && mem_pool.cycles_pool().cycles() >= fee_config.minimal_tx_cycles_limit()
+                {
                     break;
                 }
                 drop(mem_pool);
@@ -536,7 +564,11 @@ impl RequestSubmitter {
                 let fee_config = dynamic_config_manager.get_fee_config();
                 match req_to_entry(fee_config, self.generator.clone(), req, &state, queue.len()) {
                     Ok(entry) => {
-                        queue.add(entry, handle);
+                        if entry.cycles_limit > self.mem_pool_config.mem_block.max_cycles_limit {
+                            log::error!("tx {} exceeded mem block max cycles limit, drop it", hash);
+                        } else {
+                            queue.add(entry, handle);
+                        }
                     }
                     Err(err) => {
                         log::error!(
@@ -559,7 +591,11 @@ impl RequestSubmitter {
                 let fee_config = dynamic_config_manager.get_fee_config();
                 match req_to_entry(fee_config, self.generator.clone(), req, &state, queue.len()) {
                     Ok(entry) => {
-                        queue.add(entry, handle);
+                        if entry.cycles_limit > self.mem_pool_config.mem_block.max_cycles_limit {
+                            log::error!("tx {} exceeded mem block max cycles limit, drop it", hash);
+                        } else {
+                            queue.add(entry, handle);
+                        }
                     }
                     Err(err) => {
                         log::error!(
@@ -612,16 +648,41 @@ impl RequestSubmitter {
                     Ok(None) => Ok(()),
                     Err(err) => Err(err),
                 } {
+                    if let Some(TransactionError::CyclesLimitReached { .. }) =
+                        err.downcast_ref::<TransactionError>()
+                    {
+                        log::info!("[tx from zero] mem block cycles limit reached, retry later");
+
+                        for (entry, handle) in items {
+                            self.queue.add(entry, handle);
+                        }
+                        continue;
+                    }
+
                     log::info!("[tx from zero] create account {}", err);
                 }
 
                 let snap = self.mem_pool_state.load();
                 let state = snap.state().expect("get mem state");
+                let mut block_cycles_limit_reached = false;
 
                 // Note: don't change `_handle` to `_`. The request should be
                 // removed from the in queue request map after pushed to mem
                 // pool.
-                for (entry, _handle) in items {
+                for (entry, handle) in items {
+                    if let FeeItemKind::Tx = entry.item.kind() {
+                        if !block_cycles_limit_reached
+                            && entry.cycles_limit > mem_pool.cycles_pool().cycles()
+                        {
+                            block_cycles_limit_reached = true;
+                        }
+
+                        if block_cycles_limit_reached {
+                            queue.add(entry, handle);
+                            continue;
+                        }
+                    }
+
                     let maybe_ok = match entry.item.clone() {
                         FeeItem::Tx(tx) if 0 == entry.sender => {
                             let sig: Bytes = tx.signature().unpack();
@@ -653,8 +714,24 @@ impl RequestSubmitter {
 
                     if let Err(err) = maybe_ok {
                         let hash: Byte32 = entry.item.hash().pack();
+
+                        if let Some(TransactionError::CyclesLimitReached { .. }) =
+                            err.downcast_ref::<TransactionError>()
+                        {
+                            log::info!("mem block cycles limit reached for tx {}", hash);
+
+                            block_cycles_limit_reached = true;
+                            queue.add(entry, handle);
+
+                            continue;
+                        }
                         log::info!("push {:?} {} failed {}", entry.item.kind(), hash, err);
                     }
+                }
+
+                if block_cycles_limit_reached {
+                    drop(mem_pool);
+                    tokio::time::sleep(Self::INTERVAL_MS).await;
                 }
             }
         }
@@ -933,6 +1010,10 @@ async fn execute_l2transaction(
         let snap = ctx.mem_pool_state.load();
         let mem_state = snap.state()?;
         let mut state = MemExecuteTxStateTree::new(mem_state);
+        let mut cycles_pool = CyclesPool::new(
+            ctx.mem_pool_config.mem_block.max_cycles_limit,
+            ctx.mem_pool_config.mem_block.syscall_cycles.clone(),
+        );
 
         // Mock sender account if not exists
         let eth_recover = &ctx.polyjuice_sender_recover.eth;
@@ -954,6 +1035,7 @@ async fn execute_l2transaction(
             &block_info,
             &raw_tx,
             100000000,
+            &mut cycles_pool,
         )?;
 
         Result::<_, anyhow::Error>::Ok(run_result)
@@ -1042,6 +1124,10 @@ async fn execute_raw_l2transaction(
     let execute_l2tx_max_cycles = mem_pool_config.execute_l2tx_max_cycles;
     let tx_hash: H256 = raw_l2tx.hash().into();
     let block_number: u64 = block_info.number().unpack();
+    let mut cycles_pool = CyclesPool::new(
+        ctx.mem_pool_config.mem_block.max_cycles_limit,
+        ctx.mem_pool_config.mem_block.syscall_cycles.clone(),
+    );
 
     // check sender's balance
     // NOTE: for tx from id zero, its balance will be verified after mock account
@@ -1096,6 +1182,7 @@ async fn execute_raw_l2transaction(
                     &block_info,
                     &raw_l2tx,
                     execute_l2tx_max_cycles,
+                    &mut cycles_pool,
                 )?
             }
             None => {
@@ -1117,6 +1204,7 @@ async fn execute_raw_l2transaction(
                     &block_info,
                     &raw_l2tx,
                     execute_l2tx_max_cycles,
+                    &mut cycles_pool,
                 )?
             }
         };

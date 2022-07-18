@@ -5,6 +5,7 @@ use gw_common::registry_address::RegistryAddress;
 use gw_common::state::State;
 use gw_common::H256;
 use gw_generator::constants::L2TX_MAX_CYCLES;
+use gw_generator::generator::CyclesPool;
 use gw_generator::traits::StateExt;
 use gw_generator::Generator;
 use gw_store::chain_view::ChainView;
@@ -112,6 +113,7 @@ impl ReplayBlock {
                 &block_info,
                 &raw_tx,
                 L2TX_MAX_CYCLES,
+                &mut CyclesPool::unlimit_cycles(),
             )?;
 
             state.apply_run_result(&run_result.write)?;
