@@ -1229,7 +1229,8 @@ async fn submit_l2transaction(
         Some(_) => tx_hash,
         None => {
             let mut hasher = new_blake2b();
-            hasher.update(tx.signature().as_slice());
+            let sig: Bytes = tx.signature().unpack();
+            hasher.update(&sig);
             let mut hash = [0u8; 32];
             hasher.finalize(&mut hash);
             H256::from(hash)
