@@ -14,8 +14,6 @@ use gw_utils::since::{LockValue, Since};
 use crate::custodian::to_custodian_cell;
 
 /// check and reject invalid deposit cells
-///
-/// TODO!!: exclude deposits that have already been handled by local blocks.
 pub fn sanitize_deposit_cells(
     ctx: &RollupContext,
     config: &MemBlockConfig,

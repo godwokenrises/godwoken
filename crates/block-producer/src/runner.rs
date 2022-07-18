@@ -827,7 +827,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         .await
         .context("create ProduceSubmitConfirm")?;
 
-        // TODO: Avoid blocking.
         let shutdown_completed_send = shutdown_completed_send.clone();
         let mut shutdown_event_recv = shutdown_event.subscribe();
         Some(tokio::spawn(async move {

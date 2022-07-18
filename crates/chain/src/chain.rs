@@ -145,7 +145,6 @@ pub struct Chain {
     local_state: LocalState,
     generator: Arc<Generator>,
     mem_pool: Option<Arc<Mutex<MemPool>>>,
-    complete_initial_syncing: bool,
     skipped_invalid_block_list: HashSet<H256>,
 }
 
@@ -198,7 +197,6 @@ impl Chain {
             mem_pool,
             rollup_type_script_hash,
             rollup_config_hash,
-            complete_initial_syncing: false,
             skipped_invalid_block_list,
         })
     }
@@ -236,34 +234,6 @@ impl Chain {
         self.challenge_target
             .as_ref()
             .map(|t| t.block_hash().unpack())
-    }
-
-    pub async fn complete_initial_syncing(&mut self) -> Result<()> {
-        if let Some(mem_pool) = &self.mem_pool {
-            if !self.complete_initial_syncing {
-                // Do first notify
-                let tip_block_hash: H256 = match self.challenge_target {
-                    Some(_) => self.store().get_last_valid_tip_block_hash()?,
-                    None => self.local_state.tip.hash().into(),
-                };
-
-                log::debug!("[complete_initial_syncing] acquire mem-pool",);
-                let t = Instant::now();
-                let mut mem_pool = mem_pool.lock().await;
-                // TODO: local cells manager.
-                mem_pool
-                    .notify_new_tip(tip_block_hash, &Default::default())
-                    .await?;
-                mem_pool.mem_pool_state().set_completed_initial_syncing();
-                log::debug!(
-                    "[complete_initial_syncing] unlock mem-pool {}ms",
-                    t.elapsed().as_millis()
-                );
-            }
-        }
-        self.complete_initial_syncing = true;
-
-        Ok(())
     }
 
     pub fn dump_cancel_challenge_tx(
@@ -884,7 +854,7 @@ impl Chain {
         let tip_block_hash: H256 = self.local_state.tip.hash().into();
         if let Some(mem_pool) = &self.mem_pool {
             if matches!(self.last_sync_event, SyncEvent::Success)
-                && (is_l1_revert_happend || is_bad_block_reverted || self.complete_initial_syncing)
+                && (is_l1_revert_happend || is_bad_block_reverted)
             {
                 // update mem pool state
                 log::debug!(target: "sync-block", "acquire mem-pool",);
@@ -926,7 +896,7 @@ impl Chain {
 
     /// Store a new local block.
     ///
-    /// Note that this does not store block deposit requests or finalized custodian.
+    /// Note that this does not store finalized custodians.
     pub async fn update_local(
         &mut self,
         store_tx: &StoreTransaction,

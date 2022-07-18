@@ -78,12 +78,10 @@ impl ProduceSubmitConfirm {
                     local_cells_manager.lock_cell(c.out_point());
                 }
             }
-            context
-                .mem_pool
-                .lock()
-                .await
-                .notify_new_tip(snap.get_last_valid_tip_block_hash()?, &local_cells_manager)
+            let mut pool = context.mem_pool.lock().await;
+            pool.notify_new_tip(snap.get_last_valid_tip_block_hash()?, &local_cells_manager)
                 .await?;
+            pool.mem_pool_state().set_completed_initial_syncing();
         }
         log::info!(
             "last valid: {}, last_submitted: {}, last_confirmed: {}",
@@ -91,12 +89,6 @@ impl ProduceSubmitConfirm {
             last_submitted,
             last_confirmed
         );
-        context
-            .chain
-            .lock()
-            .await
-            .complete_initial_syncing()
-            .await?;
         let local_count = last_valid - last_submitted;
         let submitted_count = last_submitted - last_confirmed;
         Ok(Self {

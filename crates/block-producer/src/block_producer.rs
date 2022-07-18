@@ -9,7 +9,8 @@ use crate::{
     test_mode_control::TestModeControl,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
+use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
 use gw_chain::chain::Chain;
 use gw_common::{h256_ext::H256Ext, H256};
 use gw_config::BlockProducerConfig;
@@ -38,9 +39,6 @@ use std::{collections::HashSet, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
 use tracing::instrument;
 
-const MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT: usize = 10;
-const TRANSACTION_SCRIPT_ERROR: &str = "TransactionScriptError";
-const TRANSACTION_EXCEEDED_MAXIMUM_BLOCK_BYTES_ERROR: &str = "ExceededMaximumBlockBytes";
 /// 524_288 we choose this value because it is smaller than the MAX_BLOCK_BYTES which is 597K
 const MAX_ROLLUP_WITNESS_SIZE: usize = 1 << 19;
 
@@ -274,11 +272,11 @@ impl BlockProducer {
         };
 
         // witnesses
-        tx_skeleton.witnesses_mut().push(
-            WitnessArgs::new_builder()
-                .output_type(Some(rollup_action.as_bytes()).pack())
-                .build(),
-        );
+        let witness = WitnessArgs::new_builder()
+            .output_type(Some(rollup_action.as_bytes()).pack())
+            .build();
+        ensure!(witness.as_slice().len() < MAX_ROLLUP_WITNESS_SIZE);
+        tx_skeleton.witnesses_mut().push(witness);
 
         // output
         let output_data = global_state.as_bytes();
@@ -448,7 +446,7 @@ impl BlockProducer {
         );
         // sign
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
-        // TODO: check tx size witnesses size.
+        ensure!((tx.as_slice().len() as u64) < MAX_BLOCK_BYTES);
         log::debug!("final tx size: {}", tx.as_slice().len());
         Ok(tx)
     }
