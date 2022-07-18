@@ -1,4 +1,7 @@
-use crate::{account_lock_manage::AccountLockManage, syscalls::error_codes::GW_FATAL_UNKNOWN_ARGS};
+use crate::{
+    account_lock_manage::AccountLockManage, generator::CyclesPool,
+    syscalls::error_codes::GW_FATAL_UNKNOWN_ARGS,
+};
 use ckb_vm::{
     memory::Memory,
     registers::{A0, A1, A2, A3, A4, A5, A7},
@@ -72,6 +75,7 @@ pub(crate) struct L2Syscalls<'a, S, C> {
     pub(crate) code_store: &'a dyn CodeStore,
     pub(crate) result: &'a mut RunResult,
     pub(crate) redir_log_handler: &'a RedirLogHandler,
+    pub(crate) cycles_pool: &'a mut CyclesPool,
 }
 
 #[allow(dead_code)]
@@ -138,6 +142,13 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
 
     fn ecall(&mut self, machine: &mut Mac) -> Result<bool, VMError> {
         let code = machine.registers()[A7].to_u64();
+
+        let syscall_cycles = self.get_syscall_cycles(code);
+        if 0 != syscall_cycles {
+            self.sub_cycles(syscall_cycles)?;
+            machine.add_cycles(syscall_cycles)?;
+        }
+
         match code {
             SYS_STORE => {
                 let key_addr = machine.registers()[A0].to_u64();
@@ -601,5 +612,32 @@ impl<'a, S: State, C: ChainView> L2Syscalls<'a, S, C> {
         let s = String::from_utf8(buffer).map_err(|_| VMError::ParseError)?;
         self.redir_log_handler.append_log(s);
         Ok(())
+    }
+
+    fn get_syscall_cycles(&self, syscall: u64) -> u64 {
+        let config = self.cycles_pool.syscall_config();
+
+        match syscall {
+            SYS_STORE => config.sys_store_cycles,
+            SYS_LOAD => config.sys_load_cycles,
+            SYS_CREATE => config.sys_create_cycles,
+            SYS_LOAD_ACCOUNT_SCRIPT => config.sys_load_account_script_cycles,
+            SYS_STORE_DATA => config.sys_store_data_cycles,
+            SYS_LOAD_DATA => config.sys_load_data_cycles,
+            SYS_GET_BLOCK_HASH => config.sys_get_block_hash_cycles,
+            SYS_RECOVER_ACCOUNT => config.sys_recover_account_cycles,
+            SYS_LOG => config.sys_log_cycles,
+            _ => 0,
+        }
+    }
+
+    fn sub_cycles(&mut self, cycles: u64) -> Result<(), VMError> {
+        self.cycles_pool.sub_cycles(cycles);
+
+        if self.cycles_pool.limit_reached() {
+            Err(VMError::LimitReached)
+        } else {
+            Ok(())
+        }
     }
 }

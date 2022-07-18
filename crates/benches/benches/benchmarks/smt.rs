@@ -14,6 +14,7 @@ use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::BackendManage,
     constants::L2TX_MAX_CYCLES,
+    generator::CyclesPool,
     genesis::build_genesis_from_store,
     traits::StateExt,
     Generator,
@@ -253,7 +254,14 @@ impl BenchExecutionEnvironment {
 
             let run_result = self
                 .generator
-                .execute_transaction(&self.chain, &state, &block_info, &raw_tx, L2TX_MAX_CYCLES)
+                .execute_transaction(
+                    &self.chain,
+                    &state,
+                    &block_info,
+                    &raw_tx,
+                    L2TX_MAX_CYCLES,
+                    &mut CyclesPool::unlimit_cycles(),
+                )
                 .unwrap();
 
             state.apply_run_result(&run_result.write).unwrap();
