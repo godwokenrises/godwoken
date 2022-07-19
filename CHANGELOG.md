@@ -13,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 - Fix gw-tools `stat-custodian-ckb` command [#757](https://github.com/nervosnetwork/godwoken/pull/757)
 - Redirect layer 2 transaction syscall log to sentry [#758](https://github.com/nervosnetwork/godwoken/pull/758)
 
+## [v1.3.0-rc2] - 2022-07-19
+
+- fix(withdrawal unlocker): unhandle tx status unknown and rejected [#764](https://github.com/nervosnetwork/godwoken/pull/764)
+
 ## [v1.3.0-rc1] - 2022-07-01
 
 - Fix gw-tools `transfer` command [#744](https://github.com/nervosnetwork/godwoken/pull/744)
