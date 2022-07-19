@@ -240,7 +240,7 @@ pub fn init_genesis(
         0,
         &FinalizedCustodianCapacity::default().as_reader(),
     )?;
-    db.set_submit_tx(0, transaction)?;
+    db.set_block_submit_tx(0, transaction)?;
     db.commit()?;
     Ok(())
 }

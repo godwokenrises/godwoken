@@ -741,11 +741,12 @@ async fn get_block_committed_info(
     store: Data<Store>,
 ) -> Result<Option<L2BlockCommittedInfo>> {
     if let Some(number) = store.get_block_number(&to_h256(block_hash))? {
-        let tx = store.get_submit_tx(number).context("get submit tx")?;
-        let transaction_hash = tx.hash();
+        let transaction_hash = store
+            .get_block_submit_tx_hash(number)
+            .context("get submit tx")?;
         let opt_block_hash = rpc_client
             .ckb
-            .get_transaction_block_hash(transaction_hash.into())
+            .get_transaction_block_hash(transaction_hash)
             .await?;
         if let Some(block_hash) = opt_block_hash {
             let number = rpc_client
@@ -757,7 +758,7 @@ async fn get_block_committed_info(
             Ok(Some(L2BlockCommittedInfo {
                 number,
                 block_hash: block_hash.into(),
-                transaction_hash: transaction_hash.into(),
+                transaction_hash: to_jsonh256(transaction_hash),
             }))
         } else {
             Ok(None)
@@ -1840,11 +1841,11 @@ async fn get_last_submitted_info(store: Data<Store>) -> Result<LastL2BlockCommit
         .context("get last submitted block")?
         .number()
         .unpack();
-    let tx = store
-        .get_submit_tx(last_submitted)
-        .context("get submission tx")?;
+    let tx_hash = store
+        .get_block_submit_tx_hash(last_submitted)
+        .context("get submission tx hash")?;
     Ok(LastL2BlockCommittedInfo {
-        transaction_hash: tx.hash().into(),
+        transaction_hash: to_jsonh256(tx_hash),
     })
 }
 

@@ -7,9 +7,10 @@ use gw_db::error::Error;
 use gw_db::schema::{
     COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
     COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_GLOBAL_STATE,
-    COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY, COLUMN_BLOCK_SUBMIT_TX, COLUMN_INDEX,
-    COLUMN_MEM_POOL_TRANSACTION, COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL,
-    COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
+    COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY, COLUMN_BLOCK_SUBMIT_TX,
+    COLUMN_BLOCK_SUBMIT_TX_HASH, COLUMN_INDEX, COLUMN_MEM_POOL_TRANSACTION,
+    COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
+    COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
     COLUMN_TRANSACTION_RECEIPT, COLUMN_WITHDRAWAL, COLUMN_WITHDRAWAL_INFO, META_BLOCK_SMT_ROOT_KEY,
     META_CHAIN_ID_KEY, META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY,
     META_LAST_SUBMITTED_BLOCK_NUMBER_HASH_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
@@ -123,9 +124,14 @@ pub trait ChainStore: KVStoreRead {
         BlockStatus::Local
     }
 
-    fn get_submit_tx(&self, block_number: u64) -> Option<Transaction> {
+    fn get_block_submit_tx(&self, block_number: u64) -> Option<Transaction> {
         let data = self.get(COLUMN_BLOCK_SUBMIT_TX, &block_number.to_be_bytes())?;
         Some(from_box_should_be_ok!(packed::TransactionReader, data))
+    }
+
+    fn get_block_submit_tx_hash(&self, block_number: u64) -> Option<H256> {
+        let data = self.get(COLUMN_BLOCK_SUBMIT_TX_HASH, &block_number.to_be_bytes())?;
+        Some(packed::Byte32Reader::from_slice_should_be_ok(data.as_ref()).unpack())
     }
 
     fn get_block_deposit_info_vec(&self, block_number: u64) -> Option<DepositInfoVec> {

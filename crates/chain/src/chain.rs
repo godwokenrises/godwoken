@@ -416,7 +416,7 @@ impl Chain {
                         )?;
                         db.set_last_submitted_block_number_hash(&nh.as_reader())?;
                         db.set_last_confirmed_block_number_hash(&nh.as_reader())?;
-                        db.set_submit_tx(block_number, &transaction.as_reader())?;
+                        db.set_block_submit_tx(block_number, &transaction.as_reader())?;
 
                         log::info!("sync new block #{} success", block_number);
 

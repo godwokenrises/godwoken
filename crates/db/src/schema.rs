@@ -58,8 +58,13 @@ pub const COLUMN_MEM_POOL_WITHDRAWAL: Col = 27;
 pub const COLUMN_WITHDRAWAL: Col = 33;
 /// Column store withdrawal extra information
 pub const COLUMN_WITHDRAWAL_INFO: Col = 34;
-/// block number (in big endian for natural ordering) -> block submit L1 tx
+/// block number (in big endian for natural ordering) -> block submission tx.
+///
+/// This is only available on full nodes.
 pub const COLUMN_BLOCK_SUBMIT_TX: Col = 35;
+// Reuse removed column.
+/// Block number (in big endian) -> block submission tx hash.
+pub const COLUMN_BLOCK_SUBMIT_TX_HASH: Col = 7;
 /// block number (in big endian) -> deposit info vec.
 pub const COLUMN_BLOCK_DEPOSIT_INFO_VEC: Col = 36;
 /// block number (in big endian) -> FinalizedCustodianCapacity.

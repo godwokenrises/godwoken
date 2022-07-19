@@ -85,7 +85,7 @@ fn test_state_with_version() {
             .unwrap();
         commit_block(&db, build_block(&state, 1, prev_txs_state_checkpoint));
         prev_txs_state_checkpoint = state.calculate_state_checkpoint().unwrap();
-        db.set_submit_tx(1, &Transaction::default().as_reader())
+        db.set_block_submit_tx(1, &Transaction::default().as_reader())
             .unwrap();
         db.set_last_submitted_block_number_hash(
             &NumberHash::new_builder()
@@ -110,7 +110,7 @@ fn test_state_with_version() {
                 .map(|nh| nh.number().unpack()),
             Some(1),
         );
-        assert!(db.get_submit_tx(1).is_some());
+        assert!(db.get_block_submit_tx(1).is_some());
     }
 
     // attach block 2

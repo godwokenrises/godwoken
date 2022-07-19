@@ -68,7 +68,7 @@ impl ProduceSubmitConfirm {
         {
             let mut local_cells_manager = context.local_cells_manager.lock().await;
             for b in last_confirmed + 1..=last_submitted {
-                let tx = snap.get_submit_tx(b).expect("submit tx");
+                let tx = snap.get_block_submit_tx(b).expect("submit tx");
                 local_cells_manager.apply_tx(&tx.as_reader());
             }
             for b in last_submitted + 1..=last_valid {
@@ -133,7 +133,7 @@ impl ProduceSubmitConfirm {
                         let mut local_cells_manager = self.context.local_cells_manager.lock().await;
                         local_cells_manager.reset();
                         for b in last_confirmed + 1..=last_submitted {
-                            let tx = snap.get_submit_tx(b).expect("submit tx");
+                            let tx = snap.get_block_submit_tx(b).expect("submit tx");
                             local_cells_manager.apply_tx(&tx.as_reader());
                         }
                         for b in last_submitted + 1..=last_valid {
@@ -345,7 +345,7 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
     // https://github.com/nervosnetwork/godwoken-scripts/blob/d983fb351410eb6fbe02bb298af909193aeb5f22/contracts/state-validator/src/verifications/submit_block.rs#L707-L726
     let since = greater_since(timestamp_millis);
     let since_millis = since.extract_lock_value().unwrap().timestamp().unwrap();
-    let tx = if let Some(tx) = snap.get_submit_tx(block_number) {
+    let tx = if let Some(tx) = snap.get_block_submit_tx(block_number) {
         drop(snap);
         tx
     } else {
@@ -383,7 +383,7 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
         let tx = ctx.block_producer.compose_submit_tx(args).await?;
 
         let store_tx = ctx.store.begin_transaction();
-        store_tx.set_submit_tx(block_number, &tx.as_reader())?;
+        store_tx.set_block_submit_tx(block_number, &tx.as_reader())?;
         store_tx.commit()?;
 
         log::info!(
@@ -473,7 +473,9 @@ async fn sync_next_block(context: &PSCContext) -> Result<NumberHash> {
     let block_hash = snap
         .get_block_hash_by_number(block_number)?
         .expect("block hash");
-    let tx = snap.get_submit_tx(block_number).expect("get submit tx");
+    let tx = snap
+        .get_block_submit_tx(block_number)
+        .expect("get submit tx");
     drop(snap);
     poll_tx_confirmed(&context.rpc_client, &tx)
         .await
@@ -617,15 +619,12 @@ async fn sync_l1(psc: &PSCContext) -> Result<()> {
     // Find last known block on L1.
     loop {
         log::info!("checking L2 block {last_confirmed_l1} on L1");
-        let tx = psc
+        let tx_hash = psc
             .store
-            .get_submit_tx(last_confirmed_l1)
+            .get_block_submit_tx_hash(last_confirmed_l1)
             .context("get submit tx")?;
-        if let Some(TxStatus::Committed) = psc
-            .rpc_client
-            .ckb
-            .get_transaction_status(tx.hash().into())
-            .await?
+        if let Some(TxStatus::Committed) =
+            psc.rpc_client.ckb.get_transaction_status(tx_hash).await?
         {
             log::info!("L2 block {last_confirmed_l1} is on L1");
             break;
@@ -652,14 +651,9 @@ async fn confirm_blocks(
 ) -> Result<()> {
     loop {
         let next = *last_confirmed + 1;
-        if let Some(tx) = store_tx.get_submit_tx(next) {
+        if let Some(tx_hash) = store_tx.get_block_submit_tx_hash(next) {
             log::info!("try to confirme block {next}");
-            match psc
-                .rpc_client
-                .ckb
-                .get_transaction_status(tx.hash().into())
-                .await?
-            {
+            match psc.rpc_client.ckb.get_transaction_status(tx_hash).await? {
                 Some(TxStatus::Committed) => {
                     log::info!("block {next} confirmed");
                 }
@@ -685,13 +679,13 @@ async fn sync_l1_unknown(
     log::info!("syncing unknown L2 blocks from L1");
 
     // Get submission transactions, if there are unknown transactions, revert, update.
-    let tx = store_tx
-        .get_submit_tx(last_confirmed)
+    let tx_hash = store_tx
+        .get_block_submit_tx_hash(last_confirmed)
         .context("get submit tx")?;
     let start_l1_block = psc
         .rpc_client
         .ckb
-        .get_transaction_block_number(tx.hash().into())
+        .get_transaction_block_number(tx_hash)
         .await?
         .context("get transaction block number")?;
     let search_key =
@@ -705,7 +699,8 @@ async fn sync_l1_unknown(
             ..Default::default()
         }));
     let mut last_cursor = None;
-    let last_confirmed_tx_hash = tx.hash().into();
+    let tx_hash: [u8; 32] = tx_hash.into();
+    let last_confirmed_tx_hash = tx_hash.into();
     let mut seen_last_confirmed = false;
     let mut reverted = false;
     loop {
