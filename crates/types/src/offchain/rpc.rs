@@ -51,6 +51,7 @@ pub struct WithdrawalsAmount {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum TxStatus {
     /// Status "pending". The transaction is in the pool, and not proposed yet.
     Pending,
