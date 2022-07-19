@@ -1,6 +1,6 @@
 [package]
 name = "gw-jsonrpc-types"
-version = "1.4.0-rc1"
+version = "1.4.0-rc2"
 authors = ["Nervos Network"]
 edition = "2018"
 
