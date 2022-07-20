@@ -143,6 +143,10 @@ impl CyclesPool {
             }
         }
     }
+
+    pub fn add_cycles(&mut self, cycles: u64) {
+        self.cycles.saturating_add(cycles);
+    }
 }
 
 pub struct MachineRunArgs<'a, C, S> {
