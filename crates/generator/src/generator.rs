@@ -256,7 +256,15 @@ impl Generator {
             let maybe_ok = machine.run();
             used_cycles = machine.machine.cycles();
             drop(machine);
-            cycles_pool.sub_cycles(used_cycles);
+
+            // Already subtract syscall cycles
+            let used_syscall_cycles = cycles_pool_bak.cycles() - cycles_pool.cycles();
+            cycles_pool.sub_cycles(used_cycles.saturating_sub(used_syscall_cycles));
+            if cycles_pool.limit_reached() {
+                return Err(TransactionError::CyclesLimitReached {
+                    limit: cycles_pool.limit,
+                });
+            }
 
             match maybe_ok {
                 Ok(_exit_code) => {
@@ -265,11 +273,6 @@ impl Generator {
                 Err(ckb_vm::error::Error::InvalidCycles) => {
                     exit_code = INVALID_CYCLES_EXIT_CODE;
                     used_cycles = max_cycles;
-                }
-                Err(ckb_vm::error::Error::LimitReached) if cycles_pool.limit_reached() => {
-                    return Err(TransactionError::CyclesLimitReached {
-                        limit: cycles_pool.limit,
-                    })
                 }
                 Err(err) => {
                     *cycles_pool = cycles_pool_bak;
