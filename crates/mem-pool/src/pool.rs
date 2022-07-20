@@ -719,15 +719,13 @@ impl MemPool {
         )
         .await?;
 
-        // Update block cycles
-        let remained_block_cycles = self
-            .mem_block_config
-            .max_cycles_limit
-            .saturating_sub(self.cycles_pool.cycles_used());
+        // Update block remained cycles
+        let used_cycles = self.cycles_pool.cycles_used();
         self.cycles_pool = CyclesPool::new(
-            remained_block_cycles,
+            self.mem_block_config.max_cycles_limit,
             self.mem_block_config.syscall_cycles.clone(),
         );
+        self.cycles_pool.sub_cycles(used_cycles);
 
         // store mem state
         self.mem_pool_state.store(Arc::new(mem_store));

@@ -135,6 +135,10 @@ impl CyclesPool {
     }
 
     pub fn sub_cycles(&mut self, cycles: u64) {
+        if self.limit_reached {
+            return;
+        }
+
         match self.cycles.checked_sub(cycles) {
             Some(cycles) => self.cycles = cycles,
             None => {
@@ -142,10 +146,6 @@ impl CyclesPool {
                 self.limit_reached = true;
             }
         }
-    }
-
-    pub fn add_cycles(&mut self, cycles: u64) {
-        self.cycles.saturating_add(cycles);
     }
 }
 
