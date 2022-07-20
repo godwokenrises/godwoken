@@ -239,6 +239,10 @@ impl MemPool {
         &self.cycles_pool
     }
 
+    pub fn cycles_pool_mut(&mut self) -> &mut CyclesPool {
+        &mut self.cycles_pool
+    }
+
     pub fn restore_manager(&self) -> &RestoreManager {
         &self.restore_manager
     }

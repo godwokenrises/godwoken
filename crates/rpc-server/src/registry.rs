@@ -477,27 +477,23 @@ impl RequestSubmitter {
 
     async fn in_background(mut self) {
         // First mem pool reinject txs
-        loop {
+        {
             let db = self.store.begin_transaction();
             let mut mem_pool = self.mem_pool.lock().await;
 
             log::info!(
-                "try reinject mem block txs {}",
+                "reinject mem block txs {}",
                 mem_pool.pending_restored_tx_hashes().len()
             );
+
+            // Add u64::MAX cycles to ensure all exists mem pool transactions are included
+            let remained_cycles = mem_pool.cycles_pool().cycles();
+            mem_pool.cycles_pool_mut().add_cycles(u64::MAX);
 
             while let Some(hash) = mem_pool.pending_restored_tx_hashes().pop_front() {
                 match db.get_mem_pool_transaction(&hash) {
                     Ok(Some(tx)) => {
                         if let Err(err) = mem_pool.push_transaction(tx).await {
-                            if let Some(TransactionError::CyclesLimitReached { .. }) =
-                                err.downcast_ref::<TransactionError>()
-                            {
-                                log::info!("mem block cycles limit reached, try later");
-                                mem_pool.pending_restored_tx_hashes().push_front(hash);
-                                break;
-                            }
-
                             log::error!("reinject mem block tx {} failed {}", hash.pack(), err);
                         }
                     }
@@ -510,13 +506,12 @@ impl RequestSubmitter {
                 }
             }
 
-            if !mem_pool.pending_restored_tx_hashes().is_empty() {
-                drop(mem_pool);
-                // Sleep and try later
-                tokio::time::sleep(Self::INTERVAL_MS).await;
-            } else {
-                break;
-            }
+            // Update remained block cycles
+            let mut_cycles_pool = mem_pool.cycles_pool_mut();
+            let used_cycles = mut_cycles_pool.cycles_used();
+            let remained_cycles = remained_cycles.saturating_sub(used_cycles);
+            let diff = mut_cycles_pool.cycles().saturating_sub(remained_cycles);
+            mut_cycles_pool.sub_cycles(diff);
         }
 
         loop {
