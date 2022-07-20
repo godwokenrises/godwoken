@@ -640,7 +640,7 @@ impl RequestSubmitter {
                     Ok(None) => Ok(()),
                     Err(err) => Err(err),
                 } {
-                    if let Some(TransactionError::CyclesLimitReached { .. }) =
+                    if let Some(TransactionError::BlockCyclesLimitReached { .. }) =
                         err.downcast_ref::<TransactionError>()
                     {
                         log::info!("[tx from zero] mem block cycles limit reached, retry later");
@@ -707,7 +707,7 @@ impl RequestSubmitter {
                     if let Err(err) = maybe_ok {
                         let hash: Byte32 = entry.item.hash().pack();
 
-                        if let Some(TransactionError::CyclesLimitReached { .. }) =
+                        if let Some(TransactionError::BlockCyclesLimitReached { .. }) =
                             err.downcast_ref::<TransactionError>()
                         {
                             log::info!("mem block cycles limit reached for tx {}", hash);
