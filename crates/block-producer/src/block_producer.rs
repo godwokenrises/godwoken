@@ -129,7 +129,10 @@ impl BlockProducer {
             contracts_dep_manager,
         } = args;
 
-        let wallet = Wallet::from_config(&config.wallet_config).with_context(|| "init wallet")?;
+        let wallet = match config.wallet_config {
+            Some(ref c) => Wallet::from_config(c).with_context(|| "init wallet")?,
+            None => bail!("no wallet config for block producer"),
+        };
 
         let block_producer = BlockProducer {
             rollup_config_hash,

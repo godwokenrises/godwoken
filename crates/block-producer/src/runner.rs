@@ -528,13 +528,13 @@ impl BaseInitComponents {
     pub async fn init_offchain_mock_context(
         &self,
         block_producer_config: &BlockProducerConfig,
-    ) -> Result<OffChainMockContext> {
+    ) -> Result<Option<OffChainMockContext>> {
+        let wallet = match block_producer_config.wallet_config {
+            Some(ref c) => Wallet::from_config(c).with_context(|| "offchain init wallet")?,
+            None => return Ok(None),
+        };
         let ckb_genesis_info = gw_challenge::offchain::CKBGenesisInfo {
             sighash_dep: self.ckb_genesis_info.sighash_dep(),
-        };
-        let wallet = {
-            let config = &block_producer_config.wallet_config;
-            Wallet::from_config(config).with_context(|| "init wallet")?
         };
         let contracts_dep_manager = self
             .contracts_dep_manager
@@ -551,7 +551,8 @@ impl BaseInitComponents {
             contracts_dep_manager,
         };
 
-        OffChainMockContext::build(build_args).await
+        let ctx = OffChainMockContext::build(build_args).await?;
+        Ok(Some(ctx))
     }
 }
 
@@ -588,9 +589,12 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     let base = BaseInitComponents::init(&config, skip_config_check).await?;
     let (mem_pool, wallet, offchain_mock_context) = match config.block_producer.as_ref() {
         Some(block_producer_config) => {
-            let wallet = Wallet::from_config(&block_producer_config.wallet_config)
-                .with_context(|| "init wallet")?;
-            let offchain_mock_context = base
+            let opt_wallet = block_producer_config
+                .wallet_config
+                .as_ref()
+                .map(|c| Wallet::from_config(c).with_context(|| "init block producer wallet"))
+                .transpose()?;
+            let opt_offchain_mock_context = base
                 .init_offchain_mock_context(block_producer_config)
                 .await?;
             let mem_pool_provider = DefaultMemPoolProvider::new(
@@ -623,7 +627,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                         .with_context(|| "create mem-pool")?,
                 ))
             };
-            (Some(mem_pool), Some(wallet), Some(offchain_mock_context))
+            (Some(mem_pool), opt_wallet, opt_offchain_mock_context)
         }
         None => (None, None, None),
     };
@@ -708,17 +712,17 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 None
             };
 
-            let unlocker_wallet = match block_producer_config
-                .withdrawal_unlocker_wallet_config
-                .as_ref()
-            {
-                Some(wallet_config) => {
-                    Wallet::from_config(wallet_config).with_context(|| "init unlocker wallet")?
+            let unlocker_wallet = match block_producer_config.withdrawal_unlocker_wallet_config {
+                Some(ref wallet_config) => {
+                    Wallet::from_config(wallet_config).with_context(|| "unlocker wallet")?
                 }
                 None => {
                     log::info!("[unlock withdrawal] reuse block producer wallet");
-                    Wallet::from_config(&block_producer_config.wallet_config)
-                        .with_context(|| "init unlocker wallet")?
+
+                    match block_producer_config.wallet_config {
+                        Some(ref c) => Wallet::from_config(c).with_context(|| "unlocker wallet")?,
+                        None => bail!("no wallet config for withdrawal unlocker"),
+                    }
                 }
             };
 
@@ -736,14 +740,16 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 wallet,
             ));
 
-            let wallet = Wallet::from_config(&block_producer_config.wallet_config)
-                .with_context(|| "init wallet")?;
+            let challenger_wallet = match block_producer_config.wallet_config {
+                Some(ref c) => Wallet::from_config(c).with_context(|| "challenger wallet")?,
+                None => bail!("no wallet config for block producer"),
+            };
 
             // Challenger
             let args = ChallengerNewArgs {
                 rollup_context,
                 rpc_client: rpc_client.clone(),
-                wallet,
+                wallet: challenger_wallet,
                 config: block_producer_config.clone(),
                 debug_config: config.debug.clone(),
                 builtin_load_data,
@@ -827,13 +833,20 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     // RPC registry
     let polyjuice_sender_recover = {
-        log::info!("[tx from zero] use block producer wallet");
+        let opt_wallet = match config.block_producer.map(|c| c.wallet_config) {
+            Some(Some(c)) => {
+                log::info!("[tx from zero] use block producer wallet");
 
-        let block_producer_wallet = config
-            .block_producer
-            .map(|config| Wallet::from_config(&config.wallet_config).with_context(|| "init wallet"))
-            .transpose()?;
-        PolyjuiceSenderRecover::create(generator.rollup_context(), block_producer_wallet)?
+                Some(Wallet::from_config(&c).with_context(|| "polyjuice sender creator wallet")?)
+            }
+            _ => {
+                log::info!("[tx from zero] no wallet config for polyjuice sender creator");
+
+                None
+            }
+        };
+
+        PolyjuiceSenderRecover::create(generator.rollup_context(), opt_wallet)?
     };
     let args = RegistryArgs {
         store,
@@ -1101,20 +1114,20 @@ fn check_locks(
     }
 
     // check wallet lock
-    if zeros == block_producer_config.wallet_config.lock.code_hash {
-        return Err(anyhow!(
-            "[block_producer.wallet.lock.code_hash] shouldn't be zero"
-        ));
-    }
-    if block_producer_config.wallet_config.lock
-        == block_producer_config
+    let opt_wallet_config = block_producer_config.wallet_config.as_ref();
+    if let Some(block_producer_wallet_lock) = opt_wallet_config.map(|c| &c.lock) {
+        if zeros == block_producer_wallet_lock.code_hash {
+            bail!("[block_producer.wallet.lock.code_hash] shouldn't be zero");
+        }
+
+        let challenger_rewards_receiver_lock = &block_producer_config
             .challenger_config
-            .rewards_receiver_lock
-    {
-        return Err(anyhow!(
-            "[block_producer.challenger.rewards_receiver_lock] and [block_producer.wallet.lock] have the same address, which is not recommended"
-        ));
+            .rewards_receiver_lock;
+        if block_producer_wallet_lock == challenger_rewards_receiver_lock {
+            bail!("[block_producer.challenger.rewards_receiver_lock] and [block_producer.wallet.lock] have the same address, which is not recommended");
+        }
     }
+
     Ok(())
 }
 
