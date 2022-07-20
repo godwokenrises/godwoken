@@ -1134,17 +1134,20 @@ impl MemPool {
             }
         }
 
-        // execute tx
-        let raw_tx = tx.raw();
+        // Use block max cycles if it's smaller than L2TX_MAX_CYCLES
+        let l2tx_max_cycles = min(L2TX_MAX_CYCLES, self.mem_block_config.max_cycles_limit);
         let cycles_pool = &mut self.cycles_pool;
         let generator = Arc::clone(&self.generator);
+
+        // execute tx
+        let raw_tx = tx.raw();
         let run_result = tokio::task::block_in_place(|| {
             generator.unchecked_execute_transaction(
                 &chain_view,
                 state,
                 block_info,
                 &raw_tx,
-                L2TX_MAX_CYCLES,
+                l2tx_max_cycles,
                 cycles_pool,
             )
         })?;
