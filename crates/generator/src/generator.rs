@@ -261,7 +261,7 @@ impl Generator {
             let used_syscall_cycles = cycles_pool_bak.cycles() - cycles_pool.cycles();
             cycles_pool.sub_cycles(used_cycles.saturating_sub(used_syscall_cycles));
             if cycles_pool.limit_reached() {
-                return Err(TransactionError::CyclesLimitReached {
+                return Err(TransactionError::BlockCyclesLimitReached {
                     limit: cycles_pool.limit,
                 });
             }

@@ -81,7 +81,7 @@ async fn test_block_max_cycles_limit() {
     let system_log = PolyjuiceSystemLog::parse_logs(logs).unwrap();
     assert_eq!(system_log.status_code, 0);
 
-    // Test TransactionError::CyclesLimitReached
+    // Test TransactionError::BlockCyclesLimitReached
     let mem_pool_config = MemPoolConfig {
         mem_block: MemBlockConfig {
             max_cycles_limit: 1000,
@@ -133,6 +133,6 @@ async fn test_block_max_cycles_limit() {
         .unwrap_err();
     eprintln!("err {}", err);
 
-    let expected_err = TransactionError::CyclesLimitReached { limit: 1000 };
+    let expected_err = TransactionError::BlockCyclesLimitReached { limit: 1000 };
     assert!(err.to_string().contains(&expected_err.to_string()));
 }
