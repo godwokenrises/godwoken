@@ -220,7 +220,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         // cell deps
         rollup_config_cell_dep,
         challenger_config,
-        wallet_config,
+        wallet_config: Some(wallet_config),
         check_mem_block_before_submit: false,
         withdrawal_unlocker_wallet_config: None,
     });
