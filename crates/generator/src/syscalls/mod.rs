@@ -145,6 +145,7 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
 
         let syscall_cycles = self.get_syscall_cycles(code);
         if 0 != syscall_cycles {
+            // Sub cycles here to interrupt execution
             self.sub_cycles(syscall_cycles)?;
             machine.add_cycles(syscall_cycles)?;
         }
