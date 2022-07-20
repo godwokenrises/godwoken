@@ -486,9 +486,9 @@ impl RequestSubmitter {
                 mem_pool.pending_restored_tx_hashes().len()
             );
 
-            // Add u64::MAX cycles to ensure all exists mem pool transactions are included
-            let remained_cycles = mem_pool.cycles_pool().cycles();
-            mem_pool.cycles_pool_mut().add_cycles(u64::MAX);
+            // Use unlimit to ensure all exists mem pool transactions are included
+            let mut org_cycles_pool = mem_pool.cycles_pool().clone();
+            *mem_pool.cycles_pool_mut() = CyclesPool::unlimit_cycles();
 
             while let Some(hash) = mem_pool.pending_restored_tx_hashes().pop_front() {
                 match db.get_mem_pool_transaction(&hash) {
@@ -507,11 +507,8 @@ impl RequestSubmitter {
             }
 
             // Update remained block cycles
-            let mut_cycles_pool = mem_pool.cycles_pool_mut();
-            let used_cycles = mut_cycles_pool.cycles_used();
-            let remained_cycles = remained_cycles.saturating_sub(used_cycles);
-            let diff = mut_cycles_pool.cycles().saturating_sub(remained_cycles);
-            mut_cycles_pool.sub_cycles(diff);
+            org_cycles_pool.sub_cycles(mem_pool.cycles_pool().cycles_used());
+            *mem_pool.cycles_pool_mut() = org_cycles_pool;
         }
 
         loop {
