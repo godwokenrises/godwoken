@@ -43,3 +43,11 @@ impl<T> Drop for AbortOnDropHandle<T> {
         self.inner.abort();
     }
 }
+
+pub fn spawn_abort_on_drop<F>(f: F) -> AbortOnDropHandle<<F as Future>::Output>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    AbortOnDropHandle::from(tokio::spawn(f))
+}

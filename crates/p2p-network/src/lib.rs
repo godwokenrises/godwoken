@@ -162,3 +162,6 @@ impl<F: Fn(Arc<SessionContext>, &ServiceAsyncControl, SubstreamReadPart)> Protoc
 
 pub const P2P_MEM_BLOCK_SYNC_PROTOCOL: ProtocolId = ProtocolId::new(1);
 pub const P2P_MEM_BLOCK_SYNC_PROTOCOL_NAME: &str = "/p2p/mem_block_sync";
+
+pub const P2P_BLOCK_SYNC_PROTOCOL: ProtocolId = ProtocolId::new(2);
+pub const P2P_BLOCK_SYNC_PROTOCOL_NAME: &str = "/p2p/block_sync";

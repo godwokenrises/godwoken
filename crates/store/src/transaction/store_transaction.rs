@@ -306,6 +306,16 @@ impl StoreTransaction {
         Ok(())
     }
 
+    pub fn set_block_submit_tx_hash(
+        &self,
+        block_number: u64,
+        hash: &[u8; 32],
+    ) -> Result<(), Error> {
+        let k = block_number.to_be_bytes();
+        self.insert_raw(COLUMN_BLOCK_SUBMIT_TX_HASH, &k, hash)?;
+        Ok(())
+    }
+
     pub fn delete_submit_tx(&self, block_number: u64) -> Result<(), Error> {
         let k = block_number.to_be_bytes();
         self.delete(COLUMN_BLOCK_SUBMIT_TX, &k)?;
