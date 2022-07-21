@@ -7,7 +7,7 @@ use gw_common::{
     H256,
 };
 use gw_config::{MemBlockConfig, MemPoolConfig};
-use gw_generator::account_lock_manage::secp256k1::Secp256k1Eth;
+use gw_generator::{account_lock_manage::secp256k1::Secp256k1Eth, error::TransactionError};
 use gw_types::{
     packed::{
         CreateAccount, DepositRequest, Fee, L2Transaction, MetaContractArgs, RawL2Transaction,
@@ -187,15 +187,19 @@ async fn test_block_max_cycles_limit() {
     assert_eq!(system_log.status_code, 0);
 
     {
-        let mem_pool = chain.mem_pool().await;
+        let mut mem_pool = chain.mem_pool().await;
         let cycles = mem_pool.cycles_pool().cycles();
         assert!(cycles < bob_deploy_gas_limit);
-    }
 
-    // Wait 5s, should timeout
-    wait_tx_committed(&chain, &bob_tx_hash, Duration::from_secs(5))
-        .await
-        .unwrap_err();
+        // Directly push bob tx will result in TransactionError::BlockCyclesLimitReached
+        let err = mem_pool.push_transaction(bob_deploy_tx).await.unwrap_err();
+        eprintln!("err {}", err);
+
+        let expected_err = TransactionError::BlockCyclesLimitReached {
+            limit: BLOCK_MAX_CYCLES_LIMIT,
+        };
+        assert!(err.to_string().contains(&expected_err.to_string()));
+    }
 
     let is_in_queue = rpc_server.is_request_in_queue(bob_tx_hash).await.unwrap();
     assert!(is_in_queue);
@@ -209,4 +213,117 @@ async fn test_block_max_cycles_limit() {
 
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, bob_tx_hash).unwrap();
     assert_eq!(system_log.status_code, 0);
+
+    // Produce a block to refresh mem block cycles
+    chain.produce_block(vec![], vec![]).await.unwrap();
+
+    // Test tx exceed block max cycles limit
+    // Expect result: failed transaction is included
+    let mem_pool_config = MemPoolConfig {
+        mem_block: MemBlockConfig {
+            max_cycles_limit: 200000,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let mut chain = chain.update_mem_pool_config(mem_pool_config.clone()).await;
+    let rpc_server = {
+        let mut args = RPCServer::default_registry_args(
+            &chain.inner,
+            chain.rollup_type_script.to_owned(),
+            None,
+        );
+        args.mem_pool_config = mem_pool_config.clone();
+        RPCServer::build_from_registry_args(args).await.unwrap()
+    };
+
+    let mem_pool_state = chain.mem_pool_state().await;
+    let snap = mem_pool_state.load();
+    let state = snap.state().unwrap();
+
+    let alice_balance_before = state
+        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, alice_wallet.reg_address())
+        .unwrap();
+
+    // Use smaller gas limit so it wont be dropped
+    let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18)
+        .gas_limit(mem_pool_config.mem_block.max_cycles_limit - 1)
+        .gas_price(1)
+        .finish();
+
+    let alice_raw_tx = RawL2Transaction::new_builder()
+        .chain_id(chain.chain_id().pack())
+        .from_id(alice_id.pack())
+        .to_id(polyjuice_account_id.pack())
+        .nonce(2u32.pack())
+        .args(deploy_args.pack())
+        .build();
+
+    let alice_deploy_tx = alice_wallet
+        .sign_polyjuice_tx(&state, alice_raw_tx.clone())
+        .unwrap();
+
+    let alice_tx_hash = rpc_server
+        .submit_l2transaction(&alice_deploy_tx)
+        .await
+        .unwrap()
+        .unwrap();
+
+    wait_tx_committed(&chain, &alice_tx_hash, Duration::from_secs(30))
+        .await
+        .unwrap();
+
+    let snap = mem_pool_state.load();
+    let state = snap.state().unwrap();
+
+    let alice_balance_after = state
+        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, alice_wallet.reg_address())
+        .unwrap();
+
+    assert!(alice_balance_before > alice_balance_after);
+
+    let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, alice_tx_hash).unwrap();
+    assert_eq!(system_log.status_code, 0);
+
+    // Test tx gas limit exceed block max cycles limit, it will be dropped immediately
+    chain.produce_block(vec![], vec![]).await.unwrap();
+
+    let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18)
+        .gas_limit(mem_pool_config.mem_block.max_cycles_limit + 1)
+        .gas_price(1)
+        .finish();
+
+    let alice_raw_tx = RawL2Transaction::new_builder()
+        .chain_id(chain.chain_id().pack())
+        .from_id(alice_id.pack())
+        .to_id(polyjuice_account_id.pack())
+        .nonce(3u32.pack())
+        .args(deploy_args.pack())
+        .build();
+
+    let alice_deploy_tx = alice_wallet
+        .sign_polyjuice_tx(&state, alice_raw_tx.clone())
+        .unwrap();
+
+    let alice_tx_hash = rpc_server
+        .submit_l2transaction(&alice_deploy_tx)
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Wait 5 seconds to reach `RequestSubmitter`.
+    // NOTE: `is_request_in_queue` rpc will return true for tx in submit channel
+    wait_tx_committed(&chain, &alice_tx_hash, Duration::from_secs(5))
+        .await
+        .unwrap_err();
+
+    let not_in_queue = !rpc_server.is_request_in_queue(alice_tx_hash).await.unwrap();
+    assert!(not_in_queue);
+
+    {
+        let mem_pool = chain.mem_pool().await;
+        let not_in_mem_block = !mem_pool.mem_block().txs_set().contains(&alice_tx_hash);
+        assert!(not_in_mem_block);
+    }
 }

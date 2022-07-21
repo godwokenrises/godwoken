@@ -97,7 +97,7 @@ pub struct CyclesPool {
     limit: u64,
     cycles: u64,
     syscall_config: SyscallCyclesConfig,
-    limit_reached: bool,
+    run_out: bool,
 }
 
 impl CyclesPool {
@@ -106,7 +106,7 @@ impl CyclesPool {
             limit,
             cycles: limit,
             syscall_config,
-            limit_reached: false,
+            run_out: false,
         }
     }
 
@@ -126,8 +126,8 @@ impl CyclesPool {
         self.limit - self.cycles
     }
 
-    pub fn limit_reached(&self) -> bool {
-        self.limit_reached
+    pub fn run_out(&self) -> bool {
+        self.run_out
     }
 
     pub fn syscall_config(&self) -> &SyscallCyclesConfig {
@@ -135,7 +135,7 @@ impl CyclesPool {
     }
 
     pub fn sub_cycles(&mut self, cycles: u64) {
-        if self.limit_reached {
+        if self.run_out {
             return;
         }
 
@@ -143,7 +143,7 @@ impl CyclesPool {
             Some(cycles) => self.cycles = cycles,
             None => {
                 self.cycles = 0;
-                self.limit_reached = true;
+                self.run_out = true;
             }
         }
     }
@@ -257,16 +257,23 @@ impl Generator {
             used_cycles = machine.machine.cycles();
             drop(machine);
 
-            // Already subtract syscall cycles
+            // Subtract tx cycles.
+            // NOTE: already subtract syscall cycles from cycles pool during machine running to
+            // interrupt execution eariler.
             let used_syscall_cycles = cycles_pool_bak.cycles() - cycles_pool.cycles();
             cycles_pool.sub_cycles(used_cycles.saturating_sub(used_syscall_cycles));
-            if cycles_pool.limit_reached() {
+            if cycles_pool.run_out() && used_cycles <= cycles_pool.limit() {
                 return Err(TransactionError::BlockCyclesLimitReached {
                     limit: cycles_pool.limit,
                 });
             }
 
             match maybe_ok {
+                // Tx cycles exceed block max cycles limit
+                Ok(_exit_code) if used_cycles > cycles_pool.limit() => {
+                    exit_code = INVALID_CYCLES_EXIT_CODE;
+                    used_cycles = cycles_pool.limit();
+                }
                 Ok(_exit_code) => {
                     exit_code = _exit_code;
                 }

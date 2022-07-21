@@ -17,6 +17,7 @@ use gw_common::{
     },
     H256,
 };
+use gw_config::SyscallCyclesConfig;
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
@@ -143,11 +144,15 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
     fn ecall(&mut self, machine: &mut Mac) -> Result<bool, VMError> {
         let code = machine.registers()[A7].to_u64();
 
-        let syscall_cycles = self.get_syscall_cycles(code);
+        let syscall_cycles = Self::get_syscall_cycles(code, self.cycles_pool.syscall_config());
         if 0 != syscall_cycles {
-            // Sub cycles here to interrupt execution
-            self.sub_cycles(syscall_cycles)?;
             machine.add_cycles(syscall_cycles)?;
+
+            // Also sub cycles to interrupt execution eariler
+            self.cycles_pool.sub_cycles(syscall_cycles);
+            if self.cycles_pool.run_out() {
+                return Err(VMError::LimitReached);
+            }
         }
 
         match code {
@@ -615,30 +620,18 @@ impl<'a, S: State, C: ChainView> L2Syscalls<'a, S, C> {
         Ok(())
     }
 
-    fn get_syscall_cycles(&self, syscall: u64) -> u64 {
-        let config = self.cycles_pool.syscall_config();
-
+    fn get_syscall_cycles(syscall: u64, cycles_config: &SyscallCyclesConfig) -> u64 {
         match syscall {
-            SYS_STORE => config.sys_store_cycles,
-            SYS_LOAD => config.sys_load_cycles,
-            SYS_CREATE => config.sys_create_cycles,
-            SYS_LOAD_ACCOUNT_SCRIPT => config.sys_load_account_script_cycles,
-            SYS_STORE_DATA => config.sys_store_data_cycles,
-            SYS_LOAD_DATA => config.sys_load_data_cycles,
-            SYS_GET_BLOCK_HASH => config.sys_get_block_hash_cycles,
-            SYS_RECOVER_ACCOUNT => config.sys_recover_account_cycles,
-            SYS_LOG => config.sys_log_cycles,
+            SYS_STORE => cycles_config.sys_store_cycles,
+            SYS_LOAD => cycles_config.sys_load_cycles,
+            SYS_CREATE => cycles_config.sys_create_cycles,
+            SYS_LOAD_ACCOUNT_SCRIPT => cycles_config.sys_load_account_script_cycles,
+            SYS_STORE_DATA => cycles_config.sys_store_data_cycles,
+            SYS_LOAD_DATA => cycles_config.sys_load_data_cycles,
+            SYS_GET_BLOCK_HASH => cycles_config.sys_get_block_hash_cycles,
+            SYS_RECOVER_ACCOUNT => cycles_config.sys_recover_account_cycles,
+            SYS_LOG => cycles_config.sys_log_cycles,
             _ => 0,
-        }
-    }
-
-    fn sub_cycles(&mut self, cycles: u64) -> Result<(), VMError> {
-        self.cycles_pool.sub_cycles(cycles);
-
-        if self.cycles_pool.limit_reached() {
-            Err(VMError::LimitReached)
-        } else {
-            Ok(())
         }
     }
 }

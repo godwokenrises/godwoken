@@ -1,7 +1,6 @@
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, registry_address::RegistryAddress};
 use gw_config::{MemBlockConfig, MemPoolConfig};
-use gw_generator::error::TransactionError;
 use gw_types::{
     bytes::Bytes,
     packed::{RawL2Transaction, Script},
@@ -133,6 +132,6 @@ async fn test_block_max_cycles_limit() {
         .unwrap_err();
     eprintln!("err {}", err);
 
-    let expected_err = TransactionError::BlockCyclesLimitReached { limit: 1000 };
-    assert!(err.to_string().contains(&expected_err.to_string()));
+    let expected_err = "invalid exit code -1";
+    assert!(err.to_string().contains(expected_err));
 }
