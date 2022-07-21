@@ -303,14 +303,39 @@ pub struct MemBlockConfig {
     pub max_deposits: usize,
     pub max_withdrawals: usize,
     pub max_txs: usize,
-    #[serde(default = "default_max_block_cycles_limit")]
+    #[serde(
+        default = "default_max_block_cycles_limit",
+        with = "toml_u64_serde_workaround"
+    )]
     pub max_cycles_limit: u64,
-    #[serde(default)]
+    #[serde(default = "default_syscall_cycles")]
     pub syscall_cycles: SyscallCyclesConfig,
 }
 
 const fn default_max_block_cycles_limit() -> u64 {
     u64::MAX
+}
+
+fn default_syscall_cycles() -> SyscallCyclesConfig {
+    SyscallCyclesConfig::all_zero()
+}
+
+// Workaround: https://github.com/alexcrichton/toml-rs/issues/256
+// Serialize to string instead
+mod toml_u64_serde_workaround {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(val: &u64, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&val.to_string())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<u64, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: &str = Deserialize::deserialize(deserializer)?;
+        s.parse::<u64>().map_err(serde::de::Error::custom)
+    }
 }
 
 // Field default value for backward config file compitability
@@ -339,7 +364,7 @@ impl Default for MemBlockConfig {
             max_withdrawals: 100,
             max_txs: 1000,
             max_cycles_limit: default_max_block_cycles_limit(),
-            syscall_cycles: Default::default(),
+            syscall_cycles: SyscallCyclesConfig::all_zero(),
         }
     }
 }
@@ -480,11 +505,5 @@ impl SyscallCyclesConfig {
             sys_recover_account_cycles: 0,
             sys_log_cycles: 0,
         }
-    }
-}
-
-impl Default for SyscallCyclesConfig {
-    fn default() -> Self {
-        Self::all_zero()
     }
 }
