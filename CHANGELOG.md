@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.4.0-rc3] - 2022-07-21
+
+- fix(config): optional block producer wallet for readonly node [#768](https://github.com/nervosnetwork/godwoken/pull/768)
+
 ## [v1.4.0-rc2] - 2022-07-19
 
 - fix(rpc): calculate tx signature hash using packed bytes [#760](https://github.com/nervosnetwork/godwoken/pull/760)
