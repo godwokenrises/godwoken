@@ -666,6 +666,9 @@ impl RequestSubmitter {
                         if !block_cycles_limit_reached
                             && entry.cycles_limit > mem_pool.cycles_pool().cycles()
                         {
+                            let hash: Byte32 = entry.item.hash().pack();
+                            log::info!("mem block cycles limit reached for tx {}", hash);
+
                             block_cycles_limit_reached = true;
                         }
 
