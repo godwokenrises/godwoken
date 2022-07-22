@@ -658,9 +658,6 @@ impl RequestSubmitter {
                 let state = snap.state().expect("get mem state");
                 let mut block_cycles_limit_reached = false;
 
-                // Note: don't change `_handle` to `_`. The request should be
-                // removed from the in queue request map after pushed to mem
-                // pool.
                 for (entry, handle) in items {
                     if let FeeItemKind::Tx = entry.item.kind() {
                         if !block_cycles_limit_reached
