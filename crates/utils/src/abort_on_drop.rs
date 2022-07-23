@@ -1,4 +1,4 @@
-use std::{future::Future, mem::ManuallyDrop, pin::Pin};
+use std::{future::Future, pin::Pin};
 
 use tokio::task::{JoinError, JoinHandle};
 
@@ -12,13 +12,6 @@ impl<T> AbortOnDropHandle<T> {
     pub fn replace_with(&mut self, handle: JoinHandle<T>) {
         self.inner.abort();
         self.inner = handle;
-    }
-
-    /// Convert back to a normal JoinHandle.
-    pub fn into_inner(self) -> JoinHandle<T> {
-        let this = ManuallyDrop::new(self);
-        // Safety: safe because this.inner will not be used anymore.
-        unsafe { core::ptr::read(&this.inner) }
     }
 }
 
