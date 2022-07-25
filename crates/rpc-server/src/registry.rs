@@ -294,7 +294,7 @@ impl Registry {
             }))
             .with_data(Data::new(SubmitTransactionContext {
                 in_queue_request_map: self.in_queue_request_map.clone(),
-                submit_tx: self.submit_tx,
+                submit_tx: self.submit_tx.clone(),
                 mem_pool_state: self.mem_pool_state.clone(),
                 rate_limiter: send_transaction_rate_limiter,
                 rate_limit_config: self.send_tx_rate_limit,
@@ -313,6 +313,7 @@ impl Registry {
             .with_data(Data::new(self.consensus_config))
             .with_data(Data::new(self.node_mode))
             .with_data(Data::new(self.in_queue_request_map))
+            .with_data(Data::new(self.submit_tx))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -1252,6 +1253,7 @@ async fn submit_l2transaction(
 }
 
 // TODO: refactor complex type.
+// Either `RPCContext` or derive?
 #[allow(clippy::type_complexity)]
 #[instrument(skip_all)]
 async fn submit_withdrawal_request(
