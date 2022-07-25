@@ -1,11 +1,11 @@
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashSet, iter::FromIterator, sync::Arc, time::Duration};
 
 use anyhow::{bail, Result};
 use ckb_types::prelude::Entity;
 use gw_block_producer::test_mode_control::TestModeControl;
 use gw_chain::chain::Chain;
 use gw_common::H256;
-use gw_config::{NodeMode::FullNode, RPCClientConfig};
+use gw_config::{NodeMode::FullNode, RPCClientConfig, RPCMethods};
 
 use gw_jsonrpc_types::{
     ckb_jsonrpc_types::{Byte32, JsonBytes, Uint64},
@@ -18,7 +18,7 @@ use gw_rpc_client::{
 use gw_rpc_server::registry::{Registry, RegistryArgs};
 use gw_types::{
     bytes::Bytes,
-    packed::{L2Transaction, RawL2Transaction, Script},
+    packed::{L2Transaction, RawL2Transaction, Script, WithdrawalRequestExtra},
     prelude::Pack,
 };
 
@@ -74,7 +74,10 @@ impl RPCServer {
             node_mode: FullNode,
             rpc_client,
             send_tx_rate_limit: Default::default(),
-            server_config: Default::default(),
+            server_config: gw_config::RPCServerConfig {
+                enable_methods: HashSet::from_iter(vec![RPCMethods::Test]),
+                ..Default::default()
+            },
             chain_config: Default::default(),
             consensus_config: Default::default(),
             dynamic_config_manager: Default::default(),
@@ -178,6 +181,41 @@ impl RPCServer {
 
         let result = self.handle_single_request(req).await?;
         Ok(result)
+    }
+
+    pub async fn submit_withdrawal_request(&self, req: &WithdrawalRequestExtra) -> Result<H256> {
+        let params = {
+            let bytes = JsonBytes::from_bytes(req.as_bytes());
+            serde_json::to_value(&(bytes,))?
+        };
+
+        let req = RequestBuilder::default()
+            .with_id(1)
+            .with_method("gw_submit_withdrawal_request")
+            .with_params(params)
+            .finish();
+
+        let hash: Byte32 = self.handle_single_request(req).await?;
+        Ok(hash.0.into())
+    }
+
+    pub async fn submit_withdrawal_request_finalized_custodian_unchecked(
+        &self,
+        req: &WithdrawalRequestExtra,
+    ) -> Result<H256> {
+        let params = {
+            let bytes = JsonBytes::from_bytes(req.as_bytes());
+            serde_json::to_value(&(bytes,))?
+        };
+
+        let req = RequestBuilder::default()
+            .with_id(1)
+            .with_method("gw_submit_withdrawal_request_finalized_custodian_unchecked")
+            .with_params(params)
+            .finish();
+
+        let hash: Byte32 = self.handle_single_request(req).await?;
+        Ok(hash.0.into())
     }
 
     async fn handle_single_request<R: DeserializeOwned>(&self, req: RequestObject) -> Result<R> {
