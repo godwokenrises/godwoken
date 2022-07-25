@@ -113,7 +113,7 @@ impl ReplayBlock {
                 &block_info,
                 &raw_tx,
                 L2TX_MAX_CYCLES,
-                &mut CyclesPool::unlimit_cycles(),
+                CyclesPool::none(),
             )?;
 
             state.apply_run_result(&run_result.write)?;

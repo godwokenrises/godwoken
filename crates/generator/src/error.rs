@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use ckb_vm::Error as VMError;
 use gw_common::{error::Error as StateError, sparse_merkle_tree::error::Error as SMTError, H256};
-use gw_types::packed::Byte32;
+use gw_types::{offchain::RunResultCycles, packed::Byte32};
 use thiserror::Error;
 
 /// Error
@@ -159,8 +159,10 @@ pub enum TransactionError {
     NonceOverflow,
     #[error("Intrinsic gas: {0}")]
     IntrinsicGas(Cow<'static, str>),
-    #[error("Block cycles limit reached: limit {limit}")]
-    BlockCyclesLimitReached { limit: u64 },
+    #[error("Block cycles limit reached: cycles {cycles:?}, limit {limit}")]
+    BlockCyclesLimitReached { cycles: RunResultCycles, limit: u64 },
+    #[error("Exceeded block max cycles limit: cycles {cycles:?}, limit {limit}")]
+    ExceededBlockMaxCycles { cycles: RunResultCycles, limit: u64 },
 }
 
 impl From<VMError> for TransactionError {

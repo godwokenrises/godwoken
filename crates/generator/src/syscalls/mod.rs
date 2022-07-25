@@ -66,7 +66,7 @@ const SYS_RECOVER_ACCOUNT: u64 = 3503;
 /* CKB compatible syscalls */
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
-pub(crate) struct L2Syscalls<'a, S, C> {
+pub(crate) struct L2Syscalls<'a, 'b, S, C> {
     pub(crate) chain: &'a C,
     pub(crate) state: &'a S,
     pub(crate) rollup_context: &'a RollupContext,
@@ -74,9 +74,9 @@ pub(crate) struct L2Syscalls<'a, S, C> {
     pub(crate) block_info: &'a BlockInfo,
     pub(crate) raw_tx: &'a RawL2Transaction,
     pub(crate) code_store: &'a dyn CodeStore,
-    pub(crate) result: &'a mut RunResult,
+    pub(crate) result: &'b mut RunResult,
     pub(crate) redir_log_handler: &'a RedirLogHandler,
-    pub(crate) cycles_pool: &'a mut CyclesPool,
+    pub(crate) cycles_pool: &'b mut Option<&'a mut CyclesPool>,
 }
 
 #[allow(dead_code)]
@@ -136,7 +136,9 @@ pub fn store_data<Mac: SupportMachine>(machine: &mut Mac, data: &[u8]) -> Result
     Ok(real_size)
 }
 
-impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S, C> {
+impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
+    for L2Syscalls<'a, 'b, S, C>
+{
     fn initialize(&mut self, _machine: &mut Mac) -> Result<(), VMError> {
         Ok(())
     }
@@ -144,14 +146,16 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
     fn ecall(&mut self, machine: &mut Mac) -> Result<bool, VMError> {
         let code = machine.registers()[A7].to_u64();
 
-        let syscall_cycles = Self::get_syscall_cycles(code, self.cycles_pool.syscall_config());
-        if 0 != syscall_cycles {
-            machine.add_cycles(syscall_cycles)?;
+        if let Some(cycles_pool) = self.cycles_pool {
+            let syscall_cycles = Self::get_syscall_cycles(code, cycles_pool.syscall_config());
+            if 0 != syscall_cycles {
+                self.result.cycles.r#virtual =
+                    self.result.cycles.r#virtual.saturating_add(syscall_cycles);
 
-            // Also sub cycles to interrupt execution eariler
-            self.cycles_pool.sub_cycles(syscall_cycles);
-            if self.cycles_pool.run_out() {
-                return Err(VMError::LimitReached);
+                // Subtract cycles to interrupt execution eariler
+                if cycles_pool.checked_sub_cycles(syscall_cycles).is_none() {
+                    return Err(VMError::LimitReached);
+                }
             }
         }
 
@@ -524,7 +528,7 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
     }
 }
 
-impl<'a, S: State, C: ChainView> L2Syscalls<'a, S, C> {
+impl<'a, 'b, S: State, C: ChainView> L2Syscalls<'a, 'b, S, C> {
     fn get_raw(&mut self, key: &H256) -> Result<H256, VMError> {
         let value = match self.result.write.write_values.get(key) {
             Some(value) => *value,

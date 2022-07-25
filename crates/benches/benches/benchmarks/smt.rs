@@ -260,7 +260,7 @@ impl BenchExecutionEnvironment {
                     &block_info,
                     &raw_tx,
                     L2TX_MAX_CYCLES,
-                    &mut CyclesPool::unlimit_cycles(),
+                    CyclesPool::none(),
                 )
                 .unwrap();
 

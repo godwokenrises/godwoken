@@ -7,7 +7,7 @@ use gw_common::{
     H256,
 };
 use gw_config::{MemBlockConfig, MemPoolConfig};
-use gw_generator::{account_lock_manage::secp256k1::Secp256k1Eth, error::TransactionError};
+use gw_generator::account_lock_manage::secp256k1::Secp256k1Eth;
 use gw_types::{
     packed::{
         CreateAccount, DepositRequest, Fee, L2Transaction, MetaContractArgs, RawL2Transaction,
@@ -134,7 +134,8 @@ async fn test_block_max_cycles_limit() {
         .unwrap();
 
     // Gas limit will be used as tx's cycles limit for polyjuice tx
-    // If cycles limit is bigger than block's remained cycles, then that tx will not be packaged.
+    // If cycles limit is bigger than block's remained cycles, then that tx must wait for next
+    // block.
     let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18)
         .gas_limit(BLOCK_MAX_CYCLES_LIMIT - 1)
         .gas_price(1)
@@ -188,17 +189,15 @@ async fn test_block_max_cycles_limit() {
 
     {
         let mut mem_pool = chain.mem_pool().await;
-        let cycles = mem_pool.cycles_pool().cycles();
+        let cycles = mem_pool.cycles_pool().available_cycles();
         assert!(cycles < bob_deploy_gas_limit);
 
         // Directly push bob tx will result in TransactionError::BlockCyclesLimitReached
         let err = mem_pool.push_transaction(bob_deploy_tx).await.unwrap_err();
         eprintln!("err {}", err);
 
-        let expected_err = TransactionError::BlockCyclesLimitReached {
-            limit: BLOCK_MAX_CYCLES_LIMIT,
-        };
-        assert!(err.to_string().contains(&expected_err.to_string()));
+        let expected_err = "Block cycles limit reached";
+        assert!(err.to_string().contains(expected_err));
     }
 
     let is_in_queue = rpc_server.is_request_in_queue(bob_tx_hash).await.unwrap();
@@ -218,7 +217,7 @@ async fn test_block_max_cycles_limit() {
     chain.produce_block(vec![], vec![]).await.unwrap();
 
     // Test tx exceed block max cycles limit
-    // Expect result: failed transaction is included
+    // Expect result: TransactionError::ExceededBlockMaxCycles and drop tx
     let mem_pool_config = MemPoolConfig {
         mem_block: MemBlockConfig {
             max_cycles_limit: 200000,
@@ -242,9 +241,11 @@ async fn test_block_max_cycles_limit() {
     let snap = mem_pool_state.load();
     let state = snap.state().unwrap();
 
-    let alice_balance_before = state
-        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, alice_wallet.reg_address())
-        .unwrap();
+    let alice_nonce_before = state.get_nonce(alice_id);
+    let available_cycles_before = {
+        let mem_pool = chain.mem_pool().await;
+        mem_pool.cycles_pool().available_cycles()
+    };
 
     // Use smaller gas limit so it wont be dropped
     let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18)
@@ -270,21 +271,26 @@ async fn test_block_max_cycles_limit() {
         .unwrap()
         .unwrap();
 
-    wait_tx_committed(&chain, &alice_tx_hash, Duration::from_secs(30))
+    // Wait 5 seconds to reach `RequestSubmitter`.
+    // Expect timeout
+    wait_tx_committed(&chain, &alice_tx_hash, Duration::from_secs(5))
         .await
-        .unwrap();
+        .unwrap_err();
+
+    let not_in_queue = !rpc_server.is_request_in_queue(bob_tx_hash).await.unwrap();
+    assert!(not_in_queue);
 
     let snap = mem_pool_state.load();
     let state = snap.state().unwrap();
 
-    let alice_balance_after = state
-        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, alice_wallet.reg_address())
-        .unwrap();
+    let alice_nonce_after = state.get_nonce(alice_id);
+    let available_cycles_after = {
+        let mem_pool = chain.mem_pool().await;
+        mem_pool.cycles_pool().available_cycles()
+    };
 
-    assert!(alice_balance_before > alice_balance_after);
-
-    let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, alice_tx_hash).unwrap();
-    assert_eq!(system_log.status_code, 0);
+    assert_eq!(alice_nonce_before, alice_nonce_after);
+    assert_eq!(available_cycles_before, available_cycles_after);
 
     // Test tx gas limit exceed block max cycles limit, it will be dropped immediately
     chain.produce_block(vec![], vec![]).await.unwrap();
@@ -298,7 +304,7 @@ async fn test_block_max_cycles_limit() {
         .chain_id(chain.chain_id().pack())
         .from_id(alice_id.pack())
         .to_id(polyjuice_account_id.pack())
-        .nonce(3u32.pack())
+        .nonce(2u32.pack())
         .args(deploy_args.pack())
         .build();
 
