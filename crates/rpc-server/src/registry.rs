@@ -1283,6 +1283,7 @@ async fn submit_withdrawal_request(
 }
 
 // TODO: remove code after remove withdrawal cell
+#[allow(clippy::type_complexity)]
 #[instrument(skip_all)]
 async fn inner_submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
@@ -1941,6 +1942,7 @@ async fn get_mem_pool_state_ready(
 }
 
 // TODO: remove code after remove withdrawal cell
+#[allow(clippy::type_complexity)]
 #[instrument(skip_all)]
 async fn test_submit_withdrawal_request_finalized_custodian_unchecked(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
