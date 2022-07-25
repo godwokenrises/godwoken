@@ -102,7 +102,7 @@ fn run_contract_get_result<S: State + CodeStore>(
         block_info,
         &raw_tx,
         L2TX_MAX_CYCLES,
-        &mut CyclesPool::unlimit_cycles(),
+        CyclesPool::none(),
     )?;
     tree.apply_run_result(&run_result.write)
         .expect("update state");

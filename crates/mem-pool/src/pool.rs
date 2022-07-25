@@ -13,7 +13,7 @@ use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, registry_address::RegistryAddress,
     state::State, H256,
 };
-use gw_config::{MemBlockConfig, MemPoolConfig, NodeMode};
+use gw_config::{MemBlockConfig, MemPoolConfig, NodeMode, SyscallCyclesConfig};
 use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_generator::{
     constants::L2TX_MAX_CYCLES,
@@ -707,8 +707,8 @@ impl MemPool {
             self.try_package_more_withdrawals(&mem_state, &mut withdrawals);
         }
 
-        // To simplify logic, use unlimit to make consistent state.
-        self.cycles_pool = CyclesPool::unlimit_cycles();
+        // To simplify logic, don't restrict reinjected txs
+        self.cycles_pool = CyclesPool::new(u64::MAX, SyscallCyclesConfig::all_zero());
 
         self.prepare_next_mem_block(
             &db,
@@ -725,7 +725,7 @@ impl MemPool {
             self.mem_block_config.max_cycles_limit,
             self.mem_block_config.syscall_cycles.clone(),
         );
-        self.cycles_pool.sub_cycles(used_cycles);
+        self.cycles_pool.checked_sub_cycles(used_cycles);
 
         // store mem state
         self.mem_pool_state.store(Arc::new(mem_store));
@@ -1136,8 +1136,6 @@ impl MemPool {
             }
         }
 
-        // Use block max cycles if it's smaller than L2TX_MAX_CYCLES
-        let l2tx_max_cycles = min(L2TX_MAX_CYCLES, self.mem_block_config.max_cycles_limit);
         let cycles_pool = &mut self.cycles_pool;
         let generator = Arc::clone(&self.generator);
 
@@ -1149,8 +1147,8 @@ impl MemPool {
                 state,
                 block_info,
                 &raw_tx,
-                l2tx_max_cycles,
-                cycles_pool,
+                L2TX_MAX_CYCLES,
+                Some(cycles_pool),
             )
         })?;
 

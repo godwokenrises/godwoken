@@ -6,7 +6,7 @@ use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
 use gw_common::{state::State, H256};
 use gw_config::{
     ChainConfig, ConsensusConfig, FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit,
-    RPCServerConfig,
+    RPCServerConfig, SyscallCyclesConfig,
 };
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
 use gw_generator::generator::CyclesPool;
@@ -488,7 +488,8 @@ impl RequestSubmitter {
 
             // Use unlimit to ensure all exists mem pool transactions are included
             let mut org_cycles_pool = mem_pool.cycles_pool().clone();
-            *mem_pool.cycles_pool_mut() = CyclesPool::unlimit_cycles();
+            *mem_pool.cycles_pool_mut() =
+                CyclesPool::new(u64::MAX, SyscallCyclesConfig::all_zero());
 
             while let Some(hash) = mem_pool.pending_restored_tx_hashes().pop_front() {
                 match db.get_mem_pool_transaction(&hash) {
@@ -507,7 +508,7 @@ impl RequestSubmitter {
             }
 
             // Update remained block cycles
-            org_cycles_pool.sub_cycles(mem_pool.cycles_pool().cycles_used());
+            org_cycles_pool.checked_sub_cycles(mem_pool.cycles_pool().cycles_used());
             *mem_pool.cycles_pool_mut() = org_cycles_pool;
         }
 
@@ -526,7 +527,8 @@ impl RequestSubmitter {
                 );
                 // continue to batch process if we have enough mem block slots
                 if !mem_pool.is_mem_txs_full(Self::MAX_BATCH_SIZE)
-                    && mem_pool.cycles_pool().cycles() >= fee_config.minimal_tx_cycles_limit()
+                    && mem_pool.cycles_pool().available_cycles()
+                        >= fee_config.minimal_tx_cycles_limit()
                 {
                     break;
                 }
@@ -651,7 +653,7 @@ impl RequestSubmitter {
                         continue;
                     }
 
-                    log::info!("[tx from zero] create account {}", err);
+                    log::error!("[tx from zero] create account {}", err);
                 }
 
                 let snap = self.mem_pool_state.load();
@@ -661,7 +663,7 @@ impl RequestSubmitter {
                 for (entry, handle) in items {
                     if let FeeItemKind::Tx = entry.item.kind() {
                         if !block_cycles_limit_reached
-                            && entry.cycles_limit > mem_pool.cycles_pool().cycles()
+                            && entry.cycles_limit > mem_pool.cycles_pool().available_cycles()
                         {
                             let hash: Byte32 = entry.item.hash().pack();
                             log::info!("mem block cycles limit reached for tx {}", hash);
@@ -717,6 +719,7 @@ impl RequestSubmitter {
 
                             continue;
                         }
+
                         log::info!("push {:?} {} failed {}", entry.item.kind(), hash, err);
                     }
                 }
@@ -1027,7 +1030,7 @@ async fn execute_l2transaction(
             &block_info,
             &raw_tx,
             100000000,
-            &mut cycles_pool,
+            Some(&mut cycles_pool),
         )?;
 
         Result::<_, anyhow::Error>::Ok(run_result)
@@ -1174,7 +1177,7 @@ async fn execute_raw_l2transaction(
                     &block_info,
                     &raw_l2tx,
                     execute_l2tx_max_cycles,
-                    &mut cycles_pool,
+                    Some(&mut cycles_pool),
                 )?
             }
             None => {
@@ -1196,7 +1199,7 @@ async fn execute_raw_l2transaction(
                     &block_info,
                     &raw_l2tx,
                     execute_l2tx_max_cycles,
-                    &mut cycles_pool,
+                    Some(&mut cycles_pool),
                 )?
             }
         };

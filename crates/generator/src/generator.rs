@@ -36,7 +36,7 @@ use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::{ChallengeTargetType, ScriptHashType},
-    offchain::{RollupContext, RunResult},
+    offchain::{RollupContext, RunResult, RunResultCycles},
     packed::{
         AccountMerkleState, BlockInfo, ChallengeTarget, DepositRequest, L2Block, L2Transaction,
         RawL2Block, RawL2Transaction, TxReceipt, WithdrawalReceipt, WithdrawalRequestExtra,
@@ -95,57 +95,44 @@ impl From<WithdrawalCellError> for Error {
 #[derive(Debug, Clone)]
 pub struct CyclesPool {
     limit: u64,
-    cycles: u64,
+    available_cycles: u64,
     syscall_config: SyscallCyclesConfig,
-    run_out: bool,
 }
 
 impl CyclesPool {
     pub fn new(limit: u64, syscall_config: SyscallCyclesConfig) -> Self {
         CyclesPool {
             limit,
-            cycles: limit,
+            available_cycles: limit,
             syscall_config,
-            run_out: false,
         }
     }
 
-    pub fn unlimit_cycles() -> Self {
-        Self::new(u64::MAX, SyscallCyclesConfig::all_zero())
+    pub fn none<'a>() -> Option<&'a mut CyclesPool> {
+        None
     }
 
     pub fn limit(&self) -> u64 {
         self.limit
     }
 
-    pub fn cycles(&self) -> u64 {
-        self.cycles
+    pub fn available_cycles(&self) -> u64 {
+        self.available_cycles
     }
 
     pub fn cycles_used(&self) -> u64 {
-        self.limit - self.cycles
-    }
-
-    pub fn run_out(&self) -> bool {
-        self.run_out
+        self.limit - self.available_cycles
     }
 
     pub fn syscall_config(&self) -> &SyscallCyclesConfig {
         &self.syscall_config
     }
 
-    pub fn sub_cycles(&mut self, cycles: u64) {
-        if self.run_out {
-            return;
-        }
+    pub fn checked_sub_cycles(&mut self, cycles: u64) -> Option<u64> {
+        let opt_available_cycles = self.available_cycles.checked_sub(cycles);
+        self.available_cycles = opt_available_cycles.unwrap_or(0);
 
-        match self.cycles.checked_sub(cycles) {
-            Some(cycles) => self.cycles = cycles,
-            None => {
-                self.cycles = 0;
-                self.run_out = true;
-            }
-        }
+        opt_available_cycles
     }
 }
 
@@ -156,7 +143,7 @@ pub struct MachineRunArgs<'a, C, S> {
     raw_tx: &'a RawL2Transaction,
     max_cycles: u64,
     backend: Backend,
-    cycles_pool: &'a mut CyclesPool,
+    cycles_pool: Option<&'a mut CyclesPool>,
 }
 
 pub struct Generator {
@@ -204,14 +191,14 @@ impl Generator {
             raw_tx,
             max_cycles,
             backend,
-            cycles_pool,
+            mut cycles_pool,
         } = args;
 
         self.redir_log_handler.start(raw_tx);
         let mut run_result = RunResult::default();
-        let mut used_cycles;
+        let used_cycles;
         let exit_code;
-        let cycles_pool_bak = cycles_pool.clone();
+        let org_cycles_pool = cycles_pool.as_mut().map(|p| p.clone());
         {
             let t = Instant::now();
             let global_vm_version = GLOBAL_VM_VERSION.load(SeqCst);
@@ -232,7 +219,7 @@ impl Generator {
                     result: &mut run_result,
                     code_store: state,
                     redir_log_handler: &self.redir_log_handler,
-                    cycles_pool,
+                    cycles_pool: &mut cycles_pool,
                 }))
                 .instruction_cycle_func(Box::new(instruction_cycles));
             let default_machine = machine_builder.build();
@@ -254,35 +241,44 @@ impl Generator {
 
             machine.load_program(&backend.generator, &[])?;
             let maybe_ok = machine.run();
-            used_cycles = machine.machine.cycles();
+            let execution_cycles = machine.machine.cycles();
             drop(machine);
 
-            // Subtract tx cycles.
-            // NOTE: already subtract syscall cycles from cycles pool during machine running to
-            // interrupt execution eariler.
-            let used_syscall_cycles = cycles_pool_bak.cycles() - cycles_pool.cycles();
-            cycles_pool.sub_cycles(used_cycles.saturating_sub(used_syscall_cycles));
-            if cycles_pool.run_out() && used_cycles <= cycles_pool.limit() {
-                return Err(TransactionError::BlockCyclesLimitReached {
-                    limit: cycles_pool.limit,
-                });
+            // Subtract tx execution cycles.
+            if let Some(cycles_pool) = &mut cycles_pool {
+                if cycles_pool.checked_sub_cycles(execution_cycles).is_none() {
+                    let cycles = RunResultCycles {
+                        execution: execution_cycles,
+                        r#virtual: run_result.cycles.r#virtual,
+                    };
+                    let limit = cycles_pool.limit;
+
+                    if cycles.total() > limit {
+                        // Restore cycles pool, because we will not treat this tx as failed tx
+                        assert!(org_cycles_pool.is_some());
+                        **cycles_pool = org_cycles_pool.unwrap();
+
+                        return Err(TransactionError::ExceededBlockMaxCycles { cycles, limit });
+                    } else {
+                        return Err(TransactionError::BlockCyclesLimitReached { cycles, limit });
+                    }
+                }
             }
 
             match maybe_ok {
-                // Tx cycles exceed block max cycles limit
-                Ok(_exit_code) if used_cycles > cycles_pool.limit() => {
-                    exit_code = INVALID_CYCLES_EXIT_CODE;
-                    used_cycles = cycles_pool.limit();
-                }
                 Ok(_exit_code) => {
                     exit_code = _exit_code;
+                    used_cycles = execution_cycles;
                 }
                 Err(ckb_vm::error::Error::InvalidCycles) => {
                     exit_code = INVALID_CYCLES_EXIT_CODE;
                     used_cycles = max_cycles;
                 }
                 Err(err) => {
-                    *cycles_pool = cycles_pool_bak;
+                    // Restore cycles pool
+                    if let Some((pool, org_pool)) = cycles_pool.as_mut().zip(org_cycles_pool) {
+                        **pool = org_pool;
+                    }
                     // unexpected VM error
                     return Err(err.into());
                 }
@@ -295,7 +291,7 @@ impl Generator {
                 used_cycles
             );
         }
-        run_result.used_cycles = used_cycles;
+        run_result.cycles.execution = used_cycles;
         run_result.exit_code = exit_code;
 
         Ok(run_result)
@@ -554,7 +550,7 @@ impl Generator {
                 &block_info,
                 &raw_tx,
                 L2TX_MAX_CYCLES,
-                &mut CyclesPool::unlimit_cycles(),
+                CyclesPool::none(),
             ) {
                 Ok(run_result) => run_result,
                 Err(err) => {
@@ -610,7 +606,7 @@ impl Generator {
                     };
                 }
 
-                let used_cycles = run_result.used_cycles;
+                let used_cycles = run_result.cycles.execution;
                 let post_state = match state.merkle_state() {
                     Ok(merkle_state) => merkle_state,
                     Err(err) => return ApplyBlockResult::Error(err),
@@ -687,14 +683,14 @@ impl Generator {
 
     /// execute a layer2 tx
     #[instrument(skip_all)]
-    pub fn execute_transaction<S: State + CodeStore, C: ChainView>(
-        &self,
-        chain: &C,
-        state: &S,
-        block_info: &BlockInfo,
-        raw_tx: &RawL2Transaction,
+    pub fn execute_transaction<'a, S: State + CodeStore, C: ChainView>(
+        &'a self,
+        chain: &'a C,
+        state: &'a S,
+        block_info: &'a BlockInfo,
+        raw_tx: &'a RawL2Transaction,
         max_cycles: u64,
-        cycles_pool: &mut CyclesPool,
+        cycles_pool: Option<&'a mut CyclesPool>,
     ) -> Result<RunResult, TransactionError> {
         let run_result = self.unchecked_execute_transaction(
             chain,
@@ -709,14 +705,14 @@ impl Generator {
 
     /// execute a layer2 tx, doesn't check exit code
     #[instrument(skip_all, fields(block = block_info.number().unpack(), tx_hash = %raw_tx.hash().pack()))]
-    pub fn unchecked_execute_transaction<S: State + CodeStore, C: ChainView>(
-        &self,
-        chain: &C,
-        state: &S,
-        block_info: &BlockInfo,
-        raw_tx: &RawL2Transaction,
+    pub fn unchecked_execute_transaction<'a, S: State + CodeStore, C: ChainView>(
+        &'a self,
+        chain: &'a C,
+        state: &'a S,
+        block_info: &'a BlockInfo,
+        raw_tx: &'a RawL2Transaction,
         max_cycles: u64,
-        cycles_pool: &mut CyclesPool,
+        cycles_pool: Option<&'a mut CyclesPool>,
     ) -> Result<RunResult, TransactionError> {
         let account_id = raw_tx.to_id().unpack();
         let script_hash = state.get_script_hash(account_id)?;
