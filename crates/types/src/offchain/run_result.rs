@@ -40,8 +40,6 @@ pub struct RunResult {
     pub get_scripts: HashMap<H256, Script>,
     // data hash -> data full size
     pub read_data: HashMap<H256, Bytes>,
-    // used cycles
-    pub used_cycles: u64,
     pub exit_code: i8,
     pub write: RunResultWriteState,
     pub cycles: RunResultCycles,
