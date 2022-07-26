@@ -11,10 +11,13 @@ use gw_rpc_client::{
     error::{get_jsonrpc_error_code, CkbRpcError},
     rpc_client::RPCClient,
 };
-use gw_store::{traits::chain_store::ChainStore, Store};
+use gw_store::{snapshot::StoreSnapshot, traits::chain_store::ChainStore, Store};
 use gw_types::{
     offchain::{CellStatus, DepositInfo, TxStatus},
-    packed::{GlobalState, NumberHash, OutPoint, Script, Transaction, WithdrawalKey},
+    packed::{
+        Confirmed, GlobalState, LocalBlock, NumberHash, OutPoint, Script, ScriptVec, Submitted,
+        Transaction, WithdrawalKey,
+    },
     prelude::*,
 };
 use gw_utils::{abort_on_drop::spawn_abort_on_drop, local_cells::LocalCellsManager, since::Since};
@@ -22,6 +25,7 @@ use tokio::{sync::Mutex, time::Instant};
 
 use crate::{
     block_producer::{BlockProducer, ComposeSubmitTxArgs},
+    block_sync_server::BlockSyncServerState,
     chain_updater::ChainUpdater,
     produce_block::ProduceBlockResult,
     sync_l1::{revert, sync_l1, SyncL1Context},
@@ -46,6 +50,7 @@ pub struct PSCContext {
     pub chain_updater: ChainUpdater,
     pub rollup_type_script: Script,
     pub psc_config: PscConfig,
+    pub block_sync_server_state: Option<Arc<std::sync::Mutex<BlockSyncServerState>>>,
 }
 
 impl SyncL1Context for PSCContext {
@@ -103,6 +108,17 @@ impl ProduceSubmitConfirm {
                 .await?;
             pool.mem_pool_state().set_completed_initial_syncing();
         }
+        // Publish initial messages.
+        if let Some(ref sync_server) = context.block_sync_server_state {
+            let mut sync_server = sync_server.lock().unwrap();
+            for b in last_confirmed + 1..=last_valid {
+                publish_local_block(&mut sync_server, &snap, b)?;
+            }
+            for b in last_confirmed + 1..=last_submitted {
+                publish_submitted(&mut sync_server, &snap, b)?;
+            }
+        }
+
         log::info!(
             "last valid: {}, last_submitted: {}, last_confirmed: {}",
             last_valid,
@@ -135,6 +151,8 @@ impl ProduceSubmitConfirm {
                     }
 
                     sync_l1(&*self.context).await?;
+
+                    // TODO: publish block sync messages.
 
                     // Reset local_count, submitted_count and local_cells_manager.
                     let snap = self.context.store.get_snapshot();
@@ -205,9 +223,14 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                 match result {
                     Err(err) if err.is_panic() => bail!("submit task panic: {:?}", err.into_panic()),
                     Ok(nh) => {
+                        let nh = nh?;
                         let store_tx = state.context.store.begin_transaction();
-                        store_tx.set_last_submitted_block_number_hash(&nh?.as_reader())?;
+                        store_tx.set_last_submitted_block_number_hash(&nh.as_reader())?;
                         store_tx.commit()?;
+                        if let Some(ref sync_server) = state.context.block_sync_server_state {
+                            let mut sync_server = sync_server.lock().unwrap();
+                            publish_submitted(&mut sync_server, &state.context.store.get_snapshot(), nh.number().unpack())?;
+                        }
                         state.submitted_count += 1;
                         state.local_count -= 1;
                     }
@@ -220,9 +243,14 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                 match result {
                     Err(err) if err.is_panic() => bail!("sync task panic: {:?}", err.into_panic()),
                     Ok(nh) => {
+                        let nh = nh?;
                         let store_tx = state.context.store.begin_transaction();
-                        store_tx.set_last_confirmed_block_number_hash(&nh?.as_reader())?;
+                        store_tx.set_last_confirmed_block_number_hash(&nh.as_reader())?;
                         store_tx.commit()?;
+                        if let Some(ref sync_server) = state.context.block_sync_server_state {
+                            let mut sync_server = sync_server.lock().unwrap();
+                            publish_confirmed(&mut sync_server, &state.context.store.get_snapshot(), nh.number().unpack())?;
+                        }
                         state.submitted_count -= 1;
                     }
                     _ => {}
@@ -334,6 +362,13 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
     let mut local_cells_manager = ctx.local_cells_manager.lock().await;
     for d in deposit_cells {
         local_cells_manager.lock_cell(d.cell.out_point);
+    }
+    if let Some(ref sync_server_state) = ctx.block_sync_server_state {
+        publish_local_block(
+            &mut sync_server_state.lock().unwrap(),
+            &ctx.store.get_snapshot(),
+            number,
+        )?;
     }
     ctx.mem_pool
         .lock()
@@ -622,5 +657,107 @@ async fn check_tx_input(rpc_client: &RPCClient, tx: &Transaction) -> Result<()> 
             }
         }
     }
+    Ok(())
+}
+
+fn publish_local_block(
+    sync_server: &mut BlockSyncServerState,
+    snap: &StoreSnapshot,
+    b: u64,
+) -> Result<()> {
+    let block_hash = snap
+        .get_block_hash_by_number(b)?
+        .context("get block hash")?;
+    let block = snap.get_block(&block_hash)?.context("get block")?;
+    let global_state = snap
+        .get_block_post_global_state(&block_hash)?
+        .context("get block post global state")?;
+    let deposit_info_vec = snap
+        .get_block_deposit_info_vec(b)
+        .context("get block deposit info vec")?;
+    let deposit_asset_scripts = {
+        let reader = deposit_info_vec.as_reader();
+        let asset_hashes = reader.iter().filter_map(|r| {
+            let h: H256 = r.request().sudt_script_hash().unpack();
+            if h.is_zero() {
+                None
+            } else {
+                Some(h)
+            }
+        });
+        let asset_scripts = asset_hashes.map(|h| {
+            snap.get_asset_script(&h)?
+                .with_context(|| format!("block {} asset script {} not found", b, h.pack()))
+        });
+        asset_scripts.collect::<Result<Vec<_>>>()?
+    };
+    let withdrawals = {
+        let reqs = block.as_reader().withdrawals();
+        let extra_reqs = reqs.iter().map(|w| {
+            let h = w.hash().into();
+            snap.get_withdrawal(&h)?
+                .with_context(|| format!("block {} withdrawal {} not found", b, h.pack()))
+        });
+        extra_reqs.collect::<Result<Vec<_>>>()?
+    };
+    sync_server.publish_local_block(
+        LocalBlock::new_builder()
+            .block(block)
+            .post_global_state(global_state)
+            .deposit_info_vec(deposit_info_vec)
+            .deposit_asset_scripts(ScriptVec::new_builder().set(deposit_asset_scripts).build())
+            .withdrawals(withdrawals.pack())
+            .build(),
+    );
+    Ok(())
+}
+
+fn publish_submitted(
+    sync_server: &mut BlockSyncServerState,
+    snap: &StoreSnapshot,
+    b: u64,
+) -> Result<()> {
+    let block_hash = snap
+        .get_block_hash_by_number(b)?
+        .context("get block hash")?;
+    let tx_hash = snap
+        .get_block_submit_tx_hash(b)
+        .context("get submit tx hash")?;
+    sync_server.publish_submitted(
+        Submitted::new_builder()
+            .tx_hash(tx_hash.pack())
+            .number_hash(
+                NumberHash::new_builder()
+                    .number(b.pack())
+                    .block_hash(block_hash.pack())
+                    .build(),
+            )
+            .build(),
+    );
+    Ok(())
+}
+
+fn publish_confirmed(
+    sync_server: &mut BlockSyncServerState,
+    snap: &StoreSnapshot,
+    b: u64,
+) -> Result<()> {
+    let block_hash = snap
+        .get_block_hash_by_number(b)?
+        .context("get block hash")?;
+    let tx_hash = snap
+        .get_block_submit_tx_hash(b)
+        .context("get submit tx hash")?;
+    sync_server.publish_confirmed(
+        Confirmed::new_builder()
+            .tx_hash(tx_hash.pack())
+            .number_hash(
+                NumberHash::new_builder()
+                    .number(b.pack())
+                    .block_hash(block_hash.pack())
+                    .build(),
+            )
+            .build(),
+    );
     Ok(())
 }

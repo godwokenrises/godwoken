@@ -1,5 +1,7 @@
 use crate::{
     block_producer::{BlockProducer, BlockProducerCreateArgs},
+    block_sync_client::{block_sync_client_protocol, BlockSyncClient, P2PStream},
+    block_sync_server::{block_sync_server_protocol, BlockSyncServerState},
     chain_updater::ChainUpdater,
     challenger::{Challenger, ChallengerNewArgs},
     cleaner::Cleaner,
@@ -65,7 +67,11 @@ use std::{
 use tentacle::service::ProtocolMeta;
 use tokio::{
     spawn,
-    sync::{broadcast, mpsc, Mutex},
+    sync::{
+        broadcast,
+        mpsc::{self, unbounded_channel, UnboundedReceiver},
+        Mutex,
+    },
 };
 use tracing::{info_span, instrument};
 
@@ -721,6 +727,16 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     // Broadcast shutdown event.
     let (shutdown_event, shutdown_event_recv) = broadcast::channel(1);
 
+    let has_block_producer_and_p2p =
+        block_producer.is_some() && config.p2p_network_config.is_some();
+    let block_sync_server_state = if has_block_producer_and_p2p {
+        Some(Arc::new(std::sync::Mutex::new(BlockSyncServerState::new())))
+    } else {
+        None
+    };
+
+    let mut block_sync_client_p2p_receiver: Option<UnboundedReceiver<P2PStream>> = None;
+
     // P2P network.
     let p2p_control_and_handle = if let Some(ref p2p_network_config) = config.p2p_network_config {
         let mut protocols: Vec<ProtocolMeta> = Vec::new();
@@ -740,6 +756,20 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 ));
             }
             _ => {}
+        }
+        match config.node_mode {
+            NodeMode::ReadOnly => {
+                log::info!("will enable p2p block sync client");
+                let (tx, rx) = unbounded_channel();
+                block_sync_client_p2p_receiver = Some(rx);
+                protocols.push(block_sync_client_protocol(tx));
+            }
+            NodeMode::FullNode | NodeMode::Test => {
+                if let Some(ref state) = block_sync_server_state {
+                    log::info!("will enable p2p block sync server");
+                    protocols.push(block_sync_server_protocol(state.clone()));
+                }
+            }
         }
         let mut network = P2PNetwork::init(p2p_network_config, protocols).await?;
         let control = network.control().clone();
@@ -812,7 +842,8 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     log::info!("{:?} mode", config.node_mode);
 
-    let psc_task = if let (Some(block_producer), Some(mem_pool)) = (block_producer, mem_pool) {
+    let bm = (block_producer, mem_pool.clone()); // To keep the next line short.
+    let psc_task = if let (Some(block_producer), Some(mem_pool)) = bm {
         let psc_state = ProduceSubmitConfirm::init(Arc::new(PSCContext {
             store: store.clone(),
             block_producer,
@@ -820,9 +851,10 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
             chain: chain.clone(),
             mem_pool,
             local_cells_manager: Mutex::new(LocalCellsManager::default()),
-            chain_updater,
-            rollup_type_script,
+            chain_updater: chain_updater.clone(),
+            rollup_type_script: rollup_type_script.clone(),
             psc_config: config.block_producer.as_ref().unwrap().psc_config.clone(),
+            block_sync_server_state: block_sync_server_state.clone(),
         }))
         .await
         .context("create ProduceSubmitConfirm")?;
@@ -844,6 +876,33 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     };
     let has_psc_task = psc_task.is_some();
     let psc_task = OptionFuture::from(psc_task);
+
+    let block_sync_task =
+        if let (Some(receiver), Some(mem_pool)) = (block_sync_client_p2p_receiver, mem_pool) {
+            let client = BlockSyncClient {
+                store: store.clone(),
+                rpc_client: rpc_client.clone(),
+                chain: chain.clone(),
+                mem_pool,
+                chain_updater,
+                rollup_type_script: rollup_type_script.clone(),
+                p2p_stream_receiver: receiver,
+                completed_initial_syncing: false,
+            };
+            let shutdown_completed_send = shutdown_completed_send.clone();
+            let mut shutdown_event_recv = shutdown_event.subscribe();
+            Some(tokio::spawn(async move {
+                tokio::select! {
+                    _ = shutdown_event_recv.recv() => {},
+                    _ = client.run() => {},
+                }
+                drop(shutdown_completed_send);
+            }))
+        } else {
+            None
+        };
+    let has_block_sync_task = block_sync_task.is_some();
+    let block_sync_task = OptionFuture::from(block_sync_task);
 
     let (chain_task_ended_tx, chain_task) = tokio::sync::oneshot::channel::<()>();
     let rt_handle = tokio::runtime::Handle::current();
@@ -937,6 +996,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         _ = chain_task => {},
         _ = rpc_task => {},
         _ = psc_task, if has_psc_task => {},
+        _ = block_sync_task, if has_block_sync_task => {},
     };
 
     //If any task is out of running, broadcast shutdown event.

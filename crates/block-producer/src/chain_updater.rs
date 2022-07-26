@@ -40,6 +40,7 @@ impl QueryL1TxError {
     }
 }
 
+#[derive(Clone)]
 pub struct ChainUpdater {
     chain: Arc<Mutex<Chain>>,
     rpc_client: RPCClient,

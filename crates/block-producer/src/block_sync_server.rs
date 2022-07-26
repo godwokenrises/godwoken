@@ -16,7 +16,7 @@ use gw_types::{
     prelude::*,
 };
 use tentacle::{builder::MetaBuilder, service::ProtocolMeta};
-use tokio::sync::broadcast::{Receiver, Sender};
+use tokio::sync::broadcast::{channel, Receiver, Sender};
 
 const KEEP_BLOCKS: u64 = 16;
 
@@ -32,7 +32,21 @@ pub struct BlockSyncServerState {
     tx: Sender<BlockSync>,
 }
 
+impl Default for BlockSyncServerState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BlockSyncServerState {
+    pub fn new() -> Self {
+        let (tx, _) = channel(8);
+        Self {
+            buffer: Default::default(),
+            tx,
+        }
+    }
+
     pub fn publish_local_block(&mut self, local_block: LocalBlock) {
         let reader = local_block.as_reader();
         let raw = reader.block().raw();

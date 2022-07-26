@@ -2,7 +2,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 use bytes::Bytes;
 use ckb_types::prelude::{Builder, Entity, Reader};
 use futures::TryStreamExt;
@@ -34,13 +34,14 @@ use crate::{
 };
 
 pub struct BlockSyncClient {
-    store: Store,
-    rpc_client: RPCClient,
-    chain: Arc<Mutex<Chain>>,
-    mem_pool: Arc<Mutex<MemPool>>,
-    chain_updater: ChainUpdater,
-    rollup_type_script: Script,
-    p2p_stream_receiver: UnboundedReceiver<P2PStream>,
+    pub store: Store,
+    pub rpc_client: RPCClient,
+    pub chain: Arc<Mutex<Chain>>,
+    pub mem_pool: Arc<Mutex<MemPool>>,
+    pub chain_updater: ChainUpdater,
+    pub rollup_type_script: Script,
+    pub p2p_stream_receiver: UnboundedReceiver<P2PStream>,
+    pub completed_initial_syncing: bool,
 }
 
 impl SyncL1Context for BlockSyncClient {
@@ -64,29 +65,33 @@ impl SyncL1Context for BlockSyncClient {
     }
 }
 
-pub async fn run(mut client: BlockSyncClient) -> Result<()> {
-    let mut p2p_stream = None;
-    loop {
-        if let Some(ref mut s) = p2p_stream {
-            if let Err(err) = run_with_p2p_stream(&mut client, s).await {
-                if err.is::<StreamError>() {
-                    // XXX: disconnect this p2p session?
-                    p2p_stream = None;
+impl BlockSyncClient {
+    pub async fn run(self) {
+        let mut client = self;
+        let mut p2p_stream = None;
+        loop {
+            if let Some(ref mut s) = p2p_stream {
+                if let Err(err) = run_with_p2p_stream(&mut client, s).await {
+                    if err.is::<StreamError>() {
+                        // XXX: disconnect this p2p session?
+                        p2p_stream = None;
+                    }
+                    log::warn!("{:#}", err);
                 }
-                log::warn!("{:#}", err);
-            }
-        } else {
-            if let Ok(stream) = client.p2p_stream_receiver.try_recv() {
-                p2p_stream = Some(stream);
-                continue;
-            }
+                // TODO: backoff.
+                tokio::time::sleep(Duration::from_secs(3)).await;
+            } else {
+                if let Ok(stream) = client.p2p_stream_receiver.try_recv() {
+                    p2p_stream = Some(stream);
+                    continue;
+                }
 
-            if let Err(err) = sync_l1(&client).await {
-                log::warn!("{:#}", err);
+                if let Err(err) = sync_l1(&client).await {
+                    log::warn!("{:#}", err);
+                }
+                tokio::time::sleep(Duration::from_secs(3)).await;
             }
         }
-        // TODO: backoff.
-        tokio::time::sleep(Duration::from_secs(3)).await;
     }
 }
 
@@ -102,6 +107,16 @@ impl std::fmt::Display for StreamError {
 async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStream) -> Result<()> {
     loop {
         sync_l1(client).await?;
+        if !client.completed_initial_syncing {
+            let mut mem_pool = client.mem_pool.lock().await;
+            // XXX: local cells manager.
+            let new_tip = client.store.get_last_valid_tip_block_hash()?;
+            mem_pool
+                .notify_new_tip(new_tip, &Default::default())
+                .await?;
+            mem_pool.mem_pool_state().set_completed_initial_syncing();
+            client.completed_initial_syncing = true;
+        }
         let last_confirmed = client
             .store
             .get_last_confirmed_block_number_hash()
@@ -122,6 +137,7 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
             P2PBlockSyncResponseUnionReader::Found(_) => break,
             P2PBlockSyncResponseUnionReader::TryAgain(_) => {}
         }
+        tokio::time::sleep(Duration::from_secs(3)).await;
     }
     while let Some(msg) = stream.recv().await.context(StreamError)? {
         BlockSyncReader::from_slice(msg.as_ref()).context(StreamError)?;
@@ -139,22 +155,41 @@ async fn apply_msg(client: &BlockSyncClient, msg: BlockSync) -> Result<()> {
             let store_tx = client.store.begin_transaction();
             revert(client, &store_tx, r.number_hash().number().unpack()).await?;
             store_tx.commit()?;
+            let mut mem_pool = client.mem_pool.lock().await;
+            mem_pool
+                .notify_new_tip(r.number_hash().block_hash().unpack(), &Default::default())
+                .await?;
         }
         BlockSyncUnion::LocalBlock(l) => {
-            let mut chain = client.chain.lock().await;
+            let block_hash = l.block().hash().into();
+            let block_number = l.block().raw().number().unpack();
             let store_tx = client.store.begin_transaction();
-            chain
-                .update_local(
-                    &store_tx,
-                    l.block(),
-                    l.deposit_info_vec(),
-                    l.deposit_asset_scripts().into_iter().collect(),
-                    l.withdrawals().into_iter().collect(),
-                    l.post_global_state(),
-                )
-                .await?;
-            // TODO: finalized custodians.
-            store_tx.commit()?;
+            let store_block_hash = store_tx.get_block_hash_by_number(block_number)?;
+            match store_block_hash {
+                None => {
+                    let mut chain = client.chain.lock().await;
+                    chain
+                        .update_local(
+                            &store_tx,
+                            l.block(),
+                            l.deposit_info_vec(),
+                            l.deposit_asset_scripts().into_iter().collect(),
+                            l.withdrawals().into_iter().collect(),
+                            l.post_global_state(),
+                        )
+                        .await?;
+                    chain.calculate_and_store_finalized_custodians(&store_tx, block_number)?;
+                    store_tx.commit()?;
+                    let mut mem_pool = client.mem_pool.lock().await;
+                    mem_pool
+                        .notify_new_tip(block_hash, &Default::default())
+                        .await?;
+                }
+                Some(store_block_hash) => {
+                    // TODO: revert?
+                    ensure!(store_block_hash == block_hash);
+                }
+            }
         }
         BlockSyncUnion::Submitted(s) => {
             // TODO: check block hash.
@@ -163,6 +198,7 @@ async fn apply_msg(client: &BlockSyncClient, msg: BlockSync) -> Result<()> {
                 s.number_hash().number().unpack(),
                 &s.tx_hash().unpack(),
             )?;
+            store_tx.set_last_submitted_block_number_hash(&s.number_hash().as_reader())?;
             store_tx.commit()?;
         }
         BlockSyncUnion::Confirmed(c) => {

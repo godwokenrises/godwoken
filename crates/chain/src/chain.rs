@@ -327,8 +327,6 @@ impl Chain {
                         return Ok(SyncEvent::BadBlock { context });
                     }
 
-                    let withdrawals_clone = withdrawals.clone();
-
                     if let Some(challenge_target) = self.process_block(
                         db,
                         l2block.clone(),
@@ -367,53 +365,7 @@ impl Chain {
                             .block_hash(l2block.hash().pack())
                             .build();
 
-                        // Store remaining finalized custodians.
-                        //
-                        // Remaining finalized custodians = parent block
-                        // remaining finalized custodians + just finalized
-                        // deposits - this block withdrawals
-                        let mut finalized_custodians = db
-                            .get_block_post_finalized_custodian_capacity(block_number - 1)
-                            .context("get parent block remaining finalized custodians")?
-                            .as_reader()
-                            .unpack();
-                        let last_finalized_block = self
-                            .generator
-                            .rollup_context()
-                            .last_finalized_block_number(block_number - 1);
-                        let deposits = db
-                            .get_block_deposit_info_vec(last_finalized_block)
-                            .context("get last finalized block deposit")?;
-                        for deposit in deposits {
-                            let deposit = deposit.request();
-                            finalized_custodians.capacity = finalized_custodians
-                                .capacity
-                                .checked_add(deposit.capacity().unpack().into())
-                                .context("add capacity overflow")?;
-                            finalized_custodians
-                                .checked_add_sudt(
-                                    deposit.sudt_script_hash().unpack(), // XXX: is this correct.
-                                    deposit.amount().unpack(),
-                                    deposit.script(),
-                                )
-                                .context("add sudt overflow")?;
-                        }
-                        for w in withdrawals_clone {
-                            finalized_custodians.capacity = finalized_custodians
-                                .capacity
-                                .checked_sub(w.raw().capacity().unpack().into())
-                                .context("withdrawal not enough capacity")?;
-                            finalized_custodians
-                                .checked_sub_sudt(
-                                    w.request().raw().sudt_script_hash().unpack(),
-                                    w.request().raw().amount().unpack(),
-                                )
-                                .context("withdrawal not enough sudt amount")?;
-                        }
-                        db.set_block_post_finalized_custodian_capacity(
-                            block_number,
-                            &finalized_custodians.pack().as_reader(),
-                        )?;
+                        self.calculate_and_store_finalized_custodians(db, block_number)?;
                         db.set_last_submitted_block_number_hash(&nh.as_reader())?;
                         db.set_last_confirmed_block_number_hash(&nh.as_reader())?;
                         db.set_block_submit_tx(block_number, &transaction.as_reader())?;
@@ -616,6 +568,64 @@ impl Chain {
         self.local_state.last_global_state = global_state;
         log::debug!("last sync event {:?}", self.last_sync_event);
 
+        Ok(())
+    }
+
+    pub fn calculate_and_store_finalized_custodians(
+        &mut self,
+        db: &StoreTransaction,
+        block_number: u64,
+    ) -> Result<(), anyhow::Error> {
+        let block_hash = db
+            .get_block_hash_by_number(block_number)?
+            .context("get block hash")?;
+        let withdrawals = db
+            .get_block(&block_hash)?
+            .context("get block")?
+            .withdrawals();
+
+        let mut finalized_custodians = db
+            .get_block_post_finalized_custodian_capacity(block_number - 1)
+            .context("get parent block remaining finalized custodians")?
+            .as_reader()
+            .unpack();
+        let last_finalized_block = self
+            .generator
+            .rollup_context()
+            .last_finalized_block_number(block_number - 1);
+        let deposits = db
+            .get_block_deposit_info_vec(last_finalized_block)
+            .context("get last finalized block deposit")?;
+        for deposit in deposits {
+            let deposit = deposit.request();
+            finalized_custodians.capacity = finalized_custodians
+                .capacity
+                .checked_add(deposit.capacity().unpack().into())
+                .context("add capacity overflow")?;
+            finalized_custodians
+                .checked_add_sudt(
+                    deposit.sudt_script_hash().unpack(), // XXX: is this correct.
+                    deposit.amount().unpack(),
+                    deposit.script(),
+                )
+                .context("add sudt overflow")?;
+        }
+        for w in withdrawals.as_reader().iter() {
+            finalized_custodians.capacity = finalized_custodians
+                .capacity
+                .checked_sub(w.raw().capacity().unpack().into())
+                .context("withdrawal not enough capacity")?;
+            finalized_custodians
+                .checked_sub_sudt(
+                    w.raw().sudt_script_hash().unpack(),
+                    w.raw().amount().unpack(),
+                )
+                .context("withdrawal not enough sudt amount")?;
+        }
+        db.set_block_post_finalized_custodian_capacity(
+            block_number,
+            &finalized_custodians.pack().as_reader(),
+        )?;
         Ok(())
     }
 
