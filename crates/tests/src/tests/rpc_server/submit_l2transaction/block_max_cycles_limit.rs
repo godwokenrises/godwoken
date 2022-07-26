@@ -6,8 +6,11 @@ use gw_common::{
     state::State,
     H256,
 };
-use gw_config::{MemBlockConfig, MemPoolConfig};
-use gw_generator::account_lock_manage::secp256k1::Secp256k1Eth;
+use gw_config::{MemBlockConfig, MemPoolConfig, SyscallCyclesConfig};
+use gw_generator::{
+    account_lock_manage::secp256k1::Secp256k1Eth, constants::L2TX_MAX_CYCLES,
+    error::TransactionError,
+};
 use gw_types::{
     packed::{
         CreateAccount, DepositRequest, Fee, L2Transaction, MetaContractArgs, RawL2Transaction,
@@ -331,5 +334,102 @@ async fn test_block_max_cycles_limit() {
         let mem_pool = chain.mem_pool().await;
         let not_in_mem_block = !mem_pool.mem_block().txs_set().contains(&alice_tx_hash);
         assert!(not_in_mem_block);
+    }
+
+    // Test execution cycles < max_cycles_limit but execution + virtual cycles > max_cycles_limit
+    // Expect result: TransactionError::ExceededBlockMaxCycles and drop tx
+    const MAX_CYCLES_LIMIT: u64 = L2TX_MAX_CYCLES;
+
+    let mem_pool_config = MemPoolConfig {
+        mem_block: MemBlockConfig {
+            max_cycles_limit: MAX_CYCLES_LIMIT,
+            syscall_cycles: SyscallCyclesConfig {
+                sys_store_cycles: MAX_CYCLES_LIMIT,
+                sys_load_cycles: MAX_CYCLES_LIMIT,
+                sys_create_cycles: MAX_CYCLES_LIMIT,
+                sys_load_account_script_cycles: MAX_CYCLES_LIMIT,
+                sys_store_data_cycles: MAX_CYCLES_LIMIT,
+                sys_load_data_cycles: MAX_CYCLES_LIMIT,
+                sys_get_block_hash_cycles: MAX_CYCLES_LIMIT,
+                sys_recover_account_cycles: MAX_CYCLES_LIMIT,
+                sys_log_cycles: MAX_CYCLES_LIMIT,
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let chain = chain.update_mem_pool_config(mem_pool_config.clone()).await;
+    let rpc_server = {
+        let mut args = RPCServer::default_registry_args(
+            &chain.inner,
+            chain.rollup_type_script.to_owned(),
+            None,
+        );
+        args.mem_pool_config = mem_pool_config.clone();
+        RPCServer::build_from_registry_args(args).await.unwrap()
+    };
+
+    let mem_pool_state = chain.mem_pool_state().await;
+    let snap = mem_pool_state.load();
+    let state = snap.state().unwrap();
+
+    let alice_nonce_before = state.get_nonce(alice_id);
+
+    // Use smaller gas limit so it wont be dropped
+    let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18)
+        .gas_limit(mem_pool_config.mem_block.max_cycles_limit - 1)
+        .gas_price(1)
+        .finish();
+
+    let alice_raw_tx = RawL2Transaction::new_builder()
+        .chain_id(chain.chain_id().pack())
+        .from_id(alice_id.pack())
+        .to_id(polyjuice_account_id.pack())
+        .nonce(2u32.pack())
+        .args(deploy_args.pack())
+        .build();
+
+    let alice_deploy_tx = alice_wallet
+        .sign_polyjuice_tx(&state, alice_raw_tx.clone())
+        .unwrap();
+
+    let alice_tx_hash = rpc_server
+        .submit_l2transaction(&alice_deploy_tx)
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Wait 5 seconds to reach `RequestSubmitter`.
+    // Expect timeout
+    wait_tx_committed(&chain, &alice_tx_hash, Duration::from_secs(5))
+        .await
+        .unwrap_err();
+
+    let not_in_queue = !rpc_server.is_request_in_queue(bob_tx_hash).await.unwrap();
+    assert!(not_in_queue);
+
+    let snap = mem_pool_state.load();
+    let state = snap.state().unwrap();
+
+    let alice_nonce_after = state.get_nonce(alice_id);
+    assert_eq!(alice_nonce_before, alice_nonce_after);
+
+    // Check err
+    {
+        let mut mem_pool = chain.mem_pool().await;
+        let err = mem_pool
+            .push_transaction(alice_deploy_tx)
+            .await
+            .unwrap_err();
+
+        let (cycles, limit) = match err.downcast::<TransactionError>().unwrap() {
+            TransactionError::ExceededMaxBlockCycles { cycles, limit } => (cycles, limit),
+            _ => panic!("unexpected transaction error"),
+        };
+
+        assert_eq!(limit, MAX_CYCLES_LIMIT);
+        assert!(cycles.execution < MAX_CYCLES_LIMIT);
+        assert!(cycles.total() > MAX_CYCLES_LIMIT);
     }
 }
