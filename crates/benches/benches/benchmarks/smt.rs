@@ -14,7 +14,6 @@ use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::BackendManage,
     constants::L2TX_MAX_CYCLES,
-    generator::CyclesPool,
     genesis::build_genesis_from_store,
     traits::StateExt,
     Generator,
@@ -260,7 +259,7 @@ impl BenchExecutionEnvironment {
                     &block_info,
                     &raw_tx,
                     L2TX_MAX_CYCLES,
-                    CyclesPool::none(),
+                    None,
                 )
                 .unwrap();
 

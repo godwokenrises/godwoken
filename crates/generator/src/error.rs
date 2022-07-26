@@ -159,10 +159,10 @@ pub enum TransactionError {
     NonceOverflow,
     #[error("Intrinsic gas: {0}")]
     IntrinsicGas(Cow<'static, str>),
-    #[error("Block cycles limit reached: cycles {cycles:?}, limit {limit}")]
-    BlockCyclesLimitReached { cycles: RunResultCycles, limit: u64 },
-    #[error("Exceeded block max cycles limit: cycles {cycles:?}, limit {limit}")]
-    ExceededBlockMaxCycles { cycles: RunResultCycles, limit: u64 },
+    #[error("Insufficient pool cycles: cycles {cycles:?}, limit {limit}")]
+    InsufficientPoolCycles { cycles: RunResultCycles, limit: u64 },
+    #[error("Exceeded max block cycles: cycles {cycles:?}, limit {limit}")]
+    ExceededMaxBlockCycles { cycles: RunResultCycles, limit: u64 },
 }
 
 impl From<VMError> for TransactionError {

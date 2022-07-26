@@ -5,8 +5,8 @@ use gw_common::{
 use gw_config::{BackendConfig, BackendSwitchConfig};
 use gw_generator::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage,
-    constants::L2TX_MAX_CYCLES, dummy_state::DummyState, error::TransactionError,
-    generator::CyclesPool, traits::StateExt, Generator,
+    constants::L2TX_MAX_CYCLES, dummy_state::DummyState, error::TransactionError, traits::StateExt,
+    Generator,
 };
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
@@ -102,7 +102,7 @@ fn run_contract_get_result<S: State + CodeStore>(
         block_info,
         &raw_tx,
         L2TX_MAX_CYCLES,
-        CyclesPool::none(),
+        None,
     )?;
     tree.apply_run_result(&run_result.write)
         .expect("update state");

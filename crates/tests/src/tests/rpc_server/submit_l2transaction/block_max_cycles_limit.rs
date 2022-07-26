@@ -196,7 +196,7 @@ async fn test_block_max_cycles_limit() {
         let err = mem_pool.push_transaction(bob_deploy_tx).await.unwrap_err();
         eprintln!("err {}", err);
 
-        let expected_err = "Block cycles limit reached";
+        let expected_err = "Insufficient pool cycles";
         assert!(err.to_string().contains(expected_err));
     }
 

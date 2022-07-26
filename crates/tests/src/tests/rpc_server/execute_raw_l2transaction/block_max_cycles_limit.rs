@@ -132,6 +132,6 @@ async fn test_block_max_cycles_limit() {
         .unwrap_err();
     eprintln!("err {}", err);
 
-    let expected_err = "Exceeded block max cycles limit";
+    let expected_err = "Exceeded max block cycles";
     assert!(err.to_string().contains(expected_err));
 }
