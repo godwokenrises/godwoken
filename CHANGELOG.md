@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.4.0-rc4] - 2022-07-26
+
+- hotfix(rpc server): submit withdrawal missing data for submit_tx [#770](https://github.com/nervosnetwork/godwoken/pull/770)
+
 ## [v1.4.0-rc3] - 2022-07-21
 
 - fix(config): optional block producer wallet for readonly node [#768](https://github.com/nervosnetwork/godwoken/pull/768)
