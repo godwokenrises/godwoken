@@ -725,7 +725,7 @@ impl MemPool {
             self.mem_block_config.max_cycles_limit,
             self.mem_block_config.syscall_cycles.clone(),
         );
-        self.cycles_pool.checked_sub_cycles(used_cycles);
+        self.cycles_pool.consume_cycles(used_cycles);
 
         // store mem state
         self.mem_pool_state.store(Arc::new(mem_store));

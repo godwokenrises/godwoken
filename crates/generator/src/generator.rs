@@ -108,10 +108,6 @@ impl CyclesPool {
         }
     }
 
-    pub fn none<'a>() -> Option<&'a mut CyclesPool> {
-        None
-    }
-
     pub fn limit(&self) -> u64 {
         self.limit
     }
@@ -128,7 +124,7 @@ impl CyclesPool {
         &self.syscall_config
     }
 
-    pub fn checked_sub_cycles(&mut self, cycles: u64) -> Option<u64> {
+    pub fn consume_cycles(&mut self, cycles: u64) -> Option<u64> {
         let opt_available_cycles = self.available_cycles.checked_sub(cycles);
         self.available_cycles = opt_available_cycles.unwrap_or(0);
 
@@ -246,7 +242,7 @@ impl Generator {
 
             // Subtract tx execution cycles.
             if let Some(cycles_pool) = &mut cycles_pool {
-                if cycles_pool.checked_sub_cycles(execution_cycles).is_none() {
+                if cycles_pool.consume_cycles(execution_cycles).is_none() {
                     let cycles = RunResultCycles {
                         execution: execution_cycles,
                         r#virtual: run_result.cycles.r#virtual,
@@ -258,9 +254,9 @@ impl Generator {
                         assert!(org_cycles_pool.is_some());
                         **cycles_pool = org_cycles_pool.unwrap();
 
-                        return Err(TransactionError::ExceededBlockMaxCycles { cycles, limit });
+                        return Err(TransactionError::ExceededMaxBlockCycles { cycles, limit });
                     } else {
-                        return Err(TransactionError::BlockCyclesLimitReached { cycles, limit });
+                        return Err(TransactionError::InsufficientPoolCycles { cycles, limit });
                     }
                 }
             }
@@ -550,7 +546,7 @@ impl Generator {
                 &block_info,
                 &raw_tx,
                 L2TX_MAX_CYCLES,
-                CyclesPool::none(),
+                None,
             ) {
                 Ok(run_result) => run_result,
                 Err(err) => {

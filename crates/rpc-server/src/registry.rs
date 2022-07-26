@@ -508,7 +508,7 @@ impl RequestSubmitter {
             }
 
             // Update remained block cycles
-            org_cycles_pool.checked_sub_cycles(mem_pool.cycles_pool().cycles_used());
+            org_cycles_pool.consume_cycles(mem_pool.cycles_pool().cycles_used());
             *mem_pool.cycles_pool_mut() = org_cycles_pool;
         }
 
@@ -642,7 +642,7 @@ impl RequestSubmitter {
                     Ok(None) => Ok(()),
                     Err(err) => Err(err),
                 } {
-                    if let Some(TransactionError::BlockCyclesLimitReached { .. }) =
+                    if let Some(TransactionError::InsufficientPoolCycles { .. }) =
                         err.downcast_ref::<TransactionError>()
                     {
                         log::info!("[tx from zero] mem block cycles limit reached, retry later");
@@ -709,7 +709,7 @@ impl RequestSubmitter {
                     if let Err(err) = maybe_ok {
                         let hash: Byte32 = entry.item.hash().pack();
 
-                        if let Some(TransactionError::BlockCyclesLimitReached { .. }) =
+                        if let Some(TransactionError::InsufficientPoolCycles { .. }) =
                             err.downcast_ref::<TransactionError>()
                         {
                             log::info!("mem block cycles limit reached for tx {}", hash);
