@@ -153,7 +153,12 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                     self.result.cycles.r#virtual.saturating_add(syscall_cycles);
 
                 // Subtract cycles to interrupt execution eariler
-                if cycles_pool.checked_sub_cycles(syscall_cycles).is_none() {
+                let execution_and_virtual = machine
+                    .cycles()
+                    .saturating_add(self.result.cycles.r#virtual);
+                if cycles_pool.checked_sub_cycles(syscall_cycles).is_none()
+                    || execution_and_virtual > cycles_pool.limit()
+                {
                     return Err(VMError::LimitReached);
                 }
             }
