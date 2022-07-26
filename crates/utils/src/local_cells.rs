@@ -214,7 +214,56 @@ fn script_prefix_eq(
     this: &gw_jsonrpc_types::ckb_jsonrpc_types::Script,
     other: &gw_types::packed::Script,
 ) -> bool {
+    // It's important to use raw_data here instead of as_slice or as_bytes.
     (this.code_hash.as_bytes(), this.hash_type.clone() as u8)
         == (other.code_hash().as_slice(), u8::from(other.hash_type()))
         && other.args().raw_data().starts_with(this.args.as_bytes())
+}
+
+#[cfg(test)]
+mod tests {
+    use gw_types::packed::Script;
+
+    use super::*;
+
+    #[test]
+    fn test_script_prefix_eq() {
+        let script = Script::new_builder()
+            .code_hash([1u8; 32].pack())
+            .hash_type(1u8.into())
+            .args(Bytes::from_static(b"args-foo").pack())
+            .build();
+        assert!(script_prefix_eq(
+            &gw_jsonrpc_types::ckb_jsonrpc_types::Script {
+                code_hash: [1u8; 32].into(),
+                hash_type: gw_jsonrpc_types::ckb_jsonrpc_types::ScriptHashType::Type,
+                args: JsonBytes::from_bytes(Bytes::from_static(b"args-foo")),
+            },
+            &script
+        ));
+        assert!(!script_prefix_eq(
+            &gw_jsonrpc_types::ckb_jsonrpc_types::Script {
+                code_hash: [2u8; 32].into(),
+                hash_type: gw_jsonrpc_types::ckb_jsonrpc_types::ScriptHashType::Type,
+                args: JsonBytes::from_bytes(Bytes::from_static(b"args-foo")),
+            },
+            &script
+        ));
+        assert!(script_prefix_eq(
+            &gw_jsonrpc_types::ckb_jsonrpc_types::Script {
+                code_hash: [1u8; 32].into(),
+                hash_type: gw_jsonrpc_types::ckb_jsonrpc_types::ScriptHashType::Type,
+                args: JsonBytes::from_bytes(Bytes::from_static(b"args")),
+            },
+            &script
+        ));
+        assert!(!script_prefix_eq(
+            &gw_jsonrpc_types::ckb_jsonrpc_types::Script {
+                code_hash: [1u8; 32].into(),
+                hash_type: gw_jsonrpc_types::ckb_jsonrpc_types::ScriptHashType::Type,
+                args: JsonBytes::from_bytes(Bytes::from_static(b"args-bar")),
+            },
+            &script
+        ));
+    }
 }
