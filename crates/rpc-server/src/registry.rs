@@ -559,7 +559,11 @@ impl RequestSubmitter {
                 match req_to_entry(fee_config, self.generator.clone(), req, &state, queue.len()) {
                     Ok(entry) => {
                         if entry.cycles_limit > self.mem_pool_config.mem_block.max_cycles_limit {
-                            log::info!("tx {} exceeded mem block max cycles limit, drop it", hash);
+                            log::info!(
+                                "req kind {} hash {} exceeded mem block max cycles limit, drop it",
+                                kind,
+                                hash,
+                            );
                         } else {
                             queue.add(entry, handle);
                         }
@@ -586,7 +590,11 @@ impl RequestSubmitter {
                 match req_to_entry(fee_config, self.generator.clone(), req, &state, queue.len()) {
                     Ok(entry) => {
                         if entry.cycles_limit > self.mem_pool_config.mem_block.max_cycles_limit {
-                            log::info!("tx {} exceeded mem block max cycles limit, drop it", hash);
+                            log::info!(
+                                "req kind {} hash {} exceeded mem block max cycles limit, drop it",
+                                kind,
+                                hash,
+                            );
                         } else {
                             queue.add(entry, handle);
                         }
@@ -648,7 +656,7 @@ impl RequestSubmitter {
                         log::info!("[tx from zero] mem block cycles limit reached, retry later");
 
                         for (entry, handle) in items {
-                            self.queue.add(entry, handle);
+                            queue.add(entry, handle);
                         }
                         continue;
                     }
