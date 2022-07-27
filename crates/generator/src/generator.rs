@@ -250,7 +250,8 @@ impl Generator {
                     let limit = cycles_pool.limit;
 
                     if cycles.total() > limit {
-                        // Restore cycles pool, because we will not treat this tx as failed tx
+                        // Restore cycles pool, because we will not treat this tx as failed tx, it
+                        // will be dropped.
                         assert!(org_cycles_pool.is_some());
                         **cycles_pool = org_cycles_pool.unwrap();
 
