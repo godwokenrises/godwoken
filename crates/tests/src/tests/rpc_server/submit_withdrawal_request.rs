@@ -96,13 +96,15 @@ async fn test_submit_withdrawal_request() {
         .is_request_in_queue(withdrawal_hash)
         .await
         .unwrap();
-    assert!(is_in_queue);
 
-    chain.produce_block(vec![], vec![]).await.unwrap();
+    if !is_in_queue {
+        chain.produce_block(vec![], vec![withdrawal]).await.unwrap();
+    } else {
+        chain.produce_block(vec![], vec![]).await.unwrap();
+    }
 
     let snap = mem_pool_state.load();
     let state = snap.state().unwrap();
-
     let balance_after_withdrawal = state
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, test_wallet.reg_address())
         .unwrap();
