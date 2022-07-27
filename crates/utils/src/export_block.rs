@@ -13,7 +13,6 @@ use gw_types::{
     prelude::{Builder, Entity, Pack, Reader, Unpack},
 };
 
-// pub fn export_block(store: &Store, block_number: u64) -> Result<ExportedBlock> {
 pub fn export_block(snap: &StoreReadonly, block_number: u64) -> Result<ExportedBlock> {
     let block_hash = snap
         .get_block_hash_by_number(block_number)?
@@ -60,6 +59,7 @@ pub fn export_block(snap: &StoreReadonly, block_number: u64) -> Result<ExportedB
     };
 
     let bad_block_hashes = get_bad_block_hashes(snap, block_number)?;
+    let submit_tx_hash = snap.get_block_submit_tx_hash(block_number);
 
     let exported_block = ExportedBlock {
         block,
@@ -68,6 +68,7 @@ pub fn export_block(snap: &StoreReadonly, block_number: u64) -> Result<ExportedB
         deposit_asset_scripts,
         withdrawals,
         bad_block_hashes,
+        submit_tx_hash,
     };
 
     Ok(exported_block)

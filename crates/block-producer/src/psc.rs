@@ -200,8 +200,8 @@ impl ProduceSubmitConfirm {
 async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
     let mut submitting = false;
     let mut submit_handle = spawn_abort_on_drop(async { anyhow::Ok(NumberHash::default()) });
-    let mut syncing = false;
-    let mut sync_handle = spawn_abort_on_drop(async { anyhow::Ok(NumberHash::default()) });
+    let mut confirming = false;
+    let mut confirm_handle = spawn_abort_on_drop(async { anyhow::Ok(NumberHash::default()) });
     let config = &state.context.psc_config;
     let mut interval = tokio::time::interval(Duration::from_secs(config.block_interval_secs));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -238,8 +238,8 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                 }
             }
             // Block confirmed.
-            result = &mut sync_handle, if syncing => {
-                syncing = false;
+            result = &mut confirm_handle, if confirming => {
+                confirming = false;
                 match result {
                     Err(err) if err.is_panic() => bail!("sync task panic: {:?}", err.into_panic()),
                     Ok(nh) => {
@@ -277,10 +277,10 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                 }
             }));
         }
-        if !syncing && state.submitted_count > 0 {
-            syncing = true;
+        if !confirming && state.submitted_count > 0 {
+            confirming = true;
             let context = state.context.clone();
-            sync_handle.replace_with(tokio::spawn(async move {
+            confirm_handle.replace_with(tokio::spawn(async move {
                 loop {
                     match confirm_next_block(&context).await {
                         Ok(nh) => break Ok(nh),

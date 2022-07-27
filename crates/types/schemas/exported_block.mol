@@ -13,6 +13,7 @@ table ExportedBlock {
     deposit_asset_scripts: ScriptVec,
     withdrawals: WithdrawalRequestExtraVec,
     bad_block_hashes: Byte32VecVecOpt,
+    submit_tx_hash: Byte32Opt,
 }
 
 union BlockSync {

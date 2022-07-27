@@ -13,6 +13,7 @@ pub struct ExportedBlock {
     pub deposit_asset_scripts: Vec<Script>,
     pub withdrawals: Vec<WithdrawalRequestExtra>,
     pub bad_block_hashes: Option<Vec<Vec<H256>>>,
+    pub submit_tx_hash: Option<H256>,
 }
 
 impl ExportedBlock {
@@ -35,6 +36,7 @@ impl PartialEq for ExportedBlock {
             && self.post_global_state.as_slice() == other.post_global_state.as_slice()
             && self.bad_block_hashes == other.bad_block_hashes
             && self.deposit_info_vec.as_slice() == other.deposit_info_vec.as_slice()
+            && self.submit_tx_hash == other.submit_tx_hash
     }
 }
 

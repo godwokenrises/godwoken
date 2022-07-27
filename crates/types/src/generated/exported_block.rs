@@ -532,6 +532,7 @@ impl ::core::fmt::Display for ExportedBlock {
         )?;
         write!(f, ", {}: {}", "withdrawals", self.withdrawals())?;
         write!(f, ", {}: {}", "bad_block_hashes", self.bad_block_hashes())?;
+        write!(f, ", {}: {}", "submit_tx_hash", self.submit_tx_hash())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -542,10 +543,10 @@ impl ::core::fmt::Display for ExportedBlock {
 impl ::core::default::Default for ExportedBlock {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            74, 2, 0, 0, 28, 0, 0, 0, 128, 1, 0, 0, 62, 2, 0, 0, 66, 2, 0, 0, 70, 2, 0, 0, 74, 2,
-            0, 0, 100, 1, 0, 0, 28, 0, 0, 0, 80, 1, 0, 0, 84, 1, 0, 0, 88, 1, 0, 0, 92, 1, 0, 0,
-            96, 1, 0, 0, 52, 1, 0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 88, 0, 0, 0, 120, 0,
-            0, 0, 128, 0, 0, 0, 164, 0, 0, 0, 200, 0, 0, 0, 204, 0, 0, 0, 240, 0, 0, 0, 0, 0, 0, 0,
+            78, 2, 0, 0, 32, 0, 0, 0, 132, 1, 0, 0, 66, 2, 0, 0, 70, 2, 0, 0, 74, 2, 0, 0, 78, 2,
+            0, 0, 78, 2, 0, 0, 100, 1, 0, 0, 28, 0, 0, 0, 80, 1, 0, 0, 84, 1, 0, 0, 88, 1, 0, 0,
+            92, 1, 0, 0, 96, 1, 0, 0, 52, 1, 0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 88, 0, 0,
+            0, 120, 0, 0, 0, 128, 0, 0, 0, 164, 0, 0, 0, 200, 0, 0, 0, 204, 0, 0, 0, 240, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -555,20 +556,20 @@ impl ::core::default::Default for ExportedBlock {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0,
         ];
         ExportedBlock::new_unchecked(v.into())
     }
 }
 impl ExportedBlock {
-    pub const FIELD_COUNT: usize = 6;
+    pub const FIELD_COUNT: usize = 7;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -618,11 +619,17 @@ impl ExportedBlock {
     pub fn bad_block_hashes(&self) -> Byte32VecVecOpt {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[24..]) as usize;
+        let end = molecule::unpack_number(&slice[28..]) as usize;
+        Byte32VecVecOpt::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn submit_tx_hash(&self) -> Byte32Opt {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[28..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[28..]) as usize;
-            Byte32VecVecOpt::new_unchecked(self.0.slice(start..end))
+            let end = molecule::unpack_number(&slice[32..]) as usize;
+            Byte32Opt::new_unchecked(self.0.slice(start..end))
         } else {
-            Byte32VecVecOpt::new_unchecked(self.0.slice(start..))
+            Byte32Opt::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> ExportedBlockReader<'r> {
@@ -658,6 +665,7 @@ impl molecule::prelude::Entity for ExportedBlock {
             .deposit_asset_scripts(self.deposit_asset_scripts())
             .withdrawals(self.withdrawals())
             .bad_block_hashes(self.bad_block_hashes())
+            .submit_tx_hash(self.submit_tx_hash())
     }
 }
 #[derive(Clone, Copy)]
@@ -690,6 +698,7 @@ impl<'r> ::core::fmt::Display for ExportedBlockReader<'r> {
         )?;
         write!(f, ", {}: {}", "withdrawals", self.withdrawals())?;
         write!(f, ", {}: {}", "bad_block_hashes", self.bad_block_hashes())?;
+        write!(f, ", {}: {}", "submit_tx_hash", self.submit_tx_hash())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -698,7 +707,7 @@ impl<'r> ::core::fmt::Display for ExportedBlockReader<'r> {
     }
 }
 impl<'r> ExportedBlockReader<'r> {
-    pub const FIELD_COUNT: usize = 6;
+    pub const FIELD_COUNT: usize = 7;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -748,11 +757,17 @@ impl<'r> ExportedBlockReader<'r> {
     pub fn bad_block_hashes(&self) -> Byte32VecVecOptReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[24..]) as usize;
+        let end = molecule::unpack_number(&slice[28..]) as usize;
+        Byte32VecVecOptReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn submit_tx_hash(&self) -> Byte32OptReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[28..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[28..]) as usize;
-            Byte32VecVecOptReader::new_unchecked(&self.as_slice()[start..end])
+            let end = molecule::unpack_number(&slice[32..]) as usize;
+            Byte32OptReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            Byte32VecVecOptReader::new_unchecked(&self.as_slice()[start..])
+            Byte32OptReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -811,6 +826,7 @@ impl<'r> molecule::prelude::Reader<'r> for ExportedBlockReader<'r> {
         ScriptVecReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         WithdrawalRequestExtraVecReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
         Byte32VecVecOptReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
+        Byte32OptReader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
         Ok(())
     }
 }
@@ -822,9 +838,10 @@ pub struct ExportedBlockBuilder {
     pub(crate) deposit_asset_scripts: ScriptVec,
     pub(crate) withdrawals: WithdrawalRequestExtraVec,
     pub(crate) bad_block_hashes: Byte32VecVecOpt,
+    pub(crate) submit_tx_hash: Byte32Opt,
 }
 impl ExportedBlockBuilder {
-    pub const FIELD_COUNT: usize = 6;
+    pub const FIELD_COUNT: usize = 7;
     pub fn block(mut self, v: L2Block) -> Self {
         self.block = v;
         self
@@ -849,6 +866,10 @@ impl ExportedBlockBuilder {
         self.bad_block_hashes = v;
         self
     }
+    pub fn submit_tx_hash(mut self, v: Byte32Opt) -> Self {
+        self.submit_tx_hash = v;
+        self
+    }
 }
 impl molecule::prelude::Builder for ExportedBlockBuilder {
     type Entity = ExportedBlock;
@@ -861,6 +882,7 @@ impl molecule::prelude::Builder for ExportedBlockBuilder {
             + self.deposit_asset_scripts.as_slice().len()
             + self.withdrawals.as_slice().len()
             + self.bad_block_hashes.as_slice().len()
+            + self.submit_tx_hash.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -877,6 +899,8 @@ impl molecule::prelude::Builder for ExportedBlockBuilder {
         total_size += self.withdrawals.as_slice().len();
         offsets.push(total_size);
         total_size += self.bad_block_hashes.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.submit_tx_hash.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
@@ -887,6 +911,7 @@ impl molecule::prelude::Builder for ExportedBlockBuilder {
         writer.write_all(self.deposit_asset_scripts.as_slice())?;
         writer.write_all(self.withdrawals.as_slice())?;
         writer.write_all(self.bad_block_hashes.as_slice())?;
+        writer.write_all(self.submit_tx_hash.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {

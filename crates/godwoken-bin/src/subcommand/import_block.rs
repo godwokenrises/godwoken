@@ -3,13 +3,12 @@ use std::fs;
 use std::io::BufReader;
 use std::path::PathBuf;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use gw_block_producer::runner::BaseInitComponents;
 use gw_chain::chain::{Chain, RevertL1ActionContext, RevertedL1Action, SyncParam};
 use gw_config::Config;
 use gw_store::{traits::chain_store::ChainStore, Store};
-use gw_types::offchain::ExportedBlock;
-use gw_types::prelude::Unpack;
+use gw_types::{offchain::ExportedBlock, packed::NumberHash, prelude::*};
 use gw_utils::export_block::{
     check_block_post_state, insert_bad_block_hashes, ExportedBlockReader,
 };
@@ -181,13 +180,14 @@ impl ImportBlock {
             }
         });
 
+        let mut last_submitted_block = None;
         let mut next_block_number = db_tip_block_number + 1;
         for maybe_new_block in rx.into_iter() {
             let (block, size) = maybe_new_block
                 .map_err(|err| anyhow!("read block {} {}", next_block_number, err))?;
             let block_number = block.block_number();
 
-            insert_block(&mut self.chain, block)
+            insert_block(&mut self.chain, block, &mut last_submitted_block)
                 .map_err(|err| anyhow!("insert block {} {}", block_number, err))?;
 
             if let Some(ref progress_bar) = self.progress_bar {
@@ -195,6 +195,26 @@ impl ImportBlock {
             }
 
             next_block_number += 1;
+        }
+
+        // Just set last_submitted/last_confirmed block to the last block that
+        // has a submission tx, because we don't have a CKB rpc client here.
+        //
+        // When the node starts it will sync with L1 and correct the last
+        // confirmed block.
+        if let Some(last_submitted_block) = last_submitted_block {
+            let tx_db = self.chain.store().begin_transaction();
+            let block_hash = tx_db
+                .get_block_hash_by_number(last_submitted_block)?
+                .context("get block hash")?;
+            let nh = NumberHash::new_builder()
+                .number(last_submitted_block.pack())
+                .block_hash(block_hash.pack())
+                .build();
+            let nh = nh.as_reader();
+            tx_db.set_last_submitted_block_number_hash(&nh)?;
+            tx_db.set_last_confirmed_block_number_hash(&nh)?;
+            tx_db.commit()?;
         }
 
         if let Some(ref progress_bar) = self.progress_bar {
@@ -207,7 +227,11 @@ impl ImportBlock {
     }
 }
 
-fn insert_block(chain: &mut Chain, exported: ExportedBlock) -> Result<()> {
+fn insert_block(
+    chain: &mut Chain,
+    exported: ExportedBlock,
+    last_submitted_block: &mut Option<u64>,
+) -> Result<()> {
     let tx_db = chain.store().begin_transaction();
     let block_number = exported.block_number();
 
@@ -228,6 +252,12 @@ fn insert_block(chain: &mut Chain, exported: ExportedBlock) -> Result<()> {
     }
 
     check_block_post_state(&tx_db, block_number, &exported.post_global_state)?;
+
+    if let Some(hash) = exported.submit_tx_hash {
+        tx_db.set_block_submit_tx_hash(block_number, &hash.into())?;
+        *last_submitted_block = Some(block_number);
+    };
+    chain.calculate_and_store_finalized_custodians(&tx_db, block_number)?;
 
     tx_db.commit()?;
 

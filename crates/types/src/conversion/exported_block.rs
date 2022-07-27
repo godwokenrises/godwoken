@@ -16,6 +16,7 @@ impl From<ExportedBlock> for packed::ExportedBlock {
             .deposit_asset_scripts(deposit_asset_scripts)
             .withdrawals(exported.withdrawals.pack())
             .bad_block_hashes(exported.bad_block_hashes.pack())
+            .submit_tx_hash(exported.submit_tx_hash.pack())
             .build()
     }
 }
@@ -32,6 +33,7 @@ impl From<packed::ExportedBlock> for ExportedBlock {
             deposit_asset_scripts,
             withdrawals,
             bad_block_hashes: exported.bad_block_hashes().unpack(),
+            submit_tx_hash: exported.submit_tx_hash().unpack(),
         }
     }
 }
