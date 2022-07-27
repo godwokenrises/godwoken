@@ -275,7 +275,10 @@ impl BlockProducer {
         let witness = WitnessArgs::new_builder()
             .output_type(Some(rollup_action.as_bytes()).pack())
             .build();
-        ensure!(witness.as_slice().len() < MAX_ROLLUP_WITNESS_SIZE);
+        ensure!(
+            witness.as_slice().len() < MAX_ROLLUP_WITNESS_SIZE,
+            TransactionSizeError::WitnessTooLarge,
+        );
         tx_skeleton.witnesses_mut().push(witness);
 
         // output
@@ -446,7 +449,10 @@ impl BlockProducer {
         );
         // sign
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
-        ensure!((tx.as_slice().len() as u64) < MAX_BLOCK_BYTES);
+        ensure!(
+            (tx.as_slice().len() as u64) < MAX_BLOCK_BYTES,
+            TransactionSizeError::TransactionTooLarge
+        );
         log::debug!("final tx size: {}", tx.as_slice().len());
         Ok(tx)
     }
@@ -459,4 +465,12 @@ pub struct ComposeSubmitTxArgs<'a> {
     pub since: Since,
     pub withdrawal_extras: Vec<WithdrawalRequestExtra>,
     pub local_cells_manager: &'a LocalCellsManager,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum TransactionSizeError {
+    #[error("transaction too large")]
+    TransactionTooLarge,
+    #[error("witness too large")]
+    WitnessTooLarge,
 }

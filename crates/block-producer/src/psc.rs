@@ -24,7 +24,7 @@ use gw_utils::{abort_on_drop::spawn_abort_on_drop, local_cells::LocalCellsManage
 use tokio::{sync::Mutex, time::Instant};
 
 use crate::{
-    block_producer::{BlockProducer, ComposeSubmitTxArgs},
+    block_producer::{BlockProducer, ComposeSubmitTxArgs, TransactionSizeError},
     block_sync_server::BlockSyncServerState,
     chain_updater::ChainUpdater,
     produce_block::ProduceBlockResult,
@@ -433,7 +433,11 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
             withdrawal_extras,
             local_cells_manager: &*local_cells_manager,
         };
-        let tx = ctx.block_producer.compose_submit_tx(args).await?;
+        let tx = ctx
+            .block_producer
+            .compose_submit_tx(args)
+            .await
+            .context(BlockContext(block_number))?;
 
         let store_tx = ctx.store.begin_transaction();
         store_tx.set_block_submit_tx(block_number, &tx.as_reader())?;
@@ -650,7 +654,7 @@ impl Display for BlockContext {
 }
 
 fn is_should_revert_error(e: &anyhow::Error) -> bool {
-    e.is::<DeadCellError>() || e.is::<UnknownCellError>()
+    e.is::<DeadCellError>() || e.is::<UnknownCellError>() || e.is::<TransactionSizeError>()
 }
 
 #[derive(thiserror::Error, Debug)]
