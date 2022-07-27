@@ -680,14 +680,14 @@ impl Generator {
 
     /// execute a layer2 tx
     #[instrument(skip_all)]
-    pub fn execute_transaction<'a, S: State + CodeStore, C: ChainView>(
-        &'a self,
-        chain: &'a C,
-        state: &'a S,
-        block_info: &'a BlockInfo,
-        raw_tx: &'a RawL2Transaction,
+    pub fn execute_transaction<S: State + CodeStore, C: ChainView>(
+        &self,
+        chain: &C,
+        state: &S,
+        block_info: &BlockInfo,
+        raw_tx: &RawL2Transaction,
         max_cycles: u64,
-        cycles_pool: Option<&'a mut CyclesPool>,
+        cycles_pool: Option<&mut CyclesPool>,
     ) -> Result<RunResult, TransactionError> {
         let run_result = self.unchecked_execute_transaction(
             chain,
@@ -702,14 +702,14 @@ impl Generator {
 
     /// execute a layer2 tx, doesn't check exit code
     #[instrument(skip_all, fields(block = block_info.number().unpack(), tx_hash = %raw_tx.hash().pack()))]
-    pub fn unchecked_execute_transaction<'a, S: State + CodeStore, C: ChainView>(
-        &'a self,
-        chain: &'a C,
-        state: &'a S,
-        block_info: &'a BlockInfo,
-        raw_tx: &'a RawL2Transaction,
+    pub fn unchecked_execute_transaction<S: State + CodeStore, C: ChainView>(
+        &self,
+        chain: &C,
+        state: &S,
+        block_info: &BlockInfo,
+        raw_tx: &RawL2Transaction,
         max_cycles: u64,
-        cycles_pool: Option<&'a mut CyclesPool>,
+        cycles_pool: Option<&mut CyclesPool>,
     ) -> Result<RunResult, TransactionError> {
         let account_id = raw_tx.to_id().unpack();
         let script_hash = state.get_script_hash(account_id)?;
