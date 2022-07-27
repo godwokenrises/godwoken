@@ -139,7 +139,7 @@ impl ProduceSubmitConfirm {
         loop {
             match run(&mut self).await {
                 Ok(()) => return Ok(()),
-                Err(e) if e.is::<DeadCellError>() => {
+                Err(e) if is_should_revert_error(&e) => {
                     log::warn!("Error: {:#}", e);
 
                     let error_block = e.downcast::<BlockContext>()?.0;
@@ -266,7 +266,7 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                     match submit_next_block(&context).await {
                         Ok(nh) => return Ok(nh),
                         Err(err) => {
-                            if err.is::<DeadCellError>() {
+                            if is_should_revert_error(&err) {
                                 return Err(err);
                             }
                             log::warn!("failed to submit next block: {:#}", err);
@@ -285,7 +285,7 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                     match confirm_next_block(&context).await {
                         Ok(nh) => break Ok(nh),
                         Err(err) => {
-                            if err.is::<DeadCellError>() {
+                            if is_should_revert_error(&err) {
                                 return Err(err);
                             }
                             log::warn!("failed to confirm next block: {:#}", err);
@@ -468,7 +468,7 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
         hex::encode(tx.hash()),
         block_number
     );
-    send_transaction_or_check_inputs(&ctx.rpc_client, &tx)
+    send_transaction_or_check_inputs(&ctx.rpc_client, &tx, false)
         .await
         .context(BlockContext(block_number))?;
     log::info!("tx sent");
@@ -494,7 +494,7 @@ async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<(
         };
         if should_resend {
             log::info!("resend transaction 0x{}", hex::encode(tx.hash()));
-            send_transaction_or_check_inputs(rpc_client, tx).await?;
+            send_transaction_or_check_inputs(rpc_client, tx, true).await?;
             last_sent = Instant::now();
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
@@ -575,7 +575,7 @@ async fn check_cell(rpc_client: &RPCClient, out_point: &OutPoint) -> Result<()> 
         .ckb
         .get_transaction_block_number(out_point.tx_hash().unpack())
         .await?
-        .context("transaction not committed")?;
+        .context(UnknownCellError)?;
     let mut opt_block = rpc_client.get_block_by_number(block_number).await?;
     // Search later blocks to see who consumed this cell.
     for _ in 0..100 {
@@ -606,15 +606,28 @@ async fn check_cell(rpc_client: &RPCClient, out_point: &OutPoint) -> Result<()> 
 ///
 /// Will check input cells if sending fails with `TransactionFailedToResolve`.
 /// If any input cell is dead, the error returned will be a `DeadCellError`.
+///
+/// If `strict` is true, when any input cell is output of a transaction that is
+/// not confirmed, the returned error will be a `UnknownCellError`.
+///
+/// If `strict` is false, having input cells that are output of unconfirmed
+/// transactions is not an error.
 async fn send_transaction_or_check_inputs(
     rpc_client: &RPCClient,
     tx: &Transaction,
+    strict: bool,
 ) -> anyhow::Result<()> {
     if let Err(mut err) = rpc_client.send_transaction(tx).await {
         let code = get_jsonrpc_error_code(&err);
         if code == Some(CkbRpcError::TransactionFailedToResolve as i64) {
             if let Err(e) = check_tx_input(rpc_client, tx).await {
-                err = e.context(err);
+                if !strict && e.is::<UnknownCellError>() {
+                    // This way err is not `UnknownCellError`.
+                    err = err.context(e);
+                } else {
+                    // If e is some specific error, err is too.
+                    err = e.context(err);
+                }
             }
             Err(err)
         } else if code == Some(CkbRpcError::PoolRejectedDuplicatedTransaction as i64) {
@@ -636,9 +649,17 @@ impl Display for BlockContext {
     }
 }
 
+fn is_should_revert_error(e: &anyhow::Error) -> bool {
+    e.is::<DeadCellError>() || e.is::<UnknownCellError>()
+}
+
 #[derive(thiserror::Error, Debug)]
 #[error("dead cell")]
 struct DeadCellError;
+
+#[derive(thiserror::Error, Debug)]
+#[error("previous transaction not confirmed")]
+struct UnknownCellError;
 
 async fn check_tx_input(rpc_client: &RPCClient, tx: &Transaction) -> Result<()> {
     // Check inputs.
