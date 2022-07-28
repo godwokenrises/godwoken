@@ -77,6 +77,13 @@ impl FinalizedWithdrawalUnlocker {
                     bail!("send tx failed {}", err);
                 }
             };
+
+            log::info!(
+                "[unlock withdrawal] try unlock {} withdrawals in tx {}",
+                to_unlock.len(),
+                tx_hash.pack()
+            );
+
             self.unlocked_set.extend(to_unlock.clone());
             self.unlock_txs.insert(tx_hash, to_unlock);
         }
@@ -94,15 +101,33 @@ impl FinalizedWithdrawalUnlocker {
                     log::info!("[unlock withdrawal] dropped unlock tx {}", tx_hash.pack());
                     drop_txs.push(*tx_hash);
                 }
-                Ok(Some(tx_status)) if matches!(tx_status, TxStatus::Committed) => {
-                    log::info!(
-                        "[unlock withdrawal] unlock {} withdrawals in tx {}",
-                        withdrawal_to_unlock.len(),
-                        tx_hash.pack(),
-                    );
+                Ok(Some(tx_status)) => {
+                    match tx_status {
+                        TxStatus::Pending | TxStatus::Proposed => continue, // Wait
+                        TxStatus::Committed => {
+                            log::info!(
+                                "[unlock withdrawal] unlock {} withdrawals in tx {}",
+                                withdrawal_to_unlock.len(),
+                                tx_hash.pack(),
+                            );
+                        }
+                        TxStatus::Unknown | TxStatus::Rejected => {
+                            log::debug!(
+                                "[unlock withdrawal] unlock withdrawals tx {} status {:?}, drop it",
+                                tx_hash.pack(),
+                                tx_status
+                            );
+                        }
+                        _ => {
+                            log::warn!(
+                                "[unlock withdrawal] unhandled unlock withdrawals tx {} status {:?}, drop it",
+                                tx_hash.pack(),
+                                tx_status
+                            )
+                        }
+                    }
                     drop_txs.push(*tx_hash);
                 }
-                Ok(Some(_)) => (), // Wait
             }
         }
 

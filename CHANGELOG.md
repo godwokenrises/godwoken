@@ -5,7 +5,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.4.0-rc4] - 2022-07-26
+
+- hotfix(rpc server): submit withdrawal missing data for submit_tx [#770](https://github.com/nervosnetwork/godwoken/pull/770)
+
+## [v1.4.0-rc3] - 2022-07-21
+
+- fix(config): optional block producer wallet for readonly node [#768](https://github.com/nervosnetwork/godwoken/pull/768)
+
+## [v1.4.0-rc2] - 2022-07-19
+
+- fix(rpc): calculate tx signature hash using packed bytes [#760](https://github.com/nervosnetwork/godwoken/pull/760)
+
+## [v1.4.0-rc1] - 2022-07-14
+
 - Automatically create account for undeposited sender [#710](https://github.com/nervosnetwork/godwoken/pull/710)
+- Check sender's balance in `execute_raw_l2transaction` RPC [#750](https://github.com/nervosnetwork/godwoken/pull/750)
+- Add export and import block command [#754](https://github.com/nervosnetwork/godwoken/pull/754)
+- Fix gw-tools `stat-custodian-ckb` command [#757](https://github.com/nervosnetwork/godwoken/pull/757)
+- Redirect layer 2 transaction syscall log to sentry [#758](https://github.com/nervosnetwork/godwoken/pull/758)
+
+## [v1.3.0-rc2] - 2022-07-19
+
+- fix(withdrawal unlocker): unhandle tx status unknown and rejected [#764](https://github.com/nervosnetwork/godwoken/pull/764)
 
 ## [v1.3.0-rc1] - 2022-07-01
 

@@ -9,7 +9,7 @@ use crate::{
     test_mode_control::TestModeControl,
 };
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
 use gw_chain::chain::Chain;
 use gw_common::{h256_ext::H256Ext, H256};
@@ -99,7 +99,10 @@ impl BlockProducer {
             contracts_dep_manager,
         } = args;
 
-        let wallet = Wallet::from_config(&config.wallet_config).with_context(|| "init wallet")?;
+        let wallet = match config.wallet_config {
+            Some(ref c) => Wallet::from_config(c).with_context(|| "init wallet")?,
+            None => bail!("no wallet config for block producer"),
+        };
 
         let block_producer = BlockProducer {
             rollup_config_hash,

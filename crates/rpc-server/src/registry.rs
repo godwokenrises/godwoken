@@ -287,7 +287,7 @@ impl Registry {
             }))
             .with_data(Data::new(SubmitTransactionContext {
                 in_queue_request_map: self.in_queue_request_map.clone(),
-                submit_tx: self.submit_tx,
+                submit_tx: self.submit_tx.clone(),
                 mem_pool_state: self.mem_pool_state.clone(),
                 rate_limiter: send_transaction_rate_limiter,
                 rate_limit_config: self.send_tx_rate_limit,
@@ -306,6 +306,7 @@ impl Registry {
             .with_data(Data::new(self.consensus_config))
             .with_data(Data::new(self.node_mode))
             .with_data(Data::new(self.in_queue_request_map))
+            .with_data(Data::new(self.submit_tx))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -372,7 +373,11 @@ impl Registry {
                     server = server
                         // .with_method("gw_dump_mem_block", dump_mem_block)
                         .with_method("gw_get_rocksdb_mem_stats", get_rocksdb_memory_stats)
-                        .with_method("gw_dump_jemalloc_profiling", dump_jemalloc_profiling);
+                        .with_method("gw_dump_jemalloc_profiling", dump_jemalloc_profiling)
+                        .with_method(
+                            "gw_submit_withdrawal_request_finalized_custodian_unchecked",
+                            test_submit_withdrawal_request_finalized_custodian_unchecked,
+                        );
                 }
             }
         }
@@ -1239,7 +1244,8 @@ async fn submit_l2transaction(
         Some(_) => tx_hash,
         None => {
             let mut hasher = new_blake2b();
-            hasher.update(tx.signature().as_slice());
+            let sig: Bytes = tx.signature().unpack();
+            hasher.update(&sig);
             let mut hash = [0u8; 32];
             hasher.finalize(&mut hash);
             H256::from(hash)
@@ -1261,17 +1267,42 @@ async fn submit_l2transaction(
 }
 
 // TODO: refactor complex type.
+// Either `RPCContext` or derive?
 #[allow(clippy::type_complexity)]
 #[instrument(skip_all)]
 async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
-    _generator: Data<Generator>,
-    _store: Data<Store>,
+    generator: Data<Generator>,
+    store: Data<Store>,
     (in_queue_request_map, submit_tx): (
         Data<Option<Arc<InQueueRequestMap>>>,
         Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
     ),
+    rpc_client: Data<RPCClient>,
+) -> Result<JsonH256, RpcError> {
+    inner_submit_withdrawal_request(
+        Params((withdrawal_request,)),
+        generator,
+        store,
+        in_queue_request_map,
+        submit_tx,
+        rpc_client,
+        true,
+    )
+    .await
+}
+
+// TODO: remove code after remove withdrawal cell
+#[allow(clippy::type_complexity)]
+#[instrument(skip_all)]
+async fn inner_submit_withdrawal_request(
+    Params((withdrawal_request,)): Params<(JsonBytes,)>,
+    _generator: Data<Generator>,
+    _store: Data<Store>,
+    in_queue_request_map: Data<Option<Arc<InQueueRequestMap>>>,
+    submit_tx: Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
     _rpc_client: Data<RPCClient>,
+    _check_finalized_custodian: bool,
 ) -> Result<JsonH256, RpcError> {
     let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = packed::WithdrawalRequestExtra::from_slice(&withdrawal_bytes)?;
@@ -1875,6 +1906,31 @@ async fn get_mem_pool_state_ready(
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<bool, RpcError> {
     Ok(mem_pool_state.completed_initial_syncing())
+}
+
+// TODO: remove code after remove withdrawal cell
+#[allow(clippy::type_complexity)]
+#[instrument(skip_all)]
+async fn test_submit_withdrawal_request_finalized_custodian_unchecked(
+    Params((withdrawal_request,)): Params<(JsonBytes,)>,
+    generator: Data<Generator>,
+    store: Data<Store>,
+    (in_queue_request_map, submit_tx): (
+        Data<Option<Arc<InQueueRequestMap>>>,
+        Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
+    ),
+    rpc_client: Data<RPCClient>,
+) -> Result<JsonH256, RpcError> {
+    inner_submit_withdrawal_request(
+        Params((withdrawal_request,)),
+        generator,
+        store,
+        in_queue_request_map,
+        submit_tx,
+        rpc_client,
+        false,
+    )
+    .await
 }
 
 async fn tests_produce_block(

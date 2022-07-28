@@ -45,9 +45,13 @@ async fn build_validator(config: Config) -> Result<DBBlockCancelChallengeValidat
     let base = BaseInitComponents::init(&config, true).await?;
     let block_producer_config = config.block_producer.expect("block producer config");
 
-    let mut offchain_mock_context = base
+    let mut offchain_mock_context = match base
         .init_offchain_mock_context(&block_producer_config)
-        .await?;
+        .await?
+    {
+        Some(ctx) => ctx,
+        None => bail!("no wallet config for block producer"),
+    };
 
     let validator_config = config.db_block_validator.as_ref();
     if let Some(Some(scripts)) = validator_config.map(|c| c.replace_scripts.as_ref()) {

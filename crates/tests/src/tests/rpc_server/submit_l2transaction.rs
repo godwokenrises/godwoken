@@ -9,8 +9,9 @@ use gw_common::{
     H256,
 };
 use gw_types::{
+    bytes::Bytes,
     packed::{Fee, RawL2Transaction, SUDTArgs, SUDTTransfer, Script},
-    prelude::Pack,
+    prelude::{Pack, Unpack},
     U256,
 };
 
@@ -147,7 +148,8 @@ async fn test_in_queue_query_with_signature_hash() {
     mem_pool_state.store(snap.into());
     let signature_hash = {
         let mut hasher = new_blake2b();
-        hasher.update(deploy_tx.signature().as_slice());
+        let sig: Bytes = deploy_tx.signature().unpack();
+        hasher.update(&sig);
         let mut hash = [0u8; 32];
         hasher.finalize(&mut hash);
         H256::from(hash)

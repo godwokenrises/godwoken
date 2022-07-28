@@ -169,7 +169,8 @@ pub struct BlockProducerConfig {
     pub block_producer: RegistryAddressConfig,
     pub rollup_config_cell_dep: CellDep,
     pub challenger_config: ChallengerConfig,
-    pub wallet_config: WalletConfig,
+    #[serde(default = "default_block_producer_wallet")]
+    pub wallet_config: Option<WalletConfig>,
     #[serde(default = "default_withdrawal_unlocker_wallet")]
     pub withdrawal_unlocker_wallet_config: Option<WalletConfig>,
 }
@@ -195,11 +196,15 @@ impl Default for PscConfig {
     }
 }
 
-fn default_check_mem_block_before_submit() -> bool {
+const fn default_check_mem_block_before_submit() -> bool {
     false
 }
 
-fn default_withdrawal_unlocker_wallet() -> Option<WalletConfig> {
+const fn default_withdrawal_unlocker_wallet() -> Option<WalletConfig> {
+    None
+}
+
+const fn default_block_producer_wallet() -> Option<WalletConfig> {
     None
 }
 

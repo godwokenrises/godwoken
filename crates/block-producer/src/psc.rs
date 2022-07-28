@@ -494,7 +494,7 @@ async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<(
             Some(TxStatus::Pending) | Some(TxStatus::Proposed) => false,
             Some(TxStatus::Committed) => break,
             Some(TxStatus::Rejected) => true,
-            Some(TxStatus::Unknown) | None => last_sent.elapsed() > Duration::from_secs(20),
+            _ => last_sent.elapsed() > Duration::from_secs(20),
         };
         if should_resend {
             log::info!("resend transaction 0x{}", hex::encode(tx.hash()));
