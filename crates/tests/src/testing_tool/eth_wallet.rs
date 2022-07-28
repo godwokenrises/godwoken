@@ -17,7 +17,8 @@ use gw_types::{
     U256,
 };
 use gw_utils::wallet::{privkey_to_eth_account_script, Wallet};
-use secp256k1::{rand::rngs::OsRng, Secp256k1};
+use rand::{rngs::OsRng, Rng};
+use secp256k1::SecretKey;
 
 use crate::testing_tool::chain::ETH_ACCOUNT_LOCK_CODE_HASH;
 
@@ -28,11 +29,8 @@ pub struct EthWallet {
 
 impl EthWallet {
     pub fn random(rollup_script_hash: H256) -> Self {
-        let secp = Secp256k1::new();
-        let mut rng = OsRng::new().expect("OsRng");
-
         let privkey = {
-            let (sk, _public_key) = secp.generate_keypair(&mut rng);
+            let sk = SecretKey::from_slice(&OsRng.gen::<[u8; 32]>()).expect("generating SecretKey");
             Privkey::from_slice(&sk.serialize_secret())
         };
 
