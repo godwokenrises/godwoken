@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     ckb_decimal::CKBCapacity,
@@ -92,16 +94,14 @@ async fn test_submit_withdrawal_request() {
         .await
         .unwrap();
 
-    let is_in_queue = rpc_server
+    while rpc_server
         .is_request_in_queue(withdrawal_hash)
         .await
-        .unwrap();
-
-    if !is_in_queue {
-        chain.produce_block(vec![], vec![withdrawal]).await.unwrap();
-    } else {
-        chain.produce_block(vec![], vec![]).await.unwrap();
+        .unwrap()
+    {
+        tokio::time::sleep(Duration::from_millis(100)).await;
     }
+    chain.produce_block(vec![], vec![withdrawal]).await.unwrap();
 
     let snap = mem_pool_state.load();
     let state = snap.state().unwrap();
