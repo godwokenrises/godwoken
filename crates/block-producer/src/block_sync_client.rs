@@ -54,9 +54,6 @@ impl SyncL1Context for BlockSyncClient {
     fn chain(&self) -> &Mutex<Chain> {
         &self.chain
     }
-    fn mem_pool(&self) -> &Mutex<MemPool> {
-        &self.mem_pool
-    }
     fn chain_updater(&self) -> &ChainUpdater {
         &self.chain_updater
     }

@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use gw_chain::chain::{Chain, RevertedL1Action};
 use gw_jsonrpc_types::ckb_jsonrpc_types::BlockNumber;
-use gw_mem_pool::pool::MemPool;
 use gw_rpc_client::{
     indexer_types::{Order, SearchKey, SearchKeyFilter},
     rpc_client::RPCClient,
@@ -20,7 +19,6 @@ pub trait SyncL1Context {
     fn store(&self) -> &Store;
     fn rpc_client(&self) -> &RPCClient;
     fn chain(&self) -> &Mutex<Chain>;
-    fn mem_pool(&self) -> &Mutex<MemPool>;
     fn chain_updater(&self) -> &ChainUpdater;
     fn rollup_type_script(&self) -> &Script;
 }
