@@ -121,6 +121,7 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
             .store
             .get_last_confirmed_block_number_hash()
             .context("last confirmed")?;
+        log::info!("request syncing from {}", last_confirmed.number().unpack());
         let request = P2PSyncRequest::new_builder()
             .block_hash(last_confirmed.block_hash())
             .block_number(last_confirmed.number())
@@ -137,13 +138,16 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
             P2PBlockSyncResponseUnionReader::Found(_) => break,
             P2PBlockSyncResponseUnionReader::TryAgain(_) => {}
         }
+        log::info!("will try again");
         tokio::time::sleep(Duration::from_secs(3)).await;
     }
+    log::info!("receiving block sync messages from peer");
     while let Some(msg) = stream.recv().await.context(StreamError)? {
         BlockSyncReader::from_slice(msg.as_ref()).context(StreamError)?;
         let msg = BlockSync::new_unchecked(msg);
         apply_msg(client, msg).await?;
     }
+    log::info!("end receiving block sync messages from peer");
 
     Ok(())
 }
@@ -152,6 +156,10 @@ async fn apply_msg(client: &BlockSyncClient, msg: BlockSync) -> Result<()> {
     match msg.to_enum() {
         BlockSyncUnion::Revert(r) => {
             // TODO: check block hash.
+            log::info!(
+                "received revert block {}",
+                r.number_hash().number().unpack()
+            );
             let store_tx = client.store.begin_transaction();
             revert(client, &store_tx, r.number_hash().number().unpack()).await?;
             store_tx.commit()?;
@@ -161,12 +169,17 @@ async fn apply_msg(client: &BlockSyncClient, msg: BlockSync) -> Result<()> {
                 .await?;
         }
         BlockSyncUnion::LocalBlock(l) => {
-            let block_hash = l.block().hash().into();
+            let block_hash = l.block().hash();
             let block_number = l.block().raw().number().unpack();
+            log::info!(
+                "received block {block_number} {}",
+                ckb_types::H256::from(block_hash),
+            );
             let store_tx = client.store.begin_transaction();
             let store_block_hash = store_tx.get_block_hash_by_number(block_number)?;
             match store_block_hash {
                 None => {
+                    // TODO: check parent.
                     let mut chain = client.chain.lock().await;
                     chain
                         .update_local(
@@ -182,17 +195,21 @@ async fn apply_msg(client: &BlockSyncClient, msg: BlockSync) -> Result<()> {
                     store_tx.commit()?;
                     let mut mem_pool = client.mem_pool.lock().await;
                     mem_pool
-                        .notify_new_tip(block_hash, &Default::default())
+                        .notify_new_tip(block_hash.into(), &Default::default())
                         .await?;
                 }
                 Some(store_block_hash) => {
                     // TODO: revert?
-                    ensure!(store_block_hash == block_hash);
+                    ensure!(store_block_hash == block_hash.into());
                 }
             }
         }
         BlockSyncUnion::Submitted(s) => {
             // TODO: check block hash.
+            log::info!(
+                "received submitted block {}",
+                s.number_hash().number().unpack()
+            );
             let store_tx = client.store.begin_transaction();
             store_tx.set_block_submit_tx_hash(
                 s.number_hash().number().unpack(),
@@ -203,6 +220,10 @@ async fn apply_msg(client: &BlockSyncClient, msg: BlockSync) -> Result<()> {
         }
         BlockSyncUnion::Confirmed(c) => {
             // TODO: check block hash.
+            log::info!(
+                "received confirmed block {}",
+                c.number_hash().number().unpack()
+            );
             let store_tx = client.store.begin_transaction();
             store_tx.set_last_confirmed_block_number_hash(&c.number_hash().as_reader())?;
             store_tx.commit()?;

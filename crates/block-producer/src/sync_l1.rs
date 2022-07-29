@@ -29,6 +29,7 @@ pub trait SyncL1Context {
 ///
 /// Will reset last confirmed, last submitted and last valid blocks.
 pub async fn sync_l1(ctx: &(dyn SyncL1Context + Sync + Send)) -> Result<()> {
+    log::info!("syncing with L1");
     let store_tx = ctx.store().begin_transaction();
     let last_confirmed_local = store_tx
         .get_last_confirmed_block_number_hash()
@@ -67,6 +68,7 @@ async fn confirm_blocks(
     store_tx: &StoreTransaction,
     last_confirmed: &mut u64,
 ) -> Result<()> {
+    log::info!("confirm blocks");
     loop {
         let next = *last_confirmed + 1;
         if let Some(tx_hash) = store_tx.get_block_submit_tx_hash(next) {
