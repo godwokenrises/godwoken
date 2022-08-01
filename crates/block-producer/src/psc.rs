@@ -87,13 +87,10 @@ impl ProduceSubmitConfirm {
             .expect("get last confirmed")
             .number()
             .unpack();
+        ensure!(last_submitted == last_confirmed);
         {
             let mut local_cells_manager = context.local_cells_manager.lock().await;
-            for b in last_confirmed + 1..=last_submitted {
-                let tx = snap.get_block_submit_tx(b).expect("submit tx");
-                local_cells_manager.apply_tx(&tx.as_reader());
-            }
-            for b in last_submitted + 1..=last_valid {
+            for b in last_confirmed + 1..=last_valid {
                 let deposits = snap.get_block_deposit_info_vec(b).expect("deposit info");
                 let deposits = deposits.into_iter().map(|d| d.cell());
                 for c in deposits {
@@ -110,9 +107,6 @@ impl ProduceSubmitConfirm {
             let mut sync_server = sync_server.lock().unwrap();
             for b in last_confirmed + 1..=last_valid {
                 publish_local_block(&mut sync_server, &snap, b)?;
-            }
-            for b in last_confirmed + 1..=last_submitted {
-                publish_submitted(&mut sync_server, &snap, b)?;
             }
         }
 
@@ -164,14 +158,11 @@ impl ProduceSubmitConfirm {
                         .expect("get last confirmed")
                         .number()
                         .unpack();
+                    ensure!(last_submitted == last_confirmed);
                     {
                         let mut local_cells_manager = self.context.local_cells_manager.lock().await;
                         local_cells_manager.reset();
-                        for b in last_confirmed + 1..=last_submitted {
-                            let tx = snap.get_block_submit_tx(b).expect("submit tx");
-                            local_cells_manager.apply_tx(&tx.as_reader());
-                        }
-                        for b in last_submitted + 1..=last_valid {
+                        for b in last_confirmed + 1..=last_valid {
                             let deposits =
                                 snap.get_block_deposit_info_vec(b).expect("deposit info");
                             let deposits = deposits.into_iter().map(|d| d.cell());

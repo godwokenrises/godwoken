@@ -154,7 +154,7 @@ async fn sync_l1_unknown(
         }
     }
     if !reverted {
-        // Reset last confirmed.
+        // Reset last confirmed and last_submitted.
         let block_hash = store_tx
             .get_block_hash_by_number(last_confirmed)?
             .context("get block hash")?;
@@ -163,6 +163,7 @@ async fn sync_l1_unknown(
             .block_hash(block_hash.pack())
             .build();
         store_tx.set_last_confirmed_block_number_hash(&nh.as_reader())?;
+        store_tx.set_last_submitted_block_number_hash(&nh.as_reader())?;
         store_tx.commit()?;
     }
 
