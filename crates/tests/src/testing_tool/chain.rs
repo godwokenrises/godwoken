@@ -3,7 +3,7 @@
 use gw_block_producer::produce_block::{
     generate_produce_block_param, produce_block, ProduceBlockParam, ProduceBlockResult,
 };
-use gw_chain::chain::Chain;
+use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BackendConfig, BackendSwitchConfig, ChainConfig, GenesisConfig, MemPoolConfig};
 use gw_generator::{
@@ -15,14 +15,15 @@ use gw_generator::{
     Generator,
 };
 use gw_mem_pool::pool::{MemPool, MemPoolCreateArgs, OutputParam};
-use gw_store::Store;
+use gw_store::{mem_pool_state::MemPoolState, traits::chain_store::ChainStore, Store};
 use gw_types::{
     bytes::Bytes,
     core::{AllowedContractType, AllowedEoaType, ScriptHashType},
     offchain::{CellInfo, DepositInfo, RollupContext},
     packed::{
-        AllowedTypeHash, CellOutput, DepositLockArgs, DepositRequest, RawTransaction, RollupAction,
-        RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, Transaction, WitnessArgs,
+        AllowedTypeHash, CellOutput, DepositInfoVec, DepositLockArgs, DepositRequest, L2Block,
+        OutPoint, RawTransaction, RollupAction, RollupActionUnion, RollupConfig, RollupSubmitBlock,
+        Script, Transaction, WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::*,
 };
@@ -233,7 +234,7 @@ impl TestChain {
 
     pub async fn produce_block(
         &mut self,
-        deposit_requests: Vec<DepositRequest>,
+        deposit_info_vec: DepositInfoVec,
         withdrawals: Vec<WithdrawalRequestExtra>,
     ) -> anyhow::Result<()> {
         let rollup_cell = CellOutput::new_builder()
@@ -242,21 +243,18 @@ impl TestChain {
 
         let block_result = {
             let mut mem_pool = self.mem_pool().await;
-            construct_block(&self.inner, &mut mem_pool, deposit_requests.clone()).await?
+            construct_block(&self.inner, &mut mem_pool, deposit_info_vec.clone()).await?
         };
 
         self.l1_committed_block_number += 1;
         let update_action = L1Action {
             context: L1ActionContext::SubmitBlock {
                 l2block: block_result.block.clone(),
-                deposit_requests,
+                deposit_info_vec,
                 deposit_asset_scripts: Default::default(),
                 withdrawals,
             },
             transaction: build_sync_tx(rollup_cell, block_result),
-            l2block_committed_info: L2BlockCommittedInfo::new_builder()
-                .number(self.l1_committed_block_number.pack())
-                .build(),
         };
         let param = SyncParam {
             updates: vec![update_action],
@@ -340,7 +338,7 @@ pub async fn setup_chain(rollup_type_script: Script) -> Chain {
         (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
         Box::new(Secp256k1Eth::default()),
     );
-    let mut chain = setup_chain_with_account_lock_manage(
+    setup_chain_with_account_lock_manage(
         rollup_type_script,
         rollup_config,
         account_lock_manage,
@@ -348,9 +346,7 @@ pub async fn setup_chain(rollup_type_script: Script) -> Chain {
         None,
         None,
     )
-    .await;
-    chain.complete_initial_syncing().await.unwrap();
-    chain
+    .await
 }
 
 pub async fn setup_chain_with_config(
@@ -364,7 +360,7 @@ pub async fn setup_chain_with_config(
         (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
         Box::new(Secp256k1Eth::default()),
     );
-    let mut chain = setup_chain_with_account_lock_manage(
+    setup_chain_with_account_lock_manage(
         rollup_type_script,
         rollup_config,
         account_lock_manage,
@@ -372,9 +368,7 @@ pub async fn setup_chain_with_config(
         None,
         None,
     )
-    .await;
-    chain.complete_initial_syncing().await.unwrap();
-    chain
+    .await
 }
 
 // Simulate process restart
@@ -400,7 +394,7 @@ pub async fn restart_chain(
         restore_path,
         ..Default::default()
     };
-    let mut chain = setup_chain_with_account_lock_manage(
+    setup_chain_with_account_lock_manage(
         rollup_type_script,
         rollup_config,
         account_lock_manage,
@@ -408,9 +402,7 @@ pub async fn restart_chain(
         Some(mem_pool_config),
         opt_provider,
     )
-    .await;
-    chain.complete_initial_syncing().await.unwrap();
-    chain
+    .await
 }
 
 pub fn chain_generator(chain: &Chain, rollup_type_script: Script) -> Arc<Generator> {
@@ -457,7 +449,14 @@ pub async fn setup_chain_with_account_lock_manage(
         rollup_type_hash: rollup_script_hash.into(),
         secp_data_dep: Default::default(),
     };
-    init_genesis(&store, &genesis_config, Bytes::default()).unwrap();
+    let transaction = Transaction::default();
+    init_genesis(
+        &store,
+        &genesis_config,
+        &transaction.as_reader(),
+        Bytes::default(),
+    )
+    .unwrap();
     let backend_manage = build_backend_manage(&rollup_config);
     let rollup_context = RollupContext {
         rollup_script_hash: rollup_script_hash.into(),
@@ -523,7 +522,7 @@ pub fn build_sync_tx(
 pub async fn apply_block_result(
     chain: &mut Chain,
     block_result: ProduceBlockResult,
-    deposit_requests: Vec<DepositRequest>,
+    deposit_info_vec: DepositInfoVec,
     deposit_asset_scripts: HashSet<Script>,
 ) {
     let number = block_result.block.raw().number().unpack();
@@ -533,7 +532,7 @@ pub async fn apply_block_result(
         .update_local(
             &store_tx,
             block_result.block,
-            deposit_requests,
+            deposit_info_vec,
             deposit_asset_scripts,
             block_result.withdrawal_extras,
             block_result.global_state,
@@ -558,21 +557,21 @@ pub async fn apply_block_result(
 pub async fn construct_block(
     chain: &Chain,
     mem_pool: &mut MemPool,
-    deposit_requests: Vec<DepositRequest>,
+    deposit_info_vec: DepositInfoVec,
 ) -> anyhow::Result<ProduceBlockResult> {
-    construct_block_with_timestamp(chain, mem_pool, deposit_requests, 0, true).await
+    construct_block_with_timestamp(chain, mem_pool, deposit_info_vec, 0, true).await
 }
 
 pub async fn construct_block_with_timestamp(
     chain: &Chain,
     mem_pool: &mut MemPool,
-    deposit_requests: Vec<DepositRequest>,
+    deposit_info_vec: DepositInfoVec,
     timestamp: u64,
     refresh_mem_pool: bool,
 ) -> anyhow::Result<ProduceBlockResult> {
     if !refresh_mem_pool {
         assert!(
-            deposit_requests.is_empty(),
+            deposit_info_vec.is_empty(),
             "skip refresh mem pool, but deposits isn't empty"
         )
     }
@@ -581,45 +580,8 @@ pub async fn construct_block_with_timestamp(
     let generator = chain.generator();
     let rollup_config_hash = (*chain.rollup_config_hash()).into();
 
-    let deposit_lock_type_hash = generator
-        .rollup_context()
-        .rollup_config
-        .deposit_script_type_hash();
-    let rollup_script_hash = generator.rollup_context().rollup_script_hash;
-
-    let lock_args = {
-        let cancel_timeout = 0xc0000000000004b0u64;
-        let mut buf: Vec<u8> = Vec::new();
-        let deposit_args = DepositLockArgs::new_builder()
-            .cancel_timeout(cancel_timeout.pack())
-            .build();
-        buf.extend(rollup_script_hash.as_slice());
-        buf.extend(deposit_args.as_slice());
-        buf
-    };
-
-    let deposit_cells = deposit_requests
-        .into_iter()
-        .map(|deposit| DepositInfo {
-            cell: CellInfo {
-                out_point: Default::default(),
-                output: CellOutput::new_builder()
-                    .lock(
-                        Script::new_builder()
-                            .code_hash(deposit_lock_type_hash.clone())
-                            .hash_type(ScriptHashType::Type.into())
-                            .args(lock_args.pack())
-                            .build(),
-                    )
-                    .capacity(deposit.capacity())
-                    .build(),
-                data: Default::default(),
-            },
-            request: deposit,
-        })
-        .collect();
     let provider = DummyMemPoolProvider {
-        deposit_cells,
+        deposit_cells: deposit_info_vec.unpack(),
         fake_blocktime: Duration::from_millis(timestamp),
     };
     mem_pool.set_provider(Box::new(provider));
@@ -636,6 +598,7 @@ pub async fn construct_block_with_timestamp(
     let (mut mem_block, post_merkle_state) = mem_pool.output_mem_block(&OutputParam::default());
     let remaining_capacity = mem_block.take_finalized_custodians_capacity();
     let block_param = generate_produce_block_param(chain.store(), mem_block, post_merkle_state)?;
+    let reverted_block_root = db.get_reverted_block_smt_root().unwrap();
     let param = ProduceBlockParam {
         stake_cell_owner_lock_hash,
         rollup_config_hash,
@@ -646,4 +609,44 @@ pub async fn construct_block_with_timestamp(
         r.remaining_capacity = remaining_capacity;
         r
     })
+}
+
+pub fn into_deposit_info_cell(
+    rollup_context: &RollupContext,
+    request: DepositRequest,
+) -> DepositInfo {
+    let rollup_script_hash = rollup_context.rollup_script_hash;
+    let deposit_lock_type_hash = rollup_context.rollup_config.deposit_script_type_hash();
+
+    let lock_args = {
+        let cancel_timeout = 0xc0000000000004b0u64;
+        let mut buf: Vec<u8> = Vec::new();
+        let deposit_args = DepositLockArgs::new_builder()
+            .cancel_timeout(cancel_timeout.pack())
+            .build();
+        buf.extend(rollup_script_hash.as_slice());
+        buf.extend(deposit_args.as_slice());
+        buf
+    };
+
+    let out_point = OutPoint::new_builder()
+        .tx_hash(rand::random::<[u8; 32]>().pack())
+        .build();
+    let lock_script = Script::new_builder()
+        .code_hash(deposit_lock_type_hash)
+        .hash_type(ScriptHashType::Type.into())
+        .args(lock_args.pack())
+        .build();
+    let output = CellOutput::new_builder()
+        .lock(lock_script)
+        .capacity(request.capacity())
+        .build();
+
+    let cell = CellInfo {
+        out_point,
+        output,
+        data: request.amount().as_bytes(),
+    };
+
+    DepositInfo { cell, request }
 }

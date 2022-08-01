@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::testing_tool::chain::{
-    apply_block_result, chain_generator, construct_block, restart_chain, setup_chain,
+    apply_block_result, construct_block, into_deposit_info_cell, restart_chain, setup_chain,
 };
 use crate::testing_tool::common::random_always_success_script;
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
@@ -9,32 +9,29 @@ use crate::testing_tool::rpc_server::RPCServer;
 
 use ckb_types::prelude::{Builder, Entity};
 use ckb_vm::Bytes;
-use gw_block_producer::test_mode_control::TestModeControl;
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::{state::State, H256};
 use gw_rpc_server::registry::Registry;
 use gw_store::state::state_db::StateContext;
-use gw_types::core::ScriptHashType;
-use gw_types::offchain::{CellInfo, DepositInfo, RollupContext};
 use gw_types::packed::{
-    CellOutput, DepositLockArgs, DepositRequest, Fee, L2Transaction, OutPoint, RawL2Transaction,
-    RawWithdrawalRequest, SUDTArgs, SUDTTransfer, Script, WithdrawalRequest,
-    WithdrawalRequestExtra,
+    DepositInfoVec, DepositRequest, Fee, L2Transaction, RawL2Transaction, RawWithdrawalRequest,
+    SUDTArgs, SUDTTransfer, Script, WithdrawalRequest, WithdrawalRequestExtra,
 };
-use gw_types::prelude::Pack;
+use gw_types::prelude::*;
 use gw_types::U256;
 use gw_utils::local_cells::LocalCellsManager;
 
 const CKB: u64 = 100000000;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_restore_mem_block() {
     let _ = env_logger::builder().is_test(true).try_init();
 
     let rollup_type_script = Script::default();
     let rollup_script_hash: H256 = rollup_type_script.hash().into();
     let mut chain = setup_chain(rollup_type_script.clone()).await;
+    let rollup_context = chain.generator().rollup_context();
 
     // Deposit 20 accounts
     const DEPOSIT_CAPACITY: u64 = 1000000 * CKB;
@@ -50,18 +47,21 @@ async fn test_restore_mem_block() {
             .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
             .build()
     });
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .extend(deposits.map(|d| into_deposit_info_cell(rollup_context, d).pack()))
+        .build();
 
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, deposits.clone().collect())
+        construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
     apply_block_result(
         &mut chain,
         block_result,
-        deposits.collect(),
+        deposit_info_vec,
         Default::default(),
     )
     .await;
@@ -236,41 +236,4 @@ async fn test_restore_mem_block() {
             assert_eq!(reinjected_tx_hash.pack(), tx.hash().pack());
         }
     }
-}
-
-fn into_deposit_info_cell(rollup_context: &RollupContext, request: DepositRequest) -> DepositInfo {
-    let rollup_script_hash = rollup_context.rollup_script_hash;
-    let deposit_lock_type_hash = rollup_context.rollup_config.deposit_script_type_hash();
-
-    let lock_args = {
-        let cancel_timeout = 0xc0000000000004b0u64;
-        let mut buf: Vec<u8> = Vec::new();
-        let deposit_args = DepositLockArgs::new_builder()
-            .cancel_timeout(cancel_timeout.pack())
-            .build();
-        buf.extend(rollup_script_hash.as_slice());
-        buf.extend(deposit_args.as_slice());
-        buf
-    };
-
-    let out_point = OutPoint::new_builder()
-        .tx_hash(rand::random::<[u8; 32]>().pack())
-        .build();
-    let lock_script = Script::new_builder()
-        .code_hash(deposit_lock_type_hash)
-        .hash_type(ScriptHashType::Type.into())
-        .args(lock_args.pack())
-        .build();
-    let output = CellOutput::new_builder()
-        .lock(lock_script)
-        .capacity(request.capacity())
-        .build();
-
-    let cell = CellInfo {
-        out_point,
-        output,
-        data: request.amount().as_bytes(),
-    };
-
-    DepositInfo { cell, request }
 }

@@ -6,9 +6,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::testing_tool::chain::{
-    build_sync_tx, construct_block, construct_block_with_timestamp, setup_chain_with_config,
-    ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM, CUSTODIAN_LOCK_PROGRAM, STAKE_LOCK_PROGRAM,
-    STATE_VALIDATOR_TYPE_PROGRAM, WITHDRAWAL_LOCK_PROGRAM,
+    build_sync_tx, construct_block, construct_block_with_timestamp, into_deposit_info_cell,
+    setup_chain_with_config, ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM,
+    CUSTODIAN_LOCK_PROGRAM, STAKE_LOCK_PROGRAM, STATE_VALIDATOR_TYPE_PROGRAM,
+    WITHDRAWAL_LOCK_PROGRAM,
 };
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 use crate::testing_tool::verify_tx::{verify_tx, TxWithContext};
@@ -206,18 +207,21 @@ async fn test_build_unlock_to_owner_tx() {
             .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
             .build()
     });
+    let deposit_info_vec = deposits
+        .map(|d| into_deposit_info_cell(&rollup_context, d).pack())
+        .pack();
 
     let deposit_block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, deposits.clone().collect())
+        construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
     let apply_deposits = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: deposit_block_result.block.clone(),
-            deposit_requests: deposits.collect(),
+            deposit_info_vec,
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
@@ -298,9 +302,15 @@ async fn test_build_unlock_to_owner_tx() {
     let withdrawal_block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block_with_timestamp(&chain, &mut mem_pool, vec![], BLOCK_TIMESTAMP, true)
-            .await
-            .unwrap()
+        construct_block_with_timestamp(
+            &chain,
+            &mut mem_pool,
+            Default::default(),
+            BLOCK_TIMESTAMP,
+            true,
+        )
+        .await
+        .unwrap()
     };
     assert_eq!(
         withdrawal_block_result.block.withdrawals().len(),
@@ -554,7 +564,7 @@ async fn test_build_unlock_to_owner_tx() {
             .reset_mem_block(&LocalCellsManager::default())
             .await
             .unwrap();
-        construct_block_with_timestamp(&chain, &mut mem_pool, vec![], BLOCK_TIMESTAMP2, true)
+        construct_block_with_timestamp(&chain, &mut mem_pool, Default::default(), BLOCK_TIMESTAMP2, true)
             .await
             .unwrap()
     };

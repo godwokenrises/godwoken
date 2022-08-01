@@ -1,8 +1,8 @@
 #![allow(clippy::mutable_key_type)]
 
 use crate::testing_tool::chain::{
-    apply_block_result, construct_block, setup_chain, ALWAYS_SUCCESS_CODE_HASH,
-    DEFAULT_FINALITY_BLOCKS,
+    apply_block_result, construct_block, into_deposit_info_cell, setup_chain,
+    ALWAYS_SUCCESS_CODE_HASH, DEFAULT_FINALITY_BLOCKS,
 };
 
 use anyhow::Result;
@@ -22,7 +22,8 @@ use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore};
 use gw_types::{
     core::ScriptHashType,
     packed::{
-        DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest, WithdrawalRequestExtra,
+        DepositInfo, DepositInfoVec, DepositRequest, RawWithdrawalRequest, Script,
+        WithdrawalRequest, WithdrawalRequestExtra,
     },
     prelude::*,
     U256,
@@ -39,7 +40,7 @@ async fn produce_empty_block(chain: &mut Chain) -> Result<()> {
     let asset_scripts = HashSet::new();
 
     // deposit
-    apply_block_result(chain, block_result, vec![], asset_scripts).await;
+    apply_block_result(chain, block_result, Default::default(), asset_scripts).await;
     Ok(())
 }
 
@@ -52,17 +53,21 @@ async fn deposite_to_chain(
     sudt_script: Script,
     amount: u128,
 ) -> Result<()> {
-    let deposit_requests = vec![DepositRequest::new_builder()
+    let deposit = DepositRequest::new_builder()
         .capacity(capacity.pack())
         .sudt_script_hash(sudt_script_hash.pack())
         .amount(amount.pack())
         .script(user_script)
         .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
-        .build()];
+        .build();
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(chain.generator().rollup_context(), deposit).pack())
+        .build();
+
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(chain, &mut mem_pool, deposit_requests.clone()).await?
+        construct_block(chain, &mut mem_pool, deposit_info_vec.clone()).await?
     };
     let asset_scripts = if sudt_script_hash == H256::zero() {
         HashSet::new()
@@ -71,7 +76,7 @@ async fn deposite_to_chain(
     };
 
     // deposit
-    apply_block_result(chain, block_result, deposit_requests, asset_scripts).await;
+    apply_block_result(chain, block_result, deposit_info_vec, asset_scripts).await;
     Ok(())
 }
 
@@ -102,13 +107,13 @@ async fn withdrawal_from_chain(
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
         mem_pool.push_withdrawal_request(withdrawal).await?;
-        construct_block(chain, &mut mem_pool, Vec::default())
+        construct_block(chain, &mut mem_pool, Default::default())
             .await
             .unwrap()
     };
 
     // deposit
-    apply_block_result(chain, block_result, Vec::new(), HashSet::new()).await;
+    apply_block_result(chain, block_result, Default::default(), HashSet::new()).await;
     Ok(())
 }
 

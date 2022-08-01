@@ -7,14 +7,19 @@ use gw_common::{
 use gw_generator::account_lock_manage::eip712::{self, traits::EIP712Encode};
 use gw_types::{
     packed::{
-        DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest, WithdrawalRequestExtra,
+        DepositInfoVec, DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest,
+        WithdrawalRequestExtra,
     },
     prelude::{Builder, Entity, Pack},
 };
 
-use crate::testing_tool::{chain::TestChain, eth_wallet::EthWallet, rpc_server::RPCServer};
+use crate::testing_tool::{
+    chain::{into_deposit_info_cell, TestChain},
+    eth_wallet::EthWallet,
+    rpc_server::RPCServer,
+};
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_submit_withdrawal_request() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -32,7 +37,10 @@ async fn test_submit_withdrawal_request() {
         .script(test_wallet.account_script().to_owned())
         .registry_id(ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
-    chain.produce_block(vec![deposit], vec![]).await.unwrap();
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(chain.inner.generator().rollup_context(), deposit).pack())
+        .build();
+    chain.produce_block(deposit_info_vec, vec![]).await.unwrap();
 
     let mem_pool_state = chain.mem_pool_state().await;
     let snap = mem_pool_state.load();
@@ -98,7 +106,10 @@ async fn test_submit_withdrawal_request() {
         .unwrap();
     assert!(is_in_queue);
 
-    chain.produce_block(vec![], vec![]).await.unwrap();
+    chain
+        .produce_block(Default::default(), vec![])
+        .await
+        .unwrap();
 
     let snap = mem_pool_state.load();
     let state = snap.state().unwrap();

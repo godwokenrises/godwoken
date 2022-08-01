@@ -159,7 +159,7 @@ mod tests {
     };
     use gw_types::{
         bytes::Bytes,
-        packed::{AllowedTypeHash, L2Transaction, RawL2Transaction, RollupConfig},
+        packed::{AllowedTypeHash, L2Transaction, RawL2Transaction, RollupConfig, Transaction},
         prelude::{Builder, Entity, Pack, PackVec, Unpack},
     };
 
@@ -530,6 +530,13 @@ mod tests {
             },
             secp_data_dep: Default::default(),
         };
-        init_genesis(store, &genesis_config, Bytes::default()).unwrap();
+        let transaction = Transaction::default();
+        init_genesis(
+            store,
+            &genesis_config,
+            &transaction.as_reader(),
+            Bytes::default(),
+        )
+        .unwrap();
     }
 }

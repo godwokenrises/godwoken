@@ -27,6 +27,7 @@ use gw_types::{
     },
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
+use gw_utils::block_in_place_if_not_testing;
 use std::{collections::HashSet, convert::TryFrom, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
 
@@ -840,7 +841,7 @@ impl Chain {
         let has_bad_block_before_update = self.challenge_target.is_some();
 
         let updates = param.updates;
-        tokio::task::block_in_place(|| {
+        block_in_place_if_not_testing(|| {
             // update layer1 actions
             log::debug!(target: "sync-block", "sync {} actions", updates.len());
             for (i, action) in updates.into_iter().enumerate() {

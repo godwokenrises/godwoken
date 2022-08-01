@@ -39,7 +39,7 @@ use gw_types::{
     },
     prelude::{Pack, Unpack},
 };
-use gw_utils::local_cells::LocalCellsManager;
+use gw_utils::{block_in_place_if_not_testing, local_cells::LocalCellsManager};
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
@@ -1127,7 +1127,7 @@ impl MemPool {
 
         // execute tx
         let raw_tx = tx.raw();
-        let run_result = tokio::task::block_in_place(|| {
+        let run_result = block_in_place_if_not_testing(|| {
             self.generator.unchecked_execute_transaction(
                 &chain_view,
                 state,
@@ -1154,7 +1154,7 @@ impl MemPool {
         }
         // apply run result
         let t = Instant::now();
-        tokio::task::block_in_place(|| state.apply_run_result(&run_result.write))?;
+        block_in_place_if_not_testing(|| state.apply_run_result(&run_result.write))?;
         log::debug!(
             "[finalize tx] apply run result: {}ms",
             t.elapsed().as_millis()

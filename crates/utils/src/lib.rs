@@ -13,3 +13,14 @@ pub mod wallet;
 pub mod withdrawal;
 
 pub use query_rollup_cell::query_rollup_cell;
+
+pub fn block_in_place_if_not_testing<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    if cfg!(test) {
+        tokio::task::block_in_place(f)
+    } else {
+        f()
+    }
+}

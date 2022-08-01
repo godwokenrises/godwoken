@@ -1,8 +1,8 @@
 use crate::testing_tool::{
     bad_block::generate_bad_block_using_first_withdrawal,
     chain::{
-        build_sync_tx, construct_block, restart_chain, setup_chain, ALWAYS_SUCCESS_CODE_HASH,
-        DEFAULT_FINALITY_BLOCKS,
+        build_sync_tx, construct_block, into_deposit_info_cell, restart_chain, setup_chain,
+        ALWAYS_SUCCESS_CODE_HASH, DEFAULT_FINALITY_BLOCKS,
     },
 };
 
@@ -17,8 +17,8 @@ use gw_types::{
     bytes::Bytes,
     core::{ScriptHashType, Status},
     packed::{
-        BlockMerkleState, CellInput, CellOutput, DepositRequest, GlobalState, L2Block,
-        RawWithdrawalRequest, Script, SubmitWithdrawals, WithdrawalRequest, WithdrawalRequestExtra,
+        CellInput, CellOutput, DepositInfoVec, DepositRequest, GlobalState, RawWithdrawalRequest,
+        Script, WithdrawalRequest, WithdrawalRequestExtra,
     },
     prelude::*,
 };
@@ -31,10 +31,13 @@ async fn produce_a_block(
     rollup_cell: CellOutput,
     expected_tip: u64,
 ) -> SyncParam {
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(chain.generator().rollup_context(), deposit).pack())
+        .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(chain, &mut mem_pool, vec![deposit.clone()])
+        construct_block(chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
@@ -44,7 +47,7 @@ async fn produce_a_block(
     let update = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block,
-            deposit_requests: vec![deposit],
+            deposit_info_vec,
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
@@ -194,14 +197,17 @@ async fn test_layer1_fork() {
         let chain = setup_chain(rollup_type_script).await;
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        let block_result = construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+        let deposit_info_vec = DepositInfoVec::new_builder()
+            .push(into_deposit_info_cell(chain.generator().rollup_context(), deposit).pack())
+            .build();
+        let block_result = construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap();
 
         L1Action {
             context: L1ActionContext::SubmitBlock {
                 l2block: block_result.block.clone(),
-                deposit_requests: vec![deposit],
+                deposit_info_vec,
                 deposit_asset_scripts: Default::default(),
                 withdrawals: Default::default(),
             },
@@ -223,17 +229,20 @@ async fn test_layer1_fork() {
         .script(alice_script)
         .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(chain.generator().rollup_context(), deposit).pack())
+        .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+        construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
     let action1 = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
-            deposit_requests: vec![deposit],
+            deposit_info_vec,
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
@@ -260,17 +269,20 @@ async fn test_layer1_fork() {
         .script(bob_script)
         .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(chain.generator().rollup_context(), deposit).pack())
+        .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+        construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
     let action2 = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
-            deposit_requests: vec![deposit],
+            deposit_info_vec,
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
@@ -374,17 +386,20 @@ async fn test_layer1_revert() {
         .script(alice_script.clone())
         .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(chain.generator().rollup_context(), deposit).pack())
+        .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+        construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
     let action1 = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
-            deposit_requests: vec![deposit],
+            deposit_info_vec,
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
@@ -411,17 +426,20 @@ async fn test_layer1_revert() {
         .script(bob_script.clone())
         .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(chain.generator().rollup_context(), deposit).pack())
+        .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+        construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
     let action2 = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
-            deposit_requests: vec![deposit],
+            deposit_info_vec,
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
@@ -715,17 +733,20 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         .script(alice_script.clone())
         .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(chain.generator().rollup_context(), deposit).pack())
+        .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+        construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
     let action1 = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
-            deposit_requests: vec![deposit],
+            deposit_info_vec,
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
@@ -763,7 +784,7 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
         mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
-        construct_block(&chain, &mut mem_pool, Vec::default())
+        construct_block(&chain, &mut mem_pool, Default::default())
             .await
             .unwrap()
     };
@@ -799,7 +820,7 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
     let update_bad_block = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: bad_block_result.block.clone(),
-            deposit_requests: vec![],
+            deposit_info_vec: Default::default(),
             deposit_asset_scripts: Default::default(),
             withdrawals: bad_block_result.withdrawal_extras.clone(),
         },
@@ -934,17 +955,20 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         .script(bob_script)
         .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(chain.generator().rollup_context(), deposit).pack())
+        .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+        construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
     let new_block = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
-            deposit_requests: vec![deposit],
+            deposit_info_vec,
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
@@ -977,7 +1001,7 @@ async fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) {
     let update = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block,
-            deposit_requests: Default::default(),
+            deposit_info_vec: Default::default(),
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },

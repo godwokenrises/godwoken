@@ -2,10 +2,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use gw_mem_pool::traits::MemPoolProvider;
-use gw_types::{
-    offchain::{CellStatus, CellWithStatus, DepositInfo},
-    packed::OutPoint,
-};
+use gw_types::offchain::DepositInfo;
 use gw_utils::local_cells::LocalCellsManager;
 
 #[derive(Debug, Default)]

@@ -81,7 +81,6 @@ impl RPCServer {
             chain_config: Default::default(),
             consensus_config: Default::default(),
             dynamic_config_manager: Default::default(),
-            last_submitted_tx_hash: None,
             polyjuice_sender_recover,
         }
     }

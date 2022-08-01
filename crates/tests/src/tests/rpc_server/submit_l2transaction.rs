@@ -22,7 +22,7 @@ use crate::testing_tool::{
     rpc_server::{wait_tx_committed, RPCServer},
 };
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_polyjuice_erc20_tx() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -103,7 +103,7 @@ async fn test_polyjuice_erc20_tx() {
     assert_eq!(balance, amount);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_in_queue_query_with_signature_hash() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -171,7 +171,7 @@ async fn test_in_queue_query_with_signature_hash() {
     assert_eq!(system_log.status_code, 0);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_polyjuice_tx_from_id_zero() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -310,7 +310,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     assert!(balance > balance_after);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_invalid_polyjuice_tx_from_id_zero() {
     let _ = env_logger::builder().is_test(true).try_init();
 
