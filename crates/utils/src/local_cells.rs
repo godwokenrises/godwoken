@@ -222,7 +222,10 @@ fn script_prefix_eq(
 
 #[cfg(test)]
 mod tests {
-    use gw_types::packed::Script;
+    use gw_types::{
+        packed::{CellInput, CellInputVec, RawTransaction, Script},
+        prelude::*,
+    };
 
     use super::*;
 
@@ -265,5 +268,63 @@ mod tests {
             },
             &script
         ));
+    }
+
+    #[test]
+    fn test_local_cells_manager() {
+        let mut l = LocalCellsManager::default();
+        l.add_live(CellInfo {
+            out_point: OutPoint::new_builder()
+                .tx_hash(Default::default())
+                .index(3u32.pack())
+                .build(),
+            output: Default::default(),
+            data: Default::default(),
+        });
+        l.add_live(CellInfo {
+            out_point: OutPoint::new_builder()
+                .tx_hash(Default::default())
+                .index(4u32.pack())
+                .build(),
+            output: Default::default(),
+            data: Default::default(),
+        });
+        assert_eq!(l.local_live().count(), 2);
+        l.lock_cell(
+            OutPoint::new_builder()
+                .tx_hash(Default::default())
+                .index(3u32.pack())
+                .build(),
+        );
+        assert!(l.is_dead(
+            &OutPoint::new_builder()
+                .tx_hash(Default::default())
+                .index(3u32.pack())
+                .build(),
+        ));
+        assert_eq!(l.local_live().count(), 1);
+        l.confirm_tx(
+            &Transaction::new_builder()
+                .raw(
+                    RawTransaction::new_builder()
+                        .inputs(
+                            CellInputVec::new_builder()
+                                .push(
+                                    CellInput::new_builder()
+                                        .previous_output(
+                                            OutPoint::new_builder()
+                                                .tx_hash(Default::default())
+                                                .index(3u32.pack())
+                                                .build(),
+                                        )
+                                        .build(),
+                                )
+                                .build(),
+                        )
+                        .build(),
+                )
+                .build(),
+        );
+        assert!(l.dead_cells.is_empty());
     }
 }
