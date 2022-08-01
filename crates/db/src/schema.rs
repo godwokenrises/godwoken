@@ -3,7 +3,7 @@
 /// Column families alias type
 pub type Col = u8;
 /// Total column number
-pub const COLUMNS: u32 = 38;
+pub const COLUMNS: u32 = 37;
 /// Column store meta data
 pub const COLUMN_META: Col = 0;
 /// Column store chain index
@@ -60,15 +60,16 @@ pub const COLUMN_WITHDRAWAL: Col = 33;
 pub const COLUMN_WITHDRAWAL_INFO: Col = 34;
 /// block number (in big endian for natural ordering) -> block submission tx.
 ///
-/// This is only available on full nodes.
+/// May not be available for all blocks.
 pub const COLUMN_BLOCK_SUBMIT_TX: Col = 35;
 // Reuse removed column.
 /// Block number (in big endian) -> block submission tx hash.
 pub const COLUMN_BLOCK_SUBMIT_TX_HASH: Col = 7;
+// Reuse removed column.
 /// block number (in big endian) -> deposit info vec.
-pub const COLUMN_BLOCK_DEPOSIT_INFO_VEC: Col = 36;
+pub const COLUMN_BLOCK_DEPOSIT_INFO_VEC: Col = 16;
 /// block number (in big endian) -> FinalizedCustodianCapacity.
-pub const COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY: Col = 37;
+pub const COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY: Col = 36;
 
 /// chain id
 pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";
