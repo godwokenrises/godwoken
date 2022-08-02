@@ -6,6 +6,7 @@ use gw_jsonrpc_types::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    cmp::min,
     collections::{HashMap, HashSet},
     path::PathBuf,
 };
@@ -331,6 +332,39 @@ pub struct MemBlockConfig {
     pub deposit_timestamp_timeout: u64,
     /// Only package deposits whose epoch timeout >= deposit_epoch_timeout.
     pub deposit_epoch_timeout: u64,
+    #[serde(
+        default = "default_max_block_cycles_limit",
+        with = "toml_u64_serde_workaround"
+    )]
+    pub max_cycles_limit: u64,
+    #[serde(default = "default_syscall_cycles")]
+    pub syscall_cycles: SyscallCyclesConfig,
+}
+
+const fn default_max_block_cycles_limit() -> u64 {
+    u64::MAX
+}
+
+fn default_syscall_cycles() -> SyscallCyclesConfig {
+    SyscallCyclesConfig::all_zero()
+}
+
+// Workaround: https://github.com/alexcrichton/toml-rs/issues/256
+// Serialize to string instead
+mod toml_u64_serde_workaround {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(val: &u64, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&val.to_string())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<u64, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: &str = Deserialize::deserialize(deserializer)?;
+        s.parse::<u64>().map_err(serde::de::Error::custom)
+    }
 }
 
 // Field default value for backward config file compitability
@@ -364,6 +398,8 @@ impl Default for MemBlockConfig {
             deposit_timestamp_timeout: 1_200_000,
             // 1 epoch, about 4 hours, this option is supposed not actually used, so we simply set a value
             deposit_epoch_timeout: 1,
+            max_cycles_limit: default_max_block_cycles_limit(),
+            syscall_cycles: SyscallCyclesConfig::all_zero(),
         }
     }
 }
@@ -425,6 +461,15 @@ pub struct FeeConfig {
     pub withdraw_cycles_limit: u64,
 }
 
+impl FeeConfig {
+    pub fn minimal_tx_cycles_limit(&self) -> u64 {
+        min(
+            min(self.meta_cycles_limit, self.sudt_cycles_limit),
+            self.eth_addr_reg_cycles_limit,
+        )
+    }
+}
+
 impl Default for FeeConfig {
     fn default() -> Self {
         // CKB default weight is 1000 / 1000
@@ -465,5 +510,35 @@ pub enum ContractLogConfig {
 impl Default for ContractLogConfig {
     fn default() -> Self {
         ContractLogConfig::Default
+    }
+}
+
+// Cycles config for all db related syscalls
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SyscallCyclesConfig {
+    pub sys_store_cycles: u64,
+    pub sys_load_cycles: u64,
+    pub sys_create_cycles: u64,
+    pub sys_load_account_script_cycles: u64,
+    pub sys_store_data_cycles: u64,
+    pub sys_load_data_cycles: u64,
+    pub sys_get_block_hash_cycles: u64,
+    pub sys_recover_account_cycles: u64,
+    pub sys_log_cycles: u64,
+}
+
+impl SyscallCyclesConfig {
+    pub fn all_zero() -> Self {
+        SyscallCyclesConfig {
+            sys_store_cycles: 0,
+            sys_load_cycles: 0,
+            sys_create_cycles: 0,
+            sys_load_account_script_cycles: 0,
+            sys_store_data_cycles: 0,
+            sys_load_data_cycles: 0,
+            sys_get_block_hash_cycles: 0,
+            sys_recover_account_cycles: 0,
+            sys_log_cycles: 0,
+        }
     }
 }

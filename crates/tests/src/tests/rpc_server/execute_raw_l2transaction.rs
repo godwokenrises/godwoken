@@ -23,6 +23,8 @@ use crate::testing_tool::{
     rpc_server::RPCServer,
 };
 
+pub mod block_max_cycles_limit;
+
 const META_CONTRACT_ACCOUNT_ID: u32 = RESERVED_ACCOUNT_ID;
 
 #[tokio::test]

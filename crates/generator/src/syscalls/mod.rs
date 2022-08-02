@@ -1,4 +1,7 @@
-use crate::{account_lock_manage::AccountLockManage, syscalls::error_codes::GW_FATAL_UNKNOWN_ARGS};
+use crate::{
+    account_lock_manage::AccountLockManage, generator::CyclesPool,
+    syscalls::error_codes::GW_FATAL_UNKNOWN_ARGS,
+};
 use ckb_vm::{
     memory::Memory,
     registers::{A0, A1, A2, A3, A4, A5, A7},
@@ -14,6 +17,7 @@ use gw_common::{
     },
     H256,
 };
+use gw_config::SyscallCyclesConfig;
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
@@ -62,7 +66,7 @@ const SYS_RECOVER_ACCOUNT: u64 = 3503;
 /* CKB compatible syscalls */
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
-pub(crate) struct L2Syscalls<'a, S, C> {
+pub(crate) struct L2Syscalls<'a, 'b, S, C> {
     pub(crate) chain: &'a C,
     pub(crate) state: &'a S,
     pub(crate) rollup_context: &'a RollupContext,
@@ -70,8 +74,9 @@ pub(crate) struct L2Syscalls<'a, S, C> {
     pub(crate) block_info: &'a BlockInfo,
     pub(crate) raw_tx: &'a RawL2Transaction,
     pub(crate) code_store: &'a dyn CodeStore,
-    pub(crate) result: &'a mut RunResult,
+    pub(crate) result: &'b mut RunResult,
     pub(crate) redir_log_handler: &'a RedirLogHandler,
+    pub(crate) cycles_pool: &'b mut Option<&'a mut CyclesPool>,
 }
 
 #[allow(dead_code)]
@@ -131,13 +136,34 @@ pub fn store_data<Mac: SupportMachine>(machine: &mut Mac, data: &[u8]) -> Result
     Ok(real_size)
 }
 
-impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S, C> {
+impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
+    for L2Syscalls<'a, 'b, S, C>
+{
     fn initialize(&mut self, _machine: &mut Mac) -> Result<(), VMError> {
         Ok(())
     }
 
     fn ecall(&mut self, machine: &mut Mac) -> Result<bool, VMError> {
         let code = machine.registers()[A7].to_u64();
+
+        if let Some(cycles_pool) = self.cycles_pool {
+            let syscall_cycles = Self::get_syscall_cycles(code, cycles_pool.syscall_config());
+            if 0 != syscall_cycles {
+                self.result.cycles.r#virtual =
+                    self.result.cycles.r#virtual.saturating_add(syscall_cycles);
+
+                // Subtract cycles to interrupt execution eariler
+                let execution_and_virtual = machine
+                    .cycles()
+                    .saturating_add(self.result.cycles.r#virtual);
+                if cycles_pool.consume_cycles(syscall_cycles).is_none()
+                    || execution_and_virtual > cycles_pool.limit()
+                {
+                    return Err(VMError::LimitReached);
+                }
+            }
+        }
+
         match code {
             SYS_STORE => {
                 let key_addr = machine.registers()[A0].to_u64();
@@ -507,7 +533,7 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
     }
 }
 
-impl<'a, S: State, C: ChainView> L2Syscalls<'a, S, C> {
+impl<'a, 'b, S: State, C: ChainView> L2Syscalls<'a, 'b, S, C> {
     fn get_raw(&mut self, key: &H256) -> Result<H256, VMError> {
         let value = match self.result.write.write_values.get(key) {
             Some(value) => *value,
@@ -601,5 +627,20 @@ impl<'a, S: State, C: ChainView> L2Syscalls<'a, S, C> {
         let s = String::from_utf8(buffer).map_err(|_| VMError::ParseError)?;
         self.redir_log_handler.append_log(s);
         Ok(())
+    }
+
+    fn get_syscall_cycles(syscall: u64, cycles_config: &SyscallCyclesConfig) -> u64 {
+        match syscall {
+            SYS_STORE => cycles_config.sys_store_cycles,
+            SYS_LOAD => cycles_config.sys_load_cycles,
+            SYS_CREATE => cycles_config.sys_create_cycles,
+            SYS_LOAD_ACCOUNT_SCRIPT => cycles_config.sys_load_account_script_cycles,
+            SYS_STORE_DATA => cycles_config.sys_store_data_cycles,
+            SYS_LOAD_DATA => cycles_config.sys_load_data_cycles,
+            SYS_GET_BLOCK_HASH => cycles_config.sys_get_block_hash_cycles,
+            SYS_RECOVER_ACCOUNT => cycles_config.sys_recover_account_cycles,
+            SYS_LOG => cycles_config.sys_log_cycles,
+            _ => 0,
+        }
     }
 }

@@ -253,7 +253,14 @@ impl BenchExecutionEnvironment {
 
             let run_result = self
                 .generator
-                .execute_transaction(&self.chain, &state, &block_info, &raw_tx, L2TX_MAX_CYCLES)
+                .execute_transaction(
+                    &self.chain,
+                    &state,
+                    &block_info,
+                    &raw_tx,
+                    L2TX_MAX_CYCLES,
+                    None,
+                )
                 .unwrap();
 
             state.apply_run_result(&run_result.write).unwrap();

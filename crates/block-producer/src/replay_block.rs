@@ -114,6 +114,7 @@ impl ReplayBlock {
                 &block_info,
                 &raw_tx,
                 L2TX_MAX_CYCLES,
+                None,
             )?;
 
             state.apply_run_result(&run_result.write)?;

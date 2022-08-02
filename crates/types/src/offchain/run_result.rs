@@ -20,6 +20,18 @@ pub struct RunResultWriteState {
     pub logs: Vec<LogItem>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RunResultCycles {
+    pub execution: u64,
+    pub r#virtual: u64,
+}
+
+impl RunResultCycles {
+    pub fn total(&self) -> u64 {
+        self.execution.saturating_add(self.r#virtual)
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct RunResult {
     pub read_values: HashMap<H256, H256>,
@@ -28,10 +40,9 @@ pub struct RunResult {
     pub get_scripts: HashMap<H256, Script>,
     // data hash -> data full size
     pub read_data: HashMap<H256, Bytes>,
-    // used cycles
-    pub used_cycles: u64,
     pub exit_code: i8,
     pub write: RunResultWriteState,
+    pub cycles: RunResultCycles,
 }
 
 impl RunResult {

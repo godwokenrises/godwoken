@@ -30,13 +30,13 @@ use gw_common::{
     },
     H256,
 };
-use gw_config::ContractLogConfig;
+use gw_config::{ContractLogConfig, SyscallCyclesConfig};
 use gw_store::{state::state_db::StateContext, transaction::StoreTransaction};
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::{ChallengeTargetType, ScriptHashType},
-    offchain::{RollupContext, RunResult},
+    offchain::{RollupContext, RunResult, RunResultCycles},
     packed::{
         AccountMerkleState, BlockInfo, ChallengeTarget, DepositInfoVec, L2Block, L2Transaction,
         RawL2Block, RawL2Transaction, TxReceipt, WithdrawalReceipt, WithdrawalRequestExtra,
@@ -92,6 +92,56 @@ impl From<WithdrawalCellError> for Error {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct CyclesPool {
+    limit: u64,
+    available_cycles: u64,
+    syscall_config: SyscallCyclesConfig,
+}
+
+impl CyclesPool {
+    pub fn new(limit: u64, syscall_config: SyscallCyclesConfig) -> Self {
+        CyclesPool {
+            limit,
+            available_cycles: limit,
+            syscall_config,
+        }
+    }
+
+    pub fn limit(&self) -> u64 {
+        self.limit
+    }
+
+    pub fn available_cycles(&self) -> u64 {
+        self.available_cycles
+    }
+
+    pub fn cycles_used(&self) -> u64 {
+        self.limit - self.available_cycles
+    }
+
+    pub fn syscall_config(&self) -> &SyscallCyclesConfig {
+        &self.syscall_config
+    }
+
+    pub fn consume_cycles(&mut self, cycles: u64) -> Option<u64> {
+        let opt_available_cycles = self.available_cycles.checked_sub(cycles);
+        self.available_cycles = opt_available_cycles.unwrap_or(0);
+
+        opt_available_cycles
+    }
+}
+
+pub struct MachineRunArgs<'a, C, S> {
+    chain: &'a C,
+    state: &'a S,
+    block_info: &'a BlockInfo,
+    raw_tx: &'a RawL2Transaction,
+    max_cycles: u64,
+    backend: Backend,
+    cycles_pool: Option<&'a mut CyclesPool>,
+}
+
 pub struct Generator {
     backend_manage: BackendManage,
     account_lock_manage: AccountLockManage,
@@ -123,22 +173,28 @@ impl Generator {
         &self.account_lock_manage
     }
 
-    #[instrument(skip_all, fields(backend = ?backend.backend_type))]
-    fn machine_run<'a, S: State + CodeStore, C: ChainView>(
-        &'a self,
-        chain: &'a C,
-        state: &'a S,
-        block_info: &'a BlockInfo,
-        raw_tx: &'a RawL2Transaction,
-        max_cycles: u64,
-        backend: Backend,
+    #[instrument(skip_all, fields(backend = ?args.backend.backend_type))]
+    fn machine_run<S: State + CodeStore, C: ChainView>(
+        &self,
+        args: MachineRunArgs<'_, C, S>,
     ) -> Result<RunResult, TransactionError> {
         const INVALID_CYCLES_EXIT_CODE: i8 = -1;
+
+        let MachineRunArgs {
+            chain,
+            state,
+            block_info,
+            raw_tx,
+            max_cycles,
+            backend,
+            mut cycles_pool,
+        } = args;
 
         self.redir_log_handler.start(raw_tx);
         let mut run_result = RunResult::default();
         let used_cycles;
         let exit_code;
+        let org_cycles_pool = cycles_pool.as_mut().map(|p| p.clone());
         {
             let t = Instant::now();
             let global_vm_version = GLOBAL_VM_VERSION.load(SeqCst);
@@ -159,6 +215,7 @@ impl Generator {
                     result: &mut run_result,
                     code_store: state,
                     redir_log_handler: &self.redir_log_handler,
+                    cycles_pool: &mut cycles_pool,
                 }))
                 .instruction_cycle_func(Box::new(instruction_cycles));
             let default_machine = machine_builder.build();
@@ -179,16 +236,46 @@ impl Generator {
             let mut machine = TraceMachine::new(default_machine);
 
             machine.load_program(&backend.generator, &[])?;
-            match machine.run() {
+            let maybe_ok = machine.run();
+            let execution_cycles = machine.machine.cycles();
+            drop(machine);
+
+            // Subtract tx execution cycles.
+            if let Some(cycles_pool) = &mut cycles_pool {
+                if cycles_pool.consume_cycles(execution_cycles).is_none() {
+                    let cycles = RunResultCycles {
+                        execution: execution_cycles,
+                        r#virtual: run_result.cycles.r#virtual,
+                    };
+                    let limit = cycles_pool.limit;
+
+                    if cycles.total() > limit {
+                        // Restore cycles pool, because we will not treat this tx as failed tx, it
+                        // will be dropped.
+                        assert!(org_cycles_pool.is_some());
+                        **cycles_pool = org_cycles_pool.unwrap();
+
+                        return Err(TransactionError::ExceededMaxBlockCycles { cycles, limit });
+                    } else {
+                        return Err(TransactionError::InsufficientPoolCycles { cycles, limit });
+                    }
+                }
+            }
+
+            match maybe_ok {
                 Ok(_exit_code) => {
                     exit_code = _exit_code;
-                    used_cycles = machine.machine.cycles();
+                    used_cycles = execution_cycles;
                 }
                 Err(ckb_vm::error::Error::InvalidCycles) => {
                     exit_code = INVALID_CYCLES_EXIT_CODE;
                     used_cycles = max_cycles;
                 }
                 Err(err) => {
+                    // Restore cycles pool
+                    if let Some((pool, org_pool)) = cycles_pool.as_mut().zip(org_cycles_pool) {
+                        **pool = org_pool;
+                    }
                     // unexpected VM error
                     return Err(err.into());
                 }
@@ -201,7 +288,7 @@ impl Generator {
                 used_cycles
             );
         }
-        run_result.used_cycles = used_cycles;
+        run_result.cycles.execution = used_cycles;
         run_result.exit_code = exit_code;
 
         Ok(run_result)
@@ -460,6 +547,7 @@ impl Generator {
                 &block_info,
                 &raw_tx,
                 L2TX_MAX_CYCLES,
+                None,
             ) {
                 Ok(run_result) => run_result,
                 Err(err) => {
@@ -515,7 +603,7 @@ impl Generator {
                     };
                 }
 
-                let used_cycles = run_result.used_cycles;
+                let used_cycles = run_result.cycles.execution;
                 let post_state = match state.merkle_state() {
                     Ok(merkle_state) => merkle_state,
                     Err(err) => return ApplyBlockResult::Error(err),
@@ -599,9 +687,16 @@ impl Generator {
         block_info: &BlockInfo,
         raw_tx: &RawL2Transaction,
         max_cycles: u64,
+        cycles_pool: Option<&mut CyclesPool>,
     ) -> Result<RunResult, TransactionError> {
-        let run_result =
-            self.unchecked_execute_transaction(chain, state, block_info, raw_tx, max_cycles)?;
+        let run_result = self.unchecked_execute_transaction(
+            chain,
+            state,
+            block_info,
+            raw_tx,
+            max_cycles,
+            cycles_pool,
+        )?;
         Ok(run_result)
     }
 
@@ -614,6 +709,7 @@ impl Generator {
         block_info: &BlockInfo,
         raw_tx: &RawL2Transaction,
         max_cycles: u64,
+        cycles_pool: Option<&mut CyclesPool>,
     ) -> Result<RunResult, TransactionError> {
         let account_id = raw_tx.to_id().unpack();
         let script_hash = state.get_script_hash(account_id)?;
@@ -621,8 +717,17 @@ impl Generator {
             .load_backend(block_info.number().unpack(), state, &script_hash)
             .ok_or(TransactionError::BackendNotFound { script_hash })?;
 
-        let run_result: RunResult =
-            self.machine_run(chain, state, block_info, raw_tx, max_cycles, backend)?;
+        let args = MachineRunArgs {
+            chain,
+            state,
+            block_info,
+            raw_tx,
+            max_cycles,
+            backend,
+            cycles_pool,
+        };
+
+        let run_result: RunResult = self.machine_run(args)?;
         self.handle_run_result(state, block_info, raw_tx, run_result)
     }
 

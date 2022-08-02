@@ -202,6 +202,47 @@ impl TestChain {
         }
     }
 
+    pub async fn update_mem_pool_config(self, mut mem_pool_config: MemPoolConfig) -> Self {
+        let Self {
+            l1_committed_block_number,
+            rollup_type_script,
+            inner: chain,
+        } = self;
+
+        let rollup_config = chain.generator().rollup_context().rollup_config.to_owned();
+        let mut account_lock_manage = AccountLockManage::default();
+        account_lock_manage
+            .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
+        account_lock_manage.register_lock_algorithm(
+            (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
+            Box::new(Secp256k1Eth::default()),
+        );
+
+        let restore_path = {
+            let mem_pool = chain.mem_pool().as_ref().unwrap();
+            let mem_pool = mem_pool.lock().await;
+            mem_pool.restore_manager().path().to_path_buf()
+        };
+        mem_pool_config.restore_path = restore_path;
+
+        let mut inner = setup_chain_with_account_lock_manage(
+            rollup_type_script.clone(),
+            rollup_config,
+            account_lock_manage,
+            Some(chain.store().to_owned()),
+            Some(mem_pool_config),
+            None,
+        )
+        .await;
+        inner.complete_initial_syncing().await.unwrap();
+
+        Self {
+            l1_committed_block_number,
+            rollup_type_script,
+            inner,
+        }
+    }
+
     pub fn chain_id(&self) -> u64 {
         let config = &self.inner.generator().rollup_context().rollup_config;
         config.chain_id().unpack()

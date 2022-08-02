@@ -22,6 +22,8 @@ use crate::testing_tool::{
     rpc_server::{wait_tx_committed, RPCServer},
 };
 
+pub mod block_max_cycles_limit;
+
 #[tokio::test]
 async fn test_polyjuice_erc20_tx() {
     let _ = env_logger::builder().is_test(true).try_init();
