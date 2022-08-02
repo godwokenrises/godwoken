@@ -59,6 +59,7 @@ async fn produce_a_block(
     };
     chain.sync(param.clone()).await.unwrap();
     assert!(chain.last_sync_event().is_success());
+    chain.notify_new_tip().await.unwrap();
 
     assert_eq!(
         {
@@ -253,6 +254,7 @@ async fn test_layer1_fork() {
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
     // update block 2
     let bob_script = Script::new_builder()
@@ -293,6 +295,7 @@ async fn test_layer1_fork() {
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
     let tip_block = chain.store().get_tip_block().unwrap();
     let tip_block_number: u64 = tip_block.raw().number().unpack();
@@ -410,6 +413,7 @@ async fn test_layer1_revert() {
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
     // update block 2
     let bob_script = Script::new_builder()
@@ -450,6 +454,7 @@ async fn test_layer1_revert() {
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
     let tip_block = chain.store().get_tip_block().unwrap();
     let tip_block_number: u64 = tip_block.raw().number().unpack();
@@ -483,6 +488,7 @@ async fn test_layer1_revert() {
         reverts,
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     let tip_block = chain.store().get_tip_block().unwrap();
@@ -535,6 +541,7 @@ async fn test_layer1_revert() {
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     // check block2 agnain
@@ -757,6 +764,7 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     // with for deposit finalize
@@ -831,6 +839,7 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(matches!(
         chain.last_sync_event(),
         SyncEvent::BadBlock { .. }
@@ -870,6 +879,7 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(matches!(
         chain.last_sync_event(),
         SyncEvent::WaitChallenge { .. }
@@ -979,6 +989,7 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     let tip_block = chain.store().get_tip_block().unwrap();
@@ -1012,5 +1023,6 @@ async fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) {
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
 }

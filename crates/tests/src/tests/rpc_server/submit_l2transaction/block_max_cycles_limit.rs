@@ -13,14 +13,14 @@ use gw_generator::{
 };
 use gw_types::{
     packed::{
-        CreateAccount, DepositRequest, Fee, L2Transaction, MetaContractArgs, RawL2Transaction,
-        Script,
+        CreateAccount, DepositInfoVec, DepositRequest, Fee, L2Transaction, MetaContractArgs,
+        RawL2Transaction, Script,
     },
     prelude::Pack,
 };
 
 use crate::testing_tool::{
-    chain::TestChain,
+    chain::{into_deposit_info_cell, TestChain},
     eth_wallet::EthWallet,
     polyjuice::{erc20::SudtErc20ArgsBuilder, PolyjuiceAccount, PolyjuiceSystemLog},
     rpc_server::{wait_tx_committed, RPCServer},
@@ -46,6 +46,7 @@ async fn test_block_max_cycles_limit() {
         let chain = TestChain::setup(rollup_type_script).await;
         chain.update_mem_pool_config(mem_pool_config).await
     };
+    let rollup_context = chain.inner.generator().rollup_context();
     let rpc_server = RPCServer::build(&chain, None).await.unwrap();
 
     // Deposit alice account and bob account
@@ -64,10 +65,11 @@ async fn test_block_max_cycles_limit() {
         .as_builder()
         .script(bob_wallet.account_script().to_owned())
         .build();
-    chain
-        .produce_block(vec![alice_deposit, bob_deposit], vec![])
-        .await
-        .unwrap();
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(rollup_context, alice_deposit).pack())
+        .push(into_deposit_info_cell(rollup_context, bob_deposit).pack())
+        .build();
+    chain.produce_block(deposit_info_vec, vec![]).await.unwrap();
 
     let mem_pool_state = chain.mem_pool_state().await;
     let snap = mem_pool_state.load();
@@ -124,7 +126,10 @@ async fn test_block_max_cycles_limit() {
     }
 
     // Refresh block cycles limit
-    chain.produce_block(vec![], vec![]).await.unwrap();
+    chain
+        .produce_block(Default::default(), vec![])
+        .await
+        .unwrap();
 
     let snap = mem_pool_state.load();
     let state = snap.state().unwrap();
@@ -207,7 +212,10 @@ async fn test_block_max_cycles_limit() {
     assert!(is_in_queue);
 
     // Produce a block to refresh mem block cycles
-    chain.produce_block(vec![], vec![]).await.unwrap();
+    chain
+        .produce_block(Default::default(), vec![])
+        .await
+        .unwrap();
 
     wait_tx_committed(&chain, &bob_tx_hash, Duration::from_secs(30))
         .await
@@ -217,7 +225,10 @@ async fn test_block_max_cycles_limit() {
     assert_eq!(system_log.status_code, 0);
 
     // Produce a block to refresh mem block cycles
-    chain.produce_block(vec![], vec![]).await.unwrap();
+    chain
+        .produce_block(Default::default(), vec![])
+        .await
+        .unwrap();
 
     // Test tx exceed block max cycles limit
     // Expect result: TransactionError::ExceededBlockMaxCycles and drop tx
@@ -296,7 +307,10 @@ async fn test_block_max_cycles_limit() {
     assert_eq!(available_cycles_before, available_cycles_after);
 
     // Test tx gas limit exceed block max cycles limit, it will be dropped immediately
-    chain.produce_block(vec![], vec![]).await.unwrap();
+    chain
+        .produce_block(Default::default(), vec![])
+        .await
+        .unwrap();
 
     let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18)
         .gas_limit(mem_pool_config.mem_block.max_cycles_limit + 1)

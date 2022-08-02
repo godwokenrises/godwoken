@@ -905,6 +905,19 @@ impl Chain {
         Ok(())
     }
 
+    /// Only for testing.
+    pub async fn notify_new_tip(&self) -> Result<()> {
+        if let Some(mem_pool) = &self.mem_pool {
+            let tip_block_hash = self.store.get_last_valid_tip_block_hash().unwrap();
+            mem_pool
+                .lock()
+                .await
+                .notify_new_tip(tip_block_hash, &Default::default())
+                .await?;
+        }
+        Ok(())
+    }
+
     /// Store a new local block.
     ///
     /// Note that this does not store finalized custodians.

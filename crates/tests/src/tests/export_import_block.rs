@@ -22,7 +22,7 @@ use gw_generator::account_lock_manage::secp256k1::Secp256k1Eth;
 use gw_generator::account_lock_manage::AccountLockManage;
 use gw_store::{readonly::StoreReadonly, traits::chain_store::ChainStore, Store};
 use gw_types::core::Status;
-use gw_types::packed::{DepositInfo, DepositInfoVec};
+use gw_types::packed::DepositInfoVec;
 use gw_types::{
     bytes::Bytes,
     core::{AllowedEoaType, ScriptHashType},
@@ -107,7 +107,7 @@ async fn test_export_import_block() {
             (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
             Box::new(Secp256k1Eth::default()),
         );
-        let mut chain = setup_chain_with_account_lock_manage(
+        setup_chain_with_account_lock_manage(
             rollup_type_script.clone(),
             rollup_config.clone(),
             account_lock_manage,
@@ -115,8 +115,7 @@ async fn test_export_import_block() {
             None,
             None,
         )
-        .await;
-        chain
+        .await
     };
     let rollup_context = chain.generator().rollup_context();
 
@@ -208,7 +207,7 @@ async fn test_export_import_block() {
             (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
             Box::new(Secp256k1Eth::default()),
         );
-        let mut chain = setup_chain_with_account_lock_manage(
+        setup_chain_with_account_lock_manage(
             rollup_type_script.clone(),
             rollup_config.clone(),
             account_lock_manage,
@@ -216,8 +215,7 @@ async fn test_export_import_block() {
             None,
             None,
         )
-        .await;
-        chain
+        .await
     };
     let import_block = ImportBlock::new_unchecked(import_chain, export_path);
     let import_store = import_block.store().clone();
@@ -294,7 +292,7 @@ async fn test_export_import_block() {
             (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
             Box::new(Secp256k1Eth::default()),
         );
-        let mut chain = setup_chain_with_account_lock_manage(
+        setup_chain_with_account_lock_manage(
             rollup_type_script.clone(),
             rollup_config.clone(),
             account_lock_manage,
@@ -302,8 +300,7 @@ async fn test_export_import_block() {
             None,
             None,
         )
-        .await;
-        chain
+        .await
     };
     let import_block = ImportBlock::new_unchecked(import_chain, export_path);
     let import_store = import_block.store().clone();
@@ -333,7 +330,6 @@ async fn generate_and_revert_a_bad_block(
     rollup_cell: &CellInfo,
     account_script: Script,
 ) {
-    let l1_block_number = chain.local_state().tip().raw().number().unpack();
     let prev_tip_block_number = chain.local_state().tip().raw().number().unpack();
 
     // update bad block
@@ -495,8 +491,6 @@ async fn generate_and_revert_a_bad_block(
 }
 
 async fn produce_block(chain: &mut Chain, rollup_cell: &CellInfo) {
-    let l1_block_number = chain.local_state().tip().raw().number().unpack();
-
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;

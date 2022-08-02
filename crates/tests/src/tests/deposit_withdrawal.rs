@@ -22,8 +22,8 @@ use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore};
 use gw_types::{
     core::ScriptHashType,
     packed::{
-        DepositInfo, DepositInfoVec, DepositRequest, RawWithdrawalRequest, Script,
-        WithdrawalRequest, WithdrawalRequestExtra,
+        DepositInfoVec, DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest,
+        WithdrawalRequestExtra,
     },
     prelude::*,
     U256,

@@ -42,7 +42,10 @@ async fn test_block_max_cycles_limit() {
     };
 
     // Check block producer is valid registry address
-    chain.produce_block(vec![], vec![]).await.unwrap();
+    chain
+        .produce_block(Default::default(), vec![])
+        .await
+        .unwrap();
     let block_producer: Bytes = chain.last_valid_block().raw().block_producer().unpack();
     assert!(RegistryAddress::from_slice(&block_producer).is_some());
 

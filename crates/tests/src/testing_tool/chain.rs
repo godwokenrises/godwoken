@@ -225,7 +225,7 @@ impl TestChain {
         };
         mem_pool_config.restore_path = restore_path;
 
-        let mut inner = setup_chain_with_account_lock_manage(
+        let inner = setup_chain_with_account_lock_manage(
             rollup_type_script.clone(),
             rollup_config,
             account_lock_manage,
@@ -234,7 +234,6 @@ impl TestChain {
             None,
         )
         .await;
-        inner.complete_initial_syncing().await.unwrap();
 
         Self {
             l1_committed_block_number,
@@ -379,7 +378,7 @@ pub async fn setup_chain(rollup_type_script: Script) -> Chain {
         (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
         Box::new(Secp256k1Eth::default()),
     );
-    setup_chain_with_account_lock_manage(
+    let chain = setup_chain_with_account_lock_manage(
         rollup_type_script,
         rollup_config,
         account_lock_manage,
@@ -387,7 +386,9 @@ pub async fn setup_chain(rollup_type_script: Script) -> Chain {
         None,
         None,
     )
-    .await
+    .await;
+    chain.notify_new_tip().await.unwrap();
+    chain
 }
 
 pub async fn setup_chain_with_config(
