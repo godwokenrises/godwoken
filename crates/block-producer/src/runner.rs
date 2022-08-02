@@ -889,30 +889,29 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     let has_psc_task = psc_task.is_some();
     let psc_task = OptionFuture::from(psc_task);
 
-    let block_sync_task =
-        if let (Some(receiver), Some(mem_pool)) = (block_sync_client_p2p_receiver, mem_pool) {
-            let client = BlockSyncClient {
-                store: store.clone(),
-                rpc_client: rpc_client.clone(),
-                chain: chain.clone(),
-                mem_pool,
-                chain_updater,
-                rollup_type_script: rollup_type_script.clone(),
-                p2p_stream_receiver: receiver,
-                completed_initial_syncing: false,
-            };
-            let shutdown_completed_send = shutdown_completed_send.clone();
-            let mut shutdown_event_recv = shutdown_event.subscribe();
-            Some(tokio::spawn(async move {
-                tokio::select! {
-                    _ = shutdown_event_recv.recv() => {},
-                    _ = client.run() => {},
-                }
-                drop(shutdown_completed_send);
-            }))
-        } else {
-            None
+    let block_sync_task = if config.node_mode == NodeMode::ReadOnly {
+        let client = BlockSyncClient {
+            store: store.clone(),
+            rpc_client: rpc_client.clone(),
+            chain: chain.clone(),
+            mem_pool,
+            chain_updater,
+            rollup_type_script: rollup_type_script.clone(),
+            p2p_stream_receiver: block_sync_client_p2p_receiver,
+            completed_initial_syncing: false,
         };
+        let shutdown_completed_send = shutdown_completed_send.clone();
+        let mut shutdown_event_recv = shutdown_event.subscribe();
+        Some(tokio::spawn(async move {
+            tokio::select! {
+                _ = shutdown_event_recv.recv() => {},
+                _ = client.run() => {},
+            }
+            drop(shutdown_completed_send);
+        }))
+    } else {
+        None
+    };
     let has_block_sync_task = block_sync_task.is_some();
     let block_sync_task = OptionFuture::from(block_sync_task);
 

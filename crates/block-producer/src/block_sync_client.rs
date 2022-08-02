@@ -37,10 +37,10 @@ pub struct BlockSyncClient {
     pub store: Store,
     pub rpc_client: RPCClient,
     pub chain: Arc<Mutex<Chain>>,
-    pub mem_pool: Arc<Mutex<MemPool>>,
+    pub mem_pool: Option<Arc<Mutex<MemPool>>>,
     pub chain_updater: ChainUpdater,
     pub rollup_type_script: Script,
-    pub p2p_stream_receiver: UnboundedReceiver<P2PStream>,
+    pub p2p_stream_receiver: Option<UnboundedReceiver<P2PStream>>,
     pub completed_initial_syncing: bool,
 }
 
@@ -63,12 +63,11 @@ impl SyncL1Context for BlockSyncClient {
 }
 
 impl BlockSyncClient {
-    pub async fn run(self) {
-        let mut client = self;
+    pub async fn run(mut self) {
         let mut p2p_stream = None;
         loop {
             if let Some(ref mut s) = p2p_stream {
-                if let Err(err) = run_with_p2p_stream(&mut client, s).await {
+                if let Err(err) = run_with_p2p_stream(&mut self, s).await {
                     if err.is::<StreamError>() {
                         // XXX: disconnect this p2p session?
                         p2p_stream = None;
@@ -78,12 +77,14 @@ impl BlockSyncClient {
                 // TODO: backoff.
                 tokio::time::sleep(Duration::from_secs(3)).await;
             } else {
-                if let Ok(stream) = client.p2p_stream_receiver.try_recv() {
-                    p2p_stream = Some(stream);
-                    continue;
+                if let Some(ref mut receiver) = self.p2p_stream_receiver {
+                    if let Ok(stream) = receiver.try_recv() {
+                        p2p_stream = Some(stream);
+                        continue;
+                    }
                 }
 
-                if let Err(err) = sync_l1(&client).await {
+                if let Err(err) = sync_l1(&self).await {
                     log::warn!("{:#}", err);
                 }
                 tokio::time::sleep(Duration::from_secs(3)).await;
@@ -105,13 +106,15 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
     loop {
         sync_l1(client).await?;
         if !client.completed_initial_syncing {
-            let mut mem_pool = client.mem_pool.lock().await;
-            // XXX: local cells manager.
-            let new_tip = client.store.get_last_valid_tip_block_hash()?;
-            mem_pool
-                .notify_new_tip(new_tip, &Default::default())
-                .await?;
-            mem_pool.mem_pool_state().set_completed_initial_syncing();
+            if let Some(ref mem_pool) = client.mem_pool {
+                let mut mem_pool = mem_pool.lock().await;
+                // XXX: local cells manager.
+                let new_tip = client.store.get_last_valid_tip_block_hash()?;
+                mem_pool
+                    .notify_new_tip(new_tip, &Default::default())
+                    .await?;
+                mem_pool.mem_pool_state().set_completed_initial_syncing();
+            }
             client.completed_initial_syncing = true;
         }
         let last_confirmed = client
@@ -160,10 +163,12 @@ async fn apply_msg(client: &BlockSyncClient, msg: BlockSync) -> Result<()> {
             let store_tx = client.store.begin_transaction();
             revert(client, &store_tx, r.number_hash().number().unpack()).await?;
             store_tx.commit()?;
-            let mut mem_pool = client.mem_pool.lock().await;
-            mem_pool
-                .notify_new_tip(r.number_hash().block_hash().unpack(), &Default::default())
-                .await?;
+            if let Some(ref mem_pool) = client.mem_pool {
+                let mut mem_pool = mem_pool.lock().await;
+                mem_pool
+                    .notify_new_tip(r.number_hash().block_hash().unpack(), &Default::default())
+                    .await?;
+            }
         }
         BlockSyncUnion::LocalBlock(l) => {
             let block_hash = l.block().hash();
@@ -190,10 +195,12 @@ async fn apply_msg(client: &BlockSyncClient, msg: BlockSync) -> Result<()> {
                         .await?;
                     chain.calculate_and_store_finalized_custodians(&store_tx, block_number)?;
                     store_tx.commit()?;
-                    let mut mem_pool = client.mem_pool.lock().await;
-                    mem_pool
-                        .notify_new_tip(block_hash.into(), &Default::default())
-                        .await?;
+                    if let Some(ref mem_pool) = client.mem_pool {
+                        let mut mem_pool = mem_pool.lock().await;
+                        mem_pool
+                            .notify_new_tip(block_hash.into(), &Default::default())
+                            .await?;
+                    }
                 }
                 Some(store_block_hash) => {
                     // TODO: revert?
