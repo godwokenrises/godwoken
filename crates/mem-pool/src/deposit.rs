@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use gw_common::{h256_ext::H256Ext, registry::context::RegistryContext, state::State, H256};
-use gw_config::MemBlockConfig;
+use gw_config::DepositTimeoutConfig;
 use gw_store::state::mem_state_db::MemStateTree;
 use gw_types::{
     bytes::Bytes,
@@ -16,7 +16,7 @@ use crate::custodian::to_custodian_cell;
 /// check and reject invalid deposit cells
 pub fn sanitize_deposit_cells(
     ctx: &RollupContext,
-    config: &MemBlockConfig,
+    config: &DepositTimeoutConfig,
     unsanitize_deposits: Vec<DepositInfo>,
     state: &MemStateTree,
 ) -> Vec<DepositInfo> {
@@ -37,7 +37,7 @@ pub fn sanitize_deposit_cells(
 
 /// we only package deposit cells with valid cancel timeout, to prevent conflict with user's unlock
 fn check_deposit_cell_cancel_timeout(
-    config: &MemBlockConfig,
+    config: &DepositTimeoutConfig,
     deposit_args: &DepositLockArgs,
 ) -> Result<()> {
     let cancel_timeout = Since::new(deposit_args.cancel_timeout().unpack());
@@ -93,7 +93,7 @@ fn check_deposit_cell_cancel_timeout(
 // check deposit cell
 fn check_deposit_cell(
     ctx: &RollupContext,
-    config: &MemBlockConfig,
+    config: &DepositTimeoutConfig,
     cell: &DepositInfo,
     state: &MemStateTree,
 ) -> Result<()> {

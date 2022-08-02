@@ -177,6 +177,7 @@ pub struct BlockProducerConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PscConfig {
     /// Maximum number local blocks. Local blocks are blocks that have not been
     /// submitted to L1. Default is 3.
@@ -195,6 +196,21 @@ impl Default for PscConfig {
             block_interval_secs: 7,
         }
     }
+}
+
+#[test]
+fn test_psc_config_optional() {
+    #[derive(Deserialize)]
+    struct BiggerConfig {
+        _x: i32,
+        #[serde(flatten)]
+        psc_config: PscConfig,
+    }
+
+    assert_eq!(
+        toml::from_str::<BiggerConfig>("_x = 3").unwrap().psc_config,
+        PscConfig::default()
+    );
 }
 
 const fn default_check_mem_block_before_submit() -> bool {
@@ -326,12 +342,8 @@ pub struct MemBlockConfig {
     pub max_deposits: usize,
     pub max_withdrawals: usize,
     pub max_txs: usize,
-    /// Only package deposits whose block timeout >= deposit_block_timeout.
-    pub deposit_block_timeout: u64,
-    /// Only package deposits whose timestamp timeout >= deposit_timestamp_timeout.
-    pub deposit_timestamp_timeout: u64,
-    /// Only package deposits whose epoch timeout >= deposit_epoch_timeout.
-    pub deposit_epoch_timeout: u64,
+    #[serde(flatten)]
+    pub deposit_timeout_config: DepositTimeoutConfig,
     #[serde(
         default = "default_max_block_cycles_limit",
         with = "toml_u64_serde_workaround"
@@ -339,6 +351,30 @@ pub struct MemBlockConfig {
     pub max_cycles_limit: u64,
     #[serde(default = "default_syscall_cycles")]
     pub syscall_cycles: SyscallCyclesConfig,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DepositTimeoutConfig {
+    /// Only package deposits whose block timeout >= deposit_block_timeout.
+    pub deposit_block_timeout: u64,
+    /// Only package deposits whose timestamp timeout >= deposit_timestamp_timeout.
+    pub deposit_timestamp_timeout: u64,
+    /// Only package deposits whose epoch timeout >= deposit_epoch_timeout.
+    pub deposit_epoch_timeout: u64,
+}
+
+impl Default for DepositTimeoutConfig {
+    fn default() -> Self {
+        Self {
+            // 150 blocks, ~20 minutes.
+            deposit_block_timeout: 150,
+            // 20 minutes.
+            deposit_timestamp_timeout: 1_200_000,
+            // 1 epoch, about 4 hours, this option is supposed not actually used, so we simply set a value
+            deposit_epoch_timeout: 1,
+        }
+    }
 }
 
 const fn default_max_block_cycles_limit() -> u64 {
@@ -392,12 +428,7 @@ impl Default for MemBlockConfig {
             max_deposits: 100,
             max_withdrawals: 100,
             max_txs: 1000,
-            // 150 blocks, ~20 minutes.
-            deposit_block_timeout: 150,
-            // 20 minutes.
-            deposit_timestamp_timeout: 1_200_000,
-            // 1 epoch, about 4 hours, this option is supposed not actually used, so we simply set a value
-            deposit_epoch_timeout: 1,
+            deposit_timeout_config: Default::default(),
             max_cycles_limit: default_max_block_cycles_limit(),
             syscall_cycles: SyscallCyclesConfig::all_zero(),
         }
