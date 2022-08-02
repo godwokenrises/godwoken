@@ -564,9 +564,15 @@ async fn test_build_unlock_to_owner_tx() {
             .reset_mem_block(&LocalCellsManager::default())
             .await
             .unwrap();
-        construct_block_with_timestamp(&chain, &mut mem_pool, Default::default(), BLOCK_TIMESTAMP2, true)
-            .await
-            .unwrap()
+        construct_block_with_timestamp(
+            &chain,
+            &mut mem_pool,
+            Default::default(),
+            BLOCK_TIMESTAMP2,
+            true,
+        )
+        .await
+        .unwrap()
     };
     assert_eq!(block_result.block.withdrawals().len(), 0);
 
