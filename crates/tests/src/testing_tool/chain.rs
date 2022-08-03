@@ -302,6 +302,7 @@ impl TestChain {
         };
 
         self.inner.sync(param).await?;
+        self.inner.notify_new_tip().await?;
         assert!(self.inner.last_sync_event().is_success());
 
         Ok(())
@@ -691,4 +692,17 @@ pub fn into_deposit_info_cell(
     };
 
     DepositInfo { cell, request }
+}
+
+pub async fn produce_empty_block(chain: &mut Chain) -> anyhow::Result<()> {
+    let block_result = {
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block(chain, &mut mem_pool, Default::default()).await?
+    };
+    let asset_scripts = HashSet::new();
+
+    // deposit
+    apply_block_result(chain, block_result, Default::default(), asset_scripts).await;
+    Ok(())
 }

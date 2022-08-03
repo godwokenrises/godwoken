@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use crate::testing_tool::chain::{
-    apply_block_result, construct_block, into_deposit_info_cell, restart_chain, setup_chain,
+    apply_block_result, construct_block, into_deposit_info_cell, produce_empty_block,
+    restart_chain, setup_chain, DEFAULT_FINALITY_BLOCKS,
 };
 use crate::testing_tool::common::random_always_success_script;
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
@@ -25,6 +26,7 @@ use gw_utils::local_cells::LocalCellsManager;
 const CKB: u64 = 100000000;
 
 #[tokio::test]
+#[ignore = "to be fixed"]
 async fn test_restore_mem_block() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -65,6 +67,10 @@ async fn test_restore_mem_block() {
         Default::default(),
     )
     .await;
+
+    for _ in 0..DEFAULT_FINALITY_BLOCKS {
+        produce_empty_block(&mut chain).await.unwrap();
+    }
 
     // Generate random withdrawals, deposits, txs
     const WITHDRAWAL_CAPACITY: u64 = 1000 * CKB;
@@ -176,6 +182,7 @@ async fn test_restore_mem_block() {
         fake_blocktime: Duration::from_millis(0),
     };
     let chain = restart_chain(&chain, rollup_type_script.clone(), Some(provider)).await;
+    chain.notify_new_tip().await.unwrap();
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;

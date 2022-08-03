@@ -378,10 +378,6 @@ impl Registry {
                         // .with_method("gw_dump_mem_block", dump_mem_block)
                         .with_method("gw_get_rocksdb_mem_stats", get_rocksdb_memory_stats)
                         .with_method("gw_dump_jemalloc_profiling", dump_jemalloc_profiling)
-                        .with_method(
-                            "gw_submit_withdrawal_request_finalized_custodian_unchecked",
-                            test_submit_withdrawal_request_finalized_custodian_unchecked,
-                        );
                 }
             }
         }
@@ -1362,37 +1358,10 @@ async fn submit_l2transaction(
 #[instrument(skip_all)]
 async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
-    generator: Data<Generator>,
-    store: Data<Store>,
-    (in_queue_request_map, submit_tx): (
-        Data<Option<Arc<InQueueRequestMap>>>,
-        Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
-    ),
-    rpc_client: Data<RPCClient>,
-) -> Result<JsonH256, RpcError> {
-    inner_submit_withdrawal_request(
-        Params((withdrawal_request,)),
-        generator,
-        store,
-        in_queue_request_map,
-        submit_tx,
-        rpc_client,
-        true,
-    )
-    .await
-}
-
-// TODO: remove code after remove withdrawal cell
-#[allow(clippy::type_complexity)]
-#[instrument(skip_all)]
-async fn inner_submit_withdrawal_request(
-    Params((withdrawal_request,)): Params<(JsonBytes,)>,
     _generator: Data<Generator>,
     _store: Data<Store>,
     in_queue_request_map: Data<Option<Arc<InQueueRequestMap>>>,
     submit_tx: Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
-    _rpc_client: Data<RPCClient>,
-    _check_finalized_custodian: bool,
 ) -> Result<JsonH256, RpcError> {
     let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = packed::WithdrawalRequestExtra::from_slice(&withdrawal_bytes)?;
@@ -1996,31 +1965,6 @@ async fn get_mem_pool_state_ready(
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<bool, RpcError> {
     Ok(mem_pool_state.completed_initial_syncing())
-}
-
-// TODO: remove code after remove withdrawal cell
-#[allow(clippy::type_complexity)]
-#[instrument(skip_all)]
-async fn test_submit_withdrawal_request_finalized_custodian_unchecked(
-    Params((withdrawal_request,)): Params<(JsonBytes,)>,
-    generator: Data<Generator>,
-    store: Data<Store>,
-    (in_queue_request_map, submit_tx): (
-        Data<Option<Arc<InQueueRequestMap>>>,
-        Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
-    ),
-    rpc_client: Data<RPCClient>,
-) -> Result<JsonH256, RpcError> {
-    inner_submit_withdrawal_request(
-        Params((withdrawal_request,)),
-        generator,
-        store,
-        in_queue_request_map,
-        submit_tx,
-        rpc_client,
-        false,
-    )
-    .await
 }
 
 async fn tests_produce_block(

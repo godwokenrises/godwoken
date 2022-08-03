@@ -1,7 +1,7 @@
 #![allow(clippy::mutable_key_type)]
 
 use crate::testing_tool::chain::{
-    apply_block_result, construct_block, into_deposit_info_cell, setup_chain,
+    apply_block_result, construct_block, into_deposit_info_cell, produce_empty_block, setup_chain,
     ALWAYS_SUCCESS_CODE_HASH, DEFAULT_FINALITY_BLOCKS,
 };
 
@@ -30,19 +30,6 @@ use gw_types::{
 };
 
 use std::{collections::HashSet, iter::FromIterator};
-
-async fn produce_empty_block(chain: &mut Chain) -> Result<()> {
-    let block_result = {
-        let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = mem_pool.lock().await;
-        construct_block(chain, &mut mem_pool, Default::default()).await?
-    };
-    let asset_scripts = HashSet::new();
-
-    // deposit
-    apply_block_result(chain, block_result, Default::default(), asset_scripts).await;
-    Ok(())
-}
 
 /// Deposit, produce new block and update chain.
 async fn deposite_to_chain(
@@ -431,6 +418,15 @@ async fn test_overdraft() {
             args.pack()
         })
         .build();
+    let another_user_script = Script::new_builder()
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.extend(&[55u8; 20]);
+            args.pack()
+        })
+        .build();
     let user_script_hash = user_script.hash();
     // deposit
     deposite_to_chain(
@@ -443,8 +439,22 @@ async fn test_overdraft() {
     )
     .await
     .unwrap();
+    // So that we will have enough finalized custodians.
+    deposite_to_chain(
+        &mut chain,
+        another_user_script,
+        capacity,
+        H256::zero(),
+        Script::default(),
+        0,
+    )
+    .await
+    .unwrap();
 
-    // TODO: test need fix: deposit enough CKB for different account and wait finalized blocks.
+    // wait for deposit finalize
+    for _ in 0..DEFAULT_FINALITY_BLOCKS {
+        produce_empty_block(&mut chain).await.unwrap();
+    }
 
     // withdrawal
     let withdraw_capacity = 600_00000000u64;

@@ -16,7 +16,7 @@ use gw_types::{
 };
 
 use crate::testing_tool::{
-    chain::{into_deposit_info_cell, TestChain},
+    chain::{into_deposit_info_cell, produce_empty_block, TestChain, DEFAULT_FINALITY_BLOCKS},
     eth_wallet::EthWallet,
     rpc_server::RPCServer,
 };
@@ -43,6 +43,10 @@ async fn test_submit_withdrawal_request() {
         .push(into_deposit_info_cell(chain.inner.generator().rollup_context(), deposit).pack())
         .build();
     chain.produce_block(deposit_info_vec, vec![]).await.unwrap();
+
+    for _ in 0..DEFAULT_FINALITY_BLOCKS {
+        produce_empty_block(&mut chain.inner).await.unwrap();
+    }
 
     let mem_pool_state = chain.mem_pool_state().await;
     let snap = mem_pool_state.load();
@@ -87,18 +91,8 @@ async fn test_submit_withdrawal_request() {
             .build()
     };
 
-    // Expect `gw_submit_withdrawal_request` call finalized custodian check logic code
-    let err = rpc_server
-        .submit_withdrawal_request(&withdrawal)
-        .await
-        .unwrap_err();
-    eprintln!("submit withdrawal request {}", err);
-
-    // Expect rpc error since we don't configure valid rpc url
-    assert!(err.to_string().contains("get_cells error"));
-
     let withdrawal_hash = rpc_server
-        .submit_withdrawal_request_finalized_custodian_unchecked(&withdrawal)
+        .submit_withdrawal_request(&withdrawal)
         .await
         .unwrap();
 

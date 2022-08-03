@@ -198,25 +198,6 @@ impl RPCServer {
         Ok(hash.0.into())
     }
 
-    pub async fn submit_withdrawal_request_finalized_custodian_unchecked(
-        &self,
-        req: &WithdrawalRequestExtra,
-    ) -> Result<H256> {
-        let params = {
-            let bytes = JsonBytes::from_bytes(req.as_bytes());
-            serde_json::to_value(&(bytes,))?
-        };
-
-        let req = RequestBuilder::default()
-            .with_id(1)
-            .with_method("gw_submit_withdrawal_request_finalized_custodian_unchecked")
-            .with_params(params)
-            .finish();
-
-        let hash: Byte32 = self.handle_single_request(req).await?;
-        Ok(hash.0.into())
-    }
-
     async fn handle_single_request<R: DeserializeOwned>(&self, req: RequestObject) -> Result<R> {
         let ret = match self.inner.handle(req).await {
             ResponseObjects::One(ResponseObject::Result { result, .. }) => {
