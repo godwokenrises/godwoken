@@ -201,7 +201,6 @@ impl From<GlobalStateV0> for GlobalState {
 pub enum AllowedEoaType {
     Unknown,
     Eth,
-    Tron,
 }
 
 impl From<AllowedEoaType> for u8 {
@@ -218,7 +217,6 @@ impl TryFrom<u8> for AllowedEoaType {
         match value {
             0 => Ok(AllowedEoaType::Unknown),
             1 => Ok(AllowedEoaType::Eth),
-            2 => Ok(AllowedEoaType::Tron),
             n => Err(n),
         }
     }
