@@ -6,7 +6,6 @@ use crate::account_lock_manage::eip712::traits::EIP712Encode;
 use crate::account_lock_manage::eip712::types::Withdrawal;
 use crate::error::LockAlgorithmError;
 use anyhow::bail;
-use gw_common::blake2b::new_blake2b;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::H256;
 use gw_types::offchain::RollupContext;
@@ -32,91 +31,6 @@ fn convert_signature_to_byte65(signature: &[u8]) -> Result<[u8; 65], LockAlgorit
             signature.len()
         ))
     })
-}
-
-#[derive(Debug, Default)]
-pub struct Secp256k1;
-
-impl Secp256k1 {
-    fn verify_message(
-        &self,
-        lock_args: Bytes,
-        signature: Bytes,
-        message: H256,
-    ) -> Result<(), LockAlgorithmError> {
-        if lock_args.len() != 52 {
-            return Err(LockAlgorithmError::InvalidLockArgs);
-        }
-        let pubkey_hash = self.recover(message, signature.as_ref())?;
-        if pubkey_hash.as_ref() != &lock_args[32..52] {
-            return Err(LockAlgorithmError::InvalidSignature(
-                "Secp256k1: Mismatch pubkey hash".to_string(),
-            ));
-        }
-        Ok(())
-    }
-}
-
-/// Usage
-/// register an algorithm to AccountLockManage
-///
-/// manage.register_lock_algorithm(code_hash, Box::new(AlwaysSuccess::default()));
-impl LockAlgorithm for Secp256k1 {
-    fn recover(&self, message: H256, signature: &[u8]) -> Result<Bytes, LockAlgorithmError> {
-        let signature: RecoverableSignature = {
-            let signature = convert_signature_to_byte65(signature)?;
-            let recid = RecoveryId::from_i32(signature[64] as i32)
-                .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
-            let data = &signature[..64];
-            RecoverableSignature::from_compact(data, recid)
-                .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?
-        };
-        let msg = secp256k1::Message::from_slice(message.as_slice())
-            .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
-        let pubkey = SECP256K1
-            .recover(&msg, &signature)
-            .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
-
-        let mut buf = [0u8; 32];
-        let mut hasher = new_blake2b();
-        hasher.update(&pubkey.serialize());
-        hasher.finalize(&mut buf);
-        Ok(Bytes::copy_from_slice(&buf[..20]))
-    }
-
-    fn verify_tx(
-        &self,
-        ctx: &RollupContext,
-        _sender: RegistryAddress,
-        sender_script: Script,
-        receiver_script: Script,
-        tx: L2Transaction,
-    ) -> Result<(), LockAlgorithmError> {
-        let message = calc_godwoken_signing_message(
-            &ctx.rollup_script_hash,
-            &sender_script,
-            &receiver_script,
-            &tx,
-        );
-
-        self.verify_message(
-            sender_script.args().unpack(),
-            tx.signature().unpack(),
-            message,
-        )
-    }
-
-    fn verify_withdrawal(
-        &self,
-        sender_script: Script,
-        withdrawal: &WithdrawalRequestExtra,
-        _address: RegistryAddress,
-    ) -> Result<(), LockAlgorithmError> {
-        let lock_args: Bytes = sender_script.args().unpack();
-        let message = withdrawal.raw().hash().into();
-        let signature: Bytes = withdrawal.request().signature().unpack();
-        self.verify_message(lock_args, signature, message)
-    }
 }
 
 #[derive(Debug, Default)]
@@ -302,116 +216,6 @@ impl LockAlgorithm for Secp256k1Eth {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct Secp256k1Tron;
-
-impl Secp256k1Tron {
-    fn verify_message(
-        &self,
-        lock_args: Bytes,
-        signature: Bytes,
-        message: H256,
-    ) -> Result<(), LockAlgorithmError> {
-        if lock_args.len() != 52 {
-            return Err(LockAlgorithmError::InvalidLockArgs);
-        }
-        let mut hasher = Keccak256::new();
-        hasher.update("\x19TRON Signed Message:\n32");
-        hasher.update(message.as_slice());
-        let signing_message: [u8; 32] = hasher.finalize().into();
-        let signing_message = H256::from(signing_message);
-        let pubkey_hash = self.recover(signing_message, signature.as_ref())?;
-        if pubkey_hash.as_ref() != &lock_args[32..52] {
-            return Err(LockAlgorithmError::InvalidSignature(
-                "Secp256k1Tron: Mismatch pubkey hash".to_string(),
-            ));
-        }
-        Ok(())
-    }
-}
-
-/// Usage
-/// register Secp256k1Tron to AccountLockManage
-///
-/// manage.register_lock_algorithm(code_hash, Box::new(Secp256k1Tron::default()));
-impl LockAlgorithm for Secp256k1Tron {
-    fn recover(&self, message: H256, signature: &[u8]) -> Result<Bytes, LockAlgorithmError> {
-        let signature: RecoverableSignature = {
-            let signature: [u8; 65] = convert_signature_to_byte65(signature)?;
-            let recid = {
-                let rec_param = match signature[64] {
-                    28 => 1,
-                    _ => 0,
-                };
-                RecoveryId::from_i32(rec_param)
-                    .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?
-            };
-            let data = &signature[..64];
-            RecoverableSignature::from_compact(data, recid)
-                .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?
-        };
-        let msg = secp256k1::Message::from_slice(message.as_slice())
-            .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
-        let pubkey = SECP256K1
-            .recover(&msg, &signature)
-            .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
-
-        let mut hasher = Keccak256::new();
-        hasher.update(&pubkey.serialize_uncompressed()[1..]);
-        let buf = hasher.finalize();
-        Ok(Bytes::copy_from_slice(&buf[12..]))
-    }
-
-    fn verify_tx(
-        &self,
-        ctx: &RollupContext,
-        _sender: RegistryAddress,
-        sender_script: Script,
-        receiver_script: Script,
-        tx: L2Transaction,
-    ) -> Result<(), LockAlgorithmError> {
-        let message = calc_godwoken_signing_message(
-            &ctx.rollup_script_hash,
-            &sender_script,
-            &receiver_script,
-            &tx,
-        );
-
-        self.verify_message(
-            sender_script.args().unpack(),
-            tx.signature().unpack(),
-            message,
-        )
-    }
-
-    fn verify_withdrawal(
-        &self,
-        sender_script: Script,
-        withdrawal: &WithdrawalRequestExtra,
-        _address: RegistryAddress,
-    ) -> Result<(), LockAlgorithmError> {
-        let message = withdrawal.request().raw().hash();
-        self.verify_message(
-            sender_script.args().unpack(),
-            withdrawal.request().signature().unpack(),
-            message.into(),
-        )?;
-        Ok(())
-    }
-}
-
-fn calc_godwoken_signing_message(
-    rollup_type_hash: &H256,
-    sender_script: &Script,
-    receiver_script: &Script,
-    tx: &L2Transaction,
-) -> H256 {
-    tx.raw().calc_message(
-        rollup_type_hash,
-        &sender_script.hash().into(),
-        &receiver_script.hash().into(),
-    )
-}
 fn try_assemble_polyjuice_args(
     raw_tx: &RawL2Transaction,
     receiver_script: &Script,
@@ -685,21 +489,6 @@ mod tests {
                 .build(),
         };
         eth.verify_tx(&ctx, sender_address, sender_script, receiver_script, tx)
-            .expect("verify signature");
-    }
-
-    #[test]
-    fn test_secp256k1_tron() {
-        let message = H256::from([0u8; 32]);
-        let test_signature = Bytes::from(
-        hex::decode("702ec8cd52a61093519de11433595ee7177bc8beaef2836714efe23e01bbb45f7f4a51c079f16cc742a261fe53fa3d731704a7687054764d424bd92963a82a241b").expect("hex decode"));
-        let address = Bytes::from(
-            hex::decode("d0ebb370429e1cc8a7da1f7aeb2447083e15298b").expect("hex decode"),
-        );
-        let mut lock_args = vec![0u8; 32];
-        lock_args.extend(address);
-        let tron = Secp256k1Tron {};
-        tron.verify_message(lock_args.into(), test_signature, message)
             .expect("verify signature");
     }
 }
