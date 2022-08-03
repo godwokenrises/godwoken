@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use crate::testing_tool::chain::{build_sync_tx, construct_block, restart_chain, setup_chain};
+use crate::testing_tool::chain::{
+    build_sync_tx, construct_block, restart_chain, setup_chain, TEST_CHAIN_ID,
+};
 use crate::testing_tool::common::random_always_success_script;
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 use crate::testing_tool::rpc_server::RPCServer;
@@ -91,6 +93,7 @@ async fn test_restore_mem_block() {
                     .sudt_script_hash(H256::zero().pack())
                     .owner_lock_hash(owner_lock.hash().pack())
                     .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
+                    .chain_id(TEST_CHAIN_ID.pack())
                     .build();
                 let withdrawal = WithdrawalRequest::new_builder().raw(raw).build();
                 WithdrawalRequestExtra::new_builder()
@@ -146,6 +149,7 @@ async fn test_restore_mem_block() {
                     .from_id(from_id.unwrap().pack())
                     .to_id(gw_common::builtins::CKB_SUDT_ACCOUNT_ID.pack()) // 1 is reserved for sudt
                     .args(args.as_bytes().pack())
+                    .chain_id(crate::testing_tool::chain::TEST_CHAIN_ID.pack())
                     .build();
                 L2Transaction::new_builder().raw(raw).build()
             })

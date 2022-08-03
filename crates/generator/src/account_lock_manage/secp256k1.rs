@@ -103,21 +103,21 @@ impl Secp256k1Eth {
     }
 }
 
-// extract rec_id
-fn extract_rec_id(rec_id: u8) -> u8 {
-    match rec_id {
-        r if r == 27 => 0,
-        r if r == 28 => 1,
-        r => r,
-    }
-}
-
 /// Usage
 /// register AlwaysSuccess to AccountLockManage
 ///
 /// manage.register_lock_algorithm(code_hash, Box::new(AlwaysSuccess::default()));
 impl LockAlgorithm for Secp256k1Eth {
     fn recover(&self, message: H256, signature: &[u8]) -> Result<Bytes, LockAlgorithmError> {
+        // extract rec_id
+        fn extract_rec_id(rec_id: u8) -> u8 {
+            match rec_id {
+                r if r == 27 => 0,
+                r if r == 28 => 1,
+                r => r,
+            }
+        }
+
         let signature: RecoverableSignature = {
             let signature = convert_signature_to_byte65(signature)?;
             let recid = {
@@ -149,10 +149,14 @@ impl LockAlgorithm for Secp256k1Eth {
         receiver_script: Script,
         tx: L2Transaction,
     ) -> Result<(), LockAlgorithmError> {
-        // check chain id
         let expected_chain_id = ctx.rollup_config.chain_id().unpack();
         let chain_id = tx.raw().chain_id().unpack();
-        if expected_chain_id != chain_id {
+        // Non EIP-155 transaction's chain_id is zero.
+        // We support non EIP-155 for the compatibility.
+        // Related issue: https://github.com/nervosnetwork/godwoken/issues/775
+        let is_protected = chain_id != 0;
+        // check protected chain id
+        if is_protected && expected_chain_id != chain_id {
             return Err(LockAlgorithmError::InvalidTransactionArgs);
         }
         if let Some(rlp_data) = try_assemble_polyjuice_args(&tx.raw(), &receiver_script) {
@@ -166,6 +170,12 @@ impl LockAlgorithm for Secp256k1Eth {
                 signing_message,
             )?;
             return Ok(());
+        }
+
+        // Try verify transaction with EIP-712 message
+        // Reject transaction without chain_id protection
+        if !is_protected {
+            return Err(LockAlgorithmError::InvalidTransactionArgs);
         }
 
         let raw_tx = tx.raw();
@@ -248,9 +258,13 @@ fn try_assemble_polyjuice_args(
     stream.append(&to);
     stream.append(&parser.value());
     stream.append(&parser.data().to_vec());
-    stream.append(&raw_tx.chain_id().unpack());
-    stream.append(&0u8);
-    stream.append(&0u8);
+    let is_protected = raw_tx.chain_id().unpack() != 0;
+    // EIP-155 - https://eips.ethereum.org/EIPS/eip-155
+    if is_protected {
+        stream.append(&raw_tx.chain_id().unpack());
+        stream.append(&0u8);
+        stream.append(&0u8);
+    }
     stream.finalize_unbounded_list();
     Some(Bytes::from(stream.out().to_vec()))
 }
