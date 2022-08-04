@@ -34,7 +34,7 @@ use gw_types::{
     prelude::{Pack, PackVec, Unpack},
 };
 use gw_utils::export_block::check_block_post_state;
-
+ 
 const CKB: u64 = 100000000;
 const MAX_MEM_BLOCK_WITHDRAWALS: u8 = 50;
 
