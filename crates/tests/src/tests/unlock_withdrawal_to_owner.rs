@@ -7,9 +7,9 @@ use std::time::Duration;
 
 use crate::testing_tool::chain::{
     build_sync_tx, construct_block, construct_block_with_timestamp, into_deposit_info_cell,
-    setup_chain_with_config, ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM,
-    CUSTODIAN_LOCK_PROGRAM, STAKE_LOCK_PROGRAM, STATE_VALIDATOR_TYPE_PROGRAM,
-    WITHDRAWAL_LOCK_PROGRAM, DEFAULT_FINALITY_BLOCKS, produce_empty_block,
+    produce_empty_block, setup_chain_with_config, ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM,
+    CUSTODIAN_LOCK_PROGRAM, DEFAULT_FINALITY_BLOCKS, STAKE_LOCK_PROGRAM,
+    STATE_VALIDATOR_TYPE_PROGRAM, WITHDRAWAL_LOCK_PROGRAM,
 };
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 use crate::testing_tool::verify_tx::{verify_tx, TxWithContext};
