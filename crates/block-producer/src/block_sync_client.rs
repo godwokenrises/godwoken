@@ -83,10 +83,10 @@ impl BlockSyncClient {
                         continue;
                     }
                 }
-
-                if let Err(err) = sync_l1(&self).await {
+                if let Err(err) = run_once_without_p2p_stream(&mut self).await {
                     log::warn!("{:#}", err);
                 }
+
                 tokio::time::sleep(Duration::from_secs(3)).await;
             }
         }
@@ -102,21 +102,16 @@ impl std::fmt::Display for StreamError {
     }
 }
 
+async fn run_once_without_p2p_stream(client: &mut BlockSyncClient) -> Result<()> {
+    sync_l1(client).await?;
+    notify_new_tip(client).await?;
+    Ok(())
+}
+
 async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStream) -> Result<()> {
     loop {
         sync_l1(client).await?;
-        if !client.completed_initial_syncing {
-            if let Some(ref mem_pool) = client.mem_pool {
-                let mut mem_pool = mem_pool.lock().await;
-                // XXX: local cells manager.
-                let new_tip = client.store.get_last_valid_tip_block_hash()?;
-                mem_pool
-                    .notify_new_tip(new_tip, &Default::default())
-                    .await?;
-                mem_pool.mem_pool_state().set_completed_initial_syncing();
-            }
-            client.completed_initial_syncing = true;
-        }
+        notify_new_tip(client).await?;
         let last_confirmed = client
             .store
             .get_last_confirmed_block_number_hash()
@@ -152,7 +147,7 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
     Ok(())
 }
 
-async fn apply_msg(client: &BlockSyncClient, msg: BlockSync) -> Result<()> {
+async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
     match msg.to_enum() {
         BlockSyncUnion::Revert(r) => {
             // TODO: check block hash.
@@ -163,12 +158,7 @@ async fn apply_msg(client: &BlockSyncClient, msg: BlockSync) -> Result<()> {
             let store_tx = client.store.begin_transaction();
             revert(client, &store_tx, r.number_hash().number().unpack()).await?;
             store_tx.commit()?;
-            if let Some(ref mem_pool) = client.mem_pool {
-                let mut mem_pool = mem_pool.lock().await;
-                mem_pool
-                    .notify_new_tip(r.number_hash().block_hash().unpack(), &Default::default())
-                    .await?;
-            }
+            notify_new_tip(client).await?;
         }
         BlockSyncUnion::LocalBlock(l) => {
             let block_hash = l.block().hash();
@@ -182,25 +172,22 @@ async fn apply_msg(client: &BlockSyncClient, msg: BlockSync) -> Result<()> {
             match store_block_hash {
                 None => {
                     // TODO: check parent.
-                    let mut chain = client.chain.lock().await;
-                    chain
-                        .update_local(
-                            &store_tx,
-                            l.block(),
-                            l.deposit_info_vec(),
-                            l.deposit_asset_scripts().into_iter().collect(),
-                            l.withdrawals().into_iter().collect(),
-                            l.post_global_state(),
-                        )
-                        .await?;
-                    chain.calculate_and_store_finalized_custodians(&store_tx, block_number)?;
-                    store_tx.commit()?;
-                    if let Some(ref mem_pool) = client.mem_pool {
-                        let mut mem_pool = mem_pool.lock().await;
-                        mem_pool
-                            .notify_new_tip(block_hash.into(), &Default::default())
+                    {
+                        let mut chain = client.chain.lock().await;
+                        chain
+                            .update_local(
+                                &store_tx,
+                                l.block(),
+                                l.deposit_info_vec(),
+                                l.deposit_asset_scripts().into_iter().collect(),
+                                l.withdrawals().into_iter().collect(),
+                                l.post_global_state(),
+                            )
                             .await?;
+                        chain.calculate_and_store_finalized_custodians(&store_tx, block_number)?;
+                        store_tx.commit()?;
                     }
+                    notify_new_tip(client).await?;
                 }
                 Some(store_block_hash) => {
                     // TODO: revert?
@@ -274,4 +261,27 @@ pub fn block_sync_client_protocol(stream_tx: UnboundedSender<P2PStream>) -> Prot
         .id(P2P_BLOCK_SYNC_PROTOCOL)
         .protocol_spawn(spawn)
         .build()
+}
+
+async fn notify_new_tip(client: &mut BlockSyncClient) -> Result<()> {
+    if !client.completed_initial_syncing {
+        if let Some(ref mem_pool) = client.mem_pool {
+            let mut mem_pool = mem_pool.lock().await;
+            // XXX: local cells manager.
+            let new_tip = client.store.get_last_valid_tip_block_hash()?;
+            mem_pool
+                .notify_new_tip(new_tip, &Default::default())
+                .await?;
+            mem_pool.mem_pool_state().set_completed_initial_syncing();
+        }
+        client.completed_initial_syncing = true;
+    } else if let Some(ref mem_pool) = client.mem_pool {
+        let mut mem_pool = mem_pool.lock().await;
+        // XXX: local cells manager.
+        let new_tip = client.store.get_last_valid_tip_block_hash()?;
+        mem_pool
+            .notify_new_tip(new_tip, &Default::default())
+            .await?;
+    }
+    Ok(())
 }
