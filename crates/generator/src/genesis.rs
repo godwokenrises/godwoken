@@ -22,7 +22,6 @@ use gw_types::{
     packed::{
         AccountMerkleState, BlockMerkleState, DepositInfoVec, FinalizedCustodianCapacity,
         GlobalState, L2Block, NumberHash, RawL2Block, Script, SubmitTransactions,
-        TransactionReader,
     },
     prelude::*,
 };
@@ -188,10 +187,12 @@ pub fn build_genesis_from_store(
 }
 
 /// Store information about the genesis block into db if does not exist.
+///
+/// `transaction_hash`: hash of L1 transaction that deploys the genesis block.
 pub fn init_genesis(
     store: &Store,
     config: &GenesisConfig,
-    transaction: &TransactionReader,
+    transaction_hash: &[u8; 32],
     secp_data: Bytes,
 ) -> Result<()> {
     let rollup_script_hash: H256 = {
@@ -240,7 +241,7 @@ pub fn init_genesis(
         0,
         &FinalizedCustodianCapacity::default().as_reader(),
     )?;
-    db.set_block_submit_tx(0, transaction)?;
+    db.set_block_submit_tx_hash(0, transaction_hash)?;
     db.commit()?;
     Ok(())
 }

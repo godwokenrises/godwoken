@@ -11,7 +11,7 @@ use gw_store::{
 };
 use gw_types::{
     bytes::Bytes,
-    packed::{AllowedTypeHash, L2Transaction, RawL2Transaction, RollupConfig, Transaction},
+    packed::{AllowedTypeHash, L2Transaction, RawL2Transaction, RollupConfig},
     prelude::{Builder, Entity, Pack, PackVec, Unpack},
 };
 
@@ -170,12 +170,5 @@ fn setup_genesis(store: &Store) {
         },
         secp_data_dep: Default::default(),
     };
-    let transaction = Transaction::default();
-    init_genesis(
-        store,
-        &genesis_config,
-        &transaction.as_reader(),
-        Bytes::default(),
-    )
-    .unwrap();
+    init_genesis(store, &genesis_config, &[0u8; 32], Bytes::default()).unwrap();
 }

@@ -88,8 +88,13 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
             .raw_data()
     };
 
-    // TODO: @sopium fetch genesis transaction.
-    init_genesis(&local_store, &config.genesis, None.unwrap(), secp_data)
+    let genesis_tx_hash = config
+        .chain
+        .genesis_committed_info
+        .transaction_hash
+        .clone()
+        .into();
+    init_genesis(&local_store, &config.genesis, &genesis_tx_hash, secp_data)
         .with_context(|| "init genesis")?;
     let generator = {
         let backend_manage = BackendManage::from_config(config.backend_switches.clone())

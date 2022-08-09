@@ -373,19 +373,13 @@ impl BaseInitComponents {
                 .raw_data()
         };
 
-        let tx = rpc_client
-            .ckb
-            .get_transaction(
-                config
-                    .chain
-                    .genesis_committed_info
-                    .transaction_hash
-                    .0
-                    .into(),
-            )
-            .await?
-            .context("get genesis transaction")?;
-        init_genesis(&store, &config.genesis, &tx.as_reader(), secp_data.clone())
+        let genesis_tx_hash = config
+            .chain
+            .genesis_committed_info
+            .transaction_hash
+            .clone()
+            .into();
+        init_genesis(&store, &config.genesis, &genesis_tx_hash, secp_data.clone())
             .with_context(|| "init genesis")?;
 
         let dynamic_config_manager = Arc::new(ArcSwap::from_pointee(DynamicConfigManager::create(
