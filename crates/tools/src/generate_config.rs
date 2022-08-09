@@ -6,7 +6,7 @@ use crate::types::{
 };
 use anyhow::{anyhow, Result};
 use ckb_jsonrpc_types::{CellDep, JsonBytes};
-use ckb_sdk::HttpRpcClient;
+use ckb_sdk::CkbRpcClient;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_config::{
@@ -54,7 +54,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         p2p_dial,
     } = args;
 
-    let mut rpc_client = HttpRpcClient::new(ckb_url.to_string());
+    let mut rpc_client = CkbRpcClient::new(&ckb_url);
     let tx_with_status = rpc_client
         .get_transaction(rollup_result.tx_hash.clone())
         .map_err(|err| anyhow!("get transaction error: {}", err))?
@@ -69,8 +69,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         .map_err(|err| anyhow!("{}", err))?
         .ok_or_else(|| anyhow!("can't find block"))?
         .inner
-        .number
-        .into();
+        .number;
 
     // build configuration
     let node_wallet_info = get_wallet_info(privkey_path);

@@ -80,8 +80,7 @@ impl MessageBuffer {
         let messages = self
             .buffer
             .range(block.1..)
-            .map(|(_, block)| block.messages.iter())
-            .flatten()
+            .flat_map(|(_, block)| block.messages.iter())
             .cloned();
         Some(P2PSyncMessageVec::new_builder().extend(messages).build())
     }

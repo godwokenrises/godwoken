@@ -4,7 +4,7 @@
 use anyhow::anyhow;
 use anyhow::Result;
 use ckb_fixed_hash::{h256, H256};
-use ckb_sdk::HttpRpcClient;
+use ckb_sdk::CkbRpcClient;
 use ckb_sdk::NetworkType;
 use gw_config::Config;
 use gw_jsonrpc_types::godwoken::TxReceipt;
@@ -36,7 +36,7 @@ where
     S: AsRef<OsStr>,
 {
     log::debug!("[Execute]: {} {:?}", bin, args);
-    let status = Command::new(bin.to_owned())
+    let status = Command::new(bin)
         .env("RUST_BACKTRACE", "full")
         .args(args)
         .status()
@@ -58,7 +58,7 @@ where
 {
     let bin = "ckb-cli";
     log::debug!("[Execute]: {} {:?}", bin, args);
-    let init_output = Command::new(bin.to_owned())
+    let init_output = Command::new(bin)
         .env("RUST_BACKTRACE", "full")
         .env("RUST_LOG", "warn")
         .args(args)
@@ -77,7 +77,7 @@ where
     }
 }
 
-pub fn get_network_type(rpc_client: &mut HttpRpcClient) -> Result<NetworkType> {
+pub fn get_network_type(rpc_client: &mut CkbRpcClient) -> Result<NetworkType> {
     let chain_info = rpc_client
         .get_blockchain_info()
         .map_err(|err| anyhow!(err))?;
@@ -91,7 +91,7 @@ where
     S: AsRef<OsStr>,
 {
     log::debug!("[Execute]: {} {:?}", bin, args);
-    let init_output = Command::new(bin.to_owned())
+    let init_output = Command::new(bin)
         .env("RUST_BACKTRACE", "full")
         .args(args)
         .output()

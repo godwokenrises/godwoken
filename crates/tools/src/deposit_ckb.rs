@@ -5,7 +5,7 @@ use crate::types::ScriptsDeploymentResult;
 use crate::utils::transaction::{get_network_type, read_config, run_cmd};
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
-use ckb_sdk::{Address, AddressPayload, HttpRpcClient, HumanCapacity, SECP256K1};
+use ckb_sdk::{Address, AddressPayload, CkbRpcClient, HumanCapacity, SECP256K1};
 use ckb_types::{
     bytes::Bytes as CKBBytes, core::ScriptHashType, packed::Script as CKBScript,
     prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity, prelude::Pack as CKBPack,
@@ -98,13 +98,14 @@ pub async fn deposit_ckb(
 
     let deposit_lock_code_hash = &scripts_deployment.deposit_lock.script_type_hash;
 
-    let mut rpc_client = HttpRpcClient::new(ckb_rpc_url.to_string());
+    let mut rpc_client = CkbRpcClient::new(ckb_rpc_url);
     let network_type = get_network_type(&mut rpc_client)?;
-    let address_payload = AddressPayload::new_full_type(
+    let address_payload = AddressPayload::new_full(
+        ScriptHashType::Type,
         CKBPack::pack(deposit_lock_code_hash),
         GwBytes::from(l1_lock_args),
     );
-    let address: Address = Address::new(network_type, address_payload);
+    let address: Address = Address::new(network_type, address_payload, true);
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
@@ -116,7 +117,7 @@ pub async fn deposit_ckb(
     loop {
         let result = run_cmd(vec![
             "--url",
-            rpc_client.url(),
+            rpc_client.url.as_str(),
             "wallet",
             "transfer",
             "--privkey-path",
