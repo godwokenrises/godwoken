@@ -15,8 +15,8 @@ use gw_store::{snapshot::StoreSnapshot, traits::chain_store::ChainStore, Store};
 use gw_types::{
     offchain::{CellStatus, DepositInfo, TxStatus},
     packed::{
-        Confirmed, GlobalState, LocalBlock, NumberHash, OutPoint, Script, ScriptVec, Submitted,
-        Transaction, WithdrawalKey,
+        Confirmed, GlobalState, LocalBlock, NumberHash, OutPoint, Revert, Script, ScriptVec,
+        Submitted, Transaction, WithdrawalKey,
     },
     prelude::*,
 };
@@ -143,22 +143,30 @@ impl ProduceSubmitConfirm {
 
                     sync_l1(&*self.context).await?;
 
-                    // TODO: publish block sync messages.
-
                     // Reset local_count, submitted_count and local_cells_manager.
                     let snap = self.context.store.get_snapshot();
                     let last_valid = snap.get_last_valid_tip_block()?.raw().number().unpack();
-                    let last_submitted = snap
+                    let last_submitted_nh = snap
                         .get_last_submitted_block_number_hash()
-                        .expect("get last submitted")
-                        .number()
-                        .unpack();
+                        .expect("get last submitted");
+                    let last_submitted = last_submitted_nh.number().unpack();
                     let last_confirmed = snap
                         .get_last_confirmed_block_number_hash()
                         .expect("get last confirmed")
                         .number()
                         .unpack();
                     ensure!(last_submitted == last_confirmed);
+
+                    if let Some(ref sync_server) = self.context.block_sync_server_state {
+                        let mut sync_server = sync_server.lock().unwrap();
+                        sync_server.publish_revert(
+                            Revert::new_builder().number_hash(last_submitted_nh).build(),
+                        );
+                        for b in last_confirmed + 1..=last_valid {
+                            publish_local_block(&mut sync_server, &snap, b)?;
+                        }
+                    }
+
                     {
                         let mut local_cells_manager = self.context.local_cells_manager.lock().await;
                         local_cells_manager.reset();
