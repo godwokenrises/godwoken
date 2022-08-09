@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+- Decouple block producing, submission and confirming [#776](https://github.com/nervosnetwork/godwoken/pull/776)
+- Support non EIP-155 transaction [#777](https://github.com/nervosnetwork/godwoken/pull/777)
+
+## [v1.5.0-rc1] - 2022-08-09
+
+- fix(tests): wait withdrawal pushed into mem pool [#774](https://github.com/nervosnetwork/godwoken/pull/774)
+- Add RPC get_pending_tx_hashes [#772](https://github.com/nervosnetwork/godwoken/pull/772)
+- feat: Introduce max_cycles_limit of a Godwoken block [#767](https://github.com/nervosnetwork/godwoken/pull/767)
+
 ## [v1.4.0-rc4] - 2022-07-26
 
 - hotfix(rpc server): submit withdrawal missing data for submit_tx [#770](https://github.com/nervosnetwork/godwoken/pull/770)
