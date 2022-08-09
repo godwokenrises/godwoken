@@ -50,9 +50,7 @@ pub fn generate_eip712_message_to_sign(
         sender_address,
         receiver_script_hash,
     )
-    .map_err(|err| {
-        anyhow!(format!("Invalid l2transaction format {}", err));
-    })
+    .map_err(|err| anyhow!(format!("Invalid l2transaction format {}", err)))
     .expect("l2transaction");
 
     eip712::traits::EIP712Encode::eip712_message(
