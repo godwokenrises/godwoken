@@ -5,7 +5,7 @@ use crate::{
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{CellDep, DepType, OutPoint, Script};
-use ckb_sdk::{Address, AddressPayload, HttpRpcClient, HumanCapacity};
+use ckb_sdk::{Address, AddressPayload, CkbRpcClient, HumanCapacity};
 use ckb_types::{
     bytes::Bytes,
     core::{Capacity, ScriptHashType},
@@ -128,12 +128,12 @@ pub async fn deploy_scripts(
         ));
     }
 
-    let mut rpc_client = HttpRpcClient::new(ckb_rpc_url.to_string());
+    let mut rpc_client = CkbRpcClient::new(ckb_rpc_url);
     let gw_ckb_client = gw_rpc_client::ckb_client::CKBClient::with_url(ckb_rpc_url)?;
     let network_type = get_network_type(&mut rpc_client)?;
     let target_lock = packed::Script::from(scripts_result.lock.clone());
     let address_payload = AddressPayload::from(target_lock.clone());
-    let target_address = Address::new(network_type, address_payload);
+    let target_address = Address::new(network_type, address_payload, true);
 
     let mut total_file_size = 0;
     for path in &[

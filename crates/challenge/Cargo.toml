@@ -17,7 +17,6 @@ gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-traits = { path = "../traits" }
 gw-utils = { path = "../utils" }
-gw-ckb-hardfork = { path = "../ckb-hardfork" }
 ckb-fixed-hash = "0.104.0"
 ckb-types = "0.104.0"
 ckb-script = "0.104.0"

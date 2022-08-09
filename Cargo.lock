@@ -1648,7 +1648,6 @@ dependencies = [
  "ckb-script",
  "ckb-traits",
  "ckb-types",
- "gw-ckb-hardfork",
  "gw-common",
  "gw-config",
  "gw-db",
@@ -1984,7 +1983,6 @@ dependencies = [
  "async-jsonrpc-client",
  "async-trait",
  "blake2b-rs",
- "ckb-chain-spec",
  "ckb-crypto",
  "ckb-error",
  "ckb-fixed-hash",
@@ -1998,7 +1996,6 @@ dependencies = [
  "godwoken-bin",
  "gw-block-producer",
  "gw-chain",
- "gw-ckb-hardfork",
  "gw-common",
  "gw-config",
  "gw-db",
@@ -2058,7 +2055,7 @@ dependencies = [
  "log",
  "rand 0.8.5",
  "reqwest",
- "secp256k1 0.19.0",
+ "secp256k1 0.20.3",
  "serde",
  "serde_json",
  "sha3",
@@ -3767,20 +3764,11 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6179428c22c73ac0fbb7b5579a56353ce78ba29759b3b8575183336ea74cdfb"
-dependencies = [
- "secp256k1-sys 0.3.0",
-]
-
-[[package]]
-name = "secp256k1"
 version = "0.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97d03ceae636d0fed5bae6a7f4f664354c5f4fcedf6eef053fef17e49f837d0a"
 dependencies = [
- "secp256k1-sys 0.4.2",
+ "secp256k1-sys",
 ]
 
 [[package]]
@@ -3789,16 +3777,7 @@ version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab7883017d5b21f011ef8040ea9c6c7ac90834c0df26a69e4c0b06276151f125"
 dependencies = [
- "secp256k1-sys 0.4.2",
-]
-
-[[package]]
-name = "secp256k1-sys"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11553d210db090930f4432bea123b31f70bbf693ace14504ea2a35e796c28dd2"
-dependencies = [
- "cc",
+ "secp256k1-sys",
 ]
 
 [[package]]

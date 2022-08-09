@@ -21,7 +21,6 @@ gw-block-producer = { path = "../block-producer" }
 gw-rpc-server = { path = "../rpc-server" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-rpc-client = { path = "../rpc-client" }
-gw-ckb-hardfork = { path = "../ckb-hardfork" }
 gw-dynamic-config = { path = "../dynamic-config"}
 gw-eoa-mapping = { path = "../eoa-mapping" }
 gw-polyjuice-sender-recover = { path = "../polyjuice-sender-recover" }
@@ -43,7 +42,6 @@ ckb-crypto = "0.104.0"
 ckb-hash = "0.104.0"
 ckb-traits = "0.104.0"
 ckb-fixed-hash = "0.104.0"
-ckb-chain-spec = "0.104.0"
 rand = "0.8"
 serde = "1.0"
 serde_json = "1.0"
