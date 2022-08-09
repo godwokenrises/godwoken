@@ -19,13 +19,13 @@ lazy_static = "1.3"
 secp256k1 = "0.19"
 sha3 = "0.9.1"
 reqwest = { version = "0.11", features = ["json"] }
-ckb-jsonrpc-types = "0.100.0"
-ckb-types = "0.100.0"
-ckb-resource = "0.100.0"
-ckb-hash = "0.100.0"
-ckb-fixed-hash = "0.100.0"
-ckb-sdk = "0.100.0"
-ckb-crypto = "0.100.0"
+ckb-jsonrpc-types = "0.104.0"
+ckb-types = "0.104.0"
+ckb-resource = "0.104.0"
+ckb-hash = "0.104.0"
+ckb-fixed-hash = "0.104.0"
+ckb-sdk = "1.1"
+ckb-crypto = "0.104.0"
 gw-db = { path = "../db" }
 gw-types = { path = "../types" }
 gw-config = { path = "../config" }

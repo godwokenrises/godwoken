@@ -18,11 +18,11 @@ gw-rpc-client = { path = "../rpc-client" }
 gw-traits = { path = "../traits" }
 gw-utils = { path = "../utils" }
 gw-ckb-hardfork = { path = "../ckb-hardfork" }
-ckb-fixed-hash = "0.100.0"
-ckb-types = "0.100.0"
-ckb-script = "0.100.0"
-ckb-traits = "0.100.0"
-ckb-chain-spec = "0.100.0"
+ckb-fixed-hash = "0.104.0"
+ckb-types = "0.104.0"
+ckb-script = "0.104.0"
+ckb-traits = "0.104.0"
+ckb-chain-spec = "0.104.0"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
