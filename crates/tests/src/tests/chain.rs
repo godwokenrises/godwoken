@@ -717,7 +717,6 @@ async fn test_sync_blocks() {
 }
 
 #[tokio::test]
-#[ignore = "to be fixed"]
 async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
@@ -981,7 +980,7 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             l2block: block_result.block.clone(),
             deposit_info_vec,
             deposit_asset_scripts: Default::default(),
-            withdrawals: Default::default(),
+            withdrawals: block_result.withdrawal_extras.clone(),
         },
         transaction: build_sync_tx(rollup_cell, block_result),
     };

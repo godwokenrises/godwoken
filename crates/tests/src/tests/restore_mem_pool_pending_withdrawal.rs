@@ -18,13 +18,12 @@ use gw_types::packed::{
 use gw_types::prelude::{Pack, PackVec};
 use gw_utils::local_cells::LocalCellsManager;
 
-const ACCOUNTS_COUNT: usize = 20;
+const ACCOUNTS_COUNT: usize = 21;
 const CKB: u64 = 100000000;
 const DEPOSIT_CAPACITY: u64 = 1000000 * CKB;
 const WITHDRAWAL_CAPACITY: u64 = 1000 * CKB;
 
 #[tokio::test]
-#[ignore = "to be fixed"]
 async fn test_restore_mem_pool_pending_withdrawal() {
     let _ = env_logger::builder().is_test(true).try_init();
 

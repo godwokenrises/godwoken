@@ -30,7 +30,6 @@ const BLOCK_MAX_CYCLES_LIMIT: u64 = 200_0000;
 const META_CONTRACT_ACCOUNT_ID: u32 = RESERVED_ACCOUNT_ID;
 
 #[tokio::test]
-#[ignore = "to be fixed"]
 async fn test_block_max_cycles_limit() {
     let _ = env_logger::builder().is_test(true).try_init();
 

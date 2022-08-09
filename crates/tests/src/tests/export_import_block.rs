@@ -6,8 +6,9 @@ use std::time::SystemTime;
 
 use crate::testing_tool::bad_block::generate_bad_block_using_first_withdrawal;
 use crate::testing_tool::chain::{
-    build_sync_tx, construct_block, into_deposit_info_cell, setup_chain_with_account_lock_manage,
-    ALWAYS_SUCCESS_CODE_HASH, ETH_ACCOUNT_LOCK_CODE_HASH,
+    build_sync_tx, construct_block, into_deposit_info_cell, produce_empty_block,
+    setup_chain_with_account_lock_manage, ALWAYS_SUCCESS_CODE_HASH, DEFAULT_FINALITY_BLOCKS,
+    ETH_ACCOUNT_LOCK_CODE_HASH,
 };
 
 use ckb_types::prelude::{Builder, Entity};
@@ -39,7 +40,6 @@ const CKB: u64 = 100000000;
 const MAX_MEM_BLOCK_WITHDRAWALS: u8 = 50;
 
 #[tokio::test]
-#[ignore = "finalized custodian not enough to withdrawal"]
 async fn test_export_import_block() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -166,7 +166,12 @@ async fn test_export_import_block() {
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
+
+    for _ in 0..DEFAULT_FINALITY_BLOCKS {
+        produce_empty_block(&mut chain).await.unwrap();
+    }
 
     // Export block
     let export_path = {
@@ -499,18 +504,12 @@ async fn produce_block(chain: &mut Chain, rollup_cell: &CellInfo) {
             .await
             .unwrap()
     };
-    let withdrawals = block_result
-        .block
-        .withdrawals()
-        .into_iter()
-        .map(|w| WithdrawalRequestExtra::new_builder().request(w).build())
-        .collect();
     let new_block = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
             deposit_info_vec: Default::default(),
             deposit_asset_scripts: Default::default(),
-            withdrawals,
+            withdrawals: block_result.withdrawal_extras.clone(),
         },
         transaction: build_sync_tx(rollup_cell.output.clone(), block_result),
     };
