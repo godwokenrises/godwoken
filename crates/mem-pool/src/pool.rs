@@ -217,6 +217,12 @@ impl MemPool {
         let snap = mem_pool.mem_pool_state().load();
         snap.update_mem_pool_block_info(mem_pool.mem_block.block_info())?;
         mem_pool.mem_pool_state().store(snap.into());
+
+        // set tip
+        mem_pool
+            .reset(None, Some(tip.0), &Default::default())
+            .await?;
+
         // clear stored mem blocks
         tokio::spawn(async move {
             restore_manager.delete_before_one_hour();
@@ -454,8 +460,10 @@ impl MemPool {
         local_cells_manager: &LocalCellsManager,
     ) -> Result<()> {
         // reset pool state
-        self.reset(Some(self.current_tip.0), Some(new_tip), local_cells_manager)
-            .await?;
+        if self.current_tip.0 != new_tip {
+            self.reset(Some(self.current_tip.0), Some(new_tip), local_cells_manager)
+                .await?;
+        }
         Ok(())
     }
 

@@ -2,7 +2,7 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use gw_challenge::offchain::{verify_tx::TxWithContext, OffChainMockContext};
-use gw_common::{sparse_merkle_tree, state::State, H256};
+use gw_common::{sparse_merkle_tree, state::State, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_config::ChainConfig;
 use gw_generator::{
     generator::{ApplyBlockArgs, ApplyBlockResult},
@@ -615,10 +615,12 @@ impl Chain {
                 .capacity
                 .checked_sub(w.raw().capacity().unpack().into())
                 .context("withdrawal not enough capacity")?;
-            let amount = w.raw().amount().unpack();
-            if amount != 0 {
+
+            let sudt_amount = w.raw().amount().unpack();
+            let sudt_script_hash: [u8; 32] = w.raw().sudt_script_hash().unpack();
+            if 0 != sudt_amount && CKB_SUDT_SCRIPT_ARGS != sudt_script_hash {
                 finalized_custodians
-                    .checked_sub_sudt(w.raw().sudt_script_hash().unpack(), amount)
+                    .checked_sub_sudt(sudt_script_hash, sudt_amount)
                     .context("withdrawal not enough sudt amount")?;
             }
         }

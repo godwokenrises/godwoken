@@ -30,7 +30,7 @@ use gw_types::offchain::{
     CellInfo, CollectedCustodianCells, FinalizedCustodianCapacity, InputCellInfo, RollupContext,
 };
 use gw_types::packed::{
-    AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositRequest,
+    self, AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositRequest,
     GlobalState, OutPoint, RawWithdrawalRequest, RollupAction, RollupActionUnion, RollupConfig,
     RollupSubmitBlock, Script, StakeLockArgs, WithdrawalRequest, WithdrawalRequestExtra,
     WitnessArgs,
@@ -43,7 +43,6 @@ const CKB: u64 = 100000000;
 const MAX_MEM_BLOCK_WITHDRAWALS: u8 = 50;
 
 #[tokio::test]
-#[ignore = "to be fixed"]
 async fn test_build_unlock_to_owner_tx() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -240,8 +239,9 @@ async fn test_build_unlock_to_owner_tx() {
         produce_empty_block(&mut chain).await.unwrap();
     }
 
+    let deposit_finalized_global_state = chain.local_state().last_global_state().clone();
     let input_rollup_cell = CellInfo {
-        data: deposit_block_result.global_state.as_bytes(),
+        data: deposit_finalized_global_state.as_bytes(),
         out_point: OutPoint::new_builder()
             .tx_hash(rand::random::<[u8; 32]>().pack())
             .build(),
@@ -566,6 +566,19 @@ async fn test_build_unlock_to_owner_tx() {
         // Reset finalized custodian should stale all withdrawals
         let provider = DummyMemPoolProvider::default();
         mem_pool.set_provider(Box::new(provider));
+
+        let tip_block_number = chain.local_state().tip().raw().number().unpack();
+        {
+            let store_tx = chain.store().begin_transaction();
+            store_tx
+                .set_block_post_finalized_custodian_capacity(
+                    tip_block_number,
+                    &packed::FinalizedCustodianCapacity::default().as_reader(),
+                )
+                .unwrap();
+            store_tx.commit().unwrap();
+        }
+
         mem_pool
             .reset_mem_block(&LocalCellsManager::default())
             .await
@@ -601,7 +614,7 @@ async fn test_build_unlock_to_owner_tx() {
 
     let input_rollup_cell = {
         let global_state = {
-            let builder = deposit_block_result.global_state.as_builder();
+            let builder = deposit_finalized_global_state.as_builder();
             builder.reverted_block_root(reverted_block_smt.root().pack())
         };
         CellInfo {

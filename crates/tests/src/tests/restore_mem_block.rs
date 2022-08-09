@@ -26,7 +26,6 @@ use gw_utils::local_cells::LocalCellsManager;
 const CKB: u64 = 100000000;
 
 #[tokio::test]
-#[ignore = "to be fixed"]
 async fn test_restore_mem_block() {
     let _ = env_logger::builder().is_test(true).try_init();
 
