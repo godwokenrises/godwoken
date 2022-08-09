@@ -13,7 +13,7 @@ use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
     packed::{
-        BlockSync, BlockSyncReader, BlockSyncUnion, P2PBlockSyncResponseReader,
+        BlockSync, BlockSyncReader, BlockSyncUnion, NumberHash, P2PBlockSyncResponseReader,
         P2PBlockSyncResponseUnionReader, P2PSyncRequest, Script,
     },
     prelude::Unpack,
@@ -68,8 +68,8 @@ impl BlockSyncClient {
         loop {
             if let Some(ref mut s) = p2p_stream {
                 if let Err(err) = run_with_p2p_stream(&mut self, s).await {
-                    if err.is::<StreamError>() {
-                        // XXX: disconnect this p2p session?
+                    if !err.is::<RecoverableCtx>() {
+                        let _ = s.disconnect().await;
                         p2p_stream = None;
                     }
                     log::warn!("{:#}", err);
@@ -94,9 +94,9 @@ impl BlockSyncClient {
 }
 
 #[derive(Debug)]
-struct StreamError;
+struct RecoverableCtx;
 
-impl std::fmt::Display for StreamError {
+impl std::fmt::Display for RecoverableCtx {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "stream error")
     }
@@ -110,8 +110,8 @@ async fn run_once_without_p2p_stream(client: &mut BlockSyncClient) -> Result<()>
 
 async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStream) -> Result<()> {
     loop {
-        sync_l1(client).await?;
-        notify_new_tip(client).await?;
+        sync_l1(client).await.context(RecoverableCtx)?;
+        notify_new_tip(client).await.context(RecoverableCtx)?;
         let last_confirmed = client
             .store
             .get_last_confirmed_block_number_hash()
@@ -121,14 +121,9 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
             .block_hash(last_confirmed.block_hash())
             .block_number(last_confirmed.number())
             .build();
-        stream.send(request.as_bytes()).await.context(StreamError)?;
-        let response = stream
-            .recv()
-            .await
-            .context(StreamError)?
-            .context("unexpected end of stream")
-            .context(StreamError)?;
-        let response = P2PBlockSyncResponseReader::from_slice(&response).context(StreamError)?;
+        stream.send(request.as_bytes()).await?;
+        let response = stream.recv().await?.context("unexpected end of stream")?;
+        let response = P2PBlockSyncResponseReader::from_slice(&response)?;
         match response.to_enum() {
             P2PBlockSyncResponseUnionReader::Found(_) => break,
             P2PBlockSyncResponseUnionReader::TryAgain(_) => {}
@@ -137,8 +132,8 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
         tokio::time::sleep(Duration::from_secs(3)).await;
     }
     log::info!("receiving block sync messages from peer");
-    while let Some(msg) = stream.recv().await.context(StreamError)? {
-        BlockSyncReader::from_slice(msg.as_ref()).context(StreamError)?;
+    while let Some(msg) = stream.recv().await? {
+        BlockSyncReader::from_slice(msg.as_ref())?;
         let msg = BlockSync::new_unchecked(msg);
         apply_msg(client, msg).await?;
     }
@@ -150,11 +145,13 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
 async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
     match msg.to_enum() {
         BlockSyncUnion::Revert(r) => {
-            // TODO: check block hash.
             log::info!(
                 "received revert block {}",
                 r.number_hash().number().unpack()
             );
+
+            check_number_hash(client, &r.number_hash())?;
+
             let store_tx = client.store.begin_transaction();
             revert(client, &store_tx, r.number_hash().number().unpack()).await?;
             store_tx.commit()?;
@@ -171,7 +168,6 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             let store_block_hash = store_tx.get_block_hash_by_number(block_number)?;
             match store_block_hash {
                 None => {
-                    // TODO: check parent.
                     {
                         let mut chain = client.chain.lock().await;
                         chain
@@ -190,17 +186,18 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
                     notify_new_tip(client).await?;
                 }
                 Some(store_block_hash) => {
-                    // TODO: revert?
                     ensure!(store_block_hash == block_hash.into());
                 }
             }
         }
         BlockSyncUnion::Submitted(s) => {
-            // TODO: check block hash.
             log::info!(
                 "received submitted block {}",
                 s.number_hash().number().unpack()
             );
+
+            check_number_hash(client, &s.number_hash())?;
+
             let store_tx = client.store.begin_transaction();
             store_tx.set_block_submit_tx_hash(
                 s.number_hash().number().unpack(),
@@ -210,11 +207,13 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             store_tx.commit()?;
         }
         BlockSyncUnion::Confirmed(c) => {
-            // TODO: check block hash.
             log::info!(
                 "received confirmed block {}",
                 c.number_hash().number().unpack()
             );
+
+            check_number_hash(client, &c.number_hash())?;
+
             let store_tx = client.store.begin_transaction();
             store_tx.set_last_confirmed_block_number_hash(&c.number_hash().as_reader())?;
             store_tx.commit()?;
@@ -239,6 +238,11 @@ impl P2PStream {
         self.control
             .send_message_to(self.id, P2P_BLOCK_SYNC_PROTOCOL, msg)
             .await?;
+        Ok(())
+    }
+
+    async fn disconnect(&mut self) -> Result<()> {
+        self.control.disconnect(self.id).await?;
         Ok(())
     }
 }
@@ -283,5 +287,16 @@ async fn notify_new_tip(client: &mut BlockSyncClient) -> Result<()> {
             .notify_new_tip(new_tip, &Default::default())
             .await?;
     }
+    Ok(())
+}
+
+fn check_number_hash(client: &BlockSyncClient, number_hash: &NumberHash) -> Result<()> {
+    // Check block hash.
+    let number = number_hash.number().unpack();
+    let store_block_hash = client
+        .store
+        .get_block_hash_by_number(number)?
+        .context("get block hash")?;
+    ensure!(store_block_hash.as_slice() == number_hash.block_hash().as_slice());
     Ok(())
 }
