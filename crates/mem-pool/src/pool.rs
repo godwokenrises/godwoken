@@ -380,7 +380,7 @@ impl MemPool {
         Ok(())
     }
 
-    // TODO: optimization: collect on reset and cache.
+    // TODO: @sopium optimization: collect on reset and cache.
     fn collect_finalized_custodian_capacity(&self) -> Result<FinalizedCustodianCapacity> {
         let tip = self.current_tip.1;
         if tip == 0 {

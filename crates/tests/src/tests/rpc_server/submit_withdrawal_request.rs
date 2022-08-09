@@ -44,7 +44,7 @@ async fn test_submit_withdrawal_request() {
         .build();
     chain.produce_block(deposit_info_vec, vec![]).await.unwrap();
 
-    for _ in 0..DEFAULT_FINALITY_BLOCKS {
+    for _ in 0..DEFAULT_FINALITY_BLOCKS + 1 {
         produce_empty_block(&mut chain.inner).await.unwrap();
     }
 

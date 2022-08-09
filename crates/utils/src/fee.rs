@@ -124,7 +124,6 @@ pub async fn fill_tx_fee_with_local(
 }
 
 /// Add fee cell to tx skeleton
-// TODO: always use fill_tx_fee_with_local.
 pub async fn fill_tx_fee(
     tx_skeleton: &mut TransactionSkeleton,
     client: &CKBIndexerClient,

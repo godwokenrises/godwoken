@@ -84,7 +84,7 @@ type RegistryAddressJsonBytes = JsonBytes;
 const HEADER_NOT_FOUND_ERR_CODE: i64 = -32000;
 const INVALID_NONCE_ERR_CODE: i64 = -32001;
 const BUSY_ERR_CODE: i64 = -32006;
-// const CUSTODIAN_NOT_ENOUGH_CODE: i64 = -32007;
+const CUSTODIAN_NOT_ENOUGH_CODE: i64 = -32007;
 const INTERNAL_ERROR_ERR_CODE: i64 = -32099;
 const INVALID_REQUEST: i64 = -32600;
 const METHOD_NOT_AVAILABLE_ERR_CODE: i64 = -32601;
@@ -1239,7 +1239,6 @@ async fn execute_raw_l2transaction(
     Ok(run_result.into())
 }
 
-// TODO: refactor complex type.
 #[allow(clippy::type_complexity)]
 #[instrument(skip_all)]
 async fn submit_l2transaction(
@@ -1358,8 +1357,8 @@ async fn submit_l2transaction(
 #[instrument(skip_all)]
 async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
-    _generator: Data<Generator>,
-    _store: Data<Store>,
+    generator: Data<Generator>,
+    store: Data<Store>,
     in_queue_request_map: Data<Option<Arc<InQueueRequestMap>>>,
     submit_tx: Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
 ) -> Result<JsonH256, RpcError> {
@@ -1367,7 +1366,34 @@ async fn submit_withdrawal_request(
     let withdrawal = packed::WithdrawalRequestExtra::from_slice(&withdrawal_bytes)?;
     let withdrawal_hash = withdrawal.hash();
 
-    // TODO: verify remaining finalized custodian ckb/sudt capacity.
+    let last_valid = store.get_last_valid_tip_block_hash()?;
+    let last_valid = store
+        .get_block_number(&last_valid)?
+        .expect("tip block number");
+    let finalized_custodians = store
+        .get_block_post_finalized_custodian_capacity(last_valid)
+        .expect("finalized custodians");
+    let withdrawal_generator = gw_mem_pool::withdrawal::Generator::new(
+        generator.rollup_context(),
+        finalized_custodians.as_reader().unpack(),
+    );
+    if let Err(err) = withdrawal_generator.verify_remained_amount(&withdrawal.request()) {
+        return Err(RpcError::Full {
+            code: CUSTODIAN_NOT_ENOUGH_CODE,
+            message: format!(
+                "Withdrawal fund are still finalizing, please try again later. error: {}",
+                err
+            ),
+            data: None,
+        });
+    }
+    if let Err(err) = withdrawal_generator.verified_output(&withdrawal, &Default::default()) {
+        return Err(RpcError::Full {
+            code: INVALID_REQUEST,
+            message: err.to_string(),
+            data: None,
+        });
+    }
 
     let permit = submit_tx.try_reserve().map_err(|err| match err {
         mpsc::error::TrySendError::Closed(_) => RpcError::Provided {

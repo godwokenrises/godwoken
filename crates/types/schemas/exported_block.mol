@@ -24,7 +24,7 @@ union BlockSync {
 }
 
 table LocalBlock {
-    // TODO: optimization: only send transaction/withdrawal hashes like BIP 152.
+    // TODO: @sopium optimization: only send transaction/withdrawal hashes like BIP 152.
     block: L2Block,
     post_global_state: GlobalState,
     deposit_info_vec: DepositInfoVec,

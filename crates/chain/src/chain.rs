@@ -171,7 +171,6 @@ impl Chain {
             "Database chain_id must equals to rollup_script_hash"
         );
         let tip = store.get_tip_block()?;
-        // TODO: need to adapt to having local/submitted blocks.
         let last_global_state = store
             .get_block_post_global_state(&tip.hash().into())?
             .ok_or_else(|| anyhow!("can't find last global state"))?;
@@ -616,12 +615,12 @@ impl Chain {
                 .capacity
                 .checked_sub(w.raw().capacity().unpack().into())
                 .context("withdrawal not enough capacity")?;
-            finalized_custodians
-                .checked_sub_sudt(
-                    w.raw().sudt_script_hash().unpack(),
-                    w.raw().amount().unpack(),
-                )
-                .context("withdrawal not enough sudt amount")?;
+            let amount = w.raw().amount().unpack();
+            if amount != 0 {
+                finalized_custodians
+                    .checked_sub_sudt(w.raw().sudt_script_hash().unpack(), amount)
+                    .context("withdrawal not enough sudt amount")?;
+            }
         }
         db.set_block_post_finalized_custodian_capacity(
             block_number,

@@ -88,7 +88,7 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
             .raw_data()
     };
 
-    // TODO: fetch genesis transaction.
+    // TODO: @sopium fetch genesis transaction.
     init_genesis(&local_store, &config.genesis, None.unwrap(), secp_data)
         .with_context(|| "init genesis")?;
     let generator = {
