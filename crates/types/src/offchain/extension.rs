@@ -1,5 +1,5 @@
 use crate::packed::{
-    AccountMerkleState, Byte32, CompactMemBlock, GlobalState, GlobalStateV0, MemBlock,
+    AccountMerkleState, Byte32, CompactMemBlock, GlobalState, GlobalStateV1, MemBlock,
     RawWithdrawalRequest, TransactionKey, TxReceipt, WithdrawalKey, WithdrawalRequestExtra,
 };
 use crate::prelude::*;
@@ -54,7 +54,7 @@ impl TxReceipt {
 pub fn global_state_from_slice(slice: &[u8]) -> Result<GlobalState, VerificationError> {
     match GlobalState::from_slice(slice) {
         Ok(state) => Ok(state),
-        Err(_) => GlobalStateV0::from_slice(slice).map(Into::into),
+        Err(_) => GlobalStateV1::from_slice(slice).map(Into::into),
     }
 }
 

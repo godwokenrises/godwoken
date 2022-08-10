@@ -12,17 +12,35 @@ struct AccountMerkleState {
     count: Uint32,
 }
 
-struct GlobalStateV0 {
+// NOTE:
+//
+// special flags:
+// 
+// 1. u32::MAX (aka 4294967295) means a block without withdrawal is finalized
+// 2. u32::MAX - 1 (aka 4294967294) means all withdrawals in a block are finalized
+//
+// If a block's `withdrawal_index` is set to one of above value in the `GlobalState`,
+// we don't need to submit that raw block to verify `last_finalized_withdrawal`
+// transition.
+struct LastFinalizedWithdrawal {
+    block_number: Uint64,
+    withdrawal_index: Uint32,
+}
+
+struct GlobalStateV1 {
     rollup_config_hash: Byte32,
     account: AccountMerkleState,
     block: BlockMerkleState,
     reverted_block_root: Byte32,
     tip_block_hash: Byte32,
+    tip_block_timestamp: Uint64,
     last_finalized_block_number: Uint64,
     // 0: running, 1: halting
     status: byte,
+    version: byte,
 }
 
+// version 2
 struct GlobalState {
     rollup_config_hash: Byte32,
     account: AccountMerkleState,
@@ -31,6 +49,7 @@ struct GlobalState {
     tip_block_hash: Byte32,
     tip_block_timestamp: Uint64,
     last_finalized_block_number: Uint64,
+    last_finalized_withdrawal: LastFinalizedWithdrawal,
     // 0: running, 1: halting
     status: byte,
     version: byte,
@@ -357,16 +376,33 @@ table RollupSubmitBlock {
     reverted_block_hashes: Byte32Vec,
     reverted_block_proof: Bytes,
 }
+
 table RollupEnterChallenge {
     witness: ChallengeWitness,
 }
+
 table RollupCancelChallenge {}
+
 table RollupRevert {
     reverted_blocks: RawL2BlockVec, // sorted by block number
     block_proof: Bytes,
     reverted_block_proof: Bytes,
     new_tip_block: RawL2Block,
 }
+
+table RawL2BlockWithdrawals {
+    raw_l2block: RawL2Block,
+    withdrawals: WithdrawalRequestVec,
+    withdrawal_proof: CKBMerkleProof,
+}
+
+vector RawL2BlockWithdrawalsVec <RawL2BlockWithdrawals>;
+
+table RollupFinalizeWithdrawal {
+    block_withdrawals: RawL2BlockWithdrawalsVec,
+    block_proof: Bytes,
+}
+
 union RollupAction {
     // submit layer2 block
     RollupSubmitBlock,
@@ -376,6 +412,8 @@ union RollupAction {
     RollupCancelChallenge,
     // revert layer2 blocks and change status to running
     RollupRevert,
+    // finalize and generate user withdrawal cell
+    RollupFinalizeWithdrawal,
 }
 // --- end of Rollup ---
 
