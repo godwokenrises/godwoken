@@ -321,7 +321,7 @@ impl Generator {
             )?
             .ok_or(AccountError::RegistryAddressNotFound)?;
 
-        lock_algo.verify_withdrawal(account_script, withdrawal, address)?;
+        lock_algo.verify_withdrawal(self.rollup_context(), account_script, withdrawal, address)?;
 
         Ok(())
     }

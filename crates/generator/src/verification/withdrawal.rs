@@ -18,8 +18,6 @@ use crate::{
     Error,
 };
 
-use super::chain_id::ChainIdVerifier;
-
 pub struct WithdrawalVerifier<'a, S> {
     state: &'a S,
     rollup_context: &'a RollupContext,
@@ -51,10 +49,6 @@ impl<'a, S: State + CodeStore> WithdrawalVerifier<'a, S> {
         }
 
         let raw = withdrawal.request().raw();
-
-        // check chain_id
-        ChainIdVerifier::new(self.rollup_context.rollup_config.chain_id().unpack())
-            .verify(raw.chain_id().unpack())?;
 
         let account_script_hash: H256 = raw.account_script_hash().unpack();
         let sudt_script_hash: H256 = raw.sudt_script_hash().unpack();
