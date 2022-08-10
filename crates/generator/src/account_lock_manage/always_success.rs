@@ -34,6 +34,7 @@ impl LockAlgorithm for AlwaysSuccess {
 
     fn verify_withdrawal(
         &self,
+        _ctx: &RollupContext,
         _sender_script: Script,
         _withdrawal: &gw_types::packed::WithdrawalRequestExtra,
         _address: RegistryAddress,

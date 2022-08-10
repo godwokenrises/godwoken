@@ -202,10 +202,19 @@ impl LockAlgorithm for Secp256k1Eth {
 
     fn verify_withdrawal(
         &self,
+        ctx: &RollupContext,
         sender_script: Script,
         withdrawal: &WithdrawalRequestExtra,
         address: RegistryAddress,
     ) -> Result<(), LockAlgorithmError> {
+        let expected_chain_id = ctx.rollup_config.chain_id().unpack();
+        let chain_id = withdrawal.raw().chain_id().unpack();
+        if expected_chain_id != chain_id {
+            return Err(LockAlgorithmError::InvalidSignature(format!(
+                "Invalid chain id {} expected {}",
+                chain_id, expected_chain_id
+            )));
+        }
         let typed_message = Withdrawal::from_raw(
             withdrawal.raw(),
             withdrawal.owner_lock(),
@@ -214,9 +223,8 @@ impl LockAlgorithm for Secp256k1Eth {
         .map_err(|err| {
             LockAlgorithmError::InvalidSignature(format!("Invalid withdrawal format {}", err))
         })?;
-        let message = typed_message.eip712_message(
-            Self::domain_with_chain_id(withdrawal.raw().chain_id().unpack()).hash_struct(),
-        );
+        let message =
+            typed_message.eip712_message(Self::domain_with_chain_id(chain_id).hash_struct());
         self.verify_alone(
             sender_script.args().unpack(),
             withdrawal.request().signature().unpack(),
