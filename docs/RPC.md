@@ -27,6 +27,7 @@
     * [Method `gw_get_fee_config`](#method-gw_get_fee_config)
     * [Method `gw_get_mem_pool_state_root`](#method-gw_get_mem_pool_state_root)
     * [Method `gw_get_mem_pool_state_ready`](#method-gw_get_mem_pool_state_ready)
+    * [Method `gw_get_pending_tx_hashes`](#method-gw_get_pending_tx_hashes)
     * [Method `gw_get_node_info`](#method-gw_get_node_info)
     * [Method `gw_reload_config`](#method-gw_reload_config)
     * [Method `gw_submit_l2transaction`](#method-gw_submit_l2transaction)
@@ -1309,7 +1310,39 @@ Response
 }
 ```
 
+### Method `gw_get_pending_tx_hashes`
+* params: None
+* result: [`H256[]`](#type-h256)
 
+Get pending transaction hashes.
+
+#### Examples
+
+Request
+
+```json
+{
+    "id": 42,
+    "jsonrpc": "2.0",
+    "method": "gw_get_pending_tx_hashes",
+    "params": []
+}
+```
+
+Response:
+
+```json
+{
+    "id": 42,
+    "jsonrpc": "2.0",
+    "result": [
+        "0x37c705fbbe2660b6cec619fbfc7847752e0111044742a78e1b394f8da285baa3",
+        "0x4126f01bfaf17ffcbb1745c6e33830e66e2490e884c9f9c2d1e14bdbc99545de",
+        "0x7dcd3ddd4fbe1b6ee0129b3a9a4874dd909490da9952f0e17d2ee8d88ec49a2a",
+        "0xb0d96d3d73738f0dd4a66a03fb48fe11ea4d2195d8cb138885bb3a90fd29c7be"
+    ],
+}
+```
 
 ## RPC Types
 

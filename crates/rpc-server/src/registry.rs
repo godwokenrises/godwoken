@@ -338,6 +338,7 @@ impl Registry {
             .with_method("gw_get_transaction", get_transaction)
             .with_method("gw_get_transaction_receipt", get_transaction_receipt)
             .with_method("gw_get_withdrawal", get_withdrawal)
+            .with_method("gw_get_pending_tx_hashes", get_pending_tx_hashes)
             .with_method("gw_execute_l2transaction", execute_l2transaction)
             .with_method("gw_execute_raw_l2transaction", execute_raw_l2transaction)
             .with_method(
@@ -802,6 +803,15 @@ async fn get_transaction(
             status,
         },
     }))
+}
+
+async fn get_pending_tx_hashes(store: Data<Store>) -> Result<Vec<JsonH256>, RpcError> {
+    let snap = store.get_snapshot();
+    let tx_hashes = snap
+        .iter_mem_pool_transactions()
+        .map(|hash| JsonH256::from_slice(&hash))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(tx_hashes)
 }
 
 async fn is_request_in_queue(
