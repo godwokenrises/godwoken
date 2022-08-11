@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use gw_chain::chain::{Chain, RevertedL1Action};
 use gw_jsonrpc_types::ckb_jsonrpc_types::BlockNumber;
@@ -11,6 +13,7 @@ use gw_types::{
     packed::{NumberHash, Script},
     prelude::*,
 };
+use gw_utils::exponential_backoff::ExponentialBackoff;
 use tokio::sync::Mutex;
 
 use crate::chain_updater::ChainUpdater;
@@ -25,8 +28,21 @@ pub trait SyncL1Context {
 
 /// Sync with L1.
 ///
-/// Will reset last confirmed, last submitted and last valid blocks.
+/// Will reset last confirmed, last submitted and last valid blocks. Will update
+/// unknown blocks from L1. Automatically retry when failed.
 pub async fn sync_l1(ctx: &(dyn SyncL1Context + Sync + Send)) -> Result<()> {
+    let mut backoff = ExponentialBackoff::new(Duration::from_secs(1));
+    loop {
+        if let Err(err) = sync_l1_impl(ctx).await {
+            log::warn!("{:#}", err);
+            tokio::time::sleep(backoff.next_sleep()).await;
+        } else {
+            return Ok(());
+        }
+    }
+}
+
+async fn sync_l1_impl(ctx: &(dyn SyncL1Context + Sync + Send)) -> Result<()> {
     log::info!("syncing with L1");
     let store_tx = ctx.store().begin_transaction();
     let last_confirmed_local = store_tx
@@ -52,36 +68,8 @@ pub async fn sync_l1(ctx: &(dyn SyncL1Context + Sync + Send)) -> Result<()> {
         }
     }
 
-    // Try to confirm more blocks. Blocks submitted earlier (before restarting
-    // this godwoken node) may be confirmed now.
-    confirm_blocks(ctx, &store_tx, &mut last_confirmed_l1).await?;
-
     sync_l1_unknown(ctx, store_tx, last_confirmed_l1).await?;
 
-    Ok(())
-}
-
-async fn confirm_blocks(
-    ctx: &(dyn SyncL1Context + Send + Sync),
-    store_tx: &StoreTransaction,
-    last_confirmed: &mut u64,
-) -> Result<()> {
-    log::info!("confirm blocks");
-    loop {
-        let next = *last_confirmed + 1;
-        if let Some(tx_hash) = store_tx.get_block_submit_tx_hash(next) {
-            log::info!("try to confirme block {next}");
-            match ctx.rpc_client().ckb.get_transaction_status(tx_hash).await? {
-                Some(TxStatus::Committed) => {
-                    log::info!("block {next} confirmed");
-                }
-                _ => break,
-            }
-        } else {
-            break;
-        }
-        *last_confirmed = next;
-    }
     Ok(())
 }
 
@@ -92,7 +80,7 @@ async fn confirm_blocks(
 async fn sync_l1_unknown(
     ctx: &(dyn SyncL1Context + Send + Sync),
     store_tx: StoreTransaction,
-    last_confirmed: u64,
+    mut last_confirmed: u64,
 ) -> Result<()> {
     log::info!("syncing unknown L2 blocks from L1");
 
@@ -144,6 +132,16 @@ async fn sync_l1_unknown(
 
             log::info!("syncing L1 transaction {}", tx.tx_hash);
             if !reverted {
+                // It's likely that this transaction confirms the next block. In
+                // this case, we just update the last confirmed block.
+                if store_tx.get_block_submit_tx_hash(last_confirmed + 1)
+                    == Some(tx.tx_hash.0.into())
+                {
+                    last_confirmed += 1;
+                    log::info!("confirmed block {last_confirmed}");
+                    continue;
+                }
+
                 log::info!("L2 fork detected, reverting to L2 block {last_confirmed}");
                 revert(ctx, &store_tx, last_confirmed).await?;
                 // Commit transaction because chain_updater.update_single will open and commit new transactions.

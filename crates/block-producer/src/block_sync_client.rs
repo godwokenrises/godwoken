@@ -186,6 +186,7 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
                     notify_new_tip(client).await?;
                 }
                 Some(store_block_hash) => {
+                    // TODO: revert if fork.
                     ensure!(store_block_hash == block_hash.into());
                 }
             }

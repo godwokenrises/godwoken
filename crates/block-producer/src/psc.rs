@@ -130,64 +130,72 @@ impl ProduceSubmitConfirm {
         loop {
             match run(&mut self).await {
                 Ok(()) => return Ok(()),
-                Err(e) if is_should_revert_error(&e) => {
-                    log::warn!("Error: {:#}", e);
+                Err(e) => {
+                    log::warn!("{:#}", e);
+                    if let Some(should_revert) = e.downcast_ref::<ShouldRevertError>() {
+                        let revert_to = should_revert.0 - 1;
+                        log::info!("revert to block {revert_to}");
 
-                    let error_block = e.downcast::<BlockContext>()?.0;
-                    {
                         let store_tx = self.context.store.begin_transaction();
-                        log::info!("revert to block {}", error_block - 1);
-                        revert(&*self.context, &store_tx, error_block - 1).await?;
+                        revert(&*self.context, &store_tx, revert_to).await?;
                         store_tx.commit()?;
                     }
+                    if e.is::<ShouldResyncError>() || e.is::<ShouldRevertError>() {
+                        sync_l1(&*self.context).await?;
 
-                    sync_l1(&*self.context).await?;
-
-                    // Reset local_count, submitted_count and local_cells_manager.
-                    let snap = self.context.store.get_snapshot();
-                    let last_valid = snap.get_last_valid_tip_block()?.raw().number().unpack();
-                    let last_submitted_nh = snap
-                        .get_last_submitted_block_number_hash()
-                        .expect("get last submitted");
-                    let last_submitted = last_submitted_nh.number().unpack();
-                    let last_confirmed = snap
-                        .get_last_confirmed_block_number_hash()
-                        .expect("get last confirmed")
-                        .number()
-                        .unpack();
-                    ensure!(last_submitted == last_confirmed);
-
-                    if let Some(ref sync_server) = self.context.block_sync_server_state {
-                        let mut sync_server = sync_server.lock().unwrap();
-                        sync_server.publish_revert(
-                            Revert::new_builder().number_hash(last_submitted_nh).build(),
+                        // Reset local_count, submitted_count and local_cells_manager.
+                        let snap = self.context.store.get_snapshot();
+                        let last_valid = snap.get_last_valid_tip_block()?.raw().number().unpack();
+                        let last_submitted_nh = snap
+                            .get_last_submitted_block_number_hash()
+                            .expect("get last submitted");
+                        let last_submitted = last_submitted_nh.number().unpack();
+                        let last_confirmed = snap
+                            .get_last_confirmed_block_number_hash()
+                            .expect("get last confirmed")
+                            .number()
+                            .unpack();
+                        ensure!(last_submitted == last_confirmed);
+                        log::info!(
+                            "last valid: {}, last_submitted: {}, last_confirmed: {}",
+                            last_valid,
+                            last_submitted,
+                            last_confirmed
                         );
-                        for b in last_confirmed + 1..=last_valid {
-                            publish_local_block(&mut sync_server, &snap, b)?;
-                        }
-                    }
-
-                    {
-                        let mut local_cells_manager = self.context.local_cells_manager.lock().await;
-                        local_cells_manager.reset();
-                        for b in last_confirmed + 1..=last_valid {
-                            let deposits =
-                                snap.get_block_deposit_info_vec(b).expect("deposit info");
-                            let deposits = deposits.into_iter().map(|d| d.cell());
-                            for c in deposits {
-                                local_cells_manager.lock_cell(c.out_point());
+                        if let Some(ref sync_server) = self.context.block_sync_server_state {
+                            let mut sync_server = sync_server.lock().unwrap();
+                            sync_server.publish_revert(
+                                Revert::new_builder().number_hash(last_submitted_nh).build(),
+                            );
+                            for b in last_confirmed + 1..=last_valid {
+                                publish_local_block(&mut sync_server, &snap, b)?;
                             }
                         }
-                        let new_tip = snap.get_last_valid_tip_block_hash()?;
-                        let mut mem_pool = self.context.mem_pool.lock().await;
-                        mem_pool
-                            .notify_new_tip(new_tip, &local_cells_manager)
-                            .await?;
+
+                        {
+                            let mut local_cells_manager =
+                                self.context.local_cells_manager.lock().await;
+                            local_cells_manager.reset();
+                            for b in last_confirmed + 1..=last_valid {
+                                let deposits =
+                                    snap.get_block_deposit_info_vec(b).expect("deposit info");
+                                let deposits = deposits.into_iter().map(|d| d.cell());
+                                for c in deposits {
+                                    local_cells_manager.lock_cell(c.out_point());
+                                }
+                            }
+                            let new_tip = snap.get_last_valid_tip_block_hash()?;
+                            let mut mem_pool = self.context.mem_pool.lock().await;
+                            mem_pool
+                                .notify_new_tip(new_tip, &local_cells_manager)
+                                .await?;
+                        }
+                        self.local_count = last_valid - last_submitted;
+                        self.submitted_count = last_submitted - last_confirmed;
+                    } else {
+                        bail!(e);
                     }
-                    self.local_count = last_valid - last_submitted;
-                    self.submitted_count = last_submitted - last_confirmed;
                 }
-                Err(e) => return Err(e),
             }
         }
     }
@@ -257,13 +265,17 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
         if !submitting && state.local_count > 0 && state.submitted_count < config.submitted_limit {
             submitting = true;
             let context = state.context.clone();
+            // The first submission should not have any unknown cell error. If
+            // it does, it means that previous block is probably not confirmed
+            // anymore, and we should sync with L1 again.
+            let is_first = state.submitted_count == 0;
             submit_handle.replace_with(tokio::spawn(async move {
                 loop {
-                    match submit_next_block(&context).await {
+                    match submit_next_block(&context, is_first).await {
                         Ok(nh) => return Ok(nh),
                         Err(err) => {
-                            if is_should_revert_error(&err) {
-                                return Err(err);
+                            if err.is::<ShouldResyncError>() || err.is::<ShouldRevertError>() {
+                                bail!(err);
                             }
                             log::warn!("failed to submit next block: {:#}", err);
                             // TOOO: backoff.
@@ -281,8 +293,8 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                     match confirm_next_block(&context).await {
                         Ok(nh) => break Ok(nh),
                         Err(err) => {
-                            if is_should_revert_error(&err) {
-                                return Err(err);
+                            if err.is::<ShouldResyncError>() || err.is::<ShouldRevertError>() {
+                                bail!(err);
                             }
                             log::warn!("failed to confirm next block: {:#}", err);
                             // TOOO: backoff.
@@ -375,7 +387,7 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
     Ok(())
 }
 
-async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
+async fn submit_next_block(ctx: &PSCContext, is_first: bool) -> Result<NumberHash> {
     let snap = ctx.store.get_snapshot();
     // L2 block number to submit.
     let block_number = snap
@@ -433,7 +445,13 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
             .block_producer
             .compose_submit_tx(args)
             .await
-            .context(BlockContext(block_number))?;
+            .map_err(|err| {
+                if err.is::<TransactionSizeError>() {
+                    err.context(ShouldRevertError(block_number))
+                } else {
+                    err
+                }
+            })?;
 
         let store_tx = ctx.store.begin_transaction();
         store_tx.set_block_submit_tx(block_number, &tx.as_reader())?;
@@ -468,9 +486,36 @@ async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
         hex::encode(tx.hash()),
         block_number
     );
-    send_transaction_or_check_inputs(&ctx.rpc_client, &tx, false)
-        .await
-        .context(BlockContext(block_number))?;
+    if let Err(e) = send_transaction_or_check_inputs(&ctx.rpc_client, &tx).await {
+        if e.is::<UnknownCellError>() {
+            if is_first {
+                bail!(e.context(ShouldResyncError));
+            }
+            let deposits = ctx
+                .store
+                .get_block_deposit_info_vec(block_number)
+                .context("get deposit info vec")?;
+            for d in deposits {
+                let out_point = d.cell().out_point();
+                if ctx
+                    .rpc_client
+                    .ckb
+                    .get_transaction_block_number(out_point.tx_hash().unpack())
+                    .await?
+                    .is_none()
+                {
+                    bail!(e
+                        .context(ShouldRevertError(block_number))
+                        .context(format!("deposit cell {} is no longer live", out_point)));
+                }
+            }
+            bail!(e);
+        } else if e.is::<DeadCellError>() {
+            bail!(e.context(ShouldRevertError(block_number)));
+        } else {
+            bail!(e);
+        }
+    }
     log::info!("tx sent");
     Ok(NumberHash::new_builder()
         .block_hash(block_hash.pack())
@@ -494,7 +539,7 @@ async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<(
         };
         if should_resend {
             log::info!("resend transaction 0x{}", hex::encode(tx.hash()));
-            send_transaction_or_check_inputs(rpc_client, tx, true).await?;
+            send_transaction_or_check_inputs(rpc_client, tx).await?;
             last_sent = Instant::now();
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
@@ -532,7 +577,15 @@ async fn confirm_next_block(context: &PSCContext) -> Result<NumberHash> {
     drop(snap);
     poll_tx_confirmed(&context.rpc_client, &tx)
         .await
-        .context(BlockContext(block_number))?;
+        .map_err(|e| {
+            if e.is::<UnknownCellError>() {
+                e.context(ShouldResyncError)
+            } else if e.is::<DeadCellError>() {
+                e.context(ShouldRevertError(block_number))
+            } else {
+                e
+            }
+        })?;
     log::info!("block {} confirmed", block_number);
     context.local_cells_manager.lock().await.confirm_tx(&tx);
     Ok(NumberHash::new_builder()
@@ -606,28 +659,16 @@ async fn check_cell(rpc_client: &RPCClient, out_point: &OutPoint) -> Result<()> 
 ///
 /// Will check input cells if sending fails with `TransactionFailedToResolve`.
 /// If any input cell is dead, the error returned will be a `DeadCellError`.
-///
-/// If `strict` is true, when any input cell is output of a transaction that is
-/// not confirmed, the returned error will be a `UnknownCellError`.
-///
-/// If `strict` is false, having input cells that are output of unconfirmed
-/// transactions is not an error.
 async fn send_transaction_or_check_inputs(
     rpc_client: &RPCClient,
     tx: &Transaction,
-    strict: bool,
 ) -> anyhow::Result<()> {
     if let Err(mut err) = rpc_client.send_transaction(tx).await {
         let code = get_jsonrpc_error_code(&err);
         if code == Some(CkbRpcError::TransactionFailedToResolve as i64) {
             if let Err(e) = check_tx_input(rpc_client, tx).await {
-                if !strict && e.is::<UnknownCellError>() {
-                    // This way err is not `UnknownCellError`.
-                    err = err.context(e);
-                } else {
-                    // If e is some specific error, err is too.
-                    err = e.context(err);
-                }
+                err = e.context(err);
+                // Now, ∀T, e.is::<T>() -> err.is::<T>().
             }
             Err(err)
         } else if code == Some(CkbRpcError::PoolRejectedDuplicatedTransaction as i64) {
@@ -641,16 +682,21 @@ async fn send_transaction_or_check_inputs(
 }
 
 #[derive(Debug)]
-struct BlockContext(u64);
+struct ShouldRevertError(u64);
 
-impl Display for BlockContext {
+impl Display for ShouldRevertError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "block {}", self.0)
+        write!(f, "should revert block {}", self.0)
     }
 }
 
-fn is_should_revert_error(e: &anyhow::Error) -> bool {
-    e.is::<DeadCellError>() || e.is::<UnknownCellError>() || e.is::<TransactionSizeError>()
+#[derive(Debug)]
+struct ShouldResyncError;
+
+impl Display for ShouldResyncError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "should resync")
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
