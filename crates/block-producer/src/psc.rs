@@ -22,6 +22,7 @@ use gw_types::{
 };
 use gw_utils::{abort_on_drop::spawn_abort_on_drop, local_cells::LocalCellsManager, since::Since};
 use tokio::{sync::Mutex, time::Instant};
+use tracing::instrument;
 
 use crate::{
     block_producer::{BlockProducer, ComposeSubmitTxArgs, TransactionSizeError},
@@ -392,6 +393,16 @@ async fn submit_next_block(ctx: &PSCContext, is_first: bool) -> Result<NumberHas
         .number()
         .unpack()
         + 1;
+    submit_block(ctx, snap, is_first, block_number).await
+}
+
+#[instrument(skip(ctx, snap, is_first))]
+async fn submit_block(
+    ctx: &PSCContext,
+    snap: StoreSnapshot,
+    is_first: bool,
+    block_number: u64,
+) -> Result<NumberHash> {
     // L2 block hash to submit.
     let block_hash = snap
         .get_block_hash_by_number(block_number)?
@@ -453,10 +464,7 @@ async fn submit_next_block(ctx: &PSCContext, is_first: bool) -> Result<NumberHas
         store_tx.set_block_submit_tx(block_number, &tx.as_reader())?;
         store_tx.commit()?;
 
-        log::info!(
-            "generated submission transaction for block {}",
-            block_number
-        );
+        log::info!("generated submission transaction");
 
         tx
     };
@@ -498,11 +506,7 @@ async fn submit_next_block(ctx: &PSCContext, is_first: bool) -> Result<NumberHas
         }
     }
 
-    log::info!(
-        "sending transaction 0x{} to submit block {}",
-        hex::encode(tx.hash()),
-        block_number
-    );
+    log::info!("sending transaction 0x{}", hex::encode(tx.hash()));
     if let Err(e) = send_transaction_or_check_inputs(&ctx.rpc_client, &tx).await {
         if e.is::<UnknownCellError>() {
             if is_first {
@@ -515,7 +519,7 @@ async fn submit_next_block(ctx: &PSCContext, is_first: bool) -> Result<NumberHas
             bail!(e);
         }
     }
-    log::info!("tx sent for block {block_number}");
+    log::info!("tx sent");
     Ok(NumberHash::new_builder()
         .block_hash(block_hash.pack())
         .number(block_number.pack())
@@ -567,6 +571,15 @@ async fn confirm_next_block(context: &PSCContext) -> Result<NumberHash> {
         .number()
         .unpack()
         + 1;
+    confirm_block(context, snap, block_number).await
+}
+
+#[instrument(skip(context, snap))]
+async fn confirm_block(
+    context: &PSCContext,
+    snap: StoreSnapshot,
+    block_number: u64,
+) -> Result<NumberHash, anyhow::Error> {
     let block_hash = snap
         .get_block_hash_by_number(block_number)?
         .expect("block hash");
@@ -585,7 +598,7 @@ async fn confirm_next_block(context: &PSCContext) -> Result<NumberHash> {
                 e
             }
         })?;
-    log::info!("block {} confirmed", block_number);
+    log::info!("block confirmed");
     context.local_cells_manager.lock().await.confirm_tx(&tx);
     Ok(NumberHash::new_builder()
         .block_hash(block_hash.pack())
