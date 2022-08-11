@@ -698,7 +698,7 @@ impl Generator {
         max_cycles: u64,
         cycles_pool: Option<&mut CyclesPool>,
     ) -> Result<RunResult, TransactionError> {
-        let run_result = self.unchecked_execute_transaction(
+        let args = self.prepare_machine_run_args(
             chain,
             state,
             block_info,
@@ -706,12 +706,16 @@ impl Generator {
             max_cycles,
             cycles_pool,
         )?;
-        Ok(run_result)
+
+        let run_result = self.machine_run(args)?;
+        self.handle_run_result(state, block_info, raw_tx, run_result)
     }
 
-    /// execute a layer2 tx, doesn't check exit code
+    /// execute a layer2 tx without handle run result
+    /// for custom godwoken-scripts contract tests only
+    #[cfg(feature = "unhandled-execution")]
     #[instrument(skip_all, fields(block = block_info.number().unpack(), tx_hash = %raw_tx.hash().pack()))]
-    pub fn unchecked_execute_transaction<S: State + CodeStore, C: ChainView>(
+    pub fn unhandled_execute_transaction<S: State + CodeStore, C: ChainView>(
         &self,
         chain: &C,
         state: &S,
@@ -720,6 +724,31 @@ impl Generator {
         max_cycles: u64,
         cycles_pool: Option<&mut CyclesPool>,
     ) -> Result<RunResult, TransactionError> {
+        let args = self.prepare_machine_run_args(
+            chain,
+            state,
+            block_info,
+            raw_tx,
+            max_cycles,
+            cycles_pool,
+        )?;
+
+        self.machine_run(args)
+    }
+
+    pub fn backend_manage(&self) -> &BackendManage {
+        &self.backend_manage
+    }
+
+    fn prepare_machine_run_args<'a, S: State + CodeStore, C: ChainView>(
+        &'a self,
+        chain: &'a C,
+        state: &'a S,
+        block_info: &'a BlockInfo,
+        raw_tx: &'a RawL2Transaction,
+        max_cycles: u64,
+        cycles_pool: Option<&'a mut CyclesPool>,
+    ) -> Result<MachineRunArgs<'a, C, S>, TransactionError> {
         let account_id = raw_tx.to_id().unpack();
         let script_hash = state.get_script_hash(account_id)?;
         let backend = self
@@ -736,12 +765,7 @@ impl Generator {
             cycles_pool,
         };
 
-        let run_result: RunResult = self.machine_run(args)?;
-        self.handle_run_result(state, block_info, raw_tx, run_result)
-    }
-
-    pub fn backend_manage(&self) -> &BackendManage {
-        &self.backend_manage
+        Ok(args)
     }
 
     pub fn get_polyjuice_creator_id<S: State + CodeStore>(

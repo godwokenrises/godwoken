@@ -1054,7 +1054,7 @@ async fn execute_l2transaction(
         ctx.generator.check_transaction_signature(&state, &tx)?;
         // execute tx
         let raw_tx = tx.raw();
-        let run_result = ctx.generator.unchecked_execute_transaction(
+        let run_result = ctx.generator.execute_transaction(
             &chain_view,
             &state,
             &block_info,
@@ -1201,7 +1201,7 @@ async fn execute_raw_l2transaction(
                         .map_err(|err| anyhow!("check balance err {}", err))?;
                 }
 
-                ctx.generator.unchecked_execute_transaction(
+                ctx.generator.execute_transaction(
                     &chain_view,
                     &state,
                     &block_info,
@@ -1223,7 +1223,7 @@ async fn execute_raw_l2transaction(
                         .map_err(|err| anyhow!("check balance err {}", err))?;
                 }
 
-                ctx.generator.unchecked_execute_transaction(
+                ctx.generator.execute_transaction(
                     &chain_view,
                     &state,
                     &block_info,
