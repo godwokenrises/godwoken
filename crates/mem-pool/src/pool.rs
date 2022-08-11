@@ -1118,7 +1118,7 @@ impl MemPool {
 
         // execute tx
         let raw_tx = tx.raw();
-        let run_result = generator.unchecked_execute_transaction(
+        let run_result = generator.execute_transaction(
             &chain_view,
             state,
             block_info,
