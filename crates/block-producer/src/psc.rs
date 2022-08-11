@@ -348,25 +348,21 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
         .await?;
 
     log::info!(
-        "produced new block #{} (txs: {}, deposits: {}, withdrawals: {})",
+        "produced new block #{} (txs: {}, deposits: {}, withdrawals: {}, capacity: {})",
         number,
         block_txs,
         deposit_cells.len(),
         block_withdrawals,
+        remaining_capacity.capacity,
     );
 
-    log::info!(
-        "save capacity: block: {}, capacity: {}",
-        number,
-        remaining_capacity.capacity
-    );
     store_tx.set_block_post_finalized_custodian_capacity(
         number,
         &remaining_capacity.pack().as_reader(),
     )?;
 
     store_tx.commit()?;
-    // Lock collected deposits and custodians.
+    // Lock collected deposits.
     let mut local_cells_manager = ctx.local_cells_manager.lock().await;
     for d in deposit_cells {
         local_cells_manager.lock_cell(d.cell.out_point);
@@ -481,6 +477,27 @@ async fn submit_next_block(ctx: &PSCContext, is_first: bool) -> Result<NumberHas
         }
     }
 
+    {
+        // Deposits should be live.
+        let deposits = ctx
+            .store
+            .get_block_deposit_info_vec(block_number)
+            .context("get deposit info vec")?;
+        for d in deposits {
+            let out_point = d.cell().out_point();
+            if !matches!(
+                ctx.rpc_client
+                    .get_cell(out_point.clone())
+                    .await?
+                    .map(|c| c.status),
+                Some(CellStatus::Live)
+            ) {
+                bail!(anyhow::Error::new(ShouldRevertError(block_number))
+                    .context(format!("deposit cell {} is no longer live", out_point)));
+            }
+        }
+    }
+
     log::info!(
         "sending transaction 0x{} to submit block {}",
         hex::encode(tx.hash()),
@@ -491,24 +508,6 @@ async fn submit_next_block(ctx: &PSCContext, is_first: bool) -> Result<NumberHas
             if is_first {
                 bail!(e.context(ShouldResyncError));
             }
-            let deposits = ctx
-                .store
-                .get_block_deposit_info_vec(block_number)
-                .context("get deposit info vec")?;
-            for d in deposits {
-                let out_point = d.cell().out_point();
-                if ctx
-                    .rpc_client
-                    .ckb
-                    .get_transaction_block_number(out_point.tx_hash().unpack())
-                    .await?
-                    .is_none()
-                {
-                    bail!(e
-                        .context(ShouldRevertError(block_number))
-                        .context(format!("deposit cell {} is no longer live", out_point)));
-                }
-            }
             bail!(e);
         } else if e.is::<DeadCellError>() {
             bail!(e.context(ShouldRevertError(block_number)));
@@ -516,7 +515,7 @@ async fn submit_next_block(ctx: &PSCContext, is_first: bool) -> Result<NumberHas
             bail!(e);
         }
     }
-    log::info!("tx sent");
+    log::info!("tx sent for block {block_number}");
     Ok(NumberHash::new_builder()
         .block_hash(block_hash.pack())
         .number(block_number.pack())
@@ -681,14 +680,9 @@ async fn send_transaction_or_check_inputs(
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("should revert block {0}")]
 struct ShouldRevertError(u64);
-
-impl Display for ShouldRevertError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "should revert block {}", self.0)
-    }
-}
 
 #[derive(Debug)]
 struct ShouldResyncError;
