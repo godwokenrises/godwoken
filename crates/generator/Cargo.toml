@@ -10,6 +10,7 @@ edition = "2018"
 default = ["detect-asm"]
 detect-asm = ["ckb-vm/detect-asm", "ckb-vm/aot"]
 enable-always-success-lock = []
+unhandled-execution = []
 
 [dependencies]
 gw-types = { path = "../types" }
