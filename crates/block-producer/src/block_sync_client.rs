@@ -153,9 +153,11 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             check_number_hash(client, &r.number_hash())?;
 
             let store_tx = client.store.begin_transaction();
-            revert(client, &store_tx, r.number_hash().number().unpack()).await?;
+            let nh = r.number_hash();
+            let nh = &nh.as_reader();
+            store_tx.set_last_confirmed_block_number_hash(nh)?;
+            store_tx.set_last_submitted_block_number_hash(nh)?;
             store_tx.commit()?;
-            notify_new_tip(client).await?;
         }
         BlockSyncUnion::LocalBlock(l) => {
             let block_hash = l.block().hash();
@@ -166,30 +168,33 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             );
             let store_tx = client.store.begin_transaction();
             let store_block_hash = store_tx.get_block_hash_by_number(block_number)?;
-            match store_block_hash {
-                None => {
-                    {
-                        let mut chain = client.chain.lock().await;
-                        chain
-                            .update_local(
-                                &store_tx,
-                                l.block(),
-                                l.deposit_info_vec(),
-                                l.deposit_asset_scripts().into_iter().collect(),
-                                l.withdrawals().into_iter().collect(),
-                                l.post_global_state(),
-                            )
-                            .await?;
-                        chain.calculate_and_store_finalized_custodians(&store_tx, block_number)?;
-                        store_tx.commit()?;
-                    }
-                    notify_new_tip(client).await?;
-                }
-                Some(store_block_hash) => {
-                    // TODO: revert if fork.
-                    ensure!(store_block_hash == block_hash.into());
+            if let Some(store_block_hash) = store_block_hash {
+                if store_block_hash != block_hash.into() {
+                    log::info!("revert to {}", block_number - 1);
+                    revert(client, &store_tx, block_number - 1).await?;
+                    store_tx.commit()?;
+                } else {
+                    log::info!("block already known");
+                    return Ok(());
                 }
             }
+            {
+                log::info!("update local block");
+                let mut chain = client.chain.lock().await;
+                chain
+                    .update_local(
+                        &store_tx,
+                        l.block(),
+                        l.deposit_info_vec(),
+                        l.deposit_asset_scripts().into_iter().collect(),
+                        l.withdrawals().into_iter().collect(),
+                        l.post_global_state(),
+                    )
+                    .await?;
+                chain.calculate_and_store_finalized_custodians(&store_tx, block_number)?;
+                store_tx.commit()?;
+            }
+            notify_new_tip(client).await?;
         }
         BlockSyncUnion::Submitted(s) => {
             log::info!(
