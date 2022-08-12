@@ -97,7 +97,7 @@ async fn get_github_config(url: &str, token: &str) -> Result<Config> {
     Ok(config)
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DynamicConfigReloadResponse {
     old: DynamicConfig,
     new: DynamicConfig,

@@ -322,9 +322,9 @@ impl BlockProducer {
             return Ok(());
         }
 
-        return Err(anyhow!(
+        Err(anyhow!(
             "[produce_next_block] produce block reach max retry"
-        ));
+        ))
     }
 
     #[instrument(skip_all, fields(retry_count = retry_count))]
