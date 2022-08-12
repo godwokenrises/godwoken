@@ -1042,7 +1042,7 @@ async fn check_rollup_config_cell(
         .await?
         .and_then(|cell_with_status| cell_with_status.cell)
         .ok_or_else(|| anyhow!("can't find rollup config cell"))?;
-    let cell_data = RollupConfig::from_slice(&rollup_config_cell.data.to_vec())?;
+    let cell_data = RollupConfig::from_slice(&rollup_config_cell.data)?;
     let eoa_set = rollup_config
         .allowed_eoa_type_hashes()
         .into_iter()
