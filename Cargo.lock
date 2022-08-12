@@ -455,21 +455,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "chrono"
-version = "0.4.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6127248204b9aba09a362f6c930ef6a78f2c1b2215f8a7b398c06e1083f17af0"
-dependencies = [
- "js-sys",
- "num-integer",
- "num-traits",
- "serde",
- "wasm-bindgen",
- "time",
- "winapi",
-]
-
-[[package]]
 name = "cipher"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1103,8 +1088,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6ee87af31d84ef885378aebca32be3d682b0e0dc119d5b4860a2c5bb5046730"
 dependencies = [
- "serde",
- "uuid 0.8.2",
+ "uuid",
 ]
 
 [[package]]
@@ -2821,16 +2805,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "num-integer"
-version = "0.1.45"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "225d3389fb3509a24c93f5c29eb6bde2586b98d9f016636dff58d7c6f7569cd9"
-dependencies = [
- "autocfg",
- "num-traits",
-]
-
-[[package]]
 name = "num-traits"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3866,79 +3840,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93f6841e709003d68bb2deee8c343572bf446003ec20a583e76f7b15cebf3711"
 
 [[package]]
-name = "sentry-backtrace"
-version = "0.23.0"
-source = "git+https://github.com/getsentry/sentry-rust?rev=df694a49595d6890c510d80b85cfbb4b5ae6159a#df694a49595d6890c510d80b85cfbb4b5ae6159a"
-dependencies = [
- "backtrace",
- "lazy_static",
- "regex",
- "sentry-core",
-]
-
-[[package]]
-name = "sentry-contexts"
-version = "0.23.0"
-source = "git+https://github.com/getsentry/sentry-rust?rev=df694a49595d6890c510d80b85cfbb4b5ae6159a#df694a49595d6890c510d80b85cfbb4b5ae6159a"
-dependencies = [
- "hostname",
- "libc",
- "rustc_version",
- "sentry-core",
- "uname",
-]
-
-[[package]]
-name = "sentry-core"
-version = "0.23.0"
-source = "git+https://github.com/getsentry/sentry-rust?rev=df694a49595d6890c510d80b85cfbb4b5ae6159a#df694a49595d6890c510d80b85cfbb4b5ae6159a"
-dependencies = [
- "chrono",
- "lazy_static",
- "rand 0.8.5",
- "sentry-types",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "sentry-panic"
-version = "0.23.0"
-source = "git+https://github.com/getsentry/sentry-rust?rev=df694a49595d6890c510d80b85cfbb4b5ae6159a#df694a49595d6890c510d80b85cfbb4b5ae6159a"
-dependencies = [
- "sentry-backtrace",
- "sentry-core",
-]
-
-[[package]]
-name = "sentry-tracing"
-version = "0.23.0"
-source = "git+https://github.com/getsentry/sentry-rust?rev=df694a49595d6890c510d80b85cfbb4b5ae6159a#df694a49595d6890c510d80b85cfbb4b5ae6159a"
-dependencies = [
- "sentry-core",
- "tracing-core",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "sentry-types"
-version = "0.23.0"
-source = "git+https://github.com/getsentry/sentry-rust?rev=df694a49595d6890c510d80b85cfbb4b5ae6159a#df694a49595d6890c510d80b85cfbb4b5ae6159a"
-dependencies = [
- "chrono",
- "debugid",
- "getrandom 0.2.7",
- "hex",
- "serde",
- "serde_json",
- "thiserror",
- "url",
- "uuid",
-]
-
-[[package]]
-=======
->>>>>>> 94eea86d (feat: remove sentry)
 name = "serde"
 version = "1.0.143"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4809,10 +4710,6 @@ name = "uuid"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
-dependencies = [
- "getrandom 0.2.7",
- "serde",
-]
 
 [[package]]
 name = "valuable"
