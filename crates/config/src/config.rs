@@ -363,7 +363,7 @@ pub struct DepositTimeoutConfig {
     /// Only package deposits whose epoch timeout >= deposit_epoch_timeout.
     pub deposit_epoch_timeout: u64,
     /// Only package deposits whose block number <= tip - deposit_minimum_blocks.
-    pub deposit_minimum_blocks: u64,
+    pub deposit_minimal_blocks: u64,
 }
 
 impl Default for DepositTimeoutConfig {
@@ -375,7 +375,7 @@ impl Default for DepositTimeoutConfig {
             deposit_timestamp_timeout: 1_200_000,
             // 1 epoch, about 4 hours, this option is supposed not actually used, so we simply set a value
             deposit_epoch_timeout: 1,
-            deposit_minimum_blocks: 0,
+            deposit_minimal_blocks: 0,
         }
     }
 }

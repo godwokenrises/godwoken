@@ -82,7 +82,7 @@ impl MemPoolProvider for DefaultMemPoolProvider {
                 self.mem_block_config.max_deposits,
                 self.mem_block_config
                     .deposit_timeout_config
-                    .deposit_minimum_blocks,
+                    .deposit_minimal_blocks,
                 MIN_CKB_DEPOSIT_CAPACITY,
                 MIN_SUDT_DEPOSIT_CAPACITY,
                 local_cells_manager.dead_cells(),
