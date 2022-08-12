@@ -163,6 +163,8 @@ pub enum TransactionError {
     InsufficientPoolCycles { cycles: RunResultCycles, limit: u64 },
     #[error("Exceeded max block cycles: cycles {cycles:?}, limit {limit}")]
     ExceededMaxBlockCycles { cycles: RunResultCycles, limit: u64 },
+    #[error("Convert to UTF-8 error: {0}")]
+    Utf8Error(std::str::Utf8Error),
 }
 
 impl From<VMError> for TransactionError {
