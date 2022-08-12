@@ -408,6 +408,7 @@ impl RPCClient {
     pub async fn query_deposit_cells(
         &self,
         count: usize,
+        deposit_minimal_blocks: u64,
         min_ckb_deposit_capacity: u64,
         min_sudt_deposit_capacity: u64,
         dead_cells: &HashSet<OutPoint>,
@@ -435,7 +436,7 @@ impl RPCClient {
             lock.into()
         };
         let from_block = tip_number.saturating_sub(BLOCKS_TO_SEARCH);
-        let to_block = u64::max_value();
+        let to_block = tip_number.saturating_sub(deposit_minimal_blocks);
 
         log::debug!(target: "collect-deposit-cells", "start searching deposit cells from_block {} to_block {} count {} min_ckb_deposit_capacity {} min_sudt_deposit_capacity {}",
              from_block, to_block, count, min_ckb_deposit_capacity, min_sudt_deposit_capacity);

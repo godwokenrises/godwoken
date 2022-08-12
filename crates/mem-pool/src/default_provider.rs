@@ -77,10 +77,12 @@ impl MemPoolProvider for DefaultMemPoolProvider {
         &self,
         local_cells_manager: &LocalCellsManager,
     ) -> Result<Vec<DepositInfo>> {
-        let rpc_client = self.rpc_client.clone();
-        rpc_client
+        self.rpc_client
             .query_deposit_cells(
                 self.mem_block_config.max_deposits,
+                self.mem_block_config
+                    .deposit_timeout_config
+                    .deposit_minimum_blocks,
                 MIN_CKB_DEPOSIT_CAPACITY,
                 MIN_SUDT_DEPOSIT_CAPACITY,
                 local_cells_manager.dead_cells(),
