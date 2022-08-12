@@ -1271,9 +1271,8 @@ impl MemPool {
         let db = self.store.begin_transaction();
         self.remove_unexecutables(&mut mem_state, &db).await?;
 
-        // reset cycles pool, don't restrict tx for readonly
-        // TODO: @zeroqn refactor cycles_pool to Option for readonly node
-        self.cycles_pool = CyclesPool::new(u64::MAX, SyscallCyclesConfig::all_zero());
+        // reset cycles pool available cycles
+        self.cycles_pool.reset_available_cycles_to_limit();
 
         // prepare next mem block
         self.try_package_more_withdrawals(&mem_state, &mut withdrawals);
