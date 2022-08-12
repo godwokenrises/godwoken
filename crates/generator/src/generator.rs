@@ -130,10 +130,6 @@ impl CyclesPool {
 
         opt_available_cycles
     }
-
-    pub fn reset_available_cycles_to_limit(&mut self) {
-        self.available_cycles = self.limit
-    }
 }
 
 pub struct MachineRunArgs<'a, C, S> {
