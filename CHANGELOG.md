@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 - Decouple block producing, submission and confirming [#776](https://github.com/nervosnetwork/godwoken/pull/776)
 - Support non EIP-155 transaction [#777](https://github.com/nervosnetwork/godwoken/pull/777)
 
+## [v1.5.0-rc2] - 2022-08-12
+
+- fix(mempool): pool cycles not reset on next mem block for readonly node [#781](https://github.com/nervosnetwork/godwoken/pull/781)
+
 ## [v1.5.0-rc1] - 2022-08-09
 
 - fix(tests): wait withdrawal pushed into mem pool [#774](https://github.com/nervosnetwork/godwoken/pull/774)
