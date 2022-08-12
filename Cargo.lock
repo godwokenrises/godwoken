@@ -465,6 +465,7 @@ dependencies = [
  "num-traits",
  "serde",
  "wasm-bindgen",
+ "time",
  "winapi",
 ]
 
@@ -1103,7 +1104,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6ee87af31d84ef885378aebca32be3d682b0e0dc119d5b4860a2c5bb5046730"
 dependencies = [
  "serde",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -1631,8 +1632,6 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-jaeger",
  "semver",
- "sentry",
- "sentry-tracing",
  "serde",
  "serde_json",
  "tentacle",
@@ -1793,7 +1792,6 @@ dependencies = [
  "log",
  "rlp",
  "secp256k1 0.20.3",
- "sentry",
  "sha3",
  "tempfile",
  "thiserror",
@@ -2248,17 +2246,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hostname"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c731c3e10504cc8ed35cfe2f1db4c9274c3d35fa486e3b31df46f068ef3e867"
-dependencies = [
- "libc",
- "match_cfg",
- "winapi",
-]
-
-[[package]]
 name = "http"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2665,12 +2652,6 @@ dependencies = [
  "libc",
  "winapi",
 ]
-
-[[package]]
-name = "match_cfg"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffbee8634e0d45d258acb448e7eaab3fce7a0a467395d4d9f228e3c1f01fb2e4"
 
 [[package]]
 name = "matchers"
@@ -3885,20 +3866,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93f6841e709003d68bb2deee8c343572bf446003ec20a583e76f7b15cebf3711"
 
 [[package]]
-name = "sentry"
-version = "0.23.0"
-source = "git+https://github.com/getsentry/sentry-rust?rev=df694a49595d6890c510d80b85cfbb4b5ae6159a#df694a49595d6890c510d80b85cfbb4b5ae6159a"
-dependencies = [
- "httpdate",
- "reqwest",
- "sentry-backtrace",
- "sentry-contexts",
- "sentry-core",
- "sentry-panic",
- "tokio",
-]
-
-[[package]]
 name = "sentry-backtrace"
 version = "0.23.0"
 source = "git+https://github.com/getsentry/sentry-rust?rev=df694a49595d6890c510d80b85cfbb4b5ae6159a#df694a49595d6890c510d80b85cfbb4b5ae6159a"
@@ -3970,6 +3937,8 @@ dependencies = [
 ]
 
 [[package]]
+=======
+>>>>>>> 94eea86d (feat: remove sentry)
 name = "serde"
 version = "1.0.143"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4759,15 +4728,6 @@ dependencies = [
  "crunchy",
  "hex",
  "static_assertions",
-]
-
-[[package]]
-name = "uname"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b72f89f0ca32e4db1c04e2a72f5345d59796d4866a1ee0609084569f73683dc8"
-dependencies = [
- "libc",
 ]
 
 [[package]]

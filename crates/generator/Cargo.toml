@@ -33,9 +33,7 @@ tokio = "1.15"
 arc-swap = "1.5"
 ethabi = "16.0.0"
 tracing = { version = "0.1", features = ["attributes"] }
-sentry = { git = "https://github.com/getsentry/sentry-rust", rev = "df694a49595d6890c510d80b85cfbb4b5ae6159a" }
 
 [dev-dependencies]
 gw-utils = {path = "../utils" }
 tempfile = "3"
-sentry = { git = "https://github.com/getsentry/sentry-rust", rev = "df694a49595d6890c510d80b85cfbb4b5ae6159a", features=["test"] }

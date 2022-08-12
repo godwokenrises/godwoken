@@ -557,18 +557,6 @@ impl BaseInitComponents {
 }
 
 pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
-    // Set up sentry.
-    let _guard = match &config.sentry_dsn.as_ref() {
-        Some(sentry_dsn) => sentry::init((
-            sentry_dsn.as_str(),
-            sentry::ClientOptions {
-                release: sentry::release_name!(),
-                ..Default::default()
-            },
-        )),
-        None => sentry::init(()),
-    };
-
     spawn_starvation_detector();
 
     // Set up runtim monitor.
