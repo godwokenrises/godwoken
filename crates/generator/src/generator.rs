@@ -267,7 +267,7 @@ impl Generator {
                     exit_code = _exit_code;
                     used_cycles = execution_cycles;
                 }
-                Err(ckb_vm::error::Error::InvalidCycles) => {
+                Err(ckb_vm::error::Error::CyclesExceeded) => {
                     exit_code = INVALID_CYCLES_EXIT_CODE;
                     used_cycles = max_cycles;
                 }

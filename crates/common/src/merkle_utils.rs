@@ -88,8 +88,8 @@ mod tests {
 
         //rebuild proof
         let proof = crate::merkle_utils::CBMTMerkleProof::new(
-            proof.indices().iter().copied().collect(),
-            proof.lemmas().iter().copied().collect(),
+            proof.indices().to_vec(),
+            proof.lemmas().to_vec(),
         );
 
         let proof_leaves: Vec<crate::smt::H256> = vec![[0u8; 32].into(), [4u8; 32].into()];

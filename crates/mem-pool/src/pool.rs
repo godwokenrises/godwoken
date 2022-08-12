@@ -1487,7 +1487,7 @@ mod test {
                 expected.push_withdrawal(hash, state.clone(), touched_keys);
                 post_states.push(state);
             }
-            let deposits = deposits.iter().cloned().take(deposits_count).collect();
+            let deposits = deposits.iter().take(deposits_count).cloned().collect();
             let deposit_states: Vec<_> =
                 { deposits_state.clone().into_iter().take(deposits_count) }.collect();
             let deposit_touched_keys =

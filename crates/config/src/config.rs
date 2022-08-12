@@ -18,7 +18,7 @@ pub enum Trace {
     TokioConsole,
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {
     pub node_mode: NodeMode,
     #[serde(default)]
@@ -57,20 +57,20 @@ pub enum RPCMethods {
     Test,
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RPCServerConfig {
     pub listen: String,
     #[serde(default)]
     pub enable_methods: HashSet<RPCMethods>,
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RPCClientConfig {
     pub indexer_url: String,
     pub ckb_url: String,
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RPCConfig {
     pub allowed_sudt_proxy_creator_account_id: Vec<u32>,
     pub sudt_proxy_code_hashes: Vec<H256>,
@@ -79,14 +79,14 @@ pub struct RPCConfig {
     pub send_tx_rate_limit: Option<RPCRateLimit>,
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RPCRateLimit {
     pub seconds: u64,
     pub lru_size: usize,
 }
 
 /// Onchain rollup cell config
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChainConfig {
     /// Ignore invalid state caused by blocks
     #[serde(default)]
@@ -107,7 +107,7 @@ pub struct GenesisConfig {
     pub secp_data_dep: CellDep,
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WalletConfig {
     pub privkey_path: PathBuf,
     pub lock: Script,
@@ -117,13 +117,13 @@ pub struct WalletConfig {
 // since stake_capacity(minus burnt) + challenge_capacity - tx_fee will never
 // bigger or equal than stake_capacity(minus burnt) + challenge_capacity.
 // TODO: Support sudt stake ?
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChallengerConfig {
     pub rewards_receiver_lock: Script,
     pub burn_lock: Script,
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContractTypeScriptConfig {
     pub state_validator: Script,
     pub deposit_lock: Script,
@@ -151,17 +151,17 @@ pub struct ContractsCellDep {
     pub allowed_contract_types: HashMap<H256, CellDep>,
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConsensusConfig {
     pub contract_type_scripts: ContractTypeScriptConfig,
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RegistryAddressConfig {
     pub registry_id: u32,
     pub address: JsonBytes,
 }
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlockProducerConfig {
     #[serde(default = "default_check_mem_block_before_submit")]
     pub check_mem_block_before_submit: bool,
@@ -225,7 +225,7 @@ const fn default_block_producer_wallet() -> Option<WalletConfig> {
     None
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BackendType {
     Meta,
     Sudt,
@@ -240,13 +240,13 @@ impl Default for BackendType {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BackendSwitchConfig {
     pub switch_height: u64,
     pub backends: Vec<BackendConfig>,
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BackendConfig {
     pub validator_path: PathBuf,
     pub generator_path: PathBuf,
@@ -254,7 +254,7 @@ pub struct BackendConfig {
     pub backend_type: BackendType,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DebugConfig {
     pub output_l1_tx_cycles: bool,
     pub expected_l1_tx_upper_bound_cycles: u64,
@@ -283,7 +283,7 @@ impl Default for DebugConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OffChainValidatorConfig {
     pub verify_withdrawal_signature: bool,
     pub verify_tx_signature: bool,
@@ -304,7 +304,7 @@ impl Default for OffChainValidatorConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct P2PNetworkConfig {
     /// Multiaddr listen address, e.g. /ip4/1.2.3.4/tcp/443
     #[serde(default)]
@@ -314,19 +314,19 @@ pub struct P2PNetworkConfig {
     pub dial: Vec<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PublishMemPoolConfig {
     pub hosts: Vec<String>,
     pub topic: String,
 }
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SubscribeMemPoolConfig {
     pub hosts: Vec<String>,
     pub topic: String,
     pub group: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MemPoolConfig {
     pub execute_l2tx_max_cycles: u64,
     #[serde(default = "default_restore_path")]
@@ -337,7 +337,7 @@ pub struct MemPoolConfig {
     pub mem_block: MemBlockConfig,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MemBlockConfig {
     pub max_deposits: usize,
     pub max_withdrawals: usize,
@@ -452,7 +452,7 @@ impl Default for NodeMode {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DBBlockValidatorConfig {
     pub verify_max_cycles: u64,
     pub parallel_verify_blocks: bool,
@@ -471,7 +471,7 @@ impl Default for DBBlockValidatorConfig {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoreConfig {
     #[serde(default)]
     pub path: PathBuf,
@@ -483,7 +483,7 @@ pub struct StoreConfig {
     pub options: HashMap<String, String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FeeConfig {
     // fee_rate: fee / cycles limit
     pub meta_cycles_limit: u64,
@@ -517,7 +517,7 @@ impl Default for FeeConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GithubConfigUrl {
     pub org: String,
     pub repo: String,
@@ -527,13 +527,13 @@ pub struct GithubConfigUrl {
 }
 
 // Configs in DynamicConfig can be hot reloaded from remote. But GithubConfigUrl must be setup.
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DynamicConfig {
     pub fee_config: FeeConfig,
     pub rpc_config: RPCConfig,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ContractLogConfig {
     Default,       //print contract log in place
@@ -548,7 +548,7 @@ impl Default for ContractLogConfig {
 }
 
 // Cycles config for all db related syscalls
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SyscallCyclesConfig {
     pub sys_store_cycles: u64,
     pub sys_load_cycles: u64,

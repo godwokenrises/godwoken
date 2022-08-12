@@ -159,7 +159,7 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                 if cycles_pool.consume_cycles(syscall_cycles).is_none()
                     || execution_and_virtual > cycles_pool.limit()
                 {
-                    return Err(VMError::LimitReached);
+                    return Err(VMError::Unexpected("cycles pool limit reached".to_owned()));
                 }
             }
         }
@@ -189,7 +189,7 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                 let data_addr = machine.registers()[A0].to_u64();
                 let len = machine.registers()[A1].to_u64();
                 if len > MAX_SET_RETURN_DATA_SIZE {
-                    return Err(VMError::Unexpected);
+                    return Err(VMError::Unexpected("exceeded max return data".to_owned()));
                 }
                 let data = load_bytes(machine, data_addr, len as usize)?;
                 self.result.return_data = data.into();
@@ -327,8 +327,10 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
             SYS_LOAD_ACCOUNT_SCRIPT => {
                 let account_id = machine.registers()[A3].to_u32();
                 let script_hash = self.get_script_hash(account_id).map_err(|err| {
-                    log::error!("syscall error: get script hash by account id: {:?}", err);
-                    VMError::Unexpected
+                    let err_msg =
+                        format!("syscall error: get script hash by account id: {:?}", err);
+                    log::error!("{}", err_msg);
+                    VMError::Unexpected(err_msg)
                 })?;
                 // return not found if script_hash is zero, otherwise we search the script from DB
                 if script_hash.is_zero() {
@@ -336,11 +338,12 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                     return Ok(true);
                 }
                 let script = self.get_script(&script_hash).ok_or_else(|| {
-                    log::error!(
+                    let err_msg = format!(
                         "syscall error: script not found by script hash: {:?}",
                         script_hash
                     );
-                    VMError::Unexpected
+                    log::error!("{}", err_msg);
+                    VMError::Unexpected(err_msg)
                 })?;
                 let data = script.as_slice();
                 store_data(machine, data)?;
@@ -391,12 +394,12 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
 
                 let block_hash_opt =
                     self.chain.get_block_hash_by_number(number).map_err(|err| {
-                        log::error!(
+                        let err_msg = format!(
                             "syscall error: get block hash by number: {}, error: {:?}",
-                            number,
-                            err
+                            number, err
                         );
-                        VMError::Unexpected
+                        log::error!("{}", err_msg);
+                        VMError::Unexpected(err_msg)
                     })?;
                 if let Some(hash) = block_hash_opt {
                     machine
@@ -494,8 +497,10 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                     let payer_addr_len = machine.registers()[A1].to_u64();
                     // addr len: 4 registry id + 4 addr len + 20 addr
                     if payer_addr_len != 28u64 {
-                        log::error!("unexpected payer address length: {}", payer_addr_len);
-                        return Err(VMError::Unexpected);
+                        let err_msg =
+                            format!("unexpected payer address length: {}", payer_addr_len);
+                        log::error!("{}", err_msg);
+                        return Err(VMError::Unexpected(err_msg));
                     }
                     let payer_addr_bytes =
                         load_bytes(machine, payer_addr, payer_addr_len as usize)?;
@@ -503,7 +508,7 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                         Some(addr) => addr,
                         None => {
                             log::error!("invalid payer address");
-                            return Err(VMError::Unexpected);
+                            return Err(VMError::Unexpected("invalid payer address".to_owned()));
                         }
                     }
                 };
@@ -538,7 +543,10 @@ impl<'a, 'b, S: State, C: ChainView> L2Syscalls<'a, 'b, S, C> {
         let value = match self.result.write.write_values.get(key) {
             Some(value) => *value,
             None => {
-                let tree_value = self.state.get_raw(key).map_err(|_| VMError::Unexpected)?;
+                let tree_value = self
+                    .state
+                    .get_raw(key)
+                    .map_err(|err| VMError::Unexpected(err.to_string()))?;
                 self.result.read_values.insert(*key, tree_value);
                 tree_value
             }
@@ -550,8 +558,9 @@ impl<'a, 'b, S: State, C: ChainView> L2Syscalls<'a, 'b, S, C> {
             Ok(id)
         } else {
             self.state.get_account_count().map_err(|err| {
-                log::error!("syscall error: get account count : {:?}", err);
-                VMError::Unexpected
+                let err_msg = format!("syscall error: get account count : {:?}", err);
+                log::error!("{}", err_msg);
+                VMError::Unexpected(err_msg)
             })
         }
     }
@@ -587,8 +596,9 @@ impl<'a, 'b, S: State, C: ChainView> L2Syscalls<'a, 'b, S, C> {
         let value = self
             .get_raw(&build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH_TYPE))
             .map_err(|err| {
-                log::error!("syscall error: get script hash by account id : {:?}", err);
-                VMError::Unexpected
+                let err_msg = format!("syscall error: get script hash by account id : {:?}", err);
+                log::error!("{}", err);
+                VMError::Unexpected(err_msg)
             })?;
         Ok(value)
     }
@@ -599,8 +609,9 @@ impl<'a, 'b, S: State, C: ChainView> L2Syscalls<'a, 'b, S, C> {
         let value = self
             .get_raw(&build_script_hash_to_account_id_key(script_hash.as_slice()))
             .map_err(|err| {
-                log::error!("syscall error: get account id by script hash : {:?}", err);
-                VMError::Unexpected
+                let err_msg = format!("syscall error: get account id by script hash : {:?}", err);
+                log::error!("{}", err_msg);
+                VMError::Unexpected(err_msg)
             })?;
         if value.is_zero() {
             return Ok(None);
@@ -624,7 +635,8 @@ impl<'a, 'b, S: State, C: ChainView> L2Syscalls<'a, 'b, S, C> {
             buffer.push(byte);
             addr += 1;
         }
-        let s = String::from_utf8(buffer).map_err(|_| VMError::ParseError)?;
+        let s = String::from_utf8(buffer)
+            .map_err(|_| VMError::Unexpected("invalid utf8 debug string".to_owned()))?;
         self.redir_log_handler.append_log(s);
         Ok(())
     }

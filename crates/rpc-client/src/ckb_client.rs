@@ -7,10 +7,7 @@ use crate::{
 use anyhow::{anyhow, bail, Context, Result};
 use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
 use gw_common::H256;
-use gw_jsonrpc_types::{
-    blockchain::{CellDep, TransactionWithStatus},
-    ckb_jsonrpc_types,
-};
+use gw_jsonrpc_types::{blockchain::CellDep, ckb_jsonrpc_types};
 use gw_types::{offchain::TxStatus, packed::Transaction, prelude::*};
 use serde::de::DeserializeOwned;
 use serde_json::json;
@@ -89,7 +86,7 @@ impl CKBClient {
     pub async fn get_transaction_with_status(
         &self,
         tx_hash: H256,
-    ) -> Result<Option<TransactionWithStatus>> {
+    ) -> Result<Option<ckb_jsonrpc_types::TransactionWithStatus>> {
         self.request(
             "get_transaction",
             Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
@@ -110,8 +107,18 @@ impl CKBClient {
 
     #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]
     pub async fn get_transaction_status(&self, tx_hash: H256) -> Result<Option<TxStatus>> {
+        use ckb_jsonrpc_types::Status;
+
         let tx_with_status = self.get_transaction_with_status(tx_hash).await?;
-        Ok(tx_with_status.map(|tx_with_status| tx_with_status.tx_status.status.into()))
+        Ok(
+            tx_with_status.map(|tx_with_status| match tx_with_status.tx_status.status {
+                Status::Pending => TxStatus::Pending,
+                Status::Proposed => TxStatus::Proposed,
+                Status::Committed => TxStatus::Committed,
+                Status::Unknown => TxStatus::Unknown,
+                Status::Rejected => TxStatus::Rejected,
+            }),
+        )
     }
 
     pub async fn wait_tx_proposed(&self, tx_hash: H256) -> Result<()> {
@@ -171,7 +178,7 @@ impl CKBClient {
         contract: &str,
         cell_dep: CellDep,
     ) -> Result<gw_jsonrpc_types::blockchain::Script> {
-        use gw_jsonrpc_types::blockchain::TransactionWithStatus;
+        use ckb_jsonrpc_types::TransactionWithStatus;
 
         let tx_hash = cell_dep.out_point.tx_hash;
         let tx_with_status: Option<TransactionWithStatus> = self

@@ -126,7 +126,7 @@ impl ChainUpdater {
     fn extract_rollup_action(&self, tx: &Transaction) -> Result<RollupAction> {
         let rollup_type_hash: [u8; 32] = {
             let hash = self.rollup_type_script.calc_script_hash();
-            ckb_types::prelude::Unpack::unpack(&hash)
+            ckb_types::prelude::Unpack::unpack(&hash).0
         };
 
         // find rollup state cell from outputs
