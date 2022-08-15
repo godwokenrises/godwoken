@@ -4,15 +4,15 @@ static GLOBAL_ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 use anyhow::{Context, Result};
 use clap::{App, Arg, SubCommand};
+use godwoken_bin::subcommand::db_block_validator;
+use godwoken_bin::subcommand::export_block::{ExportArgs, ExportBlock};
+use godwoken_bin::subcommand::import_block::{ImportArgs, ImportBlock};
+use godwoken_bin::subcommand::peer_id::{PeerIdCommand, COMMAND_PEER_ID};
 use gw_block_producer::{runner, trace};
 use gw_config::{BackendSwitchConfig, Config};
 use gw_version::Version;
 use std::{env, fs, path::Path};
-
-mod subcommand;
-use subcommand::db_block_validator;
-use subcommand::export_block::{ExportArgs, ExportBlock};
-use subcommand::import_block::{ImportArgs, ImportBlock};
+use structopt::StructOpt;
 
 const COMMAND_RUN: &str = "run";
 const COMMAND_EXAMPLE_CONFIG: &str = "generate-example-config";
@@ -202,7 +202,8 @@ async fn run_cli() -> Result<()> {
                         .help("Show progress bar"),
                 )
                 .display_order(4),
-        );
+        )
+        .subcommand(PeerIdCommand::clap());
 
     // handle subcommands
     let matches = app.clone().get_matches();
@@ -264,6 +265,9 @@ async fn run_cli() -> Result<()> {
                 show_progress,
             };
             ImportBlock::create(args).await?.execute().await?;
+        }
+        (COMMAND_PEER_ID, Some(m)) => {
+            PeerIdCommand::from_clap(m).run()?;
         }
         _ => {
             // default command: start a Godwoken node
