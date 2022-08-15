@@ -304,14 +304,15 @@ impl Default for OffChainValidatorConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct P2PNetworkConfig {
     /// Multiaddr listen address, e.g. /ip4/1.2.3.4/tcp/443
-    #[serde(default)]
     pub listen: Option<String>,
     /// Multiaddr dial addresses, e.g. /ip4/1.2.3.4/tcp/443
     #[serde(default)]
     pub dial: Vec<String>,
+    pub secret_key_path: Option<PathBuf>,
+    pub allowed_peer_ids: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

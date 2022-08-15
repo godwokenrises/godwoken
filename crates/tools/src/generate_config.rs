@@ -234,6 +234,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         Some(P2PNetworkConfig {
             listen: p2p_listen,
             dial: p2p_dial,
+            ..Default::default()
         })
     } else {
         None

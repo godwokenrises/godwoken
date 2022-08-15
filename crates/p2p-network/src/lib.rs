@@ -1,4 +1,8 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Duration,
+};
 
 use anyhow::{Context, Result};
 use gw_config::P2PNetworkConfig;
@@ -8,18 +12,19 @@ use tentacle::{
     async_trait,
     builder::ServiceBuilder,
     context::{ServiceContext, SessionContext},
-    multiaddr::{MultiAddr, Protocol},
-    secio::SecioKeyPair,
+    multiaddr::MultiAddr,
+    secio::{PeerId, SecioKeyPair},
     service::{
         ProtocolMeta, Service, ServiceAsyncControl, ServiceError, ServiceEvent, TargetProtocol,
     },
     traits::{ProtocolSpawn, ServiceHandle},
+    utils::extract_peer_id,
     ProtocolId, SubstreamReadPart,
 };
 
 const RECONNECT_BASE_DURATION: Duration = Duration::from_secs(2);
 
-/// Wrapper for tentacle Service. Automatcially reconnect dial addresses.
+/// Wrapper for tentacle Service. Automatically reconnect dial addresses.
 pub struct P2PNetwork {
     service: Service<SHandle>,
 }
@@ -37,6 +42,17 @@ impl P2PNetwork {
             dial_backoff.insert(address, ExponentialBackoff::new(RECONNECT_BASE_DURATION));
         }
         let dial_vec: Vec<MultiAddr> = dial_backoff.keys().cloned().collect();
+        let key_pair = if let Some(ref secret_key_path) = config.secret_key_path {
+            let key = std::fs::read(secret_key_path).with_context(|| {
+                format!(
+                    "read secret key from file {}",
+                    secret_key_path.to_string_lossy()
+                )
+            })?;
+            SecioKeyPair::secp256k1_raw_key(key).context("read secret key")?
+        } else {
+            SecioKeyPair::secp256k1_generated()
+        };
         let mut builder = ServiceBuilder::new()
             .forever(true)
             .tcp_config(|socket| {
@@ -44,12 +60,31 @@ impl P2PNetwork {
                 sock_ref.set_nodelay(true)?;
                 Ok(socket)
             })
-            // TODO: allow config keypair.
-            .key_pair(SecioKeyPair::secp256k1_generated());
+            .key_pair(key_pair);
         for p in protocols {
             builder = builder.insert_protocol(p.into());
         }
-        let mut service = builder.build(SHandle { dial_backoff });
+        let allowed_peer_ids = if let Some(ref allowed) = config.allowed_peer_ids {
+            let mut allowed_peer_ids = HashSet::new();
+            for a in allowed {
+                allowed_peer_ids.insert(
+                    a.parse()
+                        .with_context(|| format!("parse allowed peer id {}", a))?,
+                );
+            }
+            for d in dial_backoff.keys() {
+                if let Some(a) = extract_peer_id(d) {
+                    allowed_peer_ids.insert(a);
+                }
+            }
+            Some(allowed_peer_ids)
+        } else {
+            None
+        };
+        let mut service = builder.build(SHandle {
+            dial_backoff,
+            allowed_peer_ids,
+        });
         let control = service.control().clone();
         // Send dial in another task to avoid deadlock.
         if !dial_vec.is_empty() {
@@ -84,6 +119,7 @@ impl P2PNetwork {
 
 // Implement ServiceHandle to handle tentacle events.
 struct SHandle {
+    allowed_peer_ids: Option<HashSet<PeerId>>,
     dial_backoff: HashMap<MultiAddr, ExponentialBackoff>,
 }
 
@@ -111,29 +147,32 @@ impl ServiceHandle for SHandle {
         log::info!("service event: {:?}", event);
         match event {
             ServiceEvent::SessionClose { session_context } => {
-                // session_context.address is like /ip4/127.0.0.1/tcp/32874/p2p/QmaFyRtib8rAULAq8tZEnFj2XcoLjtNPpymJmUZXxP3Z1k, we want to keep only stuff before /p2p.
-                let address = session_context
-                    .address
-                    .iter()
-                    .take_while(|x| !matches!(x, Protocol::P2P(_)))
-                    .collect();
+                let address = session_context.address.clone();
                 if let Some(backoff) = self.dial_backoff.get_mut(&address) {
                     let sleep = backoff.next_sleep();
                     let control = context.control().clone();
                     tokio::spawn(async move {
                         tokio::time::sleep(sleep).await;
                         log::info!("dial {}", address);
-                        let _ = control.dial(address, TargetProtocol::All).await;
+                        let _ = control.dial(address.clone(), TargetProtocol::All).await;
                     });
                 }
             }
             ServiceEvent::SessionOpen { session_context } => {
-                let address = session_context
-                    .address
-                    .iter()
-                    .take_while(|x| !matches!(x, Protocol::P2P(_)))
-                    .collect();
-                if let Some(backoff) = self.dial_backoff.get_mut(&address) {
+                // Check allow list.
+                let mut allow = true;
+                if let Some(ref allowed) = self.allowed_peer_ids {
+                    if let Some(peer_id) = extract_peer_id(&session_context.address) {
+                        if !allowed.contains(&peer_id) {
+                            allow = false;
+                        }
+                    } else {
+                        allow = false;
+                    }
+                };
+                if !allow {
+                    let _ = context.control().disconnect(session_context.id).await;
+                } else if let Some(backoff) = self.dial_backoff.get_mut(&session_context.address) {
                     backoff.reset();
                 }
             }

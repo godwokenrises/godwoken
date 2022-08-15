@@ -40,11 +40,17 @@ async fn main() -> anyhow::Result<()> {
         P2PNetworkConfig {
             listen: Some("/ip6/::1/tcp/32874".into()),
             dial: Vec::new(),
+            secret_key_path: Some("server-key".into()),
+            allowed_peer_ids: Some(vec!["Qme22rAhVjej4UCYxzW52L8PtYVv3XHeY2JqRKuwJn5ZFQ".into()]),
         }
     } else {
         P2PNetworkConfig {
             listen: None,
-            dial: vec!["/ip6/::1/tcp/32874".into()],
+            dial: vec![
+                "/ip6/::1/tcp/32874/p2p/QmPM86hUFFsc5c5Twuux7yaW2PdziwRrmbThGZec13veQ1".into(),
+            ],
+            secret_key_path: Some("client-key".into()),
+            allowed_peer_ids: None,
         }
     };
     let mut network = P2PNetwork::init(&config, [protocol()]).await?;
