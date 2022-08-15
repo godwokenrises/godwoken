@@ -188,7 +188,6 @@ impl Generator {
             mut cycles_pool,
         } = args;
 
-        //self.redir_log_handler.start(raw_tx);
         let mut run_result = RunResult::default();
         let used_cycles;
         let exit_code;
