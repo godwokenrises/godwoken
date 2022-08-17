@@ -148,7 +148,12 @@ async fn sync_l1_unknown(
                 store_tx.commit()?;
                 reverted = true;
             }
-            ctx.chain_updater().update_single(&tx.tx_hash).await?;
+            let rt_handle = tokio::runtime::Handle::current();
+            let chain_updater = ctx.chain_updater().clone();
+            tokio::task::spawn_blocking(move || {
+                rt_handle.block_on(async move { chain_updater.update_single(&tx.tx_hash).await })
+            })
+            .await??;
         }
     }
     if !reverted {

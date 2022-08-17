@@ -27,7 +27,6 @@ use gw_types::{
     },
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
-use gw_utils::block_in_place_if_not_testing;
 use std::{collections::HashSet, convert::TryFrom, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
 
@@ -842,22 +841,20 @@ impl Chain {
         let has_bad_block_before_update = self.challenge_target.is_some();
 
         let updates = param.updates;
-        block_in_place_if_not_testing(|| {
-            // update layer1 actions
-            log::debug!(target: "sync-block", "sync {} actions", updates.len());
-            for (i, action) in updates.into_iter().enumerate() {
-                let t = Instant::now();
-                self.update_l1action(&db, action)?;
-                log::debug!(target: "sync-block", "process {}th action cost {}ms", i, t.elapsed().as_millis());
-                match self.last_sync_event() {
-                    SyncEvent::Success => (),
-                    _ => db.commit()?,
-                }
-            }
 
-            db.commit()?;
-            anyhow::Ok(())
-        })?;
+        // update layer1 actions
+        log::debug!(target: "sync-block", "sync {} actions", updates.len());
+        for (i, action) in updates.into_iter().enumerate() {
+            let t = Instant::now();
+            self.update_l1action(&db, action)?;
+            log::debug!(target: "sync-block", "process {}th action cost {}ms", i, t.elapsed().as_millis());
+            match self.last_sync_event() {
+                SyncEvent::Success => (),
+                _ => db.commit()?,
+            }
+        }
+
+        db.commit()?;
 
         // Should reset mem pool after bad block is reverted. Deposit cell may pass cancel timeout
         // and get reclaimed. Finalized custodians may be merged in bad block submit tx and this
