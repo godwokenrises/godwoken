@@ -6,7 +6,6 @@ use crate::{
     constants::{L2TX_MAX_CYCLES, MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
     error::{BlockError, TransactionValidateError, WithdrawalError},
     run_result_state::RunResultState,
-    syscalls::redir_log::RedirLogHandler,
     typed_transaction::types::TypedRawTransaction,
     types::vm::VMVersion,
     utils::get_tx_type,
@@ -146,7 +145,7 @@ pub struct Generator {
     backend_manage: BackendManage,
     account_lock_manage: AccountLockManage,
     rollup_context: RollupContext,
-    redir_log_handler: RedirLogHandler,
+    contract_log_config: ContractLogConfig,
 }
 
 impl Generator {
@@ -156,12 +155,11 @@ impl Generator {
         rollup_context: RollupContext,
         contract_log_config: ContractLogConfig,
     ) -> Self {
-        let redir_log_handler = RedirLogHandler::new(contract_log_config);
         Generator {
             backend_manage,
             account_lock_manage,
             rollup_context,
-            redir_log_handler,
+            contract_log_config,
         }
     }
 
@@ -190,7 +188,6 @@ impl Generator {
             mut cycles_pool,
         } = args;
 
-        self.redir_log_handler.start(raw_tx);
         let mut run_result = RunResult::default();
         let used_cycles;
         let exit_code;
@@ -204,6 +201,7 @@ impl Generator {
                 ver => panic!("Unsupport VMVersion: {}", ver),
             };
             let core_machine = vm_version.init_core_machine(max_cycles);
+            let mut sys_log_buf = Vec::with_capacity(1024);
             let machine_builder = DefaultMachineBuilder::new(core_machine)
                 .syscall(Box::new(L2Syscalls {
                     chain,
@@ -214,8 +212,8 @@ impl Generator {
                     account_lock_manage: &self.account_lock_manage,
                     result: &mut run_result,
                     code_store: state,
-                    redir_log_handler: &self.redir_log_handler,
                     cycles_pool: &mut cycles_pool,
+                    log_buf: &mut sys_log_buf,
                 }))
                 .instruction_cycle_func(Box::new(instruction_cycles));
             let default_machine = machine_builder.build();
@@ -280,7 +278,10 @@ impl Generator {
                     return Err(err.into());
                 }
             }
-            self.redir_log_handler.flush(exit_code);
+            if self.contract_log_config == ContractLogConfig::Verbose || exit_code != 0 {
+                let s = std::str::from_utf8(&sys_log_buf).map_err(TransactionError::Utf8Error)?;
+                log::debug!("[contract debug]: {}", s);
+            }
             log::debug!(
                 "[execute tx] VM machine_run time: {}ms, exit code: {} used_cycles: {}",
                 t.elapsed().as_millis(),

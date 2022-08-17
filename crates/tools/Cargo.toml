@@ -1,6 +1,6 @@
 [package]
 name = "gw-tools"
-version = "1.5.0-rc1"
+version = "1.5.0-rc2"
 authors = ["Nervos Network"]
 edition = "2018"
 
@@ -35,7 +35,7 @@ gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-utils = { path = "../utils" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-version = { path = "../version" }
-url = "2.2"
+url = { version = "2.2", features = ["serde"] }
 faster-hex = "0.5.0"
 rand = "0.8"
 hex = "0.4"

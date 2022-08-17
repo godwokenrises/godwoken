@@ -28,17 +28,12 @@ use gw_types::{
 };
 use std::cmp;
 
-use self::{
-    error_codes::{
-        GW_ERROR_ACCOUNT_NOT_FOUND, GW_ERROR_DUPLICATED_SCRIPT_HASH,
-        GW_ERROR_INVALID_ACCOUNT_SCRIPT, GW_ERROR_NOT_FOUND, GW_ERROR_RECOVER,
-        GW_ERROR_UNKNOWN_SCRIPT_CODE_HASH, SUCCESS,
-    },
-    redir_log::RedirLogHandler,
+use self::error_codes::{
+    GW_ERROR_ACCOUNT_NOT_FOUND, GW_ERROR_DUPLICATED_SCRIPT_HASH, GW_ERROR_INVALID_ACCOUNT_SCRIPT,
+    GW_ERROR_NOT_FOUND, GW_ERROR_RECOVER, GW_ERROR_UNKNOWN_SCRIPT_CODE_HASH, SUCCESS,
 };
 
 pub mod error_codes;
-pub(crate) mod redir_log;
 
 /* Constants */
 // 25KB is max ethereum contract code size
@@ -75,8 +70,8 @@ pub(crate) struct L2Syscalls<'a, 'b, S, C> {
     pub(crate) raw_tx: &'a RawL2Transaction,
     pub(crate) code_store: &'a dyn CodeStore,
     pub(crate) result: &'b mut RunResult,
-    pub(crate) redir_log_handler: &'a RedirLogHandler,
     pub(crate) cycles_pool: &'b mut Option<&'a mut CyclesPool>,
+    pub(crate) log_buf: &'b mut Vec<u8>,
 }
 
 #[allow(dead_code)]
@@ -620,7 +615,7 @@ impl<'a, 'b, S: State, C: ChainView> L2Syscalls<'a, 'b, S, C> {
         Ok(Some(id))
     }
 
-    fn output_debug<Mac: SupportMachine>(&self, machine: &mut Mac) -> Result<(), VMError> {
+    fn output_debug<Mac: SupportMachine>(&mut self, machine: &mut Mac) -> Result<(), VMError> {
         let mut addr = machine.registers()[A0].to_u64();
         let mut buffer = Vec::new();
 
@@ -635,9 +630,8 @@ impl<'a, 'b, S: State, C: ChainView> L2Syscalls<'a, 'b, S, C> {
             buffer.push(byte);
             addr += 1;
         }
-        let s = String::from_utf8(buffer)
-            .map_err(|_| VMError::Unexpected("invalid utf8 debug string".to_owned()))?;
-        self.redir_log_handler.append_log(s);
+        self.log_buf.push(b'\n');
+        self.log_buf.extend_from_slice(&buffer);
         Ok(())
     }
 

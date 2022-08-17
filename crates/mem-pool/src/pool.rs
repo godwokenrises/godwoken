@@ -1295,6 +1295,13 @@ impl MemPool {
         let db = self.store.begin_transaction();
         self.remove_unexecutables(&mut mem_state, &db).await?;
 
+        // reset cycles pool available cycles.
+        // recreate from config, in case we migrate to dynamic config in the future.
+        self.cycles_pool = CyclesPool::new(
+            self.mem_block_config.max_cycles_limit,
+            self.mem_block_config.syscall_cycles.clone(),
+        );
+
         // prepare next mem block
         self.try_package_more_withdrawals(&mem_state, &mut withdrawals);
         self.prepare_next_mem_block(&db, &mut mem_state, withdrawals, deposits, mem_block_txs)

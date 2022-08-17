@@ -38,7 +38,6 @@ pub struct Config {
     #[serde(default)]
     pub db_block_validator: Option<DBBlockValidatorConfig>,
     pub store: StoreConfig,
-    pub sentry_dsn: Option<String>,
     #[serde(default)]
     pub trace: Option<Trace>,
     #[serde(default)]
@@ -537,14 +536,13 @@ pub struct DynamicConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ContractLogConfig {
-    Default,       //print contract log in place
-    Redirect,      //print all of the contract logs, send error logs to sentry
-    RedirectError, //only print logs when the tx hit an error, send error logs to sentry
+    Verbose,
+    Error,
 }
 
 impl Default for ContractLogConfig {
     fn default() -> Self {
-        ContractLogConfig::Default
+        ContractLogConfig::Verbose
     }
 }
 

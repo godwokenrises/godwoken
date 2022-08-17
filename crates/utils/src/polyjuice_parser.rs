@@ -17,7 +17,9 @@ impl PolyjuiceParser {
         }
         let parser = Self(args);
         // check data size
-        if args_len != 52 + parser.data_size() {
+        // and to_address if it's a transfer tx
+        let data_size = parser.data_size();
+        if args_len != 52 + data_size && args_len != 52 + data_size + 20 {
             return None;
         }
         Some(parser)
@@ -54,5 +56,17 @@ impl PolyjuiceParser {
 
     pub fn data(&self) -> &[u8] {
         &self.0[52..52 + self.data_size()]
+    }
+
+    // Optional, if it's not a native token transfer tx.
+    pub fn to_address(&self) -> Option<&[u8]> {
+        let args_len = self.0.len();
+        // check it's a valid len of transfer tx
+        if args_len == 52 + self.data_size() + 20 {
+            let idx = 52 + self.data_size();
+            Some(&self.0[idx..idx + 20])
+        } else {
+            None
+        }
     }
 }
