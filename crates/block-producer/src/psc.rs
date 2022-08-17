@@ -20,7 +20,10 @@ use gw_types::{
     },
     prelude::*,
 };
-use gw_utils::{abort_on_drop::spawn_abort_on_drop, local_cells::LocalCellsManager, since::Since};
+use gw_utils::{
+    abort_on_drop::spawn_abort_on_drop, block_in_place_if_not_testing,
+    local_cells::LocalCellsManager, since::Since,
+};
 use tokio::{sync::Mutex, time::Instant};
 use tracing::instrument;
 
@@ -335,34 +338,32 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
 
     let store_tx = ctx.store.begin_transaction();
 
-    ctx.chain
-        .lock()
-        .await
-        .update_local(
+    let mut chain = ctx.chain.lock().await;
+    block_in_place_if_not_testing(|| {
+        chain.update_local(
             &store_tx,
             block,
             deposit_info_vec,
             deposit_asset_scripts,
             withdrawal_extras,
             global_state,
-        )
-        .await?;
+        )?;
+        log::info!(
+            "produced new block #{} (txs: {}, deposits: {}, withdrawals: {}, capacity: {})",
+            number,
+            block_txs,
+            deposit_cells.len(),
+            block_withdrawals,
+            remaining_capacity.capacity,
+        );
+        store_tx.set_block_post_finalized_custodian_capacity(
+            number,
+            &remaining_capacity.pack().as_reader(),
+        )?;
+        store_tx.commit()?;
+        anyhow::Ok(())
+    })?;
 
-    log::info!(
-        "produced new block #{} (txs: {}, deposits: {}, withdrawals: {}, capacity: {})",
-        number,
-        block_txs,
-        deposit_cells.len(),
-        block_withdrawals,
-        remaining_capacity.capacity,
-    );
-
-    store_tx.set_block_post_finalized_custodian_capacity(
-        number,
-        &remaining_capacity.pack().as_reader(),
-    )?;
-
-    store_tx.commit()?;
     // Lock collected deposits.
     let mut local_cells_manager = ctx.local_cells_manager.lock().await;
     for d in deposit_cells {

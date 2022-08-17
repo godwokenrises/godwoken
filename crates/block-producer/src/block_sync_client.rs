@@ -18,6 +18,7 @@ use gw_types::{
     },
     prelude::Unpack,
 };
+use gw_utils::block_in_place_if_not_testing;
 use tentacle::{
     builder::MetaBuilder,
     service::{ProtocolMeta, ServiceAsyncControl},
@@ -181,18 +182,19 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             {
                 log::info!("update local block");
                 let mut chain = client.chain.lock().await;
-                chain
-                    .update_local(
+                block_in_place_if_not_testing(|| {
+                    chain.update_local(
                         &store_tx,
                         l.block(),
                         l.deposit_info_vec(),
                         l.deposit_asset_scripts().into_iter().collect(),
                         l.withdrawals().into_iter().collect(),
                         l.post_global_state(),
-                    )
-                    .await?;
-                chain.calculate_and_store_finalized_custodians(&store_tx, block_number)?;
-                store_tx.commit()?;
+                    )?;
+                    chain.calculate_and_store_finalized_custodians(&store_tx, block_number)?;
+                    store_tx.commit()?;
+                    anyhow::Ok(())
+                })?;
             }
             notify_new_tip(client).await?;
         }

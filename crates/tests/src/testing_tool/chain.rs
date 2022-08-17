@@ -573,7 +573,6 @@ pub async fn apply_block_result(
             block_result.withdrawal_extras,
             block_result.global_state,
         )
-        .await
         .unwrap();
     store_tx
         .set_block_post_finalized_custodian_capacity(

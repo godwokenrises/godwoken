@@ -919,7 +919,7 @@ impl Chain {
     /// Store a new local block.
     ///
     /// Note that this does not store finalized custodians.
-    pub async fn update_local(
+    pub fn update_local(
         &mut self,
         store_tx: &StoreTransaction,
         l2_block: L2Block,
