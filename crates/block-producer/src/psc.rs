@@ -363,6 +363,7 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
         store_tx.commit()?;
         anyhow::Ok(())
     })?;
+    drop(chain);
 
     // Lock collected deposits.
     let mut local_cells_manager = ctx.local_cells_manager.lock().await;
