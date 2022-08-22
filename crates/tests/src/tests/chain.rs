@@ -781,6 +781,7 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             .sudt_script_hash(H256::zero().pack())
             .owner_lock_hash(owner_lock.hash().pack())
             .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
+            .chain_id(crate::testing_tool::chain::TEST_CHAIN_ID.pack())
             .build();
         let withdrawal = WithdrawalRequest::new_builder().raw(raw).build();
         WithdrawalRequestExtra::new_builder()

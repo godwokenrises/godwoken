@@ -42,6 +42,7 @@ const STATE_VALIDATOR_TYPE_PATH: &str = "state-validator";
 const STAKE_LOCK_PATH: &str = "stake-lock";
 const CUSTODIAN_LOCK_PATH: &str = "custodian-lock";
 const ETH_ACCOUNT_LOCK_PATH: &str = "eth-account-lock";
+pub const TEST_CHAIN_ID: u64 = 42;
 
 lazy_static! {
     pub static ref ALWAYS_SUCCESS_PROGRAM: Bytes = {
@@ -372,6 +373,7 @@ pub async fn setup_chain(rollup_type_script: Script) -> Chain {
         )
         .l2_sudt_validator_script_type_hash(SUDT_VALIDATOR_CODE_HASH.pack())
         .finality_blocks(DEFAULT_FINALITY_BLOCKS.pack())
+        .chain_id(TEST_CHAIN_ID.pack())
         .build();
     account_lock_manage
         .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));

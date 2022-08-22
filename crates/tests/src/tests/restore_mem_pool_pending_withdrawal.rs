@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use crate::testing_tool::chain::{
     build_sync_tx, construct_block, construct_block_with_timestamp, into_deposit_info_cell,
-    produce_empty_block, restart_chain, setup_chain, DEFAULT_FINALITY_BLOCKS,
+    produce_empty_block, restart_chain, setup_chain, DEFAULT_FINALITY_BLOCKS, TEST_CHAIN_ID,
 };
 use crate::testing_tool::common::random_always_success_script;
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
@@ -92,6 +92,7 @@ async fn test_restore_mem_pool_pending_withdrawal() {
                     .sudt_script_hash(H256::zero().pack())
                     .owner_lock_hash(owner_lock.hash().pack())
                     .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
+                    .chain_id(TEST_CHAIN_ID.pack())
                     .build();
                 let withdrawal = WithdrawalRequest::new_builder().raw(raw).build();
                 WithdrawalRequestExtra::new_builder()

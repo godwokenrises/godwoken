@@ -83,6 +83,7 @@ async fn withdrawal_from_chain(
             .amount(amount.pack())
             .owner_lock_hash(owner_lock.hash().pack())
             .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
+            .chain_id(crate::testing_tool::chain::TEST_CHAIN_ID.pack())
             .build();
         let withdrawal = WithdrawalRequest::new_builder().raw(raw).build();
         WithdrawalRequestExtra::new_builder()

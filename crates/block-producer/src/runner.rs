@@ -21,10 +21,7 @@ use gw_config::{BlockProducerConfig, Config, NodeMode};
 use gw_db::migrate::open_or_create_db;
 use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_generator::{
-    account_lock_manage::{
-        secp256k1::{Secp256k1Eth, Secp256k1Tron},
-        AccountLockManage,
-    },
+    account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
     backend_manage::BackendManage,
     genesis::init_genesis,
     ArcSwap, Generator,
@@ -404,15 +401,6 @@ impl BaseInitComponents {
                 eth_lock_script_type_hash.hash().unpack(),
                 Box::new(Secp256k1Eth::default()),
             );
-            let tron_lock_script_type_hash = allowed_eoa_type_hashes
-                .iter()
-                .find(|th| th.type_().to_entity() == AllowedEoaType::Tron.into());
-            if let Some(type_hash) = tron_lock_script_type_hash {
-                account_lock_manage.register_lock_algorithm(
-                    type_hash.hash().unpack(),
-                    Box::new(Secp256k1Tron::default()),
-                )
-            }
             Arc::new(Generator::new(
                 backend_manage,
                 account_lock_manage,

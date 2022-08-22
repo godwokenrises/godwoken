@@ -28,6 +28,7 @@ pub trait LockAlgorithm {
 
     fn verify_withdrawal(
         &self,
+        ctx: &RollupContext,
         sender_script: Script,
         withdrawal: &WithdrawalRequestExtra,
         withdrawal_address: RegistryAddress,

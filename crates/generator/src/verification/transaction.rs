@@ -13,8 +13,6 @@ use crate::{
     utils::get_tx_type,
 };
 
-use super::chain_id::ChainIdVerifier;
-
 pub struct TransactionVerifier<'a, S> {
     state: &'a S,
     rollup_context: &'a RollupContext,
@@ -42,10 +40,6 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
             }
             .into());
         }
-
-        // check chain_id
-        ChainIdVerifier::new(self.rollup_context.rollup_config.chain_id().unpack())
-            .verify(raw_tx.chain_id().unpack())?;
 
         // verify nonce
         let account_nonce: u32 = self.state.get_nonce(sender_id)?;
