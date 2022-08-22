@@ -13,12 +13,12 @@ use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
     packed::{
-        BlockSync, BlockSyncReader, BlockSyncUnion, NumberHash, P2PBlockSyncResponseReader,
-        P2PBlockSyncResponseUnionReader, P2PSyncRequest, Script,
+        BlockSync, BlockSyncReader, BlockSyncUnion, NumberHash, P2PSyncRequest,
+        P2PSyncResponseReader, P2PSyncResponseUnionReader, Script,
     },
     prelude::Unpack,
 };
-use gw_utils::block_in_place_if_not_testing;
+use gw_utils::{block_in_place_if_not_testing, compression::StreamDecoder};
 use tentacle::{
     builder::MetaBuilder,
     service::{ProtocolMeta, ServiceAsyncControl},
@@ -105,14 +105,16 @@ impl std::fmt::Display for RecoverableCtx {
 
 async fn run_once_without_p2p_stream(client: &mut BlockSyncClient) -> Result<()> {
     sync_l1(client).await?;
-    notify_new_tip(client).await?;
+    notify_new_tip(client, true).await?;
     Ok(())
 }
 
 async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStream) -> Result<()> {
     loop {
         sync_l1(client).await.context(RecoverableCtx)?;
-        notify_new_tip(client).await.context(RecoverableCtx)?;
+        notify_new_tip(client, false)
+            .await
+            .context(RecoverableCtx)?;
         let last_confirmed = client
             .store
             .get_last_confirmed_block_number_hash()
@@ -124,10 +126,10 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
             .build();
         stream.send(request.as_bytes()).await?;
         let response = stream.recv().await?.context("unexpected end of stream")?;
-        let response = P2PBlockSyncResponseReader::from_slice(&response)?;
+        let response = P2PSyncResponseReader::from_slice(&response)?;
         match response.to_enum() {
-            P2PBlockSyncResponseUnionReader::Found(_) => break,
-            P2PBlockSyncResponseUnionReader::TryAgain(_) => {}
+            P2PSyncResponseUnionReader::Found(_) => break,
+            P2PSyncResponseUnionReader::TryAgain(_) => {}
         }
         log::info!("will try again");
         tokio::time::sleep(Duration::from_secs(3)).await;
@@ -196,7 +198,7 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
                     anyhow::Ok(())
                 })?;
             }
-            notify_new_tip(client).await?;
+            notify_new_tip(client, false).await?;
         }
         BlockSyncUnion::Submitted(s) => {
             log::info!(
@@ -226,6 +228,30 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             store_tx.set_last_confirmed_block_number_hash(&c.number_hash().as_reader())?;
             store_tx.commit()?;
         }
+        BlockSyncUnion::NextMemBlock(m) => {
+            if let Some(ref mem_pool) = client.mem_pool {
+                let mut mem_pool = mem_pool.lock().await;
+                let result = mem_pool
+                    .refresh_mem_block(
+                        m.block_info(),
+                        m.withdrawals().into_iter().collect(),
+                        m.deposits().unpack(),
+                    )
+                    .await;
+                if let Err(err) = result {
+                    log::warn!("{:#}", err);
+                }
+            }
+        }
+        BlockSyncUnion::L2Transaction(tx) => {
+            if let Some(ref mem_pool) = client.mem_pool {
+                let mut mem_pool = mem_pool.lock().await;
+                let result = mem_pool.push_transaction(tx).await;
+                if let Err(err) = result {
+                    log::warn!("{:#}", err);
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -234,12 +260,17 @@ pub struct P2PStream {
     id: SessionId,
     control: ServiceAsyncControl,
     read_part: SubstreamReadPart,
+    decoder: StreamDecoder,
 }
 
 impl P2PStream {
     async fn recv(&mut self) -> Result<Option<Bytes>> {
-        let x = self.read_part.try_next().await?;
-        Ok(x)
+        Ok(if let Some(msg) = self.read_part.try_next().await? {
+            // Decompress message.
+            Some(self.decoder.decode(&msg)?.into())
+        } else {
+            None
+        })
     }
 
     async fn send(&mut self, msg: Bytes) -> Result<()> {
@@ -265,6 +296,7 @@ pub fn block_sync_client_protocol(stream_tx: UnboundedSender<P2PStream>) -> Prot
             id,
             control,
             read_part,
+            decoder: StreamDecoder::new(),
         };
         let _ = stream_tx.send(stream);
     });
@@ -275,25 +307,19 @@ pub fn block_sync_client_protocol(stream_tx: UnboundedSender<P2PStream>) -> Prot
         .build()
 }
 
-async fn notify_new_tip(client: &mut BlockSyncClient) -> Result<()> {
+async fn notify_new_tip(client: &mut BlockSyncClient, update_state: bool) -> Result<()> {
     if !client.completed_initial_syncing {
         if let Some(ref mem_pool) = client.mem_pool {
             let mut mem_pool = mem_pool.lock().await;
-            // XXX: local cells manager.
             let new_tip = client.store.get_last_valid_tip_block_hash()?;
-            mem_pool
-                .notify_new_tip(new_tip, &Default::default())
-                .await?;
+            mem_pool.reset_read_only(Some(new_tip), update_state)?;
             mem_pool.mem_pool_state().set_completed_initial_syncing();
         }
         client.completed_initial_syncing = true;
     } else if let Some(ref mem_pool) = client.mem_pool {
         let mut mem_pool = mem_pool.lock().await;
-        // XXX: local cells manager.
         let new_tip = client.store.get_last_valid_tip_block_hash()?;
-        mem_pool
-            .notify_new_tip(new_tip, &Default::default())
-            .await?;
+        mem_pool.reset_read_only(Some(new_tip), update_state)?;
     }
     Ok(())
 }

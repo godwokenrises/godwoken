@@ -5,16 +5,18 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use bytes::Bytes;
 use futures::{StreamExt, TryStreamExt};
 use gw_common::H256;
 use gw_p2p_network::{FnSpawn, P2P_BLOCK_SYNC_PROTOCOL, P2P_BLOCK_SYNC_PROTOCOL_NAME};
 use gw_types::{
     packed::{
-        BlockSync, Confirmed, Found, LocalBlock, P2PBlockSyncResponse, P2PSyncRequest,
-        P2PSyncRequestReader, Revert, Submitted, TryAgain,
+        BlockSync, Confirmed, Found, L2Transaction, LocalBlock, NextMemBlock, P2PSyncRequest,
+        P2PSyncRequestReader, P2PSyncResponse, Revert, Submitted, TryAgain,
     },
     prelude::*,
 };
+use gw_utils::compression::StreamEncoder;
 use tentacle::{builder::MetaBuilder, service::ProtocolMeta};
 use tokio::sync::broadcast::{channel, Receiver, Sender};
 
@@ -48,6 +50,7 @@ impl BlockSyncServerState {
     }
 
     pub fn publish_local_block(&mut self, local_block: LocalBlock) {
+        log::debug!("publish local block");
         let reader = local_block.as_reader();
         let raw = reader.block().raw();
         let number = raw.number().unpack();
@@ -93,6 +96,29 @@ impl BlockSyncServerState {
         let _ = self.tx.send(msg);
     }
 
+    pub fn publish_transaction(&mut self, tx: L2Transaction) {
+        if let Some((_, messages)) = self.buffer.iter_mut().rev().next() {
+            let msg = BlockSync::new_builder().set(tx).build();
+            messages.messages.push(msg.clone());
+            let _ = self.tx.send(msg);
+        }
+    }
+
+    pub fn publish_next_mem_block(&mut self, mem_block: NextMemBlock) {
+        let number = mem_block.block_info().number().unpack();
+
+        let msg = BlockSync::new_builder().set(mem_block).build();
+        self.buffer.insert(
+            number,
+            BlockMessages {
+                hash: [0; 32].into(),
+                messages: vec![msg.clone()],
+            },
+        );
+
+        let _ = self.tx.send(msg);
+    }
+
     fn get_and_subscribe(
         &self,
         after: P2PSyncRequest,
@@ -108,15 +134,7 @@ impl BlockSyncServerState {
                 return Ok((msgs, self.tx.subscribe()));
             }
         }
-        let try_again = if let Some((number, msgs)) = self.buffer.iter().next() {
-            (*number, msgs.hash)
-        } else {
-            (number + 1, [0u8; 32].into())
-        };
-        Err(TryAgain::new_builder()
-            .block_number(try_again.0.pack())
-            .block_hash(try_again.1.pack())
-            .build())
+        Err(TryAgain::default())
     }
 }
 
@@ -126,16 +144,25 @@ pub fn block_sync_server_protocol(publisher: Arc<Mutex<BlockSyncServerState>>) -
         let control = control.clone();
         let session_id = context.id;
         tokio::spawn(async move {
+            // Compress messages.
+            //
+            // We keep using the same compression context in one session. This
+            // way repeated content in later messages, e.g. transactions in
+            // local blocks that are already published when pushed to mem pool,
+            // will be compressed to just a few bytes.
+            let mut encoder = StreamEncoder::new(3).expect("create StreamEncoder");
             while let Some(msg) = read_part.try_next().await? {
                 P2PSyncRequestReader::from_slice(msg.as_ref())?;
                 let request = P2PSyncRequest::new_unchecked(msg);
-                let send = |x| control.send_message_to(session_id, P2P_BLOCK_SYNC_PROTOCOL, x);
+                let mut send = |x: Bytes| {
+                    let compressed: Bytes = encoder.encode(&x).expect("compress").into();
+                    log::debug!("compression: {} -> {}", x.len(), compressed.len());
+                    control.send_message_to(session_id, P2P_BLOCK_SYNC_PROTOCOL, compressed)
+                };
                 let result = publisher.lock().unwrap().get_and_subscribe(request);
                 match result {
                     Ok((msgs, mut receiver)) => {
-                        let response = P2PBlockSyncResponse::new_builder()
-                            .set(Found::default())
-                            .build();
+                        let response = P2PSyncResponse::new_builder().set(Found::default()).build();
                         send(response.as_bytes()).await?;
                         for msg in msgs {
                             send(msg.as_bytes()).await?;
@@ -150,7 +177,7 @@ pub fn block_sync_server_protocol(publisher: Arc<Mutex<BlockSyncServerState>>) -
                         break;
                     }
                     Err(e) => {
-                        let response = P2PBlockSyncResponse::new_builder().set(e).build();
+                        let response = P2PSyncResponse::new_builder().set(e).build();
                         send(response.as_bytes()).await?;
                     }
                 }

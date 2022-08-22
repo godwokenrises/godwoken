@@ -1,7 +1,6 @@
 use crate::{
     block_producer::{BlockProducer, BlockProducerCreateArgs},
     block_sync_client::{block_sync_client_protocol, BlockSyncClient, P2PStream},
-    block_sync_server::{block_sync_server_protocol, BlockSyncServerState},
     chain_updater::ChainUpdater,
     challenger::{Challenger, ChallengerNewArgs},
     cleaner::Cleaner,
@@ -27,10 +26,9 @@ use gw_generator::{
     ArcSwap, Generator,
 };
 use gw_mem_pool::{
+    block_sync_server::{block_sync_server_protocol, BlockSyncServerState},
     default_provider::DefaultMemPoolProvider,
     pool::{MemPool, MemPoolCreateArgs},
-    spawn_sub_mem_pool_task,
-    sync::p2p,
 };
 use gw_p2p_network::P2PNetwork;
 use gw_polyjuice_sender_recover::recover::PolyjuiceSenderRecover;
@@ -497,6 +495,15 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
     }
     let base = BaseInitComponents::init(&config, skip_config_check).await?;
+
+    let has_block_producer_and_p2p =
+        config.block_producer.is_some() && config.p2p_network_config.is_some();
+    let block_sync_server_state = if has_block_producer_and_p2p {
+        Some(Arc::new(std::sync::Mutex::new(BlockSyncServerState::new())))
+    } else {
+        None
+    };
+
     let (mem_pool, wallet, offchain_mock_context) = match config.block_producer.as_ref() {
         Some(block_producer_config) => {
             let opt_wallet = block_producer_config
@@ -529,7 +536,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     config: config.mem_pool.clone(),
                     node_mode: config.node_mode,
                     dynamic_config_manager: base.dynamic_config_manager.clone(),
-                    has_p2p_sync: config.p2p_network_config.is_some(),
+                    sync_server: block_sync_server_state.clone(),
                 };
                 Arc::new(Mutex::new(
                     MemPool::create(args)
@@ -586,19 +593,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     let (block_producer, challenger, test_mode_control, withdrawal_unlocker, cleaner) = match config
         .node_mode
     {
-        NodeMode::ReadOnly => {
-            if let Some(sync_mem_block_config) = &config.mem_pool.subscribe {
-                match &mem_pool {
-                    Some(mem_pool) => {
-                        spawn_sub_mem_pool_task(mem_pool.clone(), sync_mem_block_config.clone())?;
-                    }
-                    None => {
-                        log::warn!("Failed to init sync mem block, because mem_pool is None.");
-                    }
-                }
-            }
-            (None, None, None, None, None)
-        }
+        NodeMode::ReadOnly => (None, None, None, None, None),
         mode => {
             let block_producer_config = config
                 .block_producer
@@ -703,36 +698,11 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     // Broadcast shutdown event.
     let (shutdown_event, shutdown_event_recv) = broadcast::channel(1);
 
-    let has_block_producer_and_p2p =
-        block_producer.is_some() && config.p2p_network_config.is_some();
-    let block_sync_server_state = if has_block_producer_and_p2p {
-        Some(Arc::new(std::sync::Mutex::new(BlockSyncServerState::new())))
-    } else {
-        None
-    };
-
     let mut block_sync_client_p2p_receiver: Option<UnboundedReceiver<P2PStream>> = None;
 
     // P2P network.
     let p2p_control_and_handle = if let Some(ref p2p_network_config) = config.p2p_network_config {
         let mut protocols: Vec<ProtocolMeta> = Vec::new();
-        let mut sync_server_state: Option<Arc<Mutex<p2p::SyncServerState>>> = None;
-        match (&mem_pool, config.node_mode) {
-            (Some(_), NodeMode::FullNode | NodeMode::Test) => {
-                log::info!("will enable mem-pool p2p sync server");
-                let s = Arc::new(Mutex::new(Default::default()));
-                sync_server_state = Some(s.clone());
-                protocols.push(p2p::sync_server_protocol(s));
-            }
-            (Some(mem_pool), NodeMode::ReadOnly) => {
-                log::info!("will enable mem-pool p2p sync client");
-                protocols.push(p2p::sync_client_protocol(
-                    mem_pool.clone(),
-                    shutdown_event.clone(),
-                ));
-            }
-            _ => {}
-        }
         match config.node_mode {
             NodeMode::ReadOnly => {
                 log::info!("will enable p2p block sync client");
@@ -749,12 +719,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
         let mut network = P2PNetwork::init(p2p_network_config, protocols).await?;
         let control = network.control().clone();
-        if let (Some(sync_server_state), Some(mem_pool)) = (sync_server_state, &mem_pool) {
-            let mut mem_pool = mem_pool.lock().await;
-            mem_pool
-                .enable_publishing(control.clone(), sync_server_state)
-                .await;
-        }
         let handle = tokio::spawn(async move {
             log::info!("running the p2p network");
             network.run().await;

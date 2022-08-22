@@ -515,7 +515,7 @@ pub async fn setup_chain_with_account_lock_manage(
         config: mem_pool_config,
         node_mode: gw_config::NodeMode::FullNode,
         dynamic_config_manager: Default::default(),
-        has_p2p_sync: false,
+        sync_server: None,
     };
     let mem_pool = MemPool::create(args).await.unwrap();
     Chain::create(

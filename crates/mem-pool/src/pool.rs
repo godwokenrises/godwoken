@@ -35,10 +35,10 @@ use gw_traits::CodeStore;
 use gw_types::{
     offchain::{DepositInfo, FinalizedCustodianCapacity},
     packed::{
-        AccountMerkleState, BlockInfo, L2Block, L2Transaction, Script, TxReceipt,
+        AccountMerkleState, BlockInfo, L2Block, L2Transaction, NextMemBlock, Script, TxReceipt,
         WithdrawalRequest, WithdrawalRequestExtra,
     },
-    prelude::{Pack, Unpack},
+    prelude::{Builder, Entity, Pack, PackVec, Unpack},
 };
 use gw_utils::{block_in_place_if_not_testing, local_cells::LocalCellsManager};
 use std::{
@@ -49,21 +49,11 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tentacle::service::ServiceAsyncControl;
-use tokio::sync::{broadcast, Mutex};
 use tracing::instrument;
 
 use crate::{
-    mem_block::MemBlock,
-    restore_manager::RestoreManager,
-    sync::{
-        mq::tokio_kafka,
-        p2p::{self, SyncServerState},
-        publish::MemPoolPublishService,
-    },
-    traits::MemPoolProvider,
-    types::EntryList,
-    withdrawal::Generator as WithdrawalGenerator,
+    block_sync_server::BlockSyncServerState, mem_block::MemBlock, restore_manager::RestoreManager,
+    traits::MemPoolProvider, types::EntryList, withdrawal::Generator as WithdrawalGenerator,
 };
 
 #[derive(Debug, Default)]
@@ -97,14 +87,10 @@ pub struct MemPool {
     restore_manager: RestoreManager,
     /// Restored txs to finalize
     pending_restored_tx_hashes: VecDeque<H256>,
-    // Fan-out mem block from full node to readonly node
-    mem_pool_publish_service: Option<MemPoolPublishService>,
-    node_mode: NodeMode,
     mem_pool_state: Arc<MemPoolState>,
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
-    new_tip_publisher: broadcast::Sender<(H256, u64)>,
+    sync_server: Option<Arc<std::sync::Mutex<BlockSyncServerState>>>,
     mem_block_config: MemBlockConfig,
-    has_p2p_sync: bool,
     /// Cycles Pool
     cycles_pool: CyclesPool,
 }
@@ -117,7 +103,7 @@ pub struct MemPoolCreateArgs {
     pub config: MemPoolConfig,
     pub node_mode: NodeMode,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
-    pub has_p2p_sync: bool,
+    pub sync_server: Option<Arc<std::sync::Mutex<BlockSyncServerState>>>,
 }
 
 impl Drop for MemPool {
@@ -140,7 +126,7 @@ impl MemPool {
             config,
             node_mode,
             dynamic_config_manager,
-            has_p2p_sync,
+            sync_server,
         } = args;
         let pending = Default::default();
 
@@ -167,26 +153,11 @@ impl MemPool {
 
         mem_block.clear_txs();
 
-        let producer = config
-            .publish
-            .map(|config| -> Result<tokio_kafka::Producer> {
-                log::info!("Setup fan out mem_block handler.");
-                let producer = tokio_kafka::Producer::connect(config.hosts, config.topic)?;
-                Ok(producer)
-            })
-            .transpose()?;
-        let mem_pool_publish_service = if producer.is_some() {
-            Some(MemPoolPublishService::start(producer, None))
-        } else {
-            None
-        };
-
         let mem_pool_state = {
             let mem_store = MemStore::new(store.get_snapshot());
             Arc::new(MemPoolState::new(Arc::new(mem_store), false))
         };
 
-        let (new_tip_publisher, _) = broadcast::channel(1);
         let cycles_pool = CyclesPool::new(
             config.mem_block.max_cycles_limit,
             config.mem_block.syscall_cycles.clone(),
@@ -202,13 +173,10 @@ impl MemPool {
             pending_deposits,
             restore_manager: restore_manager.clone(),
             pending_restored_tx_hashes,
-            mem_pool_publish_service,
-            node_mode,
             mem_pool_state,
             dynamic_config_manager,
-            new_tip_publisher,
+            sync_server,
             mem_block_config: config.mem_block,
-            has_p2p_sync,
             cycles_pool,
         };
         mem_pool.restore_pending_withdrawals().await?;
@@ -219,9 +187,13 @@ impl MemPool {
         mem_pool.mem_pool_state().store(snap.into());
 
         // set tip
-        mem_pool
-            .reset(None, Some(tip.0), &Default::default())
-            .await?;
+        if matches!(node_mode, NodeMode::ReadOnly) {
+            mem_pool.reset_read_only(Some(tip.0), true)?;
+        } else {
+            mem_pool
+                .reset(None, Some(tip.0), &Default::default())
+                .await?;
+        }
 
         // clear stored mem blocks
         tokio::spawn(async move {
@@ -453,6 +425,8 @@ impl MemPool {
 
     /// Notify new tip
     /// this method update current state of mem pool
+    ///
+    /// This method should only be used on a full node or test node.
     #[instrument(skip_all)]
     pub async fn notify_new_tip(
         &mut self,
@@ -503,19 +477,10 @@ impl MemPool {
 
     /// Reset pool
     ///
-    /// - For Full node and Test node:
+    /// This method reset the current state of the mem pool. Discarded txs &
+    /// withdrawals will be reinject to pool.
     ///
-    ///   This method reset the current state of the mem pool.
-    ///   Discarded txs & withdrawals will be reinject to pool.
-    ///
-    /// - For ReadOnly nodes without P2P sync:
-    ///
-    ///   This method resets the current state of the mem pool.
-    ///
-    /// - For ReadOnly nodes with P2P sync:
-    ///
-    ///   This function only update the current tip.
-    ///   The state reset of readonly only happend when receives states from publisher, see `refresh_mem_block`
+    /// This method should only be used on a full node or test node.
     #[instrument(skip_all, fields(old_tip = old_tip.map(|h| display(h.pack())), new_tip = new_tip.map(|h| display(h.pack()))))]
     async fn reset(
         &mut self,
@@ -523,22 +488,13 @@ impl MemPool {
         new_tip: Option<H256>,
         local_cells_manager: &LocalCellsManager,
     ) -> Result<()> {
-        match self.node_mode {
-            NodeMode::FullNode | NodeMode::Test => {
-                self.reset_full(old_tip, new_tip, local_cells_manager).await
-            }
-            NodeMode::ReadOnly => self.reset_read_only(old_tip, new_tip).await,
-        }
+        self.reset_full(old_tip, new_tip, local_cells_manager).await
     }
 
     /// Only **ReadOnly** node.
-    /// update current tip.
+    /// update current tip. Reset mem pool state if `update_state` is true.
     #[instrument(skip_all)]
-    async fn reset_read_only(
-        &mut self,
-        _old_tip: Option<H256>,
-        new_tip: Option<H256>,
-    ) -> Result<()> {
+    pub fn reset_read_only(&mut self, new_tip: Option<H256>, update_state: bool) -> Result<()> {
         let new_tip = match new_tip {
             Some(block_hash) => block_hash,
             None => {
@@ -548,7 +504,7 @@ impl MemPool {
         };
         let new_tip_block = self.store.get_block(&new_tip)?.expect("new tip block");
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
-        if !self.has_p2p_sync {
+        if update_state {
             // For read only nodes that does not have P2P mem-pool syncing, just
             // reset mem block and mem pool state. Mem block will be mostly
             // empty and not in sync with full node anyway, so we skip
@@ -560,7 +516,6 @@ impl MemPool {
             self.mem_pool_state.store(Arc::new(mem_store));
         }
 
-        let _ = self.new_tip_publisher.send(self.current_tip);
         Ok(())
     }
 
@@ -696,12 +651,6 @@ impl MemPool {
 
         // set tip
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
-
-        // Publish new tip.
-        let _ = self.new_tip_publisher.send(self.current_tip);
-        if let Some(ref publish) = self.mem_pool_publish_service {
-            publish.new_tip(self.current_tip).await;
-        }
 
         // mem block withdrawals
         let mem_block_withdrawals: Vec<_> = {
@@ -902,15 +851,15 @@ impl MemPool {
         // deposits
         self.finalize_deposits(state, deposit_cells.clone()).await?;
 
-        // Fan-out next mem block to readonly node
-        if let Some(handler) = &self.mem_pool_publish_service {
-            handler
-                .next_mem_block(
-                    withdrawals,
-                    deposit_cells,
-                    self.mem_block.block_info().clone(),
-                )
-                .await
+        if let Some(ref sync_server) = self.sync_server {
+            let mut sync_server = sync_server.lock().unwrap();
+            sync_server.publish_next_mem_block(
+                NextMemBlock::new_builder()
+                    .block_info(self.mem_block.block_info().clone())
+                    .withdrawals(withdrawals.pack())
+                    .deposits(deposit_cells.pack())
+                    .build(),
+            );
         }
 
         // re-inject txs
@@ -1204,9 +1153,8 @@ impl MemPool {
         let tx_receipt =
             TxReceipt::build_receipt(tx.witness_hash().into(), run_result, merkle_state);
 
-        // fan-out to readonly mem block
-        if let Some(handler) = &self.mem_pool_publish_service {
-            handler.new_tx(tx, self.current_tip.1).await
+        if let Some(ref sync_server) = self.sync_server {
+            sync_server.lock().unwrap().publish_transaction(tx);
         }
 
         Ok(tx_receipt)
@@ -1242,7 +1190,7 @@ impl MemPool {
     // This function returns Ok(Some(block_number)), if refresh is successful.
     // Or returns Ok(None) if current tip has not synced yet.
     #[instrument(skip_all, fields(block = block_info.number().unpack(), withdrawals_count = withdrawals.len(), deposits_count = deposits.len()))]
-    pub(crate) async fn refresh_mem_block(
+    pub async fn refresh_mem_block(
         &mut self,
         block_info: BlockInfo,
         mut withdrawals: Vec<WithdrawalRequestExtra>,
@@ -1315,49 +1263,6 @@ impl MemPool {
         );
 
         Ok(Some(next_block_number))
-    }
-
-    // Only **ReadOnly** node needs this.
-    // Sync tx from fullnode to readonly.
-    #[instrument(skip_all, fields(tx_hash = %tx.hash().pack(), current_tip_block = current_tip_block_number))]
-    pub(crate) async fn append_tx(
-        &mut self,
-        tx: L2Transaction,
-        current_tip_block_number: u64,
-    ) -> Result<()> {
-        // Always expects tx from current tip.
-        // Ignore tx from an old block.
-        if current_tip_block_number < self.current_tip.1 {
-            // txs from the past block should be ignored
-            return Ok(());
-        }
-        self.push_transaction(tx).await?;
-        Ok(())
-    }
-
-    pub(crate) fn current_tip(&self) -> (H256, u64) {
-        self.current_tip
-    }
-
-    pub(crate) fn subscribe_new_tip(&self) -> broadcast::Receiver<(H256, u64)> {
-        self.new_tip_publisher.subscribe()
-    }
-
-    pub async fn enable_publishing(
-        &mut self,
-        control: ServiceAsyncControl,
-        shared: Arc<Mutex<SyncServerState>>,
-    ) {
-        let p2p_publisher = p2p::sync_server_publisher(control, shared);
-        match self.mem_pool_publish_service {
-            Some(ref service) => {
-                service.set_p2p_publisher(p2p_publisher).await;
-            }
-            None => {
-                self.mem_pool_publish_service =
-                    Some(MemPoolPublishService::start(None, Some(p2p_publisher)));
-            }
-        }
     }
 }
 

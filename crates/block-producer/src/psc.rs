@@ -6,7 +6,7 @@ use anyhow::{bail, ensure, Context, Result};
 use gw_chain::chain::Chain;
 use gw_common::H256;
 use gw_config::PscConfig;
-use gw_mem_pool::pool::MemPool;
+use gw_mem_pool::{block_sync_server::BlockSyncServerState, pool::MemPool};
 use gw_rpc_client::{
     error::{get_jsonrpc_error_code, CkbRpcError},
     rpc_client::RPCClient,
@@ -29,7 +29,6 @@ use tracing::instrument;
 
 use crate::{
     block_producer::{BlockProducer, ComposeSubmitTxArgs, TransactionSizeError},
-    block_sync_server::BlockSyncServerState,
     chain_updater::ChainUpdater,
     produce_block::ProduceBlockResult,
     sync_l1::{revert, sync_l1, SyncL1Context},

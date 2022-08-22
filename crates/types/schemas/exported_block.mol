@@ -17,14 +17,17 @@ table ExportedBlock {
 }
 
 union BlockSync {
+    // Block syncing.
     Revert,
     LocalBlock,
     Submitted,
     Confirmed,
+    // Mem block syncing.
+    NextMemBlock,
+    L2Transaction,
 }
 
 table LocalBlock {
-    // TODO: @sopium optimization: only send transaction/withdrawal hashes like BIP 152.
     block: L2Block,
     post_global_state: GlobalState,
     deposit_info_vec: DepositInfoVec,
@@ -47,12 +50,24 @@ struct Revert {
     number_hash: NumberHash,
 }
 
-// Reusing P2PSyncRequest and TryAgain from mem block syncing.
+struct P2PSyncRequest {
+    block_number: Uint64,
+    block_hash: Byte32,
+}
 
-union P2PBlockSyncResponse {
+union P2PSyncResponse {
     Found,
     TryAgain,
 }
 
 table Found {
+}
+
+table TryAgain {
+}
+
+table NextMemBlock {
+    deposits: DepositInfoVec,
+    withdrawals: WithdrawalRequestExtraVec,
+    block_info: BlockInfo,
 }

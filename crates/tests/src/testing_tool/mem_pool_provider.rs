@@ -11,7 +11,7 @@ pub struct DummyMemPoolProvider {
     pub deposit_cells: Vec<DepositInfo>,
 }
 
-#[gw_mem_pool::async_trait]
+#[async_trait::async_trait]
 impl MemPoolProvider for DummyMemPoolProvider {
     async fn estimate_next_blocktime(&self) -> Result<Duration> {
         Ok(self.fake_blocktime)
