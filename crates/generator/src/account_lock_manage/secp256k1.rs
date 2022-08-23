@@ -249,6 +249,13 @@ fn try_assemble_polyjuice_args(
     let to = if parser.is_create() {
         // 3 for EVMC_CREATE
         vec![0u8; 0]
+    } else if parser.is_native_transfer() {
+        if let Some(to_address) = parser.to_address() {
+            to_address.to_vec()
+        } else {
+            log::error!("Invalid native token transfer transaction, [to_address] isn't set.");
+            return None;
+        }
     } else {
         // For contract calling, chain id is read from scrpit args of
         // receiver_script, see the following link for more details:

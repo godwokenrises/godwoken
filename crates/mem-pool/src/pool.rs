@@ -326,7 +326,7 @@ impl MemPool {
         }
 
         // verify transaction
-        TransactionVerifier::new(state, self.generator.rollup_context()).verify(&tx)?;
+        TransactionVerifier::new(state, self.generator.clone()).verify(&tx)?;
         // verify signature
         self.generator.check_transaction_signature(state, &tx)?;
 

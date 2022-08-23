@@ -1037,7 +1037,7 @@ async fn execute_l2transaction(
         }
 
         // tx basic verification
-        TransactionVerifier::new(&state, ctx.generator.rollup_context()).verify(&tx)?;
+        TransactionVerifier::new(&state, ctx.generator.clone()).verify(&tx)?;
         // verify tx signature
         ctx.generator.check_transaction_signature(&state, &tx)?;
         // execute tx

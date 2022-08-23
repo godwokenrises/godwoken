@@ -1,9 +1,11 @@
+use std::sync::Arc;
+
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     state::State,
 };
 use gw_traits::CodeStore;
-use gw_types::{offchain::RollupContext, packed::L2Transaction, prelude::*};
+use gw_types::{packed::L2Transaction, prelude::*};
 use tracing::instrument;
 
 use crate::{
@@ -11,19 +13,17 @@ use crate::{
     error::{AccountError, TransactionError, TransactionValidateError},
     typed_transaction::types::TypedRawTransaction,
     utils::get_tx_type,
+    Generator,
 };
 
 pub struct TransactionVerifier<'a, S> {
     state: &'a S,
-    rollup_context: &'a RollupContext,
+    generator: Arc<Generator>,
 }
 
 impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
-    pub fn new(state: &'a S, rollup_context: &'a RollupContext) -> Self {
-        Self {
-            state,
-            rollup_context,
-        }
+    pub fn new(state: &'a S, generator: Arc<Generator>) -> Self {
+        Self { state, generator }
     }
     /// verify transaction
     /// Notice this function do not perform signature check
@@ -63,7 +63,7 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
         let balance = self
             .state
             .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &sender_address)?;
-        let tx_type = get_tx_type(self.rollup_context, self.state, &tx.raw())?;
+        let tx_type = get_tx_type(self.generator.rollup_context(), self.state, &tx.raw())?;
         let typed_tx =
             TypedRawTransaction::from_tx(tx.raw(), tx_type).ok_or(AccountError::UnknownScript)?;
         // reject txs has no cost, these transaction can only be execute without modify state tree
@@ -74,8 +74,8 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
         if balance < tx_cost {
             return Err(TransactionError::InsufficientBalance.into());
         }
-        // Intrinsic Gas
         if let TypedRawTransaction::Polyjuice(tx) = typed_tx {
+            // Intrinsic Gas
             let p = tx
                 .parser()
                 .ok_or_else(|| TransactionError::IntrinsicGas("parser".into()))?;
@@ -92,6 +92,17 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
                     .into(),
                 )
                 .into());
+            }
+            // Native token transfer
+            if let Some(parser) = tx.parser() {
+                if parser.is_native_transfer() {
+                    // Verify to_id is CREATOR_ID
+                    let creator_id = self.generator.get_polyjuice_creator_id(self.state)?;
+                    let to_id = raw_tx.to_id().unpack();
+                    if Some(to_id) != creator_id {
+                        return Err(TransactionError::NativeTransferInvalidToId(to_id).into());
+                    }
+                }
             }
         }
 
