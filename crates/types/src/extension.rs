@@ -51,6 +51,10 @@ impl packed::RawL2Transaction {
     pub fn hash(&self) -> [u8; 32] {
         self.as_reader().hash()
     }
+
+    pub fn is_chain_id_protected(&self) -> bool {
+        self.chain_id().unpack() != 0
+    }
 }
 
 impl packed::L2Transaction {

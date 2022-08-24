@@ -83,7 +83,7 @@ fn recover_registry_address(
     raw_tx: &RawL2Transaction,
     signature: &Bytes,
 ) -> Result<RegistryAddress, PolyjuiceTxSenderRecoverError> {
-    if raw_tx.chain_id().unpack() != ctx.chain_id {
+    if raw_tx.is_chain_id_protected() && raw_tx.chain_id().unpack() != ctx.chain_id {
         return Err(PolyjuiceTxSenderRecoverError::InvalidChainId);
     }
 
