@@ -43,7 +43,8 @@ impl Secp256k1Eth {
         receiver_script: &Script,
     ) -> anyhow::Result<H256> {
         let tx_chain_id = raw_tx.chain_id().unpack();
-        if chain_id != tx_chain_id {
+        let is_protected = raw_tx.is_chain_id_protected();
+        if is_protected && chain_id != tx_chain_id {
             bail!("mismatch tx chain id");
         }
 
@@ -154,7 +155,7 @@ impl LockAlgorithm for Secp256k1Eth {
         // Non EIP-155 transaction's chain_id is zero.
         // We support non EIP-155 for the compatibility.
         // Related issue: https://github.com/nervosnetwork/godwoken/issues/775
-        let is_protected = chain_id != 0;
+        let is_protected = tx.raw().is_chain_id_protected();
         // check protected chain id
         if is_protected && expected_chain_id != chain_id {
             return Err(LockAlgorithmError::InvalidTransactionArgs);
@@ -266,7 +267,7 @@ fn try_assemble_polyjuice_args(
     stream.append(&to);
     stream.append(&parser.value());
     stream.append(&parser.data().to_vec());
-    let is_protected = raw_tx.chain_id().unpack() != 0;
+    let is_protected = raw_tx.is_chain_id_protected();
     // EIP-155 - https://eips.ethereum.org/EIPS/eip-155
     if is_protected {
         stream.append(&raw_tx.chain_id().unpack());
