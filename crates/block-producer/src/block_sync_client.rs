@@ -8,7 +8,7 @@ use ckb_types::prelude::{Builder, Entity, Reader};
 use futures::TryStreamExt;
 use gw_chain::chain::Chain;
 use gw_mem_pool::pool::MemPool;
-use gw_p2p_network::{FnSpawn, P2P_BLOCK_SYNC_PROTOCOL, P2P_BLOCK_SYNC_PROTOCOL_NAME};
+use gw_p2p_network::{FnSpawn, P2P_SYNC_PROTOCOL, P2P_SYNC_PROTOCOL_NAME};
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
@@ -275,7 +275,7 @@ impl P2PStream {
 
     async fn send(&mut self, msg: Bytes) -> Result<()> {
         self.control
-            .send_message_to(self.id, P2P_BLOCK_SYNC_PROTOCOL, msg)
+            .send_message_to(self.id, P2P_SYNC_PROTOCOL, msg)
             .await?;
         Ok(())
     }
@@ -301,8 +301,8 @@ pub fn block_sync_client_protocol(stream_tx: UnboundedSender<P2PStream>) -> Prot
         let _ = stream_tx.send(stream);
     });
     MetaBuilder::new()
-        .name(|_| P2P_BLOCK_SYNC_PROTOCOL_NAME.into())
-        .id(P2P_BLOCK_SYNC_PROTOCOL)
+        .name(|_| P2P_SYNC_PROTOCOL_NAME.into())
+        .id(P2P_SYNC_PROTOCOL)
         .protocol_spawn(spawn)
         .build()
 }

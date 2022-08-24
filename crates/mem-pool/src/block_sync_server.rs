@@ -8,7 +8,7 @@ use std::{
 use bytes::Bytes;
 use futures::{StreamExt, TryStreamExt};
 use gw_common::H256;
-use gw_p2p_network::{FnSpawn, P2P_BLOCK_SYNC_PROTOCOL, P2P_BLOCK_SYNC_PROTOCOL_NAME};
+use gw_p2p_network::{FnSpawn, P2P_SYNC_PROTOCOL, P2P_SYNC_PROTOCOL_NAME};
 use gw_types::{
     packed::{
         BlockSync, Confirmed, Found, L2Transaction, LocalBlock, NextMemBlock, P2PSyncRequest,
@@ -157,7 +157,7 @@ pub fn block_sync_server_protocol(publisher: Arc<Mutex<BlockSyncServerState>>) -
                 let mut send = |x: Bytes| {
                     let compressed: Bytes = encoder.encode(&x).expect("compress").into();
                     log::debug!("compression: {} -> {}", x.len(), compressed.len());
-                    control.send_message_to(session_id, P2P_BLOCK_SYNC_PROTOCOL, compressed)
+                    control.send_message_to(session_id, P2P_SYNC_PROTOCOL, compressed)
                 };
                 let result = publisher.lock().unwrap().get_and_subscribe(request);
                 match result {
@@ -186,8 +186,8 @@ pub fn block_sync_server_protocol(publisher: Arc<Mutex<BlockSyncServerState>>) -
         });
     });
     MetaBuilder::new()
-        .name(|_| P2P_BLOCK_SYNC_PROTOCOL_NAME.into())
-        .id(P2P_BLOCK_SYNC_PROTOCOL)
+        .name(|_| P2P_SYNC_PROTOCOL_NAME.into())
+        .id(P2P_SYNC_PROTOCOL)
         .protocol_spawn(spawn)
         .build()
 }

@@ -221,8 +221,7 @@ impl<F: Fn(Arc<SessionContext>, &ServiceAsyncControl, SubstreamReadPart)> Protoc
 
 // Protocol registry: all p2p protocols should be declared here.
 
-pub const P2P_MEM_BLOCK_SYNC_PROTOCOL: ProtocolId = ProtocolId::new(1);
-pub const P2P_MEM_BLOCK_SYNC_PROTOCOL_NAME: &str = "/p2p/mem_block_sync";
-
-pub const P2P_BLOCK_SYNC_PROTOCOL: ProtocolId = ProtocolId::new(2);
-pub const P2P_BLOCK_SYNC_PROTOCOL_NAME: &str = "/p2p/block_sync";
+// Sync local blocks, block submission and confirmation events as well as mem
+// blocks and mem block transactions.
+pub const P2P_SYNC_PROTOCOL: ProtocolId = ProtocolId::new(3);
+pub const P2P_SYNC_PROTOCOL_NAME: &str = "/p2p/sync";
