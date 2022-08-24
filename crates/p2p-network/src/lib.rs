@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap, HashSet},
     sync::Arc,
     time::Duration,
 };
@@ -12,7 +12,7 @@ use tentacle::{
     async_trait,
     builder::ServiceBuilder,
     context::{ServiceContext, SessionContext},
-    multiaddr::MultiAddr,
+    multiaddr::{MultiAddr, Protocol},
     secio::{PeerId, SecioKeyPair},
     service::{
         ProtocolMeta, Service, ServiceAsyncControl, ServiceError, ServiceEvent, TargetProtocol,
@@ -123,6 +123,46 @@ struct SHandle {
     dial_backoff: HashMap<MultiAddr, ExponentialBackoff>,
 }
 
+impl SHandle {
+    fn re_dial(&mut self, context: &ServiceContext, address: MultiAddr) {
+        let address_without_peer_id: MultiAddr = address
+            .iter()
+            .take_while(|x| !matches!(x, Protocol::P2P(_)))
+            .collect();
+        let entry = match self.dial_backoff.entry(address) {
+            Entry::Vacant(_) => self.dial_backoff.entry(address_without_peer_id),
+            e => e,
+        };
+        if let Entry::Occupied(mut o) = entry {
+            let dial = o.key().clone();
+            let backoff = o.get_mut();
+            let sleep = backoff.next_sleep();
+            // Reconnect in a newly spawned task so that we don't block the whole tentacle service.
+            let control = context.control().clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(sleep).await;
+                log::info!("dial {}", dial);
+                let _ = control.dial(dial, TargetProtocol::All).await;
+            });
+        }
+    }
+
+    fn reset(&mut self, address: MultiAddr) {
+        let address_without_peer_id: MultiAddr = address
+            .iter()
+            .take_while(|x| !matches!(x, Protocol::P2P(_)))
+            .collect();
+        let entry = match self.dial_backoff.entry(address) {
+            Entry::Vacant(_) => self.dial_backoff.entry(address_without_peer_id),
+            e => e,
+        };
+        if let Entry::Occupied(mut o) = entry {
+            let backoff = o.get_mut();
+            backoff.reset();
+        }
+    }
+}
+
 #[async_trait]
 impl ServiceHandle for SHandle {
     // A lot of internal error events will be output here, but not all errors need to close the service,
@@ -130,16 +170,7 @@ impl ServiceHandle for SHandle {
     async fn handle_error(&mut self, context: &mut ServiceContext, error: ServiceError) {
         log::info!("service error: {:?}", error);
         if let ServiceError::DialerError { address, error: _ } = error {
-            if let Some(backoff) = self.dial_backoff.get_mut(&address) {
-                let sleep = backoff.next_sleep();
-                // Reconnect in a newly spawned task so that we don't block the whole tentacle service.
-                let control = context.control().clone();
-                tokio::spawn(async move {
-                    tokio::time::sleep(sleep).await;
-                    log::info!("dial {}", address);
-                    let _ = control.dial(address, TargetProtocol::All).await;
-                });
-            }
+            self.re_dial(context, address);
         }
     }
 
@@ -147,16 +178,7 @@ impl ServiceHandle for SHandle {
         log::info!("service event: {:?}", event);
         match event {
             ServiceEvent::SessionClose { session_context } => {
-                let address = session_context.address.clone();
-                if let Some(backoff) = self.dial_backoff.get_mut(&address) {
-                    let sleep = backoff.next_sleep();
-                    let control = context.control().clone();
-                    tokio::spawn(async move {
-                        tokio::time::sleep(sleep).await;
-                        log::info!("dial {}", address);
-                        let _ = control.dial(address.clone(), TargetProtocol::All).await;
-                    });
-                }
+                self.re_dial(context, session_context.address.clone());
             }
             ServiceEvent::SessionOpen { session_context } => {
                 // Check allow list.
@@ -172,8 +194,8 @@ impl ServiceHandle for SHandle {
                 };
                 if !allow {
                     let _ = context.control().disconnect(session_context.id).await;
-                } else if let Some(backoff) = self.dial_backoff.get_mut(&session_context.address) {
-                    backoff.reset();
+                } else {
+                    self.reset(session_context.address.clone());
                 }
             }
             _ => (),
