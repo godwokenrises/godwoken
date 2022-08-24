@@ -750,7 +750,7 @@ impl Generator {
             });
         if let Some(backend) = polyjuice_backend {
             let mut args = self.rollup_context().rollup_script_hash.as_slice().to_vec();
-            args.copy_from_slice(&CKB_SUDT_ACCOUNT_ID.to_le_bytes());
+            args.extend_from_slice(&CKB_SUDT_ACCOUNT_ID.to_le_bytes());
             let script = Script::new_builder()
                 .code_hash(backend.validator_script_type_hash.pack())
                 .hash_type(ScriptHashType::Type.into())
