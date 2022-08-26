@@ -679,18 +679,12 @@ impl MemPool {
 
         // estimate next l2block timestamp
         let estimated_timestamp = {
-            let estimated = self.provider.estimate_next_blocktime().await?;
+            let estimated = self.provider.estimate_next_blocktime().await;
             let tip_timestamp = Duration::from_millis(new_tip_block.raw().timestamp().unpack());
-            if estimated <= tip_timestamp {
-                let overwriten_timestamp = tip_timestamp.saturating_add(Duration::from_secs(1));
-                log::warn!(
-                    "[mem-pool] reset mem-pool with insatisfied estimated time, overwrite estimated time {:?} -> {:?}",
-                    estimated,
-                    overwriten_timestamp
-                );
-                overwriten_timestamp
-            } else {
-                estimated
+            match estimated {
+                Ok(e) if e <= tip_timestamp => tip_timestamp.saturating_add(Duration::from_secs(1)),
+                Err(_) => tip_timestamp.saturating_add(Duration::from_secs(1)),
+                Ok(e) => e,
             }
         };
         // reset mem block state

@@ -381,7 +381,8 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
         .lock()
         .await
         .notify_new_tip(block_hash, &local_cells_manager)
-        .await?;
+        .await
+        .expect("notify new tip");
 
     Ok(())
 }
