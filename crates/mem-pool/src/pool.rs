@@ -40,7 +40,7 @@ use gw_types::{
     },
     prelude::{Builder, Entity, Pack, PackVec, Unpack},
 };
-use gw_utils::{block_in_place_if_not_testing, local_cells::LocalCellsManager};
+use gw_utils::local_cells::LocalCellsManager;
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
@@ -267,7 +267,7 @@ impl MemPool {
     /// Push a layer2 tx into pool
     #[instrument(skip_all)]
     pub fn push_transaction(&mut self, tx: L2Transaction) -> Result<()> {
-        block_in_place_if_not_testing(|| {
+        tokio::task::block_in_place(|| {
             let db = self.store.begin_transaction();
 
             let snap = self.mem_pool_state.load();

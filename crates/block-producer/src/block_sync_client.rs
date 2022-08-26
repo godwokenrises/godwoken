@@ -18,15 +18,18 @@ use gw_types::{
     },
     prelude::Unpack,
 };
-use gw_utils::{block_in_place_if_not_testing, compression::StreamDecoder};
+use gw_utils::compression::StreamDecoder;
 use tentacle::{
     builder::MetaBuilder,
     service::{ProtocolMeta, ServiceAsyncControl},
     SessionId, SubstreamReadPart,
 };
-use tokio::sync::{
-    mpsc::{UnboundedReceiver, UnboundedSender},
-    Mutex,
+use tokio::{
+    sync::{
+        mpsc::{UnboundedReceiver, UnboundedSender},
+        Mutex,
+    },
+    task::block_in_place,
 };
 
 use crate::{
@@ -184,7 +187,7 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             {
                 log::info!("update local block");
                 let mut chain = client.chain.lock().await;
-                block_in_place_if_not_testing(|| {
+                block_in_place(|| {
                     chain.update_local(
                         &store_tx,
                         l.block(),

@@ -20,10 +20,7 @@ use gw_types::{
     },
     prelude::*,
 };
-use gw_utils::{
-    abort_on_drop::spawn_abort_on_drop, block_in_place_if_not_testing,
-    local_cells::LocalCellsManager, since::Since,
-};
+use gw_utils::{abort_on_drop::spawn_abort_on_drop, local_cells::LocalCellsManager, since::Since};
 use tokio::{sync::Mutex, time::Instant};
 use tracing::instrument;
 
@@ -338,7 +335,7 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
     let store_tx = ctx.store.begin_transaction();
 
     let mut chain = ctx.chain.lock().await;
-    block_in_place_if_not_testing(|| {
+    tokio::task::block_in_place(|| {
         chain.update_local(
             &store_tx,
             block,

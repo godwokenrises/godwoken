@@ -69,7 +69,7 @@ async fn test_polyjuice_erc20_tx() {
     assert_eq!(system_log.status_code, 0);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_polyjuice_tx_from_id_zero() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -175,7 +175,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_invalid_polyjuice_tx_from_id_zero() {
     let _ = env_logger::builder().is_test(true).try_init();
 
