@@ -266,21 +266,23 @@ impl MemPool {
 
     /// Push a layer2 tx into pool
     #[instrument(skip_all)]
-    pub async fn push_transaction(&mut self, tx: L2Transaction) -> Result<()> {
-        let db = self.store.begin_transaction();
+    pub fn push_transaction(&mut self, tx: L2Transaction) -> Result<()> {
+        block_in_place_if_not_testing(|| {
+            let db = self.store.begin_transaction();
 
-        let snap = self.mem_pool_state.load();
-        let mut state = snap.state()?;
-        self.push_transaction_with_db(&db, &mut state, tx).await?;
-        db.commit()?;
-        self.mem_pool_state.store(snap.into());
+            let snap = self.mem_pool_state.load();
+            let mut state = snap.state()?;
+            self.push_transaction_with_db(&db, &mut state, tx)?;
+            db.commit()?;
+            self.mem_pool_state.store(snap.into());
 
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Push a layer2 tx into pool
     #[instrument(skip_all, fields(tx_hash = %tx.hash().pack()))]
-    async fn push_transaction_with_db(
+    fn push_transaction_with_db(
         &mut self,
         db: &StoreTransaction,
         state: &mut MemStateTree<'_>,
@@ -308,7 +310,7 @@ impl MemPool {
 
         // instantly run tx in background & update local state
         let t = Instant::now();
-        let tx_receipt = self.execute_tx(db, state, tx.clone()).await?;
+        let tx_receipt = self.execute_tx(db, state, tx.clone())?;
         log::debug!("[push tx] finalize tx time: {}ms", t.elapsed().as_millis());
 
         // save tx receipt in mem pool
@@ -864,7 +866,7 @@ impl MemPool {
 
         // re-inject txs
         for tx in txs {
-            if let Err(err) = self.push_transaction_with_db(db, state, tx.clone()).await {
+            if let Err(err) = self.push_transaction_with_db(db, state, tx.clone()) {
                 let tx_hash = tx.hash();
                 log::info!(
                     "[mem pool] fail to re-inject tx {}, error: {}",
@@ -1068,7 +1070,7 @@ impl MemPool {
 
     /// Execute tx & update local state
     #[instrument(skip_all)]
-    async fn execute_tx(
+    fn execute_tx(
         &mut self,
         db: &StoreTransaction,
         state: &mut MemStateTree<'_>,
@@ -1108,16 +1110,14 @@ impl MemPool {
 
         // execute tx
         let raw_tx = tx.raw();
-        let run_result = block_in_place_if_not_testing(|| {
-            generator.unchecked_execute_transaction(
-                &chain_view,
-                state,
-                block_info,
-                &raw_tx,
-                L2TX_MAX_CYCLES,
-                Some(cycles_pool),
-            )
-        })?;
+        let run_result = generator.unchecked_execute_transaction(
+            &chain_view,
+            state,
+            block_info,
+            &raw_tx,
+            L2TX_MAX_CYCLES,
+            Some(cycles_pool),
+        )?;
 
         // check account id of sudt proxy contract creator is from whitelist
         {
@@ -1136,7 +1136,7 @@ impl MemPool {
         }
         // apply run result
         let t = Instant::now();
-        block_in_place_if_not_testing(|| state.apply_run_result(&run_result.write))?;
+        state.apply_run_result(&run_result.write)?;
         log::debug!(
             "[finalize tx] apply run result: {}ms",
             t.elapsed().as_millis()

@@ -130,7 +130,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     mem_pool_state.store(snap.into());
     {
         let mut mem_pool = chain.mem_pool().await;
-        mem_pool.push_transaction(deploy_tx).await.unwrap();
+        mem_pool.push_transaction(deploy_tx).unwrap();
     }
 
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();
@@ -269,7 +269,7 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
         .build();
     {
         let mut mem_pool = chain.mem_pool().await;
-        mem_pool.push_transaction(deploy_tx).await.unwrap();
+        mem_pool.push_transaction(deploy_tx).unwrap();
     }
 
     let snap = mem_pool_state.load();
@@ -294,7 +294,7 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
 
     {
         let mut mem_pool = chain.mem_pool().await;
-        mem_pool.push_transaction(deploy_tx).await.unwrap();
+        mem_pool.push_transaction(deploy_tx).unwrap();
     }
 
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();
@@ -354,7 +354,7 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
     let transfer_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
     {
         let mut mem_pool = chain.mem_pool().await;
-        mem_pool.push_transaction(transfer_tx).await.unwrap();
+        mem_pool.push_transaction(transfer_tx).unwrap();
     }
 
     let snap = mem_pool_state.load();
@@ -508,7 +508,7 @@ async fn test_invalid_registry_address() {
     mem_pool_state.store(snap.into());
     {
         let mut mem_pool = chain.mem_pool().await;
-        mem_pool.push_transaction(deploy_tx).await.unwrap();
+        mem_pool.push_transaction(deploy_tx).unwrap();
     }
 
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();

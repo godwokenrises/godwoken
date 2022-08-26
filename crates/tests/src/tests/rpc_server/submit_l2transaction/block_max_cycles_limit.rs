@@ -122,7 +122,7 @@ async fn test_block_max_cycles_limit() {
 
     {
         let mut mem_pool = chain.mem_pool().await;
-        mem_pool.push_transaction(deploy_tx).await.unwrap();
+        mem_pool.push_transaction(deploy_tx).unwrap();
     }
 
     // Refresh block cycles limit
@@ -201,7 +201,7 @@ async fn test_block_max_cycles_limit() {
         assert!(cycles < bob_deploy_gas_limit);
 
         // Directly push bob tx will result in TransactionError::BlockCyclesLimitReached
-        let err = mem_pool.push_transaction(bob_deploy_tx).await.unwrap_err();
+        let err = mem_pool.push_transaction(bob_deploy_tx).unwrap_err();
         eprintln!("err {}", err);
 
         let expected_err = "Insufficient pool cycles";
@@ -432,10 +432,7 @@ async fn test_block_max_cycles_limit() {
     // Check err
     {
         let mut mem_pool = chain.mem_pool().await;
-        let err = mem_pool
-            .push_transaction(alice_deploy_tx)
-            .await
-            .unwrap_err();
+        let err = mem_pool.push_transaction(alice_deploy_tx).unwrap_err();
 
         let (cycles, limit) = match err.downcast::<TransactionError>().unwrap() {
             TransactionError::ExceededMaxBlockCycles { cycles, limit } => (cycles, limit),

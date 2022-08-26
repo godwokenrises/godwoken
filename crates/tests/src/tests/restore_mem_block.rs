@@ -165,7 +165,7 @@ async fn test_restore_mem_block() {
             .await
             .unwrap();
         for tx in random_txs.clone() {
-            mem_pool.push_transaction(tx).await.unwrap();
+            mem_pool.push_transaction(tx).unwrap();
         }
 
         let mem_block = mem_pool.mem_block();

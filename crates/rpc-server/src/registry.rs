@@ -478,7 +478,7 @@ impl RequestSubmitter {
             while let Some(hash) = mem_pool.pending_restored_tx_hashes().pop_front() {
                 match db.get_mem_pool_transaction(&hash) {
                     Ok(Some(tx)) => {
-                        if let Err(err) = mem_pool.push_transaction(tx).await {
+                        if let Err(err) = mem_pool.push_transaction(tx) {
                             log::error!("reinject mem block tx {} failed {}", hash.pack(), err);
                         }
                     }
@@ -628,9 +628,7 @@ impl RequestSubmitter {
                 );
 
                 if let Err(err) = match recovered_senders.build_create_tx(eth_recover, &state) {
-                    Ok(Some(create_accounts_tx)) => {
-                        mem_pool.push_transaction(create_accounts_tx).await
-                    }
+                    Ok(Some(create_accounts_tx)) => mem_pool.push_transaction(create_accounts_tx),
                     Ok(None) => Ok(()),
                     Err(err) => Err(err),
                 } {
@@ -690,9 +688,9 @@ impl RequestSubmitter {
                                 tx.hash().pack()
                             );
 
-                            mem_pool.push_transaction(tx).await
+                            mem_pool.push_transaction(tx)
                         }
-                        FeeItem::Tx(tx) => mem_pool.push_transaction(tx).await,
+                        FeeItem::Tx(tx) => mem_pool.push_transaction(tx),
                         FeeItem::Withdrawal(withdrawal) => {
                             mem_pool.push_withdrawal_request(withdrawal).await
                         }

@@ -92,7 +92,7 @@ async fn test_eth_account_creator() {
     mem_pool_state.store(snap.into());
     {
         let mut mem_pool = chain.mem_pool().await;
-        mem_pool.push_transaction(batch_create_tx).await.unwrap();
+        mem_pool.push_transaction(batch_create_tx).unwrap();
     }
 
     let snap = mem_pool_state.load();

@@ -248,7 +248,7 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             log::info!("received L2Transaction 0x{}", hex::encode(tx.hash()));
             if let Some(ref mem_pool) = client.mem_pool {
                 let mut mem_pool = mem_pool.lock().await;
-                let result = mem_pool.push_transaction(tx).await;
+                let result = mem_pool.push_transaction(tx);
                 if let Err(err) = result {
                     log::warn!("{:#}", err);
                 }
