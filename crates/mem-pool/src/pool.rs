@@ -219,6 +219,10 @@ impl MemPool {
         &mut self.cycles_pool
     }
 
+    pub fn config(&self) -> &MemBlockConfig {
+        &self.mem_block_config
+    }
+
     pub fn restore_manager(&self) -> &RestoreManager {
         &self.restore_manager
     }
@@ -1238,11 +1242,7 @@ impl MemPool {
         self.remove_unexecutables(&mut mem_state, &db).await?;
 
         // reset cycles pool available cycles.
-        // recreate from config, in case we migrate to dynamic config in the future.
-        self.cycles_pool = CyclesPool::new(
-            self.mem_block_config.max_cycles_limit,
-            self.mem_block_config.syscall_cycles.clone(),
-        );
+        self.cycles_pool = CyclesPool::new(u64::MAX, SyscallCyclesConfig::all_zero());
 
         // prepare next mem block
         self.try_package_more_withdrawals(&mem_state, &mut withdrawals);

@@ -7,6 +7,7 @@ use bytes::Bytes;
 use ckb_types::prelude::{Builder, Entity, Reader};
 use futures::TryStreamExt;
 use gw_chain::chain::Chain;
+use gw_generator::generator::CyclesPool;
 use gw_mem_pool::pool::MemPool;
 use gw_p2p_network::{FnSpawn, P2P_SYNC_PROTOCOL, P2P_SYNC_PROTOCOL_NAME};
 use gw_rpc_client::rpc_client::RPCClient;
@@ -251,6 +252,12 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             log::info!("received L2Transaction 0x{}", hex::encode(tx.hash()));
             if let Some(ref mem_pool) = client.mem_pool {
                 let mut mem_pool = mem_pool.lock().await;
+                let mem_block_config = mem_pool.config();
+                *mem_pool.cycles_pool_mut() = CyclesPool::new(
+                    mem_block_config.max_cycles_limit,
+                    mem_block_config.syscall_cycles.clone(),
+                );
+
                 let result = mem_pool.push_transaction(tx);
                 if let Err(err) = result {
                     log::warn!("{:#}", err);
