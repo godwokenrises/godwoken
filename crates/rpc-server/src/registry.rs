@@ -829,25 +829,26 @@ async fn get_block_committed_info(
     store: Data<Store>,
 ) -> Result<Option<L2BlockCommittedInfo>> {
     if let Some(number) = store.get_block_number(&to_h256(block_hash))? {
-        let transaction_hash = store
-            .get_block_submit_tx_hash(number)
-            .context("get submit tx")?;
-        let opt_block_hash = rpc_client
-            .ckb
-            .get_transaction_block_hash(transaction_hash)
-            .await?;
-        if let Some(block_hash) = opt_block_hash {
-            let number = rpc_client
-                .get_header(block_hash.into())
-                .await?
-                .context("get block header")?
-                .inner
-                .number;
-            Ok(Some(L2BlockCommittedInfo {
-                number,
-                block_hash: block_hash.into(),
-                transaction_hash: to_jsonh256(transaction_hash),
-            }))
+        if let Some(transaction_hash) = store.get_block_submit_tx_hash(number) {
+            let opt_block_hash = rpc_client
+                .ckb
+                .get_transaction_block_hash(transaction_hash)
+                .await?;
+            if let Some(block_hash) = opt_block_hash {
+                let number = rpc_client
+                    .get_header(block_hash.into())
+                    .await?
+                    .context("get block header")?
+                    .inner
+                    .number;
+                Ok(Some(L2BlockCommittedInfo {
+                    number,
+                    block_hash: block_hash.into(),
+                    transaction_hash: to_jsonh256(transaction_hash),
+                }))
+            } else {
+                Ok(None)
+            }
         } else {
             Ok(None)
         }
