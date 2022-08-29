@@ -42,7 +42,7 @@ impl Default for BlockSyncServerState {
 
 impl BlockSyncServerState {
     pub fn new() -> Self {
-        let (tx, _) = channel(8);
+        let (tx, _) = channel(128);
         Self {
             buffer: Default::default(),
             tx,
@@ -151,7 +151,7 @@ pub fn block_sync_server_protocol(publisher: Arc<Mutex<BlockSyncServerState>>) -
             // local blocks that are already published when pushed to mem pool,
             // will be compressed to just a few bytes.
             let mut encoder = StreamEncoder::new(3).expect("create StreamEncoder");
-            while let Some(msg) = read_part.try_next().await? {
+            'outer: while let Some(msg) = read_part.try_next().await? {
                 P2PSyncRequestReader::from_slice(msg.as_ref())?;
                 let request = P2PSyncRequest::new_unchecked(msg);
                 let mut send = |x: Bytes| {
@@ -168,13 +168,25 @@ pub fn block_sync_server_protocol(publisher: Arc<Mutex<BlockSyncServerState>>) -
                             send(msg.as_bytes()).await?;
                         }
                         loop {
-                            let msg = tokio::select! {
-                                _ = read_part.next() => break,
-                                result = receiver.recv() => result?,
+                            let result = tokio::select! {
+                                // We don't expect more messages from the peer.
+                                _ = read_part.next() => break 'outer,
+                                result = receiver.recv() => result,
                             };
-                            send(msg.as_bytes()).await?;
+                            match result {
+                                Ok(msg) => {
+                                    send(msg.as_bytes()).await?;
+                                }
+                                Err(_) => {
+                                    log::warn!(
+                                        "subscription lagged, closing. session: {}",
+                                        session_id
+                                    );
+                                    let _ = control.disconnect(session_id).await;
+                                    break 'outer;
+                                }
+                            }
                         }
-                        break;
                     }
                     Err(e) => {
                         let response = P2PSyncResponse::new_builder().set(e).build();
