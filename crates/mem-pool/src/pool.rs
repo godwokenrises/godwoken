@@ -332,7 +332,7 @@ impl MemPool {
         // verify transaction
         TransactionVerifier::new(
             state,
-            self.generator.rollup_context().clone(),
+            self.generator.rollup_context(),
             self.polyjuice_creator_id,
         )
         .verify(&tx)?;

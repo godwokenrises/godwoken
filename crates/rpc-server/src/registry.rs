@@ -1045,7 +1045,7 @@ async fn execute_l2transaction(
         // tx basic verification
         TransactionVerifier::new(
             &state,
-            ctx.generator.rollup_context().clone(),
+            ctx.generator.rollup_context(),
             ctx.polyjuice_creator_id,
         )
         .verify(&tx)?;

@@ -15,12 +15,12 @@ use crate::{
 
 pub struct TransactionVerifier<'a, S> {
     state: &'a S,
-    rollup_context: RollupContext,
+    rollup_context: &'a RollupContext,
     polyjuice_creator_id: u32,
 }
 
 impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
-    pub fn new(state: &'a S, rollup_context: RollupContext, polyjuice_creator_id: u32) -> Self {
+    pub fn new(state: &'a S, rollup_context: &'a RollupContext, polyjuice_creator_id: u32) -> Self {
         Self {
             state,
             rollup_context,
@@ -65,7 +65,7 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
         let balance = self
             .state
             .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &sender_address)?;
-        let tx_type = get_tx_type(&self.rollup_context, self.state, &tx.raw())?;
+        let tx_type = get_tx_type(self.rollup_context, self.state, &tx.raw())?;
         let typed_tx =
             TypedRawTransaction::from_tx(tx.raw(), tx_type).ok_or(AccountError::UnknownScript)?;
         // reject txs has no cost, these transaction can only be execute without modify state tree
@@ -99,7 +99,7 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
             if p.is_native_transfer() {
                 // Verify to_id is CREATOR_ID
                 let to_id = raw_tx.to_id().unpack();
-                if to_id == self.polyjuice_creator_id {
+                if to_id != self.polyjuice_creator_id {
                     return Err(TransactionError::NativeTransferInvalidToId(to_id).into());
                 }
             }

@@ -12,16 +12,11 @@ use gw_generator::{
     },
     backend_manage::BackendManage,
     genesis::init_genesis,
-    utils::get_polyjuice_creator_id,
     Generator,
 };
 
 use gw_mem_pool::pool::{MemPool, MemPoolCreateArgs, OutputParam};
-use gw_store::{
-    mem_pool_state::{MemPoolState, MemStore},
-    traits::chain_store::ChainStore,
-    Store,
-};
+use gw_store::{mem_pool_state::MemPoolState, traits::chain_store::ChainStore, Store};
 use gw_types::{
     bytes::Bytes,
     core::{AllowedContractType, AllowedEoaType, ScriptHashType},
@@ -527,16 +522,6 @@ pub async fn setup_chain_with_account_lock_manage(
         Default::default(),
     ));
     let provider = opt_mem_pool_provider.unwrap_or_default();
-    let snapshot = store.get_snapshot();
-    let mem_store = MemStore::new(snapshot);
-    let state = mem_store.state().expect("get state");
-    let polyjuice_creator_id = get_polyjuice_creator_id(
-        generator.rollup_context(),
-        generator.backend_manage(),
-        &state,
-    )
-    .expect("Get polyjuice coreator id.")
-    .unwrap();
     let args = MemPoolCreateArgs {
         block_producer: Default::default(),
         store: store.clone(),
@@ -546,7 +531,7 @@ pub async fn setup_chain_with_account_lock_manage(
         node_mode: gw_config::NodeMode::FullNode,
         dynamic_config_manager: Default::default(),
         has_p2p_sync: false,
-        polyjuice_creator_id,
+        polyjuice_creator_id: u32::MAX, //mock
     };
     let mem_pool = MemPool::create(args).await.unwrap();
     Chain::create(

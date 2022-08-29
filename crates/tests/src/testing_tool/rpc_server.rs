@@ -7,7 +7,6 @@ use gw_chain::chain::Chain;
 use gw_common::H256;
 use gw_config::{NodeMode::FullNode, RPCClientConfig, RPCMethods};
 
-use gw_generator::utils::get_polyjuice_creator_id;
 use gw_jsonrpc_types::{
     ckb_jsonrpc_types::{Byte32, JsonBytes, Uint64},
     godwoken::RunResult,
@@ -17,7 +16,6 @@ use gw_rpc_client::{
     ckb_client::CKBClient, indexer_client::CKBIndexerClient, rpc_client::RPCClient,
 };
 use gw_rpc_server::registry::{Registry, RegistryArgs};
-use gw_store::mem_pool_state::MemStore;
 use gw_types::{
     bytes::Bytes,
     packed::{L2Transaction, RawL2Transaction, Script, WithdrawalRequestExtra},
@@ -65,16 +63,6 @@ impl RPCServer {
 
         let polyjuice_sender_recover =
             PolyjuiceSenderRecover::create(generator.rollup_context(), creator_wallet).unwrap();
-        let snapshot = store.get_snapshot();
-        let mem_store = MemStore::new(snapshot);
-        let state = mem_store.state().expect("get state");
-        let polyjuice_creator_id = get_polyjuice_creator_id(
-            generator.rollup_context(),
-            generator.backend_manage(),
-            &state,
-        )
-        .expect("Get polyjuice coreator id.")
-        .unwrap();
 
         RegistryArgs {
             store,
@@ -95,7 +83,7 @@ impl RPCServer {
             dynamic_config_manager: Default::default(),
             last_submitted_tx_hash: None,
             polyjuice_sender_recover,
-            polyjuice_creator_id,
+            polyjuice_creator_id: u32::MAX,
         }
     }
 
