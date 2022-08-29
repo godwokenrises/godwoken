@@ -107,6 +107,7 @@ pub struct MemPool {
     has_p2p_sync: bool,
     /// Cycles Pool
     cycles_pool: CyclesPool,
+    polyjuice_creator_id: u32,
 }
 
 pub struct MemPoolCreateArgs {
@@ -118,6 +119,7 @@ pub struct MemPoolCreateArgs {
     pub node_mode: NodeMode,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     pub has_p2p_sync: bool,
+    pub polyjuice_creator_id: u32,
 }
 
 impl Drop for MemPool {
@@ -141,6 +143,7 @@ impl MemPool {
             node_mode,
             dynamic_config_manager,
             has_p2p_sync,
+            polyjuice_creator_id,
         } = args;
         let pending = Default::default();
 
@@ -210,6 +213,7 @@ impl MemPool {
             mem_block_config: config.mem_block,
             has_p2p_sync,
             cycles_pool,
+            polyjuice_creator_id,
         };
         mem_pool.restore_pending_withdrawals().await?;
 
@@ -326,7 +330,12 @@ impl MemPool {
         }
 
         // verify transaction
-        TransactionVerifier::new(state, self.generator.clone()).verify(&tx)?;
+        TransactionVerifier::new(
+            state,
+            self.generator.rollup_context().clone(),
+            self.polyjuice_creator_id,
+        )
+        .verify(&tx)?;
         // verify signature
         self.generator.check_transaction_signature(state, &tx)?;
 

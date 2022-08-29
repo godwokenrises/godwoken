@@ -20,6 +20,7 @@ use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
     backend_manage::BackendManage,
     genesis::init_genesis,
+    utils::get_polyjuice_creator_id,
     ArcSwap, Generator,
 };
 use gw_mem_pool::{
@@ -38,7 +39,7 @@ use gw_rpc_server::{
     registry::{Registry, RegistryArgs},
     server::start_jsonrpc_server,
 };
-use gw_store::Store;
+use gw_store::{mem_pool_state::MemStore, Store};
 use gw_types::{
     bytes::Bytes,
     core::AllowedEoaType,
@@ -563,6 +564,18 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
     }
     let base = BaseInitComponents::init(&config, skip_config_check).await?;
+
+    // Read polyjuice creator id from backend.
+    let snapshot = base.store.get_snapshot();
+    let mem_store = MemStore::new(snapshot);
+    let state = mem_store.state()?;
+    let polyjuice_creator_id = get_polyjuice_creator_id(
+        base.generator.rollup_context(),
+        base.generator.backend_manage(),
+        &state,
+    )?
+    .ok_or_else(|| anyhow!("Get polyjuice coreator id."))?;
+
     let (mem_pool, wallet, offchain_mock_context) = match config.block_producer.as_ref() {
         Some(block_producer_config) => {
             let opt_wallet = block_producer_config
@@ -596,6 +609,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     node_mode: config.node_mode,
                     dynamic_config_manager: base.dynamic_config_manager.clone(),
                     has_p2p_sync: config.p2p_network_config.is_some(),
+                    polyjuice_creator_id,
                 };
                 Arc::new(Mutex::new(
                     MemPool::create(args)
@@ -842,6 +856,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
             .as_ref()
             .map(|bp| bp.last_submitted_tx_hash()),
         polyjuice_sender_recover,
+        polyjuice_creator_id,
     };
 
     let rpc_registry = Registry::create(args).await;

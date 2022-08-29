@@ -29,7 +29,8 @@ use gw_common::{
     },
     H256,
 };
-use gw_config::{BackendType, ContractLogConfig, SyscallCyclesConfig};
+
+use gw_config::{ContractLogConfig, SyscallCyclesConfig};
 use gw_store::{state::state_db::StateContext, transaction::StoreTransaction};
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
@@ -38,7 +39,7 @@ use gw_types::{
     offchain::{RollupContext, RunResult, RunResultCycles},
     packed::{
         AccountMerkleState, BlockInfo, ChallengeTarget, DepositRequest, L2Block, L2Transaction,
-        RawL2Block, RawL2Transaction, Script, TxReceipt, WithdrawalReceipt, WithdrawalRequestExtra,
+        RawL2Block, RawL2Transaction, TxReceipt, WithdrawalReceipt, WithdrawalRequestExtra,
     },
     prelude::*,
 };
@@ -734,33 +735,6 @@ impl Generator {
 
     pub fn backend_manage(&self) -> &BackendManage {
         &self.backend_manage
-    }
-
-    pub fn get_polyjuice_creator_id<S: State + CodeStore>(
-        &self,
-        state: &S,
-    ) -> Result<Option<u32>, gw_common::error::Error> {
-        let polyjuice_backend = self
-            .backend_manage
-            .get_backends_at_height(u64::MAX)
-            .and_then(|(_, backends)| {
-                backends
-                    .values()
-                    .find(|backend| backend.backend_type == BackendType::Polyjuice)
-            });
-        if let Some(backend) = polyjuice_backend {
-            let mut args = self.rollup_context().rollup_script_hash.as_slice().to_vec();
-            args.extend_from_slice(&CKB_SUDT_ACCOUNT_ID.to_le_bytes());
-            let script = Script::new_builder()
-                .code_hash(backend.validator_script_type_hash.pack())
-                .hash_type(ScriptHashType::Type.into())
-                .args(args.pack())
-                .build();
-            let script_hash = script.hash();
-            state.get_account_id_by_script_hash(&script_hash.into())
-        } else {
-            Ok(None)
-        }
     }
 
     // check and handle run_result before return
