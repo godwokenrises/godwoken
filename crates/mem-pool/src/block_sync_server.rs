@@ -8,6 +8,7 @@ use std::{
 use bytes::Bytes;
 use futures::{StreamExt, TryStreamExt};
 use gw_common::H256;
+use gw_config::SyncServerConfig;
 use gw_p2p_network::{FnSpawn, P2P_SYNC_PROTOCOL, P2P_SYNC_PROTOCOL_NAME};
 use gw_types::{
     packed::{
@@ -20,8 +21,6 @@ use gw_utils::compression::StreamEncoder;
 use tentacle::{builder::MetaBuilder, service::ProtocolMeta};
 use tokio::sync::broadcast::{channel, Receiver, Sender};
 
-const KEEP_BLOCKS: u64 = 16;
-
 #[derive(Default)]
 struct BlockMessages {
     hash: H256,
@@ -32,20 +31,16 @@ pub struct BlockSyncServerState {
     // Block number -> block hash and messages.
     buffer: BTreeMap<u64, BlockMessages>,
     tx: Sender<BlockSync>,
-}
-
-impl Default for BlockSyncServerState {
-    fn default() -> Self {
-        Self::new()
-    }
+    buffer_capacity: u64,
 }
 
 impl BlockSyncServerState {
-    pub fn new() -> Self {
-        let (tx, _) = channel(128);
+    pub fn new(config: &SyncServerConfig) -> Self {
+        let (tx, _) = channel(config.broadcast_channel_capacity);
         Self {
             buffer: Default::default(),
             tx,
+            buffer_capacity: config.buffer_capacity,
         }
     }
 
@@ -85,7 +80,7 @@ impl BlockSyncServerState {
         // Remove messages for block number < number.saturating_sub(KEEP_BLOCKS).
         self.buffer = self
             .buffer
-            .split_off(&(number.saturating_sub(KEEP_BLOCKS) + 1));
+            .split_off(&(number.saturating_sub(self.buffer_capacity) + 1));
     }
 
     pub fn publish_revert(&mut self, revert: Revert) {

@@ -47,6 +47,8 @@ pub struct Config {
     pub dynamic_config: DynamicConfig,
     #[serde(default)]
     pub p2p_network_config: Option<P2PNetworkConfig>,
+    #[serde(default)]
+    pub sync_server: SyncServerConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -315,15 +317,18 @@ pub struct P2PNetworkConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PublishMemPoolConfig {
-    pub hosts: Vec<String>,
-    pub topic: String,
+pub struct SyncServerConfig {
+    pub buffer_capacity: u64,
+    pub broadcast_channel_capacity: usize,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SubscribeMemPoolConfig {
-    pub hosts: Vec<String>,
-    pub topic: String,
-    pub group: String,
+
+impl Default for SyncServerConfig {
+    fn default() -> Self {
+        Self {
+            buffer_capacity: 16,
+            broadcast_channel_capacity: 1024,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -331,8 +336,6 @@ pub struct MemPoolConfig {
     pub execute_l2tx_max_cycles: u64,
     #[serde(default = "default_restore_path")]
     pub restore_path: PathBuf,
-    pub publish: Option<PublishMemPoolConfig>,
-    pub subscribe: Option<SubscribeMemPoolConfig>,
     #[serde(default)]
     pub mem_block: MemBlockConfig,
 }
@@ -418,8 +421,6 @@ impl Default for MemPoolConfig {
         Self {
             execute_l2tx_max_cycles: 100_000_000,
             restore_path: default_restore_path(),
-            publish: None,
-            subscribe: None,
             mem_block: MemBlockConfig::default(),
         }
     }

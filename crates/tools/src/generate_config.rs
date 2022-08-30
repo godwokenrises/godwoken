@@ -249,16 +249,9 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         consensus,
         block_producer,
         node_mode,
-        debug: Default::default(),
-        offchain_validator: Default::default(),
-        mem_pool: Default::default(),
-        db_block_validator: Default::default(),
         store,
-        trace: None,
-        reload_config_github_url: None,
-        dynamic_config: Default::default(),
         p2p_network_config,
-        contract_log_config: Default::default(),
+        ..Default::default()
     };
 
     Ok(config)

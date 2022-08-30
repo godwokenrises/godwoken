@@ -499,7 +499,9 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     let has_block_producer_and_p2p =
         config.block_producer.is_some() && config.p2p_network_config.is_some();
     let block_sync_server_state = if has_block_producer_and_p2p {
-        Some(Arc::new(std::sync::Mutex::new(BlockSyncServerState::new())))
+        Some(Arc::new(std::sync::Mutex::new(BlockSyncServerState::new(
+            &config.sync_server,
+        ))))
     } else {
         None
     };
