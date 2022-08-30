@@ -179,20 +179,20 @@ pub struct BlockProducerConfig {
 #[serde(default)]
 pub struct PscConfig {
     /// Maximum number local blocks. Local blocks are blocks that have not been
-    /// submitted to L1. Default is 3.
+    /// submitted to L1. Default is 5.
     pub local_limit: u64,
-    /// Maximum number of submitted (but not confirmed) blocks. Default is 3.
+    /// Maximum number of submitted (but not confirmed) blocks. Default is 5.
     pub submitted_limit: u64,
-    /// Minimum delay between blocks. Default is 7 seconds.
+    /// Minimum delay between blocks. Default is 8 seconds.
     pub block_interval_secs: u64,
 }
 
 impl Default for PscConfig {
     fn default() -> Self {
         Self {
-            local_limit: 3,
-            submitted_limit: 3,
-            block_interval_secs: 7,
+            local_limit: 5,
+            submitted_limit: 5,
+            block_interval_secs: 8,
         }
     }
 }
