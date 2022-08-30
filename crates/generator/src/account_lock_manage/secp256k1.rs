@@ -74,7 +74,7 @@ impl Secp256k1Eth {
         Ok(message.into())
     }
 
-    fn domain_with_chain_id(chain_id: u64) -> EIP712Domain {
+    pub fn domain_with_chain_id(chain_id: u64) -> EIP712Domain {
         EIP712Domain {
             name: "Godwoken".to_string(),
             chain_id,
