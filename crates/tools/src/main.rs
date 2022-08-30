@@ -1091,7 +1091,7 @@ async fn main() -> Result<()> {
             let capacity = m.value_of("capacity").unwrap();
             let amount = m.value_of("amount").unwrap();
             let fee = m.value_of("fee").unwrap();
-            let chain_id = m.value_of("chain_id").unwrap();
+            let chain_id = m.value_of("chain-id").unwrap();
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
