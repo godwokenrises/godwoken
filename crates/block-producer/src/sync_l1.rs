@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use gw_chain::chain::{Chain, RevertedL1Action};
 use gw_jsonrpc_types::ckb_jsonrpc_types::BlockNumber;
 use gw_rpc_client::{
@@ -34,6 +34,12 @@ pub async fn sync_l1(ctx: &(dyn SyncL1Context + Sync + Send)) -> Result<()> {
     let mut backoff = ExponentialBackoff::new(Duration::from_secs(1));
     loop {
         if let Err(err) = sync_l1_impl(ctx).await {
+            if err.is::<gw_db::error::Error>() {
+                // We cannot recover from db commit error because Chain
+                // local_state would be wrong. Chain always assumes that commit
+                // will success.
+                bail!(err);
+            }
             log::warn!("{:#}", err);
             tokio::time::sleep(backoff.next_sleep()).await;
         } else {
