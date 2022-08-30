@@ -20,6 +20,7 @@ use gw_generator::{
     error::TransactionError,
     generator::CyclesPool,
     traits::StateExt,
+    utils::get_polyjuice_creator_id,
     verification::{transaction::TransactionVerifier, withdrawal::WithdrawalVerifier},
     ArcSwap, Generator,
 };
@@ -107,7 +108,7 @@ pub struct MemPool {
     has_p2p_sync: bool,
     /// Cycles Pool
     cycles_pool: CyclesPool,
-    polyjuice_creator_id: u32,
+    polyjuice_creator_id: Option<u32>,
 }
 
 pub struct MemPoolCreateArgs {
@@ -119,7 +120,7 @@ pub struct MemPoolCreateArgs {
     pub node_mode: NodeMode,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     pub has_p2p_sync: bool,
-    pub polyjuice_creator_id: u32,
+    pub polyjuice_creator_id: Option<u32>,
 }
 
 impl Drop for MemPool {
@@ -330,12 +331,9 @@ impl MemPool {
         }
 
         // verify transaction
-        TransactionVerifier::new(
-            state,
-            self.generator.rollup_context(),
-            self.polyjuice_creator_id,
-        )
-        .verify(&tx)?;
+        let polyjuice_creator_id = self.get_polyjuice_creator_id()?;
+        TransactionVerifier::new(state, self.generator.rollup_context(), polyjuice_creator_id)
+            .verify(&tx)?;
         // verify signature
         self.generator.check_transaction_signature(state, &tx)?;
 
@@ -461,6 +459,20 @@ impl MemPool {
     #[instrument(skip_all, fields(retry_count = output_param.retry_count))]
     pub fn output_mem_block(&self, output_param: &OutputParam) -> (MemBlock, AccountMerkleState) {
         Self::package_mem_block(&self.mem_block, output_param)
+    }
+
+    fn get_polyjuice_creator_id(&mut self) -> Result<Option<u32>> {
+        let snap = self.mem_pool_state.load();
+        let state = snap.state()?;
+        if self.polyjuice_creator_id.is_none() {
+            let polyjuice_creator_id = get_polyjuice_creator_id(
+                self.generator.rollup_context(),
+                self.generator.backend_manage(),
+                &state,
+            )?;
+            self.polyjuice_creator_id = polyjuice_creator_id;
+        }
+        Ok(self.polyjuice_creator_id)
     }
 
     pub(crate) fn package_mem_block(

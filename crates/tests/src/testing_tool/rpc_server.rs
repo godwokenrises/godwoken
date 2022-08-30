@@ -83,7 +83,6 @@ impl RPCServer {
             dynamic_config_manager: Default::default(),
             last_submitted_tx_hash: None,
             polyjuice_sender_recover,
-            polyjuice_creator_id: u32::MAX,
         }
     }
 

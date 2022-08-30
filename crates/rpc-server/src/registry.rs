@@ -10,7 +10,8 @@ use gw_config::{
 };
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
 use gw_generator::generator::CyclesPool;
-use gw_generator::utils::get_tx_type;
+use gw_generator::utils::{get_polyjuice_creator_id, get_tx_type};
+use gw_generator::ArcSwapOption;
 use gw_generator::{
     error::TransactionError, sudt::build_l2_sudt_script,
     verification::transaction::TransactionVerifier, ArcSwap, Generator,
@@ -148,7 +149,7 @@ pub struct ExecutionTransactionContext {
     mem_pool_state: Arc<MemPoolState>,
     polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
     mem_pool_config: MemPoolConfig,
-    polyjuice_creator_id: u32,
+    polyjuice_creator_id: ArcSwapOption<u32>,
 }
 
 pub struct SubmitTransactionContext {
@@ -176,7 +177,6 @@ pub struct RegistryArgs<T> {
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     pub last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
     pub polyjuice_sender_recover: PolyjuiceSenderRecover,
-    pub polyjuice_creator_id: u32,
 }
 
 pub struct Registry {
@@ -199,7 +199,6 @@ pub struct Registry {
     mem_pool_state: Arc<MemPoolState>,
     in_queue_request_map: Option<Arc<InQueueRequestMap>>,
     polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
-    polyjuice_creator_id: u32,
 }
 
 impl Registry {
@@ -223,7 +222,6 @@ impl Registry {
             dynamic_config_manager,
             last_submitted_tx_hash,
             polyjuice_sender_recover,
-            polyjuice_creator_id,
         } = args;
 
         let backend_info = get_backend_info(generator.clone());
@@ -281,7 +279,6 @@ impl Registry {
             mem_pool_state,
             in_queue_request_map,
             polyjuice_sender_recover,
-            polyjuice_creator_id,
         }
     }
 
@@ -301,7 +298,7 @@ impl Registry {
                 mem_pool_state: self.mem_pool_state.clone(),
                 polyjuice_sender_recover: self.polyjuice_sender_recover.clone(),
                 mem_pool_config: self.mem_pool_config.clone(),
-                polyjuice_creator_id: self.polyjuice_creator_id,
+                polyjuice_creator_id: ArcSwapOption::from(None),
             }))
             .with_data(Data::new(SubmitTransactionContext {
                 in_queue_request_map: self.in_queue_request_map.clone(),
@@ -1043,12 +1040,19 @@ async fn execute_l2transaction(
         }
 
         // tx basic verification
-        TransactionVerifier::new(
-            &state,
-            ctx.generator.rollup_context(),
-            ctx.polyjuice_creator_id,
-        )
-        .verify(&tx)?;
+        if ctx.polyjuice_creator_id.load_full().is_none() {
+            let polyjuice_creator_id = get_polyjuice_creator_id(
+                ctx.generator.rollup_context(),
+                ctx.generator.backend_manage(),
+                &state,
+            )?
+            .map(Arc::new);
+            ctx.polyjuice_creator_id.store(polyjuice_creator_id);
+        }
+
+        let polyjuice_creator_id = ctx.polyjuice_creator_id.load_full().map(|id| *id);
+        TransactionVerifier::new(&state, ctx.generator.rollup_context(), polyjuice_creator_id)
+            .verify(&tx)?;
         // verify tx signature
         ctx.generator.check_transaction_signature(&state, &tx)?;
         // execute tx

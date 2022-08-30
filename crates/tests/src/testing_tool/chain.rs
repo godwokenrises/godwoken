@@ -531,7 +531,7 @@ pub async fn setup_chain_with_account_lock_manage(
         node_mode: gw_config::NodeMode::FullNode,
         dynamic_config_manager: Default::default(),
         has_p2p_sync: false,
-        polyjuice_creator_id: u32::MAX, //mock
+        polyjuice_creator_id: None,
     };
     let mem_pool = MemPool::create(args).await.unwrap();
     Chain::create(

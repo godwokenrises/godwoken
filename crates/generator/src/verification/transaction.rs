@@ -16,11 +16,15 @@ use crate::{
 pub struct TransactionVerifier<'a, S> {
     state: &'a S,
     rollup_context: &'a RollupContext,
-    polyjuice_creator_id: u32,
+    polyjuice_creator_id: Option<u32>,
 }
 
 impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
-    pub fn new(state: &'a S, rollup_context: &'a RollupContext, polyjuice_creator_id: u32) -> Self {
+    pub fn new(
+        state: &'a S,
+        rollup_context: &'a RollupContext,
+        polyjuice_creator_id: Option<u32>,
+    ) -> Self {
         Self {
             state,
             rollup_context,
@@ -99,7 +103,7 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
             if p.is_native_transfer() {
                 // Verify to_id is CREATOR_ID
                 let to_id = raw_tx.to_id().unpack();
-                if to_id != self.polyjuice_creator_id {
+                if Some(to_id) != self.polyjuice_creator_id && self.polyjuice_creator_id.is_some() {
                     return Err(TransactionError::NativeTransferInvalidToId(to_id).into());
                 }
             }
