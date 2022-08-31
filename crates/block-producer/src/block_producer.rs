@@ -766,9 +766,14 @@ impl BlockProducer {
         }
 
         // Simple UDT dep
-        tx_skeleton
-            .cell_deps_mut()
-            .push(contracts_dep.l1_sudt_type.clone().into());
+        if !deposit_cells.is_empty()
+            || !withdrawal_extras.is_empty()
+            || !finalized_custodians.sudt.is_empty()
+        {
+            tx_skeleton
+                .cell_deps_mut()
+                .push(contracts_dep.l1_sudt_type.clone().into());
+        }
 
         // custodian cells
         let custodian_cells = generate_custodian_cells(rollup_context, &block, &deposit_cells);
