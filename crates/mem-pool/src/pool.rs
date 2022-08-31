@@ -462,9 +462,9 @@ impl MemPool {
     }
 
     fn get_polyjuice_creator_id(&mut self) -> Result<Option<u32>> {
-        let snap = self.mem_pool_state.load();
-        let state = snap.state()?;
         if self.polyjuice_creator_id.is_none() {
+            let snap = self.mem_pool_state.load();
+            let state = snap.state()?;
             let polyjuice_creator_id = get_polyjuice_creator_id(
                 self.generator.rollup_context(),
                 self.generator.backend_manage(),

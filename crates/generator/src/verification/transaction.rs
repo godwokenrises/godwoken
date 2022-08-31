@@ -101,9 +101,12 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
             }
             // Native token transfer
             if p.is_native_transfer() {
+                if self.polyjuice_creator_id.is_none() {
+                    return Err(TransactionError::PolyjuiceCreatorIdNotFound);
+                }
                 // Verify to_id is CREATOR_ID
                 let to_id = raw_tx.to_id().unpack();
-                if Some(to_id) != self.polyjuice_creator_id && self.polyjuice_creator_id.is_some() {
+                if Some(to_id) != self.polyjuice_creator_id {
                     return Err(TransactionError::NativeTransferInvalidToId(to_id).into());
                 }
             }
