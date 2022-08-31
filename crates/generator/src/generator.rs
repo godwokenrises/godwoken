@@ -1,4 +1,8 @@
-use std::{collections::HashSet, sync::atomic::Ordering::SeqCst, time::Instant};
+use std::{
+    collections::HashSet,
+    sync::{atomic::Ordering::SeqCst, Arc},
+    time::Instant,
+};
 
 use crate::{
     account_lock_manage::AccountLockManage,
@@ -8,7 +12,7 @@ use crate::{
     run_result_state::RunResultState,
     typed_transaction::types::TypedRawTransaction,
     types::vm::VMVersion,
-    utils::get_tx_type,
+    utils::{get_polyjuice_creator_id, get_tx_type},
     vm_cost_model::instruction_cycles,
 };
 use crate::{
@@ -17,6 +21,7 @@ use crate::{
 };
 use crate::{error::AccountError, syscalls::L2Syscalls};
 use crate::{error::LockAlgorithmError, traits::StateExt};
+use arc_swap::ArcSwapOption;
 use gw_ckb_hardfork::GLOBAL_VM_VERSION;
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
@@ -147,6 +152,7 @@ pub struct Generator {
     account_lock_manage: AccountLockManage,
     rollup_context: RollupContext,
     contract_log_config: ContractLogConfig,
+    polyjuice_creator_id: ArcSwapOption<u32>,
 }
 
 impl Generator {
@@ -161,6 +167,7 @@ impl Generator {
             account_lock_manage,
             rollup_context,
             contract_log_config,
+            polyjuice_creator_id: ArcSwapOption::from(None),
         }
     }
 
@@ -735,6 +742,19 @@ impl Generator {
 
     pub fn backend_manage(&self) -> &BackendManage {
         &self.backend_manage
+    }
+
+    pub fn get_polyjuice_creator_id<S: State + CodeStore>(
+        &self,
+        state: &S,
+    ) -> Result<Option<u32>, TransactionError> {
+        if self.polyjuice_creator_id.load_full().is_none() {
+            let polyjuice_creator_id =
+                get_polyjuice_creator_id(self.rollup_context(), self.backend_manage(), state)?
+                    .map(Arc::new);
+            self.polyjuice_creator_id.store(polyjuice_creator_id);
+        }
+        Ok(self.polyjuice_creator_id.load_full().map(|id| *id))
     }
 
     // check and handle run_result before return

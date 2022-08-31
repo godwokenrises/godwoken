@@ -1050,7 +1050,7 @@ async fn execute_l2transaction(
             ctx.polyjuice_creator_id.store(polyjuice_creator_id);
         }
 
-        let polyjuice_creator_id = ctx.polyjuice_creator_id.load_full().map(|id| *id);
+        let polyjuice_creator_id = ctx.generator.get_polyjuice_creator_id(&state)?;
         TransactionVerifier::new(&state, ctx.generator.rollup_context(), polyjuice_creator_id)
             .verify(&tx)?;
         // verify tx signature

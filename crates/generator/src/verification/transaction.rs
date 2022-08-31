@@ -102,7 +102,7 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
             // Native token transfer
             if p.is_native_transfer() {
                 if self.polyjuice_creator_id.is_none() {
-                    return Err(TransactionError::PolyjuiceCreatorIdNotFound);
+                    return Err(TransactionError::PolyjuiceCreatorIdNotFound.into());
                 }
                 // Verify to_id is CREATOR_ID
                 let to_id = raw_tx.to_id().unpack();
