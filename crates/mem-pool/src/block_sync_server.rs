@@ -45,7 +45,7 @@ impl BlockSyncServerState {
     }
 
     pub fn publish_local_block(&mut self, local_block: LocalBlock) {
-        log::debug!("publish local block");
+        log::info!("publish local block");
         let reader = local_block.as_reader();
         let raw = reader.block().raw();
         let number = raw.number().unpack();
@@ -84,6 +84,7 @@ impl BlockSyncServerState {
     }
 
     pub fn publish_revert(&mut self, revert: Revert) {
+        log::info!("publish revert");
         let number = revert.number_hash().number().unpack();
         // Remove messages for reverted blocks.
         self.buffer.split_off(&(number + 1));
@@ -92,6 +93,7 @@ impl BlockSyncServerState {
     }
 
     pub fn publish_transaction(&mut self, tx: L2Transaction) {
+        log::debug!("publish transaction");
         if let Some((_, messages)) = self.buffer.iter_mut().rev().next() {
             let msg = BlockSync::new_builder().set(tx).build();
             messages.messages.push(msg.clone());
@@ -100,6 +102,7 @@ impl BlockSyncServerState {
     }
 
     pub fn publish_next_mem_block(&mut self, mem_block: NextMemBlock) {
+        log::info!("publish next mem block");
         let number = mem_block.block_info().number().unpack();
 
         let msg = BlockSync::new_builder().set(mem_block).build();

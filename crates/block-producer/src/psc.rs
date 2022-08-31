@@ -366,6 +366,9 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
     for d in deposit_cells {
         local_cells_manager.lock_cell(d.cell.out_point);
     }
+    // Lock mem pool when publishing the block so that no more transactions are
+    // pushed/published for this block.
+    let mut pool = ctx.mem_pool.lock().await;
     if let Some(ref sync_server_state) = ctx.block_sync_server_state {
         publish_local_block(
             &mut sync_server_state.lock().unwrap(),
@@ -373,10 +376,7 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
             number,
         )?;
     }
-    ctx.mem_pool
-        .lock()
-        .await
-        .notify_new_tip(block_hash, &local_cells_manager)
+    pool.notify_new_tip(block_hash, &local_cells_manager)
         .await
         .expect("notify new tip");
 
