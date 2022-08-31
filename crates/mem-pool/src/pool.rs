@@ -49,6 +49,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use tokio::task::block_in_place;
 use tracing::instrument;
 
 use crate::{
@@ -648,85 +649,87 @@ impl MemPool {
                 Ok(e) => e,
             }
         };
-        // reset mem block state
-        let snapshot = self.store.get_snapshot();
-        let snap_last_valid_tip = snapshot.get_last_valid_tip_block_hash()?;
-        assert_eq!(snap_last_valid_tip, new_tip, "set new snapshot");
 
-        let mem_block_content = self.mem_block.reset(&new_tip_block, estimated_timestamp);
+        block_in_place(move || {
+            // reset mem block state
+            let snapshot = self.store.get_snapshot();
+            let snap_last_valid_tip = snapshot.get_last_valid_tip_block_hash()?;
+            assert_eq!(snap_last_valid_tip, new_tip, "set new snapshot");
 
-        // set tip
-        self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
+            let mem_block_content = self.mem_block.reset(&new_tip_block, estimated_timestamp);
 
-        // mem block withdrawals
-        let mem_block_withdrawals: Vec<_> = {
-            let mut withdrawals = Vec::with_capacity(mem_block_content.withdrawals.len());
-            for withdrawal_hash in mem_block_content.withdrawals {
-                if let Some(withdrawal) = db.get_mem_pool_withdrawal(&withdrawal_hash)? {
-                    withdrawals.push(withdrawal);
+            // set tip
+            self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
+
+            // mem block withdrawals
+            let mem_block_withdrawals: Vec<_> = {
+                let mut withdrawals = Vec::with_capacity(mem_block_content.withdrawals.len());
+                for withdrawal_hash in mem_block_content.withdrawals {
+                    if let Some(withdrawal) = db.get_mem_pool_withdrawal(&withdrawal_hash)? {
+                        withdrawals.push(withdrawal);
+                    }
                 }
-            }
-            withdrawals
-        };
+                withdrawals
+            };
 
-        // mem block txs
-        let mem_block_txs: Vec<_> = {
-            let mut txs = Vec::with_capacity(mem_block_content.txs.len());
-            for tx_hash in mem_block_content.txs {
-                if let Some(tx) = db.get_mem_pool_transaction(&tx_hash)? {
-                    txs.push(tx);
+            // mem block txs
+            let mem_block_txs: Vec<_> = {
+                let mut txs = Vec::with_capacity(mem_block_content.txs.len());
+                for tx_hash in mem_block_content.txs {
+                    if let Some(tx) = db.get_mem_pool_transaction(&tx_hash)? {
+                        txs.push(tx);
+                    }
                 }
+                txs
+            };
+
+            // create new mem_store to maintain memory state
+            let mem_store = MemStore::new(snapshot);
+            mem_store.update_mem_pool_block_info(self.mem_block.block_info())?;
+            let mut mem_state = mem_store.state()?;
+
+            // remove from pending
+            self.remove_unexecutables(&mut mem_state, &db)?;
+
+            log::info!("[mem-pool] reset reinject txs: {} mem-block txs: {} reinject withdrawals: {} mem-block withdrawals: {}", reinject_txs.len(), mem_block_txs.len(), reinject_withdrawals.len(), mem_block_withdrawals.len());
+            // re-inject txs
+            let txs = reinject_txs.into_iter().chain(mem_block_txs).collect();
+
+            // re-inject withdrawals
+            let mut withdrawals: Vec<_> = reinject_withdrawals.into_iter().collect();
+            if is_mem_pool_recovery {
+                // recovery mem block withdrawals
+                withdrawals.extend(mem_block_withdrawals);
+            } else {
+                // packages more withdrawals
+                self.try_package_more_withdrawals(&mem_state, &mut withdrawals);
             }
-            txs
-        };
 
-        // create new mem_store to maintain memory state
-        let mem_store = MemStore::new(snapshot);
-        mem_store.update_mem_pool_block_info(self.mem_block.block_info())?;
-        let mut mem_state = mem_store.state()?;
+            // To simplify logic, don't restrict reinjected txs
+            self.cycles_pool = CyclesPool::new(u64::MAX, SyscallCyclesConfig::all_zero());
 
-        // remove from pending
-        self.remove_unexecutables(&mut mem_state, &db).await?;
+            self.prepare_next_mem_block(
+                &db,
+                &mut mem_state,
+                withdrawals,
+                self.pending_deposits.clone(),
+                txs,
+            )?;
 
-        log::info!("[mem-pool] reset reinject txs: {} mem-block txs: {} reinject withdrawals: {} mem-block withdrawals: {}", reinject_txs.len(), mem_block_txs.len(), reinject_withdrawals.len(), mem_block_withdrawals.len());
-        // re-inject txs
-        let txs = reinject_txs.into_iter().chain(mem_block_txs).collect();
+            // Update block remained cycles
+            let used_cycles = self.cycles_pool.cycles_used();
+            self.cycles_pool = CyclesPool::new(
+                self.mem_block_config.max_cycles_limit,
+                self.mem_block_config.syscall_cycles.clone(),
+            );
+            self.cycles_pool.consume_cycles(used_cycles);
 
-        // re-inject withdrawals
-        let mut withdrawals: Vec<_> = reinject_withdrawals.into_iter().collect();
-        if is_mem_pool_recovery {
-            // recovery mem block withdrawals
-            withdrawals.extend(mem_block_withdrawals);
-        } else {
-            // packages more withdrawals
-            self.try_package_more_withdrawals(&mem_state, &mut withdrawals);
-        }
+            // store mem state
+            self.mem_pool_state.store(Arc::new(mem_store));
+            db.commit()?;
 
-        // To simplify logic, don't restrict reinjected txs
-        self.cycles_pool = CyclesPool::new(u64::MAX, SyscallCyclesConfig::all_zero());
-
-        self.prepare_next_mem_block(
-            &db,
-            &mut mem_state,
-            withdrawals,
-            self.pending_deposits.clone(),
-            txs,
-        )
-        .await?;
-
-        // Update block remained cycles
-        let used_cycles = self.cycles_pool.cycles_used();
-        self.cycles_pool = CyclesPool::new(
-            self.mem_block_config.max_cycles_limit,
-            self.mem_block_config.syscall_cycles.clone(),
-        );
-        self.cycles_pool.consume_cycles(used_cycles);
-
-        // store mem state
-        self.mem_pool_state.store(Arc::new(mem_store));
-        db.commit()?;
-
-        Ok(())
+            Ok(())
+        })
     }
 
     fn try_package_more_withdrawals(
@@ -766,7 +769,7 @@ impl MemPool {
 
     /// Discard unexecutables from pending.
     #[instrument(skip_all)]
-    async fn remove_unexecutables(
+    fn remove_unexecutables(
         &mut self,
         state: &mut MemStateTree<'_>,
         db: &StoreTransaction,
@@ -814,7 +817,7 @@ impl MemPool {
 
     /// Prepare for next mem block
     #[instrument(skip_all, fields(withdrawals_count = withdrawals.len(), txs_count = txs.len()))]
-    async fn prepare_next_mem_block(
+    fn prepare_next_mem_block(
         &mut self,
         db: &StoreTransaction,
         state: &mut MemStateTree<'_>,
@@ -852,10 +855,9 @@ impl MemPool {
         }
         // Handle state before txs
         // withdrawal
-        self.finalize_withdrawals(state, withdrawals.clone())
-            .await?;
+        self.finalize_withdrawals(state, withdrawals.clone())?;
         // deposits
-        self.finalize_deposits(state, deposit_cells.clone()).await?;
+        self.finalize_deposits(state, deposit_cells.clone())?;
 
         if let Some(ref sync_server) = self.sync_server {
             let mut sync_server = sync_server.lock().unwrap();
@@ -926,7 +928,7 @@ impl MemPool {
     }
 
     #[instrument(skip_all, fields(deposits_count = deposit_cells.len()))]
-    async fn finalize_deposits(
+    fn finalize_deposits(
         &mut self,
         state: &mut MemStateTree<'_>,
         deposit_cells: Vec<DepositInfo>,
@@ -961,7 +963,7 @@ impl MemPool {
 
     /// Execute withdrawal & update local state
     #[instrument(skip_all, fields(withdrawals_count = withdrawals.len()))]
-    async fn finalize_withdrawals(
+    fn finalize_withdrawals(
         &mut self,
         state: &mut MemStateTree<'_>,
         withdrawals: Vec<WithdrawalRequestExtra>,
@@ -1194,75 +1196,76 @@ impl MemPool {
     // This function returns Ok(Some(block_number)), if refresh is successful.
     // Or returns Ok(None) if current tip has not synced yet.
     #[instrument(skip_all, fields(block = block_info.number().unpack(), withdrawals_count = withdrawals.len(), deposits_count = deposits.len()))]
-    pub async fn refresh_mem_block(
+    pub fn refresh_mem_block(
         &mut self,
         block_info: BlockInfo,
         mut withdrawals: Vec<WithdrawalRequestExtra>,
         deposits: Vec<DepositInfo>,
     ) -> Result<Option<u64>> {
-        let next_block_number = block_info.number().unpack();
-        let current_tip_block_number = self.current_tip.1;
-        if next_block_number <= current_tip_block_number {
-            // mem blocks from the past should be ignored
-            log::trace!(
-                "Ignore this mem block: {}, current tip: {}",
-                next_block_number,
-                current_tip_block_number
-            );
-            return Ok(Some(current_tip_block_number));
-        }
-        if next_block_number != current_tip_block_number + 1 {
-            return Ok(None);
-        }
-        let snapshot = self.store.get_snapshot();
-        let tip_block = snapshot.get_last_valid_tip_block()?;
-
-        // mem block txs
-        let mem_block_txs: Vec<_> = {
-            let mut txs = Vec::with_capacity(self.mem_block.txs().len());
-            for tx_hash in self.mem_block.txs() {
-                if let Some(tx) = snapshot.get_mem_pool_transaction(tx_hash)? {
-                    txs.push(tx);
-                }
+        block_in_place(move || {
+            let next_block_number = block_info.number().unpack();
+            let current_tip_block_number = self.current_tip.1;
+            if next_block_number <= current_tip_block_number {
+                // mem blocks from the past should be ignored
+                log::trace!(
+                    "Ignore this mem block: {}, current tip: {}",
+                    next_block_number,
+                    current_tip_block_number
+                );
+                return Ok(Some(current_tip_block_number));
             }
-            txs
-        };
+            if next_block_number != current_tip_block_number + 1 {
+                return Ok(None);
+            }
+            let snapshot = self.store.get_snapshot();
+            let tip_block = snapshot.get_last_valid_tip_block()?;
 
-        // update mem block
-        let post_merkle_state = tip_block.raw().post_account();
-        let mem_block = MemBlock::new(block_info, post_merkle_state);
-        self.mem_block = mem_block;
+            // mem block txs
+            let mem_block_txs: Vec<_> = {
+                let mut txs = Vec::with_capacity(self.mem_block.txs().len());
+                for tx_hash in self.mem_block.txs() {
+                    if let Some(tx) = snapshot.get_mem_pool_transaction(tx_hash)? {
+                        txs.push(tx);
+                    }
+                }
+                txs
+            };
 
-        let mem_store = MemStore::new(snapshot);
-        mem_store.update_mem_pool_block_info(self.mem_block.block_info())?;
-        let mut mem_state = mem_store.state()?;
+            // update mem block
+            let post_merkle_state = tip_block.raw().post_account();
+            let mem_block = MemBlock::new(block_info, post_merkle_state);
+            self.mem_block = mem_block;
 
-        // remove from pending
-        let db = self.store.begin_transaction();
-        self.remove_unexecutables(&mut mem_state, &db).await?;
+            let mem_store = MemStore::new(snapshot);
+            mem_store.update_mem_pool_block_info(self.mem_block.block_info())?;
+            let mut mem_state = mem_store.state()?;
 
-        // reset cycles pool available cycles.
-        self.cycles_pool = CyclesPool::new(u64::MAX, SyscallCyclesConfig::all_zero());
+            // remove from pending
+            let db = self.store.begin_transaction();
+            self.remove_unexecutables(&mut mem_state, &db)?;
 
-        // prepare next mem block
-        self.try_package_more_withdrawals(&mem_state, &mut withdrawals);
-        self.prepare_next_mem_block(&db, &mut mem_state, withdrawals, deposits, mem_block_txs)
-            .await?;
+            // reset cycles pool available cycles.
+            self.cycles_pool = CyclesPool::new(u64::MAX, SyscallCyclesConfig::all_zero());
 
-        // update mem state
-        self.mem_pool_state.store(Arc::new(mem_store));
-        db.commit()?;
+            // prepare next mem block
+            self.try_package_more_withdrawals(&mem_state, &mut withdrawals);
+            self.prepare_next_mem_block(&db, &mut mem_state, withdrawals, deposits, mem_block_txs)?;
 
-        let mem_block = &self.mem_block;
-        log::info!(
-            "Refreshed mem_block: block id: {}, deposits: {}, withdrawals: {}, txs: {}",
-            mem_block.block_info().number().unpack(),
-            mem_block.deposits().len(),
-            mem_block.withdrawals().len(),
-            mem_block.txs().len()
-        );
+            // update mem state
+            self.mem_pool_state.store(Arc::new(mem_store));
+            db.commit()?;
 
-        Ok(Some(next_block_number))
+            let mem_block = &self.mem_block;
+            log::info!(
+                "Refreshed mem_block: block id: {}, deposits: {}, withdrawals: {}, txs: {}",
+                mem_block.block_info().number().unpack(),
+                mem_block.deposits().len(),
+                mem_block.withdrawals().len(),
+                mem_block.txs().len()
+            );
+
+            Ok(Some(next_block_number))
+        })
     }
 }
 

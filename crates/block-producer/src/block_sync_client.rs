@@ -236,13 +236,11 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             log::info!("received mem block {}", m.block_info().number().unpack());
             if let Some(ref mem_pool) = client.mem_pool {
                 let mut mem_pool = mem_pool.lock().await;
-                let result = mem_pool
-                    .refresh_mem_block(
-                        m.block_info(),
-                        m.withdrawals().into_iter().collect(),
-                        m.deposits().unpack(),
-                    )
-                    .await;
+                let result = mem_pool.refresh_mem_block(
+                    m.block_info(),
+                    m.withdrawals().into_iter().collect(),
+                    m.deposits().unpack(),
+                );
                 if let Err(err) = result {
                     log::warn!("{:#}", err);
                 }
