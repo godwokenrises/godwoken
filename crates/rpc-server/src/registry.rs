@@ -10,8 +10,7 @@ use gw_config::{
 };
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
 use gw_generator::generator::CyclesPool;
-use gw_generator::utils::{get_polyjuice_creator_id, get_tx_type};
-use gw_generator::ArcSwapOption;
+use gw_generator::utils::get_tx_type;
 use gw_generator::{
     error::TransactionError, sudt::build_l2_sudt_script,
     verification::transaction::TransactionVerifier, ArcSwap, Generator,
@@ -149,7 +148,6 @@ pub struct ExecutionTransactionContext {
     mem_pool_state: Arc<MemPoolState>,
     polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
     mem_pool_config: MemPoolConfig,
-    polyjuice_creator_id: ArcSwapOption<u32>,
 }
 
 pub struct SubmitTransactionContext {
@@ -298,7 +296,6 @@ impl Registry {
                 mem_pool_state: self.mem_pool_state.clone(),
                 polyjuice_sender_recover: self.polyjuice_sender_recover.clone(),
                 mem_pool_config: self.mem_pool_config.clone(),
-                polyjuice_creator_id: ArcSwapOption::from(None),
             }))
             .with_data(Data::new(SubmitTransactionContext {
                 in_queue_request_map: self.in_queue_request_map.clone(),
@@ -1040,16 +1037,6 @@ async fn execute_l2transaction(
         }
 
         // tx basic verification
-        if ctx.polyjuice_creator_id.load_full().is_none() {
-            let polyjuice_creator_id = get_polyjuice_creator_id(
-                ctx.generator.rollup_context(),
-                ctx.generator.backend_manage(),
-                &state,
-            )?
-            .map(Arc::new);
-            ctx.polyjuice_creator_id.store(polyjuice_creator_id);
-        }
-
         let polyjuice_creator_id = ctx.generator.get_polyjuice_creator_id(&state)?;
         TransactionVerifier::new(&state, ctx.generator.rollup_context(), polyjuice_creator_id)
             .verify(&tx)?;
