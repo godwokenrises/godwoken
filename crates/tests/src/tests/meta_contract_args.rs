@@ -15,7 +15,7 @@ use crate::testing_tool::{chain::TestChain, eth_wallet::EthWallet};
 
 const META_CONTRACT_ACCOUNT_ID: u32 = RESERVED_ACCOUNT_ID;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_backward_compatibility() {
     let _ = env_logger::builder().is_test(true).try_init();
 

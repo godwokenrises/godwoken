@@ -18,7 +18,7 @@ use crate::testing_tool::{
     polyjuice::{PolyjuiceAccount, PolyjuiceArgsBuilder},
 };
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_eth_account_creator() {
     let _ = env_logger::builder().is_test(true).try_init();
 

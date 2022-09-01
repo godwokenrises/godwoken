@@ -77,7 +77,7 @@ async fn produce_a_block(
     param
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_produce_blocks() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
@@ -169,7 +169,7 @@ async fn test_produce_blocks() {
     drop(chain);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_layer1_fork() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
@@ -356,7 +356,7 @@ async fn test_layer1_fork() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_layer1_revert() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
@@ -603,7 +603,7 @@ async fn test_layer1_revert() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sync_blocks() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
@@ -716,7 +716,7 @@ async fn test_sync_blocks() {
     drop(chain2);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();

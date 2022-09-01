@@ -42,7 +42,7 @@ use gw_utils::transaction_skeleton::TransactionSkeleton;
 const CKB: u64 = 100000000;
 const MAX_MEM_BLOCK_WITHDRAWALS: u8 = 50;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_build_unlock_to_owner_tx() {
     let _ = env_logger::builder().is_test(true).try_init();
 

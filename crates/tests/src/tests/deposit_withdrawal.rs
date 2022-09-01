@@ -105,7 +105,7 @@ async fn withdrawal_from_chain(
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_deposit_and_withdrawal() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
@@ -274,7 +274,7 @@ async fn test_deposit_and_withdrawal() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_deposit_u128_overflow() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
@@ -404,7 +404,7 @@ async fn test_deposit_u128_overflow() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_overdraft() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
@@ -493,7 +493,7 @@ async fn test_overdraft() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_deposit_faked_ckb() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();

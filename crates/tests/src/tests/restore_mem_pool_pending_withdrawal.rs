@@ -23,7 +23,7 @@ const CKB: u64 = 100000000;
 const DEPOSIT_CAPACITY: u64 = 1000000 * CKB;
 const WITHDRAWAL_CAPACITY: u64 = 1000 * CKB;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_restore_mem_pool_pending_withdrawal() {
     let _ = env_logger::builder().is_test(true).try_init();
 
