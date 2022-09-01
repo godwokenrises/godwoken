@@ -1,6 +1,6 @@
 [package]
 name = "gw-config"
-version = "1.5.0"
+version = "1.6.0-rc1"
 authors = ["Nervos Network"]
 edition = "2018"
 
