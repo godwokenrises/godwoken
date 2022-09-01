@@ -12,8 +12,8 @@ use gw_config::SyncServerConfig;
 use gw_p2p_network::{FnSpawn, P2P_SYNC_PROTOCOL, P2P_SYNC_PROTOCOL_NAME};
 use gw_types::{
     packed::{
-        BlockSync, Confirmed, Found, L2Transaction, LocalBlock, NextMemBlock, P2PSyncRequest,
-        P2PSyncRequestReader, P2PSyncResponse, Revert, Submitted, TryAgain,
+        BlockSync, BlockSyncUnion, Confirmed, Found, L2Transaction, LocalBlock, NextMemBlock,
+        P2PSyncRequest, P2PSyncRequestReader, P2PSyncResponse, Revert, Submitted, TryAgain,
     },
     prelude::*,
 };
@@ -94,11 +94,18 @@ impl BlockSyncServerState {
 
     pub fn publish_transaction(&mut self, tx: L2Transaction) {
         log::debug!("publish transaction");
+        let msg = BlockSync::new_builder().set(tx).build();
         if let Some((_, messages)) = self.buffer.iter_mut().rev().next() {
-            let msg = BlockSync::new_builder().set(tx).build();
-            messages.messages.push(msg.clone());
-            let _ = self.tx.send(msg);
+            // The first message is either a LocalBlock or a NextMemBlock. We
+            // only need to buffer it for NextMemBlock.
+            if matches!(
+                messages.messages[0].to_enum(),
+                BlockSyncUnion::NextMemBlock(_)
+            ) {
+                messages.messages.push(msg.clone());
+            }
         }
+        let _ = self.tx.send(msg);
     }
 
     pub fn publish_next_mem_block(&mut self, mem_block: NextMemBlock) {

@@ -1,6 +1,6 @@
 #![allow(clippy::mutable_key_type)]
 
-use std::{fmt::Display, sync::Arc, time::Duration};
+use std::{collections::HashSet, fmt::Display, sync::Arc, time::Duration};
 
 use anyhow::{bail, ensure, Context, Result};
 use gw_chain::chain::Chain;
@@ -327,12 +327,29 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
     // Now update db about the new local L2 block
 
     let deposit_info_vec = deposit_cells.pack();
-    let deposit_asset_scripts = deposit_cells
+    let deposit_asset_scripts: HashSet<Script> = deposit_cells
         .iter()
         .filter_map(|d| d.cell.output.type_().to_opt())
         .collect();
 
     let store_tx = ctx.store.begin_transaction();
+
+    // Publish block to read-only nodes as soon as possible, so that read-only nodes does not lag behind us.
+    if let Some(ref sync_server_state) = ctx.block_sync_server_state {
+        sync_server_state.lock().unwrap().publish_local_block(
+            LocalBlock::new_builder()
+                .block(block.clone())
+                .post_global_state(global_state.clone())
+                .deposit_info_vec(deposit_info_vec.clone())
+                .deposit_asset_scripts(
+                    ScriptVec::new_builder()
+                        .extend(deposit_asset_scripts.iter().cloned())
+                        .build(),
+                )
+                .withdrawals(withdrawal_extras.iter().cloned().pack())
+                .build(),
+        );
+    }
 
     let mut chain = ctx.chain.lock().await;
     tokio::task::block_in_place(|| {
@@ -366,16 +383,8 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
     for d in deposit_cells {
         local_cells_manager.lock_cell(d.cell.out_point);
     }
-    // Lock mem pool when publishing the block so that no more transactions are
-    // pushed/published for this block.
+
     let mut pool = ctx.mem_pool.lock().await;
-    if let Some(ref sync_server_state) = ctx.block_sync_server_state {
-        publish_local_block(
-            &mut sync_server_state.lock().unwrap(),
-            &ctx.store.get_snapshot(),
-            number,
-        )?;
-    }
     pool.notify_new_tip(block_hash, &local_cells_manager)
         .await
         .expect("notify new tip");
