@@ -309,7 +309,9 @@ impl MemPool {
         }
 
         // verify transaction
-        TransactionVerifier::new(state, self.generator.rollup_context()).verify(&tx)?;
+        let polyjuice_creator_id = self.generator.get_polyjuice_creator_id(state)?;
+        TransactionVerifier::new(state, self.generator.rollup_context(), polyjuice_creator_id)
+            .verify(&tx)?;
         // verify signature
         self.generator.check_transaction_signature(state, &tx)?;
 

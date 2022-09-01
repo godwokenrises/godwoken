@@ -43,7 +43,8 @@ impl Secp256k1Eth {
         receiver_script: &Script,
     ) -> anyhow::Result<H256> {
         let tx_chain_id = raw_tx.chain_id().unpack();
-        if chain_id != tx_chain_id {
+        let is_protected = raw_tx.is_chain_id_protected();
+        if is_protected && chain_id != tx_chain_id {
             bail!("mismatch tx chain id");
         }
 
@@ -73,7 +74,7 @@ impl Secp256k1Eth {
         Ok(message.into())
     }
 
-    fn domain_with_chain_id(chain_id: u64) -> EIP712Domain {
+    pub fn domain_with_chain_id(chain_id: u64) -> EIP712Domain {
         EIP712Domain {
             name: "Godwoken".to_string(),
             chain_id,
@@ -154,7 +155,7 @@ impl LockAlgorithm for Secp256k1Eth {
         // Non EIP-155 transaction's chain_id is zero.
         // We support non EIP-155 for the compatibility.
         // Related issue: https://github.com/nervosnetwork/godwoken/issues/775
-        let is_protected = chain_id != 0;
+        let is_protected = tx.raw().is_chain_id_protected();
         // check protected chain id
         if is_protected && expected_chain_id != chain_id {
             return Err(LockAlgorithmError::InvalidTransactionArgs);
@@ -248,6 +249,13 @@ fn try_assemble_polyjuice_args(
     let to = if parser.is_create() {
         // 3 for EVMC_CREATE
         vec![0u8; 0]
+    } else if parser.is_native_transfer() {
+        if let Some(to_address) = parser.to_address() {
+            to_address.to_vec()
+        } else {
+            log::error!("Invalid native token transfer transaction, [to_address] isn't set.");
+            return None;
+        }
     } else {
         // For contract calling, chain id is read from scrpit args of
         // receiver_script, see the following link for more details:
@@ -266,7 +274,7 @@ fn try_assemble_polyjuice_args(
     stream.append(&to);
     stream.append(&parser.value());
     stream.append(&parser.data().to_vec());
-    let is_protected = raw_tx.chain_id().unpack() != 0;
+    let is_protected = raw_tx.is_chain_id_protected();
     // EIP-155 - https://eips.ethereum.org/EIPS/eip-155
     if is_protected {
         stream.append(&raw_tx.chain_id().unpack());
@@ -280,8 +288,8 @@ fn try_assemble_polyjuice_args(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
-    use gw_types::packed::RollupConfig;
+    use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
+    use gw_types::{core::ScriptHashType, packed::RollupConfig};
 
     #[test]
     fn test_secp256k1_eth_polyjuice_call() {
@@ -340,6 +348,70 @@ mod tests {
                 .build(),
         };
         eth.verify_tx(&ctx, sender_address, sender_script, receiver_script, tx)
+            .expect("verify signature");
+    }
+
+    #[test]
+    fn test_secp256k1_eth_polyjuice_native_token_transfer() {
+        let chain_id = 42;
+        let mut polyjuice_args = vec![0u8; 72];
+        polyjuice_args[0..7].copy_from_slice(b"\xFF\xFF\xFFPOLY");
+        polyjuice_args[7] = 0;
+        let gas_limit: u64 = 21000;
+        polyjuice_args[8..16].copy_from_slice(&gas_limit.to_le_bytes());
+        let gas_price: u128 = 20000000000;
+        polyjuice_args[16..32].copy_from_slice(&gas_price.to_le_bytes());
+        let value: u128 = 3000000;
+        polyjuice_args[32..48].copy_from_slice(&value.to_le_bytes());
+        let payload_length: u32 = 0;
+        polyjuice_args[48..52].copy_from_slice(&payload_length.to_le_bytes());
+        let to_address = [3u8; 20];
+        polyjuice_args[52..].copy_from_slice(&to_address);
+
+        let to_id: u32 = 4;
+        let raw_tx = RawL2Transaction::new_builder()
+            .chain_id(chain_id.pack())
+            .from_id(0u32.pack())
+            .to_id(to_id.pack())
+            .nonce(0u32.pack())
+            .args(polyjuice_args.pack())
+            .build();
+        let mut signature = [0u8; 65];
+        signature.copy_from_slice(&hex::decode("58810245d67f0bde7961bcf03c1c7c54d1164b612f88e63e847ea693aad92fc32bb7680f39dc0dec403ba0b4eb6340cd2ad209448720133377cfdb8acd383b8001").unwrap());
+        let tx = L2Transaction::new_builder()
+            .raw(raw_tx)
+            .signature(signature.to_vec().pack())
+            .build();
+
+        let rollup_type_hash =
+            hex::decode("77c93b0632b5b6c3ef922c5b7cea208fb0a7c427a13d50e13d3fefad17e0c590")
+                .unwrap();
+
+        let mut args = rollup_type_hash.as_slice().to_vec();
+        args.extend_from_slice(&CKB_SUDT_ACCOUNT_ID.to_le_bytes());
+
+        let mut sender_args = vec![];
+        let sender_eth_addr = hex::decode("5d200e1316687546fc6888259609c9aee0691f59").unwrap();
+        let sender_reg_addr = RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, sender_eth_addr);
+        sender_args.extend(&rollup_type_hash);
+        sender_args.extend(&sender_reg_addr.address);
+        let sender_script = Script::new_builder()
+            .args(Bytes::from(sender_args).pack())
+            .build();
+        let mock_polyjuice_code_hash = [0u8; 32];
+        let receive_script = Script::new_builder()
+            .code_hash(mock_polyjuice_code_hash.pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args(args.pack())
+            .build();
+        let ctx = RollupContext {
+            rollup_script_hash: Default::default(),
+            rollup_config: RollupConfig::new_builder()
+                .chain_id(chain_id.pack())
+                .build(),
+        };
+        let eth = Secp256k1Eth::default();
+        eth.verify_tx(&ctx, sender_reg_addr, sender_script, receive_script, tx)
             .expect("verify signature");
     }
 

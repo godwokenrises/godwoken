@@ -1041,7 +1041,9 @@ async fn execute_l2transaction(
         }
 
         // tx basic verification
-        TransactionVerifier::new(&state, ctx.generator.rollup_context()).verify(&tx)?;
+        let polyjuice_creator_id = ctx.generator.get_polyjuice_creator_id(&state)?;
+        TransactionVerifier::new(&state, ctx.generator.rollup_context(), polyjuice_creator_id)
+            .verify(&tx)?;
         // verify tx signature
         ctx.generator.check_transaction_signature(&state, &tx)?;
         // execute tx

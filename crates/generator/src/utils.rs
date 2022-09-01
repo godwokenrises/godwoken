@@ -1,6 +1,7 @@
 use std::convert::TryInto;
 
-use gw_common::{state::State, H256};
+use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
+use gw_config::BackendType;
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
@@ -10,7 +11,9 @@ use gw_types::{
     prelude::*,
 };
 
-use crate::{error::TransactionError, generator::WithdrawalCellError};
+use crate::{
+    backend_manage::BackendManage, error::TransactionError, generator::WithdrawalCellError,
+};
 
 pub fn get_tx_type<S: State + CodeStore>(
     rollup_context: &RollupContext,
@@ -98,6 +101,35 @@ pub fn build_withdrawal_cell_output(
             })
         }
         _ => Ok((output, data)),
+    }
+}
+
+pub fn get_polyjuice_creator_id<S: State + CodeStore>(
+    rollup_context: &RollupContext,
+    backend_manage: &BackendManage,
+    state: &S,
+) -> Result<Option<u32>, gw_common::error::Error> {
+    let polyjuice_backend =
+        backend_manage
+            .get_backends_at_height(u64::MAX)
+            .and_then(|(_, backends)| {
+                backends
+                    .values()
+                    .find(|backend| backend.backend_type == BackendType::Polyjuice)
+            });
+    if let Some(backend) = polyjuice_backend {
+        let mut args = rollup_context.rollup_script_hash.as_slice().to_vec();
+        args.extend_from_slice(&CKB_SUDT_ACCOUNT_ID.to_le_bytes());
+        let script = Script::new_builder()
+            .code_hash(backend.validator_script_type_hash.pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args(args.pack())
+            .build();
+        let script_hash = script.hash().into();
+        let polyjuice_creator_id = state.get_account_id_by_script_hash(&script_hash)?;
+        Ok(polyjuice_creator_id)
+    } else {
+        Ok(None)
     }
 }
 

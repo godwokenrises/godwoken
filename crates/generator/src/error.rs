@@ -165,6 +165,10 @@ pub enum TransactionError {
     ExceededMaxBlockCycles { cycles: RunResultCycles, limit: u64 },
     #[error("Convert to UTF-8 error: {0}")]
     Utf8Error(std::str::Utf8Error),
+    #[error("Native token transfer error, invalid to_id: {0}")]
+    NativeTransferInvalidToId(u32),
+    #[error("Polyjuice creator id not found.")]
+    PolyjuiceCreatorIdNotFound,
 }
 
 impl From<VMError> for TransactionError {
