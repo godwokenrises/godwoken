@@ -1,4 +1,5 @@
 use gw_hash::blake2b::{new_blake2b, Blake2b};
+use gw_types::packed::L2Block;
 use sparse_merkle_tree::{traits::Hasher, SparseMerkleTree};
 
 // re-exports
@@ -30,4 +31,20 @@ impl Hasher for Blake2bHasher {
         self.0.finalize(&mut hash);
         hash.into()
     }
+}
+
+pub fn generate_block_proof<'a, S: Store<H256>>(
+    block_smt: SMT<S>,
+    blocks: impl IntoIterator<Item = &'a L2Block>,
+) -> sparse_merkle_tree::error::Result<CompiledMerkleProof> {
+    let (keys, key_leaves) = { blocks.into_iter() }
+        .map(|blk| {
+            let key: H256 = blk.smt_key().into();
+            (key, (key, H256::zero()))
+        })
+        .unzip();
+
+    let proof = block_smt.merkle_proof(keys)?.compile(key_leaves)?;
+
+    Ok(proof)
 }

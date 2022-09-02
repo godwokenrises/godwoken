@@ -50,6 +50,12 @@ pub struct WithdrawalsAmount {
     pub sudt: HashMap<[u8; 32], u128>,
 }
 
+impl WithdrawalsAmount {
+    pub fn is_zero(&self) -> bool {
+        0 == self.capacity && self.sudt.is_empty()
+    }
+}
+
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum TxStatus {

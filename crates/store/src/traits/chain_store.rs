@@ -191,6 +191,19 @@ pub trait ChainStore: KVStoreRead {
         }
     }
 
+    fn get_block_by_number(&self, number: u64) -> Result<Option<packed::L2Block>, Error> {
+        let block_number: packed::Uint64 = number.pack();
+        let block_hash = match self.get(COLUMN_INDEX, block_number.as_slice()) {
+            Some(slice) => slice,
+            None => return Ok(None),
+        };
+
+        match self.get(COLUMN_BLOCK, &block_hash) {
+            Some(slice) => Ok(Some(from_box_should_be_ok!(packed::L2BlockReader, slice))),
+            None => Ok(None),
+        }
+    }
+
     fn get_transaction(&self, tx_hash: &H256) -> Result<Option<packed::L2Transaction>, Error> {
         match self.get_transaction_info(tx_hash)? {
             Some(tx_info) => self.get_transaction_by_key(&tx_info.key()),

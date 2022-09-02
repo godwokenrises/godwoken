@@ -1,7 +1,7 @@
 use molecule::prelude::Byte;
 
 use crate::packed::{self, GlobalState, GlobalStateV1, LastFinalizedWithdrawal};
-use crate::prelude::{Builder, Entity, Pack};
+use crate::prelude::{Builder, Entity, Pack, Unpack};
 use core::convert::TryFrom;
 use core::convert::TryInto;
 
@@ -200,6 +200,31 @@ impl From<GlobalStateV1> for GlobalState {
             .status(global_state_v1.status())
             .version(1.into())
             .build()
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum FinalizedWithdrawalIndex {
+    NoWithdrawal,
+    AllWithdrawals,
+    Value(u32),
+}
+
+impl LastFinalizedWithdrawal {
+    pub const INDEX_NO_WITHDRAWAL: u32 = u32::MAX;
+    pub const INDEX_ALL_WITHDRAWALS: u32 = u32::MAX - 1;
+
+    pub fn unpack_block_index(&self) -> (u64, FinalizedWithdrawalIndex) {
+        let index: u32 = self.withdrawal_index().unpack();
+        let index_enum = if Self::INDEX_NO_WITHDRAWAL == index {
+            FinalizedWithdrawalIndex::NoWithdrawal
+        } else if Self::INDEX_ALL_WITHDRAWALS == index {
+            FinalizedWithdrawalIndex::AllWithdrawals
+        } else {
+            FinalizedWithdrawalIndex::Value(index)
+        };
+
+        (self.block_number().unpack(), index_enum)
     }
 }
 

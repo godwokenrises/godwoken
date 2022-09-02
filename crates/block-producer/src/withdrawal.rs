@@ -1,27 +1,254 @@
 #![allow(clippy::mutable_key_type)]
 
-use anyhow::{anyhow, Result};
-use gw_common::H256;
+use anyhow::{anyhow, bail, ensure, Context, Result};
+use gw_common::{
+    merkle_utils::{ckb_merkle_leaf_hash, CBMT},
+    sparse_merkle_tree::CompiledMerkleProof,
+    CKB_SUDT_SCRIPT_ARGS, H256,
+};
 use gw_config::ContractsCellDep;
 use gw_mem_pool::{custodian::sum_withdrawals, withdrawal::Generator};
 use gw_types::{
     bytes::Bytes,
-    core::{DepType, ScriptHashType},
+    core::{DepType, FinalizedWithdrawalIndex, ScriptHashType},
     offchain::{
         global_state_from_slice, CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext,
+        WithdrawalsAmount,
     },
     packed::{
-        CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, L2Block, Script,
-        UnlockWithdrawalViaFinalize, UnlockWithdrawalViaRevert, UnlockWithdrawalWitness,
-        UnlockWithdrawalWitnessUnion, WithdrawalRequestExtra, WitnessArgs,
+        CKBMerkleProof, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs,
+        L2Block, LastFinalizedWithdrawal, RawL2BlockWithdrawals, RawL2BlockWithdrawalsVec,
+        RollupFinalizeWithdrawal, Script, UnlockWithdrawalViaFinalize, UnlockWithdrawalViaRevert,
+        UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion, WithdrawalRequest,
+        WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::*,
 };
+use tracing::instrument;
 
 use std::{
     collections::HashMap,
     time::{SystemTime, UNIX_EPOCH},
 };
+
+pub mod user_withdrawal;
+use self::user_withdrawal::UserWithdrawals;
+
+pub struct BlockWithdrawals {
+    block: L2Block,
+    range: Option<(u32, u32)>, // start..=end
+}
+
+impl BlockWithdrawals {
+    pub fn new(block: L2Block) -> Self {
+        let range = if let Some(end) = Self::last_index(&block) {
+            Some((0, end))
+        } else {
+            debug_assert!(block.withdrawals().is_empty());
+            None
+        };
+
+        BlockWithdrawals { block, range }
+    }
+
+    pub fn from_rest(
+        block: L2Block,
+        last_finalized: &LastFinalizedWithdrawal,
+    ) -> Result<Option<Self>> {
+        let (finalized_bn, finalized_idx) = last_finalized.unpack_block_index();
+        if finalized_bn != block.raw().number().unpack() {
+            bail!("diff block and last finalized withdrawal block");
+        }
+
+        let finalized_idx_val = match finalized_idx {
+            FinalizedWithdrawalIndex::NoWithdrawal | FinalizedWithdrawalIndex::AllWithdrawals => {
+                return Ok(None)
+            }
+            FinalizedWithdrawalIndex::Value(index) => index,
+        };
+        ensure!(!block.withdrawals().is_empty(), "block has withdrawals");
+
+        let last_index = Self::last_index(&block).expect("valid finalized index");
+        let range = if finalized_idx_val == last_index {
+            // All withdrawals are finalized but the index isnt set to `INDEX_ALL_WITHDRAWALS`.
+            // In this case, we must include this block into witness to do verification
+            None
+        } else {
+            Some((finalized_idx_val + 1, last_index))
+        };
+
+        Ok(Some(BlockWithdrawals { block, range }))
+    }
+
+    pub fn block(&self) -> &L2Block {
+        &self.block
+    }
+
+    pub fn block_number(&self) -> u64 {
+        self.block.raw().number().unpack()
+    }
+
+    pub fn block_range(&self) -> (u64, Option<(u32, u32)>) {
+        (self.block.raw().number().unpack(), self.range)
+    }
+
+    pub fn len(&self) -> u32 {
+        self.range.map(Self::count).unwrap_or(0)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        0 == self.len()
+    }
+
+    pub fn withdrawals(&self) -> impl Iterator<Item = WithdrawalRequest> {
+        let (skip, take) = match self.range {
+            Some((start, end)) => (start as usize, Self::count((start, end)) as usize),
+            None => (0, 0),
+        };
+
+        self.block.withdrawals().into_iter().skip(skip).take(take)
+    }
+
+    pub fn withdrawal_hashes(&self) -> impl Iterator<Item = H256> {
+        self.withdrawals().map(|w| w.hash().into())
+    }
+
+    pub fn generate_witness(&self) -> Result<RawL2BlockWithdrawals> {
+        let offset = match self.range {
+            Some((offset, _)) => offset,
+            None => {
+                return Ok(RawL2BlockWithdrawals::new_builder()
+                    .raw_l2block(self.block.raw())
+                    .build())
+            }
+        };
+
+        let leaves = { self.block.withdrawals().into_iter().enumerate() }
+            .map(|(i, w)| {
+                let hash: H256 = w.witness_hash().into();
+                ckb_merkle_leaf_hash(i as u32, &hash)
+            })
+            .collect::<Vec<_>>();
+
+        let (indices, proof_withdrawals): (Vec<_>, Vec<_>) = { self.withdrawals().enumerate() }
+            .map(|(i, w)| (i as u32 + offset, w))
+            .unzip();
+
+        let proof = CBMT::build_merkle_proof(&leaves, &indices).with_context(|| {
+            let block_number = self.block.raw().number().unpack();
+            format!("block {} range {:?}", block_number, self.range)
+        })?;
+        let cbmt_proof = CKBMerkleProof::new_builder()
+            .lemmas(proof.lemmas().pack())
+            .indices(proof.indices().pack())
+            .build();
+
+        let block_withdrawals = RawL2BlockWithdrawals::new_builder()
+            .raw_l2block(self.block.raw())
+            .withdrawals(proof_withdrawals.pack())
+            .withdrawal_proof(cbmt_proof)
+            .build();
+
+        Ok(block_withdrawals)
+    }
+
+    pub fn take(self, n: u32) -> Option<Self> {
+        let range = self.range?;
+        let count = Self::count(range);
+        if count < n {
+            return None;
+        }
+        if count == n {
+            return Some(self);
+        }
+
+        let (start, _) = range;
+        let taken = BlockWithdrawals {
+            block: self.block,
+            range: Some((start, start + n - 1)),
+        };
+
+        Some(taken)
+    }
+
+    pub fn to_last_finalized_withdrawal(&self) -> LastFinalizedWithdrawal {
+        let index = match self.range {
+            None => LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL,
+            Some((_, end)) if Some(end) == Self::last_index(&self.block) => {
+                LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS
+            }
+            Some((_, end)) => end,
+        };
+
+        LastFinalizedWithdrawal::new_builder()
+            .block_number(self.block.raw().number())
+            .withdrawal_index(index.pack())
+            .build()
+    }
+
+    fn last_index(block: &L2Block) -> Option<u32> {
+        (block.withdrawals().len() as u32).checked_sub(1)
+    }
+
+    fn count((start, end): (u32, u32)) -> u32 {
+        end - start + 1 // +1 for inclusive end, aka start..=end
+    }
+}
+
+pub struct FinalizedWithdrawals {
+    pub withdrawals: Option<(WithdrawalsAmount, Vec<(CellOutput, Bytes)>)>,
+    pub witness: RollupFinalizeWithdrawal,
+}
+
+#[instrument(skip_all)]
+pub fn finalize(
+    block_withdrawals: &[BlockWithdrawals],
+    block_proof: CompiledMerkleProof,
+    extra_map: &HashMap<H256, WithdrawalRequestExtra>,
+    sudt_script_map: &HashMap<H256, Script>,
+) -> Result<FinalizedWithdrawals> {
+    let mut withdrawals = None;
+
+    if block_withdrawals.iter().any(|bw| !bw.is_empty()) {
+        let extras = { block_withdrawals.iter() }
+            .flat_map(|bw| {
+                bw.withdrawal_hashes().map(|h| {
+                    { extra_map.get(&h) }
+                        .ok_or_else(|| anyhow!("withdrawal extra {} not found", h.pack()))
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let aggregated = aggregate_withdrawals(extras, sudt_script_map)?;
+
+        let user_withdrawal_outputs = { aggregated.users.into_values() }
+            .filter_map(UserWithdrawals::into_outputs)
+            .flatten()
+            .collect();
+
+        withdrawals = Some((aggregated.total, user_withdrawal_outputs));
+    }
+
+    let withdrawals_witness = { block_withdrawals.iter() }
+        .map(BlockWithdrawals::generate_witness)
+        .collect::<Result<Vec<_>>>()?;
+
+    let witness = RollupFinalizeWithdrawal::new_builder()
+        .block_withdrawals(
+            RawL2BlockWithdrawalsVec::new_builder()
+                .set(withdrawals_witness)
+                .build(),
+        )
+        .block_proof(block_proof.0.pack())
+        .build();
+
+    let finalized = FinalizedWithdrawals {
+        withdrawals,
+        witness,
+    };
+
+    Ok(finalized)
+}
 
 pub struct GeneratedWithdrawals {
     pub deps: Vec<CellDep>,
@@ -30,6 +257,7 @@ pub struct GeneratedWithdrawals {
 }
 
 // Note: custodian lock search rollup cell in inputs
+// TODO: remove after enable finalize withdrawals
 pub fn generate(
     rollup_context: &RollupContext,
     mut finalized_custodians: CollectedCustodianCells,
@@ -88,6 +316,7 @@ pub struct RevertedWithdrawals {
     pub outputs: Vec<(CellOutput, Bytes)>,
 }
 
+// TODO: remove after enable finalize withdrawals
 pub fn revert(
     rollup_context: &RollupContext,
     contracts_dep: &ContractsCellDep,
@@ -197,6 +426,7 @@ pub struct UnlockedWithdrawals {
     pub outputs: Vec<(CellOutput, Bytes)>,
 }
 
+// TODO: remove after enable finalize withdrawals
 pub fn unlock_to_owner(
     rollup_cell: CellInfo,
     rollup_context: &RollupContext,
@@ -292,6 +522,56 @@ pub fn unlock_to_owner(
         witness_args: withdrawal_witness,
         outputs: unlocked_to_owner_outputs,
     }))
+}
+
+struct AggregatedWithdrawals {
+    total: WithdrawalsAmount,
+    users: HashMap<H256, UserWithdrawals>,
+}
+
+fn aggregate_withdrawals<'a>(
+    extras: impl IntoIterator<Item = &'a WithdrawalRequestExtra>,
+    sudt_scripts: &HashMap<H256, Script>,
+) -> Result<AggregatedWithdrawals> {
+    let mut total = WithdrawalsAmount::default();
+    let mut users = HashMap::new();
+
+    for extra in extras {
+        let raw = extra.request().raw();
+
+        total.capacity = { total.capacity }
+            .checked_add(raw.capacity().unpack().into())
+            .context("capacity overflow")?;
+
+        let owner_lock = extra.owner_lock();
+        let user_mut = users
+            .entry(owner_lock.hash().into())
+            .or_insert_with(|| UserWithdrawals::new(owner_lock));
+
+        let sudt_amount = raw.amount().unpack();
+        if 0 == sudt_amount {
+            user_mut.push_extra((extra, None))?;
+            continue;
+        }
+
+        let sudt_script_hash: [u8; 32] = raw.sudt_script_hash().unpack();
+        if CKB_SUDT_SCRIPT_ARGS == sudt_script_hash {
+            bail!("invalid sudt withdrawal {:x}", raw.hash().pack());
+        }
+
+        let sudt_balance_mut = total.sudt.entry(sudt_script_hash).or_insert(0);
+        *sudt_balance_mut = sudt_balance_mut
+            .checked_add(sudt_amount)
+            .with_context(|| ckb_fixed_hash::H256(raw.hash()))?;
+
+        let sudt_script = sudt_scripts
+            .get(&sudt_script_hash.into())
+            .with_context(|| ckb_fixed_hash::H256(raw.hash()))?;
+
+        user_mut.push_extra((extra, Some((*sudt_script).to_owned())))?;
+    }
+
+    Ok(AggregatedWithdrawals { total, users })
 }
 
 #[cfg(test)]
