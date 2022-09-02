@@ -29,6 +29,7 @@ use gw_types::{
 };
 use std::{collections::HashSet, convert::TryFrom, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
+use tracing::instrument;
 
 #[derive(Debug, Clone)]
 pub struct ChallengeCell {
@@ -919,6 +920,7 @@ impl Chain {
     /// Store a new local block.
     ///
     /// Note that this does not store finalized custodians.
+    #[instrument(skip_all)]
     pub fn update_local(
         &mut self,
         store_tx: &StoreTransaction,

@@ -308,6 +308,7 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
 }
 
 /// Produce and save local block.
+#[instrument(skip_all)]
 async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
     // TODO: check block and retry.
 
