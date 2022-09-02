@@ -1,6 +1,6 @@
 //! L1 and P2P block sync.
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::VecDeque, sync::Arc, time::Duration};
 
 use anyhow::{ensure, Context, Result};
 use bytes::Bytes;
@@ -139,13 +139,58 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
         tokio::time::sleep(Duration::from_secs(3)).await;
     }
     log::info!("receiving block sync messages from peer");
-    while let Some(msg) = stream.recv().await? {
-        BlockSyncReader::from_slice(msg.as_ref())?;
-        let msg = BlockSync::new_unchecked(msg);
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    let mut stream = stream.take_receiver();
+    // Receive from the stream promptly but only send to tx when the previous
+    // one has been applied.
+    //
+    // When there are too many messages in the buffer that haven't been applied,
+    // we skip transactions and mem block messages till next block.
+    let recv_handle = tokio::spawn(async move {
+        let mut buffer: VecDeque<BlockSync> = VecDeque::new();
+        let mut stream_ended = false;
+        loop {
+            tokio::select! {
+                biased;
+                recv_result = stream.recv(), if !stream_ended && buffer.len() < 1024 => {
+                    if let Some(msg) = recv_result? {
+                        BlockSyncReader::from_slice(&msg[..])?;
+                        buffer.push_back(BlockSync::new_unchecked(msg));
+                        if buffer.len() % 128 == 0 {
+                            log::info!("receive buffer: {}", buffer.len());
+                        }
+                    } else {
+                        stream_ended = true;
+                    }
+                }
+                reserve_result = tx.reserve(), if !buffer.is_empty() => {
+                    reserve_result?.send(buffer.pop_front().unwrap());
+                }
+                // No more messages - buffer is empty and stream is ended.
+                else => break,
+            }
+            if buffer.len() >= 512
+                && matches!(
+                    buffer[buffer.len() - 1].to_enum(),
+                    BlockSyncUnion::LocalBlock(_)
+                )
+            {
+                log::warn!("receive buffer too large, skipping transactions and mem blocks");
+                #[allow(clippy::match_like_matches_macro)]
+                buffer.retain(|msg| match msg.to_enum() {
+                    BlockSyncUnion::L2Transaction(_) => false,
+                    BlockSyncUnion::NextMemBlock(_) => false,
+                    _ => true,
+                });
+                log::info!("receive buffer: {}", buffer.len());
+            }
+        }
+        anyhow::Ok(())
+    });
+    while let Some(msg) = rx.recv().await {
         apply_msg(client, msg).await?;
     }
-    log::info!("end receiving block sync messages from peer");
-
+    recv_handle.await??;
     Ok(())
 }
 
@@ -269,13 +314,26 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
 pub struct P2PStream {
     id: SessionId,
     control: ServiceAsyncControl,
-    read_part: SubstreamReadPart,
+    read_part: Option<SubstreamReadPart>,
     decoder: StreamDecoder,
 }
 
 impl P2PStream {
+    /// After calling this, you can only receive from the returned stream, and
+    /// self can only be used for disconnecting. (This is for receiving from
+    /// another task.)
+    fn take_receiver(&mut self) -> Self {
+        Self {
+            id: self.id,
+            control: self.control.clone(),
+            read_part: self.read_part.take(),
+            decoder: core::mem::take(&mut self.decoder),
+        }
+    }
+
     async fn recv(&mut self) -> Result<Option<Bytes>> {
-        Ok(if let Some(msg) = self.read_part.try_next().await? {
+        let receiver = self.read_part.as_mut().context("stream is taken")?;
+        Ok(if let Some(msg) = receiver.try_next().await? {
             // Decompress message.
             Some(self.decoder.decode(&msg)?.into())
         } else {
@@ -305,7 +363,7 @@ pub fn block_sync_client_protocol(stream_tx: UnboundedSender<P2PStream>) -> Prot
         let stream = P2PStream {
             id,
             control,
-            read_part,
+            read_part: Some(read_part),
             decoder: StreamDecoder::new(),
         };
         let _ = stream_tx.send(stream);
