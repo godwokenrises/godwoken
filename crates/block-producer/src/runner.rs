@@ -603,9 +603,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 .ok_or_else(|| anyhow!("must provide block producer config in mode: {:?}", mode))?;
             let contracts_dep_manager =
                 contracts_dep_manager.ok_or_else(|| anyhow!("must build contracts dep"))?;
-            let mem_pool = mem_pool
-                .clone()
-                .ok_or_else(|| anyhow!("mem-pool must be enabled in mode: {:?}", mode))?;
             let wallet =
                 wallet.ok_or_else(|| anyhow!("wallet must be enabled in mode: {:?}", mode))?;
             let offchain_mock_context = {
@@ -675,7 +672,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 store: store.clone(),
                 generator: generator.clone(),
                 chain: Arc::clone(&chain),
-                mem_pool,
                 rpc_client: rpc_client.clone(),
                 ckb_genesis_info,
                 config: block_producer_config,

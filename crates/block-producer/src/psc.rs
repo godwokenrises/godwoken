@@ -310,13 +310,20 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
 /// Produce and save local block.
 async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
     // TODO: check block and retry.
+
+    // Lock mem pool the whole time we produce and update the next block. Don't
+    // push transactions. Transactions pushed in this period of time will need
+    // to be re-injected after the mem pool is reset anyway, and that creates a
+    // quite some pressure on p2p syncing and read-only nodes.
+    let mut pool = ctx.mem_pool.lock().await;
+
     let ProduceBlockResult {
         block,
         global_state,
         withdrawal_extras,
         deposit_cells,
         remaining_capacity,
-    } = ctx.block_producer.produce_next_block(0).await?;
+    } = ctx.block_producer.produce_next_block(&mut pool, 0).await?;
 
     let number: u64 = block.raw().number().unpack();
     let block_hash: H256 = block.hash().into();
@@ -331,8 +338,6 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
         .iter()
         .filter_map(|d| d.cell.output.type_().to_opt())
         .collect();
-
-    let store_tx = ctx.store.begin_transaction();
 
     // Publish block to read-only nodes as soon as possible, so that read-only nodes does not lag behind us.
     if let Some(ref sync_server_state) = ctx.block_sync_server_state {
@@ -353,6 +358,7 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
 
     let mut chain = ctx.chain.lock().await;
     tokio::task::block_in_place(|| {
+        let store_tx = ctx.store.begin_transaction();
         chain.update_local(
             &store_tx,
             block,
@@ -384,7 +390,6 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
         local_cells_manager.lock_cell(d.cell.out_point);
     }
 
-    let mut pool = ctx.mem_pool.lock().await;
     pool.notify_new_tip(block_hash, &local_cells_manager)
         .await
         .expect("notify new tip");
