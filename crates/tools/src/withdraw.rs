@@ -32,7 +32,6 @@ pub async fn withdraw(
     capacity: &str,
     amount: &str,
     fee: &str,
-    chain_id: &str,
     sudt_script_hash: &str,
     owner_ckb_address: &str,
     config_path: &Path,
@@ -41,7 +40,6 @@ pub async fn withdraw(
     let sudt_script_hash = H256::from_str(sudt_script_hash.trim().trim_start_matches("0x"))?;
     let capacity = parse_capacity(capacity)?;
     let amount: u128 = amount.parse().expect("sUDT amount format error");
-    let chain_id: u64 = chain_id.parse().expect("chain_id format error");
     let fee: u128 = parse_capacity(fee)? as u128;
 
     let scripts_deployment_content = fs::read_to_string(scripts_deployment_path)?;
@@ -52,6 +50,8 @@ pub async fn withdraw(
 
     let config = read_config(&config_path)?;
     let rollup_type_hash = &config.genesis.rollup_type_hash;
+
+    let chain_id: u64 = config.genesis.rollup_config.chain_id.into();
 
     let is_sudt = sudt_script_hash != H256([0u8; 32]);
     let minimal_capacity = minimal_withdrawal_capacity(is_sudt)?;

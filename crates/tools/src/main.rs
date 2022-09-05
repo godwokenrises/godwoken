@@ -357,12 +357,6 @@ async fn main() -> Result<()> {
                         .help("Withdrawal fee, default to 0.0001 CKB"),
                 )
                 .arg(
-                    Arg::with_name("chain-id")
-                        .long("chain-id")
-                        .takes_value(true)
-                        .help("Withdrawal chain-id"),
-                )
-                .arg(
                     Arg::with_name("owner-ckb-address")
                         .short("a")
                         .long("owner-ckb-address")
@@ -1091,7 +1085,6 @@ async fn main() -> Result<()> {
             let capacity = m.value_of("capacity").unwrap();
             let amount = m.value_of("amount").unwrap();
             let fee = m.value_of("fee").unwrap();
-            let chain_id = m.value_of("chain-id").unwrap();
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
@@ -1104,7 +1097,6 @@ async fn main() -> Result<()> {
                 capacity,
                 amount,
                 fee,
-                chain_id,
                 sudt_script_hash,
                 owner_ckb_address,
                 config_path,
