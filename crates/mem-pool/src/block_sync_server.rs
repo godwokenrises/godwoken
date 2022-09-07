@@ -12,14 +12,17 @@ use gw_config::SyncServerConfig;
 use gw_p2p_network::{FnSpawn, P2P_SYNC_PROTOCOL, P2P_SYNC_PROTOCOL_NAME};
 use gw_types::{
     packed::{
-        BlockSync, BlockSyncUnion, Confirmed, Found, L2Transaction, LocalBlock, NextMemBlock,
-        P2PSyncRequest, P2PSyncRequestReader, P2PSyncResponse, Revert, Submitted, TryAgain,
+        self, BlockSync, BlockSyncUnion, Confirmed, Found, L2Transaction, LocalBlock, NextMemBlock,
+        P2PSyncRequest, P2PSyncRequestReader, P2PSyncResponse, PushTransaction, Revert, Submitted,
+        TryAgain,
     },
     prelude::*,
 };
 use gw_utils::compression::StreamEncoder;
+use opentelemetry::trace::TraceContextExt;
 use tentacle::{builder::MetaBuilder, service::ProtocolMeta};
 use tokio::sync::broadcast::{channel, Receiver, Sender};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 #[derive(Default)]
 struct BlockMessages {
@@ -94,7 +97,16 @@ impl BlockSyncServerState {
 
     pub fn publish_transaction(&mut self, tx: L2Transaction) {
         log::debug!("publish transaction");
-        let msg = BlockSync::new_builder().set(tx).build();
+        // Propagate tracing context.
+        let cx = tracing::Span::current().context();
+        let span_ref = cx.span();
+        let span_context = span_ref.span_context();
+        let msg = PushTransaction::new_builder()
+            .trace_id(packed::Byte16::from_slice(&span_context.trace_id().to_bytes()).unwrap())
+            .span_id(packed::Byte8::from_slice(&span_context.span_id().to_bytes()).unwrap())
+            .transaction(tx)
+            .build();
+        let msg = BlockSync::new_builder().set(msg).build();
         if let Some((_, messages)) = self.buffer.iter_mut().rev().next() {
             // The first message is either a LocalBlock or a NextMemBlock. We
             // only need to buffer it for NextMemBlock.

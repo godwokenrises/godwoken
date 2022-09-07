@@ -15,14 +15,16 @@ use gw_store::{snapshot::StoreSnapshot, traits::chain_store::ChainStore, Store};
 use gw_types::{
     offchain::{CellStatus, DepositInfo, TxStatus},
     packed::{
-        Confirmed, GlobalState, LocalBlock, NumberHash, OutPoint, Revert, Script, ScriptVec,
+        self, Confirmed, GlobalState, LocalBlock, NumberHash, OutPoint, Revert, Script, ScriptVec,
         Submitted, Transaction, WithdrawalKey,
     },
     prelude::*,
 };
 use gw_utils::{abort_on_drop::spawn_abort_on_drop, local_cells::LocalCellsManager, since::Since};
+use opentelemetry::trace::TraceContextExt;
 use tokio::{sync::Mutex, time::Instant};
 use tracing::instrument;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::{
     block_producer::{BlockProducer, ComposeSubmitTxArgs, TransactionSizeError},
@@ -342,8 +344,14 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
 
     // Publish block to read-only nodes as soon as possible, so that read-only nodes does not lag behind us.
     if let Some(ref sync_server_state) = ctx.block_sync_server_state {
+        // Propagate tracing context.
+        let cx = tracing::Span::current().context();
+        let span_ref = cx.span();
+        let span_context = span_ref.span_context();
         sync_server_state.lock().unwrap().publish_local_block(
             LocalBlock::new_builder()
+                .trace_id(packed::Byte16::from_slice(&span_context.trace_id().to_bytes()).unwrap())
+                .span_id(packed::Byte8::from_slice(&span_context.span_id().to_bytes()).unwrap())
                 .block(block.clone())
                 .post_global_state(global_state.clone())
                 .deposit_info_vec(deposit_info_vec.clone())

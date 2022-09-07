@@ -3,9 +3,6 @@ import godwoken;
 import store;
 import mem_block;
 
-vector Byte32VecVec <Byte32Vec>;
-option Byte32VecVecOpt (Byte32VecVec);
-
 table ExportedBlock {
     block: L2Block,
     post_global_state: GlobalState,
@@ -14,60 +11,4 @@ table ExportedBlock {
     withdrawals: WithdrawalRequestExtraVec,
     bad_block_hashes: Byte32VecVecOpt,
     submit_tx_hash: Byte32Opt,
-}
-
-union BlockSync {
-    // Block syncing.
-    Revert,
-    LocalBlock,
-    Submitted,
-    Confirmed,
-    // Mem block syncing.
-    NextMemBlock,
-    L2Transaction,
-}
-
-table LocalBlock {
-    block: L2Block,
-    post_global_state: GlobalState,
-    deposit_info_vec: DepositInfoVec,
-    deposit_asset_scripts: ScriptVec,
-    withdrawals: WithdrawalRequestExtraVec,
-    bad_block_hashes: Byte32VecVecOpt,
-}
-
-struct Submitted {
-    number_hash: NumberHash,
-    tx_hash: Byte32,
-}
-
-struct Confirmed {
-    number_hash: NumberHash,
-    tx_hash: Byte32,
-}
-
-struct Revert {
-    number_hash: NumberHash,
-}
-
-struct P2PSyncRequest {
-    block_number: Uint64,
-    block_hash: Byte32,
-}
-
-union P2PSyncResponse {
-    Found,
-    TryAgain,
-}
-
-table Found {
-}
-
-table TryAgain {
-}
-
-table NextMemBlock {
-    deposits: DepositInfoVec,
-    withdrawals: WithdrawalRequestExtraVec,
-    block_info: BlockInfo,
 }

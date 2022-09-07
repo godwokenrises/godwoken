@@ -26,21 +26,22 @@ mod build {
     pub fn generate_molecule(files: &[&str]) {
         for f in files {
             println!("cargo:rerun-if-changed={}/{}.mol", SCHEMAS_DIR, f);
-            let output = Command::new("sh")
+            let status = Command::new("sh")
             .arg("-c")
             .arg(format!("{molc} --language rust --schema-file {schema_dir}/{file}.mol > {output_dir}/{file}.rs", molc=MOLECULE, file=f, schema_dir=SCHEMAS_DIR, output_dir=OUTPUT_DIR))
-            .output()
+            .status()
             .expect("failed to execute process");
-            assert!(output.status.success(), "run moleculec");
-            let output = Command::new("rustfmt")
+            assert!(status.success(), "run moleculec");
+
+            let status = Command::new("rustfmt")
                 .arg(format!(
                     "{output_dir}/{file}.rs",
                     file = f,
                     output_dir = OUTPUT_DIR
                 ))
-                .output()
+                .status()
                 .expect("failed to execute process");
-            assert!(output.status.success(), "run rustfmt");
+            assert!(status.success(), "run rustfmt");
         }
     }
 }
@@ -59,6 +60,7 @@ fn main() {
             "xudt_rce",
             "deprecated",
             "exported_block",
+            "block_sync",
         ]);
     }
 }

@@ -2,6 +2,9 @@ import blockchain;
 import godwoken;
 import store;
 
+vector Byte32VecVec <Byte32Vec>;
+option Byte32VecVecOpt (Byte32VecVec);
+
 table CellInfo {
     out_point: OutPoint,
     output: CellOutput,

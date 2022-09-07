@@ -20,6 +20,7 @@ use gw_types::{
     prelude::Unpack,
 };
 use gw_utils::compression::StreamDecoder;
+use opentelemetry::trace::{SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState};
 use tentacle::{
     builder::MetaBuilder,
     service::{ProtocolMeta, ServiceAsyncControl},
@@ -32,6 +33,8 @@ use tokio::{
     },
     task::block_in_place,
 };
+use tracing::info_span;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::{
     chain_updater::ChainUpdater,
@@ -178,7 +181,7 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
                 log::warn!("receive buffer too large, skipping transactions and mem blocks");
                 #[allow(clippy::match_like_matches_macro)]
                 buffer.retain(|msg| match msg.to_enum() {
-                    BlockSyncUnion::L2Transaction(_) => false,
+                    BlockSyncUnion::PushTransaction(_) => false,
                     BlockSyncUnion::NextMemBlock(_) => false,
                     _ => true,
                 });
@@ -212,6 +215,20 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             store_tx.commit()?;
         }
         BlockSyncUnion::LocalBlock(l) => {
+            // Use remote span context as parent.
+            let trace_id: [u8; 16] = l.trace_id().as_slice().try_into().unwrap();
+            let span_id: [u8; 8] = l.span_id().as_slice().try_into().unwrap();
+            let span_cx = SpanContext::new(
+                TraceId::from_bytes(trace_id),
+                SpanId::from_bytes(span_id),
+                TraceFlags::SAMPLED,
+                true,
+                TraceState::default(),
+            );
+            let span = info_span!("handle_local_block");
+            span.set_parent(opentelemetry::Context::current().with_remote_span_context(span_cx));
+            let _guard = span.enter();
+
             let block_hash = l.block().hash();
             let block_number = l.block().raw().number().unpack();
             log::info!(
@@ -291,7 +308,22 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
                 }
             }
         }
-        BlockSyncUnion::L2Transaction(tx) => {
+        BlockSyncUnion::PushTransaction(push_tx) => {
+            // Use remote span context as parent.
+            let trace_id: [u8; 16] = push_tx.trace_id().as_slice().try_into().unwrap();
+            let span_id: [u8; 8] = push_tx.span_id().as_slice().try_into().unwrap();
+            let span_cx = SpanContext::new(
+                TraceId::from_bytes(trace_id),
+                SpanId::from_bytes(span_id),
+                TraceFlags::SAMPLED,
+                true,
+                TraceState::default(),
+            );
+            let span = info_span!("handle_push_transaction");
+            span.set_parent(opentelemetry::Context::current().with_remote_span_context(span_cx));
+            let _guard = span.enter();
+
+            let tx = push_tx.transaction();
             log::info!("received L2Transaction 0x{}", hex::encode(tx.hash()));
             if let Some(ref mem_pool) = client.mem_pool {
                 let mut mem_pool = mem_pool.lock().await;

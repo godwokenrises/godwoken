@@ -1830,11 +1830,13 @@ dependencies = [
  "gw-utils",
  "hex",
  "log",
+ "opentelemetry",
  "rand 0.8.5",
  "tempfile",
  "tentacle",
  "tokio",
  "tracing",
+ "tracing-opentelemetry",
 ]
 
 [[package]]
