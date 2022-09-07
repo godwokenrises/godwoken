@@ -31,9 +31,9 @@ use gw_types::offchain::{
 };
 use gw_types::packed::{
     self, AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositRequest,
-    GlobalState, OutPoint, RawWithdrawalRequest, RollupAction, RollupActionUnion, RollupConfig,
-    RollupSubmitBlock, Script, StakeLockArgs, WithdrawalRequest, WithdrawalRequestExtra,
-    WitnessArgs,
+    GlobalState, LastFinalizedWithdrawal, OutPoint, RawWithdrawalRequest, RollupAction,
+    RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, StakeLockArgs, WithdrawalRequest,
+    WithdrawalRequestExtra, WitnessArgs,
 };
 use gw_types::prelude::{Pack, PackVec, Unpack};
 use gw_utils::local_cells::LocalCellsManager;
@@ -241,7 +241,7 @@ async fn test_build_unlock_to_owner_tx() {
 
     let deposit_finalized_global_state = chain.local_state().last_global_state().clone();
     let input_rollup_cell = CellInfo {
-        data: deposit_finalized_global_state.as_bytes(),
+        data: ensure_global_state_v1(deposit_block_result.global_state.clone()).as_bytes(),
         out_point: OutPoint::new_builder()
             .tx_hash(rand::random::<[u8; 32]>().pack())
             .build(),
@@ -416,7 +416,7 @@ async fn test_build_unlock_to_owner_tx() {
 
     let output_rollup_cell = (
         rollup_cell.output.clone(),
-        withdrawal_block_result.global_state.as_bytes(),
+        ensure_global_state_v1(withdrawal_block_result.global_state.clone()).as_bytes(),
     );
     let witness = {
         let rollup_action = RollupAction::new_builder()
@@ -618,7 +618,7 @@ async fn test_build_unlock_to_owner_tx() {
             builder.reverted_block_root(reverted_block_smt.root().pack())
         };
         CellInfo {
-            data: global_state.build().as_bytes(),
+            data: ensure_global_state_v1(global_state.build()).as_bytes(),
             out_point: OutPoint::new_builder()
                 .tx_hash(rand::random::<[u8; 32]>().pack())
                 .build(),
@@ -628,7 +628,10 @@ async fn test_build_unlock_to_owner_tx() {
                 .build(),
         }
     };
-    let output_rollup_cell = (rollup_cell.output, block_result.global_state.as_bytes());
+    let output_rollup_cell = (
+        rollup_cell.output,
+        ensure_global_state_v1(block_result.global_state).as_bytes(),
+    );
 
     let output_stake = {
         let block_number = block_result.block.raw().number();
@@ -806,5 +809,12 @@ fn random_always_success_script(opt_rollup_script_hash: Option<&H256>) -> Script
             args.extend_from_slice(&random_bytes);
             args.pack()
         })
+        .build()
+}
+
+fn ensure_global_state_v1(global_state: GlobalState) -> GlobalState {
+    { global_state.as_builder() }
+        .last_finalized_withdrawal(LastFinalizedWithdrawal::default())
+        .version(1u8.into())
         .build()
 }
