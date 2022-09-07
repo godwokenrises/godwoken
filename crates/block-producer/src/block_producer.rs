@@ -355,23 +355,35 @@ impl BlockProducer {
         }
 
         // withdrawal cells
-        let map_withdrawal_extras = withdrawal_extras.into_iter().map(|w| (w.hash().into(), w));
-        if let Some(generated_withdrawal_cells) = crate::withdrawal::generate(
-            rollup_context,
-            finalized_custodians,
-            &block,
-            &contracts_dep,
-            &map_withdrawal_extras.collect(),
-        )? {
-            tx_skeleton
-                .cell_deps_mut()
-                .extend(generated_withdrawal_cells.deps);
-            tx_skeleton
-                .inputs_mut()
-                .extend(generated_withdrawal_cells.inputs);
-            tx_skeleton
-                .outputs_mut()
-                .extend(generated_withdrawal_cells.outputs);
+        let parent_global_state = {
+            let parent_block_hash: H256 = block.raw().parent_block_hash().unpack();
+            db.get_block_post_global_state(&parent_block_hash)?
+                .ok_or_else(|| {
+                    anyhow!(
+                        "parent block {:x} global state not found",
+                        parent_block_hash.pack()
+                    )
+                })?
+        };
+        if 1 == parent_global_state.version_u8() && 2 == global_state.version_u8() {
+            let map_withdrawal_extras = withdrawal_extras.into_iter().map(|w| (w.hash().into(), w));
+            if let Some(generated_withdrawal_cells) = crate::withdrawal::generate(
+                rollup_context,
+                finalized_custodians,
+                &block,
+                &contracts_dep,
+                &map_withdrawal_extras.collect(),
+            )? {
+                tx_skeleton
+                    .cell_deps_mut()
+                    .extend(generated_withdrawal_cells.deps);
+                tx_skeleton
+                    .inputs_mut()
+                    .extend(generated_withdrawal_cells.inputs);
+                tx_skeleton
+                    .outputs_mut()
+                    .extend(generated_withdrawal_cells.outputs);
+            }
         }
 
         if let Some(reverted_deposits) =

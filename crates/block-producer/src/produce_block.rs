@@ -21,8 +21,8 @@ use gw_types::{
     core::Status,
     offchain::{BlockParam, DepositInfo, FinalizedCustodianCapacity},
     packed::{
-        AccountMerkleState, BlockMerkleState, GlobalState, L2Block, RawL2Block, SubmitTransactions,
-        SubmitWithdrawals, WithdrawalRequestExtra,
+        AccountMerkleState, BlockMerkleState, GlobalState, L2Block, LastFinalizedWithdrawal,
+        RawL2Block, SubmitTransactions, SubmitWithdrawals, WithdrawalRequestExtra,
     },
     prelude::*,
 };
@@ -157,16 +157,41 @@ pub fn produce_block(
     };
     let last_finalized_block_number =
         number.saturating_sub(rollup_context.rollup_config.finality_blocks().unpack());
+    let last_finalized_withdrawal = {
+        let parent_global_state = db
+            .get_block_post_global_state(&parent_block_hash)?
+            .ok_or_else(|| {
+                anyhow!(
+                    "parent block {:x} global state not found",
+                    parent_block_hash.pack()
+                )
+            })?;
+
+        if parent_global_state.version_u8() >= 2 {
+            parent_global_state.last_finalized_withdrawal()
+        } else {
+            let index = if block.withdrawals().is_empty() {
+                LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL
+            } else {
+                LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS
+            };
+            LastFinalizedWithdrawal::new_builder()
+                .block_number(number.pack())
+                .withdrawal_index(index.pack())
+                .build()
+        }
+    };
     let global_state = GlobalState::new_builder()
         .account(post_merkle_state)
         .block(post_block)
         .tip_block_hash(block.hash().pack())
         .tip_block_timestamp(block.raw().timestamp())
         .last_finalized_block_number(last_finalized_block_number.pack())
+        .last_finalized_withdrawal(last_finalized_withdrawal)
         .reverted_block_root(Into::<[u8; 32]>::into(reverted_block_root).pack())
         .rollup_config_hash(rollup_config_hash.pack())
         .status((Status::Running as u8).into())
-        .version(1u8.into())
+        .version(2u8.into())
         .build();
     Ok(ProduceBlockResult {
         block,
