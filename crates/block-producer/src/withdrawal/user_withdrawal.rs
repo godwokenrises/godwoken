@@ -1,3 +1,4 @@
+use core::fmt;
 use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_types::{
     bytes::Bytes,
@@ -13,7 +14,7 @@ pub const MAX_CAPACITY: u64 = u64::MAX - 1;
 #[error("minimal capacity {0}")]
 pub struct MinimalCapacityError(pub u64);
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct UserWithdrawals {
     lock: Script,
     ckb_values: Vec<WithdrawalValue>,
@@ -187,10 +188,32 @@ impl UserWithdrawals {
     }
 }
 
+impl PartialEq for UserWithdrawals {
+    fn eq(&self, other: &Self) -> bool {
+        self.lock.hash().eq(&other.lock.hash())
+            && self.ckb_values.eq(&other.ckb_values)
+            && self.sudt_values.eq(&other.sudt_values)
+    }
+}
+
+impl Eq for UserWithdrawals {}
+
 #[derive(Default, Clone)]
 struct WithdrawalValue {
     capacity: u64,
     sudt: Option<(u128, Script)>,
+}
+
+impl fmt::Debug for WithdrawalValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("WithdrawalValue")
+            .field("capacity", &self.capacity)
+            .field("sudt", {
+                let sudt = self.sudt.as_ref();
+                &sudt.map(|(v, s)| (v, s.hash().pack()))
+            })
+            .finish()
+    }
 }
 
 impl WithdrawalValue {
@@ -265,11 +288,26 @@ impl WithdrawalValue {
         (output, data)
     }
 
+    /// # Panics
+    ///
+    /// Panics if occupied capacity overflow
     fn estimate_occupied_capacity(&self, lock: Script) -> u64 {
         let (output, data) = self.to_output_and_data(lock);
         output.occupied_capacity(data.len()).expect("no overflow")
     }
 }
+
+impl PartialEq for WithdrawalValue {
+    fn eq(&self, other: &Self) -> bool {
+        self.capacity.eq(&other.capacity) && {
+            { self.sudt.as_ref() }
+                .map(|(v, s)| (v, s.hash()))
+                .eq(&other.sudt.as_ref().map(|(v, s)| (v, s.hash())))
+        }
+    }
+}
+
+impl Eq for WithdrawalValue {}
 
 #[cfg(test)]
 mod tests {
@@ -277,8 +315,7 @@ mod tests {
     use gw_types::packed::{RawWithdrawalRequest, WithdrawalRequest};
 
     use super::*;
-
-    const CKB: u64 = 10u64.pow(8);
+    use crate::withdrawal::tests::{new_extra, CKB};
 
     #[test]
     fn test_withdrawal_value() {
@@ -314,6 +351,32 @@ mod tests {
             value.take_surplus_capacity(owner_lock),
             CAPACITY - occupied_capacity
         );
+    }
+
+    #[test]
+    fn test_withdrawal_value_eq() {
+        const CAPACITY: u64 = 500 * CKB;
+        const AMOUNT: u128 = 1000;
+
+        let sudt_type = Script::new_builder()
+            .args([1u8; 32].to_vec().pack())
+            .build();
+
+        let extra = new_extra(CAPACITY, AMOUNT, Some(sudt_type.clone()), Script::default());
+        let value = WithdrawalValue::from_extra(&extra, Some(sudt_type.clone()));
+        assert_eq!(value, value.clone());
+
+        let extra = new_extra(
+            CAPACITY,
+            AMOUNT + 1,
+            Some(sudt_type.clone()),
+            Script::default(),
+        );
+        let other = WithdrawalValue::from_extra(&extra, Some(sudt_type));
+        assert_ne!(value, other);
+
+        let another = WithdrawalValue::new_ckb(CAPACITY);
+        assert_ne!(value, another);
     }
 
     #[test]
@@ -368,6 +431,39 @@ mod tests {
             Some((AMOUNT, &sudt_type)),
         )
         .unwrap();
+    }
+
+    #[test]
+    fn test_user_withdrawals_eq() {
+        const CAPACITY: u64 = 1000 * CKB;
+        const AMOUNT: u128 = 1;
+
+        let lock = Script::default();
+        let sudt_type = Script::new_builder()
+            .args([1u8; 32].to_vec().pack())
+            .build();
+
+        let ckb_extra = new_extra(CAPACITY, 0, None, lock.clone());
+        let sudt_extra = new_extra(CAPACITY, AMOUNT, Some(sudt_type.clone()), lock.clone());
+
+        let mut withdrawals = UserWithdrawals::new(lock.clone());
+        withdrawals
+            .extend_from_extras([(&ckb_extra, None), (&sudt_extra, Some(sudt_type.clone()))])
+            .unwrap();
+        assert_eq!(withdrawals, withdrawals.clone());
+
+        let mut other = UserWithdrawals::new(lock);
+        other.extend_from_extras([(&ckb_extra, None)]).unwrap();
+        assert_ne!(withdrawals, other);
+
+        let another_lock = Script::new_builder()
+            .args([2u8; 32].to_vec().pack())
+            .build();
+        let mut another = UserWithdrawals::new(another_lock);
+        another
+            .extend_from_extras([(&ckb_extra, None), (&sudt_extra, Some(sudt_type))])
+            .unwrap();
+        assert_ne!(withdrawals, another);
     }
 
     #[test]
@@ -600,27 +696,6 @@ mod tests {
         let withdrawal_extra = new_extra(1000 * CKB, 1, None, Script::default());
 
         WithdrawalValue::from_extra(&withdrawal_extra, Some(Script::default()));
-    }
-
-    fn new_extra(
-        capacity: u64,
-        amount: u128,
-        type_: Option<Script>,
-        lock: Script,
-    ) -> WithdrawalRequestExtra {
-        let sudt_script_hash = type_.map(|s| s.hash()).unwrap_or([0u8; 32]);
-
-        let raw_withdrawal = RawWithdrawalRequest::new_builder()
-            .capacity(capacity.pack())
-            .amount(amount.pack())
-            .sudt_script_hash(sudt_script_hash.pack())
-            .owner_lock_hash(lock.hash().pack())
-            .build();
-
-        WithdrawalRequestExtra::new_builder()
-            .request(WithdrawalRequest::new_builder().raw(raw_withdrawal).build())
-            .owner_lock(lock)
-            .build()
     }
 
     fn check_value(

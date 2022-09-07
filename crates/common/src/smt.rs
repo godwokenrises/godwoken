@@ -34,7 +34,7 @@ impl Hasher for Blake2bHasher {
 }
 
 pub fn generate_block_proof<'a, S: Store<H256>>(
-    block_smt: SMT<S>,
+    block_smt: &SMT<S>,
     blocks: impl IntoIterator<Item = &'a L2Block>,
 ) -> sparse_merkle_tree::error::Result<CompiledMerkleProof> {
     let (keys, key_leaves) = { blocks.into_iter() }

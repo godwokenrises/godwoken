@@ -37,7 +37,7 @@ use crate::{types::ChainEvent, withdrawal::BlockWithdrawals};
 const TRANSACTION_FAILED_TO_RESOLVE_ERROR: &str = "TransactionFailedToResolve";
 
 pub const MAX_FINALIZE_BLOCKS: u32 = 8;
-pub const MAX_FINALIZE_WITHDRAWALS: u32 = 50;
+pub const MAX_FINALIZE_WITHDRAWALS: u32 = 60;
 
 pub struct FinalizerArgs {
     pub store: gw_store::Store,
@@ -221,7 +221,7 @@ pub trait FinalizeWithdrawalToOwner {
 
         let to_finalized = crate::withdrawal::finalize(
             &block_withdrawals,
-            block_proof,
+            &block_proof,
             &extra_map,
             &sudt_script_map,
         )?;
@@ -366,7 +366,7 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
         let block_smt = tx_db.block_smt()?;
         let blocks = block_withdrawals.iter().map(|bw| bw.block());
 
-        Ok(generate_block_proof(block_smt, blocks)?)
+        Ok(generate_block_proof(&block_smt, blocks)?)
     }
 
     fn get_withdrawal_extras(
@@ -466,56 +466,82 @@ fn get_pending_finalized_withdrawals(
     last_finalized_block_number: u64,
 ) -> Result<Option<Vec<BlockWithdrawals>>> {
     let (last_wthdr_bn, last_wthdr_idx) = last_finalized_withdrawal.unpack_block_index();
-    tracing::debug!(finalized_withdrawal = ?(last_wthdr_bn, last_wthdr_idx));
+    tracing::debug!(finalized_withdrawal = ?(last_wthdr_bn, last_wthdr_idx), "get pending finalized");
 
-    let get_block = |num: u64| -> Result<L2Block> {
+    let ensure_get_block = |num: u64| -> Result<L2Block> {
         match store.get_block_by_number(num)? {
             Some(b) => Ok(b),
             None => bail!("block {} not found", num),
         }
     };
 
-    let next_pending_blk_wthdrs_on_chain =
-        match BlockWithdrawals::from_rest(get_block(last_wthdr_bn)?, last_finalized_withdrawal)? {
-            Some(blk_wthdrs) => blk_wthdrs,
-            None => BlockWithdrawals::new(get_block(last_wthdr_bn + 1)?),
-        };
+    let next_pending_blk_wthdrs_on_chain = match BlockWithdrawals::from_rest(
+        ensure_get_block(last_wthdr_bn)?,
+        last_finalized_withdrawal,
+    )? {
+        Some(blk_wthdrs) => blk_wthdrs,
+        None => match store.get_block_by_number(last_wthdr_bn + 1)? {
+            Some(blk) => BlockWithdrawals::new(blk),
+            None => {
+                tracing::debug!(blk = last_wthdr_bn + 1, "pending finalized block not found");
+                return Ok(None);
+            }
+        },
+    };
     let next_pending_blk_num_on_chain = next_pending_blk_wthdrs_on_chain.block_number();
     if next_pending_blk_num_on_chain > last_finalized_block_number {
         return Ok(None);
     }
 
-    let next_pending_blk_wthdrs = match pending.block_range() {
-        Some(range) if *range.start() != next_pending_blk_num_on_chain => {
-            // Maybe L1 reorg, reset pending queue state
-            pending.reset();
-            next_pending_blk_wthdrs_on_chain
-        }
-        Some(range) if *range.end() >= last_finalized_block_number => {
-            // Maybe L1 reorg, wait pending blks to be finalized
-            return Ok(None);
-        }
-        Some(range) => BlockWithdrawals::new(get_block(*range.end() + 1)?),
-        None => next_pending_blk_wthdrs_on_chain,
-    };
+    loop {
+        let next_pending_blk_wthdrs = match pending.block_range() {
+            Some(range) if *range.start() != next_pending_blk_num_on_chain => {
+                // Maybe L1 reorg, reset pending queue state
+                pending.reset();
+                return Ok(None);
+            }
+            Some(range) if *range.end() > last_finalized_block_number => {
+                // Maybe L1 reorg, reset pending queue state
+                pending.reset();
+                return Ok(None);
+            }
+            Some(range) if *range.end() == last_finalized_block_number => {
+                return Ok(None);
+            }
+            Some(range) => {
+                // Push next available block
+                let next_blk_num = *range.end() + 1;
+                match store.get_block_by_number(next_blk_num)? {
+                    Some(blk) => BlockWithdrawals::new(blk),
+                    None => {
+                        tracing::debug!(blk = next_blk_num, "pending finalized block not found");
+                        return Ok(None);
+                    }
+                }
+            }
+            None => next_pending_blk_wthdrs_on_chain.clone(),
+        };
 
-    let next_pending_blk_range = next_pending_blk_wthdrs.block_range();
-    match pending.push(next_pending_blk_wthdrs) {
-        Ok(limit_reached) if limit_reached => Ok(Some(pending.take())),
-        Ok(_) => Ok(None),
-        Err(err) => {
-            tracing::warn!(
-                blk_range = ?next_pending_blk_range,
-                error = ?err,
-                "push pending block withdrawals"
-            );
+        let next_pending_blk_range = next_pending_blk_wthdrs.block_num_wthdrs_range();
+        match pending.push(next_pending_blk_wthdrs) {
+            Ok(limit_reached) if limit_reached => return Ok(Some(pending.take())),
+            Ok(_unfulfilled) => continue,
+            Err(err) => {
+                tracing::warn!(
+                    blk_range = ?next_pending_blk_range,
+                    error = ?err,
+                    "push pending block withdrawals"
+                );
 
-            pending.reset();
-            Ok(None)
+                // try again later
+                pending.reset();
+                return Ok(None);
+            }
         }
     }
 }
 
+#[derive(Debug)]
 struct PendingFinalizedWithdrawal {
     inner: std::sync::Mutex<Vec<BlockWithdrawals>>,
     max_block: u32,
@@ -557,21 +583,23 @@ impl PendingFinalizedWithdrawal {
             return Ok(true);
         }
 
-        let bn = block_withdrawals.block_number();
-        match inner.last().map(|bw| bw.block_number()) {
-            Some(last_bn) if last_bn == bn => return Ok(false),
-            Some(last_bn) if last_bn + 1 != bn => bail!("block withdrawals no seq"),
-            Some(last_bn) if last_bn > bn => bail!("block withdrawals rollback"),
+        let blk_hash = block_withdrawals.block().hash();
+        let parent_blk_hash: [u8; 32] =
+            block_withdrawals.block().raw().parent_block_hash().unpack();
+        match inner.last().map(|bw| bw.block().hash()) {
+            Some(last_blk_hash) if last_blk_hash == blk_hash => return Ok(false),
+            Some(last_blk_hash) if last_blk_hash != parent_blk_hash => {
+                bail!("block withdrawals no seq")
+            }
             Some(_) | None => block_left -= 1,
         }
 
         if block_withdrawals.len() >= wthdr_left {
-            wthdr_left = 0;
-
             let shrinked = block_withdrawals
                 .take(wthdr_left)
                 .expect("shrinked block withdrawals");
 
+            wthdr_left = 0;
             inner.push(shrinked);
         } else {
             wthdr_left -= block_withdrawals.len();
@@ -588,5 +616,476 @@ impl PendingFinalizedWithdrawal {
 
     fn reset(&self) {
         self.take();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gw_db::schema::Col;
+    use gw_store::traits::kv_store::KVStoreRead;
+    use gw_types::packed::GlobalState;
+
+    use super::*;
+    use crate::withdrawal::tests::BlockStore;
+
+    impl ChainStore for BlockStore {
+        fn get_block_by_number(&self, number: u64) -> Result<Option<L2Block>, gw_db::error::Error> {
+            Ok(self.blocks.get(number as usize).cloned())
+        }
+    }
+
+    impl KVStoreRead for BlockStore {
+        fn get(&self, _col: Col, _key: &[u8]) -> Option<Box<[u8]>> {
+            unreachable!()
+        }
+    }
+
+    mockall::mock! {
+        DummyFinalizer {}
+
+        #[async_trait]
+        impl FinalizeWithdrawalToOwner for DummyFinalizer {
+            fn rollup_context(&self) -> &RollupContext;
+
+            fn contracts_dep(&self) -> Guard<Arc<ContractsCellDep>>;
+
+            fn rollup_deps(&self) -> [CellDep; 2];
+
+            fn generate_block_proof(&self, withdrawals: &[BlockWithdrawals])
+            -> Result<CompiledMerkleProof>;
+
+            fn get_withdrawal_extras(
+                &self,
+                block_withdrawals: &[BlockWithdrawals],
+            ) -> Result<HashMap<H256, WithdrawalRequestExtra>>;
+
+            fn get_sudt_scripts(
+                &self,
+                block_withdrawals: &[BlockWithdrawals],
+            ) -> Result<HashMap<H256, Script>>;
+
+            fn get_pending_finalized_withdrawals(
+                &self,
+                last_finalized_withdrawal: &LastFinalizedWithdrawal,
+                last_finalized_block_number: u64,
+            ) -> Result<Option<Vec<BlockWithdrawals>>>;
+
+            async fn query_rollup_cell(&self) -> Result<Option<CellInfo>>;
+
+            async fn query_finalized_custodians(
+                &self,
+                last_finalized_block_number: u64,
+                withdrawals: &[BlockWithdrawals],
+            ) -> Result<CollectedCustodianCells>;
+
+            async fn complete_tx(&self, tx_skeleton: TransactionSkeleton) -> Result<Transaction>;
+        }
+    }
+
+    #[test]
+    fn test_get_pending_finalized_withdrawals() {
+        let mut store = BlockStore::default();
+        let pending = PendingFinalizedWithdrawal::new(4, 5);
+
+        let zero = store.produce_block(0);
+        let one = store.produce_block(0);
+        let two = store.produce_block(1);
+        let three = store.produce_block(2);
+        let four = store.produce_block(3);
+
+        let last_finalized = LastFinalizedWithdrawal::pack_block_index(
+            zero.number(),
+            LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL,
+        );
+
+        // Next pending block > last_finalized_block_number
+        let ret = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 0).unwrap();
+        assert!(ret.is_none());
+        assert_eq!(pending.block_range(), None);
+
+        let ret = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 1).unwrap();
+        assert!(ret.is_none());
+        assert_eq!(pending.block_range(), Some(one.number()..=one.number()));
+
+        // Fetch again without updated last_finalized_block_number
+        let ret = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 1).unwrap();
+        assert!(ret.is_none());
+        assert_eq!(pending.block_range(), Some(one.number()..=one.number()));
+
+        let ret = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 2).unwrap();
+        assert!(ret.is_none());
+        assert_eq!(pending.block_range(), Some(one.number()..=two.number()));
+
+        let ret = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 3).unwrap();
+        assert!(ret.is_none());
+        assert_eq!(pending.block_range(), Some(one.number()..=three.number()));
+
+        let fulfilled = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 4)
+            .unwrap()
+            .unwrap();
+        let expected_blk_wthdrs = vec![
+            BlockWithdrawals::new(one.clone()),
+            BlockWithdrawals::new(two.clone()),
+            BlockWithdrawals::new(three.clone()),
+            BlockWithdrawals::new(four.clone()).take(2).unwrap(),
+        ];
+        assert_eq!(fulfilled, expected_blk_wthdrs);
+        assert_eq!(pending.block_range(), None);
+
+        // Fetch all in once
+        let fulfilled = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 4)
+            .unwrap()
+            .unwrap();
+        assert_eq!(fulfilled, expected_blk_wthdrs);
+        assert_eq!(pending.block_range(), None);
+
+        // Max withdrawals
+        let last_finalized = LastFinalizedWithdrawal::pack_block_index(
+            one.number(),
+            LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL,
+        );
+        let fulfilled = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 4)
+            .unwrap()
+            .unwrap();
+        let expected_blk_wthdrs = vec![
+            BlockWithdrawals::new(two),
+            BlockWithdrawals::new(three),
+            BlockWithdrawals::new(four).take(2).unwrap(),
+        ];
+        assert_eq!(fulfilled, expected_blk_wthdrs);
+        assert_eq!(pending.block_range(), None);
+    }
+
+    #[test]
+    fn test_get_pending_finalized_withdrawals_block_not_found() {
+        let mut store = BlockStore::default();
+        let pending = PendingFinalizedWithdrawal::new(4, 5);
+
+        let zero = store.produce_block(0);
+
+        // Next pending block on chain not found
+        let last_finalized = LastFinalizedWithdrawal::pack_block_index(
+            zero.number(),
+            LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL,
+        );
+
+        let ret = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 1).unwrap();
+        assert!(ret.is_none());
+        assert_eq!(pending.block_range(), None);
+
+        // range.end() < last_finalized_block_number, range.end() + 1 not found
+        let one = store.produce_block(0);
+
+        let ret = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 2).unwrap();
+        assert!(ret.is_none());
+        assert_eq!(pending.block_range(), Some(one.number()..=one.number()));
+    }
+
+    #[test]
+    fn test_get_pending_finalized_withdrawals_reset_pending() {
+        let mut store = BlockStore::default();
+        let pending = PendingFinalizedWithdrawal::new(4, 5);
+
+        let zero = store.produce_block(0);
+        let one = store.produce_block(0);
+        let two = store.produce_block(1);
+        let three = store.produce_block(2);
+
+        let last_finalized = LastFinalizedWithdrawal::pack_block_index(
+            one.number(),
+            LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL,
+        );
+
+        let ret = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 2).unwrap();
+        assert!(ret.is_none());
+        assert_eq!(pending.block_range(), Some(two.number()..=two.number()));
+
+        // range.start() != next_pending_blk_num_on_chain
+        let reorg_last_finalized = LastFinalizedWithdrawal::pack_block_index(
+            zero.number(),
+            LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL,
+        );
+
+        let ret =
+            get_pending_finalized_withdrawals(&store, &pending, &reorg_last_finalized, 2).unwrap();
+        assert!(ret.is_none());
+        assert_eq!(pending.block_range(), None);
+
+        // range.end() > last_finalized_block_number
+        let last_finalized = LastFinalizedWithdrawal::pack_block_index(
+            one.number(),
+            LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL,
+        );
+
+        let ret = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 3).unwrap();
+        assert!(ret.is_none());
+        assert_eq!(pending.block_range(), Some(two.number()..=three.number()));
+
+        // reduce last_finalized_block_number from 3 to 2
+        let ret = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 2).unwrap();
+        assert!(ret.is_none());
+        assert_eq!(pending.block_range(), None);
+
+        // push error
+        let last_finalized = LastFinalizedWithdrawal::pack_block_index(
+            one.number(),
+            LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL,
+        );
+
+        let ret = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 3).unwrap();
+        assert!(ret.is_none());
+        assert_eq!(pending.block_range(), Some(two.number()..=three.number()));
+
+        // create a invalid four block, which's parent block hash isn't three
+        let _four = store.produce_block(2);
+        let four_mut = store.blocks.get_mut(4).unwrap();
+        let err_raw = { four_mut.raw().as_builder() }
+            .parent_block_hash([0u8; 32].pack())
+            .build();
+        *four_mut = { four_mut.clone() }.as_builder().raw(err_raw).build();
+
+        let ret = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 4).unwrap();
+        assert!(ret.is_none());
+        assert_eq!(pending.block_range(), None);
+    }
+
+    #[test]
+    fn test_pending_finalized_withdrawal() {
+        let mut store = BlockStore::default();
+
+        let pending = PendingFinalizedWithdrawal::new(2, 10);
+        assert!(pending.block_range().is_none());
+
+        let block = store.produce_block(1);
+        let unfulfilled = !pending.push(BlockWithdrawals::new(block.clone())).unwrap();
+
+        assert!(unfulfilled);
+        assert_eq!(pending.block_range(), Some(block.number()..=block.number()));
+
+        let other_block = store.produce_block(1);
+        let reached = pending
+            .push(BlockWithdrawals::new(other_block.clone()))
+            .unwrap();
+
+        assert!(reached);
+        assert_eq!(
+            pending.block_range(),
+            Some(block.number()..=other_block.number())
+        );
+
+        let blk_wthdrs = pending.take();
+        assert!(pending.block_range().is_none());
+        assert_eq!(blk_wthdrs.len(), 2);
+
+        let expected_blk_wthdrs = vec![
+            BlockWithdrawals::new(block.clone()),
+            BlockWithdrawals::new(other_block),
+        ];
+        assert_eq!(blk_wthdrs, expected_blk_wthdrs);
+
+        pending.push(BlockWithdrawals::new(block)).unwrap();
+        pending.reset();
+        assert!(pending.block_range().is_none());
+    }
+
+    #[test]
+    fn test_pending_finalized_withdrawal_max_withdrawals_limit() {
+        let mut store = BlockStore::default();
+
+        let pending = PendingFinalizedWithdrawal::new(5, 1);
+        assert!(pending.block_range().is_none());
+
+        let block = store.produce_block(1);
+        let reache_limit = pending.push(BlockWithdrawals::new(block.clone())).unwrap();
+
+        assert!(reache_limit);
+        assert_eq!(pending.block_range(), Some(block.number()..=block.number()));
+
+        let blk_wthdrs = pending.take();
+        assert!(pending.block_range().is_none());
+        assert_eq!(blk_wthdrs.len(), 1);
+
+        let expected_blk_wthdrs = vec![BlockWithdrawals::new(block)];
+        assert_eq!(blk_wthdrs, expected_blk_wthdrs);
+    }
+
+    #[test]
+    fn test_pending_finalized_withdrawal_push_after_reach_limit() {
+        let mut store = BlockStore::default();
+
+        let pending = PendingFinalizedWithdrawal::new(5, 1);
+        assert!(pending.block_range().is_none());
+
+        let block = store.produce_block(1);
+        let reache_limit = pending.push(BlockWithdrawals::new(block.clone())).unwrap();
+
+        assert!(reache_limit);
+        assert_eq!(pending.block_range(), Some(block.number()..=block.number()));
+
+        let other_block = store.produce_block(0);
+        let reache_limit = pending.push(BlockWithdrawals::new(other_block)).unwrap();
+
+        // Block range should not be changed
+        assert!(reache_limit);
+        assert_eq!(pending.block_range(), Some(block.number()..=block.number()));
+
+        let blk_wthdrs = pending.take();
+        assert!(pending.block_range().is_none());
+        assert_eq!(blk_wthdrs.len(), 1);
+
+        let expected_blk_wthdrs = vec![BlockWithdrawals::new(block)];
+        assert_eq!(blk_wthdrs, expected_blk_wthdrs);
+    }
+
+    #[test]
+    fn test_pending_finalized_withdrawal_shrink_withdrawals_to_fit_max_withdrawals_limit() {
+        let mut store = BlockStore::default();
+
+        let pending = PendingFinalizedWithdrawal::new(5, 10);
+        assert!(pending.block_range().is_none());
+
+        let block = store.produce_block(3);
+        let unfulfilled = !pending.push(BlockWithdrawals::new(block.clone())).unwrap();
+
+        assert!(unfulfilled);
+        assert_eq!(pending.block_range(), Some(block.number()..=block.number()));
+
+        let other_block = store.produce_block(10);
+        let reach_limit = pending
+            .push(BlockWithdrawals::new(other_block.clone()))
+            .unwrap();
+
+        assert!(reach_limit);
+        assert_eq!(
+            pending.block_range(),
+            Some(block.number()..=other_block.number())
+        );
+
+        let blk_wthdrs = pending.take();
+        assert!(pending.block_range().is_none());
+        assert_eq!(blk_wthdrs.len(), 2);
+
+        let expected_blk_wthdrs = vec![
+            BlockWithdrawals::new(block),
+            BlockWithdrawals::new(other_block).take(7).unwrap(),
+        ];
+        assert_eq!(blk_wthdrs, expected_blk_wthdrs);
+    }
+
+    #[test]
+    fn test_pending_finalized_withdrawal_push_same_block() {
+        let mut store = BlockStore::default();
+
+        let pending = PendingFinalizedWithdrawal::new(5, 10);
+        assert!(pending.block_range().is_none());
+
+        let block = store.produce_block(0);
+        let unfulfilled = !pending.push(BlockWithdrawals::new(block.clone())).unwrap();
+
+        assert!(unfulfilled);
+        assert_eq!(pending.block_range(), Some(block.number()..=block.number()));
+
+        // Push same block again
+        let unfulfilled = !pending.push(BlockWithdrawals::new(block.clone())).unwrap();
+        assert!(unfulfilled);
+        assert_eq!(pending.block_range(), Some(block.number()..=block.number()));
+
+        let blk_wthdrs = pending.take();
+        assert!(pending.block_range().is_none());
+        assert_eq!(blk_wthdrs.len(), 1);
+
+        let expected_blk_wthdrs = vec![BlockWithdrawals::new(block)];
+        assert_eq!(blk_wthdrs, expected_blk_wthdrs);
+    }
+
+    #[test]
+    fn test_pending_finalized_withdrawal_invalid_push_block_no_seq() {
+        let mut store = BlockStore::default();
+
+        let pending = PendingFinalizedWithdrawal::new(5, 10);
+        assert!(pending.block_range().is_none());
+
+        let one = store.produce_block(0);
+        let _two = store.produce_block(0);
+        let three = store.produce_block(0);
+
+        pending.push(BlockWithdrawals::new(one)).unwrap();
+        let err = pending.push(BlockWithdrawals::new(three)).unwrap_err();
+        eprintln!("err {}", err);
+
+        assert!(err.to_string().contains("block withdrawals no seq"));
+    }
+
+    #[tokio::test]
+    async fn test_query_and_finalize_to_owner_rollup_cell_not_found() {
+        let mut finalizer = MockDummyFinalizer::new();
+        finalizer.expect_query_rollup_cell().returning(|| Ok(None));
+
+        assert!({ finalizer.query_and_finalize_to_owner().await.unwrap() }.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_query_and_finalize_to_owner_invalid_global_state() {
+        let mut finalizer = MockDummyFinalizer::new();
+
+        // Version isn't 2
+        let global_state = GlobalState::new_builder().version(1u8.into()).build();
+        finalizer.expect_query_rollup_cell().returning(move || {
+            let cell_info = CellInfo {
+                data: global_state.as_bytes(),
+                ..Default::default()
+            };
+            Ok(Some(cell_info))
+        });
+
+        assert!({ finalizer.query_and_finalize_to_owner().await.unwrap() }.is_none());
+
+        // Rollup status isn't running
+        let global_state = GlobalState::new_builder()
+            .status(1u8.into())
+            .version(2u8.into())
+            .build();
+        finalizer.expect_query_rollup_cell().returning(move || {
+            let cell_info = CellInfo {
+                data: global_state.as_bytes(),
+                ..Default::default()
+            };
+            Ok(Some(cell_info))
+        });
+
+        assert!({ finalizer.query_and_finalize_to_owner().await.unwrap() }.is_none());
+
+        // Invalid rollup status
+        let global_state = GlobalState::new_builder()
+            .status(2u8.into())
+            .version(2u8.into())
+            .build();
+        finalizer.expect_query_rollup_cell().returning(move || {
+            let cell_info = CellInfo {
+                data: global_state.as_bytes(),
+                ..Default::default()
+            };
+            Ok(Some(cell_info))
+        });
+
+        assert!({ finalizer.query_and_finalize_to_owner().await.unwrap() }.is_none());
+
+        // No pending finalized withdrawals
+        let global_state = GlobalState::new_builder()
+            .status(0u8.into())
+            .version(2u8.into())
+            .build();
+        finalizer.expect_query_rollup_cell().returning(move || {
+            let cell_info = CellInfo {
+                data: global_state.as_bytes(),
+                ..Default::default()
+            };
+            Ok(Some(cell_info))
+        });
+        finalizer
+            .expect_get_pending_finalized_withdrawals()
+            .returning(|_, _| Ok(None));
+
+        assert!({ finalizer.query_and_finalize_to_owner().await.unwrap() }.is_none());
     }
 }

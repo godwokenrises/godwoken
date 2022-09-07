@@ -44,7 +44,7 @@ pub struct CollectedCustodianCells {
     pub sudt: HashMap<[u8; 32], (u128, Script)>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct WithdrawalsAmount {
     pub capacity: u128,
     pub sudt: HashMap<[u8; 32], u128>,

@@ -1,12 +1,18 @@
 use molecule::prelude::Byte;
 
-use crate::packed::{self, GlobalState, GlobalStateV1, LastFinalizedWithdrawal};
+use crate::packed::{self, GlobalState, GlobalStateV1, L2Block, LastFinalizedWithdrawal};
 use crate::prelude::{Builder, Entity, Pack, Unpack};
 use core::convert::TryFrom;
 use core::convert::TryInto;
 
 // re-export H256
 pub use sparse_merkle_tree::H256;
+
+impl L2Block {
+    pub fn number(&self) -> u64 {
+        self.raw().number().unpack()
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ScriptHashType {
@@ -225,6 +231,13 @@ impl LastFinalizedWithdrawal {
         };
 
         (self.block_number().unpack(), index_enum)
+    }
+
+    pub fn pack_block_index(bn: u64, idx: u32) -> Self {
+        LastFinalizedWithdrawal::new_builder()
+            .block_number(bn.pack())
+            .withdrawal_index(idx.pack())
+            .build()
     }
 }
 
