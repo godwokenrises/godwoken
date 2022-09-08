@@ -1,6 +1,4 @@
-use gw_common::{
-    builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, h256_ext::H256Ext, state::State, H256,
-};
+use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, state::State, H256};
 use gw_traits::CodeStore;
 use gw_types::{
     offchain::RollupContext,
@@ -14,7 +12,7 @@ use crate::{
     constants::MAX_WITHDRAWAL_SIZE,
     error::{AccountError, WithdrawalError},
     sudt::build_l2_sudt_script,
-    utils::build_withdrawal_cell_output,
+    utils::verify_withdrawal_capacity,
     Error,
 };
 
@@ -61,13 +59,7 @@ impl<'a, S: State + CodeStore> WithdrawalVerifier<'a, S> {
             .ok_or(Error::Account(AccountError::UnknownAccount))?;
 
         // check capacity (use dummy block hash and number)
-        build_withdrawal_cell_output(
-            self.rollup_context,
-            withdrawal,
-            &H256::one(),
-            1,
-            asset_script,
-        )?;
+        verify_withdrawal_capacity(withdrawal, asset_script)?;
 
         // find user account
         let id = self

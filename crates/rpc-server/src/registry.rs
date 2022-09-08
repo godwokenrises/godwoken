@@ -11,6 +11,7 @@ use gw_config::{
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
 use gw_generator::generator::CyclesPool;
 use gw_generator::utils::get_tx_type;
+use gw_generator::verification::withdrawal::WithdrawalVerifier;
 use gw_generator::{
     error::TransactionError, sudt::build_l2_sudt_script,
     verification::transaction::TransactionVerifier, ArcSwap, Generator,
@@ -84,7 +85,6 @@ type RegistryAddressJsonBytes = JsonBytes;
 const HEADER_NOT_FOUND_ERR_CODE: i64 = -32000;
 const INVALID_NONCE_ERR_CODE: i64 = -32001;
 const BUSY_ERR_CODE: i64 = -32006;
-const CUSTODIAN_NOT_ENOUGH_CODE: i64 = -32007;
 const INTERNAL_ERROR_ERR_CODE: i64 = -32099;
 const INVALID_REQUEST: i64 = -32600;
 const METHOD_NOT_AVAILABLE_ERR_CODE: i64 = -32601;
@@ -1376,41 +1376,23 @@ async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
     generator: Data<Generator>,
     store: Data<Store>,
-    in_queue_request_map: Data<Option<Arc<InQueueRequestMap>>>,
-    submit_tx: Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
+    (in_queue_request_map, submit_tx): (
+        Data<Option<Arc<InQueueRequestMap>>>,
+        Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
+    ),
+    mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<JsonH256, RpcError> {
     let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = packed::WithdrawalRequestExtra::from_slice(&withdrawal_bytes)?;
     let withdrawal_hash = withdrawal.hash();
 
-    let last_valid = store.get_last_valid_tip_block_hash()?;
-    let last_valid = store
-        .get_block_number(&last_valid)?
-        .expect("tip block number");
-    let finalized_custodians = store
-        .get_block_post_finalized_custodian_capacity(last_valid)
-        .expect("finalized custodians");
-    let withdrawal_generator = gw_mem_pool::withdrawal::Generator::new(
-        generator.rollup_context(),
-        finalized_custodians.as_reader().unpack(),
-    );
-    if let Err(err) = withdrawal_generator.verify_remained_amount(&withdrawal.request()) {
-        return Err(RpcError::Full {
-            code: CUSTODIAN_NOT_ENOUGH_CODE,
-            message: format!(
-                "Withdrawal fund are still finalizing, please try again later. error: {}",
-                err
-            ),
-            data: None,
-        });
-    }
-    if let Err(err) = withdrawal_generator.verified_output(&withdrawal, &Default::default()) {
-        return Err(RpcError::Full {
-            code: INVALID_REQUEST,
-            message: err.to_string(),
-            data: None,
-        });
-    }
+    let snap = mem_pool_state.load();
+    let asset_script_hash: H256 = withdrawal.raw().sudt_script_hash().unpack();
+    let asset_script = snap.get_asset_script(&asset_script_hash)?;
+
+    let state = snap.state()?;
+    let verifier = WithdrawalVerifier::new(&state, generator.rollup_context());
+    verifier.verify(&withdrawal, asset_script)?;
 
     let permit = submit_tx.try_reserve().map_err(|err| match err {
         mpsc::error::TrySendError::Closed(_) => RpcError::Provided {

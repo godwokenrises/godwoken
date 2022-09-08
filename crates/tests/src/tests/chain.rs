@@ -718,6 +718,8 @@ async fn test_sync_blocks() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
+    let _ = env_logger::builder().is_test(true).try_init();
+
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
     let mut chain = setup_chain(rollup_type_script.clone()).await;

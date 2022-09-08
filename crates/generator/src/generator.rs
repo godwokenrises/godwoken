@@ -8,7 +8,7 @@ use crate::{
     account_lock_manage::AccountLockManage,
     backend_manage::BackendManage,
     constants::{L2TX_MAX_CYCLES, MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
-    error::{BlockError, TransactionValidateError, WithdrawalError},
+    error::{BlockError, TransactionValidateError},
     run_result_state::RunResultState,
     typed_transaction::types::TypedRawTransaction,
     types::vm::VMVersion,
@@ -74,27 +74,6 @@ pub enum ApplyBlockResult {
         error: Error,
     },
     Error(Error),
-}
-
-#[derive(Debug)]
-pub enum WithdrawalCellError {
-    MinCapacity { min: u128, req: u64 },
-    OwnerLock(H256),
-}
-
-impl From<WithdrawalCellError> for Error {
-    fn from(err: WithdrawalCellError) -> Self {
-        match err {
-            WithdrawalCellError::MinCapacity { min, req } => {
-                WithdrawalError::InsufficientCapacity {
-                    expected: min,
-                    actual: req,
-                }
-                .into()
-            }
-            WithdrawalCellError::OwnerLock(hash) => WithdrawalError::OwnerLock(hash.pack()).into(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]

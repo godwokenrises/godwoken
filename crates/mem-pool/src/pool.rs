@@ -53,8 +53,9 @@ use tokio::task::block_in_place;
 use tracing::instrument;
 
 use crate::{
-    block_sync_server::BlockSyncServerState, mem_block::MemBlock, restore_manager::RestoreManager,
-    traits::MemPoolProvider, types::EntryList, withdrawal::Generator as WithdrawalGenerator,
+    block_sync_server::BlockSyncServerState, mem_block::MemBlock, mem_block::MemBlock,
+    restore_manager::RestoreManager, traits::MemPoolProvider, traits::MemPoolProvider,
+    types::EntryList, types::EntryList, withdrawal::Generator as WithdrawalGenerator,
 };
 
 #[derive(Debug, Default)]
@@ -411,13 +412,6 @@ impl MemPool {
         // verify withdrawal signature
         self.generator
             .check_withdrawal_signature(state, withdrawal)?;
-
-        let finalized_custodian_capacity = self.collect_finalized_custodian_capacity()?;
-        let withdrawal_generator = WithdrawalGenerator::new(
-            self.generator.rollup_context(),
-            finalized_custodian_capacity,
-        );
-        withdrawal_generator.verify_remained_amount(&withdrawal.request())?;
 
         // withdrawal basic verification
         let db = self.store.begin_transaction();
@@ -987,10 +981,6 @@ impl MemPool {
         // verify the withdrawals
         let mut unused_withdrawals = Vec::with_capacity(withdrawals.len());
         let mut total_withdrawal_capacity: u128 = 0;
-        let mut withdrawal_verifier = crate::withdrawal::Generator::new(
-            self.generator.rollup_context(),
-            finalized_custodians,
-        );
         // start track withdrawal
         state.tracker_mut().enable();
         for withdrawal in withdrawals {
@@ -1029,17 +1019,6 @@ impl MemPool {
                 continue;
             }
             total_withdrawal_capacity = new_total_withdrwal_capacity;
-
-            if let Err(err) =
-                withdrawal_verifier.include_and_verify(&withdrawal, &L2Block::default())
-            {
-                log::info!(
-                    "[mem-pool] withdrawal contextual verification failed : {}",
-                    err
-                );
-                unused_withdrawals.push(withdrawal_hash);
-                continue;
-            }
 
             // update the state
             match state.apply_withdrawal_request(
