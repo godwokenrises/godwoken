@@ -7,6 +7,7 @@ use crate::{
     psc::{PSCContext, ProduceSubmitConfirm},
     test_mode_control::TestModeControl,
     types::ChainEvent,
+    withdrawal_finalizer::{FinalizerArgs, UserWithdrawalFinalizer},
     withdrawal_unlocker::FinalizedWithdrawalUnlocker,
 };
 use anyhow::{anyhow, bail, Context, Result};
@@ -73,6 +74,7 @@ struct ChainTaskContext {
     challenger: Option<Challenger>,
     withdrawal_unlocker: Option<FinalizedWithdrawalUnlocker>,
     cleaner: Option<Arc<Cleaner>>,
+    withdrawal_finalizer: Option<UserWithdrawalFinalizer>,
 }
 
 struct ChainTaskRunStatus {
@@ -185,6 +187,12 @@ impl ChainTask {
                             err
                         );
                     }
+                }
+            }
+
+            if let Some(ref withdrawal_finalizer) = ctx.withdrawal_finalizer {
+                if let Err(err) = withdrawal_finalizer.handle_event(&event).await {
+                    log::error!("[withdrawal finalizer] {}", err);
                 }
             }
 
@@ -592,10 +600,15 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         rollup_type_script.clone(),
     );
 
-    let (block_producer, challenger, test_mode_control, withdrawal_unlocker, cleaner) = match config
-        .node_mode
-    {
-        NodeMode::ReadOnly => (None, None, None, None, None),
+    let (
+        block_producer,
+        challenger,
+        test_mode_control,
+        withdrawal_unlocker,
+        cleaner,
+        withdrawal_finalizer,
+    ) = match config.node_mode {
+        NodeMode::ReadOnly => (None, None, None, None, None, None),
         mode => {
             let block_producer_config = config
                 .block_producer
@@ -673,13 +686,29 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 generator: generator.clone(),
                 chain: Arc::clone(&chain),
                 rpc_client: rpc_client.clone(),
-                ckb_genesis_info,
-                config: block_producer_config,
+                ckb_genesis_info: ckb_genesis_info.clone(),
+                config: block_producer_config.clone(),
                 tests_control: tests_control.clone(),
-                contracts_dep_manager,
+                contracts_dep_manager: contracts_dep_manager.clone(),
             };
             let block_producer =
                 BlockProducer::create(create_args).with_context(|| "init block producer")?;
+
+            let finalizer_wallet = match block_producer_config.wallet_config {
+                Some(ref c) => Wallet::from_config(c).with_context(|| "finalizer wallet")?,
+                None => bail!("no wallet config for block producer"),
+            };
+
+            let finalizer_args = FinalizerArgs {
+                store: store.clone(),
+                rpc_client: rpc_client.clone(),
+                ckb_genesis_info,
+                contracts_dep_manager,
+                wallet: finalizer_wallet,
+                rollup_config_cell_dep: block_producer_config.rollup_config_cell_dep.into(),
+                last_block_submitted_tx: block_producer.last_submitted_tx_hash(),
+            };
+            let finalizer = UserWithdrawalFinalizer::new(finalizer_args, config.debug.clone());
 
             (
                 Some(block_producer),
@@ -687,6 +716,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 tests_control,
                 Some(withdrawal_unlocker),
                 Some(cleaner),
+                Some(finalizer),
             )
         }
     };
@@ -864,6 +894,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     challenger,
                     withdrawal_unlocker,
                     cleaner,
+                    withdrawal_finalizer,
                 };
                 let mut backoff = ExponentialBackoff::new(Duration::from_secs(1));
                 let mut chain_task = ChainTask::create(

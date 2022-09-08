@@ -21,8 +21,8 @@ use gw_types::{
         TxStatus,
     },
     packed::{
-        CellDep, CellInput, L2Block, LastFinalizedWithdrawal, RollupAction, RollupActionUnion,
-        Script, Transaction, WithdrawalRequestExtra, WitnessArgs,
+        CellDep, CellInput, L2Block, LastFinalizedWithdrawal, OutPoint, RollupAction,
+        RollupActionUnion, Script, Transaction, WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::{Builder, Entity, Pack, Unpack},
 };
@@ -46,6 +46,7 @@ pub struct FinalizerArgs {
     pub contracts_dep_manager: ContractsCellDepManager,
     pub wallet: Wallet,
     pub rollup_config_cell_dep: CellDep,
+    pub last_block_submitted_tx: Arc<tokio::sync::RwLock<H256>>,
 }
 
 pub struct UserWithdrawalFinalizer {
@@ -69,7 +70,7 @@ impl UserWithdrawalFinalizer {
         *self.last_finalize_tx.lock().expect("lock")
     }
 
-    #[instrument(skip_all, name = "user withdrawal finalizer handle_event")]
+    #[instrument(skip_all, err, name = "user withdrawal finalizer handle_event")]
     pub async fn handle_event(&self, _event: &ChainEvent) -> Result<()> {
         let rpc_client = &self.inner.rpc_client;
 
@@ -307,6 +308,7 @@ struct DefaultFinalizer {
     wallet: Wallet,
     rollup_config_cell_dep: CellDep,
     pending: PendingFinalizedWithdrawal,
+    last_block_submitted_tx: Arc<tokio::sync::RwLock<H256>>,
 }
 
 impl DefaultFinalizer {
@@ -318,6 +320,7 @@ impl DefaultFinalizer {
             contracts_dep_manager,
             wallet,
             rollup_config_cell_dep,
+            last_block_submitted_tx,
         } = args;
 
         let max_block = MAX_FINALIZE_BLOCKS;
@@ -337,6 +340,7 @@ impl DefaultFinalizer {
             wallet,
             rollup_config_cell_dep,
             pending,
+            last_block_submitted_tx,
         }
     }
 }
@@ -429,7 +433,69 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
     }
 
     async fn query_rollup_cell(&self) -> Result<Option<CellInfo>> {
-        self.rpc_client.query_rollup_cell().await
+        use TxStatus::*;
+
+        let last_block_tx = { *self.last_block_submitted_tx.read().await };
+        let rpc_client = &self.rpc_client.ckb;
+
+        match rpc_client.get_transaction_status(last_block_tx).await? {
+            Some(Pending) | Some(Proposed) | Some(Committed) => (),
+            _ => return Ok(None),
+        }
+
+        let tx = match rpc_client.get_transaction(last_block_tx).await? {
+            Some(tx) => tx,
+            None => {
+                tracing::debug!(tx_hash = %last_block_tx.pack(), "last rollup submitted tx not found");
+                return Ok(None);
+            }
+        };
+
+        // find rollup state cell from outputs
+        let rollup_type_hash: [u8; 32] = self.rpc_client.rollup_context.rollup_script_hash.into();
+        let outputs = tx.raw().outputs().into_iter();
+        let find_rollup_output = outputs.enumerate().find(|(_i, output)| {
+            output.type_().to_opt().map(|type_| type_.hash()) == Some(rollup_type_hash)
+        });
+        let (idx, output) = match find_rollup_output {
+            Some((idx, output)) => (idx, output),
+            None => {
+                tracing::debug!(tx_hash = %last_block_tx.pack(), "rollup output not found");
+                return Ok(None);
+            }
+        };
+
+        // Check no input custodians
+        // Merge custodians may invalid our finalized custodian queried from indexer.
+        let custodian_cell_dep: CellDep = self.contracts_dep().custodian_cell_lock.clone().into();
+        let custodian_cell_dep_out_point = custodian_cell_dep.out_point();
+        for cell_dep in tx.raw().cell_deps().into_iter() {
+            if cell_dep.out_point().as_slice() == custodian_cell_dep_out_point.as_slice() {
+                tracing::debug!(tx_hash = %last_block_tx.pack(), "merge custodians, skip");
+                return Ok(None);
+            }
+        }
+
+        let data: gw_types::bytes::Bytes = match tx.raw().outputs_data().get(idx) {
+            Some(data) => data.unpack(),
+            None => {
+                tracing::debug!(tx_hash = %last_block_tx.pack(), idx = idx, "rollup data not found");
+                return Ok(None);
+            }
+        };
+
+        let out_point = OutPoint::new_builder()
+            .tx_hash(last_block_tx.pack())
+            .index((idx as u32).pack())
+            .build();
+
+        let cell_info = CellInfo {
+            out_point,
+            output,
+            data,
+        };
+
+        Ok(Some(cell_info))
     }
 
     async fn query_finalized_custodians(
