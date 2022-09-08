@@ -5,7 +5,7 @@ use gw_common::{
 };
 use gw_types::{
     bytes::Bytes,
-    offchain::{DepositInfo, FinalizedCustodianCapacity},
+    offchain::DepositInfo,
     packed::{self, AccountMerkleState, BlockInfo, L2Block},
     prelude::*,
 };
@@ -24,8 +24,6 @@ pub struct MemBlock {
     txs_set: HashSet<H256>,
     /// Finalized withdrawals
     withdrawals: Vec<H256>,
-    /// Remaining CKB and SUDT capacity.
-    finalized_custodian_capacity: FinalizedCustodianCapacity,
     /// Withdrawals set
     withdrawals_set: HashSet<H256>,
     /// Finalized withdrawals
@@ -104,7 +102,6 @@ impl MemBlock {
         self.txs_set.clear();
         self.withdrawals.clear();
         self.withdrawals_set.clear();
-        self.finalized_custodian_capacity = Default::default();
         self.deposits.clear();
         self.state_checkpoints.clear();
         self.txs_prev_state_checkpoint = None;
@@ -151,14 +148,6 @@ impl MemBlock {
                 self.withdrawals.push(*withdrawal_hash);
             }
         }
-    }
-
-    pub(crate) fn set_finalized_custodian_capacity(
-        &mut self,
-        finalized_custodian_capacity: FinalizedCustodianCapacity,
-    ) {
-        assert!(self.finalized_custodian_capacity.is_empty());
-        self.finalized_custodian_capacity = finalized_custodian_capacity;
     }
 
     pub(crate) fn push_deposits(
@@ -228,14 +217,6 @@ impl MemBlock {
 
     pub fn withdrawals(&self) -> &[H256] {
         &self.withdrawals
-    }
-
-    pub fn finalized_custodians(&self) -> &FinalizedCustodianCapacity {
-        &self.finalized_custodian_capacity
-    }
-
-    pub fn take_finalized_custodians_capacity(&mut self) -> FinalizedCustodianCapacity {
-        std::mem::take(&mut self.finalized_custodian_capacity)
     }
 
     pub fn withdrawals_set(&self) -> &HashSet<H256> {
@@ -347,7 +328,6 @@ impl MemBlock {
 
         assert!(new_mem_block.state_checkpoints.is_empty());
         assert!(new_mem_block.withdrawals.is_empty());
-        assert!(new_mem_block.finalized_custodian_capacity.is_empty());
         assert!(new_mem_block.deposits.is_empty());
         assert!(new_mem_block.txs.is_empty());
         assert!(new_mem_block.touched_keys.is_empty());
@@ -365,7 +345,6 @@ impl MemBlock {
             new_mem_block.push_withdrawal(*hash, post_state.clone(), touched_keys.clone());
             packaged_states.push(post_state);
         }
-        new_mem_block.finalized_custodian_capacity = self.finalized_custodian_capacity.clone();
 
         let deposits = self.deposits.iter().take(deposits_count).cloned();
         let deposit_post_states = self.deposit_post_states.iter().take(deposits_count);
@@ -407,25 +386,6 @@ impl MemBlock {
             .build()
     }
 
-    #[cfg(test)]
-    #[deprecated]
-    pub(crate) fn pack(&self) -> packed::MemBlock {
-        let touched_keys = self.touched_keys().iter().cloned().collect::<Vec<_>>();
-
-        packed::MemBlock::new_builder()
-            .block_producer(self.block_producer.to_bytes().pack())
-            .txs(self.txs.pack())
-            .withdrawals(self.withdrawals.pack())
-            .finalized_custodians(self.finalized_custodian_capacity.pack())
-            .deposits(self.deposits.pack())
-            .state_checkpoints(self.state_checkpoints.pack())
-            .txs_prev_state_checkpoint(self.txs_prev_state_checkpoint.pack())
-            .block_info(self.block_info.clone())
-            .prev_merkle_state(self.prev_merkle_state.clone())
-            .touched_keys(touched_keys.pack())
-            .build()
-    }
-
     // Output diff for debug
     #[cfg(test)]
     pub(crate) fn cmp(&self, other: &MemBlock) -> MemBlockCmp {
@@ -445,10 +405,6 @@ impl MemBlock {
 
         if self.withdrawals != other.withdrawals {
             return Diff("withdrawals");
-        }
-
-        if self.finalized_custodian_capacity != other.finalized_custodian_capacity {
-            return Diff("finalized custodians");
         }
 
         if self.withdrawals_set != other.withdrawals_set {

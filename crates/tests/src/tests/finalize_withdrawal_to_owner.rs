@@ -258,7 +258,6 @@ async fn test_finalize_withdrawal_to_owner() {
         let provider = DummyMemPoolProvider {
             deposit_cells: vec![],
             fake_blocktime: Duration::from_millis(0),
-            collected_custodians: finalized_custodians.clone(),
         };
         mem_pool.set_provider(Box::new(provider));
 

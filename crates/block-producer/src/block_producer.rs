@@ -145,6 +145,24 @@ impl BlockProducer {
             r
         };
 
+        let tip_block_number = mem_block.block_info().number().unpack().saturating_sub(1);
+        let produce_block_param =
+            generate_produce_block_param(&self.store, mem_block, post_block_state)?;
+        rollup_input_since.verify_block_timestamp(produce_block_param.timestamp)?;
+
+        let finalized_custodians = {
+            let last_finalized_block_number = {
+                let context = self.generator.rollup_context();
+                context.last_finalized_block_number(tip_block_number)
+            };
+            let query = query_mergeable_custodians(
+                &self.rpc_client,
+                CollectedCustodianCells::default(),
+                last_finalized_block_number,
+            );
+            query.await?.expect_any()
+        };
+
         let remaining_capacity = mem_block.take_finalized_custodians_capacity();
         let t = Instant::now();
         let block_param = generate_produce_block_param(&self.store, mem_block, post_block_state)?;

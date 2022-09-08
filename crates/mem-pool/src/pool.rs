@@ -968,16 +968,10 @@ impl MemPool {
         assert!(self.mem_block.withdrawals().is_empty());
         assert!(self.mem_block.state_checkpoints().is_empty());
         assert!(self.mem_block.deposits().is_empty());
-        assert!(self.mem_block.finalized_custodians().is_empty());
         assert!(self.mem_block.txs().is_empty());
 
         let max_withdrawal_capacity = std::u128::MAX;
-        let finalized_custodians = self.collect_finalized_custodian_capacity()?;
-        let asset_scripts: HashMap<H256, Script> = {
-            let sudt_value = finalized_custodians.sudt.values();
-            sudt_value.map(|(_, script)| (script.hash().into(), script.to_owned()))
-        }
-        .collect();
+
         // verify the withdrawals
         let mut unused_withdrawals = Vec::with_capacity(withdrawals.len());
         let mut total_withdrawal_capacity: u128 = 0;
@@ -994,9 +988,8 @@ impl MemPool {
                 unused_withdrawals.push(withdrawal_hash);
                 continue;
             }
-            let asset_script = asset_scripts
-                .get(&withdrawal.raw().sudt_script_hash().unpack())
-                .cloned();
+            let asset_script =
+                { &self.store }.get_asset_script(&withdrawal.raw().sudt_script_hash().unpack())?;
             if let Err(err) = WithdrawalVerifier::new(state, self.generator.rollup_context())
                 .verify(&withdrawal, asset_script)
             {
@@ -1043,8 +1036,6 @@ impl MemPool {
             }
         }
         state.submit_tree_to_mem_block();
-        self.mem_block
-            .set_finalized_custodian_capacity(withdrawal_verifier.remaining_capacity());
 
         // remove unused withdrawals
         log::info!(
@@ -1280,7 +1271,7 @@ mod test {
     use gw_common::merkle_utils::calculate_state_checkpoint;
     use gw_common::registry_address::RegistryAddress;
     use gw_common::H256;
-    use gw_types::offchain::{DepositInfo, FinalizedCustodianCapacity};
+    use gw_types::offchain::DepositInfo;
     use gw_types::packed::{AccountMerkleState, BlockInfo, DepositRequest};
     use gw_types::prelude::{Builder, Entity, Pack, Unpack};
 
@@ -1319,8 +1310,6 @@ mod test {
             (0..deposits_count).map(|_| vec![random_hash()]).collect();
         let deposits_state: Vec<_> = { (0..deposits_count).map(|_| random_state()) }.collect();
 
-        let finalized_custodians = FinalizedCustodianCapacity::default();
-
         // Random txs
         let txs_count = 500;
         let txs: Vec<_> = (0..txs_count).map(|_| random_hash()).collect();
@@ -1335,7 +1324,6 @@ mod test {
             {
                 mem_block.push_withdrawal(hash, state, touched_keys.into_iter());
             }
-            mem_block.set_finalized_custodian_capacity(finalized_custodians.clone());
 
             let txs_prev_state_checkpoint = {
                 let state = deposits_state.last().unwrap();
@@ -1402,8 +1390,6 @@ mod test {
                 expected.push_tx(hash, state.clone());
                 post_states.push(state);
             }
-
-            expected.set_finalized_custodian_capacity(finalized_custodians.clone());
 
             (expected, post_states.last().unwrap().to_owned())
         };
