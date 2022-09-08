@@ -6,10 +6,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::testing_tool::chain::{
-    build_sync_tx, construct_block, construct_block_with_timestamp, into_deposit_info_cell,
-    produce_empty_block, setup_chain_with_config, ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM,
-    CUSTODIAN_LOCK_PROGRAM, DEFAULT_FINALITY_BLOCKS, STAKE_LOCK_PROGRAM,
-    STATE_VALIDATOR_TYPE_PROGRAM, WITHDRAWAL_LOCK_PROGRAM,
+    construct_block_with_timestamp, TestChain, ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM,
+    CUSTODIAN_LOCK_PROGRAM, STAKE_LOCK_PROGRAM, STATE_VALIDATOR_TYPE_PROGRAM,
+    WITHDRAWAL_LOCK_PROGRAM,
 };
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 use crate::testing_tool::verify_tx::{verify_tx, TxWithContext};
@@ -18,19 +17,21 @@ use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_block_producer::produce_block::ProduceBlockResult;
 use gw_block_producer::withdrawal_unlocker::{BuildUnlockWithdrawalToOwner, Guard};
-use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
 use gw_common::h256_ext::H256Ext;
 use gw_common::smt::SMT;
 use gw_common::sparse_merkle_tree::default_store::DefaultStore;
+use gw_common::state::State;
 use gw_common::H256;
 use gw_config::ContractsCellDep;
+use gw_store::state::state_db::StateContext;
+use gw_store::traits::chain_store::ChainStore;
 use gw_types::bytes::Bytes;
 use gw_types::core::{AllowedEoaType, DepType, ScriptHashType};
 use gw_types::offchain::{
     CellInfo, CollectedCustodianCells, FinalizedCustodianCapacity, InputCellInfo, RollupContext,
 };
 use gw_types::packed::{
-    self, AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositRequest,
+    AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositRequest,
     GlobalState, LastFinalizedWithdrawal, OutPoint, RawWithdrawalRequest, RollupAction,
     RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, StakeLockArgs, WithdrawalRequest,
     WithdrawalRequestExtra, WitnessArgs,
@@ -164,7 +165,7 @@ async fn test_build_unlock_to_owner_tx() {
             .build(),
     };
     let mut chain =
-        setup_chain_with_config(rollup_type_script.clone(), rollup_config.clone()).await;
+        TestChain::setup_with_config(rollup_type_script.clone(), rollup_config.clone()).await;
     let rollup_context = RollupContext {
         rollup_script_hash,
         rollup_config,
@@ -198,50 +199,23 @@ async fn test_build_unlock_to_owner_tx() {
                 .build()
         })
         .collect();
-    let deposits = accounts.iter().map(|account_script| {
-        DepositRequest::new_builder()
-            .capacity(DEPOSIT_CAPACITY.pack())
-            .sudt_script_hash(sudt_script.hash().pack())
-            .amount(DEPOSIT_AMOUNT.pack())
-            .script(account_script.to_owned())
-            .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
-            .build()
-    });
-    let deposit_info_vec = deposits
-        .map(|d| into_deposit_info_cell(&rollup_context, d).pack())
-        .pack();
+    let deposits: Vec<_> = { accounts.iter() }
+        .map(|account_script| {
+            DepositRequest::new_builder()
+                .capacity(DEPOSIT_CAPACITY.pack())
+                .sudt_script_hash(sudt_script.hash().pack())
+                .amount(DEPOSIT_AMOUNT.pack())
+                .script(account_script.to_owned())
+                .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
+                .build()
+        })
+        .collect();
 
-    let deposit_block_result = {
-        let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
-            .await
-            .unwrap()
-    };
-    let apply_deposits = L1Action {
-        context: L1ActionContext::SubmitBlock {
-            l2block: deposit_block_result.block.clone(),
-            deposit_info_vec,
-            deposit_asset_scripts: Default::default(),
-            withdrawals: Default::default(),
-        },
-        transaction: build_sync_tx(rollup_cell.output.clone(), deposit_block_result.clone()),
-    };
-    let param = SyncParam {
-        updates: vec![apply_deposits],
-        reverts: Default::default(),
-    };
-    chain.sync(param).await.unwrap();
-    chain.notify_new_tip().await.unwrap();
-    assert!(chain.last_sync_event().is_success());
+    chain.produce_block(deposits, vec![]).await.unwrap();
 
-    for _ in 0..DEFAULT_FINALITY_BLOCKS {
-        produce_empty_block(&mut chain).await.unwrap();
-    }
-
-    let deposit_finalized_global_state = chain.local_state().last_global_state().clone();
+    let deposit_global_state = chain.last_global_state().to_owned();
     let input_rollup_cell = CellInfo {
-        data: ensure_global_state_v1(deposit_block_result.global_state.clone()).as_bytes(),
+        data: ensure_global_state_v1(deposit_global_state.clone()).as_bytes(),
         out_point: OutPoint::new_builder()
             .tx_hash(rand::random::<[u8; 32]>().pack())
             .build(),
@@ -285,8 +259,7 @@ async fn test_build_unlock_to_owner_tx() {
     };
 
     {
-        let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = mem_pool.lock().await;
+        let mut mem_pool = chain.mem_pool().await;
         let provider = DummyMemPoolProvider {
             deposit_cells: vec![],
             fake_blocktime: Duration::from_millis(0),
@@ -306,17 +279,10 @@ async fn test_build_unlock_to_owner_tx() {
 
     const BLOCK_TIMESTAMP: u64 = 10000u64;
     let withdrawal_block_result = {
-        let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = mem_pool.lock().await;
-        construct_block_with_timestamp(
-            &chain,
-            &mut mem_pool,
-            Default::default(),
-            BLOCK_TIMESTAMP,
-            true,
-        )
-        .await
-        .unwrap()
+        let mut mem_pool = chain.mem_pool().await;
+        construct_block_with_timestamp(&chain.inner, &mut mem_pool, vec![], BLOCK_TIMESTAMP, true)
+            .await
+            .unwrap()
     };
     assert_eq!(
         withdrawal_block_result.block.withdrawals().len(),
@@ -560,27 +526,34 @@ async fn test_build_unlock_to_owner_tx() {
 
     // Make sure revert withdrawal also work
     const BLOCK_TIMESTAMP2: u64 = BLOCK_TIMESTAMP * 2;
+    let tip_block_number = chain.last_valid_block().raw().number().unpack();
     let block_result = {
-        let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = mem_pool.lock().await;
-        // Reset finalized custodian should stale all withdrawals
-        let provider = DummyMemPoolProvider::default();
-        mem_pool.set_provider(Box::new(provider));
-
-        let tip_block_number = chain.local_state().tip().raw().number().unpack();
-        {
-            let store_tx = chain.store().begin_transaction();
-            store_tx
-                .set_block_post_finalized_custodian_capacity(
-                    tip_block_number,
-                    &packed::FinalizedCustodianCapacity::default().as_reader(),
-                )
+        // Update sender nonce to stale all withdrawals
+        let withdrawal_hashes = {
+            let mem_pool = chain.mem_pool().await;
+            mem_pool.mem_block().withdrawals().to_owned()
+        };
+        let db = chain.store().begin_transaction();
+        let mut state = db
+            .state_tree(StateContext::AttachBlock(tip_block_number + 1))
+            .unwrap();
+        for withdrawal_hash in withdrawal_hashes {
+            let withdrawal = db
+                .get_mem_pool_withdrawal(&withdrawal_hash)
+                .unwrap()
                 .unwrap();
-            store_tx.commit().unwrap();
+            let account_script_hash: H256 = withdrawal.raw().account_script_hash().unpack();
+            let account_id = state
+                .get_account_id_by_script_hash(&account_script_hash)
+                .unwrap()
+                .unwrap();
+            state.set_nonce(account_id, 99).unwrap();
         }
+        db.commit().unwrap();
 
-        mem_pool
-            .reset_mem_block(&LocalCellsManager::default())
+        let mut mem_pool = chain.mem_pool().await;
+        mem_pool.reset_mem_block().await.unwrap();
+        construct_block_with_timestamp(&chain.inner, &mut mem_pool, vec![], BLOCK_TIMESTAMP2, true)
             .await
             .unwrap();
         construct_block_with_timestamp(
@@ -614,7 +587,7 @@ async fn test_build_unlock_to_owner_tx() {
 
     let input_rollup_cell = {
         let global_state = {
-            let builder = deposit_finalized_global_state.as_builder();
+            let builder = deposit_global_state.as_builder();
             builder.reverted_block_root(reverted_block_smt.root().pack())
         };
         CellInfo {
