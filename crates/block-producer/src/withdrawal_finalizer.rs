@@ -761,7 +761,7 @@ mod tests {
 
         let last_finalized = LastFinalizedWithdrawal::pack_block_index(
             zero.number(),
-            LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL,
+            LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS,
         );
 
         // Next pending block > last_finalized_block_number
@@ -808,7 +808,7 @@ mod tests {
         // Max withdrawals
         let last_finalized = LastFinalizedWithdrawal::pack_block_index(
             one.number(),
-            LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL,
+            LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS,
         );
         let fulfilled = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 4)
             .unwrap()
@@ -832,7 +832,7 @@ mod tests {
         // Next pending block on chain not found
         let last_finalized = LastFinalizedWithdrawal::pack_block_index(
             zero.number(),
-            LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL,
+            LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS,
         );
 
         let ret = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 1).unwrap();
@@ -859,7 +859,7 @@ mod tests {
 
         let last_finalized = LastFinalizedWithdrawal::pack_block_index(
             one.number(),
-            LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL,
+            LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS,
         );
 
         let ret = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 2).unwrap();
@@ -869,7 +869,7 @@ mod tests {
         // range.start() != next_pending_blk_num_on_chain
         let reorg_last_finalized = LastFinalizedWithdrawal::pack_block_index(
             zero.number(),
-            LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL,
+            LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS,
         );
 
         let ret =
@@ -880,7 +880,7 @@ mod tests {
         // range.end() > last_finalized_block_number
         let last_finalized = LastFinalizedWithdrawal::pack_block_index(
             one.number(),
-            LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL,
+            LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS,
         );
 
         let ret = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 3).unwrap();
@@ -895,7 +895,7 @@ mod tests {
         // push error
         let last_finalized = LastFinalizedWithdrawal::pack_block_index(
             one.number(),
-            LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL,
+            LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS,
         );
 
         let ret = get_pending_finalized_withdrawals(&store, &pending, &last_finalized, 3).unwrap();

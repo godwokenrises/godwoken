@@ -16,11 +16,10 @@ struct AccountMerkleState {
 //
 // special flags:
 // 
-// 1. u32::MAX (aka 4294967295) means a block without withdrawal is finalized
-// 2. u32::MAX - 1 (aka 4294967294) means all withdrawals in a block are finalized
+// u32::MAX (aka 4294967295) means all withdrawals in a block are finalized
 //
-// If a block's `withdrawal_index` is set to one of above value in the `GlobalState`,
-// we don't need to submit that raw block to verify `last_finalized_withdrawal`
+// If a block's `withdrawal_index` is set to above value in the `GlobalState`,
+// we don't need to submit that raw block to verify prev `last_finalized_withdrawal`
 // transition.
 struct LastFinalizedWithdrawal {
     block_number: Uint64,

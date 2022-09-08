@@ -365,7 +365,7 @@ impl BlockProducer {
                     )
                 })?
         };
-        if 1 == parent_global_state.version_u8() && 2 == global_state.version_u8() {
+        if 2 != global_state.version_u8() {
             let map_withdrawal_extras = withdrawal_extras.into_iter().map(|w| (w.hash().into(), w));
             if let Some(generated_withdrawal_cells) = crate::withdrawal::generate(
                 rollup_context,

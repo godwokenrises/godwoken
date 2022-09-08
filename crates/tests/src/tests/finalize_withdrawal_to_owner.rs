@@ -489,7 +489,7 @@ async fn test_finalize_withdrawal_to_owner() {
 
     let expected_updated_last_finalized = LastFinalizedWithdrawal::new_builder()
         .block_number((withdrawal_block_number + 1).pack())
-        .withdrawal_index(LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL.pack())
+        .withdrawal_index(LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS.pack())
         .build();
 
     assert_eq!(

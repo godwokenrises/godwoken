@@ -70,9 +70,7 @@ impl BlockWithdrawals {
         }
 
         let finalized_idx_val = match finalized_idx {
-            FinalizedWithdrawalIndex::NoWithdrawal | FinalizedWithdrawalIndex::AllWithdrawals => {
-                return Ok(None)
-            }
+            FinalizedWithdrawalIndex::AllWithdrawals => return Ok(None),
             FinalizedWithdrawalIndex::Value(index) => index,
         };
         ensure!(!block.withdrawals().is_empty(), "block has withdrawals");
@@ -183,10 +181,7 @@ impl BlockWithdrawals {
 
     pub fn to_last_finalized_withdrawal(&self) -> LastFinalizedWithdrawal {
         let index = match self.range {
-            None if Self::last_index(&self.block).is_some() => {
-                LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS
-            }
-            None => LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL,
+            None => LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS,
             Some((_, end)) if Some(end) == Self::last_index(&self.block) => {
                 LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS
             }
@@ -844,7 +839,7 @@ pub(crate) mod tests {
             blk_wthdrs.to_last_finalized_withdrawal().as_slice(),
             LastFinalizedWithdrawal::pack_block_index(
                 block.number(),
-                LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL
+                LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS
             )
             .as_slice()
         );
@@ -921,11 +916,11 @@ pub(crate) mod tests {
 
         assert!({ blk_wthdrs.verify_witness(&blk_wthdrs.generate_witness().unwrap()) }.is_ok());
 
-        // No withdrawal
+        // All withdrawal (no withdrwal)
         let block = store.produce_block(0);
         let last_finalized = LastFinalizedWithdrawal::pack_block_index(
             block.number(),
-            LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL,
+            LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS,
         );
 
         assert!(BlockWithdrawals::from_rest(block, &last_finalized)

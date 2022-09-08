@@ -211,20 +211,16 @@ impl From<GlobalStateV1> for GlobalState {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum FinalizedWithdrawalIndex {
-    NoWithdrawal,
     AllWithdrawals,
     Value(u32),
 }
 
 impl LastFinalizedWithdrawal {
-    pub const INDEX_NO_WITHDRAWAL: u32 = u32::MAX;
-    pub const INDEX_ALL_WITHDRAWALS: u32 = u32::MAX - 1;
+    pub const INDEX_ALL_WITHDRAWALS: u32 = u32::MAX;
 
     pub fn unpack_block_index(&self) -> (u64, FinalizedWithdrawalIndex) {
         let index: u32 = self.withdrawal_index().unpack();
-        let index_enum = if Self::INDEX_NO_WITHDRAWAL == index {
-            FinalizedWithdrawalIndex::NoWithdrawal
-        } else if Self::INDEX_ALL_WITHDRAWALS == index {
+        let index_enum = if Self::INDEX_ALL_WITHDRAWALS == index {
             FinalizedWithdrawalIndex::AllWithdrawals
         } else {
             FinalizedWithdrawalIndex::Value(index)

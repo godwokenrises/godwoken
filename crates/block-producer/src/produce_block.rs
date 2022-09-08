@@ -170,14 +170,10 @@ pub fn produce_block(
         if parent_global_state.version_u8() >= 2 {
             parent_global_state.last_finalized_withdrawal()
         } else {
-            let index = if block.withdrawals().is_empty() {
-                LastFinalizedWithdrawal::INDEX_NO_WITHDRAWAL
-            } else {
-                LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS
-            };
+            // Upgrade to v2
             LastFinalizedWithdrawal::new_builder()
-                .block_number(number.pack())
-                .withdrawal_index(index.pack())
+                .block_number(number.saturating_sub(1).pack())
+                .withdrawal_index(LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS.pack())
                 .build()
         }
     };
