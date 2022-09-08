@@ -24,10 +24,14 @@ use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
-    offchain::{DepositInfo, InputCellInfo, RollupContext},
+    core::Status,
+    offchain::{
+        global_state_from_slice, CellInfo, CollectedCustodianCells, DepositInfo, InputCellInfo,
+        RollupContext, WithdrawalsAmount,
+    },
     packed::{
         CellDep, CellInput, CellOutput, GlobalState, L2Block, RollupAction, RollupActionUnion,
-        RollupSubmitBlock, Transaction, WithdrawalRequestExtra, WitnessArgs,
+        RollupSubmitBlock, Transaction, WitnessArgs,
     },
     prelude::*,
 };
@@ -411,10 +415,28 @@ impl BlockProducer {
             tx_skeleton.outputs_mut().extend(reverted_deposits.outputs);
         }
 
+        // Merge custodian cells
+        let has_sudt = !finalized_custodians.sudt.is_empty();
+        if let Some(merged_custodians) = crate::custodian::aggregate_balance(
+            rollup_context,
+            finalized_custodians,
+            WithdrawalsAmount::zero_amount(),
+        )? {
+            if has_sudt {
+                { tx_skeleton.cell_deps_mut() }.push(contracts_dep.l1_sudt_type.clone().into());
+            }
+            { tx_skeleton.cell_deps_mut() }.push(contracts_dep.custodian_cell_lock.clone().into());
+
+            tx_skeleton.inputs_mut().extend(merged_custodians.inputs);
+            tx_skeleton.outputs_mut().extend(merged_custodians.outputs);
+        }
+
         // reverted withdrawal cells
-        if let Some(reverted_withdrawals) =
-            crate::withdrawal::revert(rollup_context, &contracts_dep, revert_withdrawals)?
-        {
+        if let Some(reverted_withdrawals) = crate::withdrawal::deprecated::revert(
+            rollup_context,
+            &contracts_dep,
+            revert_withdrawals,
+        )? {
             log::info!("reverted withdrawals {}", reverted_withdrawals.inputs.len());
 
             tx_skeleton
@@ -478,6 +500,7 @@ pub struct ComposeSubmitTxArgs<'a> {
     pub since: Since,
     pub withdrawal_extras: Vec<WithdrawalRequestExtra>,
     pub local_cells_manager: &'a LocalCellsManager,
+    finalized_custodians: CollectedCustodianCells,
 }
 
 #[derive(thiserror::Error, Debug)]

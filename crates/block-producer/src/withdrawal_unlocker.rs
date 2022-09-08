@@ -181,7 +181,7 @@ pub trait BuildUnlockWithdrawalToOwner {
             unlockable_withdrawals.len()
         );
 
-        let to_unlock = match crate::withdrawal::unlock_to_owner(
+        let to_unlock = match crate::withdrawal::deprecated::unlock_to_owner(
             rollup_cell,
             self.rollup_context(),
             &self.contracts_dep(),

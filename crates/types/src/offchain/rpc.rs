@@ -51,6 +51,13 @@ pub struct WithdrawalsAmount {
 }
 
 impl WithdrawalsAmount {
+    pub fn zero_amount() -> Self {
+        let zero = Self::default();
+        debug_assert!(zero.is_zero());
+
+        zero
+    }
+
     pub fn is_zero(&self) -> bool {
         0 == self.capacity && self.sudt.is_empty()
     }
