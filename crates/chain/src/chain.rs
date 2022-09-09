@@ -65,6 +65,7 @@ pub enum L1ActionContext {
     Revert {
         reverted_blocks: Vec<RawL2Block>,
     },
+    FinalizeWithdrawal,
 }
 
 #[derive(Debug, Clone)]
@@ -554,6 +555,18 @@ impl Chain {
                         }
                         None => Ok(SyncEvent::Success),
                     }
+                }
+                (Status::Running, L1ActionContext::FinalizeWithdrawal) => {
+                    let status: u8 = global_state.status().into();
+                    assert_eq!(Status::try_from(status), Ok(Status::Running));
+
+                    let (block_number, index) = global_state
+                        .last_finalized_withdrawal()
+                        .unpack_block_index();
+
+                    log::info!("last finalized withdrawal to {} {:?}", block_number, index);
+
+                    Ok(SyncEvent::Success)
                 }
                 (status, context) => {
                     panic!(
