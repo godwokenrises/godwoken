@@ -1,13 +1,15 @@
 use std::{
     collections::{HashMap, HashSet},
     ops::RangeInclusive,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
 use gw_common::{
-    smt::generate_block_proof, sparse_merkle_tree::CompiledMerkleProof, CKB_SUDT_SCRIPT_ARGS, H256,
+    smt::{generate_block_proof, Blake2bHasher},
+    sparse_merkle_tree::CompiledMerkleProof,
+    CKB_SUDT_SCRIPT_ARGS, H256,
 };
 use gw_config::{ContractsCellDep, DebugConfig};
 use gw_generator::Guard;
@@ -21,7 +23,7 @@ use gw_types::{
         TxStatus,
     },
     packed::{
-        CellDep, CellInput, L2Block, LastFinalizedWithdrawal, OutPoint, RollupAction,
+        CellDep, CellInput, GlobalState, L2Block, LastFinalizedWithdrawal, OutPoint, RollupAction,
         RollupActionUnion, Script, Transaction, WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::{Builder, Entity, Pack, Unpack},
@@ -51,7 +53,7 @@ pub struct FinalizerArgs {
 
 pub struct UserWithdrawalFinalizer {
     inner: DefaultFinalizer,
-    last_finalize_tx: std::sync::Mutex<Option<H256>>,
+    last_finalize_tx: Mutex<Option<H256>>,
     debug_config: DebugConfig,
 }
 
@@ -61,7 +63,7 @@ impl UserWithdrawalFinalizer {
 
         Self {
             inner,
-            last_finalize_tx: std::sync::Mutex::new(None),
+            last_finalize_tx: Mutex::new(None),
             debug_config,
         }
     }
@@ -313,6 +315,7 @@ struct DefaultFinalizer {
     rollup_config_cell_dep: CellDep,
     pending: PendingFinalizedWithdrawal,
     last_block_submitted_tx: Arc<tokio::sync::RwLock<H256>>,
+    last_block_state: Arc<Mutex<(L2Block, GlobalState)>>,
 }
 
 impl DefaultFinalizer {
@@ -335,6 +338,7 @@ impl DefaultFinalizer {
         );
 
         let pending = PendingFinalizedWithdrawal::new(max_block, max_withdrawals);
+        let last_block_state = Arc::new(Mutex::new((L2Block::default(), GlobalState::default())));
 
         Self {
             store,
@@ -345,6 +349,7 @@ impl DefaultFinalizer {
             rollup_config_cell_dep,
             pending,
             last_block_submitted_tx,
+            last_block_state,
         }
     }
 }
@@ -377,10 +382,31 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
         block_withdrawals: &[BlockWithdrawals],
     ) -> Result<CompiledMerkleProof> {
         let tx_db = self.store.begin_transaction();
-        let block_smt = tx_db.block_smt()?;
-        let blocks = block_withdrawals.iter().map(|bw| bw.block());
+        let mut block_smt = tx_db.block_smt()?;
 
-        Ok(generate_block_proof(&block_smt, blocks)?)
+        let block_root = {
+            let (block, global_state) = &*self.last_block_state.lock().expect("lock");
+            let expected_root: H256 = global_state.block().merkle_root().unpack();
+
+            block_smt.update(block.smt_key().into(), block.hash().into())?;
+            let root = block_smt.root();
+
+            if root != &expected_root {
+                bail!("block {} diff db smt and global state", block.number());
+            }
+            root
+        };
+
+        let blocks = block_withdrawals.iter().map(|bw| bw.block());
+        let proof = generate_block_proof(&block_smt, blocks)?;
+
+        // Ensure valid block proof
+        let leaves = { block_withdrawals.iter() }
+            .map(|bw| (bw.block().smt_key().into(), bw.block().hash().into()))
+            .collect();
+        proof.verify::<Blake2bHasher>(block_root, leaves)?;
+
+        Ok(proof)
     }
 
     fn get_withdrawal_extras(
@@ -443,6 +469,7 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
     }
 
     async fn query_rollup_cell(&self) -> Result<Option<CellInfo>> {
+        use gw_types::bytes::Bytes;
         use TxStatus::*;
 
         let rpc_client = &self.rpc_client.ckb;
@@ -497,6 +524,25 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
                 return Ok(None);
             }
         };
+
+        // extra block from witness args
+        let block = {
+            let witness: Option<Bytes> = tx.witnesses().get(idx).map(|w| w.unpack());
+            let witness_args = witness.and_then(|w| WitnessArgs::from_slice(&w).ok());
+            let output_type = witness_args.and_then(|w| w.output_type().to_opt());
+            let rollup_action =
+                output_type.and_then(|ot| RollupAction::from_slice(&ot.raw_data()).ok());
+
+            match rollup_action.map(|action| action.to_enum()) {
+                Some(RollupActionUnion::RollupSubmitBlock(submitted)) => submitted.block(),
+                _ => return Ok(None),
+            }
+        };
+        let global_state = match GlobalState::from_slice(&data) {
+            Ok(state) => state,
+            Err(_) => return Ok(None),
+        };
+        *self.last_block_state.lock().expect("lock") = (block, global_state);
 
         let out_point = OutPoint::new_builder()
             .tx_hash(last_block_tx.pack())
@@ -623,7 +669,7 @@ fn get_pending_finalized_withdrawals(
 
 #[derive(Debug)]
 struct PendingFinalizedWithdrawal {
-    inner: std::sync::Mutex<Vec<BlockWithdrawals>>,
+    inner: Mutex<Vec<BlockWithdrawals>>,
     max_block: u32,
     max_withdrawals: u32,
 }
@@ -631,7 +677,7 @@ struct PendingFinalizedWithdrawal {
 impl PendingFinalizedWithdrawal {
     fn new(max_block: u32, max_withdrawals: u32) -> Self {
         Self {
-            inner: std::sync::Mutex::new(Vec::with_capacity(max_block as usize)),
+            inner: Mutex::new(Vec::with_capacity(max_block as usize)),
             max_block,
             max_withdrawals,
         }
