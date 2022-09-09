@@ -1,6 +1,6 @@
 #!/bin/bash
 dir_name='.tmp/binaries'
-image='ghcr.io/zeroqn/godwoken-prebuilds:v1.3.0-rc1-pr-710-create-undeposited-sender-for-polyjuice-tx'
+image='ghcr.io/zeroqn/godwoken-prebuilds:v1.6-feat-remove-withdrawal-cell'
 
 docker pull $image
 [ -d $dir_name ] && rm -rf $dir_name && echo "Delete old dir"
