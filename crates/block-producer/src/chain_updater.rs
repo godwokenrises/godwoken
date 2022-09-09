@@ -107,6 +107,8 @@ impl ChainUpdater {
                     reverted_blocks: reverted_blocks.collect(),
                 }
             }
+            // FIXME: implement RollupFinalizeWithdrawal
+            RollupActionUnion::RollupFinalizeWithdrawal(_) => todo!(),
         };
 
         let update = L1Action {
@@ -262,12 +264,28 @@ impl ChainUpdater {
         block: &L2Block,
     ) -> Result<Vec<WithdrawalRequestExtra>> {
         let mut owner_lock_map = HashMap::with_capacity(block.withdrawals().len());
+
+        // extra locks from last witness if possible
+        {
+            let witness: Option<Bytes> = tx.witnesses().into_iter().last().map(|w| w.unpack());
+            let witness_args = witness.and_then(|w| WitnessArgs::from_slice(&w).ok());
+            let output_type = witness_args.and_then(|w| w.output_type().to_opt());
+            let owner_locks = output_type.and_then(|ot| ScriptVec::from_slice(&ot.raw_data()).ok());
+
+            if let Some(owner_locks) = owner_locks {
+                for lock in owner_locks {
+                    owner_lock_map.insert(lock.hash(), lock);
+                }
+            }
+        }
+
         for output in tx.raw().outputs().into_iter() {
             if let Some(owner_lock) = try_parse_withdrawal_owner_lock(&output, &self.rollup_context)
             {
                 owner_lock_map.insert(owner_lock.hash(), owner_lock);
             }
         }
+
         // return in block's sort
         let withdrawals = block
             .withdrawals()

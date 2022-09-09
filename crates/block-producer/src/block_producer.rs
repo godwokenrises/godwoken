@@ -31,7 +31,7 @@ use gw_types::{
     },
     packed::{
         CellDep, CellInput, CellOutput, GlobalState, L2Block, RollupAction, RollupActionUnion,
-        RollupSubmitBlock, Transaction, WitnessArgs,
+        RollupSubmitBlock, ScriptVec, Transaction, WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::*,
 };
@@ -322,6 +322,13 @@ impl BlockProducer {
             });
         }
 
+        // Simple UDT dep
+        if !deposit_cells.is_empty() || !finalized_custodians.sudt.is_empty() {
+            tx_skeleton
+                .cell_deps_mut()
+                .push(contracts_dep.l1_sudt_type.clone().into());
+        }
+
         // custodian cells
         let custodian_cells = generate_custodian_cells(rollup_context, &block, &deposit_cells);
         tx_skeleton.outputs_mut().extend(custodian_cells);
@@ -482,6 +489,27 @@ impl BlockProducer {
         {
             let deps: HashSet<_> = tx_skeleton.cell_deps_mut().iter().collect();
             *tx_skeleton.cell_deps_mut() = deps.into_iter().cloned().collect();
+        }
+
+        // creat withdrawal owner lock witness
+        {
+            if global_state.version_u8() >= 2 && !block.withdrawals().is_empty() {
+                // padding witness
+                let inputs_len = tx_skeleton.inputs().len();
+                { tx_skeleton.witnesses_mut() }.resize(inputs_len, Default::default());
+
+                let owner_locks = { withdrawal_extras.iter() }
+                    .map(|w| (w.raw().owner_lock_hash().unpack(), w.owner_lock()))
+                    .collect::<HashMap<H256, _>>();
+                let script_vec = ScriptVec::new_builder()
+                    .set(owner_locks.into_values().collect::<Vec<_>>())
+                    .build();
+
+                let owner_lock_witness = WitnessArgs::new_builder()
+                    .output_type(Some(script_vec.as_bytes()).pack())
+                    .build();
+                tx_skeleton.witnesses_mut().push(owner_lock_witness);
+            }
         }
 
         // tx fee cell
