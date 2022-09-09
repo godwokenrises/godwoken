@@ -849,80 +849,77 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     let (chain_task_ended_tx, chain_task) = tokio::sync::oneshot::channel::<()>();
     let rt_handle = tokio::runtime::Handle::current();
-    std::thread::Builder::new()
-        .name("chain-task".into())
-        .spawn({
-            let shutdown_send = shutdown_completed_send.clone();
-            move || {
-                rt_handle.block_on(async move {
-                    use tracing::Instrument;
+    tokio::task::spawn_blocking({
+        let shutdown_send = shutdown_completed_send.clone();
+        move || {
+            rt_handle.block_on(async move {
+                use tracing::Instrument;
 
-                    let _tx = chain_task_ended_tx;
-                    let ctx = ChainTaskContext {
-                        // chain_updater,
-                        challenger,
-                        withdrawal_unlocker,
-                        cleaner,
-                    };
-                    let mut backoff = ExponentialBackoff::new(Duration::from_secs(1));
-                    let mut chain_task = ChainTask::create(
-                        rpc_client,
-                        Duration::from_secs(3),
-                        ctx,
-                        shutdown_send,
-                        shutdown_event_recv,
-                    );
+                let _tx = chain_task_ended_tx;
+                let ctx = ChainTaskContext {
+                    // chain_updater,
+                    challenger,
+                    withdrawal_unlocker,
+                    cleaner,
+                };
+                let mut backoff = ExponentialBackoff::new(Duration::from_secs(1));
+                let mut chain_task = ChainTask::create(
+                    rpc_client,
+                    Duration::from_secs(3),
+                    ctx,
+                    shutdown_send,
+                    shutdown_event_recv,
+                );
 
-                    let mut run_status = ChainTaskRunStatus::default();
-                    loop {
-                        // Exit if shutdown event is received.
-                        if chain_task.shutdown_event.try_recv().is_ok() {
-                            log::info!("ChainTask existed successfully");
-                            return;
+                let mut run_status = ChainTaskRunStatus::default();
+                loop {
+                    // Exit if shutdown event is received.
+                    if chain_task.shutdown_event.try_recv().is_ok() {
+                        log::info!("ChainTask existed successfully");
+                        return;
+                    }
+
+                    let run_span = info_span!("chain_task_run");
+                    match chain_task
+                        .run(&run_status)
+                        .instrument(run_span.clone())
+                        .await
+                    {
+                        Ok(updated_status) => {
+                            run_status = updated_status;
+                            backoff.reset();
+
+                            let sleep_span =
+                                info_span!(parent: &run_span, "chain_task interval sleep");
+                            tokio::time::sleep(chain_task.poll_interval)
+                                .instrument(sleep_span)
+                                .await;
                         }
+                        Err(err) if err.is::<RPCRequestError>() => {
+                            // Reset status and refresh tip number hash
+                            run_status = ChainTaskRunStatus::default();
+                            let backoff_sleep = backoff.next_sleep();
+                            log::error!(
+                                "chain polling loop request error, will retry in {}s: {}",
+                                backoff_sleep.as_secs(),
+                                err
+                            );
 
-                        let run_span = info_span!("chain_task_run");
-                        match chain_task
-                            .run(&run_status)
-                            .instrument(run_span.clone())
-                            .await
-                        {
-                            Ok(updated_status) => {
-                                run_status = updated_status;
-                                backoff.reset();
-
-                                let sleep_span =
-                                    info_span!(parent: &run_span, "chain_task interval sleep");
-                                tokio::time::sleep(chain_task.poll_interval)
-                                    .instrument(sleep_span)
-                                    .await;
-                            }
-                            Err(err) if err.is::<RPCRequestError>() => {
-                                // Reset status and refresh tip number hash
-                                run_status = ChainTaskRunStatus::default();
-                                let backoff_sleep = backoff.next_sleep();
-                                log::error!(
-                                    "chain polling loop request error, will retry in {}s: {}",
-                                    backoff_sleep.as_secs(),
-                                    err
-                                );
-
-                                let sleep_span =
-                                    info_span!(parent: &run_span, "chain_task backoff sleep");
-                                tokio::time::sleep(backoff_sleep)
-                                    .instrument(sleep_span)
-                                    .await;
-                            }
-                            Err(err) => {
-                                log::error!("chain polling loop exit unexpected, error: {}", err);
-                                break;
-                            }
+                            let sleep_span =
+                                info_span!(parent: &run_span, "chain_task backoff sleep");
+                            tokio::time::sleep(backoff_sleep)
+                                .instrument(sleep_span)
+                                .await;
+                        }
+                        Err(err) => {
+                            log::error!("chain polling loop exit unexpected, error: {}", err);
+                            break;
                         }
                     }
-                });
-            }
-        })
-        .unwrap();
+                }
+            });
+        }
+    });
 
     let sub_shutdown = shutdown_event.subscribe();
     let rpc_shutdown_send = shutdown_completed_send.clone();
