@@ -220,6 +220,51 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
     let mut revert_submitted_signal = signal(SignalKind::user_defined2())?;
 
     loop {
+        if !submitting && state.local_count > 0 && state.submitted_count < config.submitted_limit {
+            submitting = true;
+            let context = state.context.clone();
+            // The first submission should not have any unknown cell error. If
+            // it does, it means that previous block is probably not confirmed
+            // anymore, and we should sync with L1 again.
+            let is_first = state.submitted_count == 0;
+            submit_handle.replace_with(tokio::spawn(async move {
+                loop {
+                    match submit_next_block(&context, is_first).await {
+                        Ok(nh) => return Ok(nh),
+                        Err(err) => {
+                            if err.is::<ShouldResyncError>() || err.is::<ShouldRevertError>() {
+                                bail!(err);
+                            }
+                            log::warn!("failed to submit next block: {:#}", err);
+                            // TOOO: backoff.
+                            tokio::time::sleep(Duration::from_secs(20)).await;
+                        }
+                    }
+                }
+            }));
+        }
+        if !confirming && state.submitted_count > 0 {
+            confirming = true;
+            let context = state.context.clone();
+            confirm_handle.replace_with(tokio::spawn(async move {
+                loop {
+                    match confirm_next_block(&context).await {
+                        Ok(nh) => break Ok(nh),
+                        Err(err) => {
+                            if err.is::<ShouldResyncError>() || err.is::<ShouldRevertError>() {
+                                bail!(err);
+                            }
+                            log::warn!("failed to confirm next block: {:#}", err);
+                            // TOOO: backoff.
+                            tokio::time::sleep(Duration::from_secs(3)).await;
+                        }
+                    }
+                }
+            }));
+        }
+        // One of the producing, submitting or confirming branch is always
+        // enabled. Otherwise we'd be stuck waiting for one of the signals.
+        assert!(state.local_count < config.local_limit || confirming || submitting);
         tokio::select! {
             _ = revert_local_signal.recv() => {
                 log::info!("revert not submitted blocks due to signal");
@@ -292,49 +337,6 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                     _ => {}
                 }
             }
-            else => {}
-        }
-        if !submitting && state.local_count > 0 && state.submitted_count < config.submitted_limit {
-            submitting = true;
-            let context = state.context.clone();
-            // The first submission should not have any unknown cell error. If
-            // it does, it means that previous block is probably not confirmed
-            // anymore, and we should sync with L1 again.
-            let is_first = state.submitted_count == 0;
-            submit_handle.replace_with(tokio::spawn(async move {
-                loop {
-                    match submit_next_block(&context, is_first).await {
-                        Ok(nh) => return Ok(nh),
-                        Err(err) => {
-                            if err.is::<ShouldResyncError>() || err.is::<ShouldRevertError>() {
-                                bail!(err);
-                            }
-                            log::warn!("failed to submit next block: {:#}", err);
-                            // TOOO: backoff.
-                            tokio::time::sleep(Duration::from_secs(20)).await;
-                        }
-                    }
-                }
-            }));
-        }
-        if !confirming && state.submitted_count > 0 {
-            confirming = true;
-            let context = state.context.clone();
-            confirm_handle.replace_with(tokio::spawn(async move {
-                loop {
-                    match confirm_next_block(&context).await {
-                        Ok(nh) => break Ok(nh),
-                        Err(err) => {
-                            if err.is::<ShouldResyncError>() || err.is::<ShouldRevertError>() {
-                                bail!(err);
-                            }
-                            log::warn!("failed to confirm next block: {:#}", err);
-                            // TOOO: backoff.
-                            tokio::time::sleep(Duration::from_secs(3)).await;
-                        }
-                    }
-                }
-            }));
         }
     }
 }
