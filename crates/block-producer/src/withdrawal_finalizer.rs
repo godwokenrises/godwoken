@@ -104,19 +104,27 @@ impl UserWithdrawalFinalizer {
         if let Some((tx, pending_finalized)) = self.inner.query_and_finalize_to_owner().await? {
             if let Err(err) = rpc_client.dry_run_transaction(&tx).await {
                 let err_string = err.to_string();
-                if err_string.contains(TRANSACTION_FAILED_TO_RESOLVE_ERROR) {
-                    tracing::info!("failed to resolve, try again later");
-                    return Ok(());
+                if !err_string.contains(TRANSACTION_FAILED_TO_RESOLVE_ERROR) {
+                    let debug_tx_dump_path = &self.debug_config.debug_tx_dump_path;
+                    tracing::info!(dump_path = ?debug_tx_dump_path, "dump finalize tx");
+
+                    crate::utils::dump_transaction(debug_tx_dump_path, rpc_client, &tx).await;
+                    bail!("dry run finalize tx failed {}", err);
                 }
-
-                let debug_tx_dump_path = &self.debug_config.debug_tx_dump_path;
-                tracing::info!(dump_path = ?debug_tx_dump_path, "dump finalize tx");
-
-                crate::utils::dump_transaction(debug_tx_dump_path, rpc_client, &tx).await;
-                bail!("dry run finalize tx failed {}", err);
             }
 
-            let tx_hash = rpc_client.send_transaction(&tx).await?;
+            let tx_hash = match rpc_client.send_transaction(&tx).await {
+                Ok(tx_hash) => tx_hash,
+                Err(err) => {
+                    let err_string = err.to_string();
+                    if err_string.contains(TRANSACTION_FAILED_TO_RESOLVE_ERROR) {
+                        tracing::info!("failed to resolve, try again later");
+                        return Ok(());
+                    }
+
+                    bail!("submit finalize tx failed {}", err);
+                }
+            };
             tracing::info!(tx_hash = %tx_hash.pack(), blk_idx = ?(pending_finalized.unpack_block_index()), "finalize withdrawal");
 
             self.set_last_finalize_tx(Some(tx_hash));
@@ -435,8 +443,12 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
     async fn query_rollup_cell(&self) -> Result<Option<CellInfo>> {
         use TxStatus::*;
 
-        let last_block_tx = { *self.last_block_submitted_tx.read().await };
         let rpc_client = &self.rpc_client.ckb;
+        let last_block_tx = { *self.last_block_submitted_tx.read().await };
+        tracing::debug!(tx_hash = %last_block_tx.pack(), "get rollup from last submitted tx hash");
+
+        let status = rpc_client.get_transaction_status(last_block_tx).await?;
+        tracing::debug!(status=?status, "got last submitted tx status");
 
         match rpc_client.get_transaction_status(last_block_tx).await? {
             Some(Pending) | Some(Proposed) | Some(Committed) => (),
