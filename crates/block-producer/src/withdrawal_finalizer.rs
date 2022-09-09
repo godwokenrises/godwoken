@@ -102,19 +102,12 @@ impl UserWithdrawalFinalizer {
         }
 
         if let Some((tx, pending_finalized)) = self.inner.query_and_finalize_to_owner().await? {
-            if let Err(err) = rpc_client.dry_run_transaction(&tx).await {
-                let err_string = err.to_string();
-                if !err_string.contains(TRANSACTION_FAILED_TO_RESOLVE_ERROR) {
-                    let debug_tx_dump_path = &self.debug_config.debug_tx_dump_path;
-                    tracing::info!(dump_path = ?debug_tx_dump_path, "dump finalize tx");
+            match rpc_client.send_transaction(&tx).await {
+                Ok(tx_hash) => {
+                    tracing::info!(tx_hash = %tx_hash.pack(), blk_idx = ?(pending_finalized.unpack_block_index()), "finalize withdrawal");
 
-                    crate::utils::dump_transaction(debug_tx_dump_path, rpc_client, &tx).await;
-                    bail!("dry run finalize tx failed {}", err);
+                    self.set_last_finalize_tx(Some(tx_hash));
                 }
-            }
-
-            let tx_hash = match rpc_client.send_transaction(&tx).await {
-                Ok(tx_hash) => tx_hash,
                 Err(err) => {
                     let err_string = err.to_string();
                     if err_string.contains(TRANSACTION_FAILED_TO_RESOLVE_ERROR) {
@@ -122,12 +115,13 @@ impl UserWithdrawalFinalizer {
                         return Ok(());
                     }
 
-                    bail!("submit finalize tx failed {}", err);
+                    let debug_tx_dump_path = &self.debug_config.debug_tx_dump_path;
+                    tracing::info!(dump_path = ?debug_tx_dump_path, "dump finalize tx");
+
+                    crate::utils::dump_transaction(debug_tx_dump_path, rpc_client, &tx).await;
+                    bail!("dry run finalize tx failed {}", err);
                 }
             };
-            tracing::info!(tx_hash = %tx_hash.pack(), blk_idx = ?(pending_finalized.unpack_block_index()), "finalize withdrawal");
-
-            self.set_last_finalize_tx(Some(tx_hash));
         }
 
         Ok(())
@@ -144,7 +138,9 @@ pub trait FinalizeWithdrawalToOwner {
 
     fn contracts_dep(&self) -> Guard<Arc<ContractsCellDep>>;
 
-    fn rollup_deps(&self) -> [CellDep; 2];
+    fn rollup_deps(&self) -> Vec<CellDep>;
+
+    fn transaction_skeleton(&self) -> TransactionSkeleton;
 
     fn generate_block_proof(&self, withdrawals: &[BlockWithdrawals])
         -> Result<CompiledMerkleProof>;
@@ -235,7 +231,7 @@ pub trait FinalizeWithdrawalToOwner {
             &sudt_script_map,
         )?;
 
-        let mut tx_skeleton = TransactionSkeleton::default();
+        let mut tx_skeleton = self.transaction_skeleton();
 
         let last_finalized_withdrawal =
             { block_withdrawals.last().expect("last block withdrawals") }
@@ -363,11 +359,17 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
         self.contracts_dep_manager.load()
     }
 
-    fn rollup_deps(&self) -> [CellDep; 2] {
-        [
+    fn rollup_deps(&self) -> Vec<CellDep> {
+        vec![
             self.contracts_dep().rollup_cell_type.clone().into(),
+            self.contracts_dep().omni_lock.clone().into(),
             self.rollup_config_cell_dep.clone(),
         ]
+    }
+
+    fn transaction_skeleton(&self) -> TransactionSkeleton {
+        let omni_lock_code_hash = self.contracts_dep_manager.load_scripts().omni_lock.hash();
+        TransactionSkeleton::new(omni_lock_code_hash.0)
     }
 
     fn generate_block_proof(
@@ -727,7 +729,9 @@ mod tests {
 
             fn contracts_dep(&self) -> Guard<Arc<ContractsCellDep>>;
 
-            fn rollup_deps(&self) -> [CellDep; 2];
+            fn rollup_deps(&self) -> Vec<CellDep>;
+
+            fn transaction_skeleton(&self) -> TransactionSkeleton;
 
             fn generate_block_proof(&self, withdrawals: &[BlockWithdrawals])
             -> Result<CompiledMerkleProof>;

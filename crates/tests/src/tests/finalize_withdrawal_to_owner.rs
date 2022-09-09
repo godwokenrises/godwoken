@@ -626,11 +626,15 @@ impl FinalizeWithdrawalToOwner for DummyFinalizer {
         Guard::from_inner(Arc::clone(&self.contracts_dep))
     }
 
-    fn rollup_deps(&self) -> [CellDep; 2] {
-        [
+    fn rollup_deps(&self) -> Vec<CellDep> {
+        vec![
             self.contracts_dep().rollup_cell_type.clone().into(),
             self.rollup_config_cell_dep.clone(),
         ]
+    }
+    
+    fn transaction_skeleton(&self) -> TransactionSkeleton {
+        TransactionSkeleton::default()
     }
 
     fn generate_block_proof(
