@@ -22,7 +22,11 @@ use gw_types::{
 };
 use gw_utils::{abort_on_drop::spawn_abort_on_drop, local_cells::LocalCellsManager, since::Since};
 use opentelemetry::trace::TraceContextExt;
-use tokio::{sync::Mutex, time::Instant};
+use tokio::{
+    signal::unix::{signal, SignalKind},
+    sync::Mutex,
+    time::Instant,
+};
 use tracing::instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
@@ -211,8 +215,34 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
     let config = &state.context.psc_config;
     let mut interval = tokio::time::interval(Duration::from_secs(config.block_interval_secs));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+    let mut revert_local_signal = signal(SignalKind::user_defined1())?;
+    let mut revert_submitted_signal = signal(SignalKind::user_defined2())?;
+
     loop {
         tokio::select! {
+            _ = revert_local_signal.recv() => {
+                log::info!("revert not submitted blocks due to signal");
+                let last_submitted = state
+                    .context
+                    .store
+                    .get_last_submitted_block_number_hash()
+                    .context("get last submitted")?
+                    .number()
+                    .unpack();
+                bail!(ShouldRevertError(last_submitted));
+            }
+            _ = revert_submitted_signal.recv() => {
+                log::info!("revert to last confirmed block due to signal");
+                let last_confirmed = state
+                    .context
+                    .store
+                    .get_last_confirmed_block_number_hash()
+                    .context("get last submitted")?
+                    .number()
+                    .unpack();
+                bail!(ShouldRevertError(last_confirmed));
+            }
             // Produce a new local block if the produce timer has expired and
             // there are not too many local blocks.
             _ = interval.tick(), if state.local_count < config.local_limit => {

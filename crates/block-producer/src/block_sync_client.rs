@@ -76,6 +76,11 @@ impl BlockSyncClient {
         loop {
             if let Some(ref mut s) = p2p_stream {
                 if let Err(err) = run_with_p2p_stream(&mut self, s).await {
+                    if err.is::<gw_db::error::Error>() {
+                        // Cannot recover from db error.
+                        log::error!("db error, exiting: {:#}", err);
+                        return;
+                    }
                     if !err.is::<RecoverableCtx>() {
                         let _ = s.disconnect().await;
                         p2p_stream = None;
@@ -92,6 +97,11 @@ impl BlockSyncClient {
                     }
                 }
                 if let Err(err) = run_once_without_p2p_stream(&mut self).await {
+                    if err.is::<gw_db::error::Error>() {
+                        // Cannot recover from db error.
+                        log::error!("db error, exiting: {:#}", err);
+                        return;
+                    }
                     log::warn!("{:#}", err);
                 }
 
@@ -251,6 +261,7 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
                 log::info!("update local block");
                 let mut chain = client.chain.lock().await;
                 block_in_place(|| {
+                    let store_tx = client.store.begin_transaction();
                     chain.update_local(
                         &store_tx,
                         l.block(),
