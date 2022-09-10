@@ -87,8 +87,10 @@ pub struct TransactionSkeleton {
     witnesses: Vec<WitnessArgs>,
     cell_outputs: Vec<(CellOutput, Bytes)>,
     omni_lock_code_hash: Option<[u8; 32]>,
+    // TODO: refactor
     // Used for `fill_tx_fee` to exclude some outpoints
     excluded_out_points: HashSet<OutPoint>,
+    live_cells: Vec<CellInfo>,
 }
 
 impl TransactionSkeleton {
@@ -131,8 +133,12 @@ impl TransactionSkeleton {
         self.omni_lock_code_hash.as_ref()
     }
 
-    pub fn excluded_out_points(&mut self) -> &mut HashSet<OutPoint> {
+    pub fn excluded_out_points_mut(&mut self) -> &mut HashSet<OutPoint> {
         &mut self.excluded_out_points
+    }
+
+    pub fn live_cells_mut(&mut self) -> &mut Vec<CellInfo> {
+        &mut self.live_cells
     }
 
     pub fn add_owner_cell(&mut self, owner_cell: CellInfo) {
@@ -286,5 +292,9 @@ impl TransactionSkeleton {
             }
         }
         Ok(taken_outpoints)
+    }
+
+    pub fn live_cells(&self) -> &Vec<CellInfo> {
+        &self.live_cells
     }
 }

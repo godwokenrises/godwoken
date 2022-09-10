@@ -316,6 +316,7 @@ struct LastRollupData {
     block: L2Block,
     global_state: GlobalState,
     used_inputs: HashSet<OutPoint>,
+    payment_outputs: Vec<CellInfo>,
 }
 
 struct DefaultFinalizer {
@@ -439,7 +440,8 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
         let omni_lock_code_hash = self.contracts_dep_manager.load_scripts().omni_lock.hash();
         let mut tx_skeleton = TransactionSkeleton::new(omni_lock_code_hash.0);
         if let Some(data) = self.last_rollup_data.lock().expect("lock").as_ref() {
-            { tx_skeleton.excluded_out_points() }.extend(data.used_inputs.clone());
+            { tx_skeleton.excluded_out_points_mut() }.extend(data.used_inputs.clone());
+            { tx_skeleton.live_cells_mut() }.extend(data.payment_outputs.clone());
         }
         tx_skeleton
     }
@@ -614,12 +616,38 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
         let used_inputs = { tx.raw().inputs().into_iter() }
             .map(|i| i.previous_output())
             .collect();
+        let payment_outputs = {
+            let wallet_lock_hash = self.wallet.lock_script().hash();
+            let payment_outputs =
+                { tx.raw().outputs().into_iter().enumerate() }.filter_map(|(i, output)| {
+                    if output.lock().hash() != wallet_lock_hash {
+                        return None;
+                    }
+
+                    let data: Bytes = tx.raw().outputs_data().get(i)?.unpack();
+
+                    let out_point = OutPoint::new_builder()
+                        .tx_hash(last_block_tx.pack())
+                        .index((i as u32).pack())
+                        .build();
+
+                    let cell = CellInfo {
+                        out_point,
+                        output,
+                        data,
+                    };
+
+                    Some(cell)
+                });
+            payment_outputs.collect()
+        };
 
         {
             *self.last_rollup_data.lock().expect("lock") = Some(LastRollupData {
                 block,
                 global_state,
                 used_inputs,
+                payment_outputs,
             });
         }
 

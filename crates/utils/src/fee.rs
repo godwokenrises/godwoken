@@ -79,7 +79,8 @@ pub async fn fill_tx_fee_with_local(
     let mut change_capacity = 0;
     while required_fee > 0 {
         // to filter used input cells
-        let taken_outpoints = tx_skeleton.taken_outpoints()?;
+        let mut taken_outpoints = tx_skeleton.taken_outpoints()?;
+
         // get payment cells
         let cells = collect_payment_cells(
             client,
