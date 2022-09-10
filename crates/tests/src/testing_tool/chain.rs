@@ -1,7 +1,8 @@
 #![allow(clippy::mutable_key_type)]
 
 use gw_block_producer::produce_block::{
-    generate_produce_block_param, produce_block, ProduceBlockParam, ProduceBlockResult,
+    generate_produce_block_param, get_last_finalized_withdrawal, produce_block, ProduceBlockParam,
+    ProduceBlockResult,
 };
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
 use gw_common::{blake2b::new_blake2b, H256};

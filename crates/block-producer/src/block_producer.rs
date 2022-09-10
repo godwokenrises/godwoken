@@ -4,7 +4,8 @@
 use crate::{
     custodian::query_mergeable_custodians,
     produce_block::{
-        generate_produce_block_param, produce_block, ProduceBlockParam, ProduceBlockResult,
+        generate_produce_block_param, get_last_finalized_withdrawal, produce_block,
+        ProduceBlockParam, ProduceBlockResult,
     },
     test_mode_control::TestModeControl,
 };

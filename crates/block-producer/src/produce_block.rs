@@ -3,6 +3,7 @@
 //! A block producer can act without the ability of produce block.
 
 use anyhow::{anyhow, Result};
+use gw_chain::chain::Chain;
 use gw_common::{
     h256_ext::H256Ext,
     merkle_utils::{calculate_ckb_merkle_root, calculate_state_checkpoint, ckb_merkle_leaf_hash},
@@ -73,6 +74,7 @@ pub fn produce_block(
                 kv_state,
                 kv_state_proof,
                 post_merkle_state,
+                last_finalized_withdrawal,
             },
     } = param;
 
@@ -157,26 +159,6 @@ pub fn produce_block(
     };
     let last_finalized_block_number =
         number.saturating_sub(rollup_context.rollup_config.finality_blocks().unpack());
-    let last_finalized_withdrawal = {
-        let parent_global_state = db
-            .get_block_post_global_state(&parent_block_hash)?
-            .ok_or_else(|| {
-                anyhow!(
-                    "parent block {:x} global state not found",
-                    parent_block_hash.pack()
-                )
-            })?;
-
-        if parent_global_state.version_u8() >= 2 {
-            parent_global_state.last_finalized_withdrawal()
-        } else {
-            // Upgrade to v2
-            LastFinalizedWithdrawal::new_builder()
-                .block_number(number.saturating_sub(1).pack())
-                .withdrawal_index(LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS.pack())
-                .build()
-        }
-    };
     let global_state = GlobalState::new_builder()
         .account(post_merkle_state)
         .block(post_block)
@@ -198,12 +180,27 @@ pub fn produce_block(
     })
 }
 
+pub fn get_last_finalized_withdrawal(chain: &Chain) -> LastFinalizedWithdrawal {
+    let last_global_state = chain.local_state().last_global_state();
+
+    if last_global_state.version_u8() >= 2 {
+        last_global_state.last_finalized_withdrawal()
+    } else {
+        // Upgrade to v2
+        LastFinalizedWithdrawal::new_builder()
+            .block_number(chain.local_state().tip().raw().number())
+            .withdrawal_index(LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS.pack())
+            .build()
+    }
+}
+
 // Generate produce block param
 #[instrument(skip_all, fields(mem_block = mem_block.block_info().number().unpack()))]
 pub fn generate_produce_block_param(
     store: &Store,
     mem_block: MemBlock,
     post_merkle_state: AccountMerkleState,
+    last_finalized_withdrawal: LastFinalizedWithdrawal,
 ) -> Result<BlockParam> {
     let db = store.begin_transaction();
     let tip_block_number = mem_block.block_info().number().unpack().saturating_sub(1);
@@ -341,6 +338,7 @@ pub fn generate_produce_block_param(
         post_merkle_state,
         kv_state,
         kv_state_proof,
+        last_finalized_withdrawal,
     };
 
     log::debug!(
