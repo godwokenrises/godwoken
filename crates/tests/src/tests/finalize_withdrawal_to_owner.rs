@@ -632,7 +632,7 @@ impl FinalizeWithdrawalToOwner for DummyFinalizer {
             self.rollup_config_cell_dep.clone(),
         ]
     }
-    
+
     fn transaction_skeleton(&self) -> TransactionSkeleton {
         TransactionSkeleton::default()
     }
@@ -670,8 +670,14 @@ impl FinalizeWithdrawalToOwner for DummyFinalizer {
         Ok(Some(self.pending.clone()))
     }
 
-    async fn query_rollup_cell(&self) -> anyhow::Result<Option<CellInfo>> {
-        Ok(Some(self.rollup_cell.clone()))
+    async fn query_rollup_cell(&self) -> anyhow::Result<Option<InputCellInfo>> {
+        let input_cell = InputCellInfo {
+            input: CellInput::new_builder()
+                .previous_output(self.rollup_cell.out_point.clone())
+                .build(),
+            cell: self.rollup_cell.clone(),
+        };
+        Ok(Some(input_cell))
     }
 
     async fn query_finalized_custodians(

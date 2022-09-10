@@ -1,7 +1,10 @@
+#![allow(clippy::mutable_key_type)]
+
 use std::{
     collections::{HashMap, HashSet},
     ops::RangeInclusive,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use anyhow::{bail, ensure, Result};
@@ -37,6 +40,7 @@ use tracing::instrument;
 use crate::{types::ChainEvent, withdrawal::BlockWithdrawals};
 
 const TRANSACTION_FAILED_TO_RESOLVE_ERROR: &str = "TransactionFailedToResolve";
+const LOOP_TX_STATUS_INTERVAL: Duration = Duration::from_secs(1);
 
 pub const MAX_FINALIZE_BLOCKS: u32 = 8;
 pub const MAX_FINALIZE_WITHDRAWALS: u32 = 60;
@@ -108,6 +112,12 @@ impl UserWithdrawalFinalizer {
                 Ok(tx_hash) => {
                     tracing::info!(tx_hash = %tx_hash.pack(), blk_idx = ?(pending_finalized.unpack_block_index()), "finalize withdrawal");
 
+                    // TODO: Optimize and remove tx blocking, block producer wait indexer refresh
+                    // rollup cell
+                    self.inner.wait(&tx_hash, TxStatus::Committed).await?;
+                    {
+                        *self.inner.last_block_submitted_tx.write().await = tx_hash;
+                    }
                     self.set_last_finalize_tx(Some(tx_hash));
                 }
                 Err(err) => {
@@ -163,7 +173,7 @@ pub trait FinalizeWithdrawalToOwner {
         last_finalized_block_number: u64,
     ) -> Result<Option<Vec<BlockWithdrawals>>>;
 
-    async fn query_rollup_cell(&self) -> Result<Option<CellInfo>>;
+    async fn query_rollup_cell(&self) -> Result<Option<InputCellInfo>>;
 
     async fn query_finalized_custodians(
         &self,
@@ -176,7 +186,7 @@ pub trait FinalizeWithdrawalToOwner {
     async fn query_and_finalize_to_owner(
         &self,
     ) -> Result<Option<(Transaction, LastFinalizedWithdrawal)>> {
-        let rollup_cell = match self.query_rollup_cell().await? {
+        let rollup_input = match self.query_rollup_cell().await? {
             Some(cell) => cell,
             None => {
                 tracing::warn!("rollup cell not found");
@@ -184,7 +194,7 @@ pub trait FinalizeWithdrawalToOwner {
             }
         };
 
-        let global_state = global_state_from_slice(&rollup_cell.data)?;
+        let global_state = global_state_from_slice(&rollup_input.cell.data)?;
         if global_state.version_u8() < 2 {
             return Ok(None);
         }
@@ -244,14 +254,10 @@ pub trait FinalizeWithdrawalToOwner {
                 .last_finalized_withdrawal(last_finalized_withdrawal.clone())
                 .build();
 
-            (rollup_cell.output.clone(), post_global_state.as_bytes())
-        };
-
-        let rollup_input = InputCellInfo {
-            input: CellInput::new_builder()
-                .previous_output(rollup_cell.out_point.clone())
-                .build(),
-            cell: rollup_cell,
+            (
+                rollup_input.cell.output.clone(),
+                post_global_state.as_bytes(),
+            )
         };
 
         let rollup_witness = {
@@ -306,6 +312,12 @@ pub trait FinalizeWithdrawalToOwner {
     }
 }
 
+struct LastRollupData {
+    block: L2Block,
+    global_state: GlobalState,
+    used_inputs: HashSet<OutPoint>,
+}
+
 struct DefaultFinalizer {
     store: gw_store::Store,
     rpc_client: RPCClient,
@@ -315,7 +327,7 @@ struct DefaultFinalizer {
     rollup_config_cell_dep: CellDep,
     pending: PendingFinalizedWithdrawal,
     last_block_submitted_tx: Arc<tokio::sync::RwLock<H256>>,
-    last_block_state: Arc<Mutex<(L2Block, GlobalState)>>,
+    last_rollup_data: Arc<Mutex<Option<LastRollupData>>>,
 }
 
 impl DefaultFinalizer {
@@ -338,7 +350,7 @@ impl DefaultFinalizer {
         );
 
         let pending = PendingFinalizedWithdrawal::new(max_block, max_withdrawals);
-        let last_block_state = Arc::new(Mutex::new((L2Block::default(), GlobalState::default())));
+        let last_rollup_data = Arc::new(Mutex::new(None));
 
         Self {
             store,
@@ -349,7 +361,58 @@ impl DefaultFinalizer {
             rollup_config_cell_dep,
             pending,
             last_block_submitted_tx,
-            last_block_state,
+            last_rollup_data,
+        }
+    }
+
+    async fn wait(&self, tx_hash: &H256, until: TxStatus) -> Result<()> {
+        use TxStatus::*;
+
+        #[derive(Debug, Clone, Copy)]
+        #[repr(u8)]
+        enum StatusFlow {
+            Unknown = 0,
+            Pending = 1,
+            Proposed = 2,
+            Committed = 3,
+        }
+
+        impl StatusFlow {
+            fn from_tx_status(status: TxStatus) -> Result<StatusFlow, TxStatus> {
+                let flow = match status {
+                    Unknown => Self::Unknown,
+                    Pending => Self::Pending,
+                    Proposed => Self::Proposed,
+                    Committed => Self::Committed,
+                    _ => return Err(status),
+                };
+                Ok(flow)
+            }
+        }
+
+        let until = StatusFlow::from_tx_status(until);
+        debug_assert!(until.is_ok());
+        let until = until.unwrap();
+
+        let rpc_client = &self.rpc_client;
+        loop {
+            match rpc_client.ckb.get_transaction_status(*tx_hash).await? {
+                Some(status) => {
+                    tracing::trace!(tx=%tx_hash.pack(), "wait tx, current {:?} until {:?}", status, until);
+
+                    let current = match StatusFlow::from_tx_status(status.clone()) {
+                        Ok(status) => status,
+                        Err(err_status) => bail!("finalize withdrawal tx status {:?}", err_status),
+                    };
+
+                    if (current as u8) < (until as u8) {
+                        tokio::time::sleep(LOOP_TX_STATUS_INTERVAL).await;
+                        continue;
+                    }
+                    return Ok(());
+                }
+                None => bail!("finalize withdrawal tx {:x} not found", tx_hash.pack()),
+            }
         }
     }
 }
@@ -374,7 +437,11 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
 
     fn transaction_skeleton(&self) -> TransactionSkeleton {
         let omni_lock_code_hash = self.contracts_dep_manager.load_scripts().omni_lock.hash();
-        TransactionSkeleton::new(omni_lock_code_hash.0)
+        let mut tx_skeleton = TransactionSkeleton::new(omni_lock_code_hash.0);
+        if let Some(data) = self.last_rollup_data.lock().expect("lock").as_ref() {
+            { tx_skeleton.excluded_out_points() }.extend(data.used_inputs.clone());
+        }
+        tx_skeleton
     }
 
     fn generate_block_proof(
@@ -385,7 +452,12 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
         let mut block_smt = tx_db.block_smt()?;
 
         let block_root = {
-            let (block, global_state) = &*self.last_block_state.lock().expect("lock");
+            let (block, global_state) = {
+                let data = self.last_rollup_data.lock().expect("lock");
+                data.as_ref()
+                    .map(|d| (d.block.clone(), d.global_state.clone()))
+                    .ok_or_else(|| anyhow::anyhow!("last rollup data not found"))?
+            };
             let expected_root: H256 = global_state.block().merkle_root().unpack();
 
             block_smt.update(block.smt_key().into(), block.hash().into())?;
@@ -468,7 +540,7 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
         )
     }
 
-    async fn query_rollup_cell(&self) -> Result<Option<CellInfo>> {
+    async fn query_rollup_cell(&self) -> Result<Option<InputCellInfo>> {
         use gw_types::bytes::Bytes;
         use TxStatus::*;
 
@@ -476,12 +548,9 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
         let last_block_tx = { *self.last_block_submitted_tx.read().await };
         tracing::debug!(tx_hash = %last_block_tx.pack(), "get rollup from last submitted tx hash");
 
-        let status = rpc_client.get_transaction_status(last_block_tx).await?;
-        tracing::debug!(status=?status, "got last submitted tx status");
-
-        match rpc_client.get_transaction_status(last_block_tx).await? {
-            Some(Pending) | Some(Proposed) | Some(Committed) => (),
-            _ => return Ok(None),
+        if let Err(err_status) = self.wait(&last_block_tx, Pending).await {
+            tracing::debug!(status=?err_status, "got last submitted tx status");
+            return Ok(None);
         }
 
         let tx = match rpc_client.get_transaction(last_block_tx).await? {
@@ -525,7 +594,7 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
             }
         };
 
-        // extra block from witness args
+        // extra block and global state
         let block = {
             let witness: Option<Bytes> = tx.witnesses().get(idx).map(|w| w.unpack());
             let witness_args = witness.and_then(|w| WitnessArgs::from_slice(&w).ok());
@@ -542,20 +611,40 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
             Ok(state) => state,
             Err(_) => return Ok(None),
         };
-        *self.last_block_state.lock().expect("lock") = (block, global_state);
+        let used_inputs = { tx.raw().inputs().into_iter() }
+            .map(|i| i.previous_output())
+            .collect();
+
+        {
+            *self.last_rollup_data.lock().expect("lock") = Some(LastRollupData {
+                block,
+                global_state,
+                used_inputs,
+            });
+        }
+
+        let since = {
+            let input = tx.raw().inputs().get(idx);
+            input.map(|i| i.since().unpack()).unwrap_or_default()
+        };
 
         let out_point = OutPoint::new_builder()
             .tx_hash(last_block_tx.pack())
             .index((idx as u32).pack())
             .build();
 
-        let cell_info = CellInfo {
+        let input = CellInput::new_builder()
+            .previous_output(out_point.clone())
+            .since(since.pack())
+            .build();
+
+        let cell = CellInfo {
             out_point,
             output,
             data,
         };
 
-        Ok(Some(cell_info))
+        Ok(Some(InputCellInfo { input, cell }))
     }
 
     async fn query_finalized_custodians(
@@ -798,7 +887,7 @@ mod tests {
                 last_finalized_block_number: u64,
             ) -> Result<Option<Vec<BlockWithdrawals>>>;
 
-            async fn query_rollup_cell(&self) -> Result<Option<CellInfo>>;
+            async fn query_rollup_cell(&self) -> Result<Option<InputCellInfo>>;
 
             async fn query_finalized_custodians(
                 &self,
@@ -1163,7 +1252,11 @@ mod tests {
                 data: global_state.as_bytes(),
                 ..Default::default()
             };
-            Ok(Some(cell_info))
+            let input_cell = InputCellInfo {
+                input: CellInput::default(),
+                cell: cell_info,
+            };
+            Ok(Some(input_cell))
         });
 
         assert!({ finalizer.query_and_finalize_to_owner().await.unwrap() }.is_none());
@@ -1178,7 +1271,11 @@ mod tests {
                 data: global_state.as_bytes(),
                 ..Default::default()
             };
-            Ok(Some(cell_info))
+            let input_cell = InputCellInfo {
+                input: CellInput::default(),
+                cell: cell_info,
+            };
+            Ok(Some(input_cell))
         });
 
         assert!({ finalizer.query_and_finalize_to_owner().await.unwrap() }.is_none());
@@ -1193,7 +1290,11 @@ mod tests {
                 data: global_state.as_bytes(),
                 ..Default::default()
             };
-            Ok(Some(cell_info))
+            let input_cell = InputCellInfo {
+                input: CellInput::default(),
+                cell: cell_info,
+            };
+            Ok(Some(input_cell))
         });
 
         assert!({ finalizer.query_and_finalize_to_owner().await.unwrap() }.is_none());
@@ -1208,7 +1309,11 @@ mod tests {
                 data: global_state.as_bytes(),
                 ..Default::default()
             };
-            Ok(Some(cell_info))
+            let input_cell = InputCellInfo {
+                input: CellInput::default(),
+                cell: cell_info,
+            };
+            Ok(Some(input_cell))
         });
         finalizer
             .expect_get_pending_finalized_withdrawals()
