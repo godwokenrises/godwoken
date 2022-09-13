@@ -30,8 +30,8 @@ use gw_types::offchain::{CellInfo, CollectedCustodianCells, InputCellInfo, Rollu
 use gw_types::packed::{
     AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositRequest,
     GlobalState, LastFinalizedWithdrawal, OutPoint, RawWithdrawalRequest, RollupAction,
-    RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, StakeLockArgs, WithdrawalRequest,
-    WithdrawalRequestExtra, WitnessArgs,
+    RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, ScriptVec, StakeLockArgs,
+    WithdrawalRequest, WithdrawalRequestExtra, WitnessArgs,
 };
 use gw_types::prelude::{Pack, PackVec, Unpack};
 use gw_utils::transaction_skeleton::TransactionSkeleton;
@@ -343,6 +343,12 @@ async fn test_finalize_withdrawal_to_owner() {
             .output_type(Some(rollup_action.as_bytes()).pack())
             .build()
     };
+    let account_scripts_witness = {
+        let scripts = ScriptVec::new_builder().set(accounts.clone()).build();
+        WitnessArgs::new_builder()
+            .output_type(Some(scripts.as_bytes()).pack())
+            .build()
+    };
 
     let input_cell_deps = vec![
         into_input_cell(always_cell.clone()),
@@ -375,7 +381,9 @@ async fn test_finalize_withdrawal_to_owner() {
     let mut tx_skeleton = TransactionSkeleton::default();
     tx_skeleton.cell_deps_mut().extend(cell_deps);
     tx_skeleton.inputs_mut().extend(inputs.clone());
-    tx_skeleton.witnesses_mut().push(witness);
+    tx_skeleton
+        .witnesses_mut()
+        .extend([witness, account_scripts_witness]);
     tx_skeleton.outputs_mut().extend(outputs);
     let tx = tx_skeleton.seal(&[], vec![]).unwrap().transaction;
 
