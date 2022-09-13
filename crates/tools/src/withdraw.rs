@@ -14,7 +14,7 @@ use gw_generator::account_lock_manage::{
     secp256k1::Secp256k1Eth,
 };
 use gw_types::core::ScriptHashType;
-use gw_types::packed::{CellOutput, Script, WithdrawalLockArgs, WithdrawalRequestExtra};
+use gw_types::packed::{CellOutput, Script, WithdrawalRequestExtra};
 use gw_types::U256;
 use gw_types::{
     packed::{Byte32, RawWithdrawalRequest, WithdrawalRequest},
@@ -53,8 +53,18 @@ pub async fn withdraw(
 
     let chain_id: u64 = config.genesis.rollup_config.chain_id.into();
 
+    // owner_ckb_address -> owner_lock_hash
+    let owner_lock_script = {
+        let address = Address::from_str(owner_ckb_address).map_err(|err| anyhow!(err))?;
+        let payload = address.payload();
+        Script::new_unchecked(ckb_types::packed::Script::from(payload).as_bytes())
+    };
+    let owner_lock_hash: H256 = CkbHasher::new()
+        .update(owner_lock_script.as_slice())
+        .finalize();
+
     let is_sudt = sudt_script_hash != H256([0u8; 32]);
-    let minimal_capacity = minimal_withdrawal_capacity(is_sudt)?;
+    let minimal_capacity = minimal_withdrawal_capacity(is_sudt, owner_lock_script.clone())?;
     if capacity < minimal_capacity {
         let msg = anyhow!(
             "Withdrawal required {} CKB at least, provided {}.",
@@ -63,16 +73,6 @@ pub async fn withdraw(
         );
         return Err(msg);
     }
-
-    // owner_ckb_address -> owner_lock_hash
-    let owner_lock_script = {
-        let address = Address::from_str(owner_ckb_address).map_err(|err| anyhow!(err))?;
-        let payload = address.payload();
-        ckb_types::packed::Script::from(payload)
-    };
-    let owner_lock_hash: H256 = CkbHasher::new()
-        .update(owner_lock_script.as_slice())
-        .finalize();
 
     let privkey = read_privkey(privkey_path)?;
 
@@ -107,7 +107,7 @@ pub async fn withdraw(
 
     let message = generate_withdrawal_message_to_sign(
         raw_request.clone(),
-        Script::new_unchecked(owner_lock_script.as_bytes()),
+        owner_lock_script.clone(),
         from_addr.clone(),
         chain_id,
     )?;
@@ -117,10 +117,9 @@ pub async fn withdraw(
         .raw(raw_request)
         .signature(signature.pack())
         .build();
-    let owner_lock = gw_types::packed::Script::new_unchecked(owner_lock_script.as_bytes());
     let withdrawal_request_extra = WithdrawalRequestExtra::new_builder()
         .request(withdrawal_request)
-        .owner_lock(owner_lock)
+        .owner_lock(owner_lock_script)
         .build();
 
     log::info!("withdrawal_request_extra: {}", withdrawal_request_extra);
@@ -213,31 +212,9 @@ fn parse_capacity(capacity: &str) -> Result<u64> {
     Ok(human_capacity.into())
 }
 
-fn minimal_withdrawal_capacity(is_sudt: bool) -> Result<u64> {
+fn minimal_withdrawal_capacity(is_sudt: bool, owner_lock: Script) -> Result<u64> {
     // fixed size, the specific value is not important.
     let dummy_hash = gw_types::core::H256::zero();
-    let dummy_block_number = 0u64;
-    let dummy_rollup_type_hash = dummy_hash;
-
-    let dummy_withdrawal_lock_args = WithdrawalLockArgs::new_builder()
-        .account_script_hash(dummy_hash.pack())
-        .withdrawal_block_hash(dummy_hash.pack())
-        .withdrawal_block_number(dummy_block_number.pack())
-        .owner_lock_hash(dummy_hash.pack())
-        .build();
-
-    let args: gw_types::bytes::Bytes = dummy_rollup_type_hash
-        .as_slice()
-        .iter()
-        .chain(dummy_withdrawal_lock_args.as_slice().iter())
-        .cloned()
-        .collect();
-
-    let lock_script = gw_types::packed::Script::new_builder()
-        .code_hash(dummy_hash.pack())
-        .hash_type(ScriptHashType::Type.into())
-        .args(args.pack())
-        .build();
 
     let type_script = if is_sudt {
         let type_ = gw_types::packed::Script::new_builder()
@@ -252,7 +229,7 @@ fn minimal_withdrawal_capacity(is_sudt: bool) -> Result<u64> {
 
     let output = CellOutput::new_builder()
         .capacity(0.pack())
-        .lock(lock_script)
+        .lock(owner_lock)
         .type_(type_script.pack())
         .build();
 
