@@ -706,7 +706,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 contracts_dep_manager,
                 wallet: finalizer_wallet,
                 rollup_config_cell_dep: block_producer_config.rollup_config_cell_dep.into(),
-                last_block_submitted_tx: block_producer.last_submitted_tx_hash(),
             };
             let finalizer = UserWithdrawalFinalizer::new(finalizer_args, config.debug.clone());
 

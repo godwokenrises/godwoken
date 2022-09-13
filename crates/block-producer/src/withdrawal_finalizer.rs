@@ -4,7 +4,6 @@ use std::{
     collections::{HashMap, HashSet},
     ops::RangeInclusive,
     sync::{Arc, Mutex},
-    time::Duration,
 };
 
 use anyhow::{bail, ensure, Result};
@@ -15,21 +14,25 @@ use gw_common::{
     CKB_SUDT_SCRIPT_ARGS, H256,
 };
 use gw_config::{ContractsCellDep, DebugConfig};
+use gw_db::schema::{COLUMN_META, META_LAST_FINALIZED_WITHDRAWAL_TX_HASH_KEY};
 use gw_generator::Guard;
 use gw_mem_pool::custodian::query_finalized_custodians;
 use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
-use gw_store::traits::chain_store::ChainStore;
+use gw_store::traits::{
+    chain_store::ChainStore,
+    kv_store::{KVStoreRead, KVStoreWrite},
+};
 use gw_types::{
     core::Status,
+    from_box_should_be_ok,
     offchain::{
-        global_state_from_slice, CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext,
-        TxStatus,
+        global_state_from_slice, CollectedCustodianCells, InputCellInfo, RollupContext, TxStatus,
     },
     packed::{
-        CellDep, CellInput, GlobalState, L2Block, LastFinalizedWithdrawal, OutPoint, RollupAction,
-        RollupActionUnion, Script, Transaction, WithdrawalRequestExtra, WitnessArgs,
+        CellDep, CellInput, L2Block, LastFinalizedWithdrawal, RollupAction, RollupActionUnion,
+        Script, Transaction, WithdrawalRequestExtra, WitnessArgs,
     },
-    prelude::{Builder, Entity, Pack, Unpack},
+    prelude::{Builder, Entity, FromSliceShouldBeOk, Pack, Unpack},
 };
 use gw_utils::{
     fee::fill_tx_fee, genesis_info::CKBGenesisInfo, transaction_skeleton::TransactionSkeleton,
@@ -40,10 +43,9 @@ use tracing::instrument;
 use crate::{types::ChainEvent, withdrawal::BlockWithdrawals};
 
 const TRANSACTION_FAILED_TO_RESOLVE_ERROR: &str = "TransactionFailedToResolve";
-const LOOP_TX_STATUS_INTERVAL: Duration = Duration::from_secs(1);
 
-pub const MAX_FINALIZE_BLOCKS: u32 = 8;
-pub const MAX_FINALIZE_WITHDRAWALS: u32 = 60;
+pub const MAX_FINALIZE_BLOCKS: u32 = 10;
+pub const MAX_FINALIZE_WITHDRAWALS: u32 = 50;
 
 pub struct FinalizerArgs {
     pub store: gw_store::Store,
@@ -52,7 +54,6 @@ pub struct FinalizerArgs {
     pub contracts_dep_manager: ContractsCellDepManager,
     pub wallet: Wallet,
     pub rollup_config_cell_dep: CellDep,
-    pub last_block_submitted_tx: Arc<tokio::sync::RwLock<H256>>,
 }
 
 pub struct UserWithdrawalFinalizer {
@@ -65,9 +66,13 @@ impl UserWithdrawalFinalizer {
     pub fn new(args: FinalizerArgs, debug_config: DebugConfig) -> Self {
         let inner = DefaultFinalizer::new(args);
 
+        let last_finalize_tx: Option<H256> = { &inner.store }
+            .get(COLUMN_META, META_LAST_FINALIZED_WITHDRAWAL_TX_HASH_KEY)
+            .map(|slice| from_box_should_be_ok!(gw_types::packed::Byte32Reader, slice).unpack());
+
         Self {
             inner,
-            last_finalize_tx: Mutex::new(None),
+            last_finalize_tx: Mutex::new(last_finalize_tx),
             debug_config,
         }
     }
@@ -104,26 +109,19 @@ impl UserWithdrawalFinalizer {
                 }
             }
 
-            self.set_last_finalize_tx(None);
+            self.set_last_finalize_tx(None)?;
+            return Ok(()); // Wait next event loop
         }
 
         if let Some((tx, pending_finalized)) = self.inner.query_and_finalize_to_owner().await? {
-            match rpc_client.send_transaction(&tx).await {
-                Ok(tx_hash) => {
-                    tracing::info!(tx_hash = %tx_hash.pack(), blk_idx = ?(pending_finalized.unpack_block_index()), "finalize withdrawal");
-
-                    // TODO: Optimize and remove tx blocking, block producer wait indexer refresh
-                    // rollup cell
-                    self.inner.wait(&tx_hash, TxStatus::Committed).await?;
-                    {
-                        *self.inner.last_block_submitted_tx.write().await = tx_hash;
-                    }
-                    self.set_last_finalize_tx(Some(tx_hash));
+            match rpc_client.dry_run_transaction(&tx).await {
+                Ok(cycles) => {
+                    tracing::trace!(tx_hash = %tx.hash().pack(), cycles=cycles, "dry run finalize tx");
                 }
                 Err(err) => {
                     let err_string = err.to_string();
                     if err_string.contains(TRANSACTION_FAILED_TO_RESOLVE_ERROR) {
-                        tracing::info!("failed to resolve, try again later");
+                        tracing::info!("finalize withdrawal tx failed to resolve, try again later");
                         return Ok(());
                     }
 
@@ -133,14 +131,34 @@ impl UserWithdrawalFinalizer {
                     crate::utils::dump_transaction(debug_tx_dump_path, rpc_client, &tx).await;
                     bail!("dry run finalize tx failed {}", err);
                 }
+            }
+
+            match rpc_client.send_transaction(&tx).await {
+                Ok(tx_hash) => {
+                    tracing::info!(tx_hash = %tx_hash.pack(), blk_idx = ?(pending_finalized.unpack_block_index()), "finalize withdrawal");
+                    self.set_last_finalize_tx(Some(tx_hash))?;
+                }
+                Err(err) => bail!("send finalize withdrawal tx failed {}", err),
             };
         }
 
         Ok(())
     }
 
-    fn set_last_finalize_tx(&self, tx_hash: Option<H256>) {
+    fn set_last_finalize_tx(&self, tx_hash: Option<H256>) -> Result<()> {
         *self.last_finalize_tx.lock().expect("lock") = tx_hash;
+
+        if let Some(tx_hash) = tx_hash {
+            let tx_db = self.inner.store.begin_transaction();
+            tx_db.insert_raw(
+                COLUMN_META,
+                META_LAST_FINALIZED_WITHDRAWAL_TX_HASH_KEY,
+                tx_hash.as_slice(),
+            )?;
+            tx_db.commit()?;
+        }
+
+        Ok(())
     }
 }
 
@@ -312,13 +330,6 @@ pub trait FinalizeWithdrawalToOwner {
     }
 }
 
-struct LastRollupData {
-    block: L2Block,
-    global_state: GlobalState,
-    used_inputs: HashSet<OutPoint>,
-    payment_outputs: Vec<CellInfo>,
-}
-
 struct DefaultFinalizer {
     store: gw_store::Store,
     rpc_client: RPCClient,
@@ -327,8 +338,6 @@ struct DefaultFinalizer {
     wallet: Wallet,
     rollup_config_cell_dep: CellDep,
     pending: PendingFinalizedWithdrawal,
-    last_block_submitted_tx: Arc<tokio::sync::RwLock<H256>>,
-    last_rollup_data: Arc<Mutex<Option<LastRollupData>>>,
 }
 
 impl DefaultFinalizer {
@@ -340,7 +349,6 @@ impl DefaultFinalizer {
             contracts_dep_manager,
             wallet,
             rollup_config_cell_dep,
-            last_block_submitted_tx,
         } = args;
 
         let max_block = MAX_FINALIZE_BLOCKS;
@@ -351,7 +359,6 @@ impl DefaultFinalizer {
         );
 
         let pending = PendingFinalizedWithdrawal::new(max_block, max_withdrawals);
-        let last_rollup_data = Arc::new(Mutex::new(None));
 
         Self {
             store,
@@ -361,59 +368,6 @@ impl DefaultFinalizer {
             wallet,
             rollup_config_cell_dep,
             pending,
-            last_block_submitted_tx,
-            last_rollup_data,
-        }
-    }
-
-    async fn wait(&self, tx_hash: &H256, until: TxStatus) -> Result<()> {
-        use TxStatus::*;
-
-        #[derive(Debug, Clone, Copy)]
-        #[repr(u8)]
-        enum StatusFlow {
-            Unknown = 0,
-            Pending = 1,
-            Proposed = 2,
-            Committed = 3,
-        }
-
-        impl StatusFlow {
-            fn from_tx_status(status: TxStatus) -> Result<StatusFlow, TxStatus> {
-                let flow = match status {
-                    Unknown => Self::Unknown,
-                    Pending => Self::Pending,
-                    Proposed => Self::Proposed,
-                    Committed => Self::Committed,
-                    _ => return Err(status),
-                };
-                Ok(flow)
-            }
-        }
-
-        let until = StatusFlow::from_tx_status(until);
-        debug_assert!(until.is_ok());
-        let until = until.unwrap();
-
-        let rpc_client = &self.rpc_client;
-        loop {
-            match rpc_client.ckb.get_transaction_status(*tx_hash).await? {
-                Some(status) => {
-                    tracing::trace!(tx=%tx_hash.pack(), "wait tx, current {:?} until {:?}", status, until);
-
-                    let current = match StatusFlow::from_tx_status(status.clone()) {
-                        Ok(status) => status,
-                        Err(err_status) => bail!("finalize withdrawal tx status {:?}", err_status),
-                    };
-
-                    if (current as u8) < (until as u8) {
-                        tokio::time::sleep(LOOP_TX_STATUS_INTERVAL).await;
-                        continue;
-                    }
-                    return Ok(());
-                }
-                None => bail!("finalize withdrawal tx {:x} not found", tx_hash.pack()),
-            }
         }
     }
 }
@@ -430,55 +384,42 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
 
     fn rollup_deps(&self) -> Vec<CellDep> {
         vec![
-            self.contracts_dep().rollup_cell_type.clone().into(),
-            self.contracts_dep().omni_lock.clone().into(),
             self.rollup_config_cell_dep.clone(),
+            self.contracts_dep().rollup_cell_type.clone().into(), // state validator type contract
+            self.contracts_dep().omni_lock.clone().into(),
         ]
     }
 
     fn transaction_skeleton(&self) -> TransactionSkeleton {
         let omni_lock_code_hash = self.contracts_dep_manager.load_scripts().omni_lock.hash();
-        let mut tx_skeleton = TransactionSkeleton::new(omni_lock_code_hash.0);
-        if let Some(data) = self.last_rollup_data.lock().expect("lock").as_ref() {
-            { tx_skeleton.excluded_out_points_mut() }.extend(data.used_inputs.clone());
-            { tx_skeleton.live_cells_mut() }.extend(data.payment_outputs.clone());
-        }
-        tx_skeleton
+        TransactionSkeleton::new(omni_lock_code_hash.0)
     }
 
     fn generate_block_proof(
         &self,
         block_withdrawals: &[BlockWithdrawals],
     ) -> Result<CompiledMerkleProof> {
-        let tx_db = self.store.begin_transaction();
-        let mut block_smt = tx_db.block_smt()?;
+        let blocks = block_withdrawals.iter().map(|bw| bw.block());
 
-        let block_root = {
-            let (block, global_state) = {
-                let data = self.last_rollup_data.lock().expect("lock");
-                data.as_ref()
-                    .map(|d| (d.block.clone(), d.global_state.clone()))
-                    .ok_or_else(|| anyhow::anyhow!("last rollup data not found"))?
-            };
-            let expected_root: H256 = global_state.block().merkle_root().unpack();
-
-            block_smt.update(block.smt_key().into(), block.hash().into())?;
-            let root = block_smt.root();
-
-            if root != &expected_root {
-                bail!("block {} diff db smt and global state", block.number());
-            }
-            root
+        let proof = {
+            let tx_db = self.store.begin_transaction();
+            let block_smt = tx_db.block_smt()?;
+            generate_block_proof(&block_smt, blocks)?
         };
 
-        let blocks = block_withdrawals.iter().map(|bw| bw.block());
-        let proof = generate_block_proof(&block_smt, blocks)?;
+        let block_root: H256 = {
+            let hash = self.store.get_last_valid_tip_block_hash()?;
+            let global_state = { &self.store }
+                .get_block_post_global_state(&hash)?
+                .ok_or_else(|| anyhow::anyhow!("valid tip block post global state not found"))?;
+            global_state.block().merkle_root().unpack()
+        };
 
         // Ensure valid block proof
         let leaves = { block_withdrawals.iter() }
             .map(|bw| (bw.block().smt_key().into(), bw.block().hash().into()))
             .collect();
-        proof.verify::<Blake2bHasher>(block_root, leaves)?;
+        proof.verify::<Blake2bHasher>(&block_root, leaves)?;
 
         Ok(proof)
     }
@@ -543,136 +484,16 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
     }
 
     async fn query_rollup_cell(&self) -> Result<Option<InputCellInfo>> {
-        use gw_types::bytes::Bytes;
-        use TxStatus::*;
+        match self.rpc_client.query_rollup_cell().await? {
+            Some(cell) => {
+                let input = CellInput::new_builder()
+                    .previous_output(cell.out_point.clone())
+                    .build();
 
-        let rpc_client = &self.rpc_client.ckb;
-        let last_block_tx = { *self.last_block_submitted_tx.read().await };
-        tracing::debug!(tx_hash = %last_block_tx.pack(), "get rollup from last submitted tx hash");
-
-        if let Err(err_status) = self.wait(&last_block_tx, Pending).await {
-            tracing::debug!(status=?err_status, "got last submitted tx status");
-            return Ok(None);
+                Ok(Some(InputCellInfo { input, cell }))
+            }
+            None => Ok(None),
         }
-
-        let tx = match rpc_client.get_transaction(last_block_tx).await? {
-            Some(tx) => tx,
-            None => {
-                tracing::debug!(tx_hash = %last_block_tx.pack(), "last rollup submitted tx not found");
-                return Ok(None);
-            }
-        };
-
-        // find rollup state cell from outputs
-        let rollup_type_hash: [u8; 32] = self.rpc_client.rollup_context.rollup_script_hash.into();
-        let outputs = tx.raw().outputs().into_iter();
-        let find_rollup_output = outputs.enumerate().find(|(_i, output)| {
-            output.type_().to_opt().map(|type_| type_.hash()) == Some(rollup_type_hash)
-        });
-        let (idx, output) = match find_rollup_output {
-            Some((idx, output)) => (idx, output),
-            None => {
-                tracing::debug!(tx_hash = %last_block_tx.pack(), "rollup output not found");
-                return Ok(None);
-            }
-        };
-
-        // Check no input custodians
-        // Merge custodians may invalid our finalized custodian queried from indexer.
-        let custodian_cell_dep: CellDep = self.contracts_dep().custodian_cell_lock.clone().into();
-        let custodian_cell_dep_out_point = custodian_cell_dep.out_point();
-        for cell_dep in tx.raw().cell_deps().into_iter() {
-            if cell_dep.out_point().as_slice() == custodian_cell_dep_out_point.as_slice() {
-                tracing::debug!(tx_hash = %last_block_tx.pack(), "merge custodians, skip");
-                return Ok(None);
-            }
-        }
-
-        let data: gw_types::bytes::Bytes = match tx.raw().outputs_data().get(idx) {
-            Some(data) => data.unpack(),
-            None => {
-                tracing::debug!(tx_hash = %last_block_tx.pack(), idx = idx, "rollup data not found");
-                return Ok(None);
-            }
-        };
-
-        // extra block and global state
-        let block = {
-            let witness: Option<Bytes> = tx.witnesses().get(idx).map(|w| w.unpack());
-            let witness_args = witness.and_then(|w| WitnessArgs::from_slice(&w).ok());
-            let output_type = witness_args.and_then(|w| w.output_type().to_opt());
-            let rollup_action =
-                output_type.and_then(|ot| RollupAction::from_slice(&ot.raw_data()).ok());
-
-            match rollup_action.map(|action| action.to_enum()) {
-                Some(RollupActionUnion::RollupSubmitBlock(submitted)) => submitted.block(),
-                _ => return Ok(None),
-            }
-        };
-        let global_state = match GlobalState::from_slice(&data) {
-            Ok(state) => state,
-            Err(_) => return Ok(None),
-        };
-        let used_inputs = { tx.raw().inputs().into_iter() }
-            .map(|i| i.previous_output())
-            .collect();
-        let payment_outputs = {
-            let wallet_lock_hash = self.wallet.lock_script().hash();
-            let payment_outputs =
-                { tx.raw().outputs().into_iter().enumerate() }.filter_map(|(i, output)| {
-                    if output.lock().hash() != wallet_lock_hash {
-                        return None;
-                    }
-
-                    let data: Bytes = tx.raw().outputs_data().get(i)?.unpack();
-
-                    let out_point = OutPoint::new_builder()
-                        .tx_hash(last_block_tx.pack())
-                        .index((i as u32).pack())
-                        .build();
-
-                    let cell = CellInfo {
-                        out_point,
-                        output,
-                        data,
-                    };
-
-                    Some(cell)
-                });
-            payment_outputs.collect()
-        };
-
-        {
-            *self.last_rollup_data.lock().expect("lock") = Some(LastRollupData {
-                block,
-                global_state,
-                used_inputs,
-                payment_outputs,
-            });
-        }
-
-        let since = {
-            let input = tx.raw().inputs().get(idx);
-            input.map(|i| i.since().unpack()).unwrap_or_default()
-        };
-
-        let out_point = OutPoint::new_builder()
-            .tx_hash(last_block_tx.pack())
-            .index((idx as u32).pack())
-            .build();
-
-        let input = CellInput::new_builder()
-            .previous_output(out_point.clone())
-            .since(since.pack())
-            .build();
-
-        let cell = CellInfo {
-            out_point,
-            output,
-            data,
-        };
-
-        Ok(Some(InputCellInfo { input, cell }))
     }
 
     async fn query_finalized_custodians(
@@ -701,7 +522,7 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
     }
 }
 
-#[instrument(skip_all)]
+#[instrument(skip_all, err)]
 fn get_pending_finalized_withdrawals(
     store: &impl ChainStore,
     pending: &PendingFinalizedWithdrawal,
@@ -866,7 +687,7 @@ impl PendingFinalizedWithdrawal {
 mod tests {
     use gw_db::schema::Col;
     use gw_store::traits::kv_store::KVStoreRead;
-    use gw_types::packed::GlobalState;
+    use gw_types::{offchain::CellInfo, packed::GlobalState};
 
     use super::*;
     use crate::withdrawal::tests::BlockStore;

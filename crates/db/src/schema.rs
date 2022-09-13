@@ -85,6 +85,8 @@ pub const META_LAST_VALID_TIP_BLOCK_HASH_KEY: &[u8] = b"LAST_VALID_TIP_BLOCK_HAS
 pub const META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY: &[u8] = b"LAST_CONFIRMED_BLOCK_NUMBER";
 /// track the last submitted l2 block NumberAndHash
 pub const META_LAST_SUBMITTED_BLOCK_NUMBER_HASH_KEY: &[u8] = b"LAST_SUBMITTED_BLOCK_NUMBER";
+/// track last finalized withdrawal tx hash
+pub const META_LAST_FINALIZED_WITHDRAWAL_TX_HASH_KEY: &[u8] = b"LAST_FINALIZED_WITHDRAWAL_TX_HASH";
 
 /// CHAIN_SPEC_HASH_KEY tracks the hash of chain spec which created current database
 pub const CHAIN_SPEC_HASH_KEY: &[u8] = b"chain-spec-hash";
