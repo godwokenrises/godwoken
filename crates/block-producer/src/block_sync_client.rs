@@ -33,7 +33,7 @@ use tokio::{
     },
     task::block_in_place,
 };
-use tracing::info_span;
+use tracing::{info_span, Instrument};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::{
@@ -237,45 +237,7 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             );
             let span = info_span!("handle_local_block");
             span.set_parent(opentelemetry::Context::current().with_remote_span_context(span_cx));
-            let _guard = span.enter();
-
-            let block_hash = l.block().hash();
-            let block_number = l.block().raw().number().unpack();
-            log::info!(
-                "received block {block_number} {}",
-                ckb_types::H256::from(block_hash),
-            );
-            let store_tx = client.store.begin_transaction();
-            let store_block_hash = store_tx.get_block_hash_by_number(block_number)?;
-            if let Some(store_block_hash) = store_block_hash {
-                if store_block_hash != block_hash.into() {
-                    log::info!("revert to {}", block_number - 1);
-                    revert(client, &store_tx, block_number - 1).await?;
-                    store_tx.commit()?;
-                } else {
-                    log::info!("block already known");
-                    return Ok(());
-                }
-            }
-            {
-                log::info!("update local block");
-                let mut chain = client.chain.lock().await;
-                block_in_place(|| {
-                    let store_tx = client.store.begin_transaction();
-                    chain.update_local(
-                        &store_tx,
-                        l.block(),
-                        l.deposit_info_vec(),
-                        l.deposit_asset_scripts().into_iter().collect(),
-                        l.withdrawals().into_iter().collect(),
-                        l.post_global_state(),
-                    )?;
-                    chain.calculate_and_store_finalized_custodians(&store_tx, block_number)?;
-                    store_tx.commit()?;
-                    anyhow::Ok(())
-                })?;
-            }
-            notify_new_tip(client, false).await?;
+            handle_lock_block(client, l).instrument(span).await?;
         }
         BlockSyncUnion::Submitted(s) => {
             log::info!(
@@ -332,12 +294,12 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             );
             let span = info_span!("handle_push_transaction");
             span.set_parent(opentelemetry::Context::current().with_remote_span_context(span_cx));
-            let _guard = span.enter();
 
             let tx = push_tx.transaction();
             log::info!("received L2Transaction 0x{}", hex::encode(tx.hash()));
             if let Some(ref mem_pool) = client.mem_pool {
                 let mut mem_pool = mem_pool.lock().await;
+                let _guard = span.enter();
                 let mem_block_config = mem_pool.config();
                 *mem_pool.cycles_pool_mut() = CyclesPool::new(
                     mem_block_config.max_cycles_limit,
@@ -351,6 +313,50 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+async fn handle_lock_block(
+    client: &mut BlockSyncClient,
+    l: gw_types::packed::LocalBlock,
+) -> Result<(), anyhow::Error> {
+    let block_hash = l.block().hash();
+    let block_number = l.block().raw().number().unpack();
+    log::info!(
+        "received block {block_number} {}",
+        ckb_types::H256::from(block_hash),
+    );
+    let store_tx = client.store.begin_transaction();
+    let store_block_hash = store_tx.get_block_hash_by_number(block_number)?;
+    if let Some(store_block_hash) = store_block_hash {
+        if store_block_hash != block_hash.into() {
+            log::info!("revert to {}", block_number - 1);
+            revert(client, &store_tx, block_number - 1).await?;
+            store_tx.commit()?;
+        } else {
+            log::info!("block already known");
+            return Ok(());
+        }
+    }
+    {
+        log::info!("update local block");
+        let mut chain = client.chain.lock().await;
+        block_in_place(|| {
+            let store_tx = client.store.begin_transaction();
+            chain.update_local(
+                &store_tx,
+                l.block(),
+                l.deposit_info_vec(),
+                l.deposit_asset_scripts().into_iter().collect(),
+                l.withdrawals().into_iter().collect(),
+                l.post_global_state(),
+            )?;
+            chain.calculate_and_store_finalized_custodians(&store_tx, block_number)?;
+            store_tx.commit()?;
+            anyhow::Ok(())
+        })?;
+    }
+    notify_new_tip(client, false).await?;
     Ok(())
 }
 
