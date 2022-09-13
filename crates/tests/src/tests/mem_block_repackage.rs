@@ -6,7 +6,10 @@ use crate::testing_tool::{
 };
 
 use gw_block_producer::{
-    produce_block::{generate_produce_block_param, produce_block, ProduceBlockParam, get_last_finalized_withdrawal},
+    produce_block::{
+        generate_produce_block_param, get_last_finalized_withdrawal, produce_block,
+        ProduceBlockParam,
+    },
     replay_block::ReplayBlock,
 };
 use gw_common::H256;
@@ -69,8 +72,13 @@ async fn test_repackage_mem_block() {
 
     let (mem_block, post_merkle_state) = mem_pool.output_mem_block(&OutputParam::default());
     let last_finalized_withdrawal = get_last_finalized_withdrawal(&chain);
-    let block_param =
-        generate_produce_block_param(chain.store(), mem_block, post_merkle_state, last_finalized_withdrawal).unwrap();
+    let block_param = generate_produce_block_param(
+        chain.store(),
+        mem_block,
+        post_merkle_state,
+        last_finalized_withdrawal,
+    )
+    .unwrap();
 
     let deposit_cells = block_param.deposits.clone();
 
