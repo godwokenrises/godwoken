@@ -13,7 +13,7 @@ use gw_types::{
     packed::{NumberHash, Script},
     prelude::*,
 };
-use gw_utils::exponential_backoff::ExponentialBackoff;
+use gw_utils::{exponential_backoff::ExponentialBackoff, liveness::Liveness};
 use tokio::sync::Mutex;
 
 use crate::chain_updater::ChainUpdater;
@@ -24,6 +24,7 @@ pub trait SyncL1Context {
     fn chain(&self) -> &Mutex<Chain>;
     fn chain_updater(&self) -> &ChainUpdater;
     fn rollup_type_script(&self) -> &Script;
+    fn liveness(&self) -> &Liveness;
 }
 
 /// Sync with L1.
@@ -160,6 +161,7 @@ async fn sync_l1_unknown(
                 rt_handle.block_on(async move { chain_updater.update_single(&tx.tx_hash).await })
             })
             .await??;
+            ctx.liveness().tick();
         }
     }
     if !reverted {

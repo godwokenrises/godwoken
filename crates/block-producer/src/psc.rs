@@ -20,7 +20,10 @@ use gw_types::{
     },
     prelude::*,
 };
-use gw_utils::{abort_on_drop::spawn_abort_on_drop, local_cells::LocalCellsManager, since::Since};
+use gw_utils::{
+    abort_on_drop::spawn_abort_on_drop, liveness::Liveness, local_cells::LocalCellsManager,
+    since::Since,
+};
 use opentelemetry::trace::TraceContextExt;
 use tokio::{
     signal::unix::{signal, SignalKind},
@@ -57,6 +60,7 @@ pub struct PSCContext {
     pub rollup_type_script: Script,
     pub psc_config: PscConfig,
     pub block_sync_server_state: Option<Arc<std::sync::Mutex<BlockSyncServerState>>>,
+    pub liveness: Arc<Liveness>,
 }
 
 impl SyncL1Context for PSCContext {
@@ -74,6 +78,9 @@ impl SyncL1Context for PSCContext {
     }
     fn rollup_type_script(&self) -> &Script {
         &self.rollup_type_script
+    }
+    fn liveness(&self) -> &Liveness {
+        &self.liveness
     }
 }
 
@@ -338,6 +345,8 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                 }
             }
         }
+        // We have produced, submitted or confirmed a block. Update liveness tick.
+        state.context.liveness.tick();
     }
 }
 

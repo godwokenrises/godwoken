@@ -21,6 +21,7 @@ pub enum Trace {
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {
     pub node_mode: NodeMode,
+    pub liveness_duration_secs: Option<u64>,
     #[serde(default)]
     pub contract_log_config: ContractLogConfig,
     pub backend_switches: Vec<BackendSwitchConfig>,

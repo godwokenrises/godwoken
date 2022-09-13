@@ -19,7 +19,7 @@ use gw_types::{
     },
     prelude::Unpack,
 };
-use gw_utils::compression::StreamDecoder;
+use gw_utils::{compression::StreamDecoder, liveness::Liveness};
 use opentelemetry::trace::{SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState};
 use tentacle::{
     builder::MetaBuilder,
@@ -50,6 +50,7 @@ pub struct BlockSyncClient {
     pub rollup_type_script: Script,
     pub p2p_stream_receiver: Option<UnboundedReceiver<P2PStream>>,
     pub completed_initial_syncing: bool,
+    pub liveness: Arc<Liveness>,
 }
 
 impl SyncL1Context for BlockSyncClient {
@@ -67,6 +68,9 @@ impl SyncL1Context for BlockSyncClient {
     }
     fn rollup_type_script(&self) -> &Script {
         &self.rollup_type_script
+    }
+    fn liveness(&self) -> &Liveness {
+        &self.liveness
     }
 }
 
@@ -238,6 +242,7 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             let span = info_span!("handle_local_block");
             span.set_parent(opentelemetry::Context::current().with_remote_span_context(span_cx));
             handle_lock_block(client, l).instrument(span).await?;
+            client.liveness.tick();
         }
         BlockSyncUnion::Submitted(s) => {
             log::info!(
@@ -254,6 +259,7 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             )?;
             store_tx.set_last_submitted_block_number_hash(&s.number_hash().as_reader())?;
             store_tx.commit()?;
+            client.liveness.tick();
         }
         BlockSyncUnion::Confirmed(c) => {
             log::info!(
@@ -266,6 +272,7 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             let store_tx = client.store.begin_transaction();
             store_tx.set_last_confirmed_block_number_hash(&c.number_hash().as_reader())?;
             store_tx.commit()?;
+            client.liveness.tick();
         }
         BlockSyncUnion::NextMemBlock(m) => {
             log::info!("received mem block {}", m.block_info().number().unpack());
@@ -280,6 +287,7 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
                     log::warn!("{:#}", err);
                 }
             }
+            client.liveness.tick();
         }
         BlockSyncUnion::PushTransaction(push_tx) => {
             // Use remote span context as parent.
