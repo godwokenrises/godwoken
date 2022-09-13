@@ -49,7 +49,7 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::{
-    exponential_backoff::ExponentialBackoff, genesis_info::CKBGenesisInfo,
+    exponential_backoff::ExponentialBackoff, genesis_info::CKBGenesisInfo, liveness::Liveness,
     local_cells::LocalCellsManager, since::EpochNumberWithFraction, wallet::Wallet,
 };
 use semver::Version;
@@ -566,6 +566,10 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         ..
     } = base;
 
+    let liveness = Arc::new(Liveness::new(Duration::from_secs(
+        config.liveness_duration_secs.unwrap_or(60),
+    )));
+
     // check state db
     {
         let t = Instant::now();
@@ -799,6 +803,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
             rollup_type_script: rollup_type_script.clone(),
             psc_config: config.block_producer.as_ref().unwrap().psc_config.clone(),
             block_sync_server_state: block_sync_server_state.clone(),
+            liveness: liveness.clone(),
         }))
         .await
         .context("create ProduceSubmitConfirm")?;
@@ -831,6 +836,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
             rollup_type_script: rollup_type_script.clone(),
             p2p_stream_receiver: block_sync_client_p2p_receiver,
             completed_initial_syncing: false,
+            liveness: liveness.clone(),
         };
         let shutdown_completed_send = shutdown_completed_send.clone();
         let mut shutdown_event_recv = shutdown_event.subscribe();
@@ -924,8 +930,14 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     let sub_shutdown = shutdown_event.subscribe();
     let rpc_shutdown_send = shutdown_completed_send.clone();
     let rpc_task = spawn(async move {
-        if let Err(err) =
-            start_jsonrpc_server(rpc_address, rpc_registry, rpc_shutdown_send, sub_shutdown).await
+        if let Err(err) = start_jsonrpc_server(
+            rpc_address,
+            rpc_registry,
+            liveness,
+            rpc_shutdown_send,
+            sub_shutdown,
+        )
+        .await
         {
             log::error!("Error running JSONRPC server: {:?}", err);
         }

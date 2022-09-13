@@ -4,6 +4,7 @@ pub mod exponential_backoff;
 pub mod export_block;
 pub mod fee;
 pub mod genesis_info;
+pub mod liveness;
 pub mod local_cells;
 pub mod polyjuice_parser;
 mod query_rollup_cell;
