@@ -9,7 +9,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [v1.6.0] - 2022-09-13
 
-## [v1.6.0-rc1] - 2022-09-01
 
 - Support non EIP-155 transaction [#777](https://github.com/nervosnetwork/godwoken/pull/777)
 - Fix withdrawal command in cli [#792](https://github.com/nervosnetwork/godwoken/pull/792)
