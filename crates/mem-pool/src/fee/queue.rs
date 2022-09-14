@@ -8,7 +8,7 @@ const MAX_QUEUE_SIZE: usize = 100_000;
 /// Drop size when queue is full
 const DROP_SIZE: usize = 100;
 
-use super::types::FeeEntry;
+use super::types::{FeeEntry, FeeItemSender};
 
 /// Txs & withdrawals queue sorted by fee rate
 pub struct FeeQueue<T> {
@@ -76,7 +76,7 @@ impl<T> FeeQueue<T> {
     pub fn fetch(&mut self, state: &impl State, count: usize) -> Result<Vec<(FeeEntry, T)>> {
         // sorted fee items
         let mut fetched_items = Vec::with_capacity(count as usize);
-        let mut fetched_senders: HashMap<u32, u32> = Default::default();
+        let mut fetched_senders: HashMap<FeeItemSender, u32> = Default::default();
         // future items, we will push back this queue
         let mut future_queue = Vec::default();
 
@@ -84,7 +84,10 @@ impl<T> FeeQueue<T> {
         while let Some((entry, t)) = self.pop_last() {
             let nonce = match fetched_senders.get(&entry.sender) {
                 Some(&nonce) => nonce,
-                None => state.get_nonce(entry.sender)?,
+                None => match entry.sender {
+                    FeeItemSender::PendingCreate(_) => 0,
+                    FeeItemSender::AccountId(account_id) => state.get_nonce(account_id)?,
+                },
             };
             match entry.item.nonce().cmp(&nonce) {
                 std::cmp::Ordering::Equal => {
@@ -167,7 +170,7 @@ mod tests {
 
     use crate::fee::{
         queue::MAX_QUEUE_SIZE,
-        types::{FeeEntry, FeeItem},
+        types::{FeeEntry, FeeItem, FeeItemSender},
     };
 
     use super::FeeQueue;
@@ -197,7 +200,7 @@ mod tests {
             item: FeeItem::Tx(Default::default()),
             fee: (100 * 1000u64).into(),
             cycles_limit: 1000,
-            sender: 2,
+            sender: FeeItemSender::AccountId(2),
             order: queue.len(),
         };
 
@@ -205,7 +208,7 @@ mod tests {
             item: FeeItem::Tx(Default::default()),
             fee: (101 * 1000u64).into(),
             cycles_limit: 1000,
-            sender: 3,
+            sender: FeeItemSender::AccountId(3),
             order: queue.len(),
         };
 
@@ -213,7 +216,7 @@ mod tests {
             item: FeeItem::Tx(Default::default()),
             fee: (100 * 1001u64).into(),
             cycles_limit: 1001,
-            sender: 4,
+            sender: FeeItemSender::AccountId(4),
             order: queue.len(),
         };
 
@@ -221,7 +224,7 @@ mod tests {
             item: FeeItem::Withdrawal(Default::default()),
             fee: (101 * 1001u64).into(),
             cycles_limit: 1001,
-            sender: 5,
+            sender: FeeItemSender::AccountId(5),
             order: queue.len(),
         };
 
@@ -237,15 +240,15 @@ mod tests {
         {
             let items = queue.fetch(&tree, 3).expect("fetch");
             assert_eq!(items.len(), 3);
-            assert_eq!(items[0].0.sender, 3);
-            assert_eq!(items[1].0.sender, 5);
-            assert_eq!(items[2].0.sender, 2);
+            assert_eq!(items[0].0.sender, FeeItemSender::AccountId(3));
+            assert_eq!(items[1].0.sender, FeeItemSender::AccountId(5));
+            assert_eq!(items[2].0.sender, FeeItemSender::AccountId(2));
         }
         // fetch 3
         {
             let items = queue.fetch(&tree, 3).expect("fetch");
             assert_eq!(items.len(), 1);
-            assert_eq!(items[0].0.sender, 4);
+            assert_eq!(items[0].0.sender, FeeItemSender::AccountId(4));
         }
         // fetch 3
         {
@@ -279,7 +282,7 @@ mod tests {
             item: FeeItem::Tx(Default::default()),
             fee: (10 * 1000u64).into(),
             cycles_limit: 1000,
-            sender: 2,
+            sender: FeeItemSender::AccountId(2),
             order: queue.len(),
         };
 
@@ -289,7 +292,7 @@ mod tests {
             item: FeeItem::Tx(Default::default()),
             fee: 1000u64.into(),
             cycles_limit: 100,
-            sender: 3,
+            sender: FeeItemSender::AccountId(3),
             order: queue.len(),
         };
 
@@ -299,7 +302,7 @@ mod tests {
             item: FeeItem::Tx(Default::default()),
             fee: 1000u64.into(),
             cycles_limit: 500,
-            sender: 4,
+            sender: FeeItemSender::AccountId(4),
             order: queue.len(),
         };
 
@@ -309,7 +312,7 @@ mod tests {
             item: FeeItem::Withdrawal(Default::default()),
             fee: (101 * 1000u64).into(),
             cycles_limit: 1001,
-            sender: 5,
+            sender: FeeItemSender::AccountId(5),
             order: queue.len(),
         };
 
@@ -322,10 +325,10 @@ mod tests {
         {
             let items = queue.fetch(&tree, 5).expect("fetch");
             assert_eq!(items.len(), 4);
-            assert_eq!(items[0].0.sender, 5);
-            assert_eq!(items[1].0.sender, 2);
-            assert_eq!(items[2].0.sender, 3);
-            assert_eq!(items[3].0.sender, 4);
+            assert_eq!(items[0].0.sender, FeeItemSender::AccountId(5));
+            assert_eq!(items[1].0.sender, FeeItemSender::AccountId(2));
+            assert_eq!(items[2].0.sender, FeeItemSender::AccountId(3));
+            assert_eq!(items[3].0.sender, FeeItemSender::AccountId(4));
         }
     }
 
@@ -357,7 +360,7 @@ mod tests {
             ),
             fee: (100 * 1000u64).into(),
             cycles_limit: 1000,
-            sender: 2,
+            sender: FeeItemSender::AccountId(2),
             order: queue.len(),
         };
 
@@ -369,7 +372,7 @@ mod tests {
             ),
             fee: (100 * 1000u64).into(),
             cycles_limit: 1000,
-            sender: 2,
+            sender: FeeItemSender::AccountId(2),
             order: queue.len(),
         };
 
@@ -388,6 +391,7 @@ mod tests {
             assert_eq!(items[1].0.item.nonce(), 1);
         }
     }
+
     #[test]
     fn test_replace_by_fee() {
         let mut queue = FeeQueue::new();
@@ -416,7 +420,7 @@ mod tests {
             ),
             fee: (100 * 1000u64).into(),
             cycles_limit: 1000,
-            sender: 2,
+            sender: FeeItemSender::AccountId(2),
             order: queue.len(),
         };
 
@@ -428,7 +432,7 @@ mod tests {
             ),
             fee: (101 * 1000u64).into(),
             cycles_limit: 1000,
-            sender: 2,
+            sender: FeeItemSender::AccountId(2),
             order: queue.len(),
         };
 
@@ -479,7 +483,7 @@ mod tests {
                 ),
                 fee: (100 * 1000u64).into(),
                 cycles_limit: 1000,
-                sender: 2,
+                sender: FeeItemSender::AccountId(2),
                 order: queue.len(),
             };
             queue.add(entry1, ());
@@ -501,7 +505,320 @@ mod tests {
                 ),
                 fee: (100 * 1000u64).into(),
                 cycles_limit: 1000,
-                sender: 2,
+                sender: FeeItemSender::AccountId(2),
+                order: queue.len(),
+            };
+            queue.add(entry1, ());
+        }
+
+        // we should trigger the drop
+        assert!(queue.len() < MAX_QUEUE_SIZE);
+    }
+
+    #[test]
+    fn test_sort_txs_by_fee_from_pending_create_sender() {
+        let mut queue = FeeQueue::new();
+
+        let store = Store::open_tmp().expect("open store");
+        setup_genesis(&store);
+        {
+            let db = store.begin_transaction();
+            let genesis = db.get_tip_block().expect("tip");
+            assert_eq!(genesis.raw().number().unpack(), 0);
+            let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
+
+            // create accounts
+            for i in 0..4 {
+                state.create_account(H256::from_u32(i)).unwrap();
+            }
+
+            db.commit().expect("commit");
+        }
+        let snap = store.get_snapshot();
+
+        let entry1 = FeeEntry {
+            item: FeeItem::Tx(Default::default()),
+            fee: (100 * 1000u64).into(),
+            cycles_limit: 1000,
+            sender: FeeItemSender::AccountId(2),
+            order: queue.len(),
+        };
+
+        let entry2 = FeeEntry {
+            item: FeeItem::Tx(Default::default()),
+            fee: (101 * 1000u64).into(),
+            cycles_limit: 1000,
+            sender: FeeItemSender::AccountId(3),
+            order: queue.len(),
+        };
+
+        let entry3 = FeeEntry {
+            item: FeeItem::Tx(Default::default()),
+            fee: (100 * 1001u64).into(),
+            cycles_limit: 1001,
+            sender: FeeItemSender::PendingCreate(H256::from_u32(4)),
+            order: queue.len(),
+        };
+
+        let entry4 = FeeEntry {
+            item: FeeItem::Withdrawal(Default::default()),
+            fee: (101 * 1001u64).into(),
+            cycles_limit: 1001,
+            sender: FeeItemSender::PendingCreate(H256::from_u32(5)),
+            order: queue.len(),
+        };
+
+        queue.add(entry1, ());
+        queue.add(entry2, ());
+        queue.add(entry3, ());
+        queue.add(entry4, ());
+
+        let mem_store = MemStore::new(snap);
+        let tree = mem_store.state().unwrap();
+
+        // fetch 3
+        {
+            let items = queue.fetch(&tree, 3).expect("fetch");
+            assert_eq!(items.len(), 3);
+            assert_eq!(items[0].0.sender, FeeItemSender::AccountId(3));
+            assert_eq!(
+                items[1].0.sender,
+                FeeItemSender::PendingCreate(H256::from_u32(5))
+            );
+            assert_eq!(items[2].0.sender, FeeItemSender::AccountId(2));
+        }
+        // fetch 3
+        {
+            let items = queue.fetch(&tree, 3).expect("fetch");
+            assert_eq!(items.len(), 1);
+            assert_eq!(
+                items[0].0.sender,
+                FeeItemSender::PendingCreate(H256::from_u32(4))
+            );
+        }
+        // fetch 3
+        {
+            let items = queue.fetch(&tree, 3).expect("fetch");
+            assert_eq!(items.len(), 0);
+        }
+    }
+
+    #[test]
+    fn test_sort_txs_by_order_from_pending_create_sender() {
+        let mut queue = FeeQueue::new();
+
+        let store = Store::open_tmp().expect("open store");
+        setup_genesis(&store);
+        {
+            let db = store.begin_transaction();
+            let genesis = db.get_tip_block().expect("tip");
+            assert_eq!(genesis.raw().number().unpack(), 0);
+            let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
+
+            // create accounts
+            for i in 0..4 {
+                state.create_account(H256::from_u32(i)).unwrap();
+            }
+
+            db.commit().expect("commit");
+        }
+        let snap = store.get_snapshot();
+
+        let entry1 = FeeEntry {
+            item: FeeItem::Tx(Default::default()),
+            fee: (10 * 1000u64).into(),
+            cycles_limit: 1000,
+            sender: FeeItemSender::AccountId(2),
+            order: queue.len(),
+        };
+
+        queue.add(entry1, ());
+
+        let entry2 = FeeEntry {
+            item: FeeItem::Tx(Default::default()),
+            fee: 1000u64.into(),
+            cycles_limit: 100,
+            sender: FeeItemSender::AccountId(3),
+            order: queue.len(),
+        };
+
+        queue.add(entry2, ());
+
+        let entry3 = FeeEntry {
+            item: FeeItem::Tx(Default::default()),
+            fee: 1000u64.into(),
+            cycles_limit: 500,
+            sender: FeeItemSender::PendingCreate(H256::from_u32(4)),
+            order: queue.len(),
+        };
+
+        queue.add(entry3, ());
+
+        let entry4 = FeeEntry {
+            item: FeeItem::Withdrawal(Default::default()),
+            fee: (101 * 1000u64).into(),
+            cycles_limit: 1001,
+            sender: FeeItemSender::PendingCreate(H256::from_u32(5)),
+            order: queue.len(),
+        };
+
+        queue.add(entry4, ());
+
+        let mem_store = MemStore::new(snap);
+        let tree = mem_store.state().unwrap();
+
+        // fetch 5
+        {
+            let items = queue.fetch(&tree, 5).expect("fetch");
+            assert_eq!(items.len(), 4);
+            assert_eq!(
+                items[0].0.sender,
+                FeeItemSender::PendingCreate(H256::from_u32(5))
+            );
+            assert_eq!(items[1].0.sender, FeeItemSender::AccountId(2));
+            assert_eq!(items[2].0.sender, FeeItemSender::AccountId(3));
+            assert_eq!(
+                items[3].0.sender,
+                FeeItemSender::PendingCreate(H256::from_u32(4))
+            );
+        }
+    }
+
+    #[test]
+    fn test_insert_distinct_nonce_from_pending_create_sender() {
+        let mut queue = FeeQueue::new();
+
+        let store = Store::open_tmp().expect("open store");
+        setup_genesis(&store);
+
+        let entry1 = FeeEntry {
+            item: FeeItem::Tx(
+                L2Transaction::new_builder()
+                    .raw(RawL2Transaction::new_builder().nonce(1u32.pack()).build())
+                    .build(),
+            ),
+            fee: (100 * 1000u64).into(),
+            cycles_limit: 1000,
+            sender: FeeItemSender::PendingCreate(H256::from_u32(2)),
+            order: queue.len(),
+        };
+
+        let entry2 = FeeEntry {
+            item: FeeItem::Tx(
+                L2Transaction::new_builder()
+                    .raw(RawL2Transaction::new_builder().nonce(0u32.pack()).build())
+                    .build(),
+            ),
+            fee: (100 * 1000u64).into(),
+            cycles_limit: 1000,
+            sender: FeeItemSender::PendingCreate(H256::from_u32(2)),
+            order: queue.len(),
+        };
+
+        queue.add(entry1, ());
+        queue.add(entry2, ());
+
+        let snap = store.get_snapshot();
+        let mem_store = MemStore::new(snap);
+        let tree = mem_store.state().unwrap();
+
+        // fetch
+        {
+            let items = queue.fetch(&tree, 3).expect("fetch");
+            assert_eq!(items.len(), 2);
+            assert_eq!(items[0].0.item.nonce(), 0);
+            assert_eq!(items[1].0.item.nonce(), 1);
+        }
+    }
+
+    #[test]
+    fn test_replace_by_fee_from_pending_create_sender() {
+        let mut queue = FeeQueue::new();
+
+        let store = Store::open_tmp().expect("open store");
+        setup_genesis(&store);
+
+        let entry1 = FeeEntry {
+            item: FeeItem::Tx(
+                L2Transaction::new_builder()
+                    .raw(RawL2Transaction::new_builder().nonce(0u32.pack()).build())
+                    .build(),
+            ),
+            fee: (100 * 1000u64).into(),
+            cycles_limit: 1000,
+            sender: FeeItemSender::PendingCreate(H256::from_u32(2)),
+            order: queue.len(),
+        };
+
+        let entry2 = FeeEntry {
+            item: FeeItem::Tx(
+                L2Transaction::new_builder()
+                    .raw(RawL2Transaction::new_builder().nonce(0u32.pack()).build())
+                    .build(),
+            ),
+            fee: (101 * 1000u64).into(),
+            cycles_limit: 1000,
+            sender: FeeItemSender::PendingCreate(H256::from_u32(2)),
+            order: queue.len(),
+        };
+
+        queue.add(entry1, ());
+        queue.add(entry2, ());
+
+        let snap = store.get_snapshot();
+        let mem_store = MemStore::new(snap);
+        let tree = mem_store.state().unwrap();
+
+        // fetch
+        {
+            let items = queue.fetch(&tree, 3).expect("fetch");
+            assert_eq!(items.len(), 1);
+            assert_eq!(items[0].0.fee, (101 * 1000u64).into());
+            // try fetch remain items
+            let items = queue.fetch(&tree, 1).expect("fetch");
+            assert_eq!(items.len(), 0);
+        }
+    }
+
+    #[test]
+    fn test_drop_items_from_pending_create_sender() {
+        let mut queue = FeeQueue::new();
+
+        let store = Store::open_tmp().expect("open store");
+        setup_genesis(&store);
+
+        for i in 0..(MAX_QUEUE_SIZE as u32) {
+            let entry1 = FeeEntry {
+                item: FeeItem::Tx(
+                    L2Transaction::new_builder()
+                        .raw(RawL2Transaction::new_builder().nonce(i.pack()).build())
+                        .build(),
+                ),
+                fee: (100 * 1000u64).into(),
+                cycles_limit: 1000,
+                sender: FeeItemSender::PendingCreate(H256::from_u32(2)),
+                order: queue.len(),
+            };
+            queue.add(entry1, ());
+        }
+
+        assert_eq!(queue.len(), MAX_QUEUE_SIZE);
+
+        // add 1 more item
+        {
+            let entry1 = FeeEntry {
+                item: FeeItem::Tx(
+                    L2Transaction::new_builder()
+                        .raw(
+                            RawL2Transaction::new_builder()
+                                .nonce(10001u32.pack())
+                                .build(),
+                        )
+                        .build(),
+                ),
+                fee: (100 * 1000u64).into(),
+                cycles_limit: 1000,
+                sender: FeeItemSender::PendingCreate(H256::from_u32(2)),
                 order: queue.len(),
             };
             queue.add(entry1, ());
