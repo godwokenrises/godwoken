@@ -5,6 +5,503 @@ use super::godwoken::*;
 use super::store::*;
 use molecule::prelude::*;
 #[derive(Clone)]
+pub struct Byte32VecVec(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for Byte32VecVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for Byte32VecVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for Byte32VecVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl ::core::default::Default for Byte32VecVec {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![4, 0, 0, 0];
+        Byte32VecVec::new_unchecked(v.into())
+    }
+}
+impl Byte32VecVec {
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn item_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<Byte32Vec> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> Byte32Vec {
+        let slice = self.as_slice();
+        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
+        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
+        if idx == self.len() - 1 {
+            Byte32Vec::new_unchecked(self.0.slice(start..))
+        } else {
+            let end_idx = start_idx + molecule::NUMBER_SIZE;
+            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
+            Byte32Vec::new_unchecked(self.0.slice(start..end))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> Byte32VecVecReader<'r> {
+        Byte32VecVecReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for Byte32VecVec {
+    type Builder = Byte32VecVecBuilder;
+    const NAME: &'static str = "Byte32VecVec";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        Byte32VecVec(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        Byte32VecVecReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        Byte32VecVecReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().extend(self.into_iter())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct Byte32VecVecReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for Byte32VecVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for Byte32VecVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for Byte32VecVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl<'r> Byte32VecVecReader<'r> {
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn item_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<Byte32VecReader<'r>> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> Byte32VecReader<'r> {
+        let slice = self.as_slice();
+        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
+        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
+        if idx == self.len() - 1 {
+            Byte32VecReader::new_unchecked(&self.as_slice()[start..])
+        } else {
+            let end_idx = start_idx + molecule::NUMBER_SIZE;
+            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
+            Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for Byte32VecVecReader<'r> {
+    type Entity = Byte32VecVec;
+    const NAME: &'static str = "Byte32VecVecReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        Byte32VecVecReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(
+                Self,
+                TotalSizeNotMatch,
+                molecule::NUMBER_SIZE * 2,
+                slice_len
+            );
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        if slice_len < offset_first {
+            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
+        }
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
+            .chunks_exact(molecule::NUMBER_SIZE)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        for pair in offsets.windows(2) {
+            let start = pair[0];
+            let end = pair[1];
+            Byte32VecReader::verify(&slice[start..end], compatible)?;
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct Byte32VecVecBuilder(pub(crate) Vec<Byte32Vec>);
+impl Byte32VecVecBuilder {
+    pub fn set(mut self, v: Vec<Byte32Vec>) -> Self {
+        self.0 = v;
+        self
+    }
+    pub fn push(mut self, v: Byte32Vec) -> Self {
+        self.0.push(v);
+        self
+    }
+    pub fn extend<T: ::core::iter::IntoIterator<Item = Byte32Vec>>(mut self, iter: T) -> Self {
+        for elem in iter {
+            self.0.push(elem);
+        }
+        self
+    }
+}
+impl molecule::prelude::Builder for Byte32VecVecBuilder {
+    type Entity = Byte32VecVec;
+    const NAME: &'static str = "Byte32VecVecBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (self.0.len() + 1)
+            + self
+                .0
+                .iter()
+                .map(|inner| inner.as_slice().len())
+                .sum::<usize>()
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        let item_count = self.0.len();
+        if item_count == 0 {
+            writer.write_all(&molecule::pack_number(
+                molecule::NUMBER_SIZE as molecule::Number,
+            ))?;
+        } else {
+            let (total_size, offsets) = self.0.iter().fold(
+                (
+                    molecule::NUMBER_SIZE * (item_count + 1),
+                    Vec::with_capacity(item_count),
+                ),
+                |(start, mut offsets), inner| {
+                    offsets.push(start);
+                    (start + inner.as_slice().len(), offsets)
+                },
+            );
+            writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+            for offset in offsets.into_iter() {
+                writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+            }
+            for inner in self.0.iter() {
+                writer.write_all(inner.as_slice())?;
+            }
+        }
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        Byte32VecVec::new_unchecked(inner.into())
+    }
+}
+pub struct Byte32VecVecIterator(Byte32VecVec, usize, usize);
+impl ::core::iter::Iterator for Byte32VecVecIterator {
+    type Item = Byte32Vec;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl ::core::iter::ExactSizeIterator for Byte32VecVecIterator {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+impl ::core::iter::IntoIterator for Byte32VecVec {
+    type Item = Byte32Vec;
+    type IntoIter = Byte32VecVecIterator;
+    fn into_iter(self) -> Self::IntoIter {
+        let len = self.len();
+        Byte32VecVecIterator(self, 0, len)
+    }
+}
+impl<'r> Byte32VecVecReader<'r> {
+    pub fn iter<'t>(&'t self) -> Byte32VecVecReaderIterator<'t, 'r> {
+        Byte32VecVecReaderIterator(&self, 0, self.len())
+    }
+}
+pub struct Byte32VecVecReaderIterator<'t, 'r>(&'t Byte32VecVecReader<'r>, usize, usize);
+impl<'t: 'r, 'r> ::core::iter::Iterator for Byte32VecVecReaderIterator<'t, 'r> {
+    type Item = Byte32VecReader<'t>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for Byte32VecVecReaderIterator<'t, 'r> {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+#[derive(Clone)]
+pub struct Byte32VecVecOpt(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for Byte32VecVecOpt {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for Byte32VecVecOpt {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for Byte32VecVecOpt {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        if let Some(v) = self.to_opt() {
+            write!(f, "{}(Some({}))", Self::NAME, v)
+        } else {
+            write!(f, "{}(None)", Self::NAME)
+        }
+    }
+}
+impl ::core::default::Default for Byte32VecVecOpt {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![];
+        Byte32VecVecOpt::new_unchecked(v.into())
+    }
+}
+impl Byte32VecVecOpt {
+    pub fn is_none(&self) -> bool {
+        self.0.is_empty()
+    }
+    pub fn is_some(&self) -> bool {
+        !self.0.is_empty()
+    }
+    pub fn to_opt(&self) -> Option<Byte32VecVec> {
+        if self.is_none() {
+            None
+        } else {
+            Some(Byte32VecVec::new_unchecked(self.0.clone()))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> Byte32VecVecOptReader<'r> {
+        Byte32VecVecOptReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for Byte32VecVecOpt {
+    type Builder = Byte32VecVecOptBuilder;
+    const NAME: &'static str = "Byte32VecVecOpt";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        Byte32VecVecOpt(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        Byte32VecVecOptReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        Byte32VecVecOptReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().set(self.to_opt())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct Byte32VecVecOptReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for Byte32VecVecOptReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for Byte32VecVecOptReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for Byte32VecVecOptReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        if let Some(v) = self.to_opt() {
+            write!(f, "{}(Some({}))", Self::NAME, v)
+        } else {
+            write!(f, "{}(None)", Self::NAME)
+        }
+    }
+}
+impl<'r> Byte32VecVecOptReader<'r> {
+    pub fn is_none(&self) -> bool {
+        self.0.is_empty()
+    }
+    pub fn is_some(&self) -> bool {
+        !self.0.is_empty()
+    }
+    pub fn to_opt(&self) -> Option<Byte32VecVecReader<'r>> {
+        if self.is_none() {
+            None
+        } else {
+            Some(Byte32VecVecReader::new_unchecked(self.as_slice()))
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for Byte32VecVecOptReader<'r> {
+    type Entity = Byte32VecVecOpt;
+    const NAME: &'static str = "Byte32VecVecOptReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        Byte32VecVecOptReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        if !slice.is_empty() {
+            Byte32VecVecReader::verify(&slice[..], compatible)?;
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct Byte32VecVecOptBuilder(pub(crate) Option<Byte32VecVec>);
+impl Byte32VecVecOptBuilder {
+    pub fn set(mut self, v: Option<Byte32VecVec>) -> Self {
+        self.0 = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for Byte32VecVecOptBuilder {
+    type Entity = Byte32VecVecOpt;
+    const NAME: &'static str = "Byte32VecVecOptBuilder";
+    fn expected_length(&self) -> usize {
+        self.0
+            .as_ref()
+            .map(|ref inner| inner.as_slice().len())
+            .unwrap_or(0)
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        self.0
+            .as_ref()
+            .map(|ref inner| writer.write_all(inner.as_slice()))
+            .unwrap_or(Ok(()))
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        Byte32VecVecOpt::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
 pub struct CellInfo(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for CellInfo {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -3011,2322 +3508,5 @@ impl molecule::prelude::Builder for MemBlockBuilder {
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
         MemBlock::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
-pub struct NextMemBlock(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for NextMemBlock {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for NextMemBlock {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for NextMemBlock {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "deposits", self.deposits())?;
-        write!(f, ", {}: {}", "withdrawals", self.withdrawals())?;
-        write!(f, ", {}: {}", "block_info", self.block_info())?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
-    }
-}
-impl ::core::default::Default for NextMemBlock {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![
-            60, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 36, 0, 0,
-            0, 16, 0, 0, 0, 20, 0, 0, 0, 28, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0,
-        ];
-        NextMemBlock::new_unchecked(v.into())
-    }
-}
-impl NextMemBlock {
-    pub const FIELD_COUNT: usize = 3;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn deposits(&self) -> DepositInfoVec {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        DepositInfoVec::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn withdrawals(&self) -> WithdrawalRequestExtraVec {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
-        WithdrawalRequestExtraVec::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn block_info(&self) -> BlockInfo {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            BlockInfo::new_unchecked(self.0.slice(start..end))
-        } else {
-            BlockInfo::new_unchecked(self.0.slice(start..))
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> NextMemBlockReader<'r> {
-        NextMemBlockReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for NextMemBlock {
-    type Builder = NextMemBlockBuilder;
-    const NAME: &'static str = "NextMemBlock";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        NextMemBlock(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        NextMemBlockReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        NextMemBlockReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
-            .deposits(self.deposits())
-            .withdrawals(self.withdrawals())
-            .block_info(self.block_info())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct NextMemBlockReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for NextMemBlockReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for NextMemBlockReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for NextMemBlockReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "deposits", self.deposits())?;
-        write!(f, ", {}: {}", "withdrawals", self.withdrawals())?;
-        write!(f, ", {}: {}", "block_info", self.block_info())?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
-    }
-}
-impl<'r> NextMemBlockReader<'r> {
-    pub const FIELD_COUNT: usize = 3;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn deposits(&self) -> DepositInfoVecReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        DepositInfoVecReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn withdrawals(&self) -> WithdrawalRequestExtraVecReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
-        WithdrawalRequestExtraVecReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn block_info(&self) -> BlockInfoReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            BlockInfoReader::new_unchecked(&self.as_slice()[start..end])
-        } else {
-            BlockInfoReader::new_unchecked(&self.as_slice()[start..])
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for NextMemBlockReader<'r> {
-    type Entity = NextMemBlock;
-    const NAME: &'static str = "NextMemBlockReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        NextMemBlockReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
-        }
-        let total_size = molecule::unpack_number(slice) as usize;
-        if slice_len != total_size {
-            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
-        }
-        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
-            return Ok(());
-        }
-        if slice_len < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
-        }
-        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
-        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        if slice_len < offset_first {
-            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
-        }
-        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
-        if field_count < Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        } else if !compatible && field_count > Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        };
-        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
-            .chunks_exact(molecule::NUMBER_SIZE)
-            .map(|x| molecule::unpack_number(x) as usize)
-            .collect();
-        offsets.push(total_size);
-        if offsets.windows(2).any(|i| i[0] > i[1]) {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        DepositInfoVecReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        WithdrawalRequestExtraVecReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        BlockInfoReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct NextMemBlockBuilder {
-    pub(crate) deposits: DepositInfoVec,
-    pub(crate) withdrawals: WithdrawalRequestExtraVec,
-    pub(crate) block_info: BlockInfo,
-}
-impl NextMemBlockBuilder {
-    pub const FIELD_COUNT: usize = 3;
-    pub fn deposits(mut self, v: DepositInfoVec) -> Self {
-        self.deposits = v;
-        self
-    }
-    pub fn withdrawals(mut self, v: WithdrawalRequestExtraVec) -> Self {
-        self.withdrawals = v;
-        self
-    }
-    pub fn block_info(mut self, v: BlockInfo) -> Self {
-        self.block_info = v;
-        self
-    }
-}
-impl molecule::prelude::Builder for NextMemBlockBuilder {
-    type Entity = NextMemBlock;
-    const NAME: &'static str = "NextMemBlockBuilder";
-    fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.deposits.as_slice().len()
-            + self.withdrawals.as_slice().len()
-            + self.block_info.as_slice().len()
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
-        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
-        offsets.push(total_size);
-        total_size += self.deposits.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.withdrawals.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.block_info.as_slice().len();
-        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
-        for offset in offsets.into_iter() {
-            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
-        }
-        writer.write_all(self.deposits.as_slice())?;
-        writer.write_all(self.withdrawals.as_slice())?;
-        writer.write_all(self.block_info.as_slice())?;
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        NextMemBlock::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
-pub struct NextL2Transaction(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for NextL2Transaction {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for NextL2Transaction {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for NextL2Transaction {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "tx", self.tx())?;
-        write!(f, ", {}: {}", "mem_block_number", self.mem_block_number())?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
-    }
-}
-impl ::core::default::Default for NextL2Transaction {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![
-            84, 0, 0, 0, 12, 0, 0, 0, 76, 0, 0, 0, 64, 0, 0, 0, 12, 0, 0, 0, 60, 0, 0, 0, 48, 0, 0,
-            0, 24, 0, 0, 0, 32, 0, 0, 0, 36, 0, 0, 0, 40, 0, 0, 0, 44, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0,
-        ];
-        NextL2Transaction::new_unchecked(v.into())
-    }
-}
-impl NextL2Transaction {
-    pub const FIELD_COUNT: usize = 2;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn tx(&self) -> L2Transaction {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        L2Transaction::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn mem_block_number(&self) -> Uint64 {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[12..]) as usize;
-            Uint64::new_unchecked(self.0.slice(start..end))
-        } else {
-            Uint64::new_unchecked(self.0.slice(start..))
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> NextL2TransactionReader<'r> {
-        NextL2TransactionReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for NextL2Transaction {
-    type Builder = NextL2TransactionBuilder;
-    const NAME: &'static str = "NextL2Transaction";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        NextL2Transaction(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        NextL2TransactionReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        NextL2TransactionReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
-            .tx(self.tx())
-            .mem_block_number(self.mem_block_number())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct NextL2TransactionReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for NextL2TransactionReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for NextL2TransactionReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for NextL2TransactionReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "tx", self.tx())?;
-        write!(f, ", {}: {}", "mem_block_number", self.mem_block_number())?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
-    }
-}
-impl<'r> NextL2TransactionReader<'r> {
-    pub const FIELD_COUNT: usize = 2;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn tx(&self) -> L2TransactionReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        L2TransactionReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn mem_block_number(&self) -> Uint64Reader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[12..]) as usize;
-            Uint64Reader::new_unchecked(&self.as_slice()[start..end])
-        } else {
-            Uint64Reader::new_unchecked(&self.as_slice()[start..])
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for NextL2TransactionReader<'r> {
-    type Entity = NextL2Transaction;
-    const NAME: &'static str = "NextL2TransactionReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        NextL2TransactionReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
-        }
-        let total_size = molecule::unpack_number(slice) as usize;
-        if slice_len != total_size {
-            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
-        }
-        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
-            return Ok(());
-        }
-        if slice_len < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
-        }
-        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
-        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        if slice_len < offset_first {
-            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
-        }
-        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
-        if field_count < Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        } else if !compatible && field_count > Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        };
-        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
-            .chunks_exact(molecule::NUMBER_SIZE)
-            .map(|x| molecule::unpack_number(x) as usize)
-            .collect();
-        offsets.push(total_size);
-        if offsets.windows(2).any(|i| i[0] > i[1]) {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        L2TransactionReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        Uint64Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct NextL2TransactionBuilder {
-    pub(crate) tx: L2Transaction,
-    pub(crate) mem_block_number: Uint64,
-}
-impl NextL2TransactionBuilder {
-    pub const FIELD_COUNT: usize = 2;
-    pub fn tx(mut self, v: L2Transaction) -> Self {
-        self.tx = v;
-        self
-    }
-    pub fn mem_block_number(mut self, v: Uint64) -> Self {
-        self.mem_block_number = v;
-        self
-    }
-}
-impl molecule::prelude::Builder for NextL2TransactionBuilder {
-    type Entity = NextL2Transaction;
-    const NAME: &'static str = "NextL2TransactionBuilder";
-    fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.tx.as_slice().len()
-            + self.mem_block_number.as_slice().len()
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
-        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
-        offsets.push(total_size);
-        total_size += self.tx.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.mem_block_number.as_slice().len();
-        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
-        for offset in offsets.into_iter() {
-            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
-        }
-        writer.write_all(self.tx.as_slice())?;
-        writer.write_all(self.mem_block_number.as_slice())?;
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        NextL2Transaction::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
-pub struct RefreshMemBlockMessage(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for RefreshMemBlockMessage {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for RefreshMemBlockMessage {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for RefreshMemBlockMessage {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}(", Self::NAME)?;
-        self.to_enum().display_inner(f)?;
-        write!(f, ")")
-    }
-}
-impl ::core::default::Default for RefreshMemBlockMessage {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![
-            0, 0, 0, 0, 84, 0, 0, 0, 12, 0, 0, 0, 76, 0, 0, 0, 64, 0, 0, 0, 12, 0, 0, 0, 60, 0, 0,
-            0, 48, 0, 0, 0, 24, 0, 0, 0, 32, 0, 0, 0, 36, 0, 0, 0, 40, 0, 0, 0, 44, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0,
-        ];
-        RefreshMemBlockMessage::new_unchecked(v.into())
-    }
-}
-impl RefreshMemBlockMessage {
-    pub const ITEMS_COUNT: usize = 2;
-    pub fn item_id(&self) -> molecule::Number {
-        molecule::unpack_number(self.as_slice())
-    }
-    pub fn to_enum(&self) -> RefreshMemBlockMessageUnion {
-        let inner = self.0.slice(molecule::NUMBER_SIZE..);
-        match self.item_id() {
-            0 => NextL2Transaction::new_unchecked(inner).into(),
-            1 => NextMemBlock::new_unchecked(inner).into(),
-            _ => panic!("{}: invalid data", Self::NAME),
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> RefreshMemBlockMessageReader<'r> {
-        RefreshMemBlockMessageReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for RefreshMemBlockMessage {
-    type Builder = RefreshMemBlockMessageBuilder;
-    const NAME: &'static str = "RefreshMemBlockMessage";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        RefreshMemBlockMessage(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        RefreshMemBlockMessageReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        RefreshMemBlockMessageReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder().set(self.to_enum())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct RefreshMemBlockMessageReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for RefreshMemBlockMessageReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for RefreshMemBlockMessageReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for RefreshMemBlockMessageReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}(", Self::NAME)?;
-        self.to_enum().display_inner(f)?;
-        write!(f, ")")
-    }
-}
-impl<'r> RefreshMemBlockMessageReader<'r> {
-    pub const ITEMS_COUNT: usize = 2;
-    pub fn item_id(&self) -> molecule::Number {
-        molecule::unpack_number(self.as_slice())
-    }
-    pub fn to_enum(&self) -> RefreshMemBlockMessageUnionReader<'r> {
-        let inner = &self.as_slice()[molecule::NUMBER_SIZE..];
-        match self.item_id() {
-            0 => NextL2TransactionReader::new_unchecked(inner).into(),
-            1 => NextMemBlockReader::new_unchecked(inner).into(),
-            _ => panic!("{}: invalid data", Self::NAME),
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for RefreshMemBlockMessageReader<'r> {
-    type Entity = RefreshMemBlockMessage;
-    const NAME: &'static str = "RefreshMemBlockMessageReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        RefreshMemBlockMessageReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
-        }
-        let item_id = molecule::unpack_number(slice);
-        let inner_slice = &slice[molecule::NUMBER_SIZE..];
-        match item_id {
-            0 => NextL2TransactionReader::verify(inner_slice, compatible),
-            1 => NextMemBlockReader::verify(inner_slice, compatible),
-            _ => ve!(Self, UnknownItem, Self::ITEMS_COUNT, item_id),
-        }?;
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct RefreshMemBlockMessageBuilder(pub(crate) RefreshMemBlockMessageUnion);
-impl RefreshMemBlockMessageBuilder {
-    pub const ITEMS_COUNT: usize = 2;
-    pub fn set<I>(mut self, v: I) -> Self
-    where
-        I: ::core::convert::Into<RefreshMemBlockMessageUnion>,
-    {
-        self.0 = v.into();
-        self
-    }
-}
-impl molecule::prelude::Builder for RefreshMemBlockMessageBuilder {
-    type Entity = RefreshMemBlockMessage;
-    const NAME: &'static str = "RefreshMemBlockMessageBuilder";
-    fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE + self.0.as_slice().len()
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        writer.write_all(&molecule::pack_number(self.0.item_id()))?;
-        writer.write_all(self.0.as_slice())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        RefreshMemBlockMessage::new_unchecked(inner.into())
-    }
-}
-#[derive(Debug, Clone)]
-pub enum RefreshMemBlockMessageUnion {
-    NextL2Transaction(NextL2Transaction),
-    NextMemBlock(NextMemBlock),
-}
-#[derive(Debug, Clone, Copy)]
-pub enum RefreshMemBlockMessageUnionReader<'r> {
-    NextL2Transaction(NextL2TransactionReader<'r>),
-    NextMemBlock(NextMemBlockReader<'r>),
-}
-impl ::core::default::Default for RefreshMemBlockMessageUnion {
-    fn default() -> Self {
-        RefreshMemBlockMessageUnion::NextL2Transaction(::core::default::Default::default())
-    }
-}
-impl ::core::fmt::Display for RefreshMemBlockMessageUnion {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            RefreshMemBlockMessageUnion::NextL2Transaction(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, NextL2Transaction::NAME, item)
-            }
-            RefreshMemBlockMessageUnion::NextMemBlock(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, NextMemBlock::NAME, item)
-            }
-        }
-    }
-}
-impl<'r> ::core::fmt::Display for RefreshMemBlockMessageUnionReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            RefreshMemBlockMessageUnionReader::NextL2Transaction(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, NextL2Transaction::NAME, item)
-            }
-            RefreshMemBlockMessageUnionReader::NextMemBlock(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, NextMemBlock::NAME, item)
-            }
-        }
-    }
-}
-impl RefreshMemBlockMessageUnion {
-    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            RefreshMemBlockMessageUnion::NextL2Transaction(ref item) => write!(f, "{}", item),
-            RefreshMemBlockMessageUnion::NextMemBlock(ref item) => write!(f, "{}", item),
-        }
-    }
-}
-impl<'r> RefreshMemBlockMessageUnionReader<'r> {
-    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            RefreshMemBlockMessageUnionReader::NextL2Transaction(ref item) => write!(f, "{}", item),
-            RefreshMemBlockMessageUnionReader::NextMemBlock(ref item) => write!(f, "{}", item),
-        }
-    }
-}
-impl ::core::convert::From<NextL2Transaction> for RefreshMemBlockMessageUnion {
-    fn from(item: NextL2Transaction) -> Self {
-        RefreshMemBlockMessageUnion::NextL2Transaction(item)
-    }
-}
-impl ::core::convert::From<NextMemBlock> for RefreshMemBlockMessageUnion {
-    fn from(item: NextMemBlock) -> Self {
-        RefreshMemBlockMessageUnion::NextMemBlock(item)
-    }
-}
-impl<'r> ::core::convert::From<NextL2TransactionReader<'r>>
-    for RefreshMemBlockMessageUnionReader<'r>
-{
-    fn from(item: NextL2TransactionReader<'r>) -> Self {
-        RefreshMemBlockMessageUnionReader::NextL2Transaction(item)
-    }
-}
-impl<'r> ::core::convert::From<NextMemBlockReader<'r>> for RefreshMemBlockMessageUnionReader<'r> {
-    fn from(item: NextMemBlockReader<'r>) -> Self {
-        RefreshMemBlockMessageUnionReader::NextMemBlock(item)
-    }
-}
-impl RefreshMemBlockMessageUnion {
-    pub const NAME: &'static str = "RefreshMemBlockMessageUnion";
-    pub fn as_bytes(&self) -> molecule::bytes::Bytes {
-        match self {
-            RefreshMemBlockMessageUnion::NextL2Transaction(item) => item.as_bytes(),
-            RefreshMemBlockMessageUnion::NextMemBlock(item) => item.as_bytes(),
-        }
-    }
-    pub fn as_slice(&self) -> &[u8] {
-        match self {
-            RefreshMemBlockMessageUnion::NextL2Transaction(item) => item.as_slice(),
-            RefreshMemBlockMessageUnion::NextMemBlock(item) => item.as_slice(),
-        }
-    }
-    pub fn item_id(&self) -> molecule::Number {
-        match self {
-            RefreshMemBlockMessageUnion::NextL2Transaction(_) => 0,
-            RefreshMemBlockMessageUnion::NextMemBlock(_) => 1,
-        }
-    }
-    pub fn item_name(&self) -> &str {
-        match self {
-            RefreshMemBlockMessageUnion::NextL2Transaction(_) => "NextL2Transaction",
-            RefreshMemBlockMessageUnion::NextMemBlock(_) => "NextMemBlock",
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> RefreshMemBlockMessageUnionReader<'r> {
-        match self {
-            RefreshMemBlockMessageUnion::NextL2Transaction(item) => item.as_reader().into(),
-            RefreshMemBlockMessageUnion::NextMemBlock(item) => item.as_reader().into(),
-        }
-    }
-}
-impl<'r> RefreshMemBlockMessageUnionReader<'r> {
-    pub const NAME: &'r str = "RefreshMemBlockMessageUnionReader";
-    pub fn as_slice(&self) -> &'r [u8] {
-        match self {
-            RefreshMemBlockMessageUnionReader::NextL2Transaction(item) => item.as_slice(),
-            RefreshMemBlockMessageUnionReader::NextMemBlock(item) => item.as_slice(),
-        }
-    }
-    pub fn item_id(&self) -> molecule::Number {
-        match self {
-            RefreshMemBlockMessageUnionReader::NextL2Transaction(_) => 0,
-            RefreshMemBlockMessageUnionReader::NextMemBlock(_) => 1,
-        }
-    }
-    pub fn item_name(&self) -> &str {
-        match self {
-            RefreshMemBlockMessageUnionReader::NextL2Transaction(_) => "NextL2Transaction",
-            RefreshMemBlockMessageUnionReader::NextMemBlock(_) => "NextMemBlock",
-        }
-    }
-}
-#[derive(Clone)]
-pub struct P2PSyncRequest(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for P2PSyncRequest {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for P2PSyncRequest {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for P2PSyncRequest {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "block_number", self.block_number())?;
-        write!(f, ", {}: {}", "block_hash", self.block_hash())?;
-        write!(f, " }}")
-    }
-}
-impl ::core::default::Default for P2PSyncRequest {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ];
-        P2PSyncRequest::new_unchecked(v.into())
-    }
-}
-impl P2PSyncRequest {
-    pub const TOTAL_SIZE: usize = 40;
-    pub const FIELD_SIZES: [usize; 2] = [8, 32];
-    pub const FIELD_COUNT: usize = 2;
-    pub fn block_number(&self) -> Uint64 {
-        Uint64::new_unchecked(self.0.slice(0..8))
-    }
-    pub fn block_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(8..40))
-    }
-    pub fn as_reader<'r>(&'r self) -> P2PSyncRequestReader<'r> {
-        P2PSyncRequestReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for P2PSyncRequest {
-    type Builder = P2PSyncRequestBuilder;
-    const NAME: &'static str = "P2PSyncRequest";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        P2PSyncRequest(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        P2PSyncRequestReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        P2PSyncRequestReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
-            .block_number(self.block_number())
-            .block_hash(self.block_hash())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct P2PSyncRequestReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for P2PSyncRequestReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for P2PSyncRequestReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for P2PSyncRequestReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "block_number", self.block_number())?;
-        write!(f, ", {}: {}", "block_hash", self.block_hash())?;
-        write!(f, " }}")
-    }
-}
-impl<'r> P2PSyncRequestReader<'r> {
-    pub const TOTAL_SIZE: usize = 40;
-    pub const FIELD_SIZES: [usize; 2] = [8, 32];
-    pub const FIELD_COUNT: usize = 2;
-    pub fn block_number(&self) -> Uint64Reader<'r> {
-        Uint64Reader::new_unchecked(&self.as_slice()[0..8])
-    }
-    pub fn block_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[8..40])
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for P2PSyncRequestReader<'r> {
-    type Entity = P2PSyncRequest;
-    const NAME: &'static str = "P2PSyncRequestReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        P2PSyncRequestReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len != Self::TOTAL_SIZE {
-            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
-        }
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct P2PSyncRequestBuilder {
-    pub(crate) block_number: Uint64,
-    pub(crate) block_hash: Byte32,
-}
-impl P2PSyncRequestBuilder {
-    pub const TOTAL_SIZE: usize = 40;
-    pub const FIELD_SIZES: [usize; 2] = [8, 32];
-    pub const FIELD_COUNT: usize = 2;
-    pub fn block_number(mut self, v: Uint64) -> Self {
-        self.block_number = v;
-        self
-    }
-    pub fn block_hash(mut self, v: Byte32) -> Self {
-        self.block_hash = v;
-        self
-    }
-}
-impl molecule::prelude::Builder for P2PSyncRequestBuilder {
-    type Entity = P2PSyncRequest;
-    const NAME: &'static str = "P2PSyncRequestBuilder";
-    fn expected_length(&self) -> usize {
-        Self::TOTAL_SIZE
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        writer.write_all(self.block_number.as_slice())?;
-        writer.write_all(self.block_hash.as_slice())?;
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        P2PSyncRequest::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
-pub struct P2PSyncResponse(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for P2PSyncResponse {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for P2PSyncResponse {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for P2PSyncResponse {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}(", Self::NAME)?;
-        self.to_enum().display_inner(f)?;
-        write!(f, ")")
-    }
-}
-impl ::core::default::Default for P2PSyncResponse {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ];
-        P2PSyncResponse::new_unchecked(v.into())
-    }
-}
-impl P2PSyncResponse {
-    pub const ITEMS_COUNT: usize = 2;
-    pub fn item_id(&self) -> molecule::Number {
-        molecule::unpack_number(self.as_slice())
-    }
-    pub fn to_enum(&self) -> P2PSyncResponseUnion {
-        let inner = self.0.slice(molecule::NUMBER_SIZE..);
-        match self.item_id() {
-            0 => TryAgain::new_unchecked(inner).into(),
-            1 => P2PSyncMessageVec::new_unchecked(inner).into(),
-            _ => panic!("{}: invalid data", Self::NAME),
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> P2PSyncResponseReader<'r> {
-        P2PSyncResponseReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for P2PSyncResponse {
-    type Builder = P2PSyncResponseBuilder;
-    const NAME: &'static str = "P2PSyncResponse";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        P2PSyncResponse(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        P2PSyncResponseReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        P2PSyncResponseReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder().set(self.to_enum())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct P2PSyncResponseReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for P2PSyncResponseReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for P2PSyncResponseReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for P2PSyncResponseReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}(", Self::NAME)?;
-        self.to_enum().display_inner(f)?;
-        write!(f, ")")
-    }
-}
-impl<'r> P2PSyncResponseReader<'r> {
-    pub const ITEMS_COUNT: usize = 2;
-    pub fn item_id(&self) -> molecule::Number {
-        molecule::unpack_number(self.as_slice())
-    }
-    pub fn to_enum(&self) -> P2PSyncResponseUnionReader<'r> {
-        let inner = &self.as_slice()[molecule::NUMBER_SIZE..];
-        match self.item_id() {
-            0 => TryAgainReader::new_unchecked(inner).into(),
-            1 => P2PSyncMessageVecReader::new_unchecked(inner).into(),
-            _ => panic!("{}: invalid data", Self::NAME),
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for P2PSyncResponseReader<'r> {
-    type Entity = P2PSyncResponse;
-    const NAME: &'static str = "P2PSyncResponseReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        P2PSyncResponseReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
-        }
-        let item_id = molecule::unpack_number(slice);
-        let inner_slice = &slice[molecule::NUMBER_SIZE..];
-        match item_id {
-            0 => TryAgainReader::verify(inner_slice, compatible),
-            1 => P2PSyncMessageVecReader::verify(inner_slice, compatible),
-            _ => ve!(Self, UnknownItem, Self::ITEMS_COUNT, item_id),
-        }?;
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct P2PSyncResponseBuilder(pub(crate) P2PSyncResponseUnion);
-impl P2PSyncResponseBuilder {
-    pub const ITEMS_COUNT: usize = 2;
-    pub fn set<I>(mut self, v: I) -> Self
-    where
-        I: ::core::convert::Into<P2PSyncResponseUnion>,
-    {
-        self.0 = v.into();
-        self
-    }
-}
-impl molecule::prelude::Builder for P2PSyncResponseBuilder {
-    type Entity = P2PSyncResponse;
-    const NAME: &'static str = "P2PSyncResponseBuilder";
-    fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE + self.0.as_slice().len()
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        writer.write_all(&molecule::pack_number(self.0.item_id()))?;
-        writer.write_all(self.0.as_slice())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        P2PSyncResponse::new_unchecked(inner.into())
-    }
-}
-#[derive(Debug, Clone)]
-pub enum P2PSyncResponseUnion {
-    TryAgain(TryAgain),
-    P2PSyncMessageVec(P2PSyncMessageVec),
-}
-#[derive(Debug, Clone, Copy)]
-pub enum P2PSyncResponseUnionReader<'r> {
-    TryAgain(TryAgainReader<'r>),
-    P2PSyncMessageVec(P2PSyncMessageVecReader<'r>),
-}
-impl ::core::default::Default for P2PSyncResponseUnion {
-    fn default() -> Self {
-        P2PSyncResponseUnion::TryAgain(::core::default::Default::default())
-    }
-}
-impl ::core::fmt::Display for P2PSyncResponseUnion {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            P2PSyncResponseUnion::TryAgain(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, TryAgain::NAME, item)
-            }
-            P2PSyncResponseUnion::P2PSyncMessageVec(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, P2PSyncMessageVec::NAME, item)
-            }
-        }
-    }
-}
-impl<'r> ::core::fmt::Display for P2PSyncResponseUnionReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            P2PSyncResponseUnionReader::TryAgain(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, TryAgain::NAME, item)
-            }
-            P2PSyncResponseUnionReader::P2PSyncMessageVec(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, P2PSyncMessageVec::NAME, item)
-            }
-        }
-    }
-}
-impl P2PSyncResponseUnion {
-    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            P2PSyncResponseUnion::TryAgain(ref item) => write!(f, "{}", item),
-            P2PSyncResponseUnion::P2PSyncMessageVec(ref item) => write!(f, "{}", item),
-        }
-    }
-}
-impl<'r> P2PSyncResponseUnionReader<'r> {
-    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            P2PSyncResponseUnionReader::TryAgain(ref item) => write!(f, "{}", item),
-            P2PSyncResponseUnionReader::P2PSyncMessageVec(ref item) => write!(f, "{}", item),
-        }
-    }
-}
-impl ::core::convert::From<TryAgain> for P2PSyncResponseUnion {
-    fn from(item: TryAgain) -> Self {
-        P2PSyncResponseUnion::TryAgain(item)
-    }
-}
-impl ::core::convert::From<P2PSyncMessageVec> for P2PSyncResponseUnion {
-    fn from(item: P2PSyncMessageVec) -> Self {
-        P2PSyncResponseUnion::P2PSyncMessageVec(item)
-    }
-}
-impl<'r> ::core::convert::From<TryAgainReader<'r>> for P2PSyncResponseUnionReader<'r> {
-    fn from(item: TryAgainReader<'r>) -> Self {
-        P2PSyncResponseUnionReader::TryAgain(item)
-    }
-}
-impl<'r> ::core::convert::From<P2PSyncMessageVecReader<'r>> for P2PSyncResponseUnionReader<'r> {
-    fn from(item: P2PSyncMessageVecReader<'r>) -> Self {
-        P2PSyncResponseUnionReader::P2PSyncMessageVec(item)
-    }
-}
-impl P2PSyncResponseUnion {
-    pub const NAME: &'static str = "P2PSyncResponseUnion";
-    pub fn as_bytes(&self) -> molecule::bytes::Bytes {
-        match self {
-            P2PSyncResponseUnion::TryAgain(item) => item.as_bytes(),
-            P2PSyncResponseUnion::P2PSyncMessageVec(item) => item.as_bytes(),
-        }
-    }
-    pub fn as_slice(&self) -> &[u8] {
-        match self {
-            P2PSyncResponseUnion::TryAgain(item) => item.as_slice(),
-            P2PSyncResponseUnion::P2PSyncMessageVec(item) => item.as_slice(),
-        }
-    }
-    pub fn item_id(&self) -> molecule::Number {
-        match self {
-            P2PSyncResponseUnion::TryAgain(_) => 0,
-            P2PSyncResponseUnion::P2PSyncMessageVec(_) => 1,
-        }
-    }
-    pub fn item_name(&self) -> &str {
-        match self {
-            P2PSyncResponseUnion::TryAgain(_) => "TryAgain",
-            P2PSyncResponseUnion::P2PSyncMessageVec(_) => "P2PSyncMessageVec",
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> P2PSyncResponseUnionReader<'r> {
-        match self {
-            P2PSyncResponseUnion::TryAgain(item) => item.as_reader().into(),
-            P2PSyncResponseUnion::P2PSyncMessageVec(item) => item.as_reader().into(),
-        }
-    }
-}
-impl<'r> P2PSyncResponseUnionReader<'r> {
-    pub const NAME: &'r str = "P2PSyncResponseUnionReader";
-    pub fn as_slice(&self) -> &'r [u8] {
-        match self {
-            P2PSyncResponseUnionReader::TryAgain(item) => item.as_slice(),
-            P2PSyncResponseUnionReader::P2PSyncMessageVec(item) => item.as_slice(),
-        }
-    }
-    pub fn item_id(&self) -> molecule::Number {
-        match self {
-            P2PSyncResponseUnionReader::TryAgain(_) => 0,
-            P2PSyncResponseUnionReader::P2PSyncMessageVec(_) => 1,
-        }
-    }
-    pub fn item_name(&self) -> &str {
-        match self {
-            P2PSyncResponseUnionReader::TryAgain(_) => "TryAgain",
-            P2PSyncResponseUnionReader::P2PSyncMessageVec(_) => "P2PSyncMessageVec",
-        }
-    }
-}
-#[derive(Clone)]
-pub struct TryAgain(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for TryAgain {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for TryAgain {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for TryAgain {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "block_number", self.block_number())?;
-        write!(f, ", {}: {}", "block_hash", self.block_hash())?;
-        write!(f, " }}")
-    }
-}
-impl ::core::default::Default for TryAgain {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ];
-        TryAgain::new_unchecked(v.into())
-    }
-}
-impl TryAgain {
-    pub const TOTAL_SIZE: usize = 40;
-    pub const FIELD_SIZES: [usize; 2] = [8, 32];
-    pub const FIELD_COUNT: usize = 2;
-    pub fn block_number(&self) -> Uint64 {
-        Uint64::new_unchecked(self.0.slice(0..8))
-    }
-    pub fn block_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(8..40))
-    }
-    pub fn as_reader<'r>(&'r self) -> TryAgainReader<'r> {
-        TryAgainReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for TryAgain {
-    type Builder = TryAgainBuilder;
-    const NAME: &'static str = "TryAgain";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        TryAgain(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        TryAgainReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        TryAgainReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
-            .block_number(self.block_number())
-            .block_hash(self.block_hash())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct TryAgainReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for TryAgainReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for TryAgainReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for TryAgainReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "block_number", self.block_number())?;
-        write!(f, ", {}: {}", "block_hash", self.block_hash())?;
-        write!(f, " }}")
-    }
-}
-impl<'r> TryAgainReader<'r> {
-    pub const TOTAL_SIZE: usize = 40;
-    pub const FIELD_SIZES: [usize; 2] = [8, 32];
-    pub const FIELD_COUNT: usize = 2;
-    pub fn block_number(&self) -> Uint64Reader<'r> {
-        Uint64Reader::new_unchecked(&self.as_slice()[0..8])
-    }
-    pub fn block_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[8..40])
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for TryAgainReader<'r> {
-    type Entity = TryAgain;
-    const NAME: &'static str = "TryAgainReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        TryAgainReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len != Self::TOTAL_SIZE {
-            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
-        }
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct TryAgainBuilder {
-    pub(crate) block_number: Uint64,
-    pub(crate) block_hash: Byte32,
-}
-impl TryAgainBuilder {
-    pub const TOTAL_SIZE: usize = 40;
-    pub const FIELD_SIZES: [usize; 2] = [8, 32];
-    pub const FIELD_COUNT: usize = 2;
-    pub fn block_number(mut self, v: Uint64) -> Self {
-        self.block_number = v;
-        self
-    }
-    pub fn block_hash(mut self, v: Byte32) -> Self {
-        self.block_hash = v;
-        self
-    }
-}
-impl molecule::prelude::Builder for TryAgainBuilder {
-    type Entity = TryAgain;
-    const NAME: &'static str = "TryAgainBuilder";
-    fn expected_length(&self) -> usize {
-        Self::TOTAL_SIZE
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        writer.write_all(self.block_number.as_slice())?;
-        writer.write_all(self.block_hash.as_slice())?;
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        TryAgain::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
-pub struct P2PSyncMessage(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for P2PSyncMessage {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for P2PSyncMessage {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for P2PSyncMessage {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}(", Self::NAME)?;
-        self.to_enum().display_inner(f)?;
-        write!(f, ")")
-    }
-}
-impl ::core::default::Default for P2PSyncMessage {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![
-            0, 0, 0, 0, 64, 0, 0, 0, 12, 0, 0, 0, 60, 0, 0, 0, 48, 0, 0, 0, 24, 0, 0, 0, 32, 0, 0,
-            0, 36, 0, 0, 0, 40, 0, 0, 0, 44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ];
-        P2PSyncMessage::new_unchecked(v.into())
-    }
-}
-impl P2PSyncMessage {
-    pub const ITEMS_COUNT: usize = 3;
-    pub fn item_id(&self) -> molecule::Number {
-        molecule::unpack_number(self.as_slice())
-    }
-    pub fn to_enum(&self) -> P2PSyncMessageUnion {
-        let inner = self.0.slice(molecule::NUMBER_SIZE..);
-        match self.item_id() {
-            0 => L2Transaction::new_unchecked(inner).into(),
-            1 => NextMemBlock::new_unchecked(inner).into(),
-            2 => TipSync::new_unchecked(inner).into(),
-            _ => panic!("{}: invalid data", Self::NAME),
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> P2PSyncMessageReader<'r> {
-        P2PSyncMessageReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for P2PSyncMessage {
-    type Builder = P2PSyncMessageBuilder;
-    const NAME: &'static str = "P2PSyncMessage";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        P2PSyncMessage(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        P2PSyncMessageReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        P2PSyncMessageReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder().set(self.to_enum())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct P2PSyncMessageReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for P2PSyncMessageReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for P2PSyncMessageReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for P2PSyncMessageReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}(", Self::NAME)?;
-        self.to_enum().display_inner(f)?;
-        write!(f, ")")
-    }
-}
-impl<'r> P2PSyncMessageReader<'r> {
-    pub const ITEMS_COUNT: usize = 3;
-    pub fn item_id(&self) -> molecule::Number {
-        molecule::unpack_number(self.as_slice())
-    }
-    pub fn to_enum(&self) -> P2PSyncMessageUnionReader<'r> {
-        let inner = &self.as_slice()[molecule::NUMBER_SIZE..];
-        match self.item_id() {
-            0 => L2TransactionReader::new_unchecked(inner).into(),
-            1 => NextMemBlockReader::new_unchecked(inner).into(),
-            2 => TipSyncReader::new_unchecked(inner).into(),
-            _ => panic!("{}: invalid data", Self::NAME),
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for P2PSyncMessageReader<'r> {
-    type Entity = P2PSyncMessage;
-    const NAME: &'static str = "P2PSyncMessageReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        P2PSyncMessageReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
-        }
-        let item_id = molecule::unpack_number(slice);
-        let inner_slice = &slice[molecule::NUMBER_SIZE..];
-        match item_id {
-            0 => L2TransactionReader::verify(inner_slice, compatible),
-            1 => NextMemBlockReader::verify(inner_slice, compatible),
-            2 => TipSyncReader::verify(inner_slice, compatible),
-            _ => ve!(Self, UnknownItem, Self::ITEMS_COUNT, item_id),
-        }?;
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct P2PSyncMessageBuilder(pub(crate) P2PSyncMessageUnion);
-impl P2PSyncMessageBuilder {
-    pub const ITEMS_COUNT: usize = 3;
-    pub fn set<I>(mut self, v: I) -> Self
-    where
-        I: ::core::convert::Into<P2PSyncMessageUnion>,
-    {
-        self.0 = v.into();
-        self
-    }
-}
-impl molecule::prelude::Builder for P2PSyncMessageBuilder {
-    type Entity = P2PSyncMessage;
-    const NAME: &'static str = "P2PSyncMessageBuilder";
-    fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE + self.0.as_slice().len()
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        writer.write_all(&molecule::pack_number(self.0.item_id()))?;
-        writer.write_all(self.0.as_slice())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        P2PSyncMessage::new_unchecked(inner.into())
-    }
-}
-#[derive(Debug, Clone)]
-pub enum P2PSyncMessageUnion {
-    L2Transaction(L2Transaction),
-    NextMemBlock(NextMemBlock),
-    TipSync(TipSync),
-}
-#[derive(Debug, Clone, Copy)]
-pub enum P2PSyncMessageUnionReader<'r> {
-    L2Transaction(L2TransactionReader<'r>),
-    NextMemBlock(NextMemBlockReader<'r>),
-    TipSync(TipSyncReader<'r>),
-}
-impl ::core::default::Default for P2PSyncMessageUnion {
-    fn default() -> Self {
-        P2PSyncMessageUnion::L2Transaction(::core::default::Default::default())
-    }
-}
-impl ::core::fmt::Display for P2PSyncMessageUnion {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            P2PSyncMessageUnion::L2Transaction(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, L2Transaction::NAME, item)
-            }
-            P2PSyncMessageUnion::NextMemBlock(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, NextMemBlock::NAME, item)
-            }
-            P2PSyncMessageUnion::TipSync(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, TipSync::NAME, item)
-            }
-        }
-    }
-}
-impl<'r> ::core::fmt::Display for P2PSyncMessageUnionReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            P2PSyncMessageUnionReader::L2Transaction(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, L2Transaction::NAME, item)
-            }
-            P2PSyncMessageUnionReader::NextMemBlock(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, NextMemBlock::NAME, item)
-            }
-            P2PSyncMessageUnionReader::TipSync(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, TipSync::NAME, item)
-            }
-        }
-    }
-}
-impl P2PSyncMessageUnion {
-    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            P2PSyncMessageUnion::L2Transaction(ref item) => write!(f, "{}", item),
-            P2PSyncMessageUnion::NextMemBlock(ref item) => write!(f, "{}", item),
-            P2PSyncMessageUnion::TipSync(ref item) => write!(f, "{}", item),
-        }
-    }
-}
-impl<'r> P2PSyncMessageUnionReader<'r> {
-    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            P2PSyncMessageUnionReader::L2Transaction(ref item) => write!(f, "{}", item),
-            P2PSyncMessageUnionReader::NextMemBlock(ref item) => write!(f, "{}", item),
-            P2PSyncMessageUnionReader::TipSync(ref item) => write!(f, "{}", item),
-        }
-    }
-}
-impl ::core::convert::From<L2Transaction> for P2PSyncMessageUnion {
-    fn from(item: L2Transaction) -> Self {
-        P2PSyncMessageUnion::L2Transaction(item)
-    }
-}
-impl ::core::convert::From<NextMemBlock> for P2PSyncMessageUnion {
-    fn from(item: NextMemBlock) -> Self {
-        P2PSyncMessageUnion::NextMemBlock(item)
-    }
-}
-impl ::core::convert::From<TipSync> for P2PSyncMessageUnion {
-    fn from(item: TipSync) -> Self {
-        P2PSyncMessageUnion::TipSync(item)
-    }
-}
-impl<'r> ::core::convert::From<L2TransactionReader<'r>> for P2PSyncMessageUnionReader<'r> {
-    fn from(item: L2TransactionReader<'r>) -> Self {
-        P2PSyncMessageUnionReader::L2Transaction(item)
-    }
-}
-impl<'r> ::core::convert::From<NextMemBlockReader<'r>> for P2PSyncMessageUnionReader<'r> {
-    fn from(item: NextMemBlockReader<'r>) -> Self {
-        P2PSyncMessageUnionReader::NextMemBlock(item)
-    }
-}
-impl<'r> ::core::convert::From<TipSyncReader<'r>> for P2PSyncMessageUnionReader<'r> {
-    fn from(item: TipSyncReader<'r>) -> Self {
-        P2PSyncMessageUnionReader::TipSync(item)
-    }
-}
-impl P2PSyncMessageUnion {
-    pub const NAME: &'static str = "P2PSyncMessageUnion";
-    pub fn as_bytes(&self) -> molecule::bytes::Bytes {
-        match self {
-            P2PSyncMessageUnion::L2Transaction(item) => item.as_bytes(),
-            P2PSyncMessageUnion::NextMemBlock(item) => item.as_bytes(),
-            P2PSyncMessageUnion::TipSync(item) => item.as_bytes(),
-        }
-    }
-    pub fn as_slice(&self) -> &[u8] {
-        match self {
-            P2PSyncMessageUnion::L2Transaction(item) => item.as_slice(),
-            P2PSyncMessageUnion::NextMemBlock(item) => item.as_slice(),
-            P2PSyncMessageUnion::TipSync(item) => item.as_slice(),
-        }
-    }
-    pub fn item_id(&self) -> molecule::Number {
-        match self {
-            P2PSyncMessageUnion::L2Transaction(_) => 0,
-            P2PSyncMessageUnion::NextMemBlock(_) => 1,
-            P2PSyncMessageUnion::TipSync(_) => 2,
-        }
-    }
-    pub fn item_name(&self) -> &str {
-        match self {
-            P2PSyncMessageUnion::L2Transaction(_) => "L2Transaction",
-            P2PSyncMessageUnion::NextMemBlock(_) => "NextMemBlock",
-            P2PSyncMessageUnion::TipSync(_) => "TipSync",
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> P2PSyncMessageUnionReader<'r> {
-        match self {
-            P2PSyncMessageUnion::L2Transaction(item) => item.as_reader().into(),
-            P2PSyncMessageUnion::NextMemBlock(item) => item.as_reader().into(),
-            P2PSyncMessageUnion::TipSync(item) => item.as_reader().into(),
-        }
-    }
-}
-impl<'r> P2PSyncMessageUnionReader<'r> {
-    pub const NAME: &'r str = "P2PSyncMessageUnionReader";
-    pub fn as_slice(&self) -> &'r [u8] {
-        match self {
-            P2PSyncMessageUnionReader::L2Transaction(item) => item.as_slice(),
-            P2PSyncMessageUnionReader::NextMemBlock(item) => item.as_slice(),
-            P2PSyncMessageUnionReader::TipSync(item) => item.as_slice(),
-        }
-    }
-    pub fn item_id(&self) -> molecule::Number {
-        match self {
-            P2PSyncMessageUnionReader::L2Transaction(_) => 0,
-            P2PSyncMessageUnionReader::NextMemBlock(_) => 1,
-            P2PSyncMessageUnionReader::TipSync(_) => 2,
-        }
-    }
-    pub fn item_name(&self) -> &str {
-        match self {
-            P2PSyncMessageUnionReader::L2Transaction(_) => "L2Transaction",
-            P2PSyncMessageUnionReader::NextMemBlock(_) => "NextMemBlock",
-            P2PSyncMessageUnionReader::TipSync(_) => "TipSync",
-        }
-    }
-}
-#[derive(Clone)]
-pub struct P2PSyncMessageVec(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for P2PSyncMessageVec {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for P2PSyncMessageVec {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for P2PSyncMessageVec {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} [", Self::NAME)?;
-        for i in 0..self.len() {
-            if i == 0 {
-                write!(f, "{}", self.get_unchecked(i))?;
-            } else {
-                write!(f, ", {}", self.get_unchecked(i))?;
-            }
-        }
-        write!(f, "]")
-    }
-}
-impl ::core::default::Default for P2PSyncMessageVec {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![4, 0, 0, 0];
-        P2PSyncMessageVec::new_unchecked(v.into())
-    }
-}
-impl P2PSyncMessageVec {
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn item_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn len(&self) -> usize {
-        self.item_count()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-    pub fn get(&self, idx: usize) -> Option<P2PSyncMessage> {
-        if idx >= self.len() {
-            None
-        } else {
-            Some(self.get_unchecked(idx))
-        }
-    }
-    pub fn get_unchecked(&self, idx: usize) -> P2PSyncMessage {
-        let slice = self.as_slice();
-        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
-        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
-        if idx == self.len() - 1 {
-            P2PSyncMessage::new_unchecked(self.0.slice(start..))
-        } else {
-            let end_idx = start_idx + molecule::NUMBER_SIZE;
-            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
-            P2PSyncMessage::new_unchecked(self.0.slice(start..end))
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> P2PSyncMessageVecReader<'r> {
-        P2PSyncMessageVecReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for P2PSyncMessageVec {
-    type Builder = P2PSyncMessageVecBuilder;
-    const NAME: &'static str = "P2PSyncMessageVec";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        P2PSyncMessageVec(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        P2PSyncMessageVecReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        P2PSyncMessageVecReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder().extend(self.into_iter())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct P2PSyncMessageVecReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for P2PSyncMessageVecReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for P2PSyncMessageVecReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for P2PSyncMessageVecReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} [", Self::NAME)?;
-        for i in 0..self.len() {
-            if i == 0 {
-                write!(f, "{}", self.get_unchecked(i))?;
-            } else {
-                write!(f, ", {}", self.get_unchecked(i))?;
-            }
-        }
-        write!(f, "]")
-    }
-}
-impl<'r> P2PSyncMessageVecReader<'r> {
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn item_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn len(&self) -> usize {
-        self.item_count()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-    pub fn get(&self, idx: usize) -> Option<P2PSyncMessageReader<'r>> {
-        if idx >= self.len() {
-            None
-        } else {
-            Some(self.get_unchecked(idx))
-        }
-    }
-    pub fn get_unchecked(&self, idx: usize) -> P2PSyncMessageReader<'r> {
-        let slice = self.as_slice();
-        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
-        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
-        if idx == self.len() - 1 {
-            P2PSyncMessageReader::new_unchecked(&self.as_slice()[start..])
-        } else {
-            let end_idx = start_idx + molecule::NUMBER_SIZE;
-            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
-            P2PSyncMessageReader::new_unchecked(&self.as_slice()[start..end])
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for P2PSyncMessageVecReader<'r> {
-    type Entity = P2PSyncMessageVec;
-    const NAME: &'static str = "P2PSyncMessageVecReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        P2PSyncMessageVecReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
-        }
-        let total_size = molecule::unpack_number(slice) as usize;
-        if slice_len != total_size {
-            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
-        }
-        if slice_len == molecule::NUMBER_SIZE {
-            return Ok(());
-        }
-        if slice_len < molecule::NUMBER_SIZE * 2 {
-            return ve!(
-                Self,
-                TotalSizeNotMatch,
-                molecule::NUMBER_SIZE * 2,
-                slice_len
-            );
-        }
-        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
-        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        if slice_len < offset_first {
-            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
-        }
-        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
-            .chunks_exact(molecule::NUMBER_SIZE)
-            .map(|x| molecule::unpack_number(x) as usize)
-            .collect();
-        offsets.push(total_size);
-        if offsets.windows(2).any(|i| i[0] > i[1]) {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        for pair in offsets.windows(2) {
-            let start = pair[0];
-            let end = pair[1];
-            P2PSyncMessageReader::verify(&slice[start..end], compatible)?;
-        }
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct P2PSyncMessageVecBuilder(pub(crate) Vec<P2PSyncMessage>);
-impl P2PSyncMessageVecBuilder {
-    pub fn set(mut self, v: Vec<P2PSyncMessage>) -> Self {
-        self.0 = v;
-        self
-    }
-    pub fn push(mut self, v: P2PSyncMessage) -> Self {
-        self.0.push(v);
-        self
-    }
-    pub fn extend<T: ::core::iter::IntoIterator<Item = P2PSyncMessage>>(mut self, iter: T) -> Self {
-        for elem in iter {
-            self.0.push(elem);
-        }
-        self
-    }
-}
-impl molecule::prelude::Builder for P2PSyncMessageVecBuilder {
-    type Entity = P2PSyncMessageVec;
-    const NAME: &'static str = "P2PSyncMessageVecBuilder";
-    fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (self.0.len() + 1)
-            + self
-                .0
-                .iter()
-                .map(|inner| inner.as_slice().len())
-                .sum::<usize>()
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        let item_count = self.0.len();
-        if item_count == 0 {
-            writer.write_all(&molecule::pack_number(
-                molecule::NUMBER_SIZE as molecule::Number,
-            ))?;
-        } else {
-            let (total_size, offsets) = self.0.iter().fold(
-                (
-                    molecule::NUMBER_SIZE * (item_count + 1),
-                    Vec::with_capacity(item_count),
-                ),
-                |(start, mut offsets), inner| {
-                    offsets.push(start);
-                    (start + inner.as_slice().len(), offsets)
-                },
-            );
-            writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
-            for offset in offsets.into_iter() {
-                writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
-            }
-            for inner in self.0.iter() {
-                writer.write_all(inner.as_slice())?;
-            }
-        }
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        P2PSyncMessageVec::new_unchecked(inner.into())
-    }
-}
-pub struct P2PSyncMessageVecIterator(P2PSyncMessageVec, usize, usize);
-impl ::core::iter::Iterator for P2PSyncMessageVecIterator {
-    type Item = P2PSyncMessage;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.1 >= self.2 {
-            None
-        } else {
-            let ret = self.0.get_unchecked(self.1);
-            self.1 += 1;
-            Some(ret)
-        }
-    }
-}
-impl ::core::iter::ExactSizeIterator for P2PSyncMessageVecIterator {
-    fn len(&self) -> usize {
-        self.2 - self.1
-    }
-}
-impl ::core::iter::IntoIterator for P2PSyncMessageVec {
-    type Item = P2PSyncMessage;
-    type IntoIter = P2PSyncMessageVecIterator;
-    fn into_iter(self) -> Self::IntoIter {
-        let len = self.len();
-        P2PSyncMessageVecIterator(self, 0, len)
-    }
-}
-impl<'r> P2PSyncMessageVecReader<'r> {
-    pub fn iter<'t>(&'t self) -> P2PSyncMessageVecReaderIterator<'t, 'r> {
-        P2PSyncMessageVecReaderIterator(&self, 0, self.len())
-    }
-}
-pub struct P2PSyncMessageVecReaderIterator<'t, 'r>(&'t P2PSyncMessageVecReader<'r>, usize, usize);
-impl<'t: 'r, 'r> ::core::iter::Iterator for P2PSyncMessageVecReaderIterator<'t, 'r> {
-    type Item = P2PSyncMessageReader<'t>;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.1 >= self.2 {
-            None
-        } else {
-            let ret = self.0.get_unchecked(self.1);
-            self.1 += 1;
-            Some(ret)
-        }
-    }
-}
-impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for P2PSyncMessageVecReaderIterator<'t, 'r> {
-    fn len(&self) -> usize {
-        self.2 - self.1
-    }
-}
-#[derive(Clone)]
-pub struct TipSync(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for TipSync {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for TipSync {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for TipSync {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "block_number", self.block_number())?;
-        write!(f, ", {}: {}", "block_hash", self.block_hash())?;
-        write!(f, " }}")
-    }
-}
-impl ::core::default::Default for TipSync {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ];
-        TipSync::new_unchecked(v.into())
-    }
-}
-impl TipSync {
-    pub const TOTAL_SIZE: usize = 40;
-    pub const FIELD_SIZES: [usize; 2] = [8, 32];
-    pub const FIELD_COUNT: usize = 2;
-    pub fn block_number(&self) -> Uint64 {
-        Uint64::new_unchecked(self.0.slice(0..8))
-    }
-    pub fn block_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(8..40))
-    }
-    pub fn as_reader<'r>(&'r self) -> TipSyncReader<'r> {
-        TipSyncReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for TipSync {
-    type Builder = TipSyncBuilder;
-    const NAME: &'static str = "TipSync";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        TipSync(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        TipSyncReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        TipSyncReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
-            .block_number(self.block_number())
-            .block_hash(self.block_hash())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct TipSyncReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for TipSyncReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for TipSyncReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for TipSyncReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "block_number", self.block_number())?;
-        write!(f, ", {}: {}", "block_hash", self.block_hash())?;
-        write!(f, " }}")
-    }
-}
-impl<'r> TipSyncReader<'r> {
-    pub const TOTAL_SIZE: usize = 40;
-    pub const FIELD_SIZES: [usize; 2] = [8, 32];
-    pub const FIELD_COUNT: usize = 2;
-    pub fn block_number(&self) -> Uint64Reader<'r> {
-        Uint64Reader::new_unchecked(&self.as_slice()[0..8])
-    }
-    pub fn block_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[8..40])
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for TipSyncReader<'r> {
-    type Entity = TipSync;
-    const NAME: &'static str = "TipSyncReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        TipSyncReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len != Self::TOTAL_SIZE {
-            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
-        }
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct TipSyncBuilder {
-    pub(crate) block_number: Uint64,
-    pub(crate) block_hash: Byte32,
-}
-impl TipSyncBuilder {
-    pub const TOTAL_SIZE: usize = 40;
-    pub const FIELD_SIZES: [usize; 2] = [8, 32];
-    pub const FIELD_COUNT: usize = 2;
-    pub fn block_number(mut self, v: Uint64) -> Self {
-        self.block_number = v;
-        self
-    }
-    pub fn block_hash(mut self, v: Byte32) -> Self {
-        self.block_hash = v;
-        self
-    }
-}
-impl molecule::prelude::Builder for TipSyncBuilder {
-    type Entity = TipSync;
-    const NAME: &'static str = "TipSyncBuilder";
-    fn expected_length(&self) -> usize {
-        Self::TOTAL_SIZE
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        writer.write_all(self.block_number.as_slice())?;
-        writer.write_all(self.block_hash.as_slice())?;
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        TipSync::new_unchecked(inner.into())
     }
 }

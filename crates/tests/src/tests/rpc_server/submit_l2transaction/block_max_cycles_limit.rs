@@ -29,7 +29,7 @@ use crate::testing_tool::{
 const BLOCK_MAX_CYCLES_LIMIT: u64 = 200_0000;
 const META_CONTRACT_ACCOUNT_ID: u32 = RESERVED_ACCOUNT_ID;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_block_max_cycles_limit() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -122,7 +122,7 @@ async fn test_block_max_cycles_limit() {
 
     {
         let mut mem_pool = chain.mem_pool().await;
-        mem_pool.push_transaction(deploy_tx).await.unwrap();
+        mem_pool.push_transaction(deploy_tx).unwrap();
     }
 
     // Refresh block cycles limit
@@ -201,7 +201,7 @@ async fn test_block_max_cycles_limit() {
         assert!(cycles < bob_deploy_gas_limit);
 
         // Directly push bob tx will result in TransactionError::BlockCyclesLimitReached
-        let err = mem_pool.push_transaction(bob_deploy_tx).await.unwrap_err();
+        let err = mem_pool.push_transaction(bob_deploy_tx).unwrap_err();
         eprintln!("err {}", err);
 
         let expected_err = "Insufficient pool cycles";
@@ -432,10 +432,7 @@ async fn test_block_max_cycles_limit() {
     // Check err
     {
         let mut mem_pool = chain.mem_pool().await;
-        let err = mem_pool
-            .push_transaction(alice_deploy_tx)
-            .await
-            .unwrap_err();
+        let err = mem_pool.push_transaction(alice_deploy_tx).unwrap_err();
 
         let (cycles, limit) = match err.downcast::<TransactionError>().unwrap() {
             TransactionError::ExceededMaxBlockCycles { cycles, limit } => (cycles, limit),

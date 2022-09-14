@@ -288,19 +288,17 @@ fn main() -> Result<()> {
         Err(e) => return Err(e.into()),
         Ok(v) => v.parse()?,
     };
-    // - 1 because ChainTask will have a dedicated thread.
-    let worker_threads = if threads >= 4 { threads - 1 } else { threads };
     let blocking_threads = match env::var("GODWOKEN_BLOCKING_THREADS") {
         Err(env::VarError::NotPresent) => {
-            // set blocking_threads to the number of CPUs because the blocking
-            // tasks are CPU bound.
-            threads
+            // set blocking_threads to the number of CPUs (but at least 4). Our
+            // blocking tasks are mostly CPU bound.
+            std::cmp::max(4, threads)
         }
         Err(e) => return Err(e.into()),
         Ok(v) => v.parse()?,
     };
     let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(worker_threads)
+        .worker_threads(threads)
         .max_blocking_threads(blocking_threads)
         .enable_all()
         .build()?;

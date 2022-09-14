@@ -25,7 +25,7 @@ use gw_utils::local_cells::LocalCellsManager;
 
 const CKB: u64 = 100000000;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_restore_mem_block() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -165,7 +165,7 @@ async fn test_restore_mem_block() {
             .await
             .unwrap();
         for tx in random_txs.clone() {
-            mem_pool.push_transaction(tx).await.unwrap();
+            mem_pool.push_transaction(tx).unwrap();
         }
 
         let mem_block = mem_pool.mem_block();

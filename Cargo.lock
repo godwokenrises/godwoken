@@ -1535,7 +1535,7 @@ dependencies = [
 
 [[package]]
 name = "godwoken-bin"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "ckb-types",
@@ -1567,7 +1567,7 @@ dependencies = [
 
 [[package]]
 name = "gw-benches"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "criterion",
  "gw-common",
@@ -1583,7 +1583,7 @@ dependencies = [
 
 [[package]]
 name = "gw-block-producer"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -1633,7 +1633,7 @@ dependencies = [
 
 [[package]]
 name = "gw-chain"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "ckb-fixed-hash",
@@ -1654,11 +1654,12 @@ dependencies = [
  "thiserror",
  "tokio",
  "toml",
+ "tracing",
 ]
 
 [[package]]
 name = "gw-challenge"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1688,7 +1689,7 @@ dependencies = [
 
 [[package]]
 name = "gw-ckb-hardfork"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "arc-swap",
  "ckb-types",
@@ -1698,7 +1699,7 @@ dependencies = [
 
 [[package]]
 name = "gw-common"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
@@ -1710,7 +1711,7 @@ dependencies = [
 
 [[package]]
 name = "gw-config"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "ckb-fixed-hash",
  "gw-jsonrpc-types",
@@ -1721,7 +1722,7 @@ dependencies = [
 
 [[package]]
 name = "gw-db"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "ckb-rocksdb",
  "gw-config",
@@ -1734,7 +1735,7 @@ dependencies = [
 
 [[package]]
 name = "gw-dynamic-config"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1749,7 +1750,7 @@ dependencies = [
 
 [[package]]
 name = "gw-eoa-mapping"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "gw-common",
@@ -1761,7 +1762,7 @@ dependencies = [
 
 [[package]]
 name = "gw-generator"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1789,14 +1790,14 @@ dependencies = [
 
 [[package]]
 name = "gw-hash"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "blake2b-ref 0.3.1",
 ]
 
 [[package]]
 name = "gw-jsonrpc-types"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "ckb-fixed-hash",
@@ -1809,10 +1810,11 @@ dependencies = [
 
 [[package]]
 name = "gw-mem-pool"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bytes",
  "futures",
  "gw-challenge",
  "gw-common",
@@ -1828,17 +1830,18 @@ dependencies = [
  "gw-utils",
  "hex",
  "log",
+ "opentelemetry",
  "rand 0.8.5",
- "rdkafka",
  "tempfile",
  "tentacle",
  "tokio",
  "tracing",
+ "tracing-opentelemetry",
 ]
 
 [[package]]
 name = "gw-p2p-network"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1856,7 +1859,7 @@ dependencies = [
 
 [[package]]
 name = "gw-polyjuice-sender-recover"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "gw-common",
@@ -1871,7 +1874,7 @@ dependencies = [
 
 [[package]]
 name = "gw-replay-chain"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "async-jsonrpc-client",
@@ -1902,7 +1905,7 @@ dependencies = [
 
 [[package]]
 name = "gw-rpc-client"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1934,7 +1937,7 @@ dependencies = [
 
 [[package]]
 name = "gw-rpc-server"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1978,7 +1981,7 @@ dependencies = [
 
 [[package]]
 name = "gw-store"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1994,7 +1997,7 @@ dependencies = [
 
 [[package]]
 name = "gw-tests"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "async-jsonrpc-client",
@@ -2043,7 +2046,7 @@ dependencies = [
 
 [[package]]
 name = "gw-tools"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "bech32 0.6.0",
@@ -2085,7 +2088,7 @@ dependencies = [
 
 [[package]]
 name = "gw-traits"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "gw-common",
  "gw-db",
@@ -2094,7 +2097,7 @@ dependencies = [
 
 [[package]]
 name = "gw-tx-filter"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "gw-common",
  "gw-config",
@@ -2107,7 +2110,7 @@ dependencies = [
 
 [[package]]
 name = "gw-types"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "cfg-if 0.1.10",
  "ckb-fixed-hash",
@@ -2120,7 +2123,7 @@ dependencies = [
 
 [[package]]
 name = "gw-utils"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
  "ckb-crypto",
@@ -2137,11 +2140,12 @@ dependencies = [
  "secp256k1 0.21.3",
  "sha3",
  "tokio",
+ "zstd",
 ]
 
 [[package]]
 name = "gw-version"
-version = "1.5.0-rc2"
+version = "1.6.0-rc1"
 dependencies = [
  "anyhow",
 ]
@@ -2827,27 +2831,6 @@ checksum = "19e64526ebdee182341572e50e9ad03965aa510cd94427a4549448f285e957a1"
 dependencies = [
  "hermit-abi",
  "libc",
-]
-
-[[package]]
-name = "num_enum"
-version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf5395665662ef45796a4ff5486c5d41d29e0c09640af4c5f17fd94ee2c119c9"
-dependencies = [
- "num_enum_derive",
-]
-
-[[package]]
-name = "num_enum_derive"
-version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b0498641e53dd6ac1a4f22547548caa6864cc4933784319cd1775271c5a46ce"
-dependencies = [
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -3581,33 +3564,6 @@ dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
  "num_cpus",
-]
-
-[[package]]
-name = "rdkafka"
-version = "0.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8acd8f5c5482fdf89e8878227bafa442d8c4409f6287391c85549ca83626c27"
-dependencies = [
- "futures",
- "libc",
- "log",
- "rdkafka-sys",
- "serde",
- "serde_derive",
- "serde_json",
- "slab",
-]
-
-[[package]]
-name = "rdkafka-sys"
-version = "3.0.0+1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca35e95c88e08cdc643b25744e38ccee7c93c7e90d1ac6850fe74cbaa40803c3"
-dependencies = [
- "libc",
- "num_enum",
- "pkg-config",
 ]
 
 [[package]]
@@ -5028,4 +4984,33 @@ dependencies = [
  "quote",
  "syn",
  "synstructure",
+]
+
+[[package]]
+name = "zstd"
+version = "0.11.2+zstd.1.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20cc960326ece64f010d2d2107537f26dc589a6573a316bd5b1dba685fa5fde4"
+dependencies = [
+ "zstd-safe",
+]
+
+[[package]]
+name = "zstd-safe"
+version = "5.0.2+zstd.1.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d2a5585e04f9eea4b2a3d1eca508c4dee9592a89ef6f450c11719da0726f4db"
+dependencies = [
+ "libc",
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-sys"
+version = "2.0.1+zstd.1.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9fd07cbbc53846d9145dbffdf6dd09a7a0aa52be46741825f5c97bdd4f73f12b"
+dependencies = [
+ "cc",
+ "libc",
 ]

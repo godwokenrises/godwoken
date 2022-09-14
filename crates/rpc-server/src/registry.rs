@@ -478,7 +478,7 @@ impl RequestSubmitter {
             while let Some(hash) = mem_pool.pending_restored_tx_hashes().pop_front() {
                 match db.get_mem_pool_transaction(&hash) {
                     Ok(Some(tx)) => {
-                        if let Err(err) = mem_pool.push_transaction(tx).await {
+                        if let Err(err) = mem_pool.push_transaction(tx) {
                             log::error!("reinject mem block tx {} failed {}", hash.pack(), err);
                         }
                     }
@@ -628,9 +628,7 @@ impl RequestSubmitter {
                 );
 
                 if let Err(err) = match recovered_senders.build_create_tx(eth_recover, &state) {
-                    Ok(Some(create_accounts_tx)) => {
-                        mem_pool.push_transaction(create_accounts_tx).await
-                    }
+                    Ok(Some(create_accounts_tx)) => mem_pool.push_transaction(create_accounts_tx),
                     Ok(None) => Ok(()),
                     Err(err) => Err(err),
                 } {
@@ -690,9 +688,9 @@ impl RequestSubmitter {
                                 tx.hash().pack()
                             );
 
-                            mem_pool.push_transaction(tx).await
+                            mem_pool.push_transaction(tx)
                         }
-                        FeeItem::Tx(tx) => mem_pool.push_transaction(tx).await,
+                        FeeItem::Tx(tx) => mem_pool.push_transaction(tx),
                         FeeItem::Withdrawal(withdrawal) => {
                             mem_pool.push_withdrawal_request(withdrawal).await
                         }
@@ -831,25 +829,26 @@ async fn get_block_committed_info(
     store: Data<Store>,
 ) -> Result<Option<L2BlockCommittedInfo>> {
     if let Some(number) = store.get_block_number(&to_h256(block_hash))? {
-        let transaction_hash = store
-            .get_block_submit_tx_hash(number)
-            .context("get submit tx")?;
-        let opt_block_hash = rpc_client
-            .ckb
-            .get_transaction_block_hash(transaction_hash)
-            .await?;
-        if let Some(block_hash) = opt_block_hash {
-            let number = rpc_client
-                .get_header(block_hash.into())
-                .await?
-                .context("get block header")?
-                .inner
-                .number;
-            Ok(Some(L2BlockCommittedInfo {
-                number,
-                block_hash: block_hash.into(),
-                transaction_hash: to_jsonh256(transaction_hash),
-            }))
+        if let Some(transaction_hash) = store.get_block_submit_tx_hash(number) {
+            let opt_block_hash = rpc_client
+                .ckb
+                .get_transaction_block_hash(transaction_hash)
+                .await?;
+            if let Some(block_hash) = opt_block_hash {
+                let number = rpc_client
+                    .get_header(block_hash.into())
+                    .await?
+                    .context("get block header")?
+                    .inner
+                    .number;
+                Ok(Some(L2BlockCommittedInfo {
+                    number,
+                    block_hash: block_hash.into(),
+                    transaction_hash: to_jsonh256(transaction_hash),
+                }))
+            } else {
+                Ok(None)
+            }
         } else {
             Ok(None)
         }
@@ -1042,7 +1041,9 @@ async fn execute_l2transaction(
         }
 
         // tx basic verification
-        TransactionVerifier::new(&state, ctx.generator.rollup_context()).verify(&tx)?;
+        let polyjuice_creator_id = ctx.generator.get_polyjuice_creator_id(&state)?;
+        TransactionVerifier::new(&state, ctx.generator.rollup_context(), polyjuice_creator_id)
+            .verify(&tx)?;
         // verify tx signature
         ctx.generator.check_transaction_signature(&state, &tx)?;
         // execute tx

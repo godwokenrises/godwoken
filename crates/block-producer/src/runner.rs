@@ -1,7 +1,6 @@
 use crate::{
     block_producer::{BlockProducer, BlockProducerCreateArgs},
     block_sync_client::{block_sync_client_protocol, BlockSyncClient, P2PStream},
-    block_sync_server::{block_sync_server_protocol, BlockSyncServerState},
     chain_updater::ChainUpdater,
     challenger::{Challenger, ChallengerNewArgs},
     cleaner::Cleaner,
@@ -27,10 +26,9 @@ use gw_generator::{
     ArcSwap, Generator,
 };
 use gw_mem_pool::{
+    block_sync_server::{block_sync_server_protocol, BlockSyncServerState},
     default_provider::DefaultMemPoolProvider,
     pool::{MemPool, MemPoolCreateArgs},
-    spawn_sub_mem_pool_task,
-    sync::p2p,
 };
 use gw_p2p_network::P2PNetwork;
 use gw_polyjuice_sender_recover::recover::PolyjuiceSenderRecover;
@@ -497,6 +495,17 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
     }
     let base = BaseInitComponents::init(&config, skip_config_check).await?;
+
+    let has_block_producer_and_p2p =
+        config.block_producer.is_some() && config.p2p_network_config.is_some();
+    let block_sync_server_state = if has_block_producer_and_p2p {
+        Some(Arc::new(std::sync::Mutex::new(BlockSyncServerState::new(
+            &config.sync_server,
+        ))))
+    } else {
+        None
+    };
+
     let (mem_pool, wallet, offchain_mock_context) = match config.block_producer.as_ref() {
         Some(block_producer_config) => {
             let opt_wallet = block_producer_config
@@ -529,7 +538,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     config: config.mem_pool.clone(),
                     node_mode: config.node_mode,
                     dynamic_config_manager: base.dynamic_config_manager.clone(),
-                    has_p2p_sync: config.p2p_network_config.is_some(),
+                    sync_server: block_sync_server_state.clone(),
                 };
                 Arc::new(Mutex::new(
                     MemPool::create(args)
@@ -586,19 +595,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     let (block_producer, challenger, test_mode_control, withdrawal_unlocker, cleaner) = match config
         .node_mode
     {
-        NodeMode::ReadOnly => {
-            if let Some(sync_mem_block_config) = &config.mem_pool.subscribe {
-                match &mem_pool {
-                    Some(mem_pool) => {
-                        spawn_sub_mem_pool_task(mem_pool.clone(), sync_mem_block_config.clone())?;
-                    }
-                    None => {
-                        log::warn!("Failed to init sync mem block, because mem_pool is None.");
-                    }
-                }
-            }
-            (None, None, None, None, None)
-        }
+        NodeMode::ReadOnly => (None, None, None, None, None),
         mode => {
             let block_producer_config = config
                 .block_producer
@@ -606,9 +603,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 .ok_or_else(|| anyhow!("must provide block producer config in mode: {:?}", mode))?;
             let contracts_dep_manager =
                 contracts_dep_manager.ok_or_else(|| anyhow!("must build contracts dep"))?;
-            let mem_pool = mem_pool
-                .clone()
-                .ok_or_else(|| anyhow!("mem-pool must be enabled in mode: {:?}", mode))?;
             let wallet =
                 wallet.ok_or_else(|| anyhow!("wallet must be enabled in mode: {:?}", mode))?;
             let offchain_mock_context = {
@@ -678,7 +672,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 store: store.clone(),
                 generator: generator.clone(),
                 chain: Arc::clone(&chain),
-                mem_pool,
                 rpc_client: rpc_client.clone(),
                 ckb_genesis_info,
                 config: block_producer_config,
@@ -703,36 +696,11 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     // Broadcast shutdown event.
     let (shutdown_event, shutdown_event_recv) = broadcast::channel(1);
 
-    let has_block_producer_and_p2p =
-        block_producer.is_some() && config.p2p_network_config.is_some();
-    let block_sync_server_state = if has_block_producer_and_p2p {
-        Some(Arc::new(std::sync::Mutex::new(BlockSyncServerState::new())))
-    } else {
-        None
-    };
-
     let mut block_sync_client_p2p_receiver: Option<UnboundedReceiver<P2PStream>> = None;
 
     // P2P network.
     let p2p_control_and_handle = if let Some(ref p2p_network_config) = config.p2p_network_config {
         let mut protocols: Vec<ProtocolMeta> = Vec::new();
-        let mut sync_server_state: Option<Arc<Mutex<p2p::SyncServerState>>> = None;
-        match (&mem_pool, config.node_mode) {
-            (Some(_), NodeMode::FullNode | NodeMode::Test) => {
-                log::info!("will enable mem-pool p2p sync server");
-                let s = Arc::new(Mutex::new(Default::default()));
-                sync_server_state = Some(s.clone());
-                protocols.push(p2p::sync_server_protocol(s));
-            }
-            (Some(mem_pool), NodeMode::ReadOnly) => {
-                log::info!("will enable mem-pool p2p sync client");
-                protocols.push(p2p::sync_client_protocol(
-                    mem_pool.clone(),
-                    shutdown_event.clone(),
-                ));
-            }
-            _ => {}
-        }
         match config.node_mode {
             NodeMode::ReadOnly => {
                 log::info!("will enable p2p block sync client");
@@ -749,12 +717,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
         let mut network = P2PNetwork::init(p2p_network_config, protocols).await?;
         let control = network.control().clone();
-        if let (Some(sync_server_state), Some(mem_pool)) = (sync_server_state, &mem_pool) {
-            let mut mem_pool = mem_pool.lock().await;
-            mem_pool
-                .enable_publishing(control.clone(), sync_server_state)
-                .await;
-        }
         let handle = tokio::spawn(async move {
             log::info!("running the p2p network");
             network.run().await;
@@ -887,80 +849,77 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     let (chain_task_ended_tx, chain_task) = tokio::sync::oneshot::channel::<()>();
     let rt_handle = tokio::runtime::Handle::current();
-    std::thread::Builder::new()
-        .name("chain-task".into())
-        .spawn({
-            let shutdown_send = shutdown_completed_send.clone();
-            move || {
-                rt_handle.block_on(async move {
-                    use tracing::Instrument;
+    tokio::task::spawn_blocking({
+        let shutdown_send = shutdown_completed_send.clone();
+        move || {
+            rt_handle.block_on(async move {
+                use tracing::Instrument;
 
-                    let _tx = chain_task_ended_tx;
-                    let ctx = ChainTaskContext {
-                        // chain_updater,
-                        challenger,
-                        withdrawal_unlocker,
-                        cleaner,
-                    };
-                    let mut backoff = ExponentialBackoff::new(Duration::from_secs(1));
-                    let mut chain_task = ChainTask::create(
-                        rpc_client,
-                        Duration::from_secs(3),
-                        ctx,
-                        shutdown_send,
-                        shutdown_event_recv,
-                    );
+                let _tx = chain_task_ended_tx;
+                let ctx = ChainTaskContext {
+                    // chain_updater,
+                    challenger,
+                    withdrawal_unlocker,
+                    cleaner,
+                };
+                let mut backoff = ExponentialBackoff::new(Duration::from_secs(1));
+                let mut chain_task = ChainTask::create(
+                    rpc_client,
+                    Duration::from_secs(3),
+                    ctx,
+                    shutdown_send,
+                    shutdown_event_recv,
+                );
 
-                    let mut run_status = ChainTaskRunStatus::default();
-                    loop {
-                        // Exit if shutdown event is received.
-                        if chain_task.shutdown_event.try_recv().is_ok() {
-                            log::info!("ChainTask existed successfully");
-                            return;
+                let mut run_status = ChainTaskRunStatus::default();
+                loop {
+                    // Exit if shutdown event is received.
+                    if chain_task.shutdown_event.try_recv().is_ok() {
+                        log::info!("ChainTask existed successfully");
+                        return;
+                    }
+
+                    let run_span = info_span!("chain_task_run");
+                    match chain_task
+                        .run(&run_status)
+                        .instrument(run_span.clone())
+                        .await
+                    {
+                        Ok(updated_status) => {
+                            run_status = updated_status;
+                            backoff.reset();
+
+                            let sleep_span =
+                                info_span!(parent: &run_span, "chain_task interval sleep");
+                            tokio::time::sleep(chain_task.poll_interval)
+                                .instrument(sleep_span)
+                                .await;
                         }
+                        Err(err) if err.is::<RPCRequestError>() => {
+                            // Reset status and refresh tip number hash
+                            run_status = ChainTaskRunStatus::default();
+                            let backoff_sleep = backoff.next_sleep();
+                            log::error!(
+                                "chain polling loop request error, will retry in {}s: {}",
+                                backoff_sleep.as_secs(),
+                                err
+                            );
 
-                        let run_span = info_span!("chain_task_run");
-                        match chain_task
-                            .run(&run_status)
-                            .instrument(run_span.clone())
-                            .await
-                        {
-                            Ok(updated_status) => {
-                                run_status = updated_status;
-                                backoff.reset();
-
-                                let sleep_span =
-                                    info_span!(parent: &run_span, "chain_task interval sleep");
-                                tokio::time::sleep(chain_task.poll_interval)
-                                    .instrument(sleep_span)
-                                    .await;
-                            }
-                            Err(err) if err.is::<RPCRequestError>() => {
-                                // Reset status and refresh tip number hash
-                                run_status = ChainTaskRunStatus::default();
-                                let backoff_sleep = backoff.next_sleep();
-                                log::error!(
-                                    "chain polling loop request error, will retry in {}s: {}",
-                                    backoff_sleep.as_secs(),
-                                    err
-                                );
-
-                                let sleep_span =
-                                    info_span!(parent: &run_span, "chain_task backoff sleep");
-                                tokio::time::sleep(backoff_sleep)
-                                    .instrument(sleep_span)
-                                    .await;
-                            }
-                            Err(err) => {
-                                log::error!("chain polling loop exit unexpected, error: {}", err);
-                                break;
-                            }
+                            let sleep_span =
+                                info_span!(parent: &run_span, "chain_task backoff sleep");
+                            tokio::time::sleep(backoff_sleep)
+                                .instrument(sleep_span)
+                                .await;
+                        }
+                        Err(err) => {
+                            log::error!("chain polling loop exit unexpected, error: {}", err);
+                            break;
                         }
                     }
-                });
-            }
-        })
-        .unwrap();
+                }
+            });
+        }
+    });
 
     let sub_shutdown = shutdown_event.subscribe();
     let rpc_shutdown_send = shutdown_completed_send.clone();

@@ -42,6 +42,11 @@ impl PolyjuiceParser {
         self.0[7] == 3
     }
 
+    pub fn is_call(&self) -> bool {
+        // 0 for EVMC_CALL
+        self.0[7] == 0
+    }
+
     pub fn value(&self) -> u128 {
         let mut data = [0u8; 16];
         data.copy_from_slice(&self.0[32..48]);
@@ -68,5 +73,9 @@ impl PolyjuiceParser {
         } else {
             None
         }
+    }
+
+    pub fn is_native_transfer(&self) -> bool {
+        self.is_call() && self.to_address().is_some()
     }
 }

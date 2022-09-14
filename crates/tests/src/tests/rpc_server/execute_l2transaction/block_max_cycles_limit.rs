@@ -14,7 +14,7 @@ use crate::testing_tool::{
     rpc_server::RPCServer,
 };
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_block_max_cycles_limit() {
     let _ = env_logger::builder().is_test(true).try_init();
 

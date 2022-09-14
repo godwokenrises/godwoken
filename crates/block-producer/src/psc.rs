@@ -1,12 +1,12 @@
 #![allow(clippy::mutable_key_type)]
 
-use std::{fmt::Display, sync::Arc, time::Duration};
+use std::{collections::HashSet, fmt::Display, sync::Arc, time::Duration};
 
 use anyhow::{bail, ensure, Context, Result};
 use gw_chain::chain::Chain;
 use gw_common::H256;
 use gw_config::PscConfig;
-use gw_mem_pool::pool::MemPool;
+use gw_mem_pool::{block_sync_server::BlockSyncServerState, pool::MemPool};
 use gw_rpc_client::{
     error::{get_jsonrpc_error_code, CkbRpcError},
     rpc_client::RPCClient,
@@ -15,21 +15,23 @@ use gw_store::{snapshot::StoreSnapshot, traits::chain_store::ChainStore, Store};
 use gw_types::{
     offchain::{CellStatus, DepositInfo, TxStatus},
     packed::{
-        Confirmed, GlobalState, LocalBlock, NumberHash, OutPoint, Revert, Script, ScriptVec,
+        self, Confirmed, GlobalState, LocalBlock, NumberHash, OutPoint, Revert, Script, ScriptVec,
         Submitted, Transaction, WithdrawalKey,
     },
     prelude::*,
 };
-use gw_utils::{
-    abort_on_drop::spawn_abort_on_drop, block_in_place_if_not_testing,
-    local_cells::LocalCellsManager, since::Since,
+use gw_utils::{abort_on_drop::spawn_abort_on_drop, local_cells::LocalCellsManager, since::Since};
+use opentelemetry::trace::TraceContextExt;
+use tokio::{
+    signal::unix::{signal, SignalKind},
+    sync::Mutex,
+    time::Instant,
 };
-use tokio::{sync::Mutex, time::Instant};
 use tracing::instrument;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::{
     block_producer::{BlockProducer, ComposeSubmitTxArgs, TransactionSizeError},
-    block_sync_server::BlockSyncServerState,
     chain_updater::ChainUpdater,
     produce_block::ProduceBlockResult,
     sync_l1::{revert, sync_l1, SyncL1Context},
@@ -213,8 +215,79 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
     let config = &state.context.psc_config;
     let mut interval = tokio::time::interval(Duration::from_secs(config.block_interval_secs));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+    let mut revert_local_signal = signal(SignalKind::user_defined1())?;
+    let mut revert_submitted_signal = signal(SignalKind::user_defined2())?;
+
     loop {
+        if !submitting && state.local_count > 0 && state.submitted_count < config.submitted_limit {
+            submitting = true;
+            let context = state.context.clone();
+            // The first submission should not have any unknown cell error. If
+            // it does, it means that previous block is probably not confirmed
+            // anymore, and we should sync with L1 again.
+            let is_first = state.submitted_count == 0;
+            submit_handle.replace_with(tokio::spawn(async move {
+                loop {
+                    match submit_next_block(&context, is_first).await {
+                        Ok(nh) => return Ok(nh),
+                        Err(err) => {
+                            if err.is::<ShouldResyncError>() || err.is::<ShouldRevertError>() {
+                                bail!(err);
+                            }
+                            log::warn!("failed to submit next block: {:#}", err);
+                            // TOOO: backoff.
+                            tokio::time::sleep(Duration::from_secs(20)).await;
+                        }
+                    }
+                }
+            }));
+        }
+        if !confirming && state.submitted_count > 0 {
+            confirming = true;
+            let context = state.context.clone();
+            confirm_handle.replace_with(tokio::spawn(async move {
+                loop {
+                    match confirm_next_block(&context).await {
+                        Ok(nh) => break Ok(nh),
+                        Err(err) => {
+                            if err.is::<ShouldResyncError>() || err.is::<ShouldRevertError>() {
+                                bail!(err);
+                            }
+                            log::warn!("failed to confirm next block: {:#}", err);
+                            // TOOO: backoff.
+                            tokio::time::sleep(Duration::from_secs(3)).await;
+                        }
+                    }
+                }
+            }));
+        }
+        // One of the producing, submitting or confirming branch is always
+        // enabled. Otherwise we'd be stuck waiting for one of the signals.
+        assert!(state.local_count < config.local_limit || confirming || submitting);
         tokio::select! {
+            _ = revert_local_signal.recv() => {
+                log::info!("revert not submitted blocks due to signal");
+                let last_submitted = state
+                    .context
+                    .store
+                    .get_last_submitted_block_number_hash()
+                    .context("get last submitted")?
+                    .number()
+                    .unpack();
+                bail!(ShouldRevertError(last_submitted));
+            }
+            _ = revert_submitted_signal.recv() => {
+                log::info!("revert to last confirmed block due to signal");
+                let last_confirmed = state
+                    .context
+                    .store
+                    .get_last_confirmed_block_number_hash()
+                    .context("get last submitted")?
+                    .number()
+                    .unpack();
+                bail!(ShouldRevertError(last_confirmed));
+            }
             // Produce a new local block if the produce timer has expired and
             // there are not too many local blocks.
             _ = interval.tick(), if state.local_count < config.local_limit => {
@@ -264,63 +337,28 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                     _ => {}
                 }
             }
-            else => {}
-        }
-        if !submitting && state.local_count > 0 && state.submitted_count < config.submitted_limit {
-            submitting = true;
-            let context = state.context.clone();
-            // The first submission should not have any unknown cell error. If
-            // it does, it means that previous block is probably not confirmed
-            // anymore, and we should sync with L1 again.
-            let is_first = state.submitted_count == 0;
-            submit_handle.replace_with(tokio::spawn(async move {
-                loop {
-                    match submit_next_block(&context, is_first).await {
-                        Ok(nh) => return Ok(nh),
-                        Err(err) => {
-                            if err.is::<ShouldResyncError>() || err.is::<ShouldRevertError>() {
-                                bail!(err);
-                            }
-                            log::warn!("failed to submit next block: {:#}", err);
-                            // TOOO: backoff.
-                            tokio::time::sleep(Duration::from_secs(20)).await;
-                        }
-                    }
-                }
-            }));
-        }
-        if !confirming && state.submitted_count > 0 {
-            confirming = true;
-            let context = state.context.clone();
-            confirm_handle.replace_with(tokio::spawn(async move {
-                loop {
-                    match confirm_next_block(&context).await {
-                        Ok(nh) => break Ok(nh),
-                        Err(err) => {
-                            if err.is::<ShouldResyncError>() || err.is::<ShouldRevertError>() {
-                                bail!(err);
-                            }
-                            log::warn!("failed to confirm next block: {:#}", err);
-                            // TOOO: backoff.
-                            tokio::time::sleep(Duration::from_secs(3)).await;
-                        }
-                    }
-                }
-            }));
         }
     }
 }
 
 /// Produce and save local block.
+#[instrument(skip_all)]
 async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
     // TODO: check block and retry.
+
+    // Lock mem pool the whole time we produce and update the next block. Don't
+    // push transactions. Transactions pushed in this period of time will need
+    // to be re-injected after the mem pool is reset anyway, and that creates a
+    // quite some pressure on p2p syncing and read-only nodes.
+    let mut pool = ctx.mem_pool.lock().await;
+
     let ProduceBlockResult {
         block,
         global_state,
         withdrawal_extras,
         deposit_cells,
         remaining_capacity,
-    } = ctx.block_producer.produce_next_block(0).await?;
+    } = ctx.block_producer.produce_next_block(&mut pool, 0).await?;
 
     let number: u64 = block.raw().number().unpack();
     let block_hash: H256 = block.hash().into();
@@ -331,15 +369,37 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
     // Now update db about the new local L2 block
 
     let deposit_info_vec = deposit_cells.pack();
-    let deposit_asset_scripts = deposit_cells
+    let deposit_asset_scripts: HashSet<Script> = deposit_cells
         .iter()
         .filter_map(|d| d.cell.output.type_().to_opt())
         .collect();
 
-    let store_tx = ctx.store.begin_transaction();
+    // Publish block to read-only nodes as soon as possible, so that read-only nodes does not lag behind us.
+    if let Some(ref sync_server_state) = ctx.block_sync_server_state {
+        // Propagate tracing context.
+        let cx = tracing::Span::current().context();
+        let span_ref = cx.span();
+        let span_context = span_ref.span_context();
+        sync_server_state.lock().unwrap().publish_local_block(
+            LocalBlock::new_builder()
+                .trace_id(packed::Byte16::from_slice(&span_context.trace_id().to_bytes()).unwrap())
+                .span_id(packed::Byte8::from_slice(&span_context.span_id().to_bytes()).unwrap())
+                .block(block.clone())
+                .post_global_state(global_state.clone())
+                .deposit_info_vec(deposit_info_vec.clone())
+                .deposit_asset_scripts(
+                    ScriptVec::new_builder()
+                        .extend(deposit_asset_scripts.iter().cloned())
+                        .build(),
+                )
+                .withdrawals(withdrawal_extras.iter().cloned().pack())
+                .build(),
+        );
+    }
 
     let mut chain = ctx.chain.lock().await;
-    block_in_place_if_not_testing(|| {
+    tokio::task::block_in_place(|| {
+        let store_tx = ctx.store.begin_transaction();
         chain.update_local(
             &store_tx,
             block,
@@ -370,17 +430,8 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
     for d in deposit_cells {
         local_cells_manager.lock_cell(d.cell.out_point);
     }
-    if let Some(ref sync_server_state) = ctx.block_sync_server_state {
-        publish_local_block(
-            &mut sync_server_state.lock().unwrap(),
-            &ctx.store.get_snapshot(),
-            number,
-        )?;
-    }
-    ctx.mem_pool
-        .lock()
-        .await
-        .notify_new_tip(block_hash, &local_cells_manager)
+
+    pool.notify_new_tip(block_hash, &local_cells_manager)
         .await
         .expect("notify new tip");
 

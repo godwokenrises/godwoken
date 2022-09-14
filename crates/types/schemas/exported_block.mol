@@ -3,9 +3,6 @@ import godwoken;
 import store;
 import mem_block;
 
-vector Byte32VecVec <Byte32Vec>;
-option Byte32VecVecOpt (Byte32VecVec);
-
 table ExportedBlock {
     block: L2Block,
     post_global_state: GlobalState,
@@ -14,45 +11,4 @@ table ExportedBlock {
     withdrawals: WithdrawalRequestExtraVec,
     bad_block_hashes: Byte32VecVecOpt,
     submit_tx_hash: Byte32Opt,
-}
-
-union BlockSync {
-    Revert,
-    LocalBlock,
-    Submitted,
-    Confirmed,
-}
-
-table LocalBlock {
-    // TODO: @sopium optimization: only send transaction/withdrawal hashes like BIP 152.
-    block: L2Block,
-    post_global_state: GlobalState,
-    deposit_info_vec: DepositInfoVec,
-    deposit_asset_scripts: ScriptVec,
-    withdrawals: WithdrawalRequestExtraVec,
-    bad_block_hashes: Byte32VecVecOpt,
-}
-
-struct Submitted {
-    number_hash: NumberHash,
-    tx_hash: Byte32,
-}
-
-struct Confirmed {
-    number_hash: NumberHash,
-    tx_hash: Byte32,
-}
-
-struct Revert {
-    number_hash: NumberHash,
-}
-
-// Reusing P2PSyncRequest and TryAgain from mem block syncing.
-
-union P2PBlockSyncResponse {
-    Found,
-    TryAgain,
-}
-
-table Found {
 }

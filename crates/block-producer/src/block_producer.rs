@@ -61,7 +61,6 @@ pub struct BlockProducer {
     rollup_config_hash: H256,
     store: Store,
     chain: Arc<Mutex<Chain>>,
-    mem_pool: Arc<Mutex<MemPool>>,
     generator: Arc<Generator>,
     wallet: Wallet,
     config: BlockProducerConfig,
@@ -76,7 +75,6 @@ pub struct BlockProducerCreateArgs {
     pub store: Store,
     pub generator: Arc<Generator>,
     pub chain: Arc<Mutex<Chain>>,
-    pub mem_pool: Arc<Mutex<MemPool>>,
     pub rpc_client: RPCClient,
     pub ckb_genesis_info: CKBGenesisInfo,
     pub config: BlockProducerConfig,
@@ -91,7 +89,6 @@ impl BlockProducer {
             store,
             generator,
             chain,
-            mem_pool,
             rpc_client,
             ckb_genesis_info,
             config,
@@ -108,7 +105,6 @@ impl BlockProducer {
             rollup_config_hash,
             generator,
             chain,
-            mem_pool,
             rpc_client,
             wallet,
             ckb_genesis_info,
@@ -121,7 +117,11 @@ impl BlockProducer {
     }
 
     #[instrument(skip_all, fields(retry_count = retry_count))]
-    pub async fn produce_next_block(&self, retry_count: usize) -> Result<ProduceBlockResult> {
+    pub async fn produce_next_block(
+        &self,
+        mem_pool: &mut MemPool,
+        retry_count: usize,
+    ) -> Result<ProduceBlockResult> {
         if let Some(ref tests_control) = self.tests_control {
             match tests_control.payload().await {
                 Some(TestModePayload::None) => tests_control.clear_none().await?,
@@ -132,13 +132,6 @@ impl BlockProducer {
 
         // get txs & withdrawal requests from mem pool
         let (mut mem_block, post_block_state) = {
-            let t = Instant::now();
-            log::debug!(target: "produce-block", "acquire mem-pool",);
-            let mem_pool = self.mem_pool.lock().await;
-            log::debug!(
-                target: "produce-block", "unlock mem-pool {}ms",
-                t.elapsed().as_millis()
-            );
             let t = Instant::now();
             let r = mem_pool.output_mem_block(&OutputParam::new(retry_count));
             log::debug!(

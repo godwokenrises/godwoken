@@ -39,7 +39,7 @@ use gw_utils::export_block::check_block_post_state;
 const CKB: u64 = 100000000;
 const MAX_MEM_BLOCK_WITHDRAWALS: u8 = 50;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_export_import_block() {
     let _ = env_logger::builder().is_test(true).try_init();
 

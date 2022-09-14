@@ -1,6 +1,6 @@
 use crate::account::{eth_sign, privkey_to_l2_script_hash, read_privkey};
 use crate::godwoken_rpc::GodwokenRpcClient;
-use crate::hasher::{CkbHasher, EthHasher};
+use crate::hasher::CkbHasher;
 use crate::types::ScriptsDeploymentResult;
 use crate::utils::transaction::read_config;
 use anyhow::{anyhow, Result};
@@ -8,9 +8,13 @@ use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_sdk::{Address, HumanCapacity};
 use ckb_types::{prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity};
-use gw_common::registry_address::RegistryAddress;
+use gw_common::{builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress};
+use gw_generator::account_lock_manage::{
+    eip712::{traits::EIP712Encode, types::Withdrawal},
+    secp256k1::Secp256k1Eth,
+};
 use gw_types::core::ScriptHashType;
-use gw_types::packed::{CellOutput, WithdrawalLockArgs, WithdrawalRequestExtra};
+use gw_types::packed::{CellOutput, Script, WithdrawalLockArgs, WithdrawalRequestExtra};
 use gw_types::U256;
 use gw_types::{
     packed::{Byte32, RawWithdrawalRequest, WithdrawalRequest},
@@ -38,7 +42,7 @@ pub async fn withdraw(
     let capacity = parse_capacity(capacity)?;
     let amount: u128 = amount.parse().expect("sUDT amount format error");
     let chain_id: u64 = chain_id.parse().expect("chain_id format error");
-    let fee: u128 = fee.parse()?;
+    let fee: u128 = parse_capacity(fee)? as u128;
 
     let scripts_deployment_content = fs::read_to_string(scripts_deployment_path)?;
     let scripts_deployment: ScriptsDeploymentResult =
@@ -80,12 +84,10 @@ pub async fn withdraw(
         .get_account_id_by_script_hash(from_script_hash.clone())
         .await?;
     let from_id = from_id.expect("from id not found!");
-    let nonce =
-        tokio::runtime::Handle::current().block_on(godwoken_rpc_client.get_nonce(from_id))?;
+    let nonce = godwoken_rpc_client.get_nonce(from_id).await?;
 
     // get account_script_hash
-    let account_script_hash =
-        tokio::runtime::Handle::current().block_on(godwoken_rpc_client.get_script_hash(from_id))?;
+    let account_script_hash = godwoken_rpc_client.get_script_hash(from_id).await?;
 
     let raw_request = create_raw_withdrawal_request(
         nonce,
@@ -98,7 +100,17 @@ pub async fn withdraw(
         &owner_lock_hash,
     )?;
 
-    let message = generate_withdrawal_message_to_sign(&raw_request, rollup_type_hash);
+    let from_addr = godwoken_rpc_client
+        .get_registry_address_by_script_hash(&from_script_hash)
+        .await?
+        .ok_or_else(|| anyhow!("registry address is not found"))?;
+
+    let message = generate_withdrawal_message_to_sign(
+        raw_request.clone(),
+        Script::new_unchecked(owner_lock_script.as_bytes()),
+        from_addr.clone(),
+        chain_id,
+    )?;
     let signature = eth_sign(&message, privkey)?;
 
     let withdrawal_request = WithdrawalRequest::new_builder()
@@ -113,15 +125,10 @@ pub async fn withdraw(
 
     log::info!("withdrawal_request_extra: {}", withdrawal_request_extra);
 
-    let from_addr = godwoken_rpc_client
-        .get_registry_address_by_script_hash(&from_script_hash)
-        .await?
-        .ok_or_else(|| anyhow!("registry address is not found"))?;
     let init_balance = godwoken_rpc_client.get_balance(&from_addr, 1).await?;
 
     let bytes = JsonBytes::from_bytes(withdrawal_request_extra.as_bytes());
-    let withdrawal_hash = tokio::runtime::Handle::current()
-        .block_on(godwoken_rpc_client.submit_withdrawal_request(bytes))?;
+    let withdrawal_hash = godwoken_rpc_client.submit_withdrawal_request(bytes).await?;
     log::info!("withdrawal_hash: {}", withdrawal_hash.pack());
 
     wait_for_balance_change(&mut godwoken_rpc_client, &from_addr, init_balance, 180u64).await?;
@@ -149,6 +156,7 @@ fn create_raw_withdrawal_request(
         .owner_lock_hash(h256_to_byte32(owner_lock_hash)?)
         .fee(fee.pack())
         .chain_id(chain_id.pack())
+        .registry_id(ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
 
     Ok(raw)
@@ -160,23 +168,18 @@ fn h256_to_byte32(hash: &H256) -> Result<Byte32> {
 }
 
 fn generate_withdrawal_message_to_sign(
-    raw_request: &RawWithdrawalRequest,
-    rollup_type_hash: &H256,
-) -> H256 {
-    let raw_data = raw_request.as_slice();
-    let rollup_type_hash_data = rollup_type_hash.as_bytes();
+    raw_request: RawWithdrawalRequest,
+    owner_lock: Script,
+    address: RegistryAddress,
+    chain_id: u64,
+) -> Result<H256> {
+    let typed_message = Withdrawal::from_raw(raw_request, owner_lock, address)?;
 
-    let digest = CkbHasher::new()
-        .update(rollup_type_hash_data)
-        .update(raw_data)
-        .finalize();
+    let eip712_domain = Secp256k1Eth::domain_with_chain_id(chain_id);
 
-    let message = EthHasher::new()
-        .update("\x19Ethereum Signed Message:\n32")
-        .update(digest.as_bytes())
-        .finalize();
+    let message = typed_message.eip712_message(eip712_domain.hash_struct());
 
-    message
+    Ok(message.into())
 }
 
 async fn wait_for_balance_change(

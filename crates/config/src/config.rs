@@ -47,6 +47,8 @@ pub struct Config {
     pub dynamic_config: DynamicConfig,
     #[serde(default)]
     pub p2p_network_config: Option<P2PNetworkConfig>,
+    #[serde(default)]
+    pub sync_server: SyncServerConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -179,20 +181,20 @@ pub struct BlockProducerConfig {
 #[serde(default)]
 pub struct PscConfig {
     /// Maximum number local blocks. Local blocks are blocks that have not been
-    /// submitted to L1. Default is 3.
+    /// submitted to L1. Default is 5.
     pub local_limit: u64,
-    /// Maximum number of submitted (but not confirmed) blocks. Default is 3.
+    /// Maximum number of submitted (but not confirmed) blocks. Default is 5.
     pub submitted_limit: u64,
-    /// Minimum delay between blocks. Default is 7 seconds.
+    /// Minimum delay between blocks. Default is 8 seconds.
     pub block_interval_secs: u64,
 }
 
 impl Default for PscConfig {
     fn default() -> Self {
         Self {
-            local_limit: 3,
-            submitted_limit: 3,
-            block_interval_secs: 7,
+            local_limit: 5,
+            submitted_limit: 5,
+            block_interval_secs: 8,
         }
     }
 }
@@ -315,15 +317,18 @@ pub struct P2PNetworkConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PublishMemPoolConfig {
-    pub hosts: Vec<String>,
-    pub topic: String,
+pub struct SyncServerConfig {
+    pub buffer_capacity: u64,
+    pub broadcast_channel_capacity: usize,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SubscribeMemPoolConfig {
-    pub hosts: Vec<String>,
-    pub topic: String,
-    pub group: String,
+
+impl Default for SyncServerConfig {
+    fn default() -> Self {
+        Self {
+            buffer_capacity: 16,
+            broadcast_channel_capacity: 1024,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -331,8 +336,6 @@ pub struct MemPoolConfig {
     pub execute_l2tx_max_cycles: u64,
     #[serde(default = "default_restore_path")]
     pub restore_path: PathBuf,
-    pub publish: Option<PublishMemPoolConfig>,
-    pub subscribe: Option<SubscribeMemPoolConfig>,
     #[serde(default)]
     pub mem_block: MemBlockConfig,
 }
@@ -418,8 +421,6 @@ impl Default for MemPoolConfig {
         Self {
             execute_l2tx_max_cycles: 100_000_000,
             restore_path: default_restore_path(),
-            publish: None,
-            subscribe: None,
             mem_block: MemBlockConfig::default(),
         }
     }

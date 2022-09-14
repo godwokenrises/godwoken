@@ -27,7 +27,7 @@ pub mod block_max_cycles_limit;
 
 const META_CONTRACT_ACCOUNT_ID: u32 = RESERVED_ACCOUNT_ID;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_polyjuice_erc20_tx() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -79,7 +79,7 @@ async fn test_polyjuice_erc20_tx() {
     assert_eq!(system_log.status_code, 0);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_polyjuice_tx_from_id_zero() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -130,7 +130,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     mem_pool_state.store(snap.into());
     {
         let mut mem_pool = chain.mem_pool().await;
-        mem_pool.push_transaction(deploy_tx).await.unwrap();
+        mem_pool.push_transaction(deploy_tx).unwrap();
     }
 
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();
@@ -194,7 +194,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_polyjuice_tx_from_id_zero_with_block_number() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -269,7 +269,7 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
         .build();
     {
         let mut mem_pool = chain.mem_pool().await;
-        mem_pool.push_transaction(deploy_tx).await.unwrap();
+        mem_pool.push_transaction(deploy_tx).unwrap();
     }
 
     let snap = mem_pool_state.load();
@@ -294,7 +294,7 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
 
     {
         let mut mem_pool = chain.mem_pool().await;
-        mem_pool.push_transaction(deploy_tx).await.unwrap();
+        mem_pool.push_transaction(deploy_tx).unwrap();
     }
 
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();
@@ -354,7 +354,7 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
     let transfer_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
     {
         let mut mem_pool = chain.mem_pool().await;
-        mem_pool.push_transaction(transfer_tx).await.unwrap();
+        mem_pool.push_transaction(transfer_tx).unwrap();
     }
 
     let snap = mem_pool_state.load();
@@ -457,7 +457,7 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_invalid_registry_address() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -508,7 +508,7 @@ async fn test_invalid_registry_address() {
     mem_pool_state.store(snap.into());
     {
         let mut mem_pool = chain.mem_pool().await;
-        mem_pool.push_transaction(deploy_tx).await.unwrap();
+        mem_pool.push_transaction(deploy_tx).unwrap();
     }
 
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();

@@ -1,6 +1,5 @@
 pub mod block_producer;
 pub mod block_sync_client;
-pub mod block_sync_server;
 pub mod chain_updater;
 pub mod challenger;
 pub mod cleaner;

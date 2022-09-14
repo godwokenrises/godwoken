@@ -16,13 +16,19 @@ use crate::{
 pub struct TransactionVerifier<'a, S> {
     state: &'a S,
     rollup_context: &'a RollupContext,
+    polyjuice_creator_id: Option<u32>,
 }
 
 impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
-    pub fn new(state: &'a S, rollup_context: &'a RollupContext) -> Self {
+    pub fn new(
+        state: &'a S,
+        rollup_context: &'a RollupContext,
+        polyjuice_creator_id: Option<u32>,
+    ) -> Self {
         Self {
             state,
             rollup_context,
+            polyjuice_creator_id,
         }
     }
     /// verify transaction
@@ -74,8 +80,8 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
         if balance < tx_cost {
             return Err(TransactionError::InsufficientBalance.into());
         }
-        // Intrinsic Gas
         if let TypedRawTransaction::Polyjuice(tx) = typed_tx {
+            // Intrinsic Gas
             let p = tx
                 .parser()
                 .ok_or_else(|| TransactionError::IntrinsicGas("parser".into()))?;
@@ -92,6 +98,17 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
                     .into(),
                 )
                 .into());
+            }
+            // Native token transfer
+            if p.is_native_transfer() {
+                if self.polyjuice_creator_id.is_none() {
+                    return Err(TransactionError::PolyjuiceCreatorIdNotFound.into());
+                }
+                // Verify to_id is CREATOR_ID
+                let to_id = raw_tx.to_id().unpack();
+                if Some(to_id) != self.polyjuice_creator_id {
+                    return Err(TransactionError::NativeTransferInvalidToId(to_id).into());
+                }
             }
         }
 

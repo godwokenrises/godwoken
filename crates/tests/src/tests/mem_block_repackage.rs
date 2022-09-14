@@ -22,7 +22,7 @@ use gw_types::{
 
 use std::time::Duration;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_repackage_mem_block() {
     const DEPOSIT_CAPACITY: u64 = 1000_00000000;
     const DEPOSIT_AMOUNT: u128 = 0;

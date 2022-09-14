@@ -21,7 +21,7 @@ use crate::testing_tool::{
     rpc_server::RPCServer,
 };
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_submit_withdrawal_request() {
     let _ = env_logger::builder().is_test(true).try_init();
 
