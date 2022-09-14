@@ -87,10 +87,6 @@ pub struct TransactionSkeleton {
     witnesses: Vec<WitnessArgs>,
     cell_outputs: Vec<(CellOutput, Bytes)>,
     omni_lock_code_hash: Option<[u8; 32]>,
-    // TODO: refactor
-    // Used for `fill_tx_fee` to exclude some outpoints
-    excluded_out_points: HashSet<OutPoint>,
-    live_cells: Vec<CellInfo>,
 }
 
 impl TransactionSkeleton {
@@ -131,14 +127,6 @@ impl TransactionSkeleton {
 
     pub fn omni_lock_code_hash(&self) -> Option<&[u8; 32]> {
         self.omni_lock_code_hash.as_ref()
-    }
-
-    pub fn excluded_out_points_mut(&mut self) -> &mut HashSet<OutPoint> {
-        &mut self.excluded_out_points
-    }
-
-    pub fn live_cells_mut(&mut self) -> &mut Vec<CellInfo> {
-        &mut self.live_cells
     }
 
     pub fn add_owner_cell(&mut self, owner_cell: CellInfo) {
@@ -285,16 +273,12 @@ impl TransactionSkeleton {
     }
 
     pub fn taken_outpoints(&self) -> Result<HashSet<OutPoint>> {
-        let mut taken_outpoints = self.excluded_out_points.clone();
+        let mut taken_outpoints = HashSet::default();
         for (index, input) in self.inputs().iter().enumerate() {
             if !taken_outpoints.insert(input.cell.out_point.clone()) {
                 panic!("Duplicated input: {:?}, index: {}", input, index);
             }
         }
         Ok(taken_outpoints)
-    }
-
-    pub fn live_cells(&self) -> &Vec<CellInfo> {
-        &self.live_cells
     }
 }
