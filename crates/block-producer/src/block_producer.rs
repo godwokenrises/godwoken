@@ -300,16 +300,6 @@ impl BlockProducer {
             });
         }
 
-        // Simple UDT dep
-        if !deposit_cells.is_empty()
-            || !withdrawal_extras.is_empty()
-            || !finalized_custodians.sudt.is_empty()
-        {
-            tx_skeleton
-                .cell_deps_mut()
-                .push(contracts_dep.l1_sudt_type.clone().into());
-        }
-
         // custodian cells
         let custodian_cells = generate_custodian_cells(rollup_context, &block, &deposit_cells);
         tx_skeleton.outputs_mut().extend(custodian_cells);
@@ -353,6 +343,16 @@ impl BlockProducer {
         )
         .await?
         .expect_any();
+
+        // Simple UDT dep
+        if !deposit_cells.is_empty()
+            || !withdrawal_extras.is_empty()
+            || !finalized_custodians.sudt.is_empty()
+        {
+            tx_skeleton
+                .cell_deps_mut()
+                .push(contracts_dep.l1_sudt_type.clone().into());
+        }
 
         // withdrawal cells
         let map_withdrawal_extras = withdrawal_extras.into_iter().map(|w| (w.hash().into(), w));
