@@ -13,6 +13,7 @@ use std::{cmp::Ordering, convert::TryInto};
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum FeeItemKind {
     Tx,
+    PendingCreateSenderTx,
     Withdrawal,
 }
 
@@ -32,6 +33,9 @@ impl FeeItem {
 
     pub fn kind(&self) -> FeeItemKind {
         match self {
+            Self::Tx(tx) if 0 == Unpack::<u32>::unpack(&tx.raw().from_id()) => {
+                FeeItemKind::PendingCreateSenderTx
+            }
             Self::Tx(_) => FeeItemKind::Tx,
             Self::Withdrawal(_) => FeeItemKind::Withdrawal,
         }
@@ -39,6 +43,10 @@ impl FeeItem {
 
     pub fn hash(&self) -> H256 {
         match self {
+            Self::Tx(tx) if self.kind() == FeeItemKind::PendingCreateSenderTx => {
+                let sig: gw_types::bytes::Bytes = tx.signature().unpack();
+                gw_common::blake2b::hash(&sig).into()
+            }
             Self::Tx(tx) => tx.hash().into(),
             Self::Withdrawal(withdrawal) => withdrawal.hash().into(),
         }
@@ -67,6 +75,12 @@ impl PartialOrd for FeeItem {
     }
 }
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
+pub enum FeeItemSender {
+    AccountId(u32),
+    PendingCreate(H256), // hash
+}
+
 #[derive(PartialEq, Eq, Clone)]
 pub struct FeeEntry {
     /// item: tx or withdrawal
@@ -74,7 +88,7 @@ pub struct FeeEntry {
     /// Order in queue: queue.len() when insertion
     pub order: usize,
     /// sender
-    pub sender: u32,
+    pub sender: FeeItemSender,
     /// fee
     pub fee: u128,
     /// estimate cycles limit
@@ -121,15 +135,24 @@ impl FeeEntry {
         order: usize,
     ) -> Result<Self> {
         let raw_l2tx = tx.raw();
-        let sender = raw_l2tx.from_id().unpack();
         let fee = parse_l2tx_fee_rate(fee_config, &raw_l2tx, backend_type)?;
+        let item = FeeItem::Tx(tx);
+
+        let from_id: u32 = raw_l2tx.from_id().unpack();
+        let sender = if 0 == from_id {
+            FeeItemSender::PendingCreate(item.hash())
+        } else {
+            FeeItemSender::AccountId(from_id)
+        };
+
         let entry = FeeEntry {
-            item: FeeItem::Tx(tx),
+            item,
             sender,
             fee: fee.fee,
             cycles_limit: fee.cycles_limit,
             order,
         };
+
         Ok(entry)
     }
 
@@ -143,7 +166,7 @@ impl FeeEntry {
         let fee = parse_withdraw_fee_rate(fee_config, &raw_withdrawal)?;
         let entry = FeeEntry {
             item: FeeItem::Withdrawal(withdrawal),
-            sender,
+            sender: FeeItemSender::AccountId(sender),
             fee: fee.fee,
             cycles_limit: fee.cycles_limit,
             order,

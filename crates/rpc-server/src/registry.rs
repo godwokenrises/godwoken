@@ -30,7 +30,7 @@ use gw_jsonrpc_types::{
 };
 use gw_mem_pool::fee::{
     queue::FeeQueue,
-    types::{FeeEntry, FeeItem, FeeItemKind},
+    types::{FeeEntry, FeeItem, FeeItemKind, FeeItemSender},
 };
 use gw_polyjuice_sender_recover::{
     mem_execute_tx_state::MemExecuteTxStateTree, recover::PolyjuiceSenderRecover,
@@ -614,7 +614,11 @@ impl RequestSubmitter {
                 let txs_from_zero = items
                     .iter()
                     .filter_map(|(entry, _handle)| match entry.item {
-                        FeeItem::Tx(ref tx) if 0 == entry.sender => Some(tx),
+                        FeeItem::Tx(ref tx)
+                            if matches!(entry.sender, FeeItemSender::PendingCreate(_)) =>
+                        {
+                            Some(tx)
+                        }
                         _ => None,
                     });
                 let recovered_senders = eth_recover.recover_sender_accounts(txs_from_zero, &state);
@@ -668,7 +672,9 @@ impl RequestSubmitter {
                     }
 
                     let maybe_ok = match entry.item.clone() {
-                        FeeItem::Tx(tx) if 0 == entry.sender => {
+                        FeeItem::Tx(tx)
+                            if matches!(entry.sender, FeeItemSender::PendingCreate(_)) =>
+                        {
                             let sig: Bytes = tx.signature().unpack();
                             let sender_id = match recovered_senders.get_account_id(&sig, &state) {
                                 Ok(id) => id,

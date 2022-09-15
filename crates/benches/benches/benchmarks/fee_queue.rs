@@ -4,7 +4,7 @@ use gw_config::GenesisConfig;
 use gw_generator::genesis::init_genesis;
 use gw_mem_pool::fee::{
     queue::FeeQueue,
-    types::{FeeEntry, FeeItem},
+    types::{FeeEntry, FeeItem, FeeItemSender},
 };
 use gw_store::{
     mem_pool_state::MemStore, state::state_db::StateContext, traits::chain_store::ChainStore, Store,
@@ -45,7 +45,7 @@ fn bench_add_full(b: &mut Bencher) {
             ),
             fee: (100 * 1000u64).into(),
             cycles_limit: 1000,
-            sender: 2,
+            sender: FeeItemSender::AccountId(2),
             order: queue.len(),
         };
         queue.add(entry1, ());
@@ -66,7 +66,7 @@ fn bench_add_full(b: &mut Bencher) {
             ),
             fee: (100 * 1000u64).into(),
             cycles_limit: 1000,
-            sender: 2,
+            sender: FeeItemSender::AccountId(2),
             order: queue.len(),
         };
         queue.add(entry1, ());
@@ -102,7 +102,7 @@ fn bench_add_fetch_20(b: &mut Bencher) {
             ),
             fee: (100 * 1000u64).into(),
             cycles_limit: 1000,
-            sender: 2,
+            sender: FeeItemSender::AccountId(2),
             order: queue.len(),
         };
         queue.add(entry1, ());
@@ -125,7 +125,7 @@ fn bench_add_fetch_20(b: &mut Bencher) {
                 ),
                 fee: (100 * 1000u64).into(),
                 cycles_limit: 1000,
-                sender: 2,
+                sender: FeeItemSender::AccountId(2),
                 order: queue.len(),
             };
             queue.add(entry1, ());
