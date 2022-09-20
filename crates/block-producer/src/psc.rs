@@ -589,7 +589,12 @@ async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<(
             .get_transaction_status(tx.hash().into())
             .await?;
         let should_resend = match status {
-            Some(TxStatus::Pending) | Some(TxStatus::Proposed) => false,
+            Some(TxStatus::Pending) | Some(TxStatus::Proposed) => {
+                // Resend the transaction if it has been pending (or proposed)
+                // for a long time. Or the transaction could be stuck in the
+                // current state.
+                last_sent.elapsed() > Duration::from_secs(40)
+            }
             Some(TxStatus::Committed) => break,
             Some(TxStatus::Rejected) => true,
             _ => last_sent.elapsed() > Duration::from_secs(20),
