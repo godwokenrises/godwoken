@@ -27,4 +27,39 @@ node_mode = "readonly"
 dial = ["/dns4/godwoken/tcp/9999"]
 ```
 
-TODO: secret key and peer id
+### Authentication
+
+Authentication between p2p peers is supported. Each node has a secp256k1
+keypair, and a peer id that is derived from the public key. A node can be
+configured to only connect to or allow peers with designated peer ids.
+
+To use this authentication scheme, generate a secret key on each node:
+
+```cmd
+$ godwoken peer-id gen --secret-path s1
+```
+
+Calculate the corresponding peer id:
+
+```cmd
+$ godwoken peer-id from-secret --secret-path s1
+QmTUDzfoDrEd6tB2qXHuVeqT7x9gWSrLgPQVD2wBGywtit
+```
+
+In the configuration of this node, set `secret_key_path`:
+
+```toml
+[p2p_network_config]
+secret_key_path = "s1"
+```
+
+Then in the configuration of the peer node, add peer-id to `dial` or
+`allowed_peer_ids`:
+
+```toml
+[p2p_network_config]
+# Dial a peer node with peer id authentication.
+dial = ["/dns4/godwoken/tcp/9999/p2p/QmTUDzfoDrEd6tB2qXHuVeqT7x9gWSrLgPQVD2wBGywtit"]
+# Or for listening, only allow peers with these peer ids.
+allowed_peer_ids = ["QmTUDzfoDrEd6tB2qXHuVeqT7x9gWSrLgPQVD2wBGywtit"]
+```
