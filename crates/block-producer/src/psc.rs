@@ -819,15 +819,18 @@ fn publish_local_block(
         .context("get block deposit info vec")?;
     let deposit_asset_scripts = {
         let reader = deposit_info_vec.as_reader();
-        let asset_hashes = reader.iter().filter_map(|r| {
-            let h: H256 = r.request().sudt_script_hash().unpack();
-            if h.is_zero() {
-                None
-            } else {
-                Some(h)
-            }
-        });
-        let asset_scripts = asset_hashes.map(|h| {
+        let asset_hashes: HashSet<H256> = reader
+            .iter()
+            .filter_map(|r| {
+                let h: H256 = r.request().sudt_script_hash().unpack();
+                if h.is_zero() {
+                    None
+                } else {
+                    Some(h)
+                }
+            })
+            .collect();
+        let asset_scripts = asset_hashes.into_iter().map(|h| {
             snap.get_asset_script(&h)?
                 .with_context(|| format!("block {} asset script {} not found", b, h.pack()))
         });
