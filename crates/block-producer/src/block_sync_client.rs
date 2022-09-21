@@ -241,7 +241,7 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
             );
             let span = info_span!("handle_local_block");
             span.set_parent(opentelemetry::Context::current().with_remote_span_context(span_cx));
-            handle_lock_block(client, l).instrument(span).await?;
+            handle_local_block(client, l).instrument(span).await?;
             client.liveness.tick();
         }
         BlockSyncUnion::Submitted(s) => {
@@ -324,7 +324,7 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
     Ok(())
 }
 
-async fn handle_lock_block(
+async fn handle_local_block(
     client: &mut BlockSyncClient,
     l: gw_types::packed::LocalBlock,
 ) -> Result<(), anyhow::Error> {
