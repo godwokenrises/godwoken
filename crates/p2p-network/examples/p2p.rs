@@ -40,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
         P2PNetworkConfig {
             listen: Some("/ip6/::1/tcp/32874".into()),
             dial: Vec::new(),
-            secret_key_path: Some("server-key".into()),
+            secret_key_path: Some("examples/server-key".into()),
             allowed_peer_ids: Some(vec!["Qme22rAhVjej4UCYxzW52L8PtYVv3XHeY2JqRKuwJn5ZFQ".into()]),
         }
     } else {
@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
             dial: vec![
                 "/ip6/::1/tcp/32874/p2p/QmPM86hUFFsc5c5Twuux7yaW2PdziwRrmbThGZec13veQ1".into(),
             ],
-            secret_key_path: Some("client-key".into()),
+            secret_key_path: Some("examples/client-key".into()),
             allowed_peer_ids: None,
         }
     };
