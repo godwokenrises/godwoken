@@ -33,6 +33,6 @@ pub(crate) fn to_jsonh256(v: H256) -> JsonH256 {
 pub(crate) fn to_result<T: DeserializeOwned>(output: Output) -> anyhow::Result<T> {
     match output {
         Output::Success(success) => Ok(from_value(success.result)?),
-        Output::Failure(failure) => Err(anyhow::anyhow!("JSONRPC error: {}", failure.error)),
+        Output::Failure(failure) => Err(failure.error.into()),
     }
 }

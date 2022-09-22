@@ -1,6 +1,6 @@
 use sparse_merkle_tree::H256;
 
-use crate::offchain::{CellInfo, CollectedCustodianCells, DepositInfo, SudtCustodian};
+use crate::offchain::{CellInfo, DepositInfo, FinalizedCustodianCapacity, SudtCustodian};
 use crate::{packed, prelude::*, vec::Vec};
 
 impl Pack<packed::CellInfo> for CellInfo {
@@ -61,48 +61,46 @@ impl<'r> Unpack<SudtCustodian> for packed::SudtCustodianReader<'r> {
     }
 }
 
-impl Pack<packed::CollectedCustodianCells> for CollectedCustodianCells {
-    fn pack(&self) -> packed::CollectedCustodianCells {
-        let sudt_custodians = {
-            let sudt = self.sudt.iter();
-            sudt.map(|(hash, (amount, script))| SudtCustodian {
-                script_hash: Into::<H256>::into(*hash),
-                amount: *amount,
-                script: script.to_owned(),
-            })
-        };
-        packed::CollectedCustodianCells::new_builder()
-            .cells_info(self.cells_info.pack())
+impl Pack<packed::FinalizedCustodianCapacity> for FinalizedCustodianCapacity {
+    fn pack(&self) -> packed::FinalizedCustodianCapacity {
+        packed::FinalizedCustodianCapacity::new_builder()
             .capacity(self.capacity.pack())
-            .sudt(sudt_custodians.collect::<Vec<_>>().pack())
+            .sudt(
+                packed::SudtCustodianVec::new_builder()
+                    .extend(self.sudt.iter().map(|(hash, (amount, script))| {
+                        packed::SudtCustodian::new_builder()
+                            .script_hash(hash.pack())
+                            .amount(amount.pack())
+                            .script(script.clone())
+                            .build()
+                    }))
+                    .build(),
+            )
             .build()
     }
 }
 
-impl<'r> Unpack<CollectedCustodianCells> for packed::CollectedCustodianCellsReader<'r> {
-    fn unpack(&self) -> CollectedCustodianCells {
-        let sudt_custodians = self.sudt().unpack();
-        let sudt = sudt_custodians
-            .into_iter()
-            .map(|sudt| (sudt.script_hash.into(), (sudt.amount, sudt.script)));
-
-        CollectedCustodianCells {
-            cells_info: self.cells_info().unpack(),
+impl<'r> Unpack<FinalizedCustodianCapacity> for packed::FinalizedCustodianCapacityReader<'r> {
+    fn unpack(&self) -> FinalizedCustodianCapacity {
+        FinalizedCustodianCapacity {
             capacity: self.capacity().unpack(),
-            sudt: sudt.collect(),
+            sudt: self
+                .sudt()
+                .iter()
+                .map(|sudt| {
+                    (
+                        sudt.script_hash().unpack(),
+                        (sudt.amount().unpack(), sudt.script().to_entity()),
+                    )
+                })
+                .collect(),
         }
     }
 }
 
 impl_conversion_for_packed_iterator_pack!(AccountMerkleState, AccountMerkleStateVec);
 impl_conversion_for_vector!(DepositInfo, DepositInfoVec, DepositInfoVecReader);
-impl_conversion_for_vector!(CellInfo, CellInfoVec, CellInfoVecReader);
 impl_conversion_for_vector!(SudtCustodian, SudtCustodianVec, SudtCustodianVecReader);
 impl_conversion_for_packed_iterator_pack!(WithdrawalRequestExtra, WithdrawalRequestExtraVec);
 impl_conversion_for_packed_iterator_pack!(DepositInfo, DepositInfoVec);
 impl_conversion_for_option!(H256, Byte32Opt, Byte32OptReader);
-impl_conversion_for_option!(
-    CollectedCustodianCells,
-    CollectedCustodianCellsOpt,
-    CollectedCustodianCellsOptReader
-);

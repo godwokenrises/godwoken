@@ -4,38 +4,23 @@ use crate::{
     error::RPCRequestError,
     utils::{to_jsonh256, to_result, DEFAULT_HTTP_TIMEOUT},
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
 use gw_common::H256;
 use gw_jsonrpc_types::{blockchain::CellDep, ckb_jsonrpc_types};
 use gw_types::{offchain::TxStatus, packed::Transaction, prelude::*};
 use serde::de::DeserializeOwned;
 use serde_json::json;
-use tokio_metrics::TaskMonitor;
 use tracing::instrument;
 
 #[derive(Clone)]
 pub struct CKBClient {
     ckb_client: HttpClient,
-    metrics_monitor: TaskMonitor,
 }
 
 impl CKBClient {
     pub fn new(ckb_client: HttpClient) -> Self {
-        let metrics_monitor = tokio_metrics::TaskMonitor::new();
-
-        let _metrics_monitor = metrics_monitor.clone();
-        tokio::spawn(async move {
-            let intervals = _metrics_monitor.intervals();
-            for interval in intervals {
-                log::debug!("ckb client metrics: {:?}", interval);
-                tokio::time::sleep(Duration::from_secs(30)).await;
-            }
-        });
-        Self {
-            ckb_client,
-            metrics_monitor,
-        }
+        Self { ckb_client }
     }
 
     pub fn with_url(url: &str) -> Result<Self> {
@@ -52,26 +37,15 @@ impl CKBClient {
     #[instrument(skip_all, fields(method = method))]
     pub async fn request<T: DeserializeOwned>(
         &self,
-        method: &str,
+        method: &'static str,
         params: Option<ClientParams>,
     ) -> Result<T> {
-        let monitor = self.metrics_monitor.clone();
-        let response = monitor
-            .instrument(self.client().request(method, params))
+        let response = self
+            .client()
+            .request(method, params)
             .await
-            .map_err(|err| RPCRequestError::new("ckb client", method.to_string(), err))?;
-        let response_str = response.to_string();
-        match to_result::<T>(response) {
-            Ok(r) => Ok(r),
-            Err(err) => {
-                log::error!(
-                    "[ckb-client] Failed to parse response, method: {}, response: {}",
-                    method,
-                    response_str
-                );
-                Err(err)
-            }
-        }
+            .map_err(|err| RPCRequestError::new("ckb client", method, err))?;
+        to_result(response).with_context(|| format!("ckb-client {method}"))
     }
 
     #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]

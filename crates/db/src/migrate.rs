@@ -4,8 +4,11 @@
 use crate::{
     error::Error,
     read_only_db::{self, ReadOnlyDB},
-    schema::{COLUMN_META, META_TIP_BLOCK_HASH_KEY},
-    Result,
+    schema::{
+        COLUMN_BLOCK, COLUMN_META, META_TIP_BLOCK_HASH_KEY, REMOVED_COLUMN_BLOCK_DEPOSIT_REQUESTS,
+        REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO,
+    },
+    DBIterator, Result,
 };
 use std::{cmp::Ordering, collections::BTreeMap};
 
@@ -109,6 +112,30 @@ impl Migration for DefaultMigration {
     }
 }
 
+struct DecoupleBlockProducingSubmissionAndConfirmationMigration;
+
+impl Migration for DecoupleBlockProducingSubmissionAndConfirmationMigration {
+    fn migrate(&self, mut db: RocksDB) -> Result<RocksDB> {
+        if db
+            .iter(COLUMN_BLOCK, rocksdb::IteratorMode::Start)?
+            .next()
+            .is_some()
+        {
+            return Err("Cannot migrate a database with existing data to version 20220517. You have to deploy a new node".to_string().into());
+        }
+
+        db.drop_cf(REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO)?;
+        db.drop_cf(REMOVED_COLUMN_BLOCK_DEPOSIT_REQUESTS)?;
+        Ok(db)
+    }
+    fn version(&self) -> &str {
+        "20220517"
+    }
+    fn expensive(&self) -> bool {
+        false
+    }
+}
+
 struct MigrationFactory {
     migration_map: BTreeMap<String, Box<dyn Migration>>,
 }
@@ -117,6 +144,9 @@ fn init_migration_factory() -> MigrationFactory {
     let mut factory = MigrationFactory::create();
     let migration = DefaultMigration;
     factory.insert(Box::new(migration));
+    factory.insert(Box::new(
+        DecoupleBlockProducingSubmissionAndConfirmationMigration,
+    ));
     factory
 }
 

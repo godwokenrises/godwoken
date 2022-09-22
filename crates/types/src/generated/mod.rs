@@ -30,9 +30,15 @@ mod deprecated;
 #[allow(clippy::all)]
 mod exported_block;
 
+#[cfg(feature = "std")]
+#[allow(clippy::all)]
+mod block_sync;
+
 pub mod packed {
     pub use molecule::prelude::{Byte, ByteReader};
 
+    #[cfg(feature = "std")]
+    pub use super::block_sync::*;
     pub use super::blockchain::*;
     #[cfg(feature = "std")]
     pub use super::exported_block::*;

@@ -3,7 +3,7 @@
 /// Column families alias type
 pub type Col = u8;
 /// Total column number
-pub const COLUMNS: u32 = 35;
+pub const COLUMNS: u32 = 37;
 /// Column store meta data
 pub const COLUMN_META: Col = 0;
 /// Column store chain index
@@ -16,8 +16,8 @@ pub const COLUMN_BLOCK_GLOBAL_STATE: Col = 4;
 pub const COLUMN_TRANSACTION: Col = 5;
 /// Column store transaction receipt
 pub const COLUMN_TRANSACTION_RECEIPT: Col = 6;
-/// Column store l2 block committed info
-pub const COLUMN_L2BLOCK_COMMITTED_INFO: Col = 7;
+/// Column store l2 block committed info. No longer used.
+pub const REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO: Col = 7;
 /// Column store transaction extra information
 pub const COLUMN_TRANSACTION_INFO: Col = 8;
 /// Column account SMT branch
@@ -33,7 +33,7 @@ pub const COLUMN_SCRIPT: Col = 14;
 /// Column data
 pub const COLUMN_DATA: Col = 15;
 /// Column block deposit requests
-pub const COLUMN_BLOCK_DEPOSIT_REQUESTS: Col = 16;
+pub const REMOVED_COLUMN_BLOCK_DEPOSIT_REQUESTS: Col = 16;
 /// Column mem pool transaction
 pub const COLUMN_MEM_POOL_TRANSACTION_RECEIPT: Col = 17;
 /// Column block state record
@@ -58,6 +58,18 @@ pub const COLUMN_MEM_POOL_WITHDRAWAL: Col = 27;
 pub const COLUMN_WITHDRAWAL: Col = 33;
 /// Column store withdrawal extra information
 pub const COLUMN_WITHDRAWAL_INFO: Col = 34;
+/// block number (in big endian for natural ordering) -> block submission tx.
+///
+/// May not be available for all blocks.
+pub const COLUMN_BLOCK_SUBMIT_TX: Col = 35;
+// Reuse removed column.
+/// Block number (in big endian) -> block submission tx hash.
+pub const COLUMN_BLOCK_SUBMIT_TX_HASH: Col = 7;
+// Reuse removed column.
+/// block number (in big endian) -> deposit info vec.
+pub const COLUMN_BLOCK_DEPOSIT_INFO_VEC: Col = 16;
+/// block number (in big endian) -> FinalizedCustodianCapacity.
+pub const COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY: Col = 36;
 
 /// chain id
 pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";
@@ -69,6 +81,10 @@ pub const META_BLOCK_SMT_ROOT_KEY: &[u8] = b"BLOCK_SMT_ROOT_KEY";
 pub const META_REVERTED_BLOCK_SMT_ROOT_KEY: &[u8] = b"REVERTED_BLOCK_SMT_ROOT_KEY";
 /// track the latest known valid block hash
 pub const META_LAST_VALID_TIP_BLOCK_HASH_KEY: &[u8] = b"LAST_VALID_TIP_BLOCK_HASH";
+/// track the last known L2 block NumberAndHash confirmed by L1
+pub const META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY: &[u8] = b"LAST_CONFIRMED_BLOCK_NUMBER";
+/// track the last submitted l2 block NumberAndHash
+pub const META_LAST_SUBMITTED_BLOCK_NUMBER_HASH_KEY: &[u8] = b"LAST_SUBMITTED_BLOCK_NUMBER";
 
 /// CHAIN_SPEC_HASH_KEY tracks the hash of chain spec which created current database
 pub const CHAIN_SPEC_HASH_KEY: &[u8] = b"chain-spec-hash";

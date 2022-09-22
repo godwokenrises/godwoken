@@ -4,12 +4,19 @@ use ckb_types::{
     prelude::{Builder, Entity},
 };
 use gw_config::ContractsCellDep;
-use gw_rpc_client::rpc_client::RPCClient;
+use gw_rpc_client::{
+    indexer_client::CKBIndexerClient,
+    indexer_types::{Order, SearchKey, SearchKeyFilter},
+    rpc_client::RPCClient,
+};
 use gw_types::{
     core::ScriptHashType,
     offchain::{CellInfo, InputCellInfo, RollupContext},
-    packed::{CellDep, CellInput, CellOutput, L2Block, Script, StakeLockArgs},
-    prelude::{Pack, Unpack},
+    packed::{CellDep, CellInput, CellOutput, L2Block, Script, StakeLockArgs, StakeLockArgsReader},
+    prelude::*,
+};
+use gw_utils::local_cells::{
+    collect_local_and_indexer_cells, CollectLocalAndIndexerCursor, LocalCellsManager,
 };
 
 pub struct GeneratedStake {
@@ -26,6 +33,7 @@ pub async fn generate(
     contracts_dep: &ContractsCellDep,
     rpc_client: &RPCClient,
     lock_script: Script,
+    local_cells_manager: &LocalCellsManager,
 ) -> Result<GeneratedStake> {
     let owner_lock_hash = lock_script.hash();
     let lock_args: Bytes = {
@@ -51,14 +59,15 @@ pub async fn generate(
         .rollup_config
         .required_staking_capacity()
         .unpack();
-    if let Some(unlocked_stake) = rpc_client
-        .query_stake(
-            rollup_context,
-            owner_lock_hash,
-            required_staking_capacity,
-            None,
-        )
-        .await?
+    if let Some(unlocked_stake) = query_stake(
+        &rpc_client.indexer,
+        rollup_context,
+        owner_lock_hash,
+        required_staking_capacity,
+        None,
+        local_cells_manager,
+    )
+    .await?
     {
         let stake_lock_dep = contracts_dep.stake_cell_lock.clone();
 
@@ -114,4 +123,61 @@ pub async fn generate(
     };
 
     Ok(generated_stake)
+}
+
+/// query stake
+///
+/// return cell which stake_block_number is less than last_finalized_block_number if the args isn't none
+/// otherwise return stake cell randomly
+pub async fn query_stake(
+    client: &CKBIndexerClient,
+    rollup_context: &RollupContext,
+    owner_lock_hash: [u8; 32],
+    required_staking_capacity: u64,
+    last_finalized_block_number: Option<u64>,
+    local_cells_manager: &LocalCellsManager,
+) -> Result<Option<CellInfo>> {
+    let lock = Script::new_builder()
+        .code_hash(rollup_context.rollup_config.stake_script_type_hash())
+        .hash_type(ScriptHashType::Type.into())
+        .args(rollup_context.rollup_script_hash.as_slice().pack())
+        .build();
+
+    let search_key = SearchKey::with_lock(lock).with_filter(Some(SearchKeyFilter {
+        output_capacity_range: Some([required_staking_capacity.into(), u64::MAX.into()]),
+        ..Default::default()
+    }));
+    let order = Order::Desc;
+
+    let mut stake_cell = None;
+    let mut cursor = CollectLocalAndIndexerCursor::Local;
+
+    while stake_cell.is_none() && !cursor.is_ended() {
+        let cells = collect_local_and_indexer_cells(
+            local_cells_manager,
+            client,
+            &search_key,
+            &order,
+            Some(1),
+            &mut cursor,
+        )
+        .await?;
+
+        stake_cell = cells.into_iter().find(|cell| {
+            let args = cell.output.as_reader().lock().args().raw_data();
+            let stake_lock_args = match StakeLockArgsReader::from_slice(&args[32..]) {
+                Ok(r) => r,
+                Err(_) => return false,
+            };
+            match last_finalized_block_number {
+                Some(last_finalized_block_number) => {
+                    stake_lock_args.stake_block_number().unpack() <= last_finalized_block_number
+                        && stake_lock_args.owner_lock_hash().as_slice() == owner_lock_hash
+                }
+                None => stake_lock_args.owner_lock_hash().as_slice() == owner_lock_hash,
+            }
+        });
+    }
+
+    Ok(stake_cell)
 }

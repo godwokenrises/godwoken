@@ -32,7 +32,7 @@ pub struct GeneratedWithdrawals {
 // Note: custodian lock search rollup cell in inputs
 pub fn generate(
     rollup_context: &RollupContext,
-    finalized_custodians: CollectedCustodianCells,
+    mut finalized_custodians: CollectedCustodianCells,
     block: &L2Block,
     contracts_dep: &ContractsCellDep,
     withdrawal_extras: &HashMap<H256, WithdrawalRequestExtra>,
@@ -42,8 +42,11 @@ pub fn generate(
     }
     log::debug!("custodian inputs {:?}", finalized_custodians);
 
+    let cells_info = std::mem::take(&mut finalized_custodians.cells_info);
+    let cusotidan_sudt_is_empty = finalized_custodians.sudt.is_empty();
+
     let total_withdrawal_amount = sum_withdrawals(block.withdrawals().into_iter());
-    let mut generator = Generator::new(rollup_context, (&finalized_custodians).into());
+    let mut generator = Generator::new(rollup_context, finalized_custodians.into());
     for req in block.withdrawals().into_iter() {
         let req_extra = match withdrawal_extras.get(&req.hash().into()) {
             Some(req_extra) => req_extra.to_owned(),
@@ -58,11 +61,11 @@ pub fn generate(
     let custodian_lock_dep = contracts_dep.custodian_cell_lock.clone();
     let sudt_type_dep = contracts_dep.l1_sudt_type.clone();
     let mut cell_deps = vec![custodian_lock_dep.into()];
-    if !total_withdrawal_amount.sudt.is_empty() || !finalized_custodians.sudt.is_empty() {
+    if !total_withdrawal_amount.sudt.is_empty() || !cusotidan_sudt_is_empty {
         cell_deps.push(sudt_type_dep.into());
     }
 
-    let custodian_inputs = finalized_custodians.cells_info.into_iter().map(|cell| {
+    let custodian_inputs = cells_info.into_iter().map(|cell| {
         let input = CellInput::new_builder()
             .previous_output(cell.out_point.clone())
             .build();

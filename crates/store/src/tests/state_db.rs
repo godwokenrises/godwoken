@@ -7,8 +7,10 @@ use crate::{
 use gw_common::{h256_ext::H256Ext, merkle_utils::calculate_state_checkpoint, state::State, H256};
 use gw_db::schema::COLUMN_BLOCK;
 use gw_types::{
-    packed::{AccountMerkleState, L2Block, RawL2Block, SubmitTransactions},
-    prelude::{Builder, Entity, Pack},
+    packed::{
+        AccountMerkleState, L2Block, NumberHash, RawL2Block, SubmitTransactions, Transaction,
+    },
+    prelude::{Builder, Entity, Pack, Unpack},
 };
 
 fn build_block(state: &impl State, block_number: u64, prev_txs_state_checkpoint: H256) -> L2Block {
@@ -83,6 +85,15 @@ fn test_state_with_version() {
             .unwrap();
         commit_block(&db, build_block(&state, 1, prev_txs_state_checkpoint));
         prev_txs_state_checkpoint = state.calculate_state_checkpoint().unwrap();
+        db.set_block_submit_tx(1, &Transaction::default().as_reader())
+            .unwrap();
+        db.set_last_submitted_block_number_hash(
+            &NumberHash::new_builder()
+                .number(1.pack())
+                .build()
+                .as_reader(),
+        )
+        .unwrap();
         db.commit().unwrap();
     }
     {
@@ -94,6 +105,12 @@ fn test_state_with_version() {
         assert_eq!(v, H256::from_u32(2));
         let v = state.get_raw(&H256::from_u32(3)).unwrap();
         assert_eq!(v, H256::from_u32(3));
+        assert_eq!(
+            db.get_last_submitted_block_number_hash()
+                .map(|nh| nh.number().unpack()),
+            Some(1),
+        );
+        assert!(db.get_block_submit_tx(1).is_some());
     }
 
     // attach block 2
@@ -111,6 +128,18 @@ fn test_state_with_version() {
             .update_raw(H256::from_u32(5), H256::from_u32(25))
             .unwrap();
         commit_block(&db, build_block(&state, 2, prev_txs_state_checkpoint));
+        db.set_last_confirmed_block_number_hash(
+            &NumberHash::new_builder()
+                .number(2.pack())
+                .build()
+                .as_reader(),
+        )
+        .unwrap();
+        assert_eq!(
+            db.get_last_confirmed_block_number_hash()
+                .map(|nh| nh.number().unpack()),
+            Some(2)
+        );
         db.commit().unwrap();
     }
     {
@@ -150,6 +179,11 @@ fn test_state_with_version() {
         assert_eq!(v, H256::from_u32(4));
         let v = state.get_raw(&H256::from_u32(5)).unwrap();
         assert_eq!(v, H256::zero());
+        assert_eq!(
+            db.get_last_confirmed_block_number_hash()
+                .map(|nh| nh.number().unpack()),
+            Some(1)
+        );
     }
 
     // attach 2 again

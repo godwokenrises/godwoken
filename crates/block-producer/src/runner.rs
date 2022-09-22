@@ -1,14 +1,17 @@
 use crate::{
     block_producer::{BlockProducer, BlockProducerCreateArgs},
+    block_sync_client::{block_sync_client_protocol, BlockSyncClient, P2PStream},
+    chain_updater::ChainUpdater,
     challenger::{Challenger, ChallengerNewArgs},
     cleaner::Cleaner,
-    poller::ChainUpdater,
+    psc::{PSCContext, ProduceSubmitConfirm},
     test_mode_control::TestModeControl,
     types::ChainEvent,
     withdrawal_unlocker::FinalizedWithdrawalUnlocker,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use ckb_types::core::hardfork::HardForkSwitch;
+use futures::future::OptionFuture;
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainMockContextBuildArgs};
 use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH, GLOBAL_VM_VERSION};
@@ -23,10 +26,9 @@ use gw_generator::{
     ArcSwap, Generator,
 };
 use gw_mem_pool::{
+    block_sync_server::{block_sync_server_protocol, BlockSyncServerState},
     default_provider::DefaultMemPoolProvider,
     pool::{MemPool, MemPoolCreateArgs},
-    spawn_sub_mem_pool_task,
-    sync::p2p,
 };
 use gw_p2p_network::P2PNetwork;
 use gw_polyjuice_sender_recover::recover::PolyjuiceSenderRecover;
@@ -47,8 +49,8 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::{
-    exponential_backoff::ExponentialBackoff, genesis_info::CKBGenesisInfo,
-    since::EpochNumberWithFraction, wallet::Wallet,
+    exponential_backoff::ExponentialBackoff, genesis_info::CKBGenesisInfo, liveness::Liveness,
+    local_cells::LocalCellsManager, since::EpochNumberWithFraction, wallet::Wallet,
 };
 use semver::Version;
 use std::{
@@ -68,8 +70,6 @@ const MIN_CKB_VERSION: &str = "0.40.0";
 const EVENT_TIMEOUT_SECONDS: u64 = 30;
 
 struct ChainTaskContext {
-    chain_updater: ChainUpdater,
-    block_producer: Option<BlockProducer>,
     challenger: Option<Challenger>,
     withdrawal_unlocker: Option<FinalizedWithdrawalUnlocker>,
     cleaner: Option<Arc<Cleaner>>,
@@ -95,10 +95,6 @@ struct ChainTask {
     ctx: Arc<tokio::sync::Mutex<ChainTaskContext>>,
     shutdown_event: broadcast::Receiver<()>,
     _shutdown_send: mpsc::Sender<()>,
-    metrics_monitor: tokio_metrics::TaskMonitor,
-    chain_update_metrics_monitor: tokio_metrics::TaskMonitor,
-    block_produce_metrics_monitor: tokio_metrics::TaskMonitor,
-    cleaner_metrics_monitor: tokio_metrics::TaskMonitor,
 }
 
 impl ChainTask {
@@ -110,43 +106,13 @@ impl ChainTask {
         shutdown_event: broadcast::Receiver<()>,
     ) -> Self {
         let ctx = Arc::new(tokio::sync::Mutex::new(ctx));
-        let metrics_monitor = tokio_metrics::TaskMonitor::new();
-        let chain_update_metrics_monitor = tokio_metrics::TaskMonitor::new();
-        let block_produce_metrics_monitor = tokio_metrics::TaskMonitor::new();
-        let cleaner_metrics_monitor = tokio_metrics::TaskMonitor::new();
-        let _metrics_monitor = metrics_monitor.clone();
-        let _chain_update_metrics_monitor = chain_update_metrics_monitor.clone();
-        let _block_produce_metrics_monitor = block_produce_metrics_monitor.clone();
-        let _cleaner_metrics_monitor = cleaner_metrics_monitor.clone();
 
-        tokio::spawn(async move {
-            let chain_intervals = _metrics_monitor.intervals();
-            let chain_update_intervals = _chain_update_metrics_monitor.intervals();
-            let block_produce_intervals = _block_produce_metrics_monitor.intervals();
-            let cleaner_intervals = _cleaner_metrics_monitor.intervals();
-
-            let zip_intervals = block_produce_intervals.zip(cleaner_intervals);
-            let zip_intervals = chain_update_intervals.zip(zip_intervals);
-            let zip_intervals = chain_intervals.zip(zip_intervals);
-
-            for (chain, (chain_update, (block_produce, cleaner))) in zip_intervals {
-                log::info!("chain task metrics: {:#?}", chain);
-                log::info!("chain_update metrics: {:?}", chain_update);
-                log::info!("block_produce metrics: {:?}", block_produce);
-                log::info!("cleaner metrics: {:?}", cleaner);
-                tokio::time::sleep(Duration::from_secs(30)).await;
-            }
-        });
         Self {
             rpc_client,
             poll_interval,
             ctx,
             _shutdown_send: shutdown_send,
             shutdown_event,
-            metrics_monitor,
-            chain_update_metrics_monitor,
-            block_produce_metrics_monitor,
-            cleaner_metrics_monitor,
         }
     }
 
@@ -204,22 +170,6 @@ impl ChainTask {
                 }
             }
 
-            if let Err(err) = self
-                .chain_update_metrics_monitor
-                .instrument(ctx.chain_updater.handle_event(event.clone()))
-                .await
-            {
-                if is_l1_query_error(&err) {
-                    log::error!("[polling] chain_updater event: {} error: {}", event, err);
-                    return Ok(None);
-                }
-                bail!(
-                    "Error occurred when polling chain_updater, event: {}, error: {}",
-                    event,
-                    err
-                );
-            }
-
             if let Some(ref mut challenger) = ctx.challenger {
                 if let Err(err) = challenger.handle_event(event.clone()).await {
                     if is_l1_query_error(&err) {
@@ -238,30 +188,8 @@ impl ChainTask {
                 }
             }
 
-            if let Some(ref mut block_producer) = ctx.block_producer {
-                if let Err(err) = self
-                    .block_produce_metrics_monitor
-                    .instrument(block_producer.handle_event(event.clone()))
-                    .await
-                {
-                    if is_l1_query_error(&err) {
-                        log::error!("[polling] block producer event: {} error: {}", event, err);
-                        return Ok(None);
-                    }
-                    bail!(
-                        "Error occurred when polling block_producer, event: {}, error: {}",
-                        event,
-                        err
-                    );
-                }
-            }
-
             if let Some(ref cleaner) = ctx.cleaner {
-                if let Err(err) = self
-                    .cleaner_metrics_monitor
-                    .instrument(cleaner.handle_event(event.clone()))
-                    .await
-                {
+                if let Err(err) = cleaner.handle_event(event.clone()).await {
                     if is_l1_query_error(&err) {
                         log::error!("[polling] cleaner event: {} error: {}", event, err);
                         return Ok(None);
@@ -336,8 +264,7 @@ impl ChainTask {
         };
 
         let opt_tip_number_hash = self
-            .metrics_monitor
-            .instrument(self.sync_next(tip_number, tip_hash, &status.last_event_time))
+            .sync_next(tip_number, tip_hash, &status.last_event_time)
             .await?;
 
         let updated_status = ChainTaskRunStatus {
@@ -437,13 +364,14 @@ impl BaseInitComponents {
                 .raw_data()
         };
 
-        init_genesis(
-            &store,
-            &config.genesis,
-            config.chain.genesis_committed_info.clone().into(),
-            secp_data.clone(),
-        )
-        .with_context(|| "init genesis")?;
+        let genesis_tx_hash = config
+            .chain
+            .genesis_committed_info
+            .transaction_hash
+            .clone()
+            .into();
+        init_genesis(&store, &config.genesis, &genesis_tx_hash, secp_data.clone())
+            .with_context(|| "init genesis")?;
 
         let dynamic_config_manager = Arc::new(ArcSwap::from_pointee(DynamicConfigManager::create(
             config.clone(),
@@ -564,6 +492,16 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     }
     let base = BaseInitComponents::init(&config, skip_config_check).await?;
 
+    let has_block_producer_and_p2p =
+        config.block_producer.is_some() && config.p2p_network_config.is_some();
+    let block_sync_server_state = if has_block_producer_and_p2p {
+        Some(Arc::new(std::sync::Mutex::new(BlockSyncServerState::new(
+            &config.sync_server,
+        ))))
+    } else {
+        None
+    };
+
     let (mem_pool, wallet, offchain_mock_context) = match config.block_producer.as_ref() {
         Some(block_producer_config) => {
             let opt_wallet = block_producer_config
@@ -596,7 +534,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     config: config.mem_pool.clone(),
                     node_mode: config.node_mode,
                     dynamic_config_manager: base.dynamic_config_manager.clone(),
-                    has_p2p_sync: config.p2p_network_config.is_some(),
+                    sync_server: block_sync_server_state.clone(),
                 };
                 Arc::new(Mutex::new(
                     MemPool::create(args)
@@ -623,6 +561,10 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         dynamic_config_manager,
         ..
     } = base;
+
+    let liveness = Arc::new(Liveness::new(Duration::from_secs(
+        config.liveness_duration_secs.unwrap_or(60),
+    )));
 
     // check state db
     {
@@ -653,19 +595,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     let (block_producer, challenger, test_mode_control, withdrawal_unlocker, cleaner) = match config
         .node_mode
     {
-        NodeMode::ReadOnly => {
-            if let Some(sync_mem_block_config) = &config.mem_pool.subscribe {
-                match &mem_pool {
-                    Some(mem_pool) => {
-                        spawn_sub_mem_pool_task(mem_pool.clone(), sync_mem_block_config.clone())?;
-                    }
-                    None => {
-                        log::warn!("Failed to init sync mem block, because mem_pool is None.");
-                    }
-                }
-            }
-            (None, None, None, None, None)
-        }
+        NodeMode::ReadOnly => (None, None, None, None, None),
         mode => {
             let block_producer_config = config
                 .block_producer
@@ -673,9 +603,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 .ok_or_else(|| anyhow!("must provide block producer config in mode: {:?}", mode))?;
             let contracts_dep_manager =
                 contracts_dep_manager.ok_or_else(|| anyhow!("must build contracts dep"))?;
-            let mem_pool = mem_pool
-                .clone()
-                .ok_or_else(|| anyhow!("mem-pool must be enabled in mode: {:?}", mode))?;
             let wallet =
                 wallet.ok_or_else(|| anyhow!("wallet must be enabled in mode: {:?}", mode))?;
             let offchain_mock_context = {
@@ -745,11 +672,9 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 store: store.clone(),
                 generator: generator.clone(),
                 chain: Arc::clone(&chain),
-                mem_pool,
                 rpc_client: rpc_client.clone(),
                 ckb_genesis_info,
                 config: block_producer_config,
-                debug_config: config.debug.clone(),
                 tests_control: tests_control.clone(),
                 contracts_dep_manager,
             };
@@ -766,39 +691,33 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
     };
 
-    //Graceful shutdown event. If all the shutdown_sends get dropped, then we can shutdown gracefully.
-    let (shutdown_send, mut shutdown_recv) = mpsc::channel(1);
-    //Broadcase shutdown event.
+    // Wait for graceful shutdown complete.
+    let (shutdown_completed_send, mut shutdown_completed_recv) = mpsc::channel(1);
+    // Broadcast shutdown event.
     let (shutdown_event, shutdown_event_recv) = broadcast::channel(1);
+
+    let block_sync_client_p2p_stream_inbox: Arc<std::sync::Mutex<Option<P2PStream>>> =
+        Arc::new(std::sync::Mutex::new(None));
 
     // P2P network.
     let p2p_control_and_handle = if let Some(ref p2p_network_config) = config.p2p_network_config {
         let mut protocols: Vec<ProtocolMeta> = Vec::new();
-        let mut sync_server_state: Option<Arc<Mutex<p2p::SyncServerState>>> = None;
-        match (&mem_pool, config.node_mode) {
-            (Some(_), NodeMode::FullNode | NodeMode::Test) => {
-                log::info!("will enable mem-pool p2p sync server");
-                let s = Arc::new(Mutex::new(Default::default()));
-                sync_server_state = Some(s.clone());
-                protocols.push(p2p::sync_server_protocol(s));
-            }
-            (Some(mem_pool), NodeMode::ReadOnly) => {
-                log::info!("will enable mem-pool p2p sync client");
-                protocols.push(p2p::sync_client_protocol(
-                    mem_pool.clone(),
-                    shutdown_event.clone(),
+        match config.node_mode {
+            NodeMode::ReadOnly => {
+                log::info!("will enable p2p block sync client");
+                protocols.push(block_sync_client_protocol(
+                    block_sync_client_p2p_stream_inbox.clone(),
                 ));
             }
-            _ => {}
+            NodeMode::FullNode | NodeMode::Test => {
+                if let Some(ref state) = block_sync_server_state {
+                    log::info!("will enable p2p block sync server");
+                    protocols.push(block_sync_server_protocol(state.clone()));
+                }
+            }
         }
         let mut network = P2PNetwork::init(p2p_network_config, protocols).await?;
         let control = network.control().clone();
-        if let (Some(sync_server_state), Some(mem_pool)) = (sync_server_state, &mem_pool) {
-            let mut mem_pool = mem_pool.lock().await;
-            mem_pool
-                .enable_publishing(control.clone(), sync_server_state)
-                .await;
-        }
         let handle = tokio::spawn(async move {
             log::info!("running the p2p network");
             network.run().await;
@@ -810,11 +729,11 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     // RPC registry
     let polyjuice_sender_recover = {
-        let opt_wallet = match config.block_producer.map(|c| c.wallet_config) {
+        let opt_wallet = match config.block_producer.as_ref().map(|c| &c.wallet_config) {
             Some(Some(c)) => {
                 log::info!("[tx from zero] use block producer wallet");
 
-                Some(Wallet::from_config(&c).with_context(|| "polyjuice sender creator wallet")?)
+                Some(Wallet::from_config(c).with_context(|| "polyjuice sender creator wallet")?)
             }
             _ => {
                 log::info!("[tx from zero] no wallet config for polyjuice sender creator");
@@ -826,8 +745,8 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         PolyjuiceSenderRecover::create(generator.rollup_context(), opt_wallet)?
     };
     let args = RegistryArgs {
-        store,
-        mem_pool,
+        store: store.clone(),
+        mem_pool: mem_pool.clone(),
         generator,
         tests_rpc_impl: test_mode_control.map(Box::new),
         rollup_config,
@@ -839,9 +758,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         send_tx_rate_limit: config.dynamic_config.rpc_config.send_tx_rate_limit.clone(),
         server_config: config.rpc_server.clone(),
         dynamic_config_manager,
-        last_submitted_tx_hash: block_producer
-            .as_ref()
-            .map(|bp| bp.last_submitted_tx_hash()),
         polyjuice_sender_recover,
     };
 
@@ -871,98 +787,165 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     log::info!("{:?} mode", config.node_mode);
 
+    let bm = (block_producer, mem_pool.clone()); // To keep the next line short.
+    let psc_task = if let (Some(block_producer), Some(mem_pool)) = bm {
+        let psc_state = ProduceSubmitConfirm::init(Arc::new(PSCContext {
+            store: store.clone(),
+            block_producer,
+            rpc_client: rpc_client.clone(),
+            chain: chain.clone(),
+            mem_pool,
+            local_cells_manager: Mutex::new(LocalCellsManager::default()),
+            chain_updater: chain_updater.clone(),
+            rollup_type_script: rollup_type_script.clone(),
+            psc_config: config.block_producer.as_ref().unwrap().psc_config.clone(),
+            block_sync_server_state: block_sync_server_state.clone(),
+            liveness: liveness.clone(),
+        }))
+        .await
+        .context("create ProduceSubmitConfirm")?;
+
+        let shutdown_completed_send = shutdown_completed_send.clone();
+        let mut shutdown_event_recv = shutdown_event.subscribe();
+        Some(tokio::spawn(async move {
+            let result = tokio::select! {
+                _ = shutdown_event_recv.recv() => return,
+                result = psc_state.run() => result,
+            };
+            if let Err(e) = result {
+                log::error!("ProduceSubmitConfirm error: {:#}", e);
+            }
+            drop(shutdown_completed_send);
+        }))
+    } else {
+        None
+    };
+    let has_psc_task = psc_task.is_some();
+    let psc_task = OptionFuture::from(psc_task);
+
+    let block_sync_task = if config.node_mode == NodeMode::ReadOnly {
+        let client = BlockSyncClient {
+            store: store.clone(),
+            rpc_client: rpc_client.clone(),
+            chain: chain.clone(),
+            mem_pool,
+            chain_updater,
+            rollup_type_script: rollup_type_script.clone(),
+            p2p_stream_inbox: block_sync_client_p2p_stream_inbox,
+            completed_initial_syncing: false,
+            liveness: liveness.clone(),
+        };
+        let shutdown_completed_send = shutdown_completed_send.clone();
+        let mut shutdown_event_recv = shutdown_event.subscribe();
+        Some(tokio::spawn(async move {
+            tokio::select! {
+                _ = shutdown_event_recv.recv() => {},
+                _ = client.run() => {},
+            }
+            drop(shutdown_completed_send);
+        }))
+    } else {
+        None
+    };
+    let has_block_sync_task = block_sync_task.is_some();
+    let block_sync_task = OptionFuture::from(block_sync_task);
+
     let (chain_task_ended_tx, chain_task) = tokio::sync::oneshot::channel::<()>();
     let rt_handle = tokio::runtime::Handle::current();
-    std::thread::Builder::new()
-        .name("chain-task".into())
-        .spawn({
-            let shutdown_send = shutdown_send.clone();
-            move || {
-                rt_handle.block_on(async move {
-                    use tracing::Instrument;
+    tokio::task::spawn_blocking({
+        let shutdown_send = shutdown_completed_send.clone();
+        move || {
+            rt_handle.block_on(async move {
+                use tracing::Instrument;
 
-                    let _tx = chain_task_ended_tx;
-                    let ctx = ChainTaskContext {
-                        chain_updater,
-                        block_producer,
-                        challenger,
-                        withdrawal_unlocker,
-                        cleaner,
-                    };
-                    let mut backoff = ExponentialBackoff::new(Duration::from_secs(1));
-                    let mut chain_task = ChainTask::create(
-                        rpc_client,
-                        Duration::from_secs(3),
-                        ctx,
-                        shutdown_send,
-                        shutdown_event_recv,
-                    );
+                let _tx = chain_task_ended_tx;
+                let ctx = ChainTaskContext {
+                    // chain_updater,
+                    challenger,
+                    withdrawal_unlocker,
+                    cleaner,
+                };
+                let mut backoff = ExponentialBackoff::new(Duration::from_secs(1));
+                let mut chain_task = ChainTask::create(
+                    rpc_client,
+                    Duration::from_secs(3),
+                    ctx,
+                    shutdown_send,
+                    shutdown_event_recv,
+                );
 
-                    let mut run_status = ChainTaskRunStatus::default();
-                    loop {
-                        // Exit if shutdown event is received.
-                        if chain_task.shutdown_event.try_recv().is_ok() {
-                            log::info!("ChainTask existed successfully");
-                            return;
+                let mut run_status = ChainTaskRunStatus::default();
+                loop {
+                    // Exit if shutdown event is received.
+                    if chain_task.shutdown_event.try_recv().is_ok() {
+                        log::info!("ChainTask existed successfully");
+                        return;
+                    }
+
+                    let run_span = info_span!("chain_task_run");
+                    match chain_task
+                        .run(&run_status)
+                        .instrument(run_span.clone())
+                        .await
+                    {
+                        Ok(updated_status) => {
+                            run_status = updated_status;
+                            backoff.reset();
+
+                            let sleep_span =
+                                info_span!(parent: &run_span, "chain_task interval sleep");
+                            tokio::time::sleep(chain_task.poll_interval)
+                                .instrument(sleep_span)
+                                .await;
                         }
+                        Err(err) if err.is::<RPCRequestError>() => {
+                            // Reset status and refresh tip number hash
+                            run_status = ChainTaskRunStatus::default();
+                            let backoff_sleep = backoff.next_sleep();
+                            log::error!(
+                                "chain polling loop request error, will retry in {}s: {}",
+                                backoff_sleep.as_secs(),
+                                err
+                            );
 
-                        let run_span = info_span!("chain_task_run");
-                        match chain_task
-                            .run(&run_status)
-                            .instrument(run_span.clone())
-                            .await
-                        {
-                            Ok(updated_status) => {
-                                run_status = updated_status;
-                                backoff.reset();
-
-                                let sleep_span =
-                                    info_span!(parent: &run_span, "chain_task interval sleep");
-                                tokio::time::sleep(chain_task.poll_interval)
-                                    .instrument(sleep_span)
-                                    .await;
-                            }
-                            Err(err) if err.is::<RPCRequestError>() => {
-                                // Reset status and refresh tip number hash
-                                run_status = ChainTaskRunStatus::default();
-                                let backoff_sleep = backoff.next_sleep();
-                                log::error!(
-                                    "chain polling loop request error, will retry in {}s: {}",
-                                    backoff_sleep.as_secs(),
-                                    err
-                                );
-
-                                let sleep_span =
-                                    info_span!(parent: &run_span, "chain_task backoff sleep");
-                                tokio::time::sleep(backoff_sleep)
-                                    .instrument(sleep_span)
-                                    .await;
-                            }
-                            Err(err) => {
-                                log::error!("chain polling loop exit unexpected, error: {}", err);
-                                break;
-                            }
+                            let sleep_span =
+                                info_span!(parent: &run_span, "chain_task backoff sleep");
+                            tokio::time::sleep(backoff_sleep)
+                                .instrument(sleep_span)
+                                .await;
+                        }
+                        Err(err) => {
+                            log::error!("chain polling loop exit unexpected, error: {}", err);
+                            break;
                         }
                     }
-                });
-            }
-        })
-        .unwrap();
+                }
+            });
+        }
+    });
 
     let sub_shutdown = shutdown_event.subscribe();
-    let rpc_shutdown_send = shutdown_send.clone();
+    let rpc_shutdown_send = shutdown_completed_send.clone();
     let rpc_task = spawn(async move {
-        if let Err(err) =
-            start_jsonrpc_server(rpc_address, rpc_registry, rpc_shutdown_send, sub_shutdown).await
+        if let Err(err) = start_jsonrpc_server(
+            rpc_address,
+            rpc_registry,
+            liveness,
+            rpc_shutdown_send,
+            sub_shutdown,
+        )
+        .await
         {
             log::error!("Error running JSONRPC server: {:?}", err);
         }
     });
 
     tokio::select! {
-        _ = sigint_or_sigterm() => { },
+        _ = sigint_or_sigterm() => {},
         _ = chain_task => {},
         _ = rpc_task => {},
+        _ = psc_task, if has_psc_task => {},
+        _ = block_sync_task, if has_block_sync_task => {},
     };
 
     //If any task is out of running, broadcast shutdown event.
@@ -979,12 +962,12 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     }
 
     // Make sure all the senders are dropped.
-    drop(shutdown_send);
+    drop(shutdown_completed_send);
 
     // When every sender has gone out of scope, the recv call
     // will return with an error. We ignore the error. Just
     // make sure we can hit this line.
-    let _ = shutdown_recv.recv().await;
+    let _ = shutdown_completed_recv.recv().await;
     log::info!("Exiting...");
 
     Ok(())
@@ -1119,7 +1102,7 @@ fn is_hardfork_switch_eq(l: &HardForkSwitch, r: &HardForkSwitch) -> bool {
 }
 
 fn is_l1_query_error(err: &anyhow::Error) -> bool {
-    use crate::poller::QueryL1TxError;
+    use crate::chain_updater::QueryL1TxError;
 
     // TODO: filter rpc request method?
     err.downcast_ref::<RPCRequestError>().is_some()

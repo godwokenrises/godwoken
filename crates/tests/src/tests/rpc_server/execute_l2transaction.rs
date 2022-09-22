@@ -21,7 +21,7 @@ use crate::testing_tool::{
 
 pub mod block_max_cycles_limit;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_polyjuice_erc20_tx() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -30,7 +30,10 @@ async fn test_polyjuice_erc20_tx() {
     let rpc_server = RPCServer::build(&chain, None).await.unwrap();
 
     // Check block producer is valid registry address
-    chain.produce_block(vec![], vec![]).await.unwrap();
+    chain
+        .produce_block(Default::default(), vec![])
+        .await
+        .unwrap();
     let block_producer: Bytes = chain.last_valid_block().raw().block_producer().unpack();
     assert!(RegistryAddress::from_slice(&block_producer).is_some());
 
@@ -66,7 +69,7 @@ async fn test_polyjuice_erc20_tx() {
     assert_eq!(system_log.status_code, 0);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_polyjuice_tx_from_id_zero() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -75,7 +78,10 @@ async fn test_polyjuice_tx_from_id_zero() {
     let rpc_server = RPCServer::build(&chain, None).await.unwrap();
 
     // Check block producer is valid registry address
-    chain.produce_block(vec![], vec![]).await.unwrap();
+    chain
+        .produce_block(Default::default(), vec![])
+        .await
+        .unwrap();
     let block_producer: Bytes = chain.last_valid_block().raw().block_producer().unpack();
     assert!(RegistryAddress::from_slice(&block_producer).is_some());
 
@@ -114,7 +120,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     mem_pool_state.store(snap.into());
     {
         let mut mem_pool = chain.mem_pool().await;
-        mem_pool.push_transaction(deploy_tx).await.unwrap();
+        mem_pool.push_transaction(deploy_tx).unwrap();
     }
 
     let snap = mem_pool_state.load();
@@ -169,7 +175,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_invalid_polyjuice_tx_from_id_zero() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -178,7 +184,10 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     let rpc_server = RPCServer::build(&chain, None).await.unwrap();
 
     // Check block producer is valid registry address
-    chain.produce_block(vec![], vec![]).await.unwrap();
+    chain
+        .produce_block(Default::default(), vec![])
+        .await
+        .unwrap();
     let block_producer: Bytes = chain.last_valid_block().raw().block_producer().unpack();
     assert!(RegistryAddress::from_slice(&block_producer).is_some());
 
@@ -213,7 +222,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     mem_pool_state.store(snap.into());
     {
         let mut mem_pool = chain.mem_pool().await;
-        mem_pool.push_transaction(deploy_tx).await.unwrap();
+        mem_pool.push_transaction(deploy_tx).unwrap();
     }
 
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();

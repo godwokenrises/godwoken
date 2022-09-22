@@ -6,21 +6,32 @@ use gw_common::H256;
 use gw_db::error::Error;
 use gw_db::schema::{
     COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
-    COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_INDEX,
-    COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_MEM_POOL_TRANSACTION,
+    COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_GLOBAL_STATE,
+    COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY, COLUMN_BLOCK_SUBMIT_TX,
+    COLUMN_BLOCK_SUBMIT_TX_HASH, COLUMN_INDEX, COLUMN_MEM_POOL_TRANSACTION,
     COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
     COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
     COLUMN_TRANSACTION_RECEIPT, COLUMN_WITHDRAWAL, COLUMN_WITHDRAWAL_INFO, META_BLOCK_SMT_ROOT_KEY,
-    META_CHAIN_ID_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY, META_REVERTED_BLOCK_SMT_ROOT_KEY,
-    META_TIP_BLOCK_HASH_KEY,
+    META_CHAIN_ID_KEY, META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY,
+    META_LAST_SUBMITTED_BLOCK_NUMBER_HASH_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
+    META_REVERTED_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
 };
-use gw_types::offchain::{global_state_from_slice, SMTRevertedBlockHashes};
-use gw_types::packed::{Script, WithdrawalKey};
 use gw_types::{
     from_box_should_be_ok,
-    packed::{self, ChallengeTarget, TransactionKey},
+    offchain::{global_state_from_slice, SMTRevertedBlockHashes},
+    packed::{
+        self, ChallengeTarget, DepositInfoVec, FinalizedCustodianCapacity, NumberHash,
+        NumberHashReader, Script, Transaction, TransactionKey, WithdrawalKey,
+    },
     prelude::*,
 };
+
+/// L2 block status on L1.
+pub enum BlockStatus {
+    Confirmed,
+    Submitted,
+    Local,
+}
 
 pub trait ChainStore: KVStoreRead {
     fn has_genesis(&self) -> Result<bool> {
@@ -83,6 +94,63 @@ pub trait ChainStore: KVStoreRead {
 
         let byte32 = packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref());
         Ok(byte32.unpack())
+    }
+
+    fn get_last_confirmed_block_number_hash(&self) -> Option<NumberHash> {
+        let data = self.get(COLUMN_META, META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY)?;
+        Some(from_box_should_be_ok!(NumberHashReader, data))
+    }
+
+    fn get_last_submitted_block_number_hash(&self) -> Option<NumberHash> {
+        let data = self.get(COLUMN_META, META_LAST_SUBMITTED_BLOCK_NUMBER_HASH_KEY)?;
+        Some(from_box_should_be_ok!(NumberHashReader, data))
+    }
+
+    fn get_block_status(&self, block_number: u64) -> BlockStatus {
+        if Some(block_number)
+            <= self
+                .get_last_confirmed_block_number_hash()
+                .map(|nh| nh.number().unpack())
+        {
+            return BlockStatus::Confirmed;
+        }
+        if Some(block_number)
+            <= self
+                .get_last_submitted_block_number_hash()
+                .map(|nh| nh.number().unpack())
+        {
+            return BlockStatus::Submitted;
+        }
+        BlockStatus::Local
+    }
+
+    fn get_block_submit_tx(&self, block_number: u64) -> Option<Transaction> {
+        let data = self.get(COLUMN_BLOCK_SUBMIT_TX, &block_number.to_be_bytes())?;
+        Some(from_box_should_be_ok!(packed::TransactionReader, data))
+    }
+
+    fn get_block_submit_tx_hash(&self, block_number: u64) -> Option<H256> {
+        let data = self.get(COLUMN_BLOCK_SUBMIT_TX_HASH, &block_number.to_be_bytes())?;
+        Some(packed::Byte32Reader::from_slice_should_be_ok(data.as_ref()).unpack())
+    }
+
+    fn get_block_deposit_info_vec(&self, block_number: u64) -> Option<DepositInfoVec> {
+        let data = self.get(COLUMN_BLOCK_DEPOSIT_INFO_VEC, &block_number.to_be_bytes())?;
+        Some(from_box_should_be_ok!(packed::DepositInfoVecReader, data))
+    }
+
+    fn get_block_post_finalized_custodian_capacity(
+        &self,
+        block_number: u64,
+    ) -> Option<FinalizedCustodianCapacity> {
+        let data = self.get(
+            COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY,
+            &block_number.to_be_bytes(),
+        )?;
+        Some(from_box_should_be_ok!(
+            packed::FinalizedCustodianCapacityReader,
+            data
+        ))
     }
 
     fn get_tip_block_hash(&self) -> Result<H256, Error> {
@@ -195,33 +263,6 @@ pub trait ChainStore: KVStoreRead {
         Ok(self
             .get(COLUMN_WITHDRAWAL, withdrawal_key.as_slice())
             .map(|slice| from_box_should_be_ok!(packed::WithdrawalRequestExtraReader, slice)))
-    }
-
-    fn get_l2block_committed_info(
-        &self,
-        block_hash: &H256,
-    ) -> Result<Option<packed::L2BlockCommittedInfo>, Error> {
-        match self.get(COLUMN_L2BLOCK_COMMITTED_INFO, block_hash.as_slice()) {
-            Some(slice) => Ok(Some(from_box_should_be_ok!(
-                packed::L2BlockCommittedInfoReader,
-                slice
-            ))),
-            None => Ok(None),
-        }
-    }
-
-    fn get_block_deposit_requests(
-        &self,
-        block_hash: &H256,
-    ) -> Result<Option<Vec<packed::DepositRequest>>, Error> {
-        match self.get(COLUMN_BLOCK_DEPOSIT_REQUESTS, block_hash.as_slice()) {
-            Some(slice) => Ok(Some(
-                from_box_should_be_ok!(packed::DepositRequestVecReader, slice)
-                    .into_iter()
-                    .collect(),
-            )),
-            None => Ok(None),
-        }
     }
 
     fn get_block_post_global_state(

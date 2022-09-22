@@ -43,7 +43,7 @@ use gw_types::{
     core::{ChallengeTargetType, ScriptHashType},
     offchain::{RollupContext, RunResult, RunResultCycles},
     packed::{
-        AccountMerkleState, BlockInfo, ChallengeTarget, DepositRequest, L2Block, L2Transaction,
+        AccountMerkleState, BlockInfo, ChallengeTarget, DepositInfoVec, L2Block, L2Transaction,
         RawL2Block, RawL2Transaction, TxReceipt, WithdrawalReceipt, WithdrawalRequestExtra,
     },
     prelude::*,
@@ -58,7 +58,7 @@ use tracing::instrument;
 
 pub struct ApplyBlockArgs {
     pub l2block: L2Block,
-    pub deposit_requests: Vec<DepositRequest>,
+    pub deposit_info_vec: DepositInfoVec,
     pub withdrawals: Vec<WithdrawalRequestExtra>,
 }
 
@@ -388,7 +388,7 @@ impl Generator {
     }
 
     /// Apply l2 state transition
-    #[instrument(skip_all, fields(block = args.l2block.raw().number().unpack(), deposits_count = args.deposit_requests.len()))]
+    #[instrument(skip_all, fields(block = args.l2block.raw().number().unpack(), deposits_count = args.deposit_info_vec.len()))]
     pub fn verify_and_apply_block<C: ChainView>(
         &self,
         db: &StoreTransaction,
@@ -483,10 +483,10 @@ impl Generator {
             withdrawal_receipts.push(withdrawal_receipt)
         }
 
-        // apply deposition to state
-        if let Err(err) = state.apply_deposit_requests(&self.rollup_context, &args.deposit_requests)
-        {
-            return ApplyBlockResult::Error(err);
+        for req in args.deposit_info_vec.into_iter().map(|i| i.request()) {
+            if let Err(err) = state.apply_deposit_request(&self.rollup_context, &req) {
+                return ApplyBlockResult::Error(err);
+            }
         }
 
         let prev_txs_state = state.get_merkle_state();

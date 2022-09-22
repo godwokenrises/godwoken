@@ -9,14 +9,19 @@ use gw_common::{
 use gw_generator::account_lock_manage::eip712::{self, traits::EIP712Encode};
 use gw_types::{
     packed::{
-        DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest, WithdrawalRequestExtra,
+        DepositInfoVec, DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest,
+        WithdrawalRequestExtra,
     },
     prelude::{Builder, Entity, Pack},
 };
 
-use crate::testing_tool::{chain::TestChain, eth_wallet::EthWallet, rpc_server::RPCServer};
+use crate::testing_tool::{
+    chain::{into_deposit_info_cell, produce_empty_block, TestChain, DEFAULT_FINALITY_BLOCKS},
+    eth_wallet::EthWallet,
+    rpc_server::RPCServer,
+};
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_submit_withdrawal_request() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -34,7 +39,14 @@ async fn test_submit_withdrawal_request() {
         .script(test_wallet.account_script().to_owned())
         .registry_id(ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
-    chain.produce_block(vec![deposit], vec![]).await.unwrap();
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(chain.inner.generator().rollup_context(), deposit).pack())
+        .build();
+    chain.produce_block(deposit_info_vec, vec![]).await.unwrap();
+
+    for _ in 0..DEFAULT_FINALITY_BLOCKS + 1 {
+        produce_empty_block(&mut chain.inner).await.unwrap();
+    }
 
     let mem_pool_state = chain.mem_pool_state().await;
     let snap = mem_pool_state.load();
@@ -79,18 +91,8 @@ async fn test_submit_withdrawal_request() {
             .build()
     };
 
-    // Expect `gw_submit_withdrawal_request` call finalized custodian check logic code
-    let err = rpc_server
-        .submit_withdrawal_request(&withdrawal)
-        .await
-        .unwrap_err();
-    eprintln!("submit withdrawal request {}", err);
-
-    // Expect rpc error since we don't configure valid rpc url
-    assert!(err.to_string().contains("get_cells error"));
-
     let withdrawal_hash = rpc_server
-        .submit_withdrawal_request_finalized_custodian_unchecked(&withdrawal)
+        .submit_withdrawal_request(&withdrawal)
         .await
         .unwrap();
 
@@ -101,7 +103,10 @@ async fn test_submit_withdrawal_request() {
     {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    chain.produce_block(vec![], vec![withdrawal]).await.unwrap();
+    chain
+        .produce_block(Default::default(), vec![withdrawal])
+        .await
+        .unwrap();
 
     let snap = mem_pool_state.load();
     let state = snap.state().unwrap();

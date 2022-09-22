@@ -16,6 +16,10 @@ impl Since {
         Since(v)
     }
 
+    pub fn new_timestamp_seconds(timestamp: u64) -> Self {
+        Self(timestamp | Self::LOCK_BY_TIMESTAMP_MASK)
+    }
+
     pub fn as_u64(self) -> u64 {
         self.0
     }

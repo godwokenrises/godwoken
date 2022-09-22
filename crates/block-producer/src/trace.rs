@@ -27,8 +27,10 @@ pub fn init(trace: Option<Trace>) -> Result<ShutdownGuard> {
             opentelemetry::global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
 
             let jaeger_layer = {
+                let service_name =
+                    std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "godwoken".into());
                 let tracer = opentelemetry_jaeger::new_pipeline()
-                    .with_service_name("godwoken")
+                    .with_service_name(service_name)
                     .with_auto_split_batch(true)
                     .install_batch(opentelemetry::runtime::Tokio)?;
                 tracing_opentelemetry::layer().with_tracer(tracer)

@@ -42,15 +42,12 @@ pub fn replay_chain(ctx: ChainContext) -> Result<()> {
         let block = from_store.get_block(&block_hash)?.expect("block");
         let block_number: u64 = block.raw().number().unpack();
         assert_eq!(block_number, replay_number, "number should be consist");
-        let block_committed_info = from_store
-            .get_l2block_committed_info(&block_hash)?
-            .expect("block");
         let global_state = from_store
             .get_block_post_global_state(&block.raw().parent_block_hash().unpack())?
             .expect("block prev global state");
         let deposit_requests = from_store
-            .get_block_deposit_requests(&block_hash)?
-            .expect("block deposit requests");
+            .get_block_deposit_info_vec(block_number)
+            .expect("block deposit info vec");
         let withdrawals = block
             .withdrawals()
             .into_iter()
@@ -70,7 +67,6 @@ pub fn replay_chain(ctx: ChainContext) -> Result<()> {
         if let Some(challenge) = chain.process_block(
             &db,
             block,
-            block_committed_info,
             global_state,
             deposit_requests,
             Default::default(),

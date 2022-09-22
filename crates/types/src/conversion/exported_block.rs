@@ -11,30 +11,29 @@ impl From<ExportedBlock> for packed::ExportedBlock {
 
         packed::ExportedBlock::new_builder()
             .block(exported.block)
-            .committed_info(exported.committed_info)
             .post_global_state(exported.post_global_state)
-            .deposit_requests(exported.deposit_requests.pack())
+            .deposit_info_vec(exported.deposit_info_vec)
             .deposit_asset_scripts(deposit_asset_scripts)
             .withdrawals(exported.withdrawals.pack())
             .bad_block_hashes(exported.bad_block_hashes.pack())
+            .submit_tx_hash(exported.submit_tx_hash.pack())
             .build()
     }
 }
 
 impl From<packed::ExportedBlock> for ExportedBlock {
     fn from(exported: packed::ExportedBlock) -> Self {
-        let deposit_requests = exported.deposit_requests().into_iter().collect();
         let deposit_asset_scripts = exported.deposit_asset_scripts().into_iter().collect();
         let withdrawals = exported.withdrawals().into_iter().collect();
 
         ExportedBlock {
             block: exported.block(),
-            committed_info: exported.committed_info(),
             post_global_state: exported.post_global_state(),
-            deposit_requests,
+            deposit_info_vec: exported.deposit_info_vec(),
             deposit_asset_scripts,
             withdrawals,
             bad_block_hashes: exported.bad_block_hashes().unpack(),
+            submit_tx_hash: exported.submit_tx_hash().unpack(),
         }
     }
 }

@@ -20,8 +20,8 @@ use gw_types::{
     core::{ScriptHashType, Status},
     offchain::RollupContext,
     packed::{
-        AccountMerkleState, BlockMerkleState, GlobalState, L2Block, L2BlockCommittedInfo,
-        RawL2Block, Script, SubmitTransactions,
+        AccountMerkleState, BlockMerkleState, DepositInfoVec, FinalizedCustodianCapacity,
+        GlobalState, L2Block, NumberHash, RawL2Block, Script, SubmitTransactions,
     },
     prelude::*,
 };
@@ -186,10 +186,13 @@ pub fn build_genesis_from_store(
     Ok((db, genesis_with_global_state))
 }
 
+/// Store information about the genesis block into db if does not exist.
+///
+/// `transaction_hash`: hash of L1 transaction that deploys the genesis block.
 pub fn init_genesis(
     store: &Store,
     config: &GenesisConfig,
-    genesis_committed_info: L2BlockCommittedInfo,
+    transaction_hash: &[u8; 32],
     secp_data: Bytes,
 ) -> Result<()> {
     let rollup_script_hash: H256 = {
@@ -219,15 +222,26 @@ pub fn init_genesis(
     let prev_txs_state = genesis.as_reader().raw().post_account().to_entity();
     db.insert_block(
         genesis.clone(),
-        genesis_committed_info,
         global_state,
         Vec::new(),
         prev_txs_state,
         Vec::new(),
-        Vec::new(),
+        Default::default(),
         Vec::new(),
     )?;
+    let nh = NumberHash::new_builder()
+        .number(0.pack())
+        .block_hash(genesis.hash().pack())
+        .build();
     db.attach_block(genesis)?;
+    db.set_last_submitted_block_number_hash(&nh.as_reader())?;
+    db.set_last_confirmed_block_number_hash(&nh.as_reader())?;
+    db.set_block_deposit_info_vec(0, &DepositInfoVec::default().as_reader())?;
+    db.set_block_post_finalized_custodian_capacity(
+        0,
+        &FinalizedCustodianCapacity::default().as_reader(),
+    )?;
+    db.set_block_submit_tx_hash(0, transaction_hash)?;
     db.commit()?;
     Ok(())
 }

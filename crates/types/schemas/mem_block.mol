@@ -2,6 +2,9 @@ import blockchain;
 import godwoken;
 import store;
 
+vector Byte32VecVec <Byte32Vec>;
+option Byte32VecVecOpt (Byte32VecVec);
+
 table CellInfo {
     out_point: OutPoint,
     output: CellOutput,
@@ -23,15 +26,12 @@ table SudtCustodian {
 }
 
 vector SudtCustodianVec <SudtCustodian>;
-vector CellInfoVec <CellInfo>;
 
-table CollectedCustodianCells {
-    cells_info: CellInfoVec,
+table FinalizedCustodianCapacity {
     capacity: Uint128,
     sudt: SudtCustodianVec,
 }
 
-option CollectedCustodianCellsOpt (CollectedCustodianCells);
 vector AccountMerkleStateVec <AccountMerkleState>;
 
 table CompactMemBlock {
@@ -44,55 +44,11 @@ table MemBlock {
     block_producer: Bytes,
     txs: Byte32Vec,
     withdrawals: Byte32Vec,
-    finalized_custodians: CollectedCustodianCellsOpt,
+    finalized_custodians: FinalizedCustodianCapacity,
     deposits: DepositInfoVec,
     state_checkpoints: Byte32Vec,
     txs_prev_state_checkpoint: Byte32Opt,
     block_info: BlockInfo,
     prev_merkle_state: AccountMerkleState,
     touched_keys: Byte32Vec,
-}
-
-table NextMemBlock {
-    deposits: DepositInfoVec,
-    withdrawals: WithdrawalRequestExtraVec,
-    block_info: BlockInfo,
-}
-
-table NextL2Transaction {
-    tx: L2Transaction,
-    mem_block_number: Uint64,
-}
-
-union RefreshMemBlockMessage {
-    NextL2Transaction,
-    NextMemBlock,
-}
-
-struct P2PSyncRequest {
-    block_number: Uint64,
-    block_hash: Byte32,
-}
-
-union P2PSyncResponse {
-    TryAgain,
-    P2PSyncMessageVec,
-}
-
-struct TryAgain {
-    block_number: Uint64,
-    block_hash: Byte32,
-}
-
-union P2PSyncMessage {
-    L2Transaction,
-    NextMemBlock,
-    TipSync,
-}
-
-vector P2PSyncMessageVec <P2PSyncMessage>;
-
-struct TipSync {
-    block_number: Uint64,
-    block_hash: Byte32,
 }

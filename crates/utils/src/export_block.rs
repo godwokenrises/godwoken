@@ -1,6 +1,6 @@
 use std::io::{ErrorKind, Read, Seek, SeekFrom};
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use gw_common::{h256_ext::H256Ext, H256};
 use gw_store::{
     readonly::StoreReadonly, state::state_db::StateContext, traits::chain_store::ChainStore,
@@ -13,7 +13,6 @@ use gw_types::{
     prelude::{Builder, Entity, Pack, Reader, Unpack},
 };
 
-// pub fn export_block(store: &Store, block_number: u64) -> Result<ExportedBlock> {
 pub fn export_block(snap: &StoreReadonly, block_number: u64) -> Result<ExportedBlock> {
     let block_hash = snap
         .get_block_hash_by_number(block_number)?
@@ -23,21 +22,18 @@ pub fn export_block(snap: &StoreReadonly, block_number: u64) -> Result<ExportedB
         .get_block(&block_hash)?
         .ok_or_else(|| anyhow!("block {} not found", block_number))?;
 
-    let committed_info = snap
-        .get_l2block_committed_info(&block_hash)?
-        .ok_or_else(|| anyhow!("block {} committed info not found", block_number))?;
-
     let post_global_state = snap
         .get_block_post_global_state(&block_hash)?
         .ok_or_else(|| anyhow!("block {} post global state not found", block_number))?;
 
     let deposit_requests = snap
-        .get_block_deposit_requests(&block_hash)?
-        .unwrap_or_default();
+        .get_block_deposit_info_vec(block_number)
+        .context("get block deposit info vec")?;
 
     let deposit_asset_scripts = {
-        let asset_hashes = deposit_requests.iter().filter_map(|r| {
-            let h: H256 = r.sudt_script_hash().unpack();
+        let reader = deposit_requests.as_reader();
+        let asset_hashes = reader.iter().filter_map(|r| {
+            let h: H256 = r.request().sudt_script_hash().unpack();
             if h.is_zero() {
                 None
             } else {
@@ -63,15 +59,16 @@ pub fn export_block(snap: &StoreReadonly, block_number: u64) -> Result<ExportedB
     };
 
     let bad_block_hashes = get_bad_block_hashes(snap, block_number)?;
+    let submit_tx_hash = snap.get_block_submit_tx_hash(block_number);
 
     let exported_block = ExportedBlock {
         block,
-        committed_info,
         post_global_state,
-        deposit_requests,
+        deposit_info_vec: deposit_requests,
         deposit_asset_scripts,
         withdrawals,
         bad_block_hashes,
+        submit_tx_hash,
     };
 
     Ok(exported_block)

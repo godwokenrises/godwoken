@@ -1,8 +1,8 @@
 use crate::testing_tool::{
     bad_block::generate_bad_block_using_first_withdrawal,
     chain::{
-        build_sync_tx, construct_block, restart_chain, setup_chain, ALWAYS_SUCCESS_CODE_HASH,
-        DEFAULT_FINALITY_BLOCKS,
+        build_sync_tx, construct_block, into_deposit_info_cell, restart_chain, setup_chain,
+        ALWAYS_SUCCESS_CODE_HASH, DEFAULT_FINALITY_BLOCKS,
     },
 };
 
@@ -17,8 +17,8 @@ use gw_types::{
     bytes::Bytes,
     core::{ScriptHashType, Status},
     packed::{
-        CellInput, CellOutput, DepositRequest, GlobalState, L2BlockCommittedInfo,
-        RawWithdrawalRequest, Script, WithdrawalRequest, WithdrawalRequestExtra,
+        CellInput, CellOutput, DepositInfoVec, DepositRequest, GlobalState, RawWithdrawalRequest,
+        Script, WithdrawalRequest, WithdrawalRequestExtra,
     },
     prelude::*,
 };
@@ -31,28 +31,27 @@ async fn produce_a_block(
     rollup_cell: CellOutput,
     expected_tip: u64,
 ) -> SyncParam {
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(chain.generator().rollup_context(), deposit).pack())
+        .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(chain, &mut mem_pool, vec![deposit.clone()])
+        construct_block(chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
     let l2block = block_result.block.clone();
     let transaction = build_sync_tx(rollup_cell, block_result);
-    let l2block_committed_info = L2BlockCommittedInfo::new_builder()
-        .number(expected_tip.pack())
-        .build();
 
     let update = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block,
-            deposit_requests: vec![deposit],
+            deposit_info_vec,
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
         transaction,
-        l2block_committed_info,
     };
     let param = SyncParam {
         updates: vec![update],
@@ -60,6 +59,7 @@ async fn produce_a_block(
     };
     chain.sync(param.clone()).await.unwrap();
     assert!(chain.last_sync_event().is_success());
+    chain.notify_new_tip().await.unwrap();
 
     assert_eq!(
         {
@@ -77,7 +77,7 @@ async fn produce_a_block(
     param
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_produce_blocks() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
@@ -169,7 +169,7 @@ async fn test_produce_blocks() {
     drop(chain);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_layer1_fork() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
@@ -198,21 +198,21 @@ async fn test_layer1_fork() {
         let chain = setup_chain(rollup_type_script).await;
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        let block_result = construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+        let deposit_info_vec = DepositInfoVec::new_builder()
+            .push(into_deposit_info_cell(chain.generator().rollup_context(), deposit).pack())
+            .build();
+        let block_result = construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap();
 
         L1Action {
             context: L1ActionContext::SubmitBlock {
                 l2block: block_result.block.clone(),
-                deposit_requests: vec![deposit],
+                deposit_info_vec,
                 deposit_asset_scripts: Default::default(),
                 withdrawals: Default::default(),
             },
             transaction: build_sync_tx(rollup_cell.clone(), block_result),
-            l2block_committed_info: L2BlockCommittedInfo::new_builder()
-                .number(1u64.pack())
-                .build(),
         }
     };
     // update block 1
@@ -230,30 +230,31 @@ async fn test_layer1_fork() {
         .script(alice_script)
         .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(chain.generator().rollup_context(), deposit).pack())
+        .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+        construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
     let action1 = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
-            deposit_requests: vec![deposit],
+            deposit_info_vec,
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(1u64.pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![action1],
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
     // update block 2
     let bob_script = Script::new_builder()
@@ -270,30 +271,31 @@ async fn test_layer1_fork() {
         .script(bob_script)
         .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(chain.generator().rollup_context(), deposit).pack())
+        .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+        construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
     let action2 = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
-            deposit_requests: vec![deposit],
+            deposit_info_vec,
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell, block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(2u64.pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![action2],
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
     let tip_block = chain.store().get_tip_block().unwrap();
     let tip_block_number: u64 = tip_block.raw().number().unpack();
@@ -307,14 +309,9 @@ async fn test_layer1_fork() {
             .get_block_post_global_state(&tip_block_parent_hash)
             .unwrap()
             .unwrap();
-        let l2block_committed_info = db
-            .get_l2block_committed_info(&tip_block_parent_hash)
-            .unwrap()
-            .unwrap();
         let context = RevertL1ActionContext::SubmitValidBlock { l2block: tip_block };
         RevertedL1Action {
             prev_global_state,
-            l2block_committed_info,
             context,
         }
     };
@@ -325,16 +322,11 @@ async fn test_layer1_fork() {
             .get_block_post_global_state(&tip_grandpa_block_hash)
             .unwrap()
             .unwrap();
-        let l2block_committed_info = db
-            .get_l2block_committed_info(&tip_grandpa_block_hash)
-            .unwrap()
-            .unwrap();
         let context = RevertL1ActionContext::SubmitValidBlock {
             l2block: tip_parent_block,
         };
         RevertedL1Action {
             prev_global_state,
-            l2block_committed_info,
             context,
         }
     };
@@ -364,7 +356,7 @@ async fn test_layer1_fork() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_layer1_revert() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
@@ -397,30 +389,31 @@ async fn test_layer1_revert() {
         .script(alice_script.clone())
         .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(chain.generator().rollup_context(), deposit).pack())
+        .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+        construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
     let action1 = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
-            deposit_requests: vec![deposit],
+            deposit_info_vec,
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(1u64.pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![action1],
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
     // update block 2
     let bob_script = Script::new_builder()
@@ -437,30 +430,31 @@ async fn test_layer1_revert() {
         .script(bob_script.clone())
         .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(chain.generator().rollup_context(), deposit).pack())
+        .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+        construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
     let action2 = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
-            deposit_requests: vec![deposit],
+            deposit_info_vec,
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell, block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(2u64.pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![action2.clone()],
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
     let tip_block = chain.store().get_tip_block().unwrap();
     let tip_block_number: u64 = tip_block.raw().number().unpack();
@@ -475,7 +469,6 @@ async fn test_layer1_revert() {
             let prev_global_state = GlobalState::default();
             let L1Action {
                 transaction: _,
-                l2block_committed_info,
                 context,
             } = action;
             let l2block = match context {
@@ -485,7 +478,6 @@ async fn test_layer1_revert() {
             let context = RevertL1ActionContext::SubmitValidBlock { l2block };
             RevertedL1Action {
                 prev_global_state,
-                l2block_committed_info,
                 context,
             }
         })
@@ -496,6 +488,7 @@ async fn test_layer1_revert() {
         reverts,
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     let tip_block = chain.store().get_tip_block().unwrap();
@@ -548,6 +541,7 @@ async fn test_layer1_revert() {
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     // check block2 agnain
@@ -609,7 +603,7 @@ async fn test_layer1_revert() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sync_blocks() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
@@ -722,7 +716,7 @@ async fn test_sync_blocks() {
     drop(chain2);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
@@ -746,30 +740,31 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         .script(alice_script.clone())
         .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(chain.generator().rollup_context(), deposit).pack())
+        .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+        construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
     let action1 = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
-            deposit_requests: vec![deposit],
+            deposit_info_vec,
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(1u64.pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![action1],
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     // with for deposit finalize
@@ -798,15 +793,17 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
         mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
-        construct_block(&chain, &mut mem_pool, Vec::default())
+        construct_block(&chain, &mut mem_pool, Default::default())
             .await
             .unwrap()
     };
-    let bad_block_result = {
+    let mut bad_block_result = {
         let ProduceBlockResult {
             block,
             global_state,
             withdrawal_extras,
+            deposit_cells,
+            remaining_capacity,
         } = block_result.clone();
         let (bad_block, bad_global_state) =
             generate_bad_block_using_first_withdrawal(&chain, block, global_state);
@@ -824,26 +821,26 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             block: bad_block,
             global_state: bad_global_state,
             withdrawal_extras,
+            deposit_cells,
+            remaining_capacity,
         }
     };
 
     let update_bad_block = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: bad_block_result.block.clone(),
-            deposit_requests: vec![],
+            deposit_info_vec: Default::default(),
             deposit_asset_scripts: Default::default(),
             withdrawals: bad_block_result.withdrawal_extras.clone(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), bad_block_result.clone()),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number((DEFAULT_FINALITY_BLOCKS + 2u64).pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![update_bad_block],
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(matches!(
         chain.last_sync_event(),
         SyncEvent::BadBlock { .. }
@@ -864,24 +861,11 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         output_data: Bytes::default(),
     };
 
-    let bad_block_result = {
-        let ProduceBlockResult {
-            block,
-            global_state,
-            withdrawal_extras,
-        } = bad_block_result;
-
-        let global_state = global_state
-            .as_builder()
-            .status(Status::Halting.into())
-            .build();
-
-        ProduceBlockResult {
-            global_state,
-            block,
-            withdrawal_extras,
-        }
-    };
+    bad_block_result.global_state = bad_block_result
+        .global_state
+        .as_builder()
+        .status(Status::Halting.into())
+        .build();
 
     let challenge_bad_block = L1Action {
         context: L1ActionContext::Challenge {
@@ -890,15 +874,13 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             witness: challenge_context.witness,
         },
         transaction: build_sync_tx(rollup_cell.clone(), bad_block_result.clone()),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number((DEFAULT_FINALITY_BLOCKS + 3u64).pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![challenge_bad_block],
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(matches!(
         chain.last_sync_event(),
         SyncEvent::WaitChallenge { .. }
@@ -918,27 +900,17 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             .unwrap();
         global_state.unwrap().block()
     };
-    let reverted_block_result = {
-        let ProduceBlockResult {
-            block,
-            global_state,
-            withdrawal_extras,
-        } = bad_block_result;
-
-        let global_state = global_state
+    let reverted_block_result = ProduceBlockResult {
+        global_state: bad_block_result
+            .global_state
             .as_builder()
             .status(Status::Running.into())
             .reverted_block_root(reverted_block_smt_root.pack())
             .tip_block_hash(last_valid_tip_block_hash.pack())
             .block(block_smt)
             .account(last_valid_tip_block.raw().post_account())
-            .build();
-
-        ProduceBlockResult {
-            global_state,
-            block,
-            withdrawal_extras,
-        }
+            .build(),
+        ..bad_block_result
     };
 
     let revert_bad_block = L1Action {
@@ -946,9 +918,6 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             reverted_blocks: vec![reverted_block_result.block.raw()],
         },
         transaction: build_sync_tx(rollup_cell.clone(), reverted_block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number((DEFAULT_FINALITY_BLOCKS + 3u64).pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![revert_bad_block],
@@ -966,12 +935,8 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
     let last_valid_tip_global_state = db
         .get_block_post_global_state(&last_valid_tip_block_hash)
         .unwrap();
-    let last_valid_tip_committed_info = db
-        .get_l2block_committed_info(&last_valid_tip_block_hash)
-        .unwrap();
     let rewind = RevertedL1Action {
         prev_global_state: last_valid_tip_global_state.clone().unwrap(),
-        l2block_committed_info: last_valid_tip_committed_info.unwrap(),
         context: RevertL1ActionContext::RewindToLastValidTip,
     };
     let param = SyncParam {
@@ -1001,30 +966,31 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         .script(bob_script)
         .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .push(into_deposit_info_cell(chain.generator().rollup_context(), deposit).pack())
+        .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+        construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
     let new_block = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
-            deposit_requests: vec![deposit],
+            deposit_info_vec,
             deposit_asset_scripts: Default::default(),
-            withdrawals: Default::default(),
+            withdrawals: block_result.withdrawal_extras.clone(),
         },
         transaction: build_sync_tx(rollup_cell, block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number((DEFAULT_FINALITY_BLOCKS + 4u64).pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![new_block],
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     let tip_block = chain.store().get_tip_block().unwrap();
@@ -1040,31 +1006,24 @@ async fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) {
             .await
             .unwrap()
     };
-    let db = chain.store().begin_transaction();
-    let tip_block_hash = db.get_tip_block_hash().unwrap();
-    let tip_committed_info = db.get_l2block_committed_info(&tip_block_hash).unwrap();
-    let l1_number = tip_committed_info.unwrap().number().unpack();
 
     let l2block = block_result.block.clone();
     let transaction = build_sync_tx(rollup_cell, block_result);
-    let l2block_committed_info = L2BlockCommittedInfo::new_builder()
-        .number((l1_number + 1).pack())
-        .build();
 
     let update = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block,
-            deposit_requests: Default::default(),
+            deposit_info_vec: Default::default(),
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
         transaction,
-        l2block_committed_info,
     };
     let param = SyncParam {
         updates: vec![update],
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
 }

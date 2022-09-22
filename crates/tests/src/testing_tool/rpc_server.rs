@@ -81,7 +81,6 @@ impl RPCServer {
             chain_config: Default::default(),
             consensus_config: Default::default(),
             dynamic_config_manager: Default::default(),
-            last_submitted_tx_hash: None,
             polyjuice_sender_recover,
         }
     }
@@ -192,25 +191,6 @@ impl RPCServer {
         let req = RequestBuilder::default()
             .with_id(1)
             .with_method("gw_submit_withdrawal_request")
-            .with_params(params)
-            .finish();
-
-        let hash: Byte32 = self.handle_single_request(req).await?;
-        Ok(hash.0.into())
-    }
-
-    pub async fn submit_withdrawal_request_finalized_custodian_unchecked(
-        &self,
-        req: &WithdrawalRequestExtra,
-    ) -> Result<H256> {
-        let params = {
-            let bytes = JsonBytes::from_bytes(req.as_bytes());
-            serde_json::to_value(&(bytes,))?
-        };
-
-        let req = RequestBuilder::default()
-            .with_id(1)
-            .with_method("gw_submit_withdrawal_request_finalized_custodian_unchecked")
             .with_params(params)
             .finish();
 

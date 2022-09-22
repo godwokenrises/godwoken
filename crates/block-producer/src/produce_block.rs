@@ -19,7 +19,7 @@ use gw_store::{
 };
 use gw_types::{
     core::Status,
-    offchain::{BlockParam, CollectedCustodianCells},
+    offchain::{BlockParam, DepositInfo, FinalizedCustodianCapacity},
     packed::{
         AccountMerkleState, BlockMerkleState, GlobalState, L2Block, RawL2Block, SubmitTransactions,
         SubmitWithdrawals, WithdrawalRequestExtra,
@@ -32,7 +32,9 @@ use tracing::instrument;
 pub struct ProduceBlockResult {
     pub block: L2Block,
     pub global_state: GlobalState,
+    pub deposit_cells: Vec<DepositInfo>,
     pub withdrawal_extras: Vec<WithdrawalRequestExtra>,
+    pub remaining_capacity: FinalizedCustodianCapacity,
 }
 
 pub struct ProduceBlockParam {
@@ -62,7 +64,7 @@ pub fn produce_block(
                 block_producer,
                 timestamp,
                 txs,
-                deposits: _,
+                deposits,
                 withdrawals,
                 parent_block,
                 prev_merkle_state,
@@ -169,7 +171,9 @@ pub fn produce_block(
     Ok(ProduceBlockResult {
         block,
         global_state,
+        deposit_cells: deposits,
         withdrawal_extras: withdrawals,
+        remaining_capacity: Default::default(),
     })
 }
 
@@ -177,9 +181,9 @@ pub fn produce_block(
 #[instrument(skip_all, fields(mem_block = mem_block.block_info().number().unpack()))]
 pub fn generate_produce_block_param(
     store: &Store,
-    mut mem_block: MemBlock,
+    mem_block: MemBlock,
     post_merkle_state: AccountMerkleState,
-) -> Result<(Option<CollectedCustodianCells>, BlockParam)> {
+) -> Result<BlockParam> {
     let db = store.begin_transaction();
     let tip_block_number = mem_block.block_info().number().unpack().saturating_sub(1);
     let tip_block_hash = {
@@ -325,5 +329,5 @@ pub fn generate_produce_block_param(
         mem_block.state_checkpoints().len(),
     );
 
-    Ok((mem_block.take_finalized_custodians(), param))
+    Ok(param)
 }

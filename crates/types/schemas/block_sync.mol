@@ -1,0 +1,73 @@
+// Block and mem block syncing related stuff.
+
+import blockchain;
+import godwoken;
+import store;
+import mem_block;
+
+array Byte8 [byte; 8];
+array Byte16 [byte; 16];
+
+union BlockSync {
+    // Block syncing.
+    Revert,
+    LocalBlock,
+    Submitted,
+    Confirmed,
+    // Mem block syncing.
+    NextMemBlock,
+    PushTransaction,
+}
+
+table LocalBlock {
+    trace_id: Byte16,
+    span_id: Byte8,
+    block: L2Block,
+    post_global_state: GlobalState,
+    deposit_info_vec: DepositInfoVec,
+    deposit_asset_scripts: ScriptVec,
+    withdrawals: WithdrawalRequestExtraVec,
+    bad_block_hashes: Byte32VecVecOpt,
+}
+
+struct Submitted {
+    number_hash: NumberHash,
+    tx_hash: Byte32,
+}
+
+struct Confirmed {
+    number_hash: NumberHash,
+    tx_hash: Byte32,
+}
+
+struct Revert {
+    number_hash: NumberHash,
+}
+
+struct P2PSyncRequest {
+    block_number: Uint64,
+    block_hash: Byte32,
+}
+
+union P2PSyncResponse {
+    Found,
+    TryAgain,
+}
+
+table Found {
+}
+
+table TryAgain {
+}
+
+table NextMemBlock {
+    deposits: DepositInfoVec,
+    withdrawals: WithdrawalRequestExtraVec,
+    block_info: BlockInfo,
+}
+
+table PushTransaction {
+    trace_id: Byte16,
+    span_id: Byte8,
+    transaction: L2Transaction,
+}

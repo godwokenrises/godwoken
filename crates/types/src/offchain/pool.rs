@@ -1,9 +1,11 @@
+use std::collections::{hash_map::Entry, HashMap};
+
 use ckb_types::bytes::Bytes;
 use sparse_merkle_tree::H256;
 
-use crate::packed::{AccountMerkleState, L2Block, L2Transaction, WithdrawalRequestExtra};
+use crate::packed::{AccountMerkleState, L2Block, L2Transaction, Script, WithdrawalRequestExtra};
 
-use super::DepositInfo;
+use super::{CollectedCustodianCells, DepositInfo};
 
 pub struct BlockParam {
     pub number: u64,
@@ -19,4 +21,57 @@ pub struct BlockParam {
     pub post_merkle_state: AccountMerkleState,
     pub kv_state: Vec<(H256, H256)>,
     pub kv_state_proof: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FinalizedCustodianCapacity {
+    pub capacity: u128,
+    pub sudt: HashMap<[u8; 32], (u128, Script)>,
+}
+
+impl FinalizedCustodianCapacity {
+    pub fn is_empty(&self) -> bool {
+        self.capacity == 0 && self.sudt.is_empty()
+    }
+
+    /// Add sudt amount with overflow check.
+    ///
+    /// Returns new amount of the sudt if not overflow.
+    pub fn checked_add_sudt(
+        &mut self,
+        hash: [u8; 32],
+        amount: u128,
+        script: Script,
+    ) -> Option<u128> {
+        match self.sudt.entry(hash) {
+            Entry::Occupied(mut e) => {
+                let pointer = e.get_mut();
+                pointer.0 = pointer.0.checked_add(amount)?;
+                pointer.1 = script;
+                Some(pointer.0)
+            }
+            Entry::Vacant(v) => {
+                v.insert((amount, script));
+                Some(amount)
+            }
+        }
+    }
+
+    /// Sub sudt amount with overflow check.
+    ///
+    /// Returns new amount of the sudt if not overflow.
+    pub fn checked_sub_sudt(&mut self, hash: [u8; 32], amount: u128) -> Option<u128> {
+        let pointer = self.sudt.get_mut(&hash)?;
+        pointer.0 = pointer.0.checked_sub(amount)?;
+        Some(pointer.0)
+    }
+}
+
+impl From<CollectedCustodianCells> for FinalizedCustodianCapacity {
+    fn from(c: CollectedCustodianCells) -> Self {
+        Self {
+            capacity: c.capacity,
+            sudt: c.sudt,
+        }
+    }
 }

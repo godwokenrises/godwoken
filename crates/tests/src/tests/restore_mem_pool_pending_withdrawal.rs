@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::testing_tool::chain::{
-    build_sync_tx, construct_block, construct_block_with_timestamp, restart_chain, setup_chain,
-    TEST_CHAIN_ID,
+    build_sync_tx, construct_block, construct_block_with_timestamp, into_deposit_info_cell,
+    produce_empty_block, restart_chain, setup_chain, DEFAULT_FINALITY_BLOCKS, TEST_CHAIN_ID,
 };
 use crate::testing_tool::common::random_always_success_script;
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
@@ -11,19 +11,19 @@ use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
 use gw_common::H256;
-use gw_types::offchain::CollectedCustodianCells;
 use gw_types::packed::{
-    CellOutput, DepositRequest, L2BlockCommittedInfo, RawWithdrawalRequest, Script,
-    WithdrawalRequest, WithdrawalRequestExtra,
+    CellOutput, DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest,
+    WithdrawalRequestExtra,
 };
-use gw_types::prelude::Pack;
+use gw_types::prelude::{Pack, PackVec};
+use gw_utils::local_cells::LocalCellsManager;
 
-const ACCOUNTS_COUNT: usize = 20;
+const ACCOUNTS_COUNT: usize = 21;
 const CKB: u64 = 100000000;
 const DEPOSIT_CAPACITY: u64 = 1000000 * CKB;
 const WITHDRAWAL_CAPACITY: u64 = 1000 * CKB;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_restore_mem_pool_pending_withdrawal() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -33,6 +33,7 @@ async fn test_restore_mem_pool_pending_withdrawal() {
         .type_(Some(rollup_type_script.clone()).pack())
         .build();
     let mut chain = setup_chain(rollup_type_script.clone()).await;
+    let rollup_context = chain.generator().rollup_context();
 
     // Deposit accounts
     let accounts: Vec<_> = (0..ACCOUNTS_COUNT)
@@ -47,32 +48,37 @@ async fn test_restore_mem_pool_pending_withdrawal() {
             .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
             .build()
     });
+    let deposit_info_vec = deposits
+        .map(|d| into_deposit_info_cell(rollup_context, d).pack())
+        .pack();
 
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, deposits.clone().collect())
+        construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
     let apply_deposits = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
-            deposit_requests: deposits.collect(),
+            deposit_info_vec,
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(1u64.pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![apply_deposits],
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
+
+    for _ in 0..DEFAULT_FINALITY_BLOCKS {
+        produce_empty_block(&mut chain).await.unwrap();
+    }
 
     // Generate withdrawals
     let mut withdrawals: Vec<_> = {
@@ -123,25 +129,22 @@ async fn test_restore_mem_pool_pending_withdrawal() {
     }
 
     // Push withdrawals
-    let finalized_custodians = CollectedCustodianCells {
-        capacity: ((ACCOUNTS_COUNT + 2) as u64 * WITHDRAWAL_CAPACITY) as u128,
-        cells_info: vec![Default::default()],
-        ..Default::default()
-    };
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
         let provider = DummyMemPoolProvider {
             deposit_cells: vec![],
             fake_blocktime: Duration::from_millis(0),
-            collected_custodians: finalized_custodians.clone(),
         };
         mem_pool.set_provider(Box::new(provider));
 
         for withdrawal in mem_block_withdrawals.clone() {
             mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
         }
-        mem_pool.reset_mem_block().await.unwrap();
+        mem_pool
+            .reset_mem_block(&LocalCellsManager::default())
+            .await
+            .unwrap();
 
         for withdrawal in pending_withdrawals.clone() {
             mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
@@ -164,9 +167,9 @@ async fn test_restore_mem_pool_pending_withdrawal() {
     let provider = DummyMemPoolProvider {
         deposit_cells: vec![],
         fake_blocktime: Duration::from_millis(0),
-        collected_custodians: finalized_custodians,
     };
     let mut chain = restart_chain(&chain, rollup_type_script.clone(), Some(provider)).await;
+    chain.notify_new_tip().await.unwrap();
 
     // Check restore mem block withdrawals
     {
@@ -192,7 +195,7 @@ async fn test_restore_mem_pool_pending_withdrawal() {
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block_with_timestamp(&chain, &mut mem_pool, vec![], 0, false)
+        construct_block_with_timestamp(&chain, &mut mem_pool, Default::default(), 0, false)
             .await
             .unwrap()
     };
@@ -212,25 +215,26 @@ async fn test_restore_mem_pool_pending_withdrawal() {
     let apply_mem_block_withdrawals = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
-            deposit_requests: vec![],
+            deposit_info_vec: Default::default(),
             deposit_asset_scripts: Default::default(),
             withdrawals: block_withdrawals,
         },
         transaction: build_sync_tx(rollup_cell, block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(2u64.pack())
-            .build(),
     };
     let param = SyncParam {
         updates: vec![apply_mem_block_withdrawals],
         reverts: Default::default(),
     };
     chain.sync(param).await.unwrap();
+    chain.notify_new_tip().await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     let mem_pool = chain.mem_pool().as_ref().unwrap();
     let mut mem_pool = mem_pool.lock().await;
-    mem_pool.reset_mem_block().await.unwrap();
+    mem_pool
+        .reset_mem_block(&LocalCellsManager::default())
+        .await
+        .unwrap();
 
     let mem_block = mem_pool.mem_block();
     assert_eq!(mem_block.withdrawals().len(), pending_withdrawals.len());

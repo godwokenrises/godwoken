@@ -4,15 +4,15 @@ static GLOBAL_ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 use anyhow::{Context, Result};
 use clap::{App, Arg, SubCommand};
+use godwoken_bin::subcommand::db_block_validator;
+use godwoken_bin::subcommand::export_block::{ExportArgs, ExportBlock};
+use godwoken_bin::subcommand::import_block::{ImportArgs, ImportBlock};
+use godwoken_bin::subcommand::peer_id::{PeerIdCommand, COMMAND_PEER_ID};
 use gw_block_producer::{runner, trace};
 use gw_config::{BackendSwitchConfig, Config};
 use gw_version::Version;
 use std::{env, fs, path::Path};
-
-mod subcommand;
-use subcommand::db_block_validator;
-use subcommand::export_block::{ExportArgs, ExportBlock};
-use subcommand::import_block::{ImportArgs, ImportBlock};
+use structopt::StructOpt;
 
 const COMMAND_RUN: &str = "run";
 const COMMAND_EXAMPLE_CONFIG: &str = "generate-example-config";
@@ -202,7 +202,8 @@ async fn run_cli() -> Result<()> {
                         .help("Show progress bar"),
                 )
                 .display_order(4),
-        );
+        )
+        .subcommand(PeerIdCommand::clap());
 
     // handle subcommands
     let matches = app.clone().get_matches();
@@ -265,6 +266,9 @@ async fn run_cli() -> Result<()> {
             };
             ImportBlock::create(args).await?.execute().await?;
         }
+        (COMMAND_PEER_ID, Some(m)) => {
+            PeerIdCommand::from_clap(m).run()?;
+        }
         _ => {
             // default command: start a Godwoken node
             let config_path = "./config.toml";
@@ -284,19 +288,17 @@ fn main() -> Result<()> {
         Err(e) => return Err(e.into()),
         Ok(v) => v.parse()?,
     };
-    // - 1 because ChainTask will have a dedicated thread.
-    let worker_threads = if threads >= 4 { threads - 1 } else { threads };
     let blocking_threads = match env::var("GODWOKEN_BLOCKING_THREADS") {
         Err(env::VarError::NotPresent) => {
-            // set blocking_threads to the number of CPUs because the blocking
-            // tasks are CPU bound.
-            threads
+            // set blocking_threads to the number of CPUs (but at least 4). Our
+            // blocking tasks are mostly CPU bound.
+            std::cmp::max(4, threads)
         }
         Err(e) => return Err(e.into()),
         Ok(v) => v.parse()?,
     };
     let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(worker_threads)
+        .worker_threads(threads)
         .max_blocking_threads(blocking_threads)
         .enable_all()
         .build()?;

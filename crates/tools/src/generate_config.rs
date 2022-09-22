@@ -220,8 +220,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         rollup_config_cell_dep,
         challenger_config,
         wallet_config: Some(wallet_config),
-        check_mem_block_before_submit: false,
-        withdrawal_unlocker_wallet_config: None,
+        ..Default::default()
     });
     let genesis: GenesisConfig = GenesisConfig {
         timestamp: rollup_result.timestamp,
@@ -235,6 +234,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         Some(P2PNetworkConfig {
             listen: p2p_listen,
             dial: p2p_dial,
+            ..Default::default()
         })
     } else {
         None
@@ -249,16 +249,9 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         consensus,
         block_producer,
         node_mode,
-        debug: Default::default(),
-        offchain_validator: Default::default(),
-        mem_pool: Default::default(),
-        db_block_validator: Default::default(),
         store,
-        trace: None,
-        reload_config_github_url: None,
-        dynamic_config: Default::default(),
         p2p_network_config,
-        contract_log_config: Default::default(),
+        ..Default::default()
     };
 
     Ok(config)

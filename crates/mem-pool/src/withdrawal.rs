@@ -3,7 +3,7 @@ use gw_common::H256;
 use gw_generator::generator::WithdrawalCellError;
 use gw_types::{
     bytes::Bytes,
-    offchain::RollupContext,
+    offchain::{FinalizedCustodianCapacity, RollupContext},
     packed::{CellOutput, L2Block, Script, WithdrawalRequest, WithdrawalRequestExtra},
     prelude::*,
 };
@@ -12,7 +12,6 @@ use std::collections::HashMap;
 
 use crate::custodian::{
     build_finalized_custodian_lock, calc_ckb_custodian_min_capacity, generate_finalized_custodian,
-    AvailableCustodians,
 };
 
 #[derive(Clone)]
@@ -38,7 +37,7 @@ pub struct Generator<'a> {
 impl<'a> Generator<'a> {
     pub fn new(
         rollup_context: &'a RollupContext,
-        available_custodians: AvailableCustodians,
+        available_custodians: FinalizedCustodianCapacity,
     ) -> Self {
         let mut total_sudt_capacity = 0u128;
         let mut sudt_custodians = HashMap::new();
@@ -75,6 +74,22 @@ impl<'a> Generator<'a> {
             ckb_custodian,
             sudt_custodians,
             withdrawals: Default::default(),
+        }
+    }
+
+    pub fn remaining_capacity(self) -> FinalizedCustodianCapacity {
+        FinalizedCustodianCapacity {
+            capacity: self.ckb_custodian.capacity
+                + self
+                    .sudt_custodians
+                    .values()
+                    .map(|v| u128::from(v.capacity))
+                    .sum::<u128>(),
+            sudt: self
+                .sudt_custodians
+                .into_iter()
+                .map(|(k, v)| (k, (v.balance, v.script)))
+                .collect(),
         }
     }
 
@@ -299,14 +314,13 @@ mod test {
 
     use gw_common::h256_ext::H256Ext;
     use gw_common::H256;
-    use gw_types::offchain::RollupContext;
+    use gw_types::offchain::{FinalizedCustodianCapacity, RollupContext};
     use gw_types::packed::{
         L2Block, RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest,
         WithdrawalRequestExtra,
     };
     use gw_types::prelude::{Builder, Entity, Pack, Unpack};
 
-    use crate::custodian::AvailableCustodians;
     use crate::withdrawal::Generator;
 
     #[test]
@@ -323,7 +337,7 @@ mod test {
             .args(vec![3u8; 32].pack())
             .build();
 
-        let available_custodians = AvailableCustodians {
+        let available_custodians = FinalizedCustodianCapacity {
             capacity: u64::MAX as u128 * 2,
             sudt: HashMap::from_iter([(sudt_script.hash(), (u128::MAX, sudt_script.clone()))]),
         };

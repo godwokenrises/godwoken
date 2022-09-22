@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::blake2b::new_blake2b;
@@ -28,13 +28,9 @@ use gw_jsonrpc_types::{
     },
     test_mode::TestModePayload,
 };
-use gw_mem_pool::fee::types::{FeeItemKind, FeeItemSender};
-use gw_mem_pool::{
-    custodian::AvailableCustodians,
-    fee::{
-        queue::FeeQueue,
-        types::{FeeEntry, FeeItem},
-    },
+use gw_mem_pool::fee::{
+    queue::FeeQueue,
+    types::{FeeEntry, FeeItem, FeeItemKind, FeeItemSender},
 };
 use gw_polyjuice_sender_recover::{
     mem_execute_tx_state::MemExecuteTxStateTree, recover::PolyjuiceSenderRecover,
@@ -173,7 +169,6 @@ pub struct RegistryArgs<T> {
     pub chain_config: ChainConfig,
     pub consensus_config: ConsensusConfig,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
-    pub last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
     pub polyjuice_sender_recover: PolyjuiceSenderRecover,
 }
 
@@ -193,7 +188,6 @@ pub struct Registry {
     chain_config: ChainConfig,
     consensus_config: ConsensusConfig,
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
-    last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
     mem_pool_state: Arc<MemPoolState>,
     in_queue_request_map: Option<Arc<InQueueRequestMap>>,
     polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
@@ -218,7 +212,6 @@ impl Registry {
             chain_config,
             consensus_config,
             dynamic_config_manager,
-            last_submitted_tx_hash,
             polyjuice_sender_recover,
         } = args;
 
@@ -273,7 +266,6 @@ impl Registry {
             chain_config,
             consensus_config,
             dynamic_config_manager,
-            last_submitted_tx_hash,
             mem_pool_state,
             in_queue_request_map,
             polyjuice_sender_recover,
@@ -357,19 +349,14 @@ impl Registry {
             .with_method("gw_get_mem_pool_state_root", get_mem_pool_state_root)
             .with_method("gw_get_mem_pool_state_ready", get_mem_pool_state_ready)
             .with_method("gw_get_node_info", get_node_info)
-            .with_method("gw_reload_config", reload_config);
+            .with_method("gw_reload_config", reload_config)
+            .with_method("gw_get_last_submitted_info", get_last_submitted_info);
 
         if self.node_mode != NodeMode::ReadOnly {
             server = server
                 .with_method("gw_submit_l2transaction", submit_l2transaction)
                 .with_method("gw_submit_withdrawal_request", submit_withdrawal_request)
                 .with_method("gw_is_request_in_queue", is_request_in_queue);
-        }
-
-        if let Some(last_submitted_tx_hash) = self.last_submitted_tx_hash {
-            server = server
-                .with_data(Data(last_submitted_tx_hash))
-                .with_method("gw_get_last_submitted_info", get_last_submitted_info);
         }
 
         // Tests
@@ -392,10 +379,6 @@ impl Registry {
                         // .with_method("gw_dump_mem_block", dump_mem_block)
                         .with_method("gw_get_rocksdb_mem_stats", get_rocksdb_memory_stats)
                         .with_method("gw_dump_jemalloc_profiling", dump_jemalloc_profiling)
-                        .with_method(
-                            "gw_submit_withdrawal_request_finalized_custodian_unchecked",
-                            test_submit_withdrawal_request_finalized_custodian_unchecked,
-                        );
                 }
             }
         }
@@ -495,7 +478,7 @@ impl RequestSubmitter {
             while let Some(hash) = mem_pool.pending_restored_tx_hashes().pop_front() {
                 match db.get_mem_pool_transaction(&hash) {
                     Ok(Some(tx)) => {
-                        if let Err(err) = mem_pool.push_transaction(tx).await {
+                        if let Err(err) = mem_pool.push_transaction(tx) {
                             log::error!("reinject mem block tx {} failed {}", hash.pack(), err);
                         }
                     }
@@ -649,9 +632,7 @@ impl RequestSubmitter {
                 );
 
                 if let Err(err) = match recovered_senders.build_create_tx(eth_recover, &state) {
-                    Ok(Some(create_accounts_tx)) => {
-                        mem_pool.push_transaction(create_accounts_tx).await
-                    }
+                    Ok(Some(create_accounts_tx)) => mem_pool.push_transaction(create_accounts_tx),
                     Ok(None) => Ok(()),
                     Err(err) => Err(err),
                 } {
@@ -713,9 +694,9 @@ impl RequestSubmitter {
                                 tx.hash().pack()
                             );
 
-                            mem_pool.push_transaction(tx).await
+                            mem_pool.push_transaction(tx)
                         }
-                        FeeItem::Tx(tx) => mem_pool.push_transaction(tx).await,
+                        FeeItem::Tx(tx) => mem_pool.push_transaction(tx),
                         FeeItem::Withdrawal(withdrawal) => {
                             mem_pool.push_withdrawal_request(withdrawal).await
                         }
@@ -850,16 +831,36 @@ async fn is_request_in_queue(
 
 async fn get_block_committed_info(
     Params((block_hash,)): Params<(JsonH256,)>,
+    rpc_client: Data<RPCClient>,
     store: Data<Store>,
 ) -> Result<Option<L2BlockCommittedInfo>> {
-    let block_hash = to_h256(block_hash);
-    let db = store.get_snapshot();
-    let committed_info = match db.get_l2block_committed_info(&block_hash)? {
-        Some(committed_info) => committed_info,
-        None => return Ok(None),
-    };
-
-    Ok(Some(committed_info.into()))
+    if let Some(number) = store.get_block_number(&to_h256(block_hash))? {
+        if let Some(transaction_hash) = store.get_block_submit_tx_hash(number) {
+            let opt_block_hash = rpc_client
+                .ckb
+                .get_transaction_block_hash(transaction_hash)
+                .await?;
+            if let Some(block_hash) = opt_block_hash {
+                let number = rpc_client
+                    .get_header(block_hash.into())
+                    .await?
+                    .context("get block header")?
+                    .inner
+                    .number;
+                Ok(Some(L2BlockCommittedInfo {
+                    number,
+                    block_hash: block_hash.into(),
+                    transaction_hash: to_jsonh256(transaction_hash),
+                }))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
+    } else {
+        Ok(None)
+    }
 }
 
 async fn get_block(
@@ -886,9 +887,12 @@ async fn get_block(
         }
 
         // block is on main chain
-        let tip_block_number = db.get_last_valid_tip_block()?.raw().number().unpack();
+        let last_confirmed_block_number = db
+            .get_last_confirmed_block_number_hash()
+            .map(|nh| nh.number().unpack())
+            .unwrap_or(0);
         let block_number = block.raw().number().unpack();
-        if tip_block_number >= block_number + rollup_config.finality_blocks().unpack() {
+        if last_confirmed_block_number >= block_number + rollup_config.finality_blocks().unpack() {
             status = L2BlockStatus::Finalized;
         }
     }
@@ -1252,7 +1256,6 @@ async fn execute_raw_l2transaction(
     Ok(run_result.into())
 }
 
-// TODO: refactor complex type.
 #[allow(clippy::type_complexity)]
 #[instrument(skip_all)]
 async fn submit_l2transaction(
@@ -1373,87 +1376,40 @@ async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
     generator: Data<Generator>,
     store: Data<Store>,
-    (in_queue_request_map, submit_tx): (
-        Data<Option<Arc<InQueueRequestMap>>>,
-        Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
-    ),
-    rpc_client: Data<RPCClient>,
-) -> Result<JsonH256, RpcError> {
-    inner_submit_withdrawal_request(
-        Params((withdrawal_request,)),
-        generator,
-        store,
-        in_queue_request_map,
-        submit_tx,
-        rpc_client,
-        true,
-    )
-    .await
-}
-
-// TODO: remove code after remove withdrawal cell
-#[allow(clippy::type_complexity)]
-#[instrument(skip_all)]
-async fn inner_submit_withdrawal_request(
-    Params((withdrawal_request,)): Params<(JsonBytes,)>,
-    generator: Data<Generator>,
-    store: Data<Store>,
     in_queue_request_map: Data<Option<Arc<InQueueRequestMap>>>,
     submit_tx: Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
-    rpc_client: Data<RPCClient>,
-    check_finalized_custodian: bool,
 ) -> Result<JsonH256, RpcError> {
     let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = packed::WithdrawalRequestExtra::from_slice(&withdrawal_bytes)?;
     let withdrawal_hash = withdrawal.hash();
 
-    // verify finalized custodian
-    if check_finalized_custodian {
-        let t = Instant::now();
-        let finalized_custodians = {
-            let db = store.get_snapshot();
-            let tip = db.get_last_valid_tip_block()?;
-            // query withdrawals from ckb-indexer
-            let last_finalized_block_number = generator
-                .rollup_context()
-                .last_finalized_block_number(tip.raw().number().unpack());
-            gw_mem_pool::custodian::query_finalized_custodians(
-                &rpc_client,
-                &db,
-                vec![withdrawal.request()].into_iter(),
-                generator.rollup_context(),
-                last_finalized_block_number,
-            )
-            .await?
-            .expect_any()
-        };
-        log::debug!(
-            "[submit withdrawal] collected {} finalized custodian cells {}ms",
-            finalized_custodians.cells_info.len(),
-            t.elapsed().as_millis()
-        );
-        let available_custodians = AvailableCustodians::from(&finalized_custodians);
-        let withdrawal_generator = gw_mem_pool::withdrawal::Generator::new(
-            generator.rollup_context(),
-            available_custodians,
-        );
-        if let Err(err) = withdrawal_generator.verify_remained_amount(&withdrawal.request()) {
-            return Err(RpcError::Full {
-                code: CUSTODIAN_NOT_ENOUGH_CODE,
-                message: format!(
-                    "Withdrawal fund are still finalizing, please try again later. error: {}",
-                    err
-                ),
-                data: None,
-            });
-        }
-        if let Err(err) = withdrawal_generator.verified_output(&withdrawal, &Default::default()) {
-            return Err(RpcError::Full {
-                code: INVALID_REQUEST,
-                message: err.to_string(),
-                data: None,
-            });
-        }
+    let last_valid = store.get_last_valid_tip_block_hash()?;
+    let last_valid = store
+        .get_block_number(&last_valid)?
+        .expect("tip block number");
+    let finalized_custodians = store
+        .get_block_post_finalized_custodian_capacity(last_valid)
+        .expect("finalized custodians");
+    let withdrawal_generator = gw_mem_pool::withdrawal::Generator::new(
+        generator.rollup_context(),
+        finalized_custodians.as_reader().unpack(),
+    );
+    if let Err(err) = withdrawal_generator.verify_remained_amount(&withdrawal.request()) {
+        return Err(RpcError::Full {
+            code: CUSTODIAN_NOT_ENOUGH_CODE,
+            message: format!(
+                "Withdrawal fund are still finalizing, please try again later. error: {}",
+                err
+            ),
+            data: None,
+        });
+    }
+    if let Err(err) = withdrawal_generator.verified_output(&withdrawal, &Default::default()) {
+        return Err(RpcError::Full {
+            code: INVALID_REQUEST,
+            message: err.to_string(),
+            data: None,
+        });
     }
 
     let permit = submit_tx.try_reserve().map_err(|err| match err {
@@ -1510,6 +1466,7 @@ impl TryFrom<u8> for GetWithdrawalVerbose {
 async fn get_withdrawal(
     Params(param): Params<GetWithdrawalParams>,
     store: Data<Store>,
+    rpc_client: Data<RPCClient>,
     in_queue_request_map: Data<Option<Arc<InQueueRequestMap>>>,
 ) -> Result<Option<WithdrawalWithStatus>, RpcError> {
     let (withdrawal_hash, verbose) = match param {
@@ -1564,9 +1521,9 @@ async fn get_withdrawal(
                 block_hash: to_jsonh256(l2_block_hash),
                 withdrawal_index: l2_withdrawal_index.into(),
             });
-            let l1_committed_info = db
-                .get_l2block_committed_info(&l2_block_hash)?
-                .map(Into::into);
+            let l1_committed_info =
+                get_block_committed_info(Params((to_jsonh256(l2_block_hash),)), rpc_client, store)
+                    .await?;
             return Ok(Some(WithdrawalWithStatus {
                 status: WithdrawalStatus::Committed,
                 withdrawal: withdrawal_opt,
@@ -2011,14 +1968,17 @@ async fn get_node_info(
     })
 }
 
-async fn get_last_submitted_info(
-    last_submitted_tx_hash: Data<tokio::sync::RwLock<H256>>,
-) -> Result<LastL2BlockCommittedInfo> {
+async fn get_last_submitted_info(store: Data<Store>) -> Result<LastL2BlockCommittedInfo> {
+    let last_submitted = store
+        .get_last_submitted_block_number_hash()
+        .context("get last submitted block")?
+        .number()
+        .unpack();
+    let tx_hash = store
+        .get_block_submit_tx_hash(last_submitted)
+        .context("get submission tx hash")?;
     Ok(LastL2BlockCommittedInfo {
-        transaction_hash: {
-            let hash: [u8; 32] = (*last_submitted_tx_hash.read().await).into();
-            hash.into()
-        },
+        transaction_hash: to_jsonh256(tx_hash),
     })
 }
 
@@ -2048,31 +2008,6 @@ async fn get_mem_pool_state_ready(
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<bool, RpcError> {
     Ok(mem_pool_state.completed_initial_syncing())
-}
-
-// TODO: remove code after remove withdrawal cell
-#[allow(clippy::type_complexity)]
-#[instrument(skip_all)]
-async fn test_submit_withdrawal_request_finalized_custodian_unchecked(
-    Params((withdrawal_request,)): Params<(JsonBytes,)>,
-    generator: Data<Generator>,
-    store: Data<Store>,
-    (in_queue_request_map, submit_tx): (
-        Data<Option<Arc<InQueueRequestMap>>>,
-        Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
-    ),
-    rpc_client: Data<RPCClient>,
-) -> Result<JsonH256, RpcError> {
-    inner_submit_withdrawal_request(
-        Params((withdrawal_request,)),
-        generator,
-        store,
-        in_queue_request_map,
-        submit_tx,
-        rpc_client,
-        false,
-    )
-    .await
 }
 
 async fn tests_produce_block(

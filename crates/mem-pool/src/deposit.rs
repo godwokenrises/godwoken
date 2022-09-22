@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use gw_common::{h256_ext::H256Ext, registry::context::RegistryContext, state::State, H256};
+use gw_config::DepositTimeoutConfig;
 use gw_store::state::mem_state_db::MemStateTree;
 use gw_types::{
     bytes::Bytes,
@@ -15,6 +16,7 @@ use crate::custodian::to_custodian_cell;
 /// check and reject invalid deposit cells
 pub fn sanitize_deposit_cells(
     ctx: &RollupContext,
+    config: &DepositTimeoutConfig,
     unsanitize_deposits: Vec<DepositInfo>,
     state: &MemStateTree,
 ) -> Vec<DepositInfo> {
@@ -23,7 +25,7 @@ pub fn sanitize_deposit_cells(
     for cell in unsanitize_deposits {
         // check deposit lock
         // the lock should be correct unless the upstream ckb-indexer has bugs
-        if let Err(err) = check_deposit_cell(ctx, &cell, state) {
+        if let Err(err) = check_deposit_cell(ctx, config, &cell, state) {
             log::debug!(target: "collect-deposit-cells", "invalid deposit cell: {}", err);
             continue;
         }
@@ -34,11 +36,10 @@ pub fn sanitize_deposit_cells(
 }
 
 /// we only package deposit cells with valid cancel timeout, to prevent conflict with user's unlock
-fn check_deposit_cell_cancel_timeout(deposit_args: &DepositLockArgs) -> Result<()> {
-    const BLOCK_TIMEOUT: u64 = 150; // 150 blocks, about 20 minutes
-    const TIMESTAMP_TIMEOUT: u64 = 1_200_000; // 20 minutes
-    const EPOCH_TIMEOUT: u64 = 1; // 1 epoch, about 4 hours, this option is supposed not actually used, so we simply set a value
-
+fn check_deposit_cell_cancel_timeout(
+    config: &DepositTimeoutConfig,
+    deposit_args: &DepositLockArgs,
+) -> Result<()> {
     let cancel_timeout = Since::new(deposit_args.cancel_timeout().unpack());
     if cancel_timeout.flags_is_valid() {
         // reject non relative flag
@@ -50,28 +51,30 @@ fn check_deposit_cell_cancel_timeout(deposit_args: &DepositLockArgs) -> Result<(
         }
 
         match cancel_timeout.extract_lock_value().expect("since value") {
-            LockValue::BlockNumber(block) if block < BLOCK_TIMEOUT => {
+            LockValue::BlockNumber(block) if block < config.deposit_block_timeout => {
                 return Err(anyhow!(
                     "Invalid deposit cancel_time: {}, invalid block timeout, block: {}, required: {}",
                     deposit_args.cancel_timeout(),
                     block,
-                    BLOCK_TIMEOUT
+                    config.deposit_block_timeout
                 ));
             }
-            LockValue::Timestamp(timestamp) if timestamp < TIMESTAMP_TIMEOUT => {
+            LockValue::Timestamp(timestamp) if timestamp < config.deposit_timestamp_timeout => {
                 return Err(anyhow!(
                     "Invalid deposit cancel_time: {}, invalid block timeout, timestamp: {}ms, required: {}ms",
                     deposit_args.cancel_timeout(),
                     timestamp,
-                    TIMESTAMP_TIMEOUT
+                    config.deposit_timestamp_timeout
                 ));
             }
-            LockValue::EpochNumberWithFraction(epoch) if epoch.number() < EPOCH_TIMEOUT => {
+            LockValue::EpochNumberWithFraction(epoch)
+                if epoch.number() < config.deposit_epoch_timeout =>
+            {
                 return Err(anyhow!(
                     "Invalid deposit cancel_time: {}, invalid epoch timeout, epoch: {}, required: {}",
                     deposit_args.cancel_timeout(),
                     epoch.number(),
-                    EPOCH_TIMEOUT
+                    config.deposit_epoch_timeout
                 ));
             }
             _ => {}
@@ -88,7 +91,12 @@ fn check_deposit_cell_cancel_timeout(deposit_args: &DepositLockArgs) -> Result<(
 }
 
 // check deposit cell
-fn check_deposit_cell(ctx: &RollupContext, cell: &DepositInfo, state: &MemStateTree) -> Result<()> {
+fn check_deposit_cell(
+    ctx: &RollupContext,
+    config: &DepositTimeoutConfig,
+    cell: &DepositInfo,
+    state: &MemStateTree,
+) -> Result<()> {
     let hash_type = ScriptHashType::Type.into();
 
     // check deposit lock
@@ -122,7 +130,7 @@ fn check_deposit_cell(ctx: &RollupContext, cell: &DepositInfo, state: &MemStateT
 
         // check deposit args
         let deposit_args = DepositLockArgs::from_slice(&args[32..])?;
-        check_deposit_cell_cancel_timeout(&deposit_args)?;
+        check_deposit_cell_cancel_timeout(config, &deposit_args)?;
     }
 
     // check sUDT

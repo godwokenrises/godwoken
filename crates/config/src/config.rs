@@ -21,6 +21,7 @@ pub enum Trace {
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {
     pub node_mode: NodeMode,
+    pub liveness_duration_secs: Option<u64>,
     #[serde(default)]
     pub contract_log_config: ContractLogConfig,
     pub backend_switches: Vec<BackendSwitchConfig>,
@@ -47,6 +48,8 @@ pub struct Config {
     pub dynamic_config: DynamicConfig,
     #[serde(default)]
     pub p2p_network_config: Option<P2PNetworkConfig>,
+    #[serde(default)]
+    pub sync_server: SyncServerConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -164,6 +167,8 @@ pub struct RegistryAddressConfig {
 pub struct BlockProducerConfig {
     #[serde(default = "default_check_mem_block_before_submit")]
     pub check_mem_block_before_submit: bool,
+    #[serde(flatten)]
+    pub psc_config: PscConfig,
     pub block_producer: RegistryAddressConfig,
     pub rollup_config_cell_dep: CellDep,
     pub challenger_config: ChallengerConfig,
@@ -171,6 +176,43 @@ pub struct BlockProducerConfig {
     pub wallet_config: Option<WalletConfig>,
     #[serde(default = "default_withdrawal_unlocker_wallet")]
     pub withdrawal_unlocker_wallet_config: Option<WalletConfig>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PscConfig {
+    /// Maximum number local blocks. Local blocks are blocks that have not been
+    /// submitted to L1. Default is 5.
+    pub local_limit: u64,
+    /// Maximum number of submitted (but not confirmed) blocks. Default is 5.
+    pub submitted_limit: u64,
+    /// Minimum delay between blocks. Default is 8 seconds.
+    pub block_interval_secs: u64,
+}
+
+impl Default for PscConfig {
+    fn default() -> Self {
+        Self {
+            local_limit: 5,
+            submitted_limit: 5,
+            block_interval_secs: 8,
+        }
+    }
+}
+
+#[test]
+fn test_psc_config_optional() {
+    #[derive(Deserialize)]
+    struct BiggerConfig {
+        _x: i32,
+        #[serde(flatten)]
+        psc_config: PscConfig,
+    }
+
+    assert_eq!(
+        toml::from_str::<BiggerConfig>("_x = 3").unwrap().psc_config,
+        PscConfig::default()
+    );
 }
 
 const fn default_check_mem_block_before_submit() -> bool {
@@ -264,26 +306,30 @@ impl Default for OffChainValidatorConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct P2PNetworkConfig {
     /// Multiaddr listen address, e.g. /ip4/1.2.3.4/tcp/443
-    #[serde(default)]
     pub listen: Option<String>,
     /// Multiaddr dial addresses, e.g. /ip4/1.2.3.4/tcp/443
     #[serde(default)]
     pub dial: Vec<String>,
+    pub secret_key_path: Option<PathBuf>,
+    pub allowed_peer_ids: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PublishMemPoolConfig {
-    pub hosts: Vec<String>,
-    pub topic: String,
+pub struct SyncServerConfig {
+    pub buffer_capacity: u64,
+    pub broadcast_channel_capacity: usize,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SubscribeMemPoolConfig {
-    pub hosts: Vec<String>,
-    pub topic: String,
-    pub group: String,
+
+impl Default for SyncServerConfig {
+    fn default() -> Self {
+        Self {
+            buffer_capacity: 16,
+            broadcast_channel_capacity: 1024,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -291,8 +337,6 @@ pub struct MemPoolConfig {
     pub execute_l2tx_max_cycles: u64,
     #[serde(default = "default_restore_path")]
     pub restore_path: PathBuf,
-    pub publish: Option<PublishMemPoolConfig>,
-    pub subscribe: Option<SubscribeMemPoolConfig>,
     #[serde(default)]
     pub mem_block: MemBlockConfig,
 }
@@ -302,6 +346,8 @@ pub struct MemBlockConfig {
     pub max_deposits: usize,
     pub max_withdrawals: usize,
     pub max_txs: usize,
+    #[serde(flatten)]
+    pub deposit_timeout_config: DepositTimeoutConfig,
     #[serde(
         default = "default_max_block_cycles_limit",
         with = "toml_u64_serde_workaround"
@@ -309,6 +355,33 @@ pub struct MemBlockConfig {
     pub max_cycles_limit: u64,
     #[serde(default = "default_syscall_cycles")]
     pub syscall_cycles: SyscallCyclesConfig,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DepositTimeoutConfig {
+    /// Only package deposits whose block timeout >= deposit_block_timeout.
+    pub deposit_block_timeout: u64,
+    /// Only package deposits whose timestamp timeout >= deposit_timestamp_timeout.
+    pub deposit_timestamp_timeout: u64,
+    /// Only package deposits whose epoch timeout >= deposit_epoch_timeout.
+    pub deposit_epoch_timeout: u64,
+    /// Only package deposits whose block number <= tip - deposit_minimum_blocks.
+    pub deposit_minimal_blocks: u64,
+}
+
+impl Default for DepositTimeoutConfig {
+    fn default() -> Self {
+        Self {
+            // 150 blocks, ~20 minutes.
+            deposit_block_timeout: 150,
+            // 20 minutes.
+            deposit_timestamp_timeout: 1_200_000,
+            // 1 epoch, about 4 hours, this option is supposed not actually used, so we simply set a value
+            deposit_epoch_timeout: 1,
+            deposit_minimal_blocks: 0,
+        }
+    }
 }
 
 const fn default_max_block_cycles_limit() -> u64 {
@@ -349,8 +422,6 @@ impl Default for MemPoolConfig {
         Self {
             execute_l2tx_max_cycles: 100_000_000,
             restore_path: default_restore_path(),
-            publish: None,
-            subscribe: None,
             mem_block: MemBlockConfig::default(),
         }
     }
@@ -362,6 +433,7 @@ impl Default for MemBlockConfig {
             max_deposits: 100,
             max_withdrawals: 100,
             max_txs: 1000,
+            deposit_timeout_config: Default::default(),
             max_cycles_limit: default_max_block_cycles_limit(),
             syscall_cycles: SyscallCyclesConfig::all_zero(),
         }

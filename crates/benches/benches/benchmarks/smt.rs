@@ -408,12 +408,11 @@ impl BenchExecutionEnvironment {
         let prev_txs_state = genesis.as_reader().raw().post_account().to_entity();
         db.insert_block(
             genesis.clone(),
-            Default::default(),
             global_state,
             Vec::new(),
             prev_txs_state,
             Vec::new(),
-            Vec::new(),
+            Default::default(),
             Vec::new(),
         )
         .unwrap();

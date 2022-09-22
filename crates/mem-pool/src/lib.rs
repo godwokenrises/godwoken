@@ -3,6 +3,7 @@
 //! MemPool only do basic verification on l2transactions & withdrawal requests,
 //! the block producer need to verify the fully verification itself.
 
+pub mod block_sync_server;
 mod constants;
 pub mod custodian;
 pub mod default_provider;
@@ -11,10 +12,6 @@ pub mod fee;
 pub mod mem_block;
 pub mod pool;
 pub mod restore_manager;
-pub mod sync;
 pub mod traits;
 mod types;
 pub mod withdrawal;
-
-pub use async_trait::*;
-pub use sync::subscribe::spawn_sub_mem_pool_task;

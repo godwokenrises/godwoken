@@ -156,6 +156,7 @@ impl ExportBlock {
         if let Some(ref progress_bar) = self.progress_bar {
             progress_bar.finish_with_message("done");
         }
+        writer.flush()?;
 
         Ok(())
     }

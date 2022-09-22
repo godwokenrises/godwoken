@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Error, Result};
+use gw_utils::liveness::Liveness;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{body::HttpBody, server::conn::AddrIncoming, Body, Method, Request, Response, Server};
 use tokio::net::TcpListener;
@@ -16,6 +17,7 @@ use crate::registry::Registry;
 pub async fn start_jsonrpc_server(
     listen_addr: SocketAddr,
     registry: Registry,
+    liveness: Arc<Liveness>,
     _shutdown_send: mpsc::Sender<()>,
     mut sub_shutdown: broadcast::Receiver<()>,
 ) -> Result<()> {
@@ -35,7 +37,12 @@ pub async fn start_jsonrpc_server(
         .tcp_nodelay(true)
         .serve(make_service_fn(move |_| {
             let rpc_server = Arc::clone(&rpc_server);
-            async { Ok::<_, Error>(service_fn(move |req| serve(Arc::clone(&rpc_server), req))) }
+            let liveness = liveness.clone();
+            async move {
+                Ok::<_, Error>(service_fn(move |req| {
+                    serve(Arc::clone(&rpc_server), liveness.clone(), req)
+                }))
+            }
         }));
     let graceful = server.with_graceful_shutdown(async {
         let _ = sub_shutdown.recv().await;
@@ -49,8 +56,20 @@ pub async fn start_jsonrpc_server(
 // Serves a request and returns a response.
 async fn serve<R: Router + 'static>(
     rpc: Arc<JsonrpcServer<R>>,
+    liveness: Arc<Liveness>,
     req: Request<Body>,
 ) -> Result<Response<Body>> {
+    if req.method() == Method::GET || req.method() == Method::HEAD && req.uri().path() == "/livez" {
+        return hyper::Response::builder()
+            .status(if liveness.is_live() {
+                hyper::StatusCode::OK
+            } else {
+                hyper::StatusCode::SERVICE_UNAVAILABLE
+            })
+            .body(Body::empty())
+            .map_err(anyhow::Error::new);
+    }
+
     if req.method() == Method::OPTIONS {
         return hyper::Response::builder()
             .status(hyper::StatusCode::NO_CONTENT)

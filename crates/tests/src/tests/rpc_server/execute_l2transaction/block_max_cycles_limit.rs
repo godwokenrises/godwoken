@@ -14,7 +14,7 @@ use crate::testing_tool::{
     rpc_server::RPCServer,
 };
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_block_max_cycles_limit() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -42,7 +42,10 @@ async fn test_block_max_cycles_limit() {
     };
 
     // Check block producer is valid registry address
-    chain.produce_block(vec![], vec![]).await.unwrap();
+    chain
+        .produce_block(Default::default(), vec![])
+        .await
+        .unwrap();
     let block_producer: Bytes = chain.last_valid_block().raw().block_producer().unpack();
     assert!(RegistryAddress::from_slice(&block_producer).is_some());
 

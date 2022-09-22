@@ -8,7 +8,7 @@
 //! txs & withdrawals again.
 //!
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, registry_address::RegistryAddress,
     state::State, H256,
@@ -33,13 +33,14 @@ use gw_store::{
 };
 use gw_traits::CodeStore;
 use gw_types::{
-    offchain::DepositInfo,
+    offchain::{DepositInfo, FinalizedCustodianCapacity},
     packed::{
-        AccountMerkleState, BlockInfo, L2Block, L2Transaction, Script, TxReceipt,
+        AccountMerkleState, BlockInfo, L2Block, L2Transaction, NextMemBlock, Script, TxReceipt,
         WithdrawalRequest, WithdrawalRequestExtra,
     },
-    prelude::{Pack, Unpack},
+    prelude::{Builder, Entity, Pack, PackVec, Unpack},
 };
+use gw_utils::local_cells::LocalCellsManager;
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
@@ -48,22 +49,12 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tentacle::service::ServiceAsyncControl;
-use tokio::sync::{broadcast, Mutex};
+use tokio::task::block_in_place;
 use tracing::instrument;
 
 use crate::{
-    custodian::AvailableCustodians,
-    mem_block::MemBlock,
-    restore_manager::RestoreManager,
-    sync::{
-        mq::tokio_kafka,
-        p2p::{self, SyncServerState},
-        publish::MemPoolPublishService,
-    },
-    traits::MemPoolProvider,
-    types::EntryList,
-    withdrawal::Generator as WithdrawalGenerator,
+    block_sync_server::BlockSyncServerState, mem_block::MemBlock, restore_manager::RestoreManager,
+    traits::MemPoolProvider, types::EntryList, withdrawal::Generator as WithdrawalGenerator,
 };
 
 #[derive(Debug, Default)]
@@ -97,14 +88,10 @@ pub struct MemPool {
     restore_manager: RestoreManager,
     /// Restored txs to finalize
     pending_restored_tx_hashes: VecDeque<H256>,
-    // Fan-out mem block from full node to readonly node
-    mem_pool_publish_service: Option<MemPoolPublishService>,
-    node_mode: NodeMode,
     mem_pool_state: Arc<MemPoolState>,
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
-    new_tip_publisher: broadcast::Sender<(H256, u64)>,
+    sync_server: Option<Arc<std::sync::Mutex<BlockSyncServerState>>>,
     mem_block_config: MemBlockConfig,
-    has_p2p_sync: bool,
     /// Cycles Pool
     cycles_pool: CyclesPool,
 }
@@ -117,7 +104,7 @@ pub struct MemPoolCreateArgs {
     pub config: MemPoolConfig,
     pub node_mode: NodeMode,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
-    pub has_p2p_sync: bool,
+    pub sync_server: Option<Arc<std::sync::Mutex<BlockSyncServerState>>>,
 }
 
 impl Drop for MemPool {
@@ -140,7 +127,7 @@ impl MemPool {
             config,
             node_mode,
             dynamic_config_manager,
-            has_p2p_sync,
+            sync_server,
         } = args;
         let pending = Default::default();
 
@@ -167,26 +154,11 @@ impl MemPool {
 
         mem_block.clear_txs();
 
-        let producer = config
-            .publish
-            .map(|config| -> Result<tokio_kafka::Producer> {
-                log::info!("Setup fan out mem_block handler.");
-                let producer = tokio_kafka::Producer::connect(config.hosts, config.topic)?;
-                Ok(producer)
-            })
-            .transpose()?;
-        let mem_pool_publish_service = if producer.is_some() {
-            Some(MemPoolPublishService::start(producer, None))
-        } else {
-            None
-        };
-
         let mem_pool_state = {
             let mem_store = MemStore::new(store.get_snapshot());
             Arc::new(MemPoolState::new(Arc::new(mem_store), false))
         };
 
-        let (new_tip_publisher, _) = broadcast::channel(1);
         let cycles_pool = CyclesPool::new(
             config.mem_block.max_cycles_limit,
             config.mem_block.syscall_cycles.clone(),
@@ -202,13 +174,10 @@ impl MemPool {
             pending_deposits,
             restore_manager: restore_manager.clone(),
             pending_restored_tx_hashes,
-            mem_pool_publish_service,
-            node_mode,
             mem_pool_state,
             dynamic_config_manager,
-            new_tip_publisher,
+            sync_server,
             mem_block_config: config.mem_block,
-            has_p2p_sync,
             cycles_pool,
         };
         mem_pool.restore_pending_withdrawals().await?;
@@ -217,8 +186,16 @@ impl MemPool {
         let snap = mem_pool.mem_pool_state().load();
         snap.update_mem_pool_block_info(mem_pool.mem_block.block_info())?;
         mem_pool.mem_pool_state().store(snap.into());
+
         // set tip
-        mem_pool.reset(None, Some(tip.0)).await?;
+        if matches!(node_mode, NodeMode::ReadOnly) {
+            mem_pool.reset_read_only(Some(tip.0), true)?;
+        } else {
+            mem_pool
+                .reset(None, Some(tip.0), &Default::default())
+                .await?;
+        }
+
         // clear stored mem blocks
         tokio::spawn(async move {
             restore_manager.delete_before_one_hour();
@@ -241,6 +218,10 @@ impl MemPool {
 
     pub fn cycles_pool_mut(&mut self) -> &mut CyclesPool {
         &mut self.cycles_pool
+    }
+
+    pub fn config(&self) -> &MemBlockConfig {
+        &self.mem_block_config
     }
 
     pub fn restore_manager(&self) -> &RestoreManager {
@@ -290,21 +271,23 @@ impl MemPool {
 
     /// Push a layer2 tx into pool
     #[instrument(skip_all)]
-    pub async fn push_transaction(&mut self, tx: L2Transaction) -> Result<()> {
-        let db = self.store.begin_transaction();
+    pub fn push_transaction(&mut self, tx: L2Transaction) -> Result<()> {
+        tokio::task::block_in_place(|| {
+            let db = self.store.begin_transaction();
 
-        let snap = self.mem_pool_state.load();
-        let mut state = snap.state()?;
-        self.push_transaction_with_db(&db, &mut state, tx).await?;
-        db.commit()?;
-        self.mem_pool_state.store(snap.into());
+            let snap = self.mem_pool_state.load();
+            let mut state = snap.state()?;
+            self.push_transaction_with_db(&db, &mut state, tx)?;
+            db.commit()?;
+            self.mem_pool_state.store(snap.into());
 
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Push a layer2 tx into pool
     #[instrument(skip_all, fields(tx_hash = %tx.hash().pack()))]
-    async fn push_transaction_with_db(
+    fn push_transaction_with_db(
         &mut self,
         db: &StoreTransaction,
         state: &mut MemStateTree<'_>,
@@ -334,7 +317,7 @@ impl MemPool {
 
         // instantly run tx in background & update local state
         let t = Instant::now();
-        let tx_receipt = self.execute_tx(db, state, tx.clone()).await?;
+        let tx_receipt = self.execute_tx(db, state, tx.clone())?;
         log::debug!("[push tx] finalize tx time: {}ms", t.elapsed().as_millis());
 
         // save tx receipt in mem pool
@@ -384,6 +367,39 @@ impl MemPool {
         Ok(())
     }
 
+    // TODO: @sopium optimization: collect on reset and cache.
+    fn collect_finalized_custodian_capacity(&self) -> Result<FinalizedCustodianCapacity> {
+        let tip = self.current_tip.1;
+        if tip == 0 {
+            return Ok(Default::default());
+        }
+        let snap = self.store.get_snapshot();
+        let mut c: FinalizedCustodianCapacity = snap
+            .get_block_post_finalized_custodian_capacity(tip)
+            .ok_or_else(|| anyhow!("failed to get last block post finalized custodian capacity"))?
+            .as_reader()
+            .unpack();
+        let last_finalized = self
+            .generator
+            .rollup_context()
+            .last_finalized_block_number(tip);
+        if last_finalized > 0 {
+            let last_finalized_deposits = snap
+                .get_block_deposit_info_vec(last_finalized)
+                .context("get last finalized block deposit")?;
+            for i in last_finalized_deposits {
+                let d = i.request();
+                c.capacity += u128::from(d.capacity().unpack());
+                let amount = d.amount().unpack();
+                if amount > 0 {
+                    let hash = d.sudt_script_hash().unpack();
+                    c.checked_add_sudt(hash, amount, d.script())
+                        .expect("add sudt amount overflow");
+                }
+            }
+        }
+        Ok(c)
+    }
     // Withdrawal request verification
     // TODO: duplicate withdrawal check
     #[instrument(skip_all)]
@@ -396,24 +412,11 @@ impl MemPool {
         self.generator
             .check_withdrawal_signature(state, withdrawal)?;
 
-        // verify finalized custodian
-        let finalized_custodians = {
-            // query withdrawals from ckb-indexer
-            let last_finalized_block_number = self
-                .generator
-                .rollup_context()
-                .last_finalized_block_number(self.current_tip.1);
-            self.provider
-                .query_available_custodians(
-                    vec![withdrawal.request()],
-                    last_finalized_block_number,
-                    self.generator.rollup_context().to_owned(),
-                )
-                .await?
-        };
-        let avaliable_custodians = AvailableCustodians::from(&finalized_custodians);
-        let withdrawal_generator =
-            WithdrawalGenerator::new(self.generator.rollup_context(), avaliable_custodians);
+        let finalized_custodian_capacity = self.collect_finalized_custodian_capacity()?;
+        let withdrawal_generator = WithdrawalGenerator::new(
+            self.generator.rollup_context(),
+            finalized_custodian_capacity,
+        );
         withdrawal_generator.verify_remained_amount(&withdrawal.request())?;
 
         // withdrawal basic verification
@@ -431,22 +434,33 @@ impl MemPool {
 
     /// Notify new tip
     /// this method update current state of mem pool
+    ///
+    /// This method should only be used on a full node or test node.
     #[instrument(skip_all)]
-    pub async fn notify_new_tip(&mut self, new_tip: H256) -> Result<()> {
+    pub async fn notify_new_tip(
+        &mut self,
+        new_tip: H256,
+        local_cells_manager: &LocalCellsManager,
+    ) -> Result<()> {
         // reset pool state
         if self.current_tip.0 != new_tip {
-            self.reset(Some(self.current_tip.0), Some(new_tip)).await?;
+            self.reset(Some(self.current_tip.0), Some(new_tip), local_cells_manager)
+                .await?;
         }
         Ok(())
     }
 
     /// Clear mem block state and recollect deposits
     #[instrument(skip_all)]
-    pub async fn reset_mem_block(&mut self) -> Result<()> {
+    pub async fn reset_mem_block(&mut self, local_cells_manager: &LocalCellsManager) -> Result<()> {
         log::info!("[mem-pool] reset mem block");
         // reset pool state
-        self.reset(Some(self.current_tip.0), Some(self.current_tip.0))
-            .await?;
+        self.reset(
+            Some(self.current_tip.0),
+            Some(self.current_tip.0),
+            local_cells_manager,
+        )
+        .await?;
         Ok(())
     }
 
@@ -472,35 +486,24 @@ impl MemPool {
 
     /// Reset pool
     ///
-    /// - For Full node and Test node:
+    /// This method reset the current state of the mem pool. Discarded txs &
+    /// withdrawals will be reinject to pool.
     ///
-    ///   This method reset the current state of the mem pool.
-    ///   Discarded txs & withdrawals will be reinject to pool.
-    ///
-    /// - For ReadOnly nodes without P2P sync:
-    ///
-    ///   This method resets the current state of the mem pool.
-    ///
-    /// - For ReadOnly nodes with P2P sync:
-    ///
-    ///   This function only update the current tip.
-    ///   The state reset of readonly only happend when receives states from publisher, see `refresh_mem_block`
+    /// This method should only be used on a full node or test node.
     #[instrument(skip_all, fields(old_tip = old_tip.map(|h| display(h.pack())), new_tip = new_tip.map(|h| display(h.pack()))))]
-    async fn reset(&mut self, old_tip: Option<H256>, new_tip: Option<H256>) -> Result<()> {
-        match self.node_mode {
-            NodeMode::FullNode | NodeMode::Test => self.reset_full(old_tip, new_tip).await,
-            NodeMode::ReadOnly => self.reset_read_only(old_tip, new_tip).await,
-        }
+    async fn reset(
+        &mut self,
+        old_tip: Option<H256>,
+        new_tip: Option<H256>,
+        local_cells_manager: &LocalCellsManager,
+    ) -> Result<()> {
+        self.reset_full(old_tip, new_tip, local_cells_manager).await
     }
 
     /// Only **ReadOnly** node.
-    /// update current tip.
+    /// update current tip. Reset mem pool state if `update_state` is true.
     #[instrument(skip_all)]
-    async fn reset_read_only(
-        &mut self,
-        _old_tip: Option<H256>,
-        new_tip: Option<H256>,
-    ) -> Result<()> {
+    pub fn reset_read_only(&mut self, new_tip: Option<H256>, update_state: bool) -> Result<()> {
         let new_tip = match new_tip {
             Some(block_hash) => block_hash,
             None => {
@@ -510,7 +513,7 @@ impl MemPool {
         };
         let new_tip_block = self.store.get_block(&new_tip)?.expect("new tip block");
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
-        if !self.has_p2p_sync {
+        if update_state {
             // For read only nodes that does not have P2P mem-pool syncing, just
             // reset mem block and mem pool state. Mem block will be mostly
             // empty and not in sync with full node anyway, so we skip
@@ -522,14 +525,18 @@ impl MemPool {
             self.mem_pool_state.store(Arc::new(mem_store));
         }
 
-        let _ = self.new_tip_publisher.send(self.current_tip);
         Ok(())
     }
 
     /// Only **Full** node and **Test** node.
     /// reset mem pool state
     #[instrument(skip_all)]
-    async fn reset_full(&mut self, old_tip: Option<H256>, new_tip: Option<H256>) -> Result<()> {
+    async fn reset_full(
+        &mut self,
+        old_tip: Option<H256>,
+        new_tip: Option<H256>,
+        local_cells_manager: &LocalCellsManager,
+    ) -> Result<()> {
         let mut reinject_txs = Default::default();
         let mut reinject_withdrawals = Default::default();
         // read block from db
@@ -630,110 +637,101 @@ impl MemPool {
 
         // refresh pending deposits
         if !is_mem_pool_recovery {
-            self.refresh_deposit_cells(&db, new_tip).await?;
+            self.refresh_deposit_cells(&db, new_tip, local_cells_manager)
+                .await?;
         }
 
         // estimate next l2block timestamp
         let estimated_timestamp = {
-            let estimated = self.provider.estimate_next_blocktime().await?;
+            let estimated = self.provider.estimate_next_blocktime().await;
             let tip_timestamp = Duration::from_millis(new_tip_block.raw().timestamp().unpack());
-            if estimated <= tip_timestamp {
-                let overwriten_timestamp = tip_timestamp.saturating_add(Duration::from_secs(1));
-                log::warn!(
-                    "[mem-pool] reset mem-pool with insatisfied estimated time, overwrite estimated time {:?} -> {:?}",
-                    estimated,
-                    overwriten_timestamp
-                );
-                overwriten_timestamp
+            match estimated {
+                Ok(e) if e <= tip_timestamp => tip_timestamp.saturating_add(Duration::from_secs(1)),
+                Err(_) => tip_timestamp.saturating_add(Duration::from_secs(1)),
+                Ok(e) => e,
+            }
+        };
+
+        block_in_place(move || {
+            // reset mem block state
+            let snapshot = self.store.get_snapshot();
+            let snap_last_valid_tip = snapshot.get_last_valid_tip_block_hash()?;
+            assert_eq!(snap_last_valid_tip, new_tip, "set new snapshot");
+
+            let mem_block_content = self.mem_block.reset(&new_tip_block, estimated_timestamp);
+
+            // set tip
+            self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
+
+            // mem block withdrawals
+            let mem_block_withdrawals: Vec<_> = {
+                let mut withdrawals = Vec::with_capacity(mem_block_content.withdrawals.len());
+                for withdrawal_hash in mem_block_content.withdrawals {
+                    if let Some(withdrawal) = db.get_mem_pool_withdrawal(&withdrawal_hash)? {
+                        withdrawals.push(withdrawal);
+                    }
+                }
+                withdrawals
+            };
+
+            // mem block txs
+            let mem_block_txs: Vec<_> = {
+                let mut txs = Vec::with_capacity(mem_block_content.txs.len());
+                for tx_hash in mem_block_content.txs {
+                    if let Some(tx) = db.get_mem_pool_transaction(&tx_hash)? {
+                        txs.push(tx);
+                    }
+                }
+                txs
+            };
+
+            // create new mem_store to maintain memory state
+            let mem_store = MemStore::new(snapshot);
+            mem_store.update_mem_pool_block_info(self.mem_block.block_info())?;
+            let mut mem_state = mem_store.state()?;
+
+            // remove from pending
+            self.remove_unexecutables(&mut mem_state, &db)?;
+
+            log::info!("[mem-pool] reset reinject txs: {} mem-block txs: {} reinject withdrawals: {} mem-block withdrawals: {}", reinject_txs.len(), mem_block_txs.len(), reinject_withdrawals.len(), mem_block_withdrawals.len());
+            // re-inject txs
+            let txs = reinject_txs.into_iter().chain(mem_block_txs).collect();
+
+            // re-inject withdrawals
+            let mut withdrawals: Vec<_> = reinject_withdrawals.into_iter().collect();
+            if is_mem_pool_recovery {
+                // recovery mem block withdrawals
+                withdrawals.extend(mem_block_withdrawals);
             } else {
-                estimated
+                // packages more withdrawals
+                self.try_package_more_withdrawals(&mem_state, &mut withdrawals);
             }
-        };
-        // reset mem block state
-        let snapshot = self.store.get_snapshot();
-        let snap_last_valid_tip = snapshot.get_last_valid_tip_block_hash()?;
-        assert_eq!(snap_last_valid_tip, new_tip, "set new snapshot");
 
-        let mem_block_content = self.mem_block.reset(&new_tip_block, estimated_timestamp);
+            // To simplify logic, don't restrict reinjected txs
+            self.cycles_pool = CyclesPool::new(u64::MAX, SyscallCyclesConfig::all_zero());
 
-        // set tip
-        self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
+            self.prepare_next_mem_block(
+                &db,
+                &mut mem_state,
+                withdrawals,
+                self.pending_deposits.clone(),
+                txs,
+            )?;
 
-        // Publish new tip.
-        let _ = self.new_tip_publisher.send(self.current_tip);
-        if let Some(ref publish) = self.mem_pool_publish_service {
-            publish.new_tip(self.current_tip).await;
-        }
+            // Update block remained cycles
+            let used_cycles = self.cycles_pool.cycles_used();
+            self.cycles_pool = CyclesPool::new(
+                self.mem_block_config.max_cycles_limit,
+                self.mem_block_config.syscall_cycles.clone(),
+            );
+            self.cycles_pool.consume_cycles(used_cycles);
 
-        // mem block withdrawals
-        let mem_block_withdrawals: Vec<_> = {
-            let mut withdrawals = Vec::with_capacity(mem_block_content.withdrawals.len());
-            for withdrawal_hash in mem_block_content.withdrawals {
-                if let Some(withdrawal) = db.get_mem_pool_withdrawal(&withdrawal_hash)? {
-                    withdrawals.push(withdrawal);
-                }
-            }
-            withdrawals
-        };
+            // store mem state
+            self.mem_pool_state.store(Arc::new(mem_store));
+            db.commit()?;
 
-        // mem block txs
-        let mem_block_txs: Vec<_> = {
-            let mut txs = Vec::with_capacity(mem_block_content.txs.len());
-            for tx_hash in mem_block_content.txs {
-                if let Some(tx) = db.get_mem_pool_transaction(&tx_hash)? {
-                    txs.push(tx);
-                }
-            }
-            txs
-        };
-
-        // create new mem_store to maintain memory state
-        let mem_store = MemStore::new(snapshot);
-        mem_store.update_mem_pool_block_info(self.mem_block.block_info())?;
-        let mut mem_state = mem_store.state()?;
-
-        // remove from pending
-        self.remove_unexecutables(&mut mem_state, &db).await?;
-
-        log::info!("[mem-pool] reset reinject txs: {} mem-block txs: {} reinject withdrawals: {} mem-block withdrawals: {}", reinject_txs.len(), mem_block_txs.len(), reinject_withdrawals.len(), mem_block_withdrawals.len());
-        // re-inject txs
-        let txs = reinject_txs.into_iter().chain(mem_block_txs).collect();
-
-        // re-inject withdrawals
-        let mut withdrawals: Vec<_> = reinject_withdrawals.into_iter().collect();
-        if is_mem_pool_recovery {
-            // recovery mem block withdrawals
-            withdrawals.extend(mem_block_withdrawals);
-        } else {
-            // packages more withdrawals
-            self.try_package_more_withdrawals(&mem_state, &mut withdrawals);
-        }
-
-        // To simplify logic, don't restrict reinjected txs
-        self.cycles_pool = CyclesPool::new(u64::MAX, SyscallCyclesConfig::all_zero());
-
-        self.prepare_next_mem_block(
-            &db,
-            &mut mem_state,
-            withdrawals,
-            self.pending_deposits.clone(),
-            txs,
-        )
-        .await?;
-
-        // Update block remained cycles
-        let used_cycles = self.cycles_pool.cycles_used();
-        self.cycles_pool = CyclesPool::new(
-            self.mem_block_config.max_cycles_limit,
-            self.mem_block_config.syscall_cycles.clone(),
-        );
-        self.cycles_pool.consume_cycles(used_cycles);
-
-        // store mem state
-        self.mem_pool_state.store(Arc::new(mem_store));
-        db.commit()?;
-
-        Ok(())
+            Ok(())
+        })
     }
 
     fn try_package_more_withdrawals(
@@ -773,7 +771,7 @@ impl MemPool {
 
     /// Discard unexecutables from pending.
     #[instrument(skip_all)]
-    async fn remove_unexecutables(
+    fn remove_unexecutables(
         &mut self,
         state: &mut MemStateTree<'_>,
         db: &StoreTransaction,
@@ -821,7 +819,7 @@ impl MemPool {
 
     /// Prepare for next mem block
     #[instrument(skip_all, fields(withdrawals_count = withdrawals.len(), txs_count = txs.len()))]
-    async fn prepare_next_mem_block(
+    fn prepare_next_mem_block(
         &mut self,
         db: &StoreTransaction,
         state: &mut MemStateTree<'_>,
@@ -859,25 +857,24 @@ impl MemPool {
         }
         // Handle state before txs
         // withdrawal
-        self.finalize_withdrawals(state, withdrawals.clone())
-            .await?;
+        self.finalize_withdrawals(state, withdrawals.clone())?;
         // deposits
-        self.finalize_deposits(state, deposit_cells.clone()).await?;
+        self.finalize_deposits(state, deposit_cells.clone())?;
 
-        // Fan-out next mem block to readonly node
-        if let Some(handler) = &self.mem_pool_publish_service {
-            handler
-                .next_mem_block(
-                    withdrawals,
-                    deposit_cells,
-                    self.mem_block.block_info().clone(),
-                )
-                .await
+        if let Some(ref sync_server) = self.sync_server {
+            let mut sync_server = sync_server.lock().unwrap();
+            sync_server.publish_next_mem_block(
+                NextMemBlock::new_builder()
+                    .block_info(self.mem_block.block_info().clone())
+                    .withdrawals(withdrawals.pack())
+                    .deposits(deposit_cells.pack())
+                    .build(),
+            );
         }
 
         // re-inject txs
         for tx in txs {
-            if let Err(err) = self.push_transaction_with_db(db, state, tx.clone()).await {
+            if let Err(err) = self.push_transaction_with_db(db, state, tx.clone()) {
                 let tx_hash = tx.hash();
                 log::info!(
                     "[mem pool] fail to re-inject tx {}, error: {}",
@@ -896,14 +893,8 @@ impl MemPool {
         &mut self,
         db: &StoreTransaction,
         new_block_hash: H256,
+        local_cells_manager: &LocalCellsManager,
     ) -> Result<()> {
-        // get processed deposit requests
-        let processed_deposit_requests: HashSet<_> = db
-            .get_block_deposit_requests(&new_block_hash)?
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
-
         // refresh
         let snap = self.mem_pool_state.load();
         let state = snap.state()?;
@@ -920,17 +911,16 @@ impl MemPool {
             mem_account_count,
             tip_account_count
         );
-        let cells = self.provider.collect_deposit_cells().await?;
-        self.pending_deposits = {
-            let cells = cells
-                .into_iter()
-                .filter(|di| !processed_deposit_requests.contains(&di.request));
-            crate::deposit::sanitize_deposit_cells(
-                self.generator.rollup_context(),
-                cells.collect(),
-                &state,
-            )
-        };
+        let cells = self
+            .provider
+            .collect_deposit_cells(local_cells_manager)
+            .await?;
+        self.pending_deposits = crate::deposit::sanitize_deposit_cells(
+            self.generator.rollup_context(),
+            &self.mem_block_config.deposit_timeout_config,
+            cells,
+            &state,
+        );
         log::debug!(
             "[mem-pool] refreshed deposits: {}",
             self.pending_deposits.len()
@@ -940,7 +930,7 @@ impl MemPool {
     }
 
     #[instrument(skip_all, fields(deposits_count = deposit_cells.len()))]
-    async fn finalize_deposits(
+    fn finalize_deposits(
         &mut self,
         state: &mut MemStateTree<'_>,
         deposit_cells: Vec<DepositInfo>,
@@ -975,7 +965,7 @@ impl MemPool {
 
     /// Execute withdrawal & update local state
     #[instrument(skip_all, fields(withdrawals_count = withdrawals.len()))]
-    async fn finalize_withdrawals(
+    fn finalize_withdrawals(
         &mut self,
         state: &mut MemStateTree<'_>,
         withdrawals: Vec<WithdrawalRequestExtra>,
@@ -984,28 +974,13 @@ impl MemPool {
         assert!(self.mem_block.withdrawals().is_empty());
         assert!(self.mem_block.state_checkpoints().is_empty());
         assert!(self.mem_block.deposits().is_empty());
-        assert!(self.mem_block.finalized_custodians().is_none());
+        assert!(self.mem_block.finalized_custodians().is_empty());
         assert!(self.mem_block.txs().is_empty());
 
         let max_withdrawal_capacity = std::u128::MAX;
-        let finalized_custodians = {
-            // query withdrawals from ckb-indexer
-            let last_finalized_block_number = self
-                .generator
-                .rollup_context()
-                .last_finalized_block_number(self.current_tip.1);
-            self.provider
-                .query_available_custodians(
-                    withdrawals.iter().map(|w| w.request()).collect(),
-                    last_finalized_block_number,
-                    self.generator.rollup_context().to_owned(),
-                )
-                .await?
-        };
-
-        let available_custodians = AvailableCustodians::from(&finalized_custodians);
+        let finalized_custodians = self.collect_finalized_custodian_capacity()?;
         let asset_scripts: HashMap<H256, Script> = {
-            let sudt_value = available_custodians.sudt.values();
+            let sudt_value = finalized_custodians.sudt.values();
             sudt_value.map(|(_, script)| (script.hash().into(), script.to_owned()))
         }
         .collect();
@@ -1014,7 +989,7 @@ impl MemPool {
         let mut total_withdrawal_capacity: u128 = 0;
         let mut withdrawal_verifier = crate::withdrawal::Generator::new(
             self.generator.rollup_context(),
-            available_custodians,
+            finalized_custodians,
         );
         // start track withdrawal
         state.tracker_mut().enable();
@@ -1090,7 +1065,7 @@ impl MemPool {
         }
         state.submit_tree_to_mem_block();
         self.mem_block
-            .set_finalized_custodians(finalized_custodians);
+            .set_finalized_custodian_capacity(withdrawal_verifier.remaining_capacity());
 
         // remove unused withdrawals
         log::info!(
@@ -1103,7 +1078,7 @@ impl MemPool {
 
     /// Execute tx & update local state
     #[instrument(skip_all)]
-    async fn execute_tx(
+    fn execute_tx(
         &mut self,
         db: &StoreTransaction,
         state: &mut MemStateTree<'_>,
@@ -1143,16 +1118,14 @@ impl MemPool {
 
         // execute tx
         let raw_tx = tx.raw();
-        let run_result = tokio::task::block_in_place(|| {
-            generator.unchecked_execute_transaction(
-                &chain_view,
-                state,
-                block_info,
-                &raw_tx,
-                L2TX_MAX_CYCLES,
-                Some(cycles_pool),
-            )
-        })?;
+        let run_result = generator.unchecked_execute_transaction(
+            &chain_view,
+            state,
+            block_info,
+            &raw_tx,
+            L2TX_MAX_CYCLES,
+            Some(cycles_pool),
+        )?;
 
         // check account id of sudt proxy contract creator is from whitelist
         {
@@ -1171,7 +1144,7 @@ impl MemPool {
         }
         // apply run result
         let t = Instant::now();
-        tokio::task::block_in_place(|| state.apply_run_result(&run_result.write))?;
+        state.apply_run_result(&run_result.write)?;
         log::debug!(
             "[finalize tx] apply run result: {}ms",
             t.elapsed().as_millis()
@@ -1188,9 +1161,8 @@ impl MemPool {
         let tx_receipt =
             TxReceipt::build_receipt(tx.witness_hash().into(), run_result, merkle_state);
 
-        // fan-out to readonly mem block
-        if let Some(handler) = &self.mem_pool_publish_service {
-            handler.new_tx(tx, self.current_tip.1).await
+        if let Some(ref sync_server) = self.sync_server {
+            sync_server.lock().unwrap().publish_transaction(tx);
         }
 
         Ok(tx_receipt)
@@ -1226,122 +1198,76 @@ impl MemPool {
     // This function returns Ok(Some(block_number)), if refresh is successful.
     // Or returns Ok(None) if current tip has not synced yet.
     #[instrument(skip_all, fields(block = block_info.number().unpack(), withdrawals_count = withdrawals.len(), deposits_count = deposits.len()))]
-    pub(crate) async fn refresh_mem_block(
+    pub fn refresh_mem_block(
         &mut self,
         block_info: BlockInfo,
         mut withdrawals: Vec<WithdrawalRequestExtra>,
         deposits: Vec<DepositInfo>,
     ) -> Result<Option<u64>> {
-        let next_block_number = block_info.number().unpack();
-        let current_tip_block_number = self.current_tip.1;
-        if next_block_number <= current_tip_block_number {
-            // mem blocks from the past should be ignored
-            log::trace!(
-                "Ignore this mem block: {}, current tip: {}",
-                next_block_number,
-                current_tip_block_number
-            );
-            return Ok(Some(current_tip_block_number));
-        }
-        if next_block_number != current_tip_block_number + 1 {
-            return Ok(None);
-        }
-        let snapshot = self.store.get_snapshot();
-        let tip_block = snapshot.get_last_valid_tip_block()?;
+        block_in_place(move || {
+            let next_block_number = block_info.number().unpack();
+            let current_tip_block_number = self.current_tip.1;
+            if next_block_number <= current_tip_block_number {
+                // mem blocks from the past should be ignored
+                log::trace!(
+                    "Ignore this mem block: {}, current tip: {}",
+                    next_block_number,
+                    current_tip_block_number
+                );
+                return Ok(Some(current_tip_block_number));
+            }
+            if next_block_number != current_tip_block_number + 1 {
+                return Ok(None);
+            }
+            let snapshot = self.store.get_snapshot();
+            let tip_block = snapshot.get_last_valid_tip_block()?;
 
-        // mem block txs
-        let mem_block_txs: Vec<_> = {
-            let mut txs = Vec::with_capacity(self.mem_block.txs().len());
-            for tx_hash in self.mem_block.txs() {
-                if let Some(tx) = snapshot.get_mem_pool_transaction(tx_hash)? {
-                    txs.push(tx);
+            // mem block txs
+            let mem_block_txs: Vec<_> = {
+                let mut txs = Vec::with_capacity(self.mem_block.txs().len());
+                for tx_hash in self.mem_block.txs() {
+                    if let Some(tx) = snapshot.get_mem_pool_transaction(tx_hash)? {
+                        txs.push(tx);
+                    }
                 }
-            }
-            txs
-        };
+                txs
+            };
 
-        // update mem block
-        let post_merkle_state = tip_block.raw().post_account();
-        let mem_block = MemBlock::new(block_info, post_merkle_state);
-        self.mem_block = mem_block;
+            // update mem block
+            let post_merkle_state = tip_block.raw().post_account();
+            let mem_block = MemBlock::new(block_info, post_merkle_state);
+            self.mem_block = mem_block;
 
-        let mem_store = MemStore::new(snapshot);
-        mem_store.update_mem_pool_block_info(self.mem_block.block_info())?;
-        let mut mem_state = mem_store.state()?;
+            let mem_store = MemStore::new(snapshot);
+            mem_store.update_mem_pool_block_info(self.mem_block.block_info())?;
+            let mut mem_state = mem_store.state()?;
 
-        // remove from pending
-        let db = self.store.begin_transaction();
-        self.remove_unexecutables(&mut mem_state, &db).await?;
+            // remove from pending
+            let db = self.store.begin_transaction();
+            self.remove_unexecutables(&mut mem_state, &db)?;
 
-        // reset cycles pool available cycles.
-        // recreate from config, in case we migrate to dynamic config in the future.
-        self.cycles_pool = CyclesPool::new(
-            self.mem_block_config.max_cycles_limit,
-            self.mem_block_config.syscall_cycles.clone(),
-        );
+            // reset cycles pool available cycles.
+            self.cycles_pool = CyclesPool::new(u64::MAX, SyscallCyclesConfig::all_zero());
 
-        // prepare next mem block
-        self.try_package_more_withdrawals(&mem_state, &mut withdrawals);
-        self.prepare_next_mem_block(&db, &mut mem_state, withdrawals, deposits, mem_block_txs)
-            .await?;
+            // prepare next mem block
+            self.try_package_more_withdrawals(&mem_state, &mut withdrawals);
+            self.prepare_next_mem_block(&db, &mut mem_state, withdrawals, deposits, mem_block_txs)?;
 
-        // update mem state
-        self.mem_pool_state.store(Arc::new(mem_store));
-        db.commit()?;
+            // update mem state
+            self.mem_pool_state.store(Arc::new(mem_store));
+            db.commit()?;
 
-        let mem_block = &self.mem_block;
-        log::info!(
-            "Refreshed mem_block: block id: {}, deposits: {}, withdrawals: {}, txs: {}",
-            mem_block.block_info().number().unpack(),
-            mem_block.deposits().len(),
-            mem_block.withdrawals().len(),
-            mem_block.txs().len()
-        );
+            let mem_block = &self.mem_block;
+            log::info!(
+                "Refreshed mem_block: block id: {}, deposits: {}, withdrawals: {}, txs: {}",
+                mem_block.block_info().number().unpack(),
+                mem_block.deposits().len(),
+                mem_block.withdrawals().len(),
+                mem_block.txs().len()
+            );
 
-        Ok(Some(next_block_number))
-    }
-
-    // Only **ReadOnly** node needs this.
-    // Sync tx from fullnode to readonly.
-    #[instrument(skip_all, fields(tx_hash = %tx.hash().pack(), current_tip_block = current_tip_block_number))]
-    pub(crate) async fn append_tx(
-        &mut self,
-        tx: L2Transaction,
-        current_tip_block_number: u64,
-    ) -> Result<()> {
-        // Always expects tx from current tip.
-        // Ignore tx from an old block.
-        if current_tip_block_number < self.current_tip.1 {
-            // txs from the past block should be ignored
-            return Ok(());
-        }
-        self.push_transaction(tx).await?;
-        Ok(())
-    }
-
-    pub(crate) fn current_tip(&self) -> (H256, u64) {
-        self.current_tip
-    }
-
-    pub(crate) fn subscribe_new_tip(&self) -> broadcast::Receiver<(H256, u64)> {
-        self.new_tip_publisher.subscribe()
-    }
-
-    pub async fn enable_publishing(
-        &mut self,
-        control: ServiceAsyncControl,
-        shared: Arc<Mutex<SyncServerState>>,
-    ) {
-        let p2p_publisher = p2p::sync_server_publisher(control, shared);
-        match self.mem_pool_publish_service {
-            Some(ref service) => {
-                service.set_p2p_publisher(p2p_publisher).await;
-            }
-            None => {
-                self.mem_pool_publish_service =
-                    Some(MemPoolPublishService::start(None, Some(p2p_publisher)));
-            }
-        }
+            Ok(Some(next_block_number))
+        })
     }
 }
 
@@ -1375,7 +1301,7 @@ mod test {
     use gw_common::merkle_utils::calculate_state_checkpoint;
     use gw_common::registry_address::RegistryAddress;
     use gw_common::H256;
-    use gw_types::offchain::{CollectedCustodianCells, DepositInfo};
+    use gw_types::offchain::{DepositInfo, FinalizedCustodianCapacity};
     use gw_types::packed::{AccountMerkleState, BlockInfo, DepositRequest};
     use gw_types::prelude::{Builder, Entity, Pack, Unpack};
 
@@ -1414,10 +1340,7 @@ mod test {
             (0..deposits_count).map(|_| vec![random_hash()]).collect();
         let deposits_state: Vec<_> = { (0..deposits_count).map(|_| random_state()) }.collect();
 
-        let finalized_custodians = CollectedCustodianCells {
-            capacity: rand::random::<u128>(),
-            ..Default::default()
-        };
+        let finalized_custodians = FinalizedCustodianCapacity::default();
 
         // Random txs
         let txs_count = 500;
@@ -1433,7 +1356,7 @@ mod test {
             {
                 mem_block.push_withdrawal(hash, state, touched_keys.into_iter());
             }
-            mem_block.set_finalized_custodians(finalized_custodians.clone());
+            mem_block.set_finalized_custodian_capacity(finalized_custodians.clone());
 
             let txs_prev_state_checkpoint = {
                 let state = deposits_state.last().unwrap();
@@ -1501,7 +1424,7 @@ mod test {
                 post_states.push(state);
             }
 
-            expected.set_finalized_custodians(finalized_custodians.clone());
+            expected.set_finalized_custodian_capacity(finalized_custodians.clone());
 
             (expected, post_states.last().unwrap().to_owned())
         };

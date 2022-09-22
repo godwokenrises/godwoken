@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use crate::testing_tool::chain::{
-    build_sync_tx, construct_block, restart_chain, setup_chain, TEST_CHAIN_ID,
+    apply_block_result, construct_block, into_deposit_info_cell, produce_empty_block,
+    restart_chain, setup_chain, DEFAULT_FINALITY_BLOCKS, TEST_CHAIN_ID,
 };
 use crate::testing_tool::common::random_always_success_script;
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
@@ -9,34 +10,29 @@ use crate::testing_tool::rpc_server::RPCServer;
 
 use ckb_types::prelude::{Builder, Entity};
 use ckb_vm::Bytes;
-use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::{state::State, H256};
 use gw_rpc_server::registry::Registry;
 use gw_store::state::state_db::StateContext;
-use gw_types::core::ScriptHashType;
-use gw_types::offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupContext};
 use gw_types::packed::{
-    CellOutput, DepositLockArgs, DepositRequest, Fee, L2BlockCommittedInfo, L2Transaction,
-    OutPoint, RawL2Transaction, RawWithdrawalRequest, SUDTArgs, SUDTTransfer, Script,
-    WithdrawalRequest, WithdrawalRequestExtra,
+    DepositInfoVec, DepositRequest, Fee, L2Transaction, RawL2Transaction, RawWithdrawalRequest,
+    SUDTArgs, SUDTTransfer, Script, WithdrawalRequest, WithdrawalRequestExtra,
 };
-use gw_types::prelude::Pack;
+use gw_types::prelude::*;
 use gw_types::U256;
+use gw_utils::local_cells::LocalCellsManager;
 
 const CKB: u64 = 100000000;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_restore_mem_block() {
     let _ = env_logger::builder().is_test(true).try_init();
 
     let rollup_type_script = Script::default();
     let rollup_script_hash: H256 = rollup_type_script.hash().into();
-    let rollup_cell = CellOutput::new_builder()
-        .type_(Some(rollup_type_script.clone()).pack())
-        .build();
     let mut chain = setup_chain(rollup_type_script.clone()).await;
+    let rollup_context = chain.generator().rollup_context();
 
     // Deposit 20 accounts
     const DEPOSIT_CAPACITY: u64 = 1000000 * CKB;
@@ -52,32 +48,28 @@ async fn test_restore_mem_block() {
             .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
             .build()
     });
+    let deposit_info_vec = DepositInfoVec::new_builder()
+        .extend(deposits.map(|d| into_deposit_info_cell(rollup_context, d).pack()))
+        .build();
 
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        construct_block(&chain, &mut mem_pool, deposits.clone().collect())
+        construct_block(&chain, &mut mem_pool, deposit_info_vec.clone())
             .await
             .unwrap()
     };
-    let apply_deposits = L1Action {
-        context: L1ActionContext::SubmitBlock {
-            l2block: block_result.block.clone(),
-            deposit_requests: deposits.collect(),
-            deposit_asset_scripts: Default::default(),
-            withdrawals: Default::default(),
-        },
-        transaction: build_sync_tx(rollup_cell, block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(1u64.pack())
-            .build(),
-    };
-    let param = SyncParam {
-        updates: vec![apply_deposits],
-        reverts: Default::default(),
-    };
-    chain.sync(param).await.unwrap();
-    assert!(chain.last_sync_event().is_success());
+    apply_block_result(
+        &mut chain,
+        block_result,
+        deposit_info_vec,
+        Default::default(),
+    )
+    .await;
+
+    for _ in 0..DEFAULT_FINALITY_BLOCKS {
+        produce_empty_block(&mut chain).await.unwrap();
+    }
 
     // Generate random withdrawals, deposits, txs
     const WITHDRAWAL_CAPACITY: u64 = 1000 * CKB;
@@ -157,26 +149,23 @@ async fn test_restore_mem_block() {
     };
 
     // Push withdrawals, deposits and txs
-    let finalized_custodians = CollectedCustodianCells {
-        capacity: ((withdrawal_count + 2) as u64 * WITHDRAWAL_CAPACITY) as u128,
-        cells_info: vec![Default::default()],
-        ..Default::default()
-    };
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
         let provider = DummyMemPoolProvider {
             deposit_cells: random_deposits.clone(),
             fake_blocktime: Duration::from_millis(0),
-            collected_custodians: finalized_custodians.clone(),
         };
         mem_pool.set_provider(Box::new(provider));
         for withdrawal in random_withdrawals.clone() {
             mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
         }
-        mem_pool.reset_mem_block().await.unwrap();
+        mem_pool
+            .reset_mem_block(&LocalCellsManager::default())
+            .await
+            .unwrap();
         for tx in random_txs.clone() {
-            mem_pool.push_transaction(tx).await.unwrap();
+            mem_pool.push_transaction(tx).unwrap();
         }
 
         let mem_block = mem_pool.mem_block();
@@ -192,9 +181,9 @@ async fn test_restore_mem_block() {
     let provider = DummyMemPoolProvider {
         deposit_cells: vec![], // IMPORTANT: Remove deposits, previous deposits in mem block should be recovered and used
         fake_blocktime: Duration::from_millis(0),
-        collected_custodians: finalized_custodians,
     };
     let chain = restart_chain(&chain, rollup_type_script.clone(), Some(provider)).await;
+    chain.notify_new_tip().await.unwrap();
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
@@ -255,41 +244,4 @@ async fn test_restore_mem_block() {
             assert_eq!(reinjected_tx_hash.pack(), tx.hash().pack());
         }
     }
-}
-
-fn into_deposit_info_cell(rollup_context: &RollupContext, request: DepositRequest) -> DepositInfo {
-    let rollup_script_hash = rollup_context.rollup_script_hash;
-    let deposit_lock_type_hash = rollup_context.rollup_config.deposit_script_type_hash();
-
-    let lock_args = {
-        let cancel_timeout = 0xc0000000000004b0u64;
-        let mut buf: Vec<u8> = Vec::new();
-        let deposit_args = DepositLockArgs::new_builder()
-            .cancel_timeout(cancel_timeout.pack())
-            .build();
-        buf.extend(rollup_script_hash.as_slice());
-        buf.extend(deposit_args.as_slice());
-        buf
-    };
-
-    let out_point = OutPoint::new_builder()
-        .tx_hash(rand::random::<[u8; 32]>().pack())
-        .build();
-    let lock_script = Script::new_builder()
-        .code_hash(deposit_lock_type_hash)
-        .hash_type(ScriptHashType::Type.into())
-        .args(lock_args.pack())
-        .build();
-    let output = CellOutput::new_builder()
-        .lock(lock_script)
-        .capacity(request.capacity())
-        .build();
-
-    let cell = CellInfo {
-        out_point,
-        output,
-        data: request.amount().as_bytes(),
-    };
-
-    DepositInfo { cell, request }
 }

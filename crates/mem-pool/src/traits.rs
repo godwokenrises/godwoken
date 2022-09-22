@@ -2,20 +2,14 @@ use std::time::Duration;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use gw_types::{
-    offchain::{CellWithStatus, CollectedCustodianCells, DepositInfo, RollupContext},
-    packed::{OutPoint, WithdrawalRequest},
-};
+use gw_types::offchain::DepositInfo;
+use gw_utils::local_cells::LocalCellsManager;
 
 #[async_trait]
 pub trait MemPoolProvider {
     async fn estimate_next_blocktime(&self) -> Result<Duration>;
-    async fn collect_deposit_cells(&self) -> Result<Vec<DepositInfo>>;
-    async fn query_available_custodians(
+    async fn collect_deposit_cells(
         &self,
-        withdrawals: Vec<WithdrawalRequest>,
-        last_finalized_block_number: u64,
-        rollup_context: RollupContext,
-    ) -> Result<CollectedCustodianCells>;
-    async fn get_cell(&self, out_point: OutPoint) -> Result<Option<CellWithStatus>>;
+        local_cells_manager: &LocalCellsManager,
+    ) -> Result<Vec<DepositInfo>>;
 }

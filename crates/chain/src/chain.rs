@@ -1,8 +1,8 @@
 #![allow(clippy::mutable_key_type)]
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use gw_challenge::offchain::{verify_tx::TxWithContext, OffChainMockContext};
-use gw_common::{sparse_merkle_tree, state::State, H256};
+use gw_common::{sparse_merkle_tree, state::State, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_config::ChainConfig;
 use gw_generator::{
     generator::{ApplyBlockArgs, ApplyBlockResult},
@@ -22,13 +22,14 @@ use gw_types::{
     offchain::global_state_from_slice,
     packed::{
         BlockMerkleState, Byte32, CellInput, CellOutput, ChallengeTarget, ChallengeWitness,
-        DepositRequest, GlobalState, L2Block, L2BlockCommittedInfo, RawL2Block, RollupConfig,
-        Script, Transaction, WithdrawalRequestExtra,
+        DepositInfoVec, GlobalState, L2Block, NumberHash, RawL2Block, RollupConfig, Script,
+        Transaction, WithdrawalRequestExtra,
     },
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
 use std::{collections::HashSet, convert::TryFrom, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
+use tracing::instrument;
 
 #[derive(Debug, Clone)]
 pub struct ChallengeCell {
@@ -51,7 +52,7 @@ pub enum L1ActionContext {
     SubmitBlock {
         /// deposit requests
         l2block: L2Block,
-        deposit_requests: Vec<DepositRequest>,
+        deposit_info_vec: DepositInfoVec,
         deposit_asset_scripts: HashSet<Script>,
         withdrawals: Vec<WithdrawalRequestExtra>,
     },
@@ -70,8 +71,6 @@ pub enum L1ActionContext {
 pub struct L1Action {
     /// transaction
     pub transaction: Transaction,
-    /// l2block committed info
-    pub l2block_committed_info: L2BlockCommittedInfo,
     pub context: L1ActionContext,
 }
 
@@ -85,8 +84,6 @@ pub enum RevertL1ActionContext {
 pub struct RevertedL1Action {
     /// input global state
     pub prev_global_state: GlobalState,
-    /// l2block committed info
-    pub l2block_committed_info: L2BlockCommittedInfo,
     pub context: RevertL1ActionContext,
 }
 
@@ -122,7 +119,6 @@ pub type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_mer
 
 pub struct LocalState {
     tip: L2Block,
-    last_synced: L2BlockCommittedInfo,
     last_global_state: GlobalState,
 }
 
@@ -134,10 +130,6 @@ impl LocalState {
     pub fn status(&self) -> Status {
         let status: u8 = self.last_global_state.status().into();
         Status::try_from(status).expect("invalid status")
-    }
-
-    pub fn last_synced(&self) -> &L2BlockCommittedInfo {
-        &self.last_synced
     }
 
     pub fn last_global_state(&self) -> &GlobalState {
@@ -154,7 +146,6 @@ pub struct Chain {
     local_state: LocalState,
     generator: Arc<Generator>,
     mem_pool: Option<Arc<Mutex<MemPool>>>,
-    complete_initial_syncing: bool,
     skipped_invalid_block_list: HashSet<H256>,
 }
 
@@ -180,15 +171,11 @@ impl Chain {
             "Database chain_id must equals to rollup_script_hash"
         );
         let tip = store.get_tip_block()?;
-        let last_synced = store
-            .get_l2block_committed_info(&tip.hash().into())?
-            .ok_or_else(|| anyhow!("can't find last synced committed info"))?;
         let last_global_state = store
             .get_block_post_global_state(&tip.hash().into())?
             .ok_or_else(|| anyhow!("can't find last global state"))?;
         let local_state = LocalState {
             tip,
-            last_synced,
             last_global_state,
         };
         let rollup_config_hash = rollup_config.hash();
@@ -210,7 +197,6 @@ impl Chain {
             mem_pool,
             rollup_type_script_hash,
             rollup_config_hash,
-            complete_initial_syncing: false,
             skipped_invalid_block_list,
         })
     }
@@ -248,31 +234,6 @@ impl Chain {
         self.challenge_target
             .as_ref()
             .map(|t| t.block_hash().unpack())
-    }
-
-    pub async fn complete_initial_syncing(&mut self) -> Result<()> {
-        if let Some(mem_pool) = &self.mem_pool {
-            if !self.complete_initial_syncing {
-                // Do first notify
-                let tip_block_hash: H256 = match self.challenge_target {
-                    Some(_) => self.store().get_last_valid_tip_block_hash()?,
-                    None => self.local_state.tip.hash().into(),
-                };
-
-                log::debug!("[complete_initial_syncing] acquire mem-pool",);
-                let t = Instant::now();
-                let mut mem_pool = mem_pool.lock().await;
-                log::debug!(
-                    "[complete_initial_syncing] unlock mem-pool {}ms",
-                    t.elapsed().as_millis()
-                );
-                mem_pool.notify_new_tip(tip_block_hash).await?;
-                mem_pool.mem_pool_state().set_completed_initial_syncing();
-            }
-        }
-        self.complete_initial_syncing = true;
-
-        Ok(())
     }
 
     pub fn dump_cancel_challenge_tx(
@@ -313,20 +274,9 @@ impl Chain {
     fn update_l1action(&mut self, db: &StoreTransaction, action: L1Action) -> Result<()> {
         let L1Action {
             transaction,
-            l2block_committed_info,
             context,
         } = action;
         let global_state = parse_global_state(&transaction, &self.rollup_type_script_hash)?;
-        assert!(
-            {
-                let number: u64 = l2block_committed_info.number().unpack();
-                number
-            } >= {
-                let number: u64 = self.local_state.last_synced.number().unpack();
-                number
-            },
-            "must be greater than or equalled to last synced number"
-        );
         let status = {
             let status: u8 = self.local_state.last_global_state.status().into();
             Status::try_from(status).expect("invalid status")
@@ -338,7 +288,7 @@ impl Chain {
                     Status::Running,
                     L1ActionContext::SubmitBlock {
                         l2block,
-                        deposit_requests,
+                        deposit_info_vec,
                         deposit_asset_scripts,
                         withdrawals,
                     },
@@ -363,7 +313,7 @@ impl Chain {
                     }
 
                     if let Some(ref target) = self.challenge_target {
-                        db.insert_bad_block(&l2block, &l2block_committed_info, &global_state)?;
+                        db.insert_bad_block(&l2block, &global_state)?;
                         log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
 
                         let global_block_root: H256 = global_state.block().merkle_root().unpack();
@@ -380,9 +330,8 @@ impl Chain {
                     if let Some(challenge_target) = self.process_block(
                         db,
                         l2block.clone(),
-                        l2block_committed_info.clone(),
                         global_state.clone(),
-                        deposit_requests,
+                        deposit_info_vec,
                         deposit_asset_scripts,
                         withdrawals,
                     )? {
@@ -391,7 +340,7 @@ impl Chain {
                         let block_number = l2block.raw().number().unpack();
                         log::warn!("bad block #{} found, rollback db", block_number,);
 
-                        db.insert_bad_block(&l2block, &l2block_committed_info, &global_state)?;
+                        db.insert_bad_block(&l2block, &global_state)?;
                         log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
 
                         let global_block_root: H256 = global_state.block().merkle_root().unpack();
@@ -411,6 +360,16 @@ impl Chain {
                         Ok(SyncEvent::BadBlock { context })
                     } else {
                         let block_number = l2block.raw().number().unpack();
+                        let nh = NumberHash::new_builder()
+                            .number(l2block.raw().number())
+                            .block_hash(l2block.hash().pack())
+                            .build();
+
+                        self.calculate_and_store_finalized_custodians(db, block_number)?;
+                        db.set_last_submitted_block_number_hash(&nh.as_reader())?;
+                        db.set_last_confirmed_block_number_hash(&nh.as_reader())?;
+                        db.set_block_submit_tx(block_number, &transaction.as_reader())?;
+
                         log::info!("sync new block #{} success", block_number);
 
                         Ok(SyncEvent::Success)
@@ -607,29 +566,82 @@ impl Chain {
 
         self.last_sync_event = update()?;
         self.local_state.last_global_state = global_state;
-        self.local_state.last_synced = l2block_committed_info;
         log::debug!("last sync event {:?}", self.last_sync_event);
 
         Ok(())
     }
 
+    pub fn calculate_and_store_finalized_custodians(
+        &mut self,
+        db: &StoreTransaction,
+        block_number: u64,
+    ) -> Result<(), anyhow::Error> {
+        let block_hash = db
+            .get_block_hash_by_number(block_number)?
+            .context("get block hash")?;
+        let withdrawals = db
+            .get_block(&block_hash)?
+            .context("get block")?
+            .withdrawals();
+
+        let mut finalized_custodians = db
+            .get_block_post_finalized_custodian_capacity(block_number - 1)
+            .context("get parent block remaining finalized custodians")?
+            .as_reader()
+            .unpack();
+        let last_finalized_block = self
+            .generator
+            .rollup_context()
+            .last_finalized_block_number(block_number - 1);
+        let deposits = db
+            .get_block_deposit_info_vec(last_finalized_block)
+            .context("get last finalized block deposit")?;
+        for deposit in deposits {
+            let deposit = deposit.request();
+            finalized_custodians.capacity = finalized_custodians
+                .capacity
+                .checked_add(deposit.capacity().unpack().into())
+                .context("add capacity overflow")?;
+            finalized_custodians
+                .checked_add_sudt(
+                    deposit.sudt_script_hash().unpack(),
+                    deposit.amount().unpack(),
+                    deposit.script(),
+                )
+                .context("add sudt overflow")?;
+        }
+        for w in withdrawals.as_reader().iter() {
+            finalized_custodians.capacity = finalized_custodians
+                .capacity
+                .checked_sub(w.raw().capacity().unpack().into())
+                .context("withdrawal not enough capacity")?;
+
+            let sudt_amount = w.raw().amount().unpack();
+            let sudt_script_hash: [u8; 32] = w.raw().sudt_script_hash().unpack();
+            if 0 != sudt_amount && CKB_SUDT_SCRIPT_ARGS != sudt_script_hash {
+                finalized_custodians
+                    .checked_sub_sudt(sudt_script_hash, sudt_amount)
+                    .context("withdrawal not enough sudt amount")?;
+            }
+        }
+        db.set_block_post_finalized_custodian_capacity(
+            block_number,
+            &finalized_custodians.pack().as_reader(),
+        )?;
+        Ok(())
+    }
+
     /// revert a layer1 action
-    fn revert_l1action(&mut self, db: &StoreTransaction, action: RevertedL1Action) -> Result<()> {
+    pub fn revert_l1action(
+        &mut self,
+        db: &StoreTransaction,
+        action: RevertedL1Action,
+    ) -> Result<()> {
         let RevertedL1Action {
             prev_global_state,
-            l2block_committed_info,
             context,
+            ..
         } = action;
-        assert!(
-            {
-                let number: u64 = l2block_committed_info.number().unpack();
-                number
-            } <= {
-                let number: u64 = self.local_state.last_synced.number().unpack();
-                number
-            },
-            "must be smaller than or equalled to last synced number"
-        );
 
         let revert = || -> Result<()> {
             match context {
@@ -813,9 +825,6 @@ impl Chain {
 
         self.local_state.last_global_state = prev_global_state;
         self.local_state.tip = db.get_tip_block()?;
-        self.local_state.last_synced = db
-            .get_l2block_committed_info(&db.get_tip_block_hash()?)?
-            .expect("last committed info");
         Ok(())
     }
 
@@ -832,9 +841,11 @@ impl Chain {
         }
         let has_bad_block_before_update = self.challenge_target.is_some();
 
+        let updates = param.updates;
+
         // update layer1 actions
-        log::debug!(target: "sync-block", "sync {} actions", param.updates.len());
-        for (i, action) in param.updates.into_iter().enumerate() {
+        log::debug!(target: "sync-block", "sync {} actions", updates.len());
+        for (i, action) in updates.into_iter().enumerate() {
             let t = Instant::now();
             self.update_l1action(&db, action)?;
             log::debug!(target: "sync-block", "process {}th action cost {}ms", i, t.elapsed().as_millis());
@@ -853,16 +864,18 @@ impl Chain {
         let tip_block_hash: H256 = self.local_state.tip.hash().into();
         if let Some(mem_pool) = &self.mem_pool {
             if matches!(self.last_sync_event, SyncEvent::Success)
-                && (is_l1_revert_happend || is_bad_block_reverted || self.complete_initial_syncing)
+                && (is_l1_revert_happend || is_bad_block_reverted)
             {
                 // update mem pool state
                 log::debug!(target: "sync-block", "acquire mem-pool",);
                 let t = Instant::now();
-                let mut mem_pool = mem_pool.lock().await;
-                log::debug!(target: "sync-block", "unlock mem-pool {}ms", t.elapsed().as_millis());
-                let t = Instant::now();
-                mem_pool.notify_new_tip(tip_block_hash).await?;
-                log::debug!(target: "sync-block", "notify mem-pool new tip cost {}ms", t.elapsed().as_millis());
+                // TODO: local cells manager.
+                mem_pool
+                    .lock()
+                    .await
+                    .notify_new_tip(tip_block_hash, &Default::default())
+                    .await?;
+                log::debug!("[sync] unlock mem-pool {}ms", t.elapsed().as_millis());
             }
         }
 
@@ -891,14 +904,70 @@ impl Chain {
         Ok(())
     }
 
+    /// Only for testing.
+    pub async fn notify_new_tip(&self) -> Result<()> {
+        if let Some(mem_pool) = &self.mem_pool {
+            let tip_block_hash = self.store.get_last_valid_tip_block_hash().unwrap();
+            mem_pool
+                .lock()
+                .await
+                .notify_new_tip(tip_block_hash, &Default::default())
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Store a new local block.
+    ///
+    /// Note that this does not store finalized custodians.
+    #[instrument(skip_all)]
+    pub fn update_local(
+        &mut self,
+        store_tx: &StoreTransaction,
+        l2_block: L2Block,
+        deposit_info_vec: DepositInfoVec,
+        deposit_asset_scripts: HashSet<Script>,
+        withdrawals: Vec<WithdrawalRequestExtra>,
+        global_state: GlobalState,
+    ) -> Result<()> {
+        let local_tip = self.local_state.tip();
+        let parent_block_hash: [u8; 32] = l2_block.raw().parent_block_hash().unpack();
+        if parent_block_hash != local_tip.hash() {
+            bail!("fork detected");
+        }
+
+        // Reverted block root should not change
+        let local_reverted_block_root = store_tx.get_reverted_block_smt_root()?;
+        let global_reverted_block_root: H256 = global_state.reverted_block_root().unpack();
+        assert_eq!(local_reverted_block_root, global_reverted_block_root);
+
+        // TODO??: check bad block challenge target.
+        let maybe_challenge_target = self.process_block(
+            store_tx,
+            l2_block,
+            global_state,
+            deposit_info_vec,
+            deposit_asset_scripts,
+            withdrawals,
+        )?;
+
+        if let Some(challenge_target) = maybe_challenge_target {
+            bail!(
+                "process_block returned challenge target: {}",
+                challenge_target
+            );
+        }
+
+        Ok(())
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn process_block(
         &mut self,
         db: &StoreTransaction,
         l2block: L2Block,
-        l2block_committed_info: L2BlockCommittedInfo,
         global_state: GlobalState,
-        deposit_requests: Vec<DepositRequest>,
+        deposit_info_vec: DepositInfoVec,
         deposit_asset_scripts: HashSet<Script>,
         withdrawals: Vec<WithdrawalRequestExtra>,
     ) -> Result<Option<ChallengeTarget>> {
@@ -920,7 +989,7 @@ impl Chain {
         // process l2block
         let args = ApplyBlockArgs {
             l2block: l2block.clone(),
-            deposit_requests: deposit_requests.clone(),
+            deposit_info_vec: deposit_info_vec.clone(),
             withdrawals: withdrawals.clone(),
         };
         let tip_block_hash = self.local_state.tip().hash().into();
@@ -967,17 +1036,17 @@ impl Chain {
         // update chain
         db.insert_block(
             l2block.clone(),
-            l2block_committed_info,
-            global_state,
+            global_state.clone(),
             withdrawal_receipts,
             prev_txs_state,
             tx_receipts,
-            deposit_requests,
+            deposit_info_vec,
             withdrawals,
         )?;
         db.insert_asset_scripts(deposit_asset_scripts)?;
         db.attach_block(l2block.clone())?;
         self.local_state.tip = l2block;
+        self.local_state.last_global_state = global_state;
         Ok(None)
     }
 }

@@ -75,7 +75,9 @@ impl ReplayBlock {
         }
 
         // apply deposition to state
-        state.apply_deposit_requests(generator.rollup_context(), deposits)?;
+        for req in deposits {
+            state.apply_deposit_request(generator.rollup_context(), req)?;
+        }
         let expected_prev_txs_state_checkpoint = state.calculate_state_checkpoint()?;
         let block_prev_txs_state_checkpoint: H256 = raw_block
             .submit_transactions()
