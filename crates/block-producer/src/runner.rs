@@ -62,11 +62,7 @@ use std::{
 use tentacle::service::ProtocolMeta;
 use tokio::{
     spawn,
-    sync::{
-        broadcast,
-        mpsc::{self, unbounded_channel, UnboundedReceiver},
-        Mutex,
-    },
+    sync::{broadcast, mpsc, Mutex},
 };
 use tracing::{info_span, instrument};
 
@@ -700,7 +696,8 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     // Broadcast shutdown event.
     let (shutdown_event, shutdown_event_recv) = broadcast::channel(1);
 
-    let mut block_sync_client_p2p_receiver: Option<UnboundedReceiver<P2PStream>> = None;
+    let block_sync_client_p2p_stream_inbox: Arc<std::sync::Mutex<Option<P2PStream>>> =
+        Arc::new(std::sync::Mutex::new(None));
 
     // P2P network.
     let p2p_control_and_handle = if let Some(ref p2p_network_config) = config.p2p_network_config {
@@ -708,9 +705,9 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         match config.node_mode {
             NodeMode::ReadOnly => {
                 log::info!("will enable p2p block sync client");
-                let (tx, rx) = unbounded_channel();
-                block_sync_client_p2p_receiver = Some(rx);
-                protocols.push(block_sync_client_protocol(tx));
+                protocols.push(block_sync_client_protocol(
+                    block_sync_client_p2p_stream_inbox.clone(),
+                ));
             }
             NodeMode::FullNode | NodeMode::Test => {
                 if let Some(ref state) = block_sync_server_state {
@@ -834,7 +831,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
             mem_pool,
             chain_updater,
             rollup_type_script: rollup_type_script.clone(),
-            p2p_stream_receiver: block_sync_client_p2p_receiver,
+            p2p_stream_inbox: block_sync_client_p2p_stream_inbox,
             completed_initial_syncing: false,
             liveness: liveness.clone(),
         };

@@ -26,13 +26,7 @@ use tentacle::{
     service::{ProtocolMeta, ServiceAsyncControl},
     SessionId, SubstreamReadPart,
 };
-use tokio::{
-    sync::{
-        mpsc::{UnboundedReceiver, UnboundedSender},
-        Mutex,
-    },
-    task::block_in_place,
-};
+use tokio::{sync::Mutex, task::block_in_place};
 use tracing::{info_span, Instrument};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
@@ -48,7 +42,7 @@ pub struct BlockSyncClient {
     pub mem_pool: Option<Arc<Mutex<MemPool>>>,
     pub chain_updater: ChainUpdater,
     pub rollup_type_script: Script,
-    pub p2p_stream_receiver: Option<UnboundedReceiver<P2PStream>>,
+    pub p2p_stream_inbox: Arc<std::sync::Mutex<Option<P2PStream>>>,
     pub completed_initial_syncing: bool,
     pub liveness: Arc<Liveness>,
 }
@@ -94,11 +88,9 @@ impl BlockSyncClient {
                 // TODO: backoff.
                 tokio::time::sleep(Duration::from_secs(3)).await;
             } else {
-                if let Some(ref mut receiver) = self.p2p_stream_receiver {
-                    if let Ok(stream) = receiver.try_recv() {
-                        p2p_stream = Some(stream);
-                        continue;
-                    }
+                p2p_stream = self.p2p_stream_inbox.lock().unwrap().take();
+                if p2p_stream.is_some() {
+                    continue;
                 }
                 if let Err(err) = run_once_without_p2p_stream(&mut self).await {
                     if err.is::<gw_db::error::Error>() {
@@ -411,9 +403,10 @@ impl P2PStream {
     }
 }
 
-// XXX: would unbounded channel leak memory?
 /// The p2p protocol just sends the p2p stream to the client.
-pub fn block_sync_client_protocol(stream_tx: UnboundedSender<P2PStream>) -> ProtocolMeta {
+pub fn block_sync_client_protocol(
+    stream_inbox: Arc<std::sync::Mutex<Option<P2PStream>>>,
+) -> ProtocolMeta {
     let spawn = FnSpawn(move |context, control, read_part| {
         let control = control.clone();
         let id = context.id;
@@ -423,7 +416,7 @@ pub fn block_sync_client_protocol(stream_tx: UnboundedSender<P2PStream>) -> Prot
             read_part: Some(read_part),
             decoder: StreamDecoder::new(),
         };
-        let _ = stream_tx.send(stream);
+        *stream_inbox.lock().unwrap() = Some(stream);
     });
     MetaBuilder::new()
         .name(|_| P2P_SYNC_PROTOCOL_NAME.into())
