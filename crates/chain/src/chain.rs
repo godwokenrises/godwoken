@@ -604,7 +604,7 @@ impl Chain {
                 .context("add capacity overflow")?;
             finalized_custodians
                 .checked_add_sudt(
-                    deposit.sudt_script_hash().unpack(), // XXX: is this correct.
+                    deposit.sudt_script_hash().unpack(),
                     deposit.amount().unpack(),
                     deposit.script(),
                 )
