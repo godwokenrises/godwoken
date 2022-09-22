@@ -273,6 +273,7 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
         // enabled. Otherwise we'd be stuck waiting for one of the signals.
         assert!(state.local_count < config.local_limit || confirming || submitting);
         tokio::select! {
+            biased;
             _ = revert_local_signal.recv() => {
                 log::info!("revert not submitted blocks due to signal");
                 let last_submitted = state
@@ -295,14 +296,23 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                     .unpack();
                 bail!(ShouldRevertError(last_confirmed));
             }
-            // Produce a new local block if the produce timer has expired and
-            // there are not too many local blocks.
-            _ = interval.tick(), if state.local_count < config.local_limit => {
-                log::info!("producing next block");
-                if let Err(e) = produce_local_block(&state.context).await {
-                    log::warn!("failed to produce local block: {:#}", e);
-                } else {
-                    state.local_count += 1;
+            // Block confirmed.
+            result = &mut confirm_handle, if confirming => {
+                confirming = false;
+                match result {
+                    Err(err) if err.is_panic() => bail!("sync task panic: {:?}", err.into_panic()),
+                    Ok(nh) => {
+                        let nh = nh?;
+                        let store_tx = state.context.store.begin_transaction();
+                        store_tx.set_last_confirmed_block_number_hash(&nh.as_reader())?;
+                        store_tx.commit()?;
+                        if let Some(ref sync_server) = state.context.block_sync_server_state {
+                            let mut sync_server = sync_server.lock().unwrap();
+                            publish_confirmed(&mut sync_server, &state.context.store.get_snapshot(), nh.number().unpack())?;
+                        }
+                        state.submitted_count -= 1;
+                    }
+                    _ => {}
                 }
             }
             // Block submitted.
@@ -325,23 +335,14 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                     _ => {}
                 }
             }
-            // Block confirmed.
-            result = &mut confirm_handle, if confirming => {
-                confirming = false;
-                match result {
-                    Err(err) if err.is_panic() => bail!("sync task panic: {:?}", err.into_panic()),
-                    Ok(nh) => {
-                        let nh = nh?;
-                        let store_tx = state.context.store.begin_transaction();
-                        store_tx.set_last_confirmed_block_number_hash(&nh.as_reader())?;
-                        store_tx.commit()?;
-                        if let Some(ref sync_server) = state.context.block_sync_server_state {
-                            let mut sync_server = sync_server.lock().unwrap();
-                            publish_confirmed(&mut sync_server, &state.context.store.get_snapshot(), nh.number().unpack())?;
-                        }
-                        state.submitted_count -= 1;
-                    }
-                    _ => {}
+            // Produce a new local block if the produce timer has expired and
+            // there are not too many local blocks.
+            _ = interval.tick(), if state.local_count < config.local_limit => {
+                log::info!("producing next block");
+                if let Err(e) = produce_local_block(&state.context).await {
+                    log::warn!("failed to produce local block: {:#}", e);
+                } else {
+                    state.local_count += 1;
                 }
             }
         }
