@@ -599,15 +599,19 @@ async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<(
             .get_transaction_status(tx.hash().into())
             .await?;
         let should_resend = match status {
-            Some(TxStatus::Pending) | Some(TxStatus::Proposed) => {
-                // Resend the transaction if it has been pending (or proposed)
-                // for a long time. Or the transaction could be stuck in the
-                // current state.
-                last_sent.elapsed() > Duration::from_secs(40)
-            }
             Some(TxStatus::Committed) => break,
             Some(TxStatus::Rejected) => true,
-            _ => last_sent.elapsed() > Duration::from_secs(20),
+            // Resend the transaction if it has been unknown, pending, or
+            // proposed for some time. Or the transaction could be stuck in the
+            // current state.
+            //
+            // This is also recommended by [CKB Transactions Management
+            // Guideline](https://hackmd.io/@doitian/Sk8-gKX7D):
+            //
+            // > The generator must store the Pending transactions locally and
+            // > send them to CKB nodes at regular intervals. It’s essential
+            // > because CKB nodes may drop the transactions in their pools.
+            _ => last_sent.elapsed() > Duration::from_secs(24),
         };
         if should_resend {
             log::info!("resend transaction 0x{}", hex::encode(tx.hash()));
