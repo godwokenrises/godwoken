@@ -115,7 +115,7 @@ The withdrawal cell:
 lock:
   code_hash:    (withdrawal lock's code hash),
   hash_type:    Type,
-  args: (rollup_type_hash(32 bytes) | WithdrawalLockArgsV0 (n bytes)
+  args: (rollup_type_hash(32 bytes) | WithdrawalLockArgsV0 (n bytes) | owner lock len (optional) | owner lock (optional) | withdrawal_to_v1 flag byte (optional)
 capacity:   (CKB amount),
 type_:  (none or SUDT script)
 data:   (none or SUDT amount)
@@ -141,4 +141,8 @@ struct WithdrawalLockArgsV0 {
 }
 ```
 
-Users must manually unlock the legacy withdrawal cell after it finalized, and user must provides a input cell in the unlocking transaction that it's `lock hash` is equals to withdrawal lock args' `owner_lock_hash`.
+We have optional fields in the withdrawal cell's args:
+
+* owner lock - If users submit withdrawal request with a owner lock structure. The block producer will generate withdrawal cells with `owner lock` field in the args, and automatically unlock these cells after they'are finalized. Users are no need to manually unlock layer-1 withdrawal cells.
+* withdrawal_to_v1 - This field only works when `owner lock` exist, if `withdrawal_to_v1` is exist and the value is `1`, which means the withdrawal is a fast withdraw to v1 Godwoken, the withdraw can be instantly processed, and the assets will be migrated to v1 Godwoken.
+* manually withdrawl - If `owner lock` do not exist, users must manually unlock the legacy withdrawal cell after it finalized, and user must provides an input cell in the unlocking transaction that it's `lock hash` is equals to withdrawal lock args' `owner_lock_hash`.
