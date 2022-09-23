@@ -68,7 +68,9 @@ CKB requires `capacity` to cover the cost of the cell, the `capacity` of the dep
 
 ## Withdrawal
 
-Users sign withdrawal requests and send them to the block producer. The block producer will process these requests in blocks, update layer2 state and convert custodian cells to withdrawal cells in block submission layer1 transactions.
+### Current withdrawals cell (v1)
+
+Users must sign withdrawal requests and send them to the block producer. The block producer will process these withdrawals by updating layer2 state and convert custodian cells to withdrawal cells in block submission layer1 transactions.
 
 The withdrawal cell:
 
@@ -82,7 +84,7 @@ type_:  (none or SUDT script)
 data:   (none or SUDT amount)
 ```
 
-Withdrawal lock guarantees the user can unlock this cell after `finality blocks`.
+Withdrawal lock guarantees the cell can only be unlocked after `finality blocks`.
 
 ```
 struct WithdrawalLockArgs {
@@ -94,9 +96,49 @@ struct WithdrawalLockArgs {
 }
 ```
 
-`withdrawal_block_hash` and `withdrawal_block_number` record the layer2 block including the withdrawal. `account_script_hash` denotes the layer2 account. `owner_lock_hash` denotes the layer1 lock user used to unlock the cell.
+`withdrawal_block_hash` and `withdrawal_block_number` record which layer2 block included the withdrawal. `account_script_hash` represent the layer2 account. `owner_lock_hash` represent the layer1 lock that user used to unlock the cell.
 
 CKB requires `capacity` to cover the cost of the cell, so the minimal withdrawal CKB that Godwoken allows is as follows:
 
 * Withdrawal CKB: 266 CKB
 * Withdrawal CKB and Simple UDT: 347 CKB
+
+The layer-1 withdrawal cell are processed by the block producer, so users do not need to know the details, they submit the withdrawal request and wait for receiving the assets cell on CKB.
+
+### Legacy withdrawal cells (v0)
+
+The lagacy withdrawal cells are not used anymore on the Godwoken network.
+
+The withdrawal cell:
+
+``` yaml
+lock:
+  code_hash:    (withdrawal lock's code hash),
+  hash_type:    Type,
+  args: (rollup_type_hash(32 bytes) | WithdrawalLockArgsV0 (n bytes)
+capacity:   (CKB amount),
+type_:  (none or SUDT script)
+data:   (none or SUDT amount)
+```
+
+Withdrawal lock guarantees the cell can only be unlocked after `finality blocks`.
+
+```
+// --- withdrawal lock ---
+// a rollup_type_hash exists before this args, to make args friendly to prefix search
+struct WithdrawalLockArgs {
+    account_script_hash: Byte32,
+    withdrawal_block_hash: Byte32,
+    withdrawal_block_number: Uint64,
+    // buyer can pay sell_amount token to unlock
+    sudt_script_hash: Byte32,
+    sell_amount: Uint128,
+    sell_capacity: Uint64,
+    // layer1 lock to withdraw after challenge period
+    owner_lock_hash: Byte32,
+    // layer1 lock to receive the payment, must exists on the chain
+    payment_lock_hash: Byte32,
+}
+```
+
+Users must manually unlock the legacy withdrawal cell after it finalized, and user must provides a input cell in the unlocking transaction that it's `lock hash` is equals to withdrawal lock args' `owner_lock_hash`.
