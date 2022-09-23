@@ -126,7 +126,7 @@ Withdrawal lock guarantees the cell can only be unlocked after `finality blocks`
 ```
 // --- withdrawal lock ---
 // a rollup_type_hash exists before this args, to make args friendly to prefix search
-struct WithdrawalLockArgs {
+struct WithdrawalLockArgsV0 {
     account_script_hash: Byte32,
     withdrawal_block_hash: Byte32,
     withdrawal_block_number: Uint64,
