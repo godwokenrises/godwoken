@@ -19,7 +19,7 @@ pub fn init(trace: Option<Trace>) -> Result<ShutdownGuard> {
         .or_else(|_| tracing_subscriber::EnvFilter::try_new("info"))?;
 
     let registry = tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_ansi(false))
+        .with(tracing_subscriber::fmt::layer())
         .with(env_filter_layer);
 
     match trace {

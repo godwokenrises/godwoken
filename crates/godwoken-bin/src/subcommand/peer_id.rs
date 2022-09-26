@@ -1,25 +1,25 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
+use clap::Parser;
 use getrandom::getrandom;
-use structopt::StructOpt;
 
 pub const COMMAND_PEER_ID: &str = "peer-id";
 
 /// P2P authentication secret key and peer id related commands.
-#[derive(StructOpt)]
-#[structopt(name = COMMAND_PEER_ID)]
+#[derive(Parser)]
+#[clap(name = COMMAND_PEER_ID)]
 pub enum PeerIdCommand {
     /// Generate secret key.
     Gen {
         /// Output secret key to file path.
-        #[structopt(long)]
+        #[clap(long)]
         secret_path: PathBuf,
     },
     /// Compute peer id from secret key.
     FromSecret {
         /// Secret key file path.
-        #[structopt(long)]
+        #[clap(long)]
         secret_path: PathBuf,
     },
 }

@@ -54,13 +54,13 @@ async fn main() -> Result<()> {
     let env_filter_layer = tracing_subscriber::EnvFilter::try_from_default_env()
         .or_else(|_| tracing_subscriber::EnvFilter::try_new("info"))?;
     tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_ansi(false))
+        .with(tracing_subscriber::fmt::layer())
         .with(env_filter_layer)
         .try_init()?;
 
     let arg_privkey_path = Arg::with_name("privkey-path")
         .long("privkey-path")
-        .short("k")
+        .short('k')
         .takes_value(true)
         .required(true)
         .help("The private key file path");
@@ -81,22 +81,22 @@ async fn main() -> Result<()> {
         .required(true)
         .help("The scripts deployment results json file path");
     let arg_config_path = Arg::with_name("config-path")
-        .short("o")
+        .short('o')
         .long("config-path")
         .takes_value(true)
         .required(true)
         .help("The config.toml file path");
     let arg_godwoken_rpc_url = Arg::with_name("godwoken-rpc-url")
-        .short("g")
+        .short('g')
         .long("godwoken-rpc-url")
         .takes_value(true)
         .default_value("http://127.0.0.1:8119")
         .help("Godwoken jsonrpc rpc sever URL");
 
-    let version = gw_version::Version::current().to_string();
+    let version: &str = Box::leak(gw_version::Version::current().to_string().into_boxed_str());
     let mut app = App::new("godwoken tools")
         .about("Godwoken cli tools")
-        .version(version.as_ref())
+        .version(version)
         .subcommand(
             SubCommand::with_name("deploy-scripts")
                 .about("Deploy scripts used by godwoken")
@@ -104,14 +104,14 @@ async fn main() -> Result<()> {
                 .arg(arg_ckb_rpc.clone())
                 .arg(
                     Arg::with_name("input-path")
-                        .short("i")
+                        .short('i')
                         .takes_value(true)
                         .required(true)
                         .help("The input json file path"),
                 )
                 .arg(
                     Arg::with_name("output-path")
-                        .short("o")
+                        .short('o')
                         .takes_value(true)
                         .required(true)
                         .help("The output json file path"),
@@ -127,7 +127,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("genesis-timestamp")
-                        .short("t")
+                        .short('t')
                         .takes_value(true)
                         .required(false)
                         .help("Genesis timestamp in milliseconds"),
@@ -135,7 +135,7 @@ async fn main() -> Result<()> {
                 .arg(
                     Arg::with_name("user-rollup-config-path")
                         .long("rollup-config")
-                        .short("r")
+                        .short('r')
                         .takes_value(true)
                         .required(true)
                         .help("The user rollup config json file path"),
@@ -143,14 +143,14 @@ async fn main() -> Result<()> {
                 .arg(
                     Arg::with_name("omni-lock-config-path")
                         .long("omni-lock-config-path")
-                        .short("l")
+                        .short('l')
                         .takes_value(true)
                         .required(true)
                         .help("The omni lock config json file path"),
                 )
                 .arg(
                     Arg::with_name("output-path")
-                        .short("o")
+                        .short('o')
                         .takes_value(true)
                         .required(true)
                         .help("The output json file path"),
@@ -173,7 +173,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("genesis-deployment-path")
-                        .short("g")
+                        .short('g')
                         .takes_value(true)
                         .required(true)
                         .help("The genesis deployment results json file path"),
@@ -181,7 +181,7 @@ async fn main() -> Result<()> {
                 .arg(
                     Arg::with_name("user-rollup-config-path")
                         .long("rollup-config")
-                        .short("r")
+                        .short('r')
                         .takes_value(true)
                         .required(true)
                         .help("The user rollup config json file path"),
@@ -189,7 +189,7 @@ async fn main() -> Result<()> {
                 .arg(
                     Arg::with_name("omni-lock-config-path")
                         .long("omni-lock-config-path")
-                        .short("l")
+                        .short('l')
                         .takes_value(true)
                         .required(true)
                         .help("The omni lock config json file path"),
@@ -204,14 +204,14 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("output-path")
-                        .short("o")
+                        .short('o')
                         .takes_value(true)
                         .required(true)
                         .help("The output json file path"),
                 )
                 .arg(
                     Arg::with_name("scripts-deployment-config-path")
-                        .short("c")
+                        .short('c')
                         .takes_value(true)
                         .required(true)
                         .help("Scripts deployment config json file path"),
@@ -243,7 +243,7 @@ async fn main() -> Result<()> {
                 .about("Prepare scripts used by godwoken")
                 .arg(
                     Arg::with_name("mode")
-                        .short("m")
+                        .short('m')
                         .takes_value(true)
                         .default_value("build")
                         .required(true)
@@ -251,14 +251,14 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("input-path")
-                        .short("i")
+                        .short('i')
                         .takes_value(true)
                         .required(true)
                         .help("The input json file path"),
                 )
                 .arg(
                     Arg::with_name("repos-dir-path")
-                        .short("r")
+                        .short('r')
                         .takes_value(true)
                         .default_value(prepare_scripts::SCRIPT_BUILD_DIR_PATH)
                         .required(true)
@@ -274,7 +274,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("output-path")
-                        .short("o")
+                        .short('o')
                         .takes_value(true)
                         .required(true)
                         .help("The output scripts deploy json file path"),
@@ -301,7 +301,7 @@ async fn main() -> Result<()> {
                 .arg(arg_godwoken_rpc_url.clone())
                 .arg(
                     Arg::with_name("capacity")
-                        .short("c")
+                        .short('c')
                         .long("capacity")
                         .takes_value(true)
                         .required(true)
@@ -309,7 +309,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("eth-address")
-                        .short("e")
+                        .short('e')
                         .long("eth-address")
                         .takes_value(true)
                         .required(false)
@@ -317,7 +317,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("fee")
-                        .short("f")
+                        .short('f')
                         .long("fee")
                         .takes_value(true)
                         .required(false)
@@ -334,7 +334,7 @@ async fn main() -> Result<()> {
                 .arg(arg_godwoken_rpc_url.clone())
                 .arg(
                     Arg::with_name("capacity")
-                        .short("c")
+                        .short('c')
                         .long("capacity")
                         .takes_value(true)
                         .required(true)
@@ -342,7 +342,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("amount")
-                        .short("m")
+                        .short('m')
                         .long("amount")
                         .takes_value(true)
                         .default_value("0")
@@ -350,7 +350,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("fee")
-                        .short("f")
+                        .short('f')
                         .long("fee")
                         .takes_value(true)
                         .default_value("0.0001")
@@ -358,7 +358,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("owner-ckb-address")
-                        .short("a")
+                        .short('a')
                         .long("owner-ckb-address")
                         .takes_value(true)
                         .required(true)
@@ -385,7 +385,7 @@ async fn main() -> Result<()> {
                 .arg(
                     Arg::with_name("mode")
                         .long("build-mode")
-                        .short("m")
+                        .short('m')
                         .takes_value(true)
                         .default_value("build")
                         .required(true)
@@ -401,7 +401,7 @@ async fn main() -> Result<()> {
                 .arg(
                     Arg::with_name("setup-config-path")
                         .long("setup-config-path")
-                        .short("c")
+                        .short('c')
                         .takes_value(true)
                         .required(true)
                         .help("The setup config json file path"),
@@ -417,7 +417,7 @@ async fn main() -> Result<()> {
                 .arg(
                     Arg::with_name("nodes-count")
                         .long("nodes")
-                        .short("n")
+                        .short('n')
                         .takes_value(true)
                         .default_value("1")
                         .required(true)
@@ -434,7 +434,7 @@ async fn main() -> Result<()> {
                 .arg(
                     Arg::with_name("output-dir-path")
                         .long("output")
-                        .short("o")
+                        .short('o')
                         .takes_value(true)
                         .default_value("output/")
                         .required(true)
@@ -450,7 +450,7 @@ async fn main() -> Result<()> {
                 .arg(arg_godwoken_rpc_url.clone())
                 .arg(
                     Arg::with_name("amount")
-                        .short("m")
+                        .short('m')
                         .long("amount")
                         .takes_value(true)
                         .default_value("0")
@@ -458,7 +458,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("fee")
-                        .short("f")
+                        .short('f')
                         .long("fee")
                         .takes_value(true)
                         .required(true)
@@ -466,7 +466,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("to")
-                        .short("t")
+                        .short('t')
                         .long("to")
                         .takes_value(true)
                         .required(true)
@@ -474,7 +474,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("sudt-id")
-                        .short("s")
+                        .short('s')
                         .long("sudt-id")
                         .takes_value(true)
                         .required(true)
@@ -490,7 +490,7 @@ async fn main() -> Result<()> {
                 .arg(arg_godwoken_rpc_url.clone())
                 .arg(
                     Arg::with_name("fee")
-                        .short("f")
+                        .short('f')
                         .long("fee")
                         .takes_value(true)
                         .required(false)
@@ -499,7 +499,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("sudt-id")
-                        .short("s")
+                        .short('s')
                         .long("sudt-id")
                         .takes_value(true)
                         .required(false)
@@ -516,7 +516,7 @@ async fn main() -> Result<()> {
                 .arg(arg_godwoken_rpc_url.clone())
                 .arg(
                     Arg::with_name("fee")
-                        .short("f")
+                        .short('f')
                         .long("fee")
                         .takes_value(true)
                         .required(false)
@@ -546,7 +546,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("quiet")
-                        .short("q")
+                        .short('q')
                         .long("quiet")
                         .takes_value(false)
                         .required(false)
@@ -559,14 +559,14 @@ async fn main() -> Result<()> {
                 .arg(arg_godwoken_rpc_url.clone())
                 .arg(
                     Arg::with_name("account")
-                        .short("a")
+                        .short('a')
                         .long("account")
                         .takes_value(true)
                         .help("script hash or account id"),
                 )
                 .arg(
                     Arg::with_name("sudt-id")
-                        .short("s")
+                        .short('s')
                         .long("sudt-id")
                         .takes_value(true)
                         .required(false)
@@ -583,7 +583,7 @@ async fn main() -> Result<()> {
                 .arg(arg_deployment_results_path.clone())
                 .arg(
                     Arg::with_name("creator-account-id")
-                        .short("c")
+                        .short('c')
                         .long("creator-account-id")
                         .takes_value(true)
                         .required(true)
@@ -591,7 +591,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("gas-limit")
-                        .short("l")
+                        .short('l')
                         .long("gas-limit")
                         .takes_value(true)
                         .required(true)
@@ -599,7 +599,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("gas-price")
-                        .short("p")
+                        .short('p')
                         .long("gas-price")
                         .takes_value(true)
                         .required(true)
@@ -607,7 +607,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("data")
-                        .short("a")
+                        .short('a')
                         .long("data")
                         .takes_value(true)
                         .required(true)
@@ -615,7 +615,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("value")
-                        .short("v")
+                        .short('v')
                         .long("value")
                         .takes_value(true)
                         .required(false)
@@ -632,7 +632,7 @@ async fn main() -> Result<()> {
                 .arg(arg_deployment_results_path.clone())
                 .arg(
                     Arg::with_name("creator-account-id")
-                        .short("c")
+                        .short('c')
                         .long("creator-account-id")
                         .takes_value(true)
                         .required(true)
@@ -640,7 +640,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("gas-limit")
-                        .short("l")
+                        .short('l')
                         .long("gas-limit")
                         .takes_value(true)
                         .required(true)
@@ -648,7 +648,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("gas-price")
-                        .short("p")
+                        .short('p')
                         .long("gas-price")
                         .takes_value(true)
                         .required(true)
@@ -656,7 +656,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("data")
-                        .short("a")
+                        .short('a')
                         .long("data")
                         .takes_value(true)
                         .required(true)
@@ -664,7 +664,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("to-address")
-                        .short("t")
+                        .short('t')
                         .long("to-address")
                         .takes_value(true)
                         .required(true)
@@ -672,7 +672,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("value")
-                        .short("v")
+                        .short('v')
                         .long("value")
                         .takes_value(true)
                         .required(false)
@@ -686,7 +686,7 @@ async fn main() -> Result<()> {
                 .arg(arg_godwoken_rpc_url.clone())
                 .arg(
                     Arg::with_name("from")
-                        .short("f")
+                        .short('f')
                         .long("from")
                         .takes_value(true)
                         .required(true)
@@ -694,7 +694,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("gas-limit")
-                        .short("l")
+                        .short('l')
                         .long("gas-limit")
                         .takes_value(true)
                         .required(false)
@@ -703,7 +703,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("gas-price")
-                        .short("p")
+                        .short('p')
                         .long("gas-price")
                         .takes_value(true)
                         .required(false)
@@ -712,7 +712,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("data")
-                        .short("a")
+                        .short('a')
                         .long("data")
                         .takes_value(true)
                         .required(true)
@@ -720,7 +720,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("value")
-                        .short("v")
+                        .short('v')
                         .long("value")
                         .takes_value(true)
                         .required(false)
@@ -729,7 +729,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("to-address")
-                        .short("t")
+                        .short('t')
                         .long("to-address")
                         .takes_value(true)
                         .required(true)
@@ -743,7 +743,7 @@ async fn main() -> Result<()> {
                 .arg(arg_deployment_results_path.clone())
                 .arg(
                     Arg::with_name("eth-address")
-                        .short("a")
+                        .short('a')
                         .long("eth-address")
                         .takes_value(true)
                         .help("eth eoa address"),
@@ -766,7 +766,7 @@ async fn main() -> Result<()> {
                 .arg(arg_godwoken_rpc_url.clone())
                 .arg(
                     Arg::with_name("block")
-                        .short("b")
+                        .short('b')
                         .long("block")
                         .takes_value(true)
                         .required(true)
@@ -774,7 +774,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("index")
-                        .short("i")
+                        .short('i')
                         .long("index")
                         .takes_value(true)
                         .required(true)
@@ -782,7 +782,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("type")
-                        .short("t")
+                        .short('t')
                         .long("type")
                         .takes_value(true)
                         .required(true)
@@ -791,7 +791,7 @@ async fn main() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("output")
-                        .short("o")
+                        .short('o')
                         .long("output")
                         .takes_value(true)
                         .required(true)
@@ -804,7 +804,7 @@ async fn main() -> Result<()> {
                 .arg(arg_godwoken_rpc_url.clone())
                 .arg(
                     Arg::with_name("output")
-                        .short("o")
+                        .short('o')
                         .long("output")
                         .takes_value(true)
                         .required(true)
@@ -865,7 +865,7 @@ async fn main() -> Result<()> {
 
     let matches = app.clone().get_matches();
     match matches.subcommand() {
-        ("deploy-scripts", Some(m)) => {
+        Some(("deploy-scripts", m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
             let input_path = Path::new(m.value_of("input-path").unwrap());
@@ -886,7 +886,7 @@ async fn main() -> Result<()> {
                 }
             };
         }
-        ("deploy-genesis", Some(m)) => {
+        Some(("deploy-genesis", m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
@@ -932,7 +932,7 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        ("generate-config", Some(m)) => {
+        Some(("generate-config", m)) => {
             let ckb_url = m.value_of("ckb-rpc-url").unwrap().to_string();
             let indexer_url = m.value_of("indexer-rpc-url").unwrap().to_string();
             let scripts_results_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
@@ -1008,7 +1008,7 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        ("prepare-scripts", Some(m)) => {
+        Some(("prepare-scripts", m)) => {
             let mode = value_t!(m, "mode", prepare_scripts::ScriptsBuildMode).unwrap();
             let input_path = Path::new(m.value_of("input-path").unwrap());
             let repos_dir = Path::new(m.value_of("repos-dir-path").unwrap());
@@ -1030,7 +1030,7 @@ async fn main() -> Result<()> {
                 }
             };
         }
-        ("update-cell", Some(m)) => {
+        Some(("update-cell", m)) => {
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
             let indexer_rpc_url = m.value_of("indexer-rpc-url").unwrap();
             let tx_hash = cli_args::to_h256(m.value_of("tx-hash").unwrap())?;
@@ -1054,7 +1054,7 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
-        ("deposit-ckb", Some(m)) => {
+        Some(("deposit-ckb", m)) => {
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap().to_string();
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let capacity = m.value_of("capacity").unwrap();
@@ -1080,7 +1080,7 @@ async fn main() -> Result<()> {
                 std::process::exit(-1);
             };
         }
-        ("withdraw", Some(m)) => {
+        Some(("withdraw", m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let capacity = m.value_of("capacity").unwrap();
             let amount = m.value_of("amount").unwrap();
@@ -1108,7 +1108,7 @@ async fn main() -> Result<()> {
                 std::process::exit(-1);
             };
         }
-        ("setup", Some(m)) => {
+        Some(("setup", m)) => {
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
             let indexer_url = m.value_of("indexer-rpc-url").unwrap();
             let setup_config_path = Path::new(m.value_of("setup-config-path").unwrap());
@@ -1136,7 +1136,7 @@ async fn main() -> Result<()> {
             };
             setup::setup(args).await;
         }
-        ("transfer", Some(m)) => {
+        Some(("transfer", m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let amount = m.value_of("amount").unwrap();
             let fee = m.value_of("fee").unwrap();
@@ -1166,7 +1166,7 @@ async fn main() -> Result<()> {
                 std::process::exit(-1);
             };
         }
-        ("create-creator-account", Some(m)) => {
+        Some(("create-creator-account", m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let fee = m.value_of("fee").unwrap();
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
@@ -1192,7 +1192,7 @@ async fn main() -> Result<()> {
                 std::process::exit(-1);
             };
         }
-        ("create-sudt-account", Some(m)) => {
+        Some(("create-sudt-account", m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let fee = m.value_of("fee").unwrap();
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
@@ -1256,7 +1256,7 @@ async fn main() -> Result<()> {
                 println!("{}", account_id);
             }
         }
-        ("get-balance", Some(m)) => {
+        Some(("get-balance", m)) => {
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
             let account = m.value_of("account").unwrap();
             let sudt_id = m
@@ -1270,7 +1270,7 @@ async fn main() -> Result<()> {
                 std::process::exit(-1);
             };
         }
-        ("polyjuice-deploy", Some(m)) => {
+        Some(("polyjuice-deploy", m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
@@ -1315,7 +1315,7 @@ async fn main() -> Result<()> {
                 std::process::exit(-1);
             };
         }
-        ("polyjuice-send", Some(m)) => {
+        Some(("polyjuice-send", m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
@@ -1362,7 +1362,7 @@ async fn main() -> Result<()> {
                 std::process::exit(-1);
             };
         }
-        ("polyjuice-call", Some(m)) => {
+        Some(("polyjuice-call", m)) => {
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
 
             let data = m.value_of("data").unwrap();
@@ -1399,7 +1399,7 @@ async fn main() -> Result<()> {
                 std::process::exit(-1);
             };
         }
-        ("to-script-hash", Some(m)) => {
+        Some(("to-script-hash", m)) => {
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let eth_address = m.value_of("eth-address").unwrap();
@@ -1411,7 +1411,7 @@ async fn main() -> Result<()> {
                 std::process::exit(-1);
             };
         }
-        ("to-eth-address", Some(m)) => {
+        Some(("to-eth-address", m)) => {
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
             let script_hash = m.value_of("script-hash").unwrap();
 
@@ -1420,7 +1420,7 @@ async fn main() -> Result<()> {
                 std::process::exit(-1);
             };
         }
-        ("dump-cancel-challenge-tx", Some(m)) => {
+        Some(("dump-cancel-challenge-tx", m)) => {
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
             let block = ChallengeBlock::from_str(m.value_of("block").unwrap()).unwrap();
             let index = u32::from_str(m.value_of("index").unwrap()).unwrap();
@@ -1438,7 +1438,7 @@ async fn main() -> Result<()> {
                 std::process::exit(-1);
             };
         }
-        ("stat-custodian-ckb", Some(m)) => {
+        Some(("stat-custodian-ckb", m)) => {
             let indexer_rpc_url = m.value_of("indexer-rpc-url").unwrap();
             let rollup_type_hash = cli_args::to_h256(m.value_of("rollup-type-hash").unwrap())?;
             let custodian_script_type_hash =
@@ -1521,7 +1521,7 @@ async fn main() -> Result<()> {
                 );
             }
         }
-        ("parse-withdrawal-lock-args", Some(m)) => {
+        Some(("parse-withdrawal-lock-args", m)) => {
             use gw_types::bytes::Bytes;
 
             let input_path: PathBuf = m.value_of("input").unwrap().into();
@@ -1542,7 +1542,7 @@ async fn main() -> Result<()> {
             let output = serde_json::to_string_pretty(&withdrawal_lock)?;
             println!("{}", output);
         }
-        ("report-accounts", Some(m)) => {
+        Some(("report-accounts", m)) => {
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
             let output_path = m.value_of("output").unwrap();
 
