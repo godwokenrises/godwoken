@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.7.0-rc1] - 2022-09-26
+
 - Decouple block producing, submission and confirming [#776](https://github.com/nervosnetwork/godwoken/pull/776)
 
 ## [v1.6.0] - 2022-09-13
