@@ -28,7 +28,7 @@ async fn run_cli() -> Result<()> {
                 .about("Replay chain")
                 .arg(
                     Arg::with_name(ARG_CONFIG)
-                        .short("c")
+                        .short('c')
                         .takes_value(true)
                         .required(true)
                         .default_value("./config.toml")
@@ -59,7 +59,7 @@ async fn run_cli() -> Result<()> {
                 .about("Detach chain")
                 .arg(
                     Arg::with_name(ARG_CONFIG)
-                        .short("c")
+                        .short('c')
                         .takes_value(true)
                         .required(true)
                         .default_value("./config.toml")
@@ -89,7 +89,7 @@ async fn run_cli() -> Result<()> {
     // handle subcommands
     let matches = app.clone().get_matches();
     match matches.subcommand() {
-        ("replay", Some(m)) => {
+        Some(("replay", m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
             let from_db_store = m.value_of("from-db-store").unwrap().into();
@@ -108,7 +108,7 @@ async fn run_cli() -> Result<()> {
             let context = setup(args).await.expect("setup");
             replay_chain(context).expect("replay");
         }
-        ("detach", Some(m)) => {
+        Some(("detach", m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
             let from_db_store = m.value_of("from-db-store").unwrap().into();

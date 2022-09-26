@@ -3,7 +3,7 @@
 static GLOBAL_ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 use anyhow::{Context, Result};
-use clap::{App, Arg, SubCommand};
+use clap::{App, Arg, CommandFactory, Parser, SubCommand};
 use godwoken_bin::subcommand::db_block_validator;
 use godwoken_bin::subcommand::export_block::{ExportArgs, ExportBlock};
 use godwoken_bin::subcommand::import_block::{ImportArgs, ImportBlock};
@@ -12,7 +12,6 @@ use gw_block_producer::{runner, trace};
 use gw_config::{BackendSwitchConfig, Config};
 use gw_version::Version;
 use std::{env, fs, path::Path};
-use structopt::StructOpt;
 
 const COMMAND_RUN: &str = "run";
 const COMMAND_EXAMPLE_CONFIG: &str = "generate-example-config";
@@ -59,7 +58,7 @@ async fn run_cli() -> Result<()> {
                 .about("Run Godwoken node")
                 .arg(
                     Arg::with_name(ARG_CONFIG)
-                        .short("c")
+                        .short('c')
                         .takes_value(true)
                         .required(true)
                         .default_value("./config.toml")
@@ -77,7 +76,7 @@ async fn run_cli() -> Result<()> {
                 .about("Generate an example config file")
                 .arg(
                     Arg::with_name(ARG_OUTPUT_PATH)
-                        .short("o")
+                        .short('o')
                         .takes_value(true)
                         .required(true)
                         .default_value("./config.example.toml")
@@ -90,7 +89,7 @@ async fn run_cli() -> Result<()> {
                 .about("Verify history blocks in db")
                 .arg(
                     Arg::with_name(ARG_CONFIG)
-                        .short("c")
+                        .short('c')
                         .takes_value(true)
                         .required(true)
                         .default_value("./config.toml")
@@ -98,13 +97,13 @@ async fn run_cli() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name(ARG_FROM_BLOCK)
-                        .short("f")
+                        .short('f')
                         .takes_value(true)
                         .help("From block number"),
                 )
                 .arg(
                     Arg::with_name(ARG_TO_BLOCK)
-                        .short("t")
+                        .short('t')
                         .takes_value(true)
                         .help("To block number"),
                 )
@@ -115,7 +114,7 @@ async fn run_cli() -> Result<()> {
                 .about("Export history blocks in db")
                 .arg(
                     Arg::with_name(ARG_CONFIG)
-                        .short("c")
+                        .short('c')
                         .takes_value(true)
                         .required(true)
                         .default_value("./config.toml")
@@ -123,7 +122,7 @@ async fn run_cli() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name(ARG_OUTPUT_PATH)
-                        .short("o")
+                        .short('o')
                         .long("output-path")
                         .takes_value(true)
                         .required(true)
@@ -131,21 +130,21 @@ async fn run_cli() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name(ARG_FROM_BLOCK)
-                        .short("f")
+                        .short('f')
                         .long("from-block")
                         .takes_value(true)
                         .help("From block number"),
                 )
                 .arg(
                     Arg::with_name(ARG_TO_BLOCK)
-                        .short("t")
+                        .short('t')
                         .long("to-block")
                         .takes_value(true)
                         .help("To block number"),
                 )
                 .arg(
                     Arg::with_name(ARG_SHOW_PROGRESS)
-                        .short("p")
+                        .short('p')
                         .long("show-progress")
                         .required(false)
                         .takes_value(false)
@@ -158,7 +157,7 @@ async fn run_cli() -> Result<()> {
                 .about("Import block from source file")
                 .arg(
                     Arg::with_name(ARG_CONFIG)
-                        .short("c")
+                        .short('c')
                         .takes_value(true)
                         .required(true)
                         .default_value("./config.toml")
@@ -166,7 +165,7 @@ async fn run_cli() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name(ARG_SOURCE_PATH)
-                        .short("s")
+                        .short('s')
                         .long("source-path")
                         .takes_value(true)
                         .required(true)
@@ -174,14 +173,14 @@ async fn run_cli() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name(ARG_READ_BATCH)
-                        .short("b")
+                        .short('b')
                         .long("read-batch")
                         .takes_value(true)
                         .help("The read block batch size"),
                 )
                 .arg(
                     Arg::with_name(ARG_TO_BLOCK)
-                        .short("t")
+                        .short('t')
                         .long("to-block")
                         .takes_value(true)
                         .help("To block number"),
@@ -195,7 +194,7 @@ async fn run_cli() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name(ARG_SHOW_PROGRESS)
-                        .short("p")
+                        .short('p')
                         .long("show-progress")
                         .required(false)
                         .takes_value(false)
@@ -203,23 +202,23 @@ async fn run_cli() -> Result<()> {
                 )
                 .display_order(4),
         )
-        .subcommand(PeerIdCommand::clap());
+        .subcommand(PeerIdCommand::command());
 
     // handle subcommands
     let matches = app.clone().get_matches();
     match matches.subcommand() {
-        (COMMAND_RUN, Some(m)) => {
+        Some((COMMAND_RUN, m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
             let _guard = trace::init(config.trace)?;
             runner::run(config, m.is_present(ARG_SKIP_CONFIG_CHECK)).await?;
         }
-        (COMMAND_EXAMPLE_CONFIG, Some(m)) => {
+        Some((COMMAND_EXAMPLE_CONFIG, m)) => {
             let path = m.value_of(ARG_OUTPUT_PATH).unwrap();
             let _guard = trace::init(None)?;
             generate_example_config(path)?;
         }
-        (COMMAND_VERIFY_DB_BLOCK, Some(m)) => {
+        Some((COMMAND_VERIFY_DB_BLOCK, m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
             let _guard = trace::init(None)?;
@@ -227,7 +226,7 @@ async fn run_cli() -> Result<()> {
             let to_block: Option<u64> = m.value_of(ARG_TO_BLOCK).map(str::parse).transpose()?;
             db_block_validator::verify(config, from_block, to_block).await?;
         }
-        (COMMAND_EXPORT_BLOCK, Some(m)) => {
+        Some((COMMAND_EXPORT_BLOCK, m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
             let _guard = trace::init(None)?;
@@ -245,7 +244,7 @@ async fn run_cli() -> Result<()> {
             };
             ExportBlock::create(args)?.execute()?;
         }
-        (COMMAND_IMPORT_BLOCK, Some(m)) => {
+        Some((COMMAND_IMPORT_BLOCK, m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
             let _guard = trace::init(None)?;
@@ -266,7 +265,7 @@ async fn run_cli() -> Result<()> {
             };
             ImportBlock::create(args).await?.execute().await?;
         }
-        (COMMAND_PEER_ID, Some(m)) => {
+        Some((COMMAND_PEER_ID, m)) => {
             PeerIdCommand::from_clap(m).run()?;
         }
         _ => {

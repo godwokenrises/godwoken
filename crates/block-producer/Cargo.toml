@@ -41,7 +41,7 @@ semver = "1.0"
 thiserror = "1.0"
 # For latest tracing
 tracing = { version = "0.1", features = ["attributes"] }
-tracing-subscriber = { version = "0.3", features = ["env-filter", "parking_lot", "smallvec", "tracing-log"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "parking_lot", "smallvec", "tracing-log"] }
 tracing-opentelemetry = "0.17"
 opentelemetry-jaeger = { version = "0.16", features = ["rt-tokio"] }
 opentelemetry = { version = "0.17", features = ["rt-tokio"] }
