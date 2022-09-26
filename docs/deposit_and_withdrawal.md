@@ -147,4 +147,4 @@ We have **optional** fields in the withdrawal cell's args:
 * withdrawal_to_v1 - This field only works when `owner lock` exist, if `withdrawal_to_v1` is exist and the value is `1`, which means the withdrawal is a fast withdrawal to Godwoken v1. A fast withdrawal from v0 to v1 can be instantly processed, and the assets will be migrated to Godwoken v1.
 
 ### **Note**:
-manually withdrawl - If `owner lock` do not exist, users must manually unlock the legacy withdrawal cell after it is finalized, and user must provides an input cell in the unlocking transaction that its `lock hash` is equals to withdrawal lock args' `owner_lock_hash`.
+manually withdrawl - If `owner lock` isn't exist, users must manually unlock the legacy withdrawal cell after it is finalized, and user must provides an input cell in the unlocking transaction that its `lock hash` is equals to withdrawal lock args' `owner_lock_hash`.
