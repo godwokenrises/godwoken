@@ -1,6 +1,6 @@
 [package]
 name = "gw-challenge"
-version = "1.6.0"
+version = "1.7.0-rc1"
 authors = ["Nervos Network"]
 edition = "2018"
 
