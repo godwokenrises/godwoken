@@ -753,6 +753,18 @@ impl StoreTransaction {
                 )
             })
     }
+
+    pub fn get_mem_pool_transaction_iter(
+        &self,
+    ) -> impl Iterator<Item = (H256, packed::L2Transaction)> + '_ {
+        self.get_iter(COLUMN_MEM_POOL_TRANSACTION, IteratorMode::End)
+            .map(|(key, val)| {
+                (
+                    packed::Byte32Reader::from_slice_should_be_ok(key.as_ref()).unpack(),
+                    from_box_should_be_ok!(packed::L2TransactionReader, val),
+                )
+            })
+    }
 }
 
 impl ChainStore for StoreTransaction {}
