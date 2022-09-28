@@ -181,6 +181,7 @@ impl MemPool {
             cycles_pool,
         };
         mem_pool.restore_pending_withdrawals().await?;
+        mem_pool.remove_reinjected_failed_txs()?;
 
         // update mem block info
         let snap = mem_pool.mem_pool_state().load();
@@ -1186,6 +1187,31 @@ impl MemPool {
                 );
                 db.remove_mem_pool_withdrawal(&withdrawal_hash)?;
             }
+        }
+
+        db.commit()?;
+        Ok(())
+    }
+
+    // Remove re-injected failed txs in mem pool db before bug fix.
+    // These txs depend on auto create tx to create sender accounts. Because we package
+    // new deposits during mem block reset, make these txs' from id invalid and re-injected failed.
+    fn remove_reinjected_failed_txs(&mut self) -> Result<()> {
+        let db = self.store.begin_transaction();
+        let txs_iter = db.get_mem_pool_transaction_iter();
+
+        for (tx_hash, _) in txs_iter {
+            if self.mem_block.txs_set().contains(&tx_hash)
+                || self.pending_restored_tx_hashes.contains(&tx_hash)
+            {
+                continue;
+            }
+
+            log::info!(
+                "[mem-pool] remove re-injected failed tx {:x}",
+                tx_hash.pack()
+            );
+            db.remove_mem_pool_transaction(&tx_hash)?;
         }
 
         db.commit()?;
