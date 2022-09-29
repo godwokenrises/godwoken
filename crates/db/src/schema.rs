@@ -69,7 +69,7 @@ pub const COLUMN_BLOCK_SUBMIT_TX_HASH: Col = 7;
 /// block number (in big endian) -> deposit info vec.
 pub const COLUMN_BLOCK_DEPOSIT_INFO_VEC: Col = 16;
 /// block number (in big endian) -> FinalizedCustodianCapacity.
-pub const COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY: Col = 36;
+pub const REMOVED_COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY: Col = 36;
 
 /// chain id
 pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";

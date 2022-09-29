@@ -6,8 +6,7 @@ use gw_common::H256;
 use gw_db::error::Error;
 use gw_db::schema::{
     COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
-    COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_GLOBAL_STATE,
-    COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY, COLUMN_BLOCK_SUBMIT_TX,
+    COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_SUBMIT_TX,
     COLUMN_BLOCK_SUBMIT_TX_HASH, COLUMN_INDEX, COLUMN_MEM_POOL_TRANSACTION,
     COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
     COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
@@ -20,7 +19,7 @@ use gw_types::{
     from_box_should_be_ok,
     offchain::{global_state_from_slice, SMTRevertedBlockHashes},
     packed::{
-        self, ChallengeTarget, DepositInfoVec, FinalizedCustodianCapacity, NumberHash,
+        self, ChallengeTarget, DepositInfoVec, NumberHash,
         NumberHashReader, Script, Transaction, TransactionKey, WithdrawalKey,
     },
     prelude::*,
@@ -137,20 +136,6 @@ pub trait ChainStore: KVStoreRead {
     fn get_block_deposit_info_vec(&self, block_number: u64) -> Option<DepositInfoVec> {
         let data = self.get(COLUMN_BLOCK_DEPOSIT_INFO_VEC, &block_number.to_be_bytes())?;
         Some(from_box_should_be_ok!(packed::DepositInfoVecReader, data))
-    }
-
-    fn get_block_post_finalized_custodian_capacity(
-        &self,
-        block_number: u64,
-    ) -> Option<FinalizedCustodianCapacity> {
-        let data = self.get(
-            COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY,
-            &block_number.to_be_bytes(),
-        )?;
-        Some(from_box_should_be_ok!(
-            packed::FinalizedCustodianCapacityReader,
-            data
-        ))
     }
 
     fn get_tip_block_hash(&self) -> Result<H256, Error> {

@@ -359,29 +359,6 @@ impl BlockProducer {
             .outputs_mut()
             .push((generated_stake.output, generated_stake.output_data));
 
-        let last_finalized_block_number = self
-            .generator
-            .rollup_context()
-            .last_finalized_block_number(block.raw().number().unpack() - 1);
-        let finalized_custodians = gw_mem_pool::custodian::query_finalized_custodians(
-            rpc_client,
-            &self.store.get_snapshot(),
-            withdrawal_extras.iter().map(|w| w.request()),
-            rollup_context,
-            last_finalized_block_number,
-            local_cells_manager,
-        )
-        .await?
-        .expect_any();
-        let finalized_custodians = query_mergeable_custodians(
-            local_cells_manager,
-            rpc_client,
-            finalized_custodians,
-            last_finalized_block_number,
-        )
-        .await?
-        .expect_any();
-
         if let Some(reverted_deposits) =
             crate::deposit::revert(rollup_context, &contracts_dep, revert_custodians)?
         {

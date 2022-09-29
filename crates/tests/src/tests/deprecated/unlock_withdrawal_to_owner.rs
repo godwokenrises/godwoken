@@ -15,6 +15,7 @@ use crate::testing_tool::verify_tx::{verify_tx, TxWithContext};
 
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
+use gw_block_producer::custodian::AvailableCustodians;
 use gw_block_producer::produce_block::ProduceBlockResult;
 use gw_block_producer::withdrawal_unlocker::{BuildUnlockWithdrawalToOwner, Guard};
 use gw_common::h256_ext::H256Ext;
@@ -27,9 +28,7 @@ use gw_store::state::state_db::StateContext;
 use gw_store::traits::chain_store::ChainStore;
 use gw_types::bytes::Bytes;
 use gw_types::core::{AllowedEoaType, DepType, ScriptHashType};
-use gw_types::offchain::{
-    CellInfo, CollectedCustodianCells, FinalizedCustodianCapacity, InputCellInfo, RollupContext,
-};
+use gw_types::offchain::{CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext};
 use gw_types::packed::{
     AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositInfoVec,
     DepositRequest, GlobalState, LastFinalizedWithdrawal, OutPoint, RawWithdrawalRequest,
@@ -248,7 +247,7 @@ async fn test_build_unlock_to_owner_tx() {
     };
 
     // Push withdrawals
-    let finalized_custodians = FinalizedCustodianCapacity {
+    let finalized_custodians = AvailableCustodians {
         capacity: ((accounts.len() as u128 + 1) * WITHDRAWAL_CAPACITY as u128),
         sudt: HashMap::from_iter([(
             sudt_script.hash(),

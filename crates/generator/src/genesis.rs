@@ -20,7 +20,7 @@ use gw_types::{
     core::{ScriptHashType, Status},
     offchain::RollupContext,
     packed::{
-        AccountMerkleState, BlockMerkleState, DepositInfoVec, FinalizedCustodianCapacity,
+        AccountMerkleState, BlockMerkleState, DepositInfoVec,
         GlobalState, L2Block, NumberHash, RawL2Block, Script, SubmitTransactions,
     },
     prelude::*,
@@ -237,10 +237,6 @@ pub fn init_genesis(
     db.set_last_submitted_block_number_hash(&nh.as_reader())?;
     db.set_last_confirmed_block_number_hash(&nh.as_reader())?;
     db.set_block_deposit_info_vec(0, &DepositInfoVec::default().as_reader())?;
-    db.set_block_post_finalized_custodian_capacity(
-        0,
-        &FinalizedCustodianCapacity::default().as_reader(),
-    )?;
     db.set_block_submit_tx_hash(0, transaction_hash)?;
     db.commit()?;
     Ok(())

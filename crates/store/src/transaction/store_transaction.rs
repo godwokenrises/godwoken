@@ -9,14 +9,14 @@ use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, H256};
 use gw_db::schema::{
     Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ASSET_SCRIPT,
     COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSIT_INFO_VEC,
-    COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY,
-    COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD,
-    COLUMN_BLOCK_STATE_REVERSE_RECORD, COLUMN_BLOCK_SUBMIT_TX, COLUMN_BLOCK_SUBMIT_TX_HASH,
-    COLUMN_INDEX, COLUMN_MEM_POOL_TRANSACTION, COLUMN_MEM_POOL_TRANSACTION_RECEIPT,
-    COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_BRANCH,
-    COLUMN_REVERTED_BLOCK_SMT_LEAF, COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION,
-    COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT, COLUMN_WITHDRAWAL, COLUMN_WITHDRAWAL_INFO,
-    META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY, META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY,
+    COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF,
+    COLUMN_BLOCK_STATE_RECORD, COLUMN_BLOCK_STATE_REVERSE_RECORD, COLUMN_BLOCK_SUBMIT_TX,
+    COLUMN_BLOCK_SUBMIT_TX_HASH, COLUMN_INDEX, COLUMN_MEM_POOL_TRANSACTION,
+    COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
+    COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF,
+    COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
+    COLUMN_TRANSACTION_RECEIPT, COLUMN_WITHDRAWAL, COLUMN_WITHDRAWAL_INFO, META_BLOCK_SMT_ROOT_KEY,
+    META_CHAIN_ID_KEY, META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY,
     META_LAST_SUBMITTED_BLOCK_NUMBER_HASH_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
     META_REVERTED_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
 };
@@ -339,29 +339,6 @@ impl StoreTransaction {
         self.delete(COLUMN_BLOCK_DEPOSIT_INFO_VEC, &block_number.to_be_bytes())
     }
 
-    pub fn set_block_post_finalized_custodian_capacity(
-        &self,
-        block_number: u64,
-        finalized_custodian_capacity: &packed::FinalizedCustodianCapacityReader,
-    ) -> Result<(), Error> {
-        self.insert_raw(
-            COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY,
-            &block_number.to_be_bytes(),
-            finalized_custodian_capacity.as_slice(),
-        )?;
-        Ok(())
-    }
-
-    pub fn delete_block_post_finalized_custodian_capacity(
-        &self,
-        block_number: u64,
-    ) -> Result<(), Error> {
-        self.delete(
-            COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY,
-            &block_number.to_be_bytes(),
-        )
-    }
-
     pub fn set_reverted_block_smt_root(&self, root: H256) -> Result<(), Error> {
         self.insert_raw(
             COLUMN_META,
@@ -561,7 +538,6 @@ impl StoreTransaction {
 
         self.delete_submit_tx(block_number)?;
         self.delete_block_deposit_info_vec(block_number)?;
-        self.delete_block_post_finalized_custodian_capacity(block_number)?;
 
         Ok(())
     }

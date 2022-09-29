@@ -2193,272 +2193,6 @@ impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for SudtCustodianVecReaderItera
     }
 }
 #[derive(Clone)]
-pub struct FinalizedCustodianCapacity(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for FinalizedCustodianCapacity {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for FinalizedCustodianCapacity {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for FinalizedCustodianCapacity {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "capacity", self.capacity())?;
-        write!(f, ", {}: {}", "sudt", self.sudt())?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
-    }
-}
-impl ::core::default::Default for FinalizedCustodianCapacity {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![
-            32, 0, 0, 0, 12, 0, 0, 0, 28, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            4, 0, 0, 0,
-        ];
-        FinalizedCustodianCapacity::new_unchecked(v.into())
-    }
-}
-impl FinalizedCustodianCapacity {
-    pub const FIELD_COUNT: usize = 2;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn capacity(&self) -> Uint128 {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        Uint128::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn sudt(&self) -> SudtCustodianVec {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[12..]) as usize;
-            SudtCustodianVec::new_unchecked(self.0.slice(start..end))
-        } else {
-            SudtCustodianVec::new_unchecked(self.0.slice(start..))
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> FinalizedCustodianCapacityReader<'r> {
-        FinalizedCustodianCapacityReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for FinalizedCustodianCapacity {
-    type Builder = FinalizedCustodianCapacityBuilder;
-    const NAME: &'static str = "FinalizedCustodianCapacity";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        FinalizedCustodianCapacity(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        FinalizedCustodianCapacityReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        FinalizedCustodianCapacityReader::from_compatible_slice(slice)
-            .map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
-            .capacity(self.capacity())
-            .sudt(self.sudt())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct FinalizedCustodianCapacityReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for FinalizedCustodianCapacityReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for FinalizedCustodianCapacityReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for FinalizedCustodianCapacityReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "capacity", self.capacity())?;
-        write!(f, ", {}: {}", "sudt", self.sudt())?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
-    }
-}
-impl<'r> FinalizedCustodianCapacityReader<'r> {
-    pub const FIELD_COUNT: usize = 2;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn capacity(&self) -> Uint128Reader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        Uint128Reader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn sudt(&self) -> SudtCustodianVecReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[12..]) as usize;
-            SudtCustodianVecReader::new_unchecked(&self.as_slice()[start..end])
-        } else {
-            SudtCustodianVecReader::new_unchecked(&self.as_slice()[start..])
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for FinalizedCustodianCapacityReader<'r> {
-    type Entity = FinalizedCustodianCapacity;
-    const NAME: &'static str = "FinalizedCustodianCapacityReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        FinalizedCustodianCapacityReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
-        }
-        let total_size = molecule::unpack_number(slice) as usize;
-        if slice_len != total_size {
-            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
-        }
-        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
-            return Ok(());
-        }
-        if slice_len < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
-        }
-        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
-        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        if slice_len < offset_first {
-            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
-        }
-        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
-        if field_count < Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        } else if !compatible && field_count > Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        };
-        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
-            .chunks_exact(molecule::NUMBER_SIZE)
-            .map(|x| molecule::unpack_number(x) as usize)
-            .collect();
-        offsets.push(total_size);
-        if offsets.windows(2).any(|i| i[0] > i[1]) {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        Uint128Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        SudtCustodianVecReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct FinalizedCustodianCapacityBuilder {
-    pub(crate) capacity: Uint128,
-    pub(crate) sudt: SudtCustodianVec,
-}
-impl FinalizedCustodianCapacityBuilder {
-    pub const FIELD_COUNT: usize = 2;
-    pub fn capacity(mut self, v: Uint128) -> Self {
-        self.capacity = v;
-        self
-    }
-    pub fn sudt(mut self, v: SudtCustodianVec) -> Self {
-        self.sudt = v;
-        self
-    }
-}
-impl molecule::prelude::Builder for FinalizedCustodianCapacityBuilder {
-    type Entity = FinalizedCustodianCapacity;
-    const NAME: &'static str = "FinalizedCustodianCapacityBuilder";
-    fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.capacity.as_slice().len()
-            + self.sudt.as_slice().len()
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
-        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
-        offsets.push(total_size);
-        total_size += self.capacity.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.sudt.as_slice().len();
-        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
-        for offset in offsets.into_iter() {
-            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
-        }
-        writer.write_all(self.capacity.as_slice())?;
-        writer.write_all(self.sudt.as_slice())?;
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        FinalizedCustodianCapacity::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
 pub struct AccountMerkleStateVec(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for AccountMerkleStateVec {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -3042,12 +2776,6 @@ impl ::core::fmt::Display for MemBlock {
         write!(f, "{}: {}", "block_producer", self.block_producer())?;
         write!(f, ", {}: {}", "txs", self.txs())?;
         write!(f, ", {}: {}", "withdrawals", self.withdrawals())?;
-        write!(
-            f,
-            ", {}: {}",
-            "finalized_custodians",
-            self.finalized_custodians()
-        )?;
         write!(f, ", {}: {}", "deposits", self.deposits())?;
         write!(f, ", {}: {}", "state_checkpoints", self.state_checkpoints())?;
         write!(
@@ -3069,19 +2797,17 @@ impl ::core::fmt::Display for MemBlock {
 impl ::core::default::Default for MemBlock {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            172, 0, 0, 0, 44, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 88, 0, 0, 0, 92, 0,
-            0, 0, 96, 0, 0, 0, 96, 0, 0, 0, 132, 0, 0, 0, 168, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 32, 0, 0, 0, 12, 0, 0, 0, 28, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 36, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 28,
+            136, 0, 0, 0, 40, 0, 0, 0, 44, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 60, 0,
+            0, 0, 60, 0, 0, 0, 96, 0, 0, 0, 132, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0,
+            0, 0, 0, 0, 0, 0, 36, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 28, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         MemBlock::new_unchecked(v.into())
     }
 }
 impl MemBlock {
-    pub const FIELD_COUNT: usize = 10;
+    pub const FIELD_COUNT: usize = 9;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -3116,47 +2842,41 @@ impl MemBlock {
         let end = molecule::unpack_number(&slice[16..]) as usize;
         Byte32Vec::new_unchecked(self.0.slice(start..end))
     }
-    pub fn finalized_custodians(&self) -> FinalizedCustodianCapacity {
+    pub fn deposits(&self) -> DepositInfoVec {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
         let end = molecule::unpack_number(&slice[20..]) as usize;
-        FinalizedCustodianCapacity::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn deposits(&self) -> DepositInfoVec {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[20..]) as usize;
-        let end = molecule::unpack_number(&slice[24..]) as usize;
         DepositInfoVec::new_unchecked(self.0.slice(start..end))
     }
     pub fn state_checkpoints(&self) -> Byte32Vec {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[24..]) as usize;
-        let end = molecule::unpack_number(&slice[28..]) as usize;
+        let start = molecule::unpack_number(&slice[20..]) as usize;
+        let end = molecule::unpack_number(&slice[24..]) as usize;
         Byte32Vec::new_unchecked(self.0.slice(start..end))
     }
     pub fn txs_prev_state_checkpoint(&self) -> Byte32Opt {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[28..]) as usize;
-        let end = molecule::unpack_number(&slice[32..]) as usize;
+        let start = molecule::unpack_number(&slice[24..]) as usize;
+        let end = molecule::unpack_number(&slice[28..]) as usize;
         Byte32Opt::new_unchecked(self.0.slice(start..end))
     }
     pub fn block_info(&self) -> BlockInfo {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[32..]) as usize;
-        let end = molecule::unpack_number(&slice[36..]) as usize;
+        let start = molecule::unpack_number(&slice[28..]) as usize;
+        let end = molecule::unpack_number(&slice[32..]) as usize;
         BlockInfo::new_unchecked(self.0.slice(start..end))
     }
     pub fn prev_merkle_state(&self) -> AccountMerkleState {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[36..]) as usize;
-        let end = molecule::unpack_number(&slice[40..]) as usize;
+        let start = molecule::unpack_number(&slice[32..]) as usize;
+        let end = molecule::unpack_number(&slice[36..]) as usize;
         AccountMerkleState::new_unchecked(self.0.slice(start..end))
     }
     pub fn touched_keys(&self) -> Byte32Vec {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[40..]) as usize;
+        let start = molecule::unpack_number(&slice[36..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[44..]) as usize;
+            let end = molecule::unpack_number(&slice[40..]) as usize;
             Byte32Vec::new_unchecked(self.0.slice(start..end))
         } else {
             Byte32Vec::new_unchecked(self.0.slice(start..))
@@ -3192,7 +2912,6 @@ impl molecule::prelude::Entity for MemBlock {
             .block_producer(self.block_producer())
             .txs(self.txs())
             .withdrawals(self.withdrawals())
-            .finalized_custodians(self.finalized_custodians())
             .deposits(self.deposits())
             .state_checkpoints(self.state_checkpoints())
             .txs_prev_state_checkpoint(self.txs_prev_state_checkpoint())
@@ -3223,12 +2942,6 @@ impl<'r> ::core::fmt::Display for MemBlockReader<'r> {
         write!(f, "{}: {}", "block_producer", self.block_producer())?;
         write!(f, ", {}: {}", "txs", self.txs())?;
         write!(f, ", {}: {}", "withdrawals", self.withdrawals())?;
-        write!(
-            f,
-            ", {}: {}",
-            "finalized_custodians",
-            self.finalized_custodians()
-        )?;
         write!(f, ", {}: {}", "deposits", self.deposits())?;
         write!(f, ", {}: {}", "state_checkpoints", self.state_checkpoints())?;
         write!(
@@ -3248,7 +2961,7 @@ impl<'r> ::core::fmt::Display for MemBlockReader<'r> {
     }
 }
 impl<'r> MemBlockReader<'r> {
-    pub const FIELD_COUNT: usize = 10;
+    pub const FIELD_COUNT: usize = 9;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -3283,47 +2996,41 @@ impl<'r> MemBlockReader<'r> {
         let end = molecule::unpack_number(&slice[16..]) as usize;
         Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn finalized_custodians(&self) -> FinalizedCustodianCapacityReader<'r> {
+    pub fn deposits(&self) -> DepositInfoVecReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
         let end = molecule::unpack_number(&slice[20..]) as usize;
-        FinalizedCustodianCapacityReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn deposits(&self) -> DepositInfoVecReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[20..]) as usize;
-        let end = molecule::unpack_number(&slice[24..]) as usize;
         DepositInfoVecReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn state_checkpoints(&self) -> Byte32VecReader<'r> {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[24..]) as usize;
-        let end = molecule::unpack_number(&slice[28..]) as usize;
+        let start = molecule::unpack_number(&slice[20..]) as usize;
+        let end = molecule::unpack_number(&slice[24..]) as usize;
         Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn txs_prev_state_checkpoint(&self) -> Byte32OptReader<'r> {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[28..]) as usize;
-        let end = molecule::unpack_number(&slice[32..]) as usize;
+        let start = molecule::unpack_number(&slice[24..]) as usize;
+        let end = molecule::unpack_number(&slice[28..]) as usize;
         Byte32OptReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn block_info(&self) -> BlockInfoReader<'r> {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[32..]) as usize;
-        let end = molecule::unpack_number(&slice[36..]) as usize;
+        let start = molecule::unpack_number(&slice[28..]) as usize;
+        let end = molecule::unpack_number(&slice[32..]) as usize;
         BlockInfoReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn prev_merkle_state(&self) -> AccountMerkleStateReader<'r> {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[36..]) as usize;
-        let end = molecule::unpack_number(&slice[40..]) as usize;
+        let start = molecule::unpack_number(&slice[32..]) as usize;
+        let end = molecule::unpack_number(&slice[36..]) as usize;
         AccountMerkleStateReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn touched_keys(&self) -> Byte32VecReader<'r> {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[40..]) as usize;
+        let start = molecule::unpack_number(&slice[36..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[44..]) as usize;
+            let end = molecule::unpack_number(&slice[40..]) as usize;
             Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
         } else {
             Byte32VecReader::new_unchecked(&self.as_slice()[start..])
@@ -3382,13 +3089,12 @@ impl<'r> molecule::prelude::Reader<'r> for MemBlockReader<'r> {
         BytesReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         Byte32VecReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         Byte32VecReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        FinalizedCustodianCapacityReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
-        DepositInfoVecReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
-        Byte32VecReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
-        Byte32OptReader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
-        BlockInfoReader::verify(&slice[offsets[7]..offsets[8]], compatible)?;
-        AccountMerkleStateReader::verify(&slice[offsets[8]..offsets[9]], compatible)?;
-        Byte32VecReader::verify(&slice[offsets[9]..offsets[10]], compatible)?;
+        DepositInfoVecReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
+        Byte32VecReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
+        Byte32OptReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
+        BlockInfoReader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
+        AccountMerkleStateReader::verify(&slice[offsets[7]..offsets[8]], compatible)?;
+        Byte32VecReader::verify(&slice[offsets[8]..offsets[9]], compatible)?;
         Ok(())
     }
 }
@@ -3397,7 +3103,6 @@ pub struct MemBlockBuilder {
     pub(crate) block_producer: Bytes,
     pub(crate) txs: Byte32Vec,
     pub(crate) withdrawals: Byte32Vec,
-    pub(crate) finalized_custodians: FinalizedCustodianCapacity,
     pub(crate) deposits: DepositInfoVec,
     pub(crate) state_checkpoints: Byte32Vec,
     pub(crate) txs_prev_state_checkpoint: Byte32Opt,
@@ -3406,7 +3111,7 @@ pub struct MemBlockBuilder {
     pub(crate) touched_keys: Byte32Vec,
 }
 impl MemBlockBuilder {
-    pub const FIELD_COUNT: usize = 10;
+    pub const FIELD_COUNT: usize = 9;
     pub fn block_producer(mut self, v: Bytes) -> Self {
         self.block_producer = v;
         self
@@ -3417,10 +3122,6 @@ impl MemBlockBuilder {
     }
     pub fn withdrawals(mut self, v: Byte32Vec) -> Self {
         self.withdrawals = v;
-        self
-    }
-    pub fn finalized_custodians(mut self, v: FinalizedCustodianCapacity) -> Self {
-        self.finalized_custodians = v;
         self
     }
     pub fn deposits(mut self, v: DepositInfoVec) -> Self {
@@ -3456,7 +3157,6 @@ impl molecule::prelude::Builder for MemBlockBuilder {
             + self.block_producer.as_slice().len()
             + self.txs.as_slice().len()
             + self.withdrawals.as_slice().len()
-            + self.finalized_custodians.as_slice().len()
             + self.deposits.as_slice().len()
             + self.state_checkpoints.as_slice().len()
             + self.txs_prev_state_checkpoint.as_slice().len()
@@ -3473,8 +3173,6 @@ impl molecule::prelude::Builder for MemBlockBuilder {
         total_size += self.txs.as_slice().len();
         offsets.push(total_size);
         total_size += self.withdrawals.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.finalized_custodians.as_slice().len();
         offsets.push(total_size);
         total_size += self.deposits.as_slice().len();
         offsets.push(total_size);
@@ -3494,7 +3192,6 @@ impl molecule::prelude::Builder for MemBlockBuilder {
         writer.write_all(self.block_producer.as_slice())?;
         writer.write_all(self.txs.as_slice())?;
         writer.write_all(self.withdrawals.as_slice())?;
-        writer.write_all(self.finalized_custodians.as_slice())?;
         writer.write_all(self.deposits.as_slice())?;
         writer.write_all(self.state_checkpoints.as_slice())?;
         writer.write_all(self.txs_prev_state_checkpoint.as_slice())?;

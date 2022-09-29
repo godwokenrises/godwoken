@@ -1,6 +1,6 @@
 use sparse_merkle_tree::H256;
 
-use crate::offchain::{CellInfo, DepositInfo, FinalizedCustodianCapacity, SudtCustodian};
+use crate::offchain::{CellInfo, DepositInfo, SudtCustodian};
 use crate::{packed, prelude::*, vec::Vec};
 
 impl Pack<packed::CellInfo> for CellInfo {
@@ -57,43 +57,6 @@ impl<'r> Unpack<SudtCustodian> for packed::SudtCustodianReader<'r> {
             script_hash: self.script_hash().unpack(),
             amount: self.amount().unpack(),
             script: self.script().to_entity(),
-        }
-    }
-}
-
-impl Pack<packed::FinalizedCustodianCapacity> for FinalizedCustodianCapacity {
-    fn pack(&self) -> packed::FinalizedCustodianCapacity {
-        packed::FinalizedCustodianCapacity::new_builder()
-            .capacity(self.capacity.pack())
-            .sudt(
-                packed::SudtCustodianVec::new_builder()
-                    .extend(self.sudt.iter().map(|(hash, (amount, script))| {
-                        packed::SudtCustodian::new_builder()
-                            .script_hash(hash.pack())
-                            .amount(amount.pack())
-                            .script(script.clone())
-                            .build()
-                    }))
-                    .build(),
-            )
-            .build()
-    }
-}
-
-impl<'r> Unpack<FinalizedCustodianCapacity> for packed::FinalizedCustodianCapacityReader<'r> {
-    fn unpack(&self) -> FinalizedCustodianCapacity {
-        FinalizedCustodianCapacity {
-            capacity: self.capacity().unpack(),
-            sudt: self
-                .sudt()
-                .iter()
-                .map(|sudt| {
-                    (
-                        sudt.script_hash().unpack(),
-                        (sudt.amount().unpack(), sudt.script().to_entity()),
-                    )
-                })
-                .collect(),
         }
     }
 }
