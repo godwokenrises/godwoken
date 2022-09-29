@@ -1,5 +1,6 @@
 pub mod abort_on_drop;
 pub mod compression;
+pub mod custodian;
 pub mod exponential_backoff;
 pub mod export_block;
 pub mod fee;

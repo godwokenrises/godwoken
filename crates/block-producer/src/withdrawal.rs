@@ -357,13 +357,13 @@ pub(crate) mod tests {
     use gw_common::sparse_merkle_tree::default_store::DefaultStore;
     use gw_common::sparse_merkle_tree::CompiledMerkleProof;
     use gw_common::{h256_ext::H256Ext, H256};
-    use gw_mem_pool::custodian::sum_withdrawals;
     use gw_types::offchain::WithdrawalsAmount;
     use gw_types::packed::{
         L2Block, LastFinalizedWithdrawal, RawL2Block, RawWithdrawalRequest, Script,
         SubmitWithdrawals, WithdrawalRequest, WithdrawalRequestExtra,
     };
     use gw_types::prelude::{Builder, Entity, Pack, PackVec};
+    use gw_utils::withdrawal::sum_withdrawals;
 
     use crate::withdrawal::user_withdrawal::UserWithdrawals;
 

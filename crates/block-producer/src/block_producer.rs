@@ -17,10 +17,7 @@ use gw_common::{h256_ext::H256Ext, H256};
 use gw_config::BlockProducerConfig;
 use gw_generator::Generator;
 use gw_jsonrpc_types::test_mode::TestModePayload;
-use gw_mem_pool::{
-    custodian::to_custodian_cell,
-    pool::{MemPool, OutputParam},
-};
+use gw_mem_pool::pool::{MemPool, OutputParam};
 use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
 use gw_store::Store;
 use gw_types::{
@@ -35,8 +32,9 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::{
-    fee::fill_tx_fee_with_local, genesis_info::CKBGenesisInfo, local_cells::LocalCellsManager,
-    query_rollup_cell, since::Since, transaction_skeleton::TransactionSkeleton, wallet::Wallet,
+    custodian::to_custodian_cell, fee::fill_tx_fee_with_local, genesis_info::CKBGenesisInfo,
+    local_cells::LocalCellsManager, query_rollup_cell, since::Since,
+    transaction_skeleton::TransactionSkeleton, wallet::Wallet,
 };
 use std::{
     collections::{HashMap, HashSet},

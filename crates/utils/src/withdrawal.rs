@@ -1,6 +1,10 @@
 use anyhow::{bail, Result};
+use gw_common::CKB_SUDT_SCRIPT_ARGS;
 use gw_types::bytes::Bytes;
-use gw_types::packed::{Script, ScriptReader, WithdrawalLockArgs, WithdrawalLockArgsReader};
+use gw_types::offchain::WithdrawalsAmount;
+use gw_types::packed::{
+    Script, ScriptReader, WithdrawalLockArgs, WithdrawalLockArgsReader, WithdrawalRequest,
+};
 use gw_types::prelude::{Entity, Reader, Unpack};
 
 pub struct ParsedWithdrawalLockArgs {
@@ -57,4 +61,31 @@ pub fn parse_lock_args(args: &Bytes) -> Result<ParsedWithdrawalLockArgs> {
         lock_args,
         owner_lock,
     })
+}
+
+pub fn sum_withdrawals<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> WithdrawalsAmount {
+    reqs.fold(
+        WithdrawalsAmount::default(),
+        |mut total_amount, withdrawal| {
+            total_amount.capacity = total_amount
+                .capacity
+                .saturating_add(withdrawal.raw().capacity().unpack() as u128);
+
+            let sudt_script_hash = withdrawal.raw().sudt_script_hash().unpack();
+            let sudt_amount = withdrawal.raw().amount().unpack();
+            if sudt_amount != 0 {
+                if sudt_script_hash ==
+                    CKB_SUDT_SCRIPT_ARGS {
+                        let account = withdrawal.raw().account_script_hash();
+                        log::warn!("{} withdrawal request non-zero sudt amount but it's type hash ckb, ignore this amount", account);
+                    }
+                    else{
+                        let total_sudt_amount = total_amount.sudt.entry(sudt_script_hash).or_insert(0u128);
+                        *total_sudt_amount = total_sudt_amount.saturating_add(sudt_amount);
+                    }
+            }
+
+            total_amount
+        }
+    )
 }

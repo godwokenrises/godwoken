@@ -9,9 +9,8 @@ use gw_types::{
     packed::DepositLockArgs,
     prelude::*,
 };
+use gw_utils::custodian::to_custodian_cell;
 use gw_utils::since::{LockValue, Since};
-
-use crate::custodian::to_custodian_cell;
 
 /// check and reject invalid deposit cells
 pub fn sanitize_deposit_cells(

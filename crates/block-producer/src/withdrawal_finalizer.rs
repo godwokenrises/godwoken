@@ -16,7 +16,6 @@ use gw_common::{
 use gw_config::{ContractsCellDep, DebugConfig};
 use gw_db::schema::{COLUMN_META, META_LAST_FINALIZED_WITHDRAWAL_TX_HASH_KEY};
 use gw_generator::Guard;
-use gw_mem_pool::custodian::query_finalized_custodians;
 use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
 use gw_store::traits::{
     chain_store::ChainStore,
@@ -40,7 +39,7 @@ use gw_utils::{
 };
 use tracing::instrument;
 
-use crate::withdrawal::BlockWithdrawals;
+use crate::{withdrawal::BlockWithdrawals, custodian::query_finalized_custodians};
 
 const TRANSACTION_FAILED_TO_RESOLVE_ERROR: &str = "TransactionFailedToResolve";
 
