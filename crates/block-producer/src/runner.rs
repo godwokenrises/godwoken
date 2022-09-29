@@ -809,8 +809,8 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     log::info!("{:?} mode", config.node_mode);
 
-    let bm = (block_producer, mem_pool.clone()); // To keep the next line short.
-    let psc_task = if let (Some(block_producer), Some(mem_pool)) = bm {
+    let bm = (block_producer, mem_pool.clone(), withdrawal_finalizer); // To keep the next line short.
+    let psc_task = if let (Some(block_producer), Some(mem_pool), Some(withdrawal_finalizer)) = bm {
         let psc_state = ProduceSubmitConfirm::init(Arc::new(PSCContext {
             store: store.clone(),
             block_producer,
@@ -819,6 +819,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
             mem_pool,
             local_cells_manager: Mutex::new(LocalCellsManager::default()),
             chain_updater: chain_updater.clone(),
+            withdrawal_finalizer,
             rollup_type_script: rollup_type_script.clone(),
             psc_config: config.block_producer.as_ref().unwrap().psc_config.clone(),
             block_sync_server_state: block_sync_server_state.clone(),

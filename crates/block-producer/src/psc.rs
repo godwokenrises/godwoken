@@ -38,6 +38,7 @@ use crate::{
     chain_updater::ChainUpdater,
     produce_block::ProduceBlockResult,
     sync_l1::{revert, sync_l1, SyncL1Context},
+    withdrawal_finalizer::UserWithdrawalFinalizer,
 };
 
 /// Block producing, submitting and confirming state machine.
@@ -57,6 +58,7 @@ pub struct PSCContext {
     // the same time.
     pub local_cells_manager: Mutex<LocalCellsManager>,
     pub chain_updater: ChainUpdater,
+    pub withdrawal_finalizer: UserWithdrawalFinalizer,
     pub rollup_type_script: Script,
     pub psc_config: PscConfig,
     pub block_sync_server_state: Option<Arc<std::sync::Mutex<BlockSyncServerState>>>,
