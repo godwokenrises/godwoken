@@ -17,7 +17,7 @@ use gw_types::{
         CellInfo, CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, DepositInfo,
         DepositInfoVec, DepositLockArgs, DepositRequest, L2Block, OutPoint, RollupAction,
         RollupActionUnion, Script, Transaction, WithdrawalRequestExtra, WitnessArgs,
-        WitnessArgsReader,
+        WitnessArgsReader, ScriptVec,
     },
     prelude::*,
 };

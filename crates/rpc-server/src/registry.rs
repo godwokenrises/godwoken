@@ -1375,7 +1375,6 @@ async fn submit_l2transaction(
 async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
     generator: Data<Generator>,
-    store: Data<Store>,
     (in_queue_request_map, submit_tx): (
         Data<Option<Arc<InQueueRequestMap>>>,
         Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,

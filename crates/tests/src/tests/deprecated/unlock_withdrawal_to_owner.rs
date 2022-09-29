@@ -6,9 +6,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::testing_tool::chain::{
-    construct_block_with_timestamp, TestChain, ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM,
-    CUSTODIAN_LOCK_PROGRAM, STAKE_LOCK_PROGRAM, STATE_VALIDATOR_TYPE_PROGRAM,
-    WITHDRAWAL_LOCK_PROGRAM,
+    construct_block_with_timestamp, into_deposit_info_cell, TestChain, ALWAYS_SUCCESS_CODE_HASH,
+    ALWAYS_SUCCESS_PROGRAM, CUSTODIAN_LOCK_PROGRAM, STAKE_LOCK_PROGRAM,
+    STATE_VALIDATOR_TYPE_PROGRAM, WITHDRAWAL_LOCK_PROGRAM,
 };
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 use crate::testing_tool::verify_tx::{verify_tx, TxWithContext};
@@ -31,10 +31,10 @@ use gw_types::offchain::{
     CellInfo, CollectedCustodianCells, FinalizedCustodianCapacity, InputCellInfo, RollupContext,
 };
 use gw_types::packed::{
-    AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositRequest,
-    GlobalState, LastFinalizedWithdrawal, OutPoint, RawWithdrawalRequest, RollupAction,
-    RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, StakeLockArgs, WithdrawalRequest,
-    WithdrawalRequestExtra, WitnessArgs,
+    AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositInfoVec,
+    DepositRequest, GlobalState, LastFinalizedWithdrawal, OutPoint, RawWithdrawalRequest,
+    RollupAction, RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, StakeLockArgs,
+    WithdrawalRequest, WithdrawalRequestExtra, WitnessArgs,
 };
 use gw_types::prelude::{Pack, PackVec, Unpack};
 use gw_utils::local_cells::LocalCellsManager;
@@ -201,17 +201,18 @@ async fn test_build_unlock_to_owner_tx() {
         .collect();
     let deposits: Vec<_> = { accounts.iter() }
         .map(|account_script| {
-            DepositRequest::new_builder()
+            let deposit = DepositRequest::new_builder()
                 .capacity(DEPOSIT_CAPACITY.pack())
                 .sudt_script_hash(sudt_script.hash().pack())
                 .amount(DEPOSIT_AMOUNT.pack())
                 .script(account_script.to_owned())
                 .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
-                .build()
+                .build();
+            into_deposit_info_cell(chain.inner.generator().rollup_context(), deposit).pack()
         })
         .collect();
 
-    chain.produce_block(deposits, vec![]).await.unwrap();
+    chain.produce_block(deposits.pack(), vec![]).await.unwrap();
 
     let deposit_global_state = chain.last_global_state().to_owned();
     let input_rollup_cell = CellInfo {
@@ -280,9 +281,15 @@ async fn test_build_unlock_to_owner_tx() {
     const BLOCK_TIMESTAMP: u64 = 10000u64;
     let withdrawal_block_result = {
         let mut mem_pool = chain.mem_pool().await;
-        construct_block_with_timestamp(&chain.inner, &mut mem_pool, vec![], BLOCK_TIMESTAMP, true)
-            .await
-            .unwrap()
+        construct_block_with_timestamp(
+            &chain.inner,
+            &mut mem_pool,
+            DepositInfoVec::default(),
+            BLOCK_TIMESTAMP,
+            true,
+        )
+        .await
+        .unwrap()
     };
     assert_eq!(
         withdrawal_block_result.block.withdrawals().len(),
@@ -552,12 +559,18 @@ async fn test_build_unlock_to_owner_tx() {
         db.commit().unwrap();
 
         let mut mem_pool = chain.mem_pool().await;
-        mem_pool.reset_mem_block().await.unwrap();
-        construct_block_with_timestamp(&chain.inner, &mut mem_pool, vec![], BLOCK_TIMESTAMP2, true)
-            .await
-            .unwrap();
+        mem_pool.reset_mem_block(&Default::default()).await.unwrap();
         construct_block_with_timestamp(
-            &chain,
+            &chain.inner,
+            &mut mem_pool,
+            DepositInfoVec::default(),
+            BLOCK_TIMESTAMP2,
+            true,
+        )
+        .await
+        .unwrap();
+        construct_block_with_timestamp(
+            &chain.inner,
             &mut mem_pool,
             Default::default(),
             BLOCK_TIMESTAMP2,

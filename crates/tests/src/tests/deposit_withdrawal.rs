@@ -18,7 +18,7 @@ use gw_generator::{
     sudt::build_l2_sudt_script,
     Error,
 };
-use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore};
+use gw_store::state::state_db::StateContext;
 use gw_types::{
     core::ScriptHashType,
     packed::{
@@ -107,6 +107,8 @@ async fn withdrawal_from_chain(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_deposit_and_withdrawal() {
+    let _ = env_logger::builder().is_test(true).try_init();
+
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
     let mut chain = setup_chain(rollup_type_script.clone()).await;
@@ -175,15 +177,6 @@ async fn test_deposit_and_withdrawal() {
         produce_empty_block(&mut chain).await.unwrap();
     }
 
-    // Check remaining ckb capacity.
-    let tip = chain.local_state().tip().raw().number().unpack();
-    let cap = chain
-        .store()
-        .get_block_post_finalized_custodian_capacity(tip)
-        .unwrap();
-    // Tip block should have 0 capacity. Next block can collect finalized deposit capacity.
-    assert_eq!(cap.capacity().unpack(), 0);
-
     // check tx pool state
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap().lock().await;
@@ -219,17 +212,6 @@ async fn test_deposit_and_withdrawal() {
     .await
     .unwrap();
     // check status
-
-    // Check remaining ckb capacity.
-    let tip = chain.local_state().tip().raw().number().unpack();
-    let cap = chain
-        .store()
-        .get_block_post_finalized_custodian_capacity(tip)
-        .unwrap();
-    assert_eq!(
-        cap.capacity().unpack(),
-        (capacity - withdraw_capacity).into()
-    );
 
     let db = chain.store().begin_transaction();
     let tree = db.state_tree(StateContext::ReadOnly).unwrap();

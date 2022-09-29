@@ -2,7 +2,7 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use gw_challenge::offchain::{verify_tx::TxWithContext, OffChainMockContext};
-use gw_common::{sparse_merkle_tree, state::State, CKB_SUDT_SCRIPT_ARGS, H256};
+use gw_common::{sparse_merkle_tree, state::State, H256};
 use gw_config::ChainConfig;
 use gw_generator::{
     generator::{ApplyBlockArgs, ApplyBlockResult},
@@ -366,7 +366,6 @@ impl Chain {
                             .block_hash(l2block.hash().pack())
                             .build();
 
-                        self.calculate_and_store_finalized_custodians(db, block_number)?;
                         db.set_last_submitted_block_number_hash(&nh.as_reader())?;
                         db.set_last_confirmed_block_number_hash(&nh.as_reader())?;
                         db.set_block_submit_tx(block_number, &transaction.as_reader())?;
@@ -581,66 +580,6 @@ impl Chain {
         self.local_state.last_global_state = global_state;
         log::debug!("last sync event {:?}", self.last_sync_event);
 
-        Ok(())
-    }
-
-    pub fn calculate_and_store_finalized_custodians(
-        &mut self,
-        db: &StoreTransaction,
-        block_number: u64,
-    ) -> Result<(), anyhow::Error> {
-        let block_hash = db
-            .get_block_hash_by_number(block_number)?
-            .context("get block hash")?;
-        let withdrawals = db
-            .get_block(&block_hash)?
-            .context("get block")?
-            .withdrawals();
-
-        let mut finalized_custodians = db
-            .get_block_post_finalized_custodian_capacity(block_number - 1)
-            .context("get parent block remaining finalized custodians")?
-            .as_reader()
-            .unpack();
-        let last_finalized_block = self
-            .generator
-            .rollup_context()
-            .last_finalized_block_number(block_number - 1);
-        let deposits = db
-            .get_block_deposit_info_vec(last_finalized_block)
-            .context("get last finalized block deposit")?;
-        for deposit in deposits {
-            let deposit = deposit.request();
-            finalized_custodians.capacity = finalized_custodians
-                .capacity
-                .checked_add(deposit.capacity().unpack().into())
-                .context("add capacity overflow")?;
-            finalized_custodians
-                .checked_add_sudt(
-                    deposit.sudt_script_hash().unpack(),
-                    deposit.amount().unpack(),
-                    deposit.script(),
-                )
-                .context("add sudt overflow")?;
-        }
-        for w in withdrawals.as_reader().iter() {
-            finalized_custodians.capacity = finalized_custodians
-                .capacity
-                .checked_sub(w.raw().capacity().unpack().into())
-                .context("withdrawal not enough capacity")?;
-
-            let sudt_amount = w.raw().amount().unpack();
-            let sudt_script_hash: [u8; 32] = w.raw().sudt_script_hash().unpack();
-            if 0 != sudt_amount && CKB_SUDT_SCRIPT_ARGS != sudt_script_hash {
-                finalized_custodians
-                    .checked_sub_sudt(sudt_script_hash, sudt_amount)
-                    .context("withdrawal not enough sudt amount")?;
-            }
-        }
-        db.set_block_post_finalized_custodian_capacity(
-            block_number,
-            &finalized_custodians.pack().as_reader(),
-        )?;
         Ok(())
     }
 

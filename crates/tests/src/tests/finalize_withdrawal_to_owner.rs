@@ -6,8 +6,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::testing_tool::chain::{
-    construct_block_with_timestamp, TestChain, ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM,
-    CUSTODIAN_LOCK_PROGRAM, STAKE_LOCK_PROGRAM, STATE_VALIDATOR_TYPE_PROGRAM,
+    construct_block_with_timestamp, into_deposit_info_cell, TestChain, ALWAYS_SUCCESS_CODE_HASH,
+    ALWAYS_SUCCESS_PROGRAM, CUSTODIAN_LOCK_PROGRAM, STAKE_LOCK_PROGRAM,
+    STATE_VALIDATOR_TYPE_PROGRAM,
 };
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 use crate::testing_tool::verify_tx::{verify_tx, TxWithContext};
@@ -28,18 +29,19 @@ use gw_types::bytes::Bytes;
 use gw_types::core::{AllowedEoaType, DepType, ScriptHashType};
 use gw_types::offchain::{CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext};
 use gw_types::packed::{
-    AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositRequest,
-    GlobalState, LastFinalizedWithdrawal, OutPoint, RawWithdrawalRequest, RollupAction,
-    RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, ScriptVec, StakeLockArgs,
-    WithdrawalRequest, WithdrawalRequestExtra, WitnessArgs,
+    AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositInfoVec,
+    DepositRequest, GlobalState, LastFinalizedWithdrawal, OutPoint, RawWithdrawalRequest,
+    RollupAction, RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, ScriptVec,
+    StakeLockArgs, WithdrawalRequest, WithdrawalRequestExtra, WitnessArgs,
 };
 use gw_types::prelude::{Pack, PackVec, Unpack};
+use gw_utils::local_cells::LocalCellsManager;
 use gw_utils::transaction_skeleton::TransactionSkeleton;
 
 const CKB: u64 = 100000000;
 const MAX_MEM_BLOCK_WITHDRAWALS: u8 = 50;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_finalize_withdrawal_to_owner() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -191,17 +193,18 @@ async fn test_finalize_withdrawal_to_owner() {
 
     let deposits: Vec<_> = { accounts.iter() }
         .map(|account_script| {
-            DepositRequest::new_builder()
+            let deposit = DepositRequest::new_builder()
                 .capacity(DEPOSIT_CAPACITY.pack())
                 .sudt_script_hash(sudt_script.hash().pack())
                 .amount(DEPOSIT_AMOUNT.pack())
                 .script(account_script.to_owned())
                 .registry_id(gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID.pack())
-                .build()
+                .build();
+            into_deposit_info_cell(chain.inner.generator().rollup_context(), deposit).pack()
         })
         .collect();
 
-    chain.produce_block(deposits, vec![]).await.unwrap();
+    chain.produce_block(deposits.pack(), vec![]).await.unwrap();
     assert_eq!(chain.last_global_state().version_u8(), 2);
 
     let input_rollup_cell = CellInfo {
@@ -265,16 +268,25 @@ async fn test_finalize_withdrawal_to_owner() {
             mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
         }
 
-        mem_pool.reset_mem_block().await.unwrap();
+        mem_pool
+            .reset_mem_block(&LocalCellsManager::default())
+            .await
+            .unwrap();
         assert_eq!(mem_pool.mem_block().withdrawals().len(), accounts.len());
     }
 
     const BLOCK_TIMESTAMP: u64 = 10000u64;
     let withdrawal_block_result = {
         let mut mem_pool = chain.mem_pool().await;
-        construct_block_with_timestamp(&chain.inner, &mut mem_pool, vec![], BLOCK_TIMESTAMP, true)
-            .await
-            .unwrap()
+        construct_block_with_timestamp(
+            &chain.inner,
+            &mut mem_pool,
+            DepositInfoVec::default(),
+            BLOCK_TIMESTAMP,
+            true,
+        )
+        .await
+        .unwrap()
     };
     assert_eq!(
         withdrawal_block_result.block.withdrawals().len(),
@@ -400,14 +412,21 @@ async fn test_finalize_withdrawal_to_owner() {
         .map(|w| withdrawals_map.get(&w.hash().into()).unwrap().to_owned())
         .collect();
     chain
-        .apply_block_result(vec![], withdrawals, withdrawal_block_result)
+        .apply_block_result(
+            DepositInfoVec::default(),
+            withdrawals,
+            withdrawal_block_result,
+        )
         .await
         .unwrap();
 
     // Produce block to finalize withdrawals
     let finality_blocks = rollup_config.finality_blocks().unpack();
     for _ in 0..(finality_blocks + 1) {
-        chain.produce_block(vec![], vec![]).await.unwrap();
+        chain
+            .produce_block(DepositInfoVec::default(), vec![])
+            .await
+            .unwrap();
     }
 
     let rollup_config_cell_dep = CellDep::new_builder()
@@ -474,6 +493,7 @@ async fn test_finalize_withdrawal_to_owner() {
         finalized_custodians,
         pending: vec![],
     };
+    let manager = LocalCellsManager::default();
 
     let inputs = vec![
         into_input_cell(input_rollup_cell),
@@ -490,7 +510,7 @@ async fn test_finalize_withdrawal_to_owner() {
         .map(|bn| BlockWithdrawals::new(chain.store().get_block_by_number(bn).unwrap().unwrap()))
         .collect::<Vec<_>>();
 
-    let (tx, updated_last_finalized) = { finalizer.query_and_finalize_to_owner().await }
+    let (tx, updated_last_finalized) = { finalizer.query_and_finalize_to_owner(&manager).await }
         .unwrap()
         .unwrap();
 
@@ -517,7 +537,7 @@ async fn test_finalize_withdrawal_to_owner() {
         .map(|bn| BlockWithdrawals::new(chain.store().get_block_by_number(bn).unwrap().unwrap()))
         .collect::<Vec<_>>();
 
-    let (tx, updated_last_finalized) = { finalizer.query_and_finalize_to_owner().await }
+    let (tx, updated_last_finalized) = { finalizer.query_and_finalize_to_owner(&manager).await }
         .unwrap()
         .unwrap();
 
@@ -546,7 +566,7 @@ async fn test_finalize_withdrawal_to_owner() {
     let last_block_withdrawals = finalizer.pending.pop().unwrap();
     { &mut finalizer.pending }.push(last_block_withdrawals.take(1).unwrap());
 
-    let (tx, updated_last_finalized) = { finalizer.query_and_finalize_to_owner().await }
+    let (tx, updated_last_finalized) = { finalizer.query_and_finalize_to_owner(&manager).await }
         .unwrap()
         .unwrap();
 
@@ -589,7 +609,7 @@ async fn test_finalize_withdrawal_to_owner() {
     .unwrap()
     .unwrap()];
 
-    let (tx, updated_last_finalized) = { finalizer.query_and_finalize_to_owner().await }
+    let (tx, updated_last_finalized) = { finalizer.query_and_finalize_to_owner(&manager).await }
         .unwrap()
         .unwrap();
 
@@ -692,6 +712,7 @@ impl FinalizeWithdrawalToOwner for DummyFinalizer {
         &self,
         _last_finalized_block_number: u64,
         _withdrawals: &[BlockWithdrawals],
+        _local_cells_manager: &LocalCellsManager,
     ) -> Result<CollectedCustodianCells> {
         Ok(self.finalized_custodians.clone())
     }

@@ -25,10 +25,8 @@ use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
-    core::Status,
     offchain::{
-        global_state_from_slice, CellInfo, CollectedCustodianCells, DepositInfo, InputCellInfo,
-        RollupContext, WithdrawalsAmount,
+        CollectedCustodianCells, DepositInfo, InputCellInfo, RollupContext, WithdrawalsAmount,
     },
     packed::{
         CellDep, CellInput, CellOutput, GlobalState, L2Block, RollupAction, RollupActionUnion,
@@ -40,7 +38,11 @@ use gw_utils::{
     fee::fill_tx_fee_with_local, genesis_info::CKBGenesisInfo, local_cells::LocalCellsManager,
     query_rollup_cell, since::Since, transaction_skeleton::TransactionSkeleton, wallet::Wallet,
 };
-use std::{collections::HashSet, sync::Arc, time::Instant};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Instant,
+};
 use tokio::sync::Mutex;
 use tracing::instrument;
 
@@ -136,7 +138,7 @@ impl BlockProducer {
         }
 
         // get txs & withdrawal requests from mem pool
-        let (mut mem_block, post_block_state) = {
+        let (mem_block, post_block_state) = {
             let t = Instant::now();
             let r = mem_pool.output_mem_block(&OutputParam::new(retry_count));
             log::debug!(
@@ -146,27 +148,18 @@ impl BlockProducer {
             r
         };
 
-        let tip_block_number = mem_block.block_info().number().unpack().saturating_sub(1);
-        let produce_block_param =
-            generate_produce_block_param(&self.store, mem_block, post_block_state)?;
-        rollup_input_since.verify_block_timestamp(produce_block_param.timestamp)?;
-
-        let finalized_custodians = {
-            let last_finalized_block_number = {
-                let context = self.generator.rollup_context();
-                context.last_finalized_block_number(tip_block_number)
-            };
-            let query = query_mergeable_custodians(
-                &self.rpc_client,
-                CollectedCustodianCells::default(),
-                last_finalized_block_number,
-            );
-            query.await?.expect_any()
+        let last_finalized_withdrawal = {
+            let chain = self.chain.lock().await;
+            get_last_finalized_withdrawal(&chain)
         };
 
-        let remaining_capacity = mem_block.take_finalized_custodians_capacity();
         let t = Instant::now();
-        let block_param = generate_produce_block_param(&self.store, mem_block, post_block_state)?;
+        let block_param = generate_produce_block_param(
+            &self.store,
+            mem_block,
+            post_block_state,
+            last_finalized_withdrawal,
+        )?;
 
         log::debug!(
             target: "produce-block",
@@ -187,8 +180,7 @@ impl BlockProducer {
             block_param,
         };
         let db = self.store.begin_transaction();
-        let mut result = produce_block(&db, &self.generator, param)?;
-        result.remaining_capacity = remaining_capacity;
+        let result = produce_block(&db, &self.generator, param)?;
         Ok(result)
     }
 
@@ -323,6 +315,22 @@ impl BlockProducer {
             });
         }
 
+        // mergeble finalized custodians cell
+        let finalized_custodians = {
+            let tip_block_number = block.as_reader().raw().number().unpack();
+            let last_finalized_block_number = {
+                let context = self.generator.rollup_context();
+                context.last_finalized_block_number(tip_block_number)
+            };
+            let query = query_mergeable_custodians(
+                local_cells_manager,
+                &self.rpc_client,
+                CollectedCustodianCells::default(),
+                last_finalized_block_number,
+            );
+            query.await?.expect_any()
+        };
+
         // Simple UDT dep
         if !deposit_cells.is_empty() || !finalized_custodians.sudt.is_empty() {
             tx_skeleton
@@ -373,45 +381,6 @@ impl BlockProducer {
         )
         .await?
         .expect_any();
-
-        // Simple UDT dep
-        if !deposit_cells.is_empty() || !finalized_custodians.sudt.is_empty() {
-            tx_skeleton
-                .cell_deps_mut()
-                .push(contracts_dep.l1_sudt_type.clone().into());
-        }
-
-        // withdrawal cells
-        let parent_global_state = {
-            let parent_block_hash: H256 = block.raw().parent_block_hash().unpack();
-            db.get_block_post_global_state(&parent_block_hash)?
-                .ok_or_else(|| {
-                    anyhow!(
-                        "parent block {:x} global state not found",
-                        parent_block_hash.pack()
-                    )
-                })?
-        };
-        if 2 != global_state.version_u8() {
-            let map_withdrawal_extras = withdrawal_extras.into_iter().map(|w| (w.hash().into(), w));
-            if let Some(generated_withdrawal_cells) = crate::withdrawal::generate(
-                rollup_context,
-                finalized_custodians,
-                &block,
-                &contracts_dep,
-                &map_withdrawal_extras.collect(),
-            )? {
-                tx_skeleton
-                    .cell_deps_mut()
-                    .extend(generated_withdrawal_cells.deps);
-                tx_skeleton
-                    .inputs_mut()
-                    .extend(generated_withdrawal_cells.inputs);
-                tx_skeleton
-                    .outputs_mut()
-                    .extend(generated_withdrawal_cells.outputs);
-            }
-        }
 
         if let Some(reverted_deposits) =
             crate::deposit::revert(rollup_context, &contracts_dep, revert_custodians)?
@@ -544,7 +513,6 @@ pub struct ComposeSubmitTxArgs<'a> {
     pub since: Since,
     pub withdrawal_extras: Vec<WithdrawalRequestExtra>,
     pub local_cells_manager: &'a LocalCellsManager,
-    finalized_custodians: CollectedCustodianCells,
 }
 
 #[derive(thiserror::Error, Debug)]

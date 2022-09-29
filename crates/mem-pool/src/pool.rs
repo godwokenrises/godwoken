@@ -8,7 +8,7 @@
 //! txs & withdrawals again.
 //!
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, registry_address::RegistryAddress,
     state::State, H256,
@@ -33,10 +33,10 @@ use gw_store::{
 };
 use gw_traits::CodeStore;
 use gw_types::{
-    offchain::{DepositInfo, FinalizedCustodianCapacity},
+    offchain::DepositInfo,
     packed::{
-        AccountMerkleState, BlockInfo, L2Block, L2Transaction, NextMemBlock, Script, TxReceipt,
-        WithdrawalRequest, WithdrawalRequestExtra,
+        AccountMerkleState, BlockInfo, L2Transaction, NextMemBlock, TxReceipt, WithdrawalRequest,
+        WithdrawalRequestExtra,
     },
     prelude::{Builder, Entity, Pack, PackVec, Unpack},
 };
@@ -53,9 +53,8 @@ use tokio::task::block_in_place;
 use tracing::instrument;
 
 use crate::{
-    block_sync_server::BlockSyncServerState, mem_block::MemBlock, mem_block::MemBlock,
-    restore_manager::RestoreManager, traits::MemPoolProvider, traits::MemPoolProvider,
-    types::EntryList, types::EntryList, withdrawal::Generator as WithdrawalGenerator,
+    block_sync_server::BlockSyncServerState, mem_block::MemBlock, restore_manager::RestoreManager,
+    traits::MemPoolProvider, types::EntryList,
 };
 
 #[derive(Debug, Default)]
@@ -368,39 +367,6 @@ impl MemPool {
         Ok(())
     }
 
-    // TODO: @sopium optimization: collect on reset and cache.
-    fn collect_finalized_custodian_capacity(&self) -> Result<FinalizedCustodianCapacity> {
-        let tip = self.current_tip.1;
-        if tip == 0 {
-            return Ok(Default::default());
-        }
-        let snap = self.store.get_snapshot();
-        let mut c: FinalizedCustodianCapacity = snap
-            .get_block_post_finalized_custodian_capacity(tip)
-            .ok_or_else(|| anyhow!("failed to get last block post finalized custodian capacity"))?
-            .as_reader()
-            .unpack();
-        let last_finalized = self
-            .generator
-            .rollup_context()
-            .last_finalized_block_number(tip);
-        if last_finalized > 0 {
-            let last_finalized_deposits = snap
-                .get_block_deposit_info_vec(last_finalized)
-                .context("get last finalized block deposit")?;
-            for i in last_finalized_deposits {
-                let d = i.request();
-                c.capacity += u128::from(d.capacity().unpack());
-                let amount = d.amount().unpack();
-                if amount > 0 {
-                    let hash = d.sudt_script_hash().unpack();
-                    c.checked_add_sudt(hash, amount, d.script())
-                        .expect("add sudt amount overflow");
-                }
-            }
-        }
-        Ok(c)
-    }
     // Withdrawal request verification
     // TODO: duplicate withdrawal check
     #[instrument(skip_all)]

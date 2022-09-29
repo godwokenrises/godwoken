@@ -368,7 +368,6 @@ async fn generate_and_revert_a_bad_block(
             global_state,
             withdrawal_extras,
             deposit_cells,
-            remaining_capacity,
         } = block_result.clone();
         let (bad_block, bad_global_state) =
             generate_bad_block_using_first_withdrawal(chain, block, global_state);
@@ -387,7 +386,6 @@ async fn generate_and_revert_a_bad_block(
             global_state: bad_global_state,
             withdrawal_extras,
             deposit_cells,
-            remaining_capacity,
         }
     };
 

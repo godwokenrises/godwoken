@@ -351,7 +351,6 @@ async fn handle_local_block(
                 l.withdrawals().into_iter().collect(),
                 l.post_global_state(),
             )?;
-            chain.calculate_and_store_finalized_custodians(&store_tx, block_number)?;
             store_tx.commit()?;
             anyhow::Ok(())
         })?;

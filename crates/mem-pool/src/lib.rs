@@ -14,4 +14,3 @@ pub mod pool;
 pub mod restore_manager;
 pub mod traits;
 mod types;
-pub mod withdrawal;

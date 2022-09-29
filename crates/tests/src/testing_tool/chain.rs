@@ -298,13 +298,13 @@ impl TestChain {
             construct_block(&self.inner, &mut mem_pool, deposit_info_vec.clone()).await?
         };
 
-        self.apply_block_result(deposit_requests, withdrawals, block_result)
+        self.apply_block_result(deposit_info_vec, withdrawals, block_result)
             .await
     }
 
     pub async fn apply_block_result(
         &mut self,
-        deposit_requests: Vec<DepositRequest>,
+        deposit_info_vec: DepositInfoVec,
         withdrawals: Vec<WithdrawalRequestExtra>,
         block_result: ProduceBlockResult,
     ) -> anyhow::Result<()> {
@@ -588,7 +588,6 @@ pub async fn apply_block_result(
     deposit_info_vec: DepositInfoVec,
     deposit_asset_scripts: HashSet<Script>,
 ) {
-    let number = block_result.block.raw().number().unpack();
     let hash = block_result.block.hash();
     let store_tx = chain.store().begin_transaction();
     chain
@@ -599,12 +598,6 @@ pub async fn apply_block_result(
             deposit_asset_scripts,
             block_result.withdrawal_extras,
             block_result.global_state,
-        )
-        .unwrap();
-    store_tx
-        .set_block_post_finalized_custodian_capacity(
-            number,
-            &block_result.remaining_capacity.pack().as_reader(),
         )
         .unwrap();
     store_tx.commit().unwrap();
@@ -657,9 +650,14 @@ pub async fn construct_block_with_timestamp(
     };
     mem_pool.set_provider(Box::new(provider));
 
-    let (mut mem_block, post_merkle_state) = mem_pool.output_mem_block(&OutputParam::default());
-    let remaining_capacity = mem_block.take_finalized_custodians_capacity();
-    let block_param = generate_produce_block_param(chain.store(), mem_block, post_merkle_state)?;
+    let (mem_block, post_merkle_state) = mem_pool.output_mem_block(&OutputParam::default());
+    let last_finalized_withdrawal = get_last_finalized_withdrawal(chain);
+    let block_param = generate_produce_block_param(
+        chain.store(),
+        mem_block,
+        post_merkle_state,
+        last_finalized_withdrawal,
+    )?;
     let reverted_block_root = db.get_reverted_block_smt_root().unwrap();
     let param = ProduceBlockParam {
         stake_cell_owner_lock_hash,
@@ -667,10 +665,7 @@ pub async fn construct_block_with_timestamp(
         reverted_block_root,
         block_param,
     };
-    produce_block(&db, generator, param).map(|mut r| {
-        r.remaining_capacity = remaining_capacity;
-        r
-    })
+    produce_block(&db, generator, param)
 }
 
 pub fn into_deposit_info_cell(

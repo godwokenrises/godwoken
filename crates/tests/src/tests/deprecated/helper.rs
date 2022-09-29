@@ -1,12 +1,13 @@
 #![allow(clippy::mutable_key_type)]
 
 use anyhow::{anyhow, bail, Result};
+use gw_block_producer::custodian::AvailableCustodians;
 use gw_common::H256;
 use gw_config::ContractsCellDep;
 use gw_generator::error::WithdrawalError;
 use gw_mem_pool::custodian::{
     build_finalized_custodian_lock, calc_ckb_custodian_min_capacity, generate_finalized_custodian,
-    sum_withdrawals, AvailableCustodians,
+    sum_withdrawals,
 };
 use gw_types::{
     bytes::Bytes,

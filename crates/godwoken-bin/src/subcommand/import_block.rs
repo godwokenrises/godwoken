@@ -257,7 +257,6 @@ fn insert_block(
         tx_db.set_block_submit_tx_hash(block_number, &hash.into())?;
         *last_submitted_block = Some(block_number);
     };
-    chain.calculate_and_store_finalized_custodians(&tx_db, block_number)?;
 
     tx_db.commit()?;
 

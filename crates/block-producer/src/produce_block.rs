@@ -20,7 +20,7 @@ use gw_store::{
 };
 use gw_types::{
     core::Status,
-    offchain::{BlockParam, DepositInfo, FinalizedCustodianCapacity},
+    offchain::{BlockParam, DepositInfo},
     packed::{
         AccountMerkleState, BlockMerkleState, GlobalState, L2Block, LastFinalizedWithdrawal,
         RawL2Block, SubmitTransactions, SubmitWithdrawals, WithdrawalRequestExtra,
@@ -35,7 +35,6 @@ pub struct ProduceBlockResult {
     pub global_state: GlobalState,
     pub deposit_cells: Vec<DepositInfo>,
     pub withdrawal_extras: Vec<WithdrawalRequestExtra>,
-    pub remaining_capacity: FinalizedCustodianCapacity,
 }
 
 pub struct ProduceBlockParam {
@@ -176,7 +175,6 @@ pub fn produce_block(
         global_state,
         deposit_cells: deposits,
         withdrawal_extras: withdrawals,
-        remaining_capacity: Default::default(),
     })
 }
 

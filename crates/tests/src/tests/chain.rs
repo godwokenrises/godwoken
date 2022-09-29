@@ -805,7 +805,6 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             global_state,
             withdrawal_extras,
             deposit_cells,
-            remaining_capacity,
         } = block_result.clone();
         let (bad_block, bad_global_state) =
             generate_bad_block_using_first_withdrawal(&chain, block, global_state);
@@ -824,7 +823,6 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             global_state: bad_global_state,
             withdrawal_extras,
             deposit_cells,
-            remaining_capacity,
         }
     };
 

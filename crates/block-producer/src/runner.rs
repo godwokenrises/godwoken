@@ -74,7 +74,6 @@ struct ChainTaskContext {
     challenger: Option<Challenger>,
     withdrawal_unlocker: Option<FinalizedWithdrawalUnlocker>,
     cleaner: Option<Arc<Cleaner>>,
-    withdrawal_finalizer: Option<UserWithdrawalFinalizer>,
 }
 
 struct ChainTaskRunStatus {
@@ -187,12 +186,6 @@ impl ChainTask {
                             err
                         );
                     }
-                }
-            }
-
-            if let Some(ref withdrawal_finalizer) = ctx.withdrawal_finalizer {
-                if let Err(err) = withdrawal_finalizer.handle_event(&event).await {
-                    log::error!("[withdrawal finalizer] {}", err);
                 }
             }
 
@@ -893,7 +886,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     challenger,
                     withdrawal_unlocker,
                     cleaner,
-                    withdrawal_finalizer,
                 };
                 let mut backoff = ExponentialBackoff::new(Duration::from_secs(1));
                 let mut chain_task = ChainTask::create(

@@ -19,7 +19,6 @@ use gw_utils::local_cells::{
 
 use gw_mem_pool::custodian::{
     build_finalized_custodian_lock, calc_ckb_custodian_min_capacity, generate_finalized_custodian,
-    AvailableCustodians,
 };
 use gw_types::{
     bytes::Bytes,
@@ -68,6 +67,15 @@ pub async fn query_mergeable_custodians(
 pub struct AggregatedCustodians {
     pub inputs: Vec<InputCellInfo>,
     pub outputs: Vec<(CellOutput, Bytes)>,
+}
+
+impl<'a> From<&'a CollectedCustodianCells> for AvailableCustodians {
+    fn from(collected: &'a CollectedCustodianCells) -> Self {
+        AvailableCustodians {
+            capacity: collected.capacity,
+            sudt: collected.sudt.clone(),
+        }
+    }
 }
 
 pub fn aggregate_balance(
@@ -339,6 +347,12 @@ pub async fn query_mergeable_sudt_custodians_cells(
     } else {
         Ok(QueryResult::Full(collected))
     }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AvailableCustodians {
+    pub capacity: u128,
+    pub sudt: HashMap<[u8; 32], (u128, Script)>,
 }
 
 #[derive(Clone)]

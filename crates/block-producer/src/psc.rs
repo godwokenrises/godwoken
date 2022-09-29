@@ -367,7 +367,6 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
         global_state,
         withdrawal_extras,
         deposit_cells,
-        remaining_capacity,
     } = ctx.block_producer.produce_next_block(&mut pool, 0).await?;
 
     let number: u64 = block.raw().number().unpack();
@@ -419,17 +418,12 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
             global_state,
         )?;
         log::info!(
-            "produced new block #{} (txs: {}, deposits: {}, withdrawals: {}, capacity: {})",
+            "produced new block #{} (txs: {}, deposits: {}, withdrawals: {})",
             number,
             block_txs,
             deposit_cells.len(),
             block_withdrawals,
-            remaining_capacity.capacity,
         );
-        store_tx.set_block_post_finalized_custodian_capacity(
-            number,
-            &remaining_capacity.pack().as_reader(),
-        )?;
         store_tx.commit()?;
         anyhow::Ok(())
     })?;

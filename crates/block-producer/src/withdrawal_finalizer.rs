@@ -35,12 +35,12 @@ use gw_types::{
     prelude::{Builder, Entity, FromSliceShouldBeOk, Pack, Unpack},
 };
 use gw_utils::{
-    fee::fill_tx_fee, genesis_info::CKBGenesisInfo, transaction_skeleton::TransactionSkeleton,
-    wallet::Wallet,
+    fee::fill_tx_fee, genesis_info::CKBGenesisInfo, local_cells::LocalCellsManager,
+    transaction_skeleton::TransactionSkeleton, wallet::Wallet,
 };
 use tracing::instrument;
 
-use crate::{types::ChainEvent, withdrawal::BlockWithdrawals};
+use crate::withdrawal::BlockWithdrawals;
 
 const TRANSACTION_FAILED_TO_RESOLVE_ERROR: &str = "TransactionFailedToResolve";
 
@@ -81,8 +81,8 @@ impl UserWithdrawalFinalizer {
         *self.last_finalize_tx.lock().expect("lock")
     }
 
-    #[instrument(skip_all, err, name = "user withdrawal finalizer handle_event")]
-    pub async fn handle_event(&self, _event: &ChainEvent) -> Result<()> {
+    #[instrument(skip_all, err, name = "user withdrawal finalizer")]
+    pub async fn try_finalize(&self, local_cells_manager: &LocalCellsManager) -> Result<()> {
         let rpc_client = &self.inner.rpc_client;
 
         if let Some(tx_hash) = self.last_finalize_tx() {
@@ -113,7 +113,11 @@ impl UserWithdrawalFinalizer {
             return Ok(()); // Wait next event loop
         }
 
-        if let Some((tx, pending_finalized)) = self.inner.query_and_finalize_to_owner().await? {
+        if let Some((tx, pending_finalized)) = self
+            .inner
+            .query_and_finalize_to_owner(local_cells_manager)
+            .await?
+        {
             match rpc_client.dry_run_transaction(&tx).await {
                 Ok(cycles) => {
                     tracing::trace!(tx_hash = %tx.hash().pack(), cycles=cycles, "dry run finalize tx");
@@ -197,12 +201,14 @@ pub trait FinalizeWithdrawalToOwner {
         &self,
         last_finalized_block_number: u64,
         withdrawals: &[BlockWithdrawals],
+        local_cells_manager: &LocalCellsManager,
     ) -> Result<CollectedCustodianCells>;
 
     async fn complete_tx(&self, tx_skeleton: TransactionSkeleton) -> Result<Transaction>;
 
     async fn query_and_finalize_to_owner(
         &self,
+        local_cells_manager: &LocalCellsManager,
     ) -> Result<Option<(Transaction, LastFinalizedWithdrawal)>> {
         let rollup_input = match self.query_rollup_cell().await? {
             Some(cell) => cell,
@@ -299,7 +305,11 @@ pub trait FinalizeWithdrawalToOwner {
             ensure!(!withdrawals_amount.is_zero(), "all withdrawals are valid");
 
             let finalized_custodians = self
-                .query_finalized_custodians(last_finalized_block_number, &block_withdrawals)
+                .query_finalized_custodians(
+                    last_finalized_block_number,
+                    &block_withdrawals,
+                    local_cells_manager,
+                )
                 .await?;
 
             let contracts_dep = self.contracts_dep();
@@ -500,6 +510,7 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
         &self,
         last_finalized_block_number: u64,
         block_withdrawals: &[BlockWithdrawals],
+        local_cells_manager: &LocalCellsManager,
     ) -> Result<CollectedCustodianCells> {
         query_finalized_custodians(
             &self.rpc_client,
@@ -507,6 +518,7 @@ impl FinalizeWithdrawalToOwner for DefaultFinalizer {
             { block_withdrawals.iter() }.flat_map(BlockWithdrawals::withdrawals),
             self.rollup_context(),
             last_finalized_block_number,
+            local_cells_manager,
         )
         .await?
         .expect_full("finalized custodian not enough")
@@ -742,6 +754,7 @@ mod tests {
                 &self,
                 last_finalized_block_number: u64,
                 withdrawals: &[BlockWithdrawals],
+                local_cells_manager: &LocalCellsManager,
             ) -> Result<CollectedCustodianCells>;
 
             async fn complete_tx(&self, tx_skeleton: TransactionSkeleton) -> Result<Transaction>;
@@ -1087,7 +1100,12 @@ mod tests {
         let mut finalizer = MockDummyFinalizer::new();
         finalizer.expect_query_rollup_cell().returning(|| Ok(None));
 
-        assert!({ finalizer.query_and_finalize_to_owner().await.unwrap() }.is_none());
+        let manager = LocalCellsManager::default();
+        let ret = finalizer
+            .query_and_finalize_to_owner(&manager)
+            .await
+            .unwrap();
+        assert!(ret.is_none());
     }
 
     #[tokio::test]
@@ -1108,7 +1126,12 @@ mod tests {
             Ok(Some(input_cell))
         });
 
-        assert!({ finalizer.query_and_finalize_to_owner().await.unwrap() }.is_none());
+        let manager = LocalCellsManager::default();
+        let ret = finalizer
+            .query_and_finalize_to_owner(&manager)
+            .await
+            .unwrap();
+        assert!(ret.is_none());
 
         // Rollup status isn't running
         let global_state = GlobalState::new_builder()
@@ -1127,7 +1150,11 @@ mod tests {
             Ok(Some(input_cell))
         });
 
-        assert!({ finalizer.query_and_finalize_to_owner().await.unwrap() }.is_none());
+        let ret = finalizer
+            .query_and_finalize_to_owner(&manager)
+            .await
+            .unwrap();
+        assert!(ret.is_none());
 
         // Invalid rollup status
         let global_state = GlobalState::new_builder()
@@ -1146,7 +1173,11 @@ mod tests {
             Ok(Some(input_cell))
         });
 
-        assert!({ finalizer.query_and_finalize_to_owner().await.unwrap() }.is_none());
+        let ret = finalizer
+            .query_and_finalize_to_owner(&manager)
+            .await
+            .unwrap();
+        assert!(ret.is_none());
 
         // No pending finalized withdrawals
         let global_state = GlobalState::new_builder()
@@ -1168,6 +1199,10 @@ mod tests {
             .expect_get_pending_finalized_withdrawals()
             .returning(|_, _| Ok(None));
 
-        assert!({ finalizer.query_and_finalize_to_owner().await.unwrap() }.is_none());
+        let ret = finalizer
+            .query_and_finalize_to_owner(&manager)
+            .await
+            .unwrap();
+        assert!(ret.is_none());
     }
 }
