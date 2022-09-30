@@ -33,6 +33,7 @@ use self::error_codes::{
     GW_ERROR_NOT_FOUND, GW_ERROR_RECOVER, GW_ERROR_UNKNOWN_SCRIPT_CODE_HASH, SUCCESS,
 };
 
+mod bn;
 pub mod error_codes;
 
 /* Constants */
@@ -58,6 +59,10 @@ const SYS_GET_BLOCK_HASH: u64 = 3404;
 const SYS_PAY_FEE: u64 = 3501;
 const SYS_LOG: u64 = 3502;
 const SYS_RECOVER_ACCOUNT: u64 = 3503;
+/* Syscall for make use the Barreto-Naehrig (BN) curve construction */
+const SYS_BN_ADD: u64 = 3601;
+const SYS_BN_MUL: u64 = 3602;
+const SYS_BN_PAIRING: u64 = 3603;
 /* CKB compatible syscalls */
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
@@ -524,6 +529,51 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
+            SYS_BN_ADD => {
+                let input_addr = machine.registers()[A3].to_u64();
+                let input_size = machine.registers()[A4].to_u64();
+                let input = load_bytes(machine, input_addr, input_size as usize)?;
+
+                let output = bn::add(&input).map_err(|err| {
+                    let err_msg = format!("syscall SYS_BN_ADD error: {:?}", err.0);
+                    log::error!("{}", err_msg);
+                    VMError::Unexpected(err_msg)
+                })?;
+                store_data(machine, output.as_slice())?;
+
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
+            SYS_BN_MUL => {
+                let input_addr = machine.registers()[A3].to_u64();
+                let input_size = machine.registers()[A4].to_u64();
+                let input = load_bytes(machine, input_addr, input_size as usize)?;
+
+                let output = bn::mul(&input).map_err(|err| {
+                    let err_msg = format!("syscall SYS_BN_MUL error: {:?}", err.0);
+                    log::error!("{}", err_msg);
+                    VMError::Unexpected(err_msg)
+                })?;
+                store_data(machine, output.as_slice())?;
+
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
+            SYS_BN_PAIRING => {
+                let input_addr = machine.registers()[A3].to_u64();
+                let input_size = machine.registers()[A4].to_u64();
+                let input = load_bytes(machine, input_addr, input_size as usize)?;
+
+                let output = bn::pairing(&input).map_err(|err| {
+                    let err_msg = format!("syscall SYS_BN_PAIRING error: {:?}", err.0);
+                    log::error!("{}", err_msg);
+                    VMError::Unexpected(err_msg)
+                })?;
+                store_data(machine, output.as_slice())?;
+
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
             DEBUG_PRINT_SYSCALL_NUMBER => {
                 self.output_debug(machine)?;
                 Ok(true)
@@ -646,6 +696,7 @@ impl<'a, 'b, S: State, C: ChainView> L2Syscalls<'a, 'b, S, C> {
             SYS_GET_BLOCK_HASH => cycles_config.sys_get_block_hash_cycles,
             SYS_RECOVER_ACCOUNT => cycles_config.sys_recover_account_cycles,
             SYS_LOG => cycles_config.sys_log_cycles,
+            // TODO: add default cycles of BN operations
             _ => 0,
         }
     }
