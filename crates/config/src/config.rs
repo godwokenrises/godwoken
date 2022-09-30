@@ -398,7 +398,7 @@ const fn default_max_block_cycles_limit() -> u64 {
 }
 
 fn default_syscall_cycles() -> SyscallCyclesConfig {
-    SyscallCyclesConfig::all_zero()
+    SyscallCyclesConfig::default()
 }
 
 // Workaround: https://github.com/alexcrichton/toml-rs/issues/256
@@ -444,7 +444,7 @@ impl Default for MemBlockConfig {
             max_txs: 1000,
             deposit_timeout_config: Default::default(),
             max_cycles_limit: default_max_block_cycles_limit(),
-            syscall_cycles: SyscallCyclesConfig::all_zero(),
+            syscall_cycles: SyscallCyclesConfig::default(),
         }
     }
 }
@@ -569,10 +569,13 @@ pub struct SyscallCyclesConfig {
     pub sys_get_block_hash_cycles: u64,
     pub sys_recover_account_cycles: u64,
     pub sys_log_cycles: u64,
+    pub sys_bn_add_cycles: u64,
+    pub sys_bn_mul_cycles: u64,
+    pub sys_bn_pairing_cycles: u64,
 }
 
 impl SyscallCyclesConfig {
-    pub fn all_zero() -> Self {
+    pub fn default() -> Self {
         SyscallCyclesConfig {
             sys_store_cycles: 0,
             sys_load_cycles: 0,
@@ -583,6 +586,12 @@ impl SyscallCyclesConfig {
             sys_get_block_hash_cycles: 0,
             sys_recover_account_cycles: 0,
             sys_log_cycles: 0,
+            // default cycles of BN operations
+            // estimated_cycles = 3 * (Gas Cost of EIP-1108)
+            // see: https://eips.ethereum.org/EIPS/eip-1108
+            sys_bn_add_cycles: 450,
+            sys_bn_mul_cycles: 18_000,
+            sys_bn_pairing_cycles: 135_000,
         }
     }
 }

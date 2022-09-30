@@ -564,6 +564,31 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                 let input_size = machine.registers()[A4].to_u64();
                 let input = load_bytes(machine, input_addr, input_size as usize)?;
 
+                if let Some(cycles_pool) = self.cycles_pool {
+                    // k is the number of pairings being computed
+                    let k: u64 = input_size / 192;
+                    if k > 0 {
+                        // Subtract additional cycles per pairing
+                        // https://eips.ethereum.org/EIPS/eip-1108
+                        let additional_cycles = k * 34000 * 3;
+                        self.result.cycles.r#virtual = self
+                            .result
+                            .cycles
+                            .r#virtual
+                            .saturating_add(additional_cycles);
+                        let execution_and_virtual = machine
+                            .cycles()
+                            .saturating_add(self.result.cycles.r#virtual);
+                        if cycles_pool.consume_cycles(additional_cycles).is_none()
+                            || execution_and_virtual > cycles_pool.limit()
+                        {
+                            return Err(VMError::Unexpected(
+                                "cycles pool limit reached".to_owned(),
+                            ));
+                        }
+                    }
+                }
+
                 let output = bn::pairing(&input).map_err(|err| {
                     let err_msg = format!("syscall SYS_BN_PAIRING error: {:?}", err.0);
                     log::error!("{}", err_msg);
@@ -696,7 +721,9 @@ impl<'a, 'b, S: State, C: ChainView> L2Syscalls<'a, 'b, S, C> {
             SYS_GET_BLOCK_HASH => cycles_config.sys_get_block_hash_cycles,
             SYS_RECOVER_ACCOUNT => cycles_config.sys_recover_account_cycles,
             SYS_LOG => cycles_config.sys_log_cycles,
-            // TODO: add default cycles of BN operations
+            SYS_BN_ADD => cycles_config.sys_bn_add_cycles,
+            SYS_BN_MUL => cycles_config.sys_bn_mul_cycles,
+            SYS_BN_PAIRING => cycles_config.sys_bn_pairing_cycles,
             _ => 0,
         }
     }

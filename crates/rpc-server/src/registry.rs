@@ -472,8 +472,7 @@ impl RequestSubmitter {
 
             // Use unlimit to ensure all exists mem pool transactions are included
             let mut org_cycles_pool = mem_pool.cycles_pool().clone();
-            *mem_pool.cycles_pool_mut() =
-                CyclesPool::new(u64::MAX, SyscallCyclesConfig::all_zero());
+            *mem_pool.cycles_pool_mut() = CyclesPool::new(u64::MAX, SyscallCyclesConfig::default());
 
             while let Some(hash) = mem_pool.pending_restored_tx_hashes().pop_front() {
                 match db.get_mem_pool_transaction(&hash) {

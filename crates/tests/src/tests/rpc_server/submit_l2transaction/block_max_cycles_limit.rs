@@ -367,6 +367,9 @@ async fn test_block_max_cycles_limit() {
                 sys_get_block_hash_cycles: MAX_CYCLES_LIMIT,
                 sys_recover_account_cycles: MAX_CYCLES_LIMIT,
                 sys_log_cycles: MAX_CYCLES_LIMIT,
+                sys_bn_add_cycles: MAX_CYCLES_LIMIT,
+                sys_bn_mul_cycles: MAX_CYCLES_LIMIT,
+                sys_bn_pairing_cycles: MAX_CYCLES_LIMIT,
             },
             ..Default::default()
         },

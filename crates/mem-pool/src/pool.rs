@@ -708,7 +708,7 @@ impl MemPool {
             }
 
             // To simplify logic, don't restrict reinjected txs
-            self.cycles_pool = CyclesPool::new(u64::MAX, SyscallCyclesConfig::all_zero());
+            self.cycles_pool = CyclesPool::new(u64::MAX, SyscallCyclesConfig::default());
 
             self.prepare_next_mem_block(
                 &db,
@@ -1247,7 +1247,7 @@ impl MemPool {
             self.remove_unexecutables(&mut mem_state, &db)?;
 
             // reset cycles pool available cycles.
-            self.cycles_pool = CyclesPool::new(u64::MAX, SyscallCyclesConfig::all_zero());
+            self.cycles_pool = CyclesPool::new(u64::MAX, SyscallCyclesConfig::default());
 
             // prepare next mem block
             self.try_package_more_withdrawals(&mem_state, &mut withdrawals);
