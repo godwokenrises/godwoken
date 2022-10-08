@@ -235,7 +235,7 @@ pub fn generate_polyjuice_system_log(
     gas_used: u64,
     cumulative_gas_used: u64,
     created_address: [u8; 20],
-    status_code: u32,
+    status_code: i32,
 ) -> LogItem {
     let service_flag: u8 = GW_LOG_POLYJUICE_SYSTEM;
     let mut data = [0u8; 40];

@@ -765,6 +765,11 @@ impl Generator {
         raw_tx: &RawL2Transaction,
         mut run_result: RunResult,
     ) -> Result<RunResult, TransactionError> {
+        /// Error code represents EVM internal error
+        /// we emit this error from Godwoken side if
+        /// Polyjuice failed to generate a system log
+        const ERROR_EVM_INTERNAL: i32 = -1;
+
         let sender_id: u32 = raw_tx.from_id().unpack();
         let nonce_raw_key = build_account_field_key(sender_id, GW_ACCOUNT_NONCE_TYPE);
         let nonce_before = state.get_nonce(sender_id)?;
@@ -848,7 +853,7 @@ impl Generator {
                             gas,
                             gas,
                             Default::default(),
-                            0,
+                            ERROR_EVM_INTERNAL,
                         ));
                     }
                     let parser = tx.parser().ok_or(TransactionError::NoCost)?;
