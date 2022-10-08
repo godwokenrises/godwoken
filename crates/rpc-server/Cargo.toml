@@ -23,6 +23,7 @@ gw-utils = { path = "../utils" }
 gw-polyjuice-sender-recover = { path = "../polyjuice-sender-recover" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-dynamic-config = { path = "../dynamic-config"}
+gw-metrics = { path = "../metrics"}
 faster-hex = "0.4"
 ckb-crypto = "0.104.0"
 ckb-fixed-hash = "0.104.0"
@@ -45,3 +46,4 @@ jemalloc-ctl = { package = "tikv-jemalloc-ctl", version = "0.4.2" }
 jemalloc-sys = { package = "tikv-jemalloc-sys", version = "0.4.2" }
 errno = "*"
 tracing = { version = "0.1", features = ["attributes"] }
+prometheus-client = "0.18.0"
