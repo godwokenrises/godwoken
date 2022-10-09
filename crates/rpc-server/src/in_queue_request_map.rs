@@ -3,25 +3,37 @@ use std::{collections::HashMap, sync::Weak};
 
 use gw_common::H256;
 use gw_types::packed::{L2Transaction, WithdrawalRequestExtra};
-use tracing::instrument;
+use prometheus_client::metrics::gauge::Gauge;
 
 use crate::registry::Request;
 
 /// Hold in queue transactions and withdrawal requests.
 ///
 /// (For get_transaction and get_withdrawal RPC calls.)
-#[derive(Default)]
 pub struct InQueueRequestMap {
     map: RwLock<HashMap<H256, Request>>,
+    queue_len: Gauge,
 }
 
 impl InQueueRequestMap {
-    #[instrument(skip_all, fields(hash = %faster_hex::hex_string(k.as_slice()).expect("hex_string")))]
+    pub fn create_and_register_metrics() -> Self {
+        let map = Self {
+            map: Default::default(),
+            queue_len: Default::default(),
+        };
+        gw_metrics::REGISTRY.write().unwrap().register(
+            "in_queue_requests",
+            "number of in queue requests",
+            Box::new(map.queue_len.clone()),
+        );
+        map
+    }
+
     pub(crate) fn insert(self: &Arc<Self>, k: H256, v: Request) -> Option<InQueueRequestHandle> {
         let mut map = self.map.write().unwrap();
         let inserted = map.insert(k, v).is_none();
+        self.queue_len.set(map.len() as u64);
         if inserted {
-            tracing::info!(map.len = map.len(), "inserted");
             Some(InQueueRequestHandle {
                 map: Arc::downgrade(self),
                 hash: k,
@@ -31,11 +43,10 @@ impl InQueueRequestMap {
         }
     }
 
-    #[instrument(skip_all, fields(hash = %faster_hex::hex_string(k.as_slice()).expect("hex_string")))]
     fn remove(&self, k: &H256) {
         let mut map = self.map.write().unwrap();
         map.remove(k);
-        tracing::info!(map.len = map.len(), "removed");
+        self.queue_len.set(map.len() as u64);
     }
 
     pub(crate) fn get_transaction(&self, k: &H256) -> Option<L2Transaction> {

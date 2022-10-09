@@ -803,6 +803,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
             psc_config: config.block_producer.as_ref().unwrap().psc_config.clone(),
             block_sync_server_state: block_sync_server_state.clone(),
             liveness: liveness.clone(),
+            metrics: Default::default(),
         }))
         .await
         .context("create ProduceSubmitConfirm")?;
