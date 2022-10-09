@@ -7,7 +7,6 @@ use anyhow::{Error, Result};
 use gw_utils::liveness::Liveness;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{body::HttpBody, server::conn::AddrIncoming, Body, Method, Request, Response, Server};
-use prometheus_client::encoding::text::SendSyncEncodeMetric;
 use tokio::net::TcpListener;
 
 use jsonrpc_v2::{RequestKind, ResponseObjects, Router, Server as JsonrpcServer};
@@ -23,7 +22,6 @@ pub async fn start_jsonrpc_server(
     mut sub_shutdown: broadcast::Receiver<()>,
 ) -> Result<()> {
     let rpc_server = registry.build_rpc_server()?;
-    let metrics_registry = Arc::new(gw_metrics::registry());
 
     let listener = TcpListener::bind(listen_addr).await?;
 
@@ -40,15 +38,9 @@ pub async fn start_jsonrpc_server(
         .serve(make_service_fn(move |_| {
             let rpc_server = Arc::clone(&rpc_server);
             let liveness = liveness.clone();
-            let metrics_registry = metrics_registry.clone();
             async move {
                 Ok::<_, Error>(service_fn(move |req| {
-                    serve(
-                        Arc::clone(&rpc_server),
-                        liveness.clone(),
-                        metrics_registry.clone(),
-                        req,
-                    )
+                    serve(Arc::clone(&rpc_server), liveness.clone(), req)
                 }))
             }
         }));
@@ -65,7 +57,6 @@ pub async fn start_jsonrpc_server(
 async fn serve<R: Router + 'static>(
     rpc: Arc<JsonrpcServer<R>>,
     liveness: Arc<Liveness>,
-    metrics_registry: Arc<prometheus_client::registry::Registry<Box<dyn SendSyncEncodeMetric>>>,
     req: Request<Body>,
 ) -> Result<Response<Body>> {
     if (req.method() == Method::GET || req.method() == Method::HEAD) && req.uri().path() == "/livez"
@@ -87,7 +78,10 @@ async fn serve<R: Router + 'static>(
         // XXX: HEAD response won't have content-length header.
         if req.method() != Method::HEAD {
             buf.reserve(1024);
-            prometheus_client::encoding::text::encode(&mut buf, &metrics_registry)?;
+            prometheus_client::encoding::text::encode(
+                &mut buf,
+                &*gw_metrics::REGISTRY.read().unwrap(),
+            )?;
         }
         return hyper::Response::builder()
             .status(hyper::StatusCode::OK)

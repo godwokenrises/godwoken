@@ -1050,10 +1050,13 @@ impl Chain {
         db.attach_block(l2block.clone())?;
 
         // Update metrics.
-        gw_metrics::BLOCK_HEIGHT.set(l2block.raw().number().unpack());
-        gw_metrics::DEPOSITS.inc_by(deposit_info_vec_len as u64);
-        gw_metrics::WITHDRAWALS.inc_by(withdrawals_len as u64);
-        gw_metrics::TRANSACTIONS.inc_by(tx_receipts_len as u64);
+        let chain_metrics = gw_metrics::chain_metrics();
+        chain_metrics
+            .block_height()
+            .set(l2block.raw().number().unpack());
+        chain_metrics.deposits().inc_by(deposit_info_vec_len as u64);
+        chain_metrics.withdrawals().inc_by(withdrawals_len as u64);
+        chain_metrics.transactions().inc_by(tx_receipts_len as u64);
 
         self.local_state.tip = l2block;
         self.local_state.last_global_state = global_state;
