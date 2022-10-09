@@ -57,6 +57,9 @@ use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as J
 use lru::LruCache;
 use once_cell::sync::Lazy;
 use pprof::ProfilerGuard;
+use prometheus_client::encoding::text::Encode;
+use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::family::Family;
 use std::{
     convert::{TryFrom, TryInto},
     sync::Arc,
@@ -144,6 +147,7 @@ pub struct ExecutionTransactionContext {
     mem_pool_state: Arc<MemPoolState>,
     polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
     mem_pool_config: MemPoolConfig,
+    metrics: Family<RunResultLabel, Counter>,
 }
 
 pub struct SubmitTransactionContext {
@@ -172,6 +176,19 @@ pub struct RegistryArgs<T> {
     pub polyjuice_sender_recover: PolyjuiceSenderRecover,
 }
 
+// Label for the execute_transactions metric.
+#[derive(Hash, Clone, Eq, PartialEq)]
+struct RunResultLabel {
+    exit_code: i8,
+}
+
+// Manual impl because i8 does not implement Encode.
+impl Encode for RunResultLabel {
+    fn encode(&self, writer: &mut dyn std::io::Write) -> Result<(), std::io::Error> {
+        write!(writer, "exit_code=\"{}\"", self.exit_code)
+    }
+}
+
 pub struct Registry {
     generator: Arc<Generator>,
     mem_pool: MemPool,
@@ -191,6 +208,7 @@ pub struct Registry {
     mem_pool_state: Arc<MemPoolState>,
     in_queue_request_map: Option<Arc<InQueueRequestMap>>,
     polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
+    execute_transaction_metrics: Family<RunResultLabel, Counter>,
 }
 
 impl Registry {
@@ -249,6 +267,13 @@ impl Registry {
             tokio::spawn(submitter.in_background());
         }
 
+        let execute_transaction_metrics = Family::default();
+        gw_metrics::REGISTRY.write().unwrap().register(
+            "execute_transactions",
+            "number of execute_transaction requests",
+            Box::new(execute_transaction_metrics.clone()),
+        );
+
         Self {
             mem_pool,
             store,
@@ -269,6 +294,7 @@ impl Registry {
             mem_pool_state,
             in_queue_request_map,
             polyjuice_sender_recover,
+            execute_transaction_metrics,
         }
     }
 
@@ -288,6 +314,7 @@ impl Registry {
                 mem_pool_state: self.mem_pool_state.clone(),
                 polyjuice_sender_recover: self.polyjuice_sender_recover.clone(),
                 mem_pool_config: self.mem_pool_config.clone(),
+                metrics: self.execute_transaction_metrics,
             }))
             .with_data(Data::new(SubmitTransactionContext {
                 in_queue_request_map: self.in_queue_request_map.clone(),
@@ -1026,6 +1053,7 @@ async fn execute_l2transaction(
         }
     }
 
+    let metrics = ctx.metrics.clone();
     let mut run_result = tokio::task::spawn_blocking(move || {
         let db = ctx.store.get_snapshot();
         let tip_block_hash = db.get_last_valid_tip_block_hash()?;
@@ -1066,6 +1094,12 @@ async fn execute_l2transaction(
         Result::<_, anyhow::Error>::Ok(run_result)
     })
     .await??;
+
+    metrics
+        .get_or_create(&RunResultLabel {
+            exit_code: run_result.exit_code,
+        })
+        .inc();
 
     if run_result.exit_code != 0 {
         let receipt = gw_types::offchain::ErrorTxReceipt {
@@ -1179,6 +1213,7 @@ async fn execute_raw_l2transaction(
     }
 
     // execute tx in task
+    let metrics = ctx.metrics.clone();
     let mut run_result = tokio::task::spawn_blocking(move || {
         let eth_recover = &ctx.polyjuice_sender_recover.eth;
         let rollup_context = ctx.generator.rollup_context();
@@ -1236,6 +1271,12 @@ async fn execute_raw_l2transaction(
         Result::<_, anyhow::Error>::Ok(run_result)
     })
     .await??;
+
+    metrics
+        .get_or_create(&RunResultLabel {
+            exit_code: run_result.exit_code,
+        })
+        .inc();
 
     if run_result.exit_code != 0 {
         let receipt = gw_types::offchain::ErrorTxReceipt {
