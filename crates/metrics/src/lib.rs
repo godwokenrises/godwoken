@@ -1,3 +1,13 @@
+//! Metrics.
+//!
+//! Global metrics that are always available should be declared and registered
+//! here.
+//!
+//! Additional metrics can be registered by taking a write lock of global
+//! `REGISTRY`.
+
+use std::sync::RwLock;
+
 use once_cell::sync::Lazy;
 use prometheus_client::{
     encoding::text::SendSyncEncodeMetric,
@@ -5,34 +15,59 @@ use prometheus_client::{
     registry::Registry,
 };
 
-// Why don't Counter or Gauge have `const fn new() -> Self`?
+#[derive(Default)]
+pub struct ChainMetrics {
+    transactions: Counter,
+    deposits: Counter,
+    withdrawals: Counter,
+    block_height: Gauge,
+}
 
-pub static TRANSACTIONS: Lazy<Counter> = Lazy::new(Counter::default);
-pub static DEPOSITS: Lazy<Counter> = Lazy::new(Counter::default);
-pub static WITHDRAWALS: Lazy<Counter> = Lazy::new(Counter::default);
-pub static BLOCK_HEIGHT: Lazy<Gauge> = Lazy::new(Gauge::default);
+impl ChainMetrics {
+    pub fn transactions(&self) -> &Counter {
+        &self.transactions
+    }
+    pub fn deposits(&self) -> &Counter {
+        &self.deposits
+    }
+    pub fn withdrawals(&self) -> &Counter {
+        &self.withdrawals
+    }
+    pub fn block_height(&self) -> &Gauge {
+        &self.block_height
+    }
+}
 
-pub fn registry() -> Registry<Box<dyn SendSyncEncodeMetric>> {
+static CHAIN_METRICS: Lazy<ChainMetrics> = Lazy::new(Default::default);
+
+/// Global metrics registry.
+pub static REGISTRY: Lazy<RwLock<Registry<Box<dyn SendSyncEncodeMetric>>>> = Lazy::new(|| {
     let mut registry: Registry<Box<dyn SendSyncEncodeMetric>> = Registry::with_prefix("gw");
+    let chain_metrics = &*CHAIN_METRICS;
     registry.register(
         "transactions",
         "number of packaged L2 transactions",
-        Box::new(TRANSACTIONS.clone()),
+        Box::new(chain_metrics.transactions().clone()),
     );
     registry.register(
         "deposits",
         "number of packaged deposits",
-        Box::new(DEPOSITS.clone()),
+        Box::new(chain_metrics.deposits().clone()),
     );
     registry.register(
         "withdrawals",
         "number of packaged withdrawals",
-        Box::new(WITHDRAWALS.clone()),
+        Box::new(chain_metrics.withdrawals().clone()),
     );
     registry.register(
         "block_height",
         "layer 2 block height",
-        Box::new(BLOCK_HEIGHT.clone()),
+        Box::new(chain_metrics.block_height().clone()),
     );
-    registry
+    registry.into()
+});
+
+/// Global chain metrics.
+pub fn chain_metrics() -> &'static ChainMetrics {
+    &*CHAIN_METRICS
 }
