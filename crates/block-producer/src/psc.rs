@@ -25,6 +25,7 @@ use gw_utils::{
     since::Since,
 };
 use opentelemetry::trace::TraceContextExt;
+use prometheus_client::metrics::{counter::Counter, gauge::Gauge};
 use tokio::{
     signal::unix::{signal, SignalKind},
     sync::Mutex,
@@ -47,6 +48,35 @@ pub struct ProduceSubmitConfirm {
     submitted_count: u64,
 }
 
+#[derive(Default)]
+pub struct PSCMetrics {
+    resend: Counter,
+    local_blocks: Gauge,
+    submitted_blocks: Gauge,
+}
+
+impl PSCMetrics {
+    fn register(&self) {
+        let mut registry = gw_metrics::REGISTRY.write().unwrap();
+        let registry = registry.sub_registry_with_prefix("psc");
+        registry.register(
+            "resend",
+            "number of times resending submission transactions",
+            Box::new(self.resend.clone()),
+        );
+        registry.register(
+            "local_blocks",
+            "number of local blocks",
+            Box::new(self.local_blocks.clone()),
+        );
+        registry.register(
+            "submitted_blocks",
+            "number of submitted (but not yet confirmed) blocks",
+            Box::new(self.submitted_blocks.clone()),
+        );
+    }
+}
+
 pub struct PSCContext {
     pub store: Store,
     pub rpc_client: RPCClient,
@@ -61,6 +91,7 @@ pub struct PSCContext {
     pub psc_config: PscConfig,
     pub block_sync_server_state: Option<Arc<std::sync::Mutex<BlockSyncServerState>>>,
     pub liveness: Arc<Liveness>,
+    pub metrics: PSCMetrics,
 }
 
 impl SyncL1Context for PSCContext {
@@ -131,6 +162,9 @@ impl ProduceSubmitConfirm {
         );
         let local_count = last_valid - last_submitted;
         let submitted_count = last_submitted - last_confirmed;
+        context.metrics.local_blocks.set(local_count);
+        context.metrics.submitted_blocks.set(submitted_count);
+        context.metrics.register();
         Ok(Self {
             context,
             local_count,
@@ -205,6 +239,11 @@ impl ProduceSubmitConfirm {
                         }
                         self.local_count = last_valid - last_submitted;
                         self.submitted_count = last_submitted - last_confirmed;
+                        self.context.metrics.local_blocks.set(self.local_count);
+                        self.context
+                            .metrics
+                            .submitted_blocks
+                            .set(self.submitted_count);
                     } else {
                         bail!(e);
                     }
@@ -311,6 +350,7 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                             publish_confirmed(&mut sync_server, &state.context.store.get_snapshot(), nh.number().unpack())?;
                         }
                         state.submitted_count -= 1;
+                        state.context.metrics.submitted_blocks.dec();
                     }
                     _ => {}
                 }
@@ -331,6 +371,8 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                         }
                         state.submitted_count += 1;
                         state.local_count -= 1;
+                        state.context.metrics.submitted_blocks.inc();
+                        state.context.metrics.local_blocks.dec();
                     }
                     _ => {}
                 }
@@ -343,6 +385,7 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                     log::warn!("failed to produce local block: {:#}", e);
                 } else {
                     state.local_count += 1;
+                    state.context.metrics.local_blocks.inc();
                 }
             }
         }
@@ -590,11 +633,12 @@ async fn submit_block(
         .build())
 }
 
-async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<()> {
+async fn poll_tx_confirmed(context: &PSCContext, tx: &Transaction) -> Result<()> {
     log::info!("waiting for tx 0x{}", hex::encode(tx.hash()));
     let mut last_sent = Instant::now();
     loop {
-        let status = rpc_client
+        let status = context
+            .rpc_client
             .ckb
             .get_transaction_status(tx.hash().into())
             .await?;
@@ -615,19 +659,21 @@ async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<(
         };
         if should_resend {
             log::info!("resend transaction 0x{}", hex::encode(tx.hash()));
-            send_transaction_or_check_inputs(rpc_client, tx).await?;
+            send_transaction_or_check_inputs(&context.rpc_client, tx).await?;
             last_sent = Instant::now();
+            context.metrics.resend.inc();
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
     // Wait for indexer syncing the L1 block.
-    let block_number = rpc_client
+    let block_number = context
+        .rpc_client
         .ckb
         .get_transaction_block_number(tx.hash().into())
         .await?
         .context("get tx block hash")?;
     loop {
-        let tip = rpc_client.get_tip().await?;
+        let tip = context.rpc_client.get_tip().await?;
         if tip.number().unpack() >= block_number {
             break;
         }
@@ -660,17 +706,15 @@ async fn confirm_block(
         .get_block_submit_tx(block_number)
         .expect("get submit tx");
     drop(snap);
-    poll_tx_confirmed(&context.rpc_client, &tx)
-        .await
-        .map_err(|e| {
-            if e.is::<UnknownCellError>() {
-                e.context(ShouldResyncError)
-            } else if e.is::<DeadCellError>() {
-                e.context(ShouldRevertError(block_number))
-            } else {
-                e
-            }
-        })?;
+    poll_tx_confirmed(context, &tx).await.map_err(|e| {
+        if e.is::<UnknownCellError>() {
+            e.context(ShouldResyncError)
+        } else if e.is::<DeadCellError>() {
+            e.context(ShouldRevertError(block_number))
+        } else {
+            e
+        }
+    })?;
     log::info!("block confirmed");
     context.local_cells_manager.lock().await.confirm_tx(&tx);
     Ok(NumberHash::new_builder()

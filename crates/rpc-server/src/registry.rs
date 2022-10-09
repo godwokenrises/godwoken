@@ -228,7 +228,7 @@ impl Registry {
             )),
         };
         let in_queue_request_map = if matches!(node_mode, NodeMode::FullNode | NodeMode::Test) {
-            Some(Arc::new(InQueueRequestMap::default()))
+            Some(Arc::new(InQueueRequestMap::create_and_register_metrics()))
         } else {
             None
         };
