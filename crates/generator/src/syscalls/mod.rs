@@ -37,7 +37,7 @@ pub mod error_codes;
 
 /* Constants */
 // 25KB is max ethereum contract code size
-const MAX_SET_RETURN_DATA_SIZE: u64 = 1024 * 25;
+const MAX_SET_RETURN_DATA_SIZE: u64 = 1024 * 128;
 
 /* Syscall account store / load / create */
 const SYS_CREATE: u64 = 3100;
