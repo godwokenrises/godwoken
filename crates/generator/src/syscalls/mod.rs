@@ -36,7 +36,7 @@ use self::error_codes::{
 pub mod error_codes;
 
 /* Constants */
-// 25KB is max ethereum contract code size
+// Increasing from 25k(ethereum contract code size) to 128k.
 const MAX_SET_RETURN_DATA_SIZE: u64 = 1024 * 128;
 
 /* Syscall account store / load / create */
