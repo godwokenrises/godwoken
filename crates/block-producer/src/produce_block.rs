@@ -22,8 +22,8 @@ use gw_types::{
     core::Status,
     offchain::{BlockParam, DepositInfo},
     packed::{
-        AccountMerkleState, BlockMerkleState, GlobalState, L2Block, LastFinalizedWithdrawal,
-        RawL2Block, SubmitTransactions, SubmitWithdrawals, WithdrawalRequestExtra,
+        AccountMerkleState, BlockMerkleState, GlobalState, L2Block, RawL2Block, SubmitTransactions,
+        SubmitWithdrawals, WithdrawalCursor, WithdrawalRequestExtra,
     },
     prelude::*,
 };
@@ -164,7 +164,7 @@ pub fn produce_block(
         .tip_block_hash(block.hash().pack())
         .tip_block_timestamp(block.raw().timestamp())
         .last_finalized_block_number(last_finalized_block_number.pack())
-        .last_finalized_withdrawal(last_finalized_withdrawal)
+        .finalized_withdrawal_cursor(last_finalized_withdrawal)
         .reverted_block_root(Into::<[u8; 32]>::into(reverted_block_root).pack())
         .rollup_config_hash(rollup_config_hash.pack())
         .status((Status::Running as u8).into())
@@ -178,16 +178,16 @@ pub fn produce_block(
     })
 }
 
-pub fn get_last_finalized_withdrawal(chain: &Chain) -> LastFinalizedWithdrawal {
+pub fn get_last_finalized_withdrawal(chain: &Chain) -> WithdrawalCursor {
     let last_global_state = chain.local_state().last_global_state();
 
     if last_global_state.version_u8() >= 2 {
-        last_global_state.last_finalized_withdrawal()
+        last_global_state.finalized_withdrawal_cursor()
     } else {
         // Upgrade to v2
-        LastFinalizedWithdrawal::new_builder()
+        WithdrawalCursor::new_builder()
             .block_number(chain.local_state().tip().raw().number())
-            .withdrawal_index(LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS.pack())
+            .index(WithdrawalCursor::ALL_WITHDRAWALS.pack())
             .build()
     }
 }
@@ -198,7 +198,7 @@ pub fn generate_produce_block_param(
     store: &Store,
     mem_block: MemBlock,
     post_merkle_state: AccountMerkleState,
-    last_finalized_withdrawal: LastFinalizedWithdrawal,
+    last_finalized_withdrawal: WithdrawalCursor,
 ) -> Result<BlockParam> {
     let db = store.begin_transaction();
     let tip_block_number = mem_block.block_info().number().unpack().saturating_sub(1);

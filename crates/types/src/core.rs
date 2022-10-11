@@ -1,6 +1,6 @@
 use molecule::prelude::Byte;
 
-use crate::packed::{self, GlobalState, GlobalStateV1, L2Block, LastFinalizedWithdrawal};
+use crate::packed::{self, GlobalState, GlobalStateV1, L2Block};
 use crate::prelude::{Builder, Entity, Pack, Unpack};
 use core::convert::TryFrom;
 use core::convert::TryInto;
@@ -202,38 +202,79 @@ impl From<GlobalStateV1> for GlobalState {
             .tip_block_hash(global_state_v1.tip_block_hash())
             .tip_block_timestamp(global_state_v1.tip_block_timestamp())
             .last_finalized_block_number(global_state_v1.last_finalized_block_number())
-            .last_finalized_withdrawal(LastFinalizedWithdrawal::default())
+            .finalized_withdrawal_cursor(packed::WithdrawalCursor::default())
             .status(global_state_v1.status())
             .version(1.into())
             .build()
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum FinalizedWithdrawalIndex {
-    AllWithdrawals,
-    Value(u32),
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum WithdrawalCursorIndex {
+    All,
+    Index(u32),
 }
 
-impl LastFinalizedWithdrawal {
-    pub const INDEX_ALL_WITHDRAWALS: u32 = u32::MAX;
-
-    pub fn unpack_block_index(&self) -> (u64, FinalizedWithdrawalIndex) {
-        let index: u32 = self.withdrawal_index().unpack();
-        let index_enum = if Self::INDEX_ALL_WITHDRAWALS == index {
-            FinalizedWithdrawalIndex::AllWithdrawals
-        } else {
-            FinalizedWithdrawalIndex::Value(index)
-        };
-
-        (self.block_number().unpack(), index_enum)
+impl WithdrawalCursorIndex {
+    /// build cursor
+    pub fn build_cursor_index(index: u32, withdrawal_count: u32) -> Option<Self> {
+        if withdrawal_count == 0 && index == 0 || index + 1 == withdrawal_count {
+            return Some(Self::All);
+        }
+        if index >= withdrawal_count {
+            // invalid index
+            return None;
+        }
+        Some(Self::Index(index))
     }
 
-    pub fn pack_block_index(bn: u64, idx: u32) -> Self {
-        LastFinalizedWithdrawal::new_builder()
-            .block_number(bn.pack())
-            .withdrawal_index(idx.pack())
+    pub fn to_cursor_index(&self) -> u32 {
+        match self {
+            Self::All => packed::WithdrawalCursor::ALL_WITHDRAWALS,
+            Self::Index(index) => *index,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct WithdrawalCursor {
+    pub block_number: u64,
+    pub index: WithdrawalCursorIndex,
+}
+
+impl WithdrawalCursor {
+    /// build cursor
+    pub fn build_cursor(block_number: u64, index: u32, withdrawal_count: u32) -> Option<Self> {
+        let index = WithdrawalCursorIndex::build_cursor_index(index, withdrawal_count)?;
+        Some(Self {
+            block_number,
+            index,
+        })
+    }
+
+    pub fn pack_cursor(&self) -> packed::WithdrawalCursor {
+        packed::WithdrawalCursor::new_builder()
+            .block_number(self.block_number.pack())
+            .index(self.index.to_cursor_index().pack())
             .build()
+    }
+}
+
+impl packed::WithdrawalCursor {
+    pub const ALL_WITHDRAWALS: u32 = u32::MAX;
+
+    pub fn unpack_cursor(&self) -> WithdrawalCursor {
+        let index: u32 = self.index().unpack();
+        let index = if Self::ALL_WITHDRAWALS == index {
+            WithdrawalCursorIndex::All
+        } else {
+            WithdrawalCursorIndex::Index(index)
+        };
+
+        WithdrawalCursor {
+            block_number: self.block_number().unpack(),
+            index,
+        }
     }
 }
 

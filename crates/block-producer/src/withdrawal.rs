@@ -8,12 +8,11 @@ use gw_common::{
 };
 use gw_types::{
     bytes::Bytes,
-    core::FinalizedWithdrawalIndex,
+    core::{WithdrawalCursor, WithdrawalCursorIndex},
     offchain::WithdrawalsAmount,
     packed::{
-        CKBMerkleProof, CellOutput, L2Block, LastFinalizedWithdrawal, RawL2BlockWithdrawals,
-        RawL2BlockWithdrawalsVec, RollupFinalizeWithdrawal, Script, WithdrawalRequest,
-        WithdrawalRequestExtra,
+        self, CKBMerkleProof, CellOutput, L2Block, RawL2BlockWithdrawals, RawL2BlockWithdrawalsVec,
+        RollupFinalizeWithdrawal, Script, WithdrawalRequest, WithdrawalRequestExtra,
     },
     prelude::*,
 };
@@ -53,28 +52,28 @@ impl BlockWithdrawals {
         BlockWithdrawals { block, range }
     }
 
-    pub fn from_rest(
+    pub fn build_from_remained(
         block: L2Block,
-        last_finalized: &LastFinalizedWithdrawal,
+        last_finalized: &packed::WithdrawalCursor,
     ) -> Result<Option<Self>> {
-        let (finalized_bn, finalized_idx) = last_finalized.unpack_block_index();
-        if finalized_bn != block.raw().number().unpack() {
+        let cursor = last_finalized.unpack_cursor();
+        if cursor.block_number != block.raw().number().unpack() {
             bail!("diff block and last finalized withdrawal block");
         }
 
-        let finalized_idx_val = match finalized_idx {
-            FinalizedWithdrawalIndex::AllWithdrawals => return Ok(None),
-            FinalizedWithdrawalIndex::Value(index) => index,
+        let finalized_index = match cursor.index {
+            WithdrawalCursorIndex::All => return Ok(None),
+            WithdrawalCursorIndex::Index(index) => index,
         };
         ensure!(!block.withdrawals().is_empty(), "block has withdrawals");
 
         let last_index = Self::last_index(&block).expect("valid finalized index");
-        let range = if finalized_idx_val == last_index {
+        let range = if finalized_index == last_index {
             // All withdrawals are finalized but the index isnt set to `INDEX_ALL_WITHDRAWALS`.
             // In this case, we must include this block into witness to do verification
             None
         } else {
-            Some((finalized_idx_val + 1, last_index))
+            Some((finalized_index + 1, last_index))
         };
 
         Ok(Some(BlockWithdrawals { block, range }))
@@ -172,19 +171,21 @@ impl BlockWithdrawals {
         Some(taken)
     }
 
-    pub fn to_last_finalized_withdrawal(&self) -> LastFinalizedWithdrawal {
-        let index = match self.range {
-            None => LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS,
-            Some((_, end)) if Some(end) == Self::last_index(&self.block) => {
-                LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS
-            }
-            Some((_, end)) => end,
+    pub fn to_last_finalized_withdrawal(&self) -> Result<packed::WithdrawalCursor> {
+        let raw_block = self.block.raw();
+        let cursor = match self.range {
+            None => WithdrawalCursor {
+                block_number: raw_block.number().unpack(),
+                index: WithdrawalCursorIndex::All,
+            },
+            Some((_, end)) => WithdrawalCursor::build_cursor(
+                raw_block.number().unpack(),
+                end,
+                raw_block.submit_withdrawals().withdrawal_count().unpack(),
+            )
+            .ok_or_else(|| anyhow!("failed to build cursor"))?,
         };
-
-        LastFinalizedWithdrawal::new_builder()
-            .block_number(self.block.raw().number())
-            .withdrawal_index(index.pack())
-            .build()
+        Ok(cursor.pack_cursor())
     }
 
     #[cfg(test)]
@@ -359,8 +360,8 @@ pub(crate) mod tests {
     use gw_common::{h256_ext::H256Ext, H256};
     use gw_types::offchain::WithdrawalsAmount;
     use gw_types::packed::{
-        L2Block, LastFinalizedWithdrawal, RawL2Block, RawWithdrawalRequest, Script,
-        SubmitWithdrawals, WithdrawalRequest, WithdrawalRequestExtra,
+        self, L2Block, RawL2Block, RawWithdrawalRequest, Script, SubmitWithdrawals,
+        WithdrawalRequest, WithdrawalRequestExtra,
     };
     use gw_types::prelude::{Builder, Entity, Pack, PackVec};
     use gw_utils::withdrawal::sum_withdrawals;
@@ -548,12 +549,15 @@ pub(crate) mod tests {
         assert_eq!(blk_wthdrs.withdrawal_hashes().count(), 0);
         assert!(blk_wthdrs.clone().take(1).is_none());
         assert_eq!(
-            blk_wthdrs.to_last_finalized_withdrawal().as_slice(),
-            LastFinalizedWithdrawal::pack_block_index(
-                block.number(),
-                LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS
-            )
-            .as_slice()
+            blk_wthdrs
+                .to_last_finalized_withdrawal()
+                .unwrap()
+                .as_slice(),
+            packed::WithdrawalCursor::new_builder()
+                .block_number(block.number().pack())
+                .index(packed::WithdrawalCursor::ALL_WITHDRAWALS.pack())
+                .build()
+                .as_slice()
         );
 
         assert!({ blk_wthdrs.verify_witness(&blk_wthdrs.generate_witness().unwrap()) }.is_ok());
@@ -576,12 +580,15 @@ pub(crate) mod tests {
         assert!({ blk_wthdrs.withdrawal_hashes() }.eq(expected_withdrawal_hashes.into_iter()));
 
         assert_eq!(
-            blk_wthdrs.to_last_finalized_withdrawal().as_slice(),
-            LastFinalizedWithdrawal::pack_block_index(
-                block.number(),
-                LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS
-            )
-            .as_slice()
+            blk_wthdrs
+                .to_last_finalized_withdrawal()
+                .unwrap()
+                .as_slice(),
+            packed::WithdrawalCursor::new_builder()
+                .block_number(block.number().pack())
+                .index(packed::WithdrawalCursor::ALL_WITHDRAWALS.pack())
+                .build()
+                .as_slice()
         );
 
         assert!({ blk_wthdrs.verify_witness(&blk_wthdrs.generate_witness().unwrap()) }.is_ok());
@@ -592,8 +599,11 @@ pub(crate) mod tests {
         let mut store = BlockStore::default();
         let block = store.produce_block(5);
 
-        let last_finalized = LastFinalizedWithdrawal::pack_block_index(block.number(), 1);
-        let blk_wthdrs = BlockWithdrawals::from_rest(block.clone(), &last_finalized)
+        let last_finalized = packed::WithdrawalCursor::new_builder()
+            .block_number(block.number().pack())
+            .index(1u32.pack())
+            .build();
+        let blk_wthdrs = BlockWithdrawals::build_from_remained(block.clone(), &last_finalized)
             .unwrap()
             .unwrap();
         assert_eq!(blk_wthdrs.block.as_slice(), block.as_slice());
@@ -618,43 +628,53 @@ pub(crate) mod tests {
         assert!({ blk_wthdrs.withdrawal_hashes() }.eq(expected_withdrawal_hashes.into_iter()));
 
         assert_eq!(
-            blk_wthdrs.to_last_finalized_withdrawal().as_slice(),
-            LastFinalizedWithdrawal::pack_block_index(
-                block.number(),
-                LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS
-            )
-            .as_slice()
+            blk_wthdrs
+                .to_last_finalized_withdrawal()
+                .unwrap()
+                .as_slice(),
+            packed::WithdrawalCursor::new_builder()
+                .block_number(block.number().pack())
+                .index(packed::WithdrawalCursor::ALL_WITHDRAWALS.pack())
+                .build()
+                .as_slice()
         );
 
         assert!({ blk_wthdrs.verify_witness(&blk_wthdrs.generate_witness().unwrap()) }.is_ok());
 
         // All withdrawal (no withdrwal)
         let block = store.produce_block(0);
-        let last_finalized = LastFinalizedWithdrawal::pack_block_index(
-            block.number(),
-            LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS,
-        );
+        let last_finalized = packed::WithdrawalCursor::new_builder()
+            .block_number(block.number().pack())
+            .index(packed::WithdrawalCursor::ALL_WITHDRAWALS.pack())
+            .build();
 
-        assert!(BlockWithdrawals::from_rest(block, &last_finalized)
-            .unwrap()
-            .is_none());
+        assert!(
+            BlockWithdrawals::build_from_remained(block, &last_finalized)
+                .unwrap()
+                .is_none()
+        );
 
         // All withdrawals
         let block = store.produce_block(1);
-        let last_finalized = LastFinalizedWithdrawal::pack_block_index(
-            block.number(),
-            LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS,
-        );
+        let last_finalized = packed::WithdrawalCursor::new_builder()
+            .block_number(block.number().pack())
+            .index(packed::WithdrawalCursor::ALL_WITHDRAWALS.pack())
+            .build();
 
-        assert!(BlockWithdrawals::from_rest(block, &last_finalized)
-            .unwrap()
-            .is_none());
+        assert!(
+            BlockWithdrawals::build_from_remained(block, &last_finalized)
+                .unwrap()
+                .is_none()
+        );
 
         // Last withdrawal index
         let block = store.produce_block(1);
-        let last_finalized = LastFinalizedWithdrawal::pack_block_index(block.number(), 0);
+        let last_finalized = packed::WithdrawalCursor::new_builder()
+            .block_number(block.number().pack())
+            .index(0u32.pack())
+            .build();
 
-        let blk_wthdrs = BlockWithdrawals::from_rest(block.clone(), &last_finalized)
+        let blk_wthdrs = BlockWithdrawals::build_from_remained(block.clone(), &last_finalized)
             .unwrap()
             .unwrap();
         assert_eq!(blk_wthdrs.block.as_slice(), block.as_slice());
@@ -667,12 +687,15 @@ pub(crate) mod tests {
         assert_eq!(blk_wthdrs.withdrawal_hashes().count(), 0);
 
         assert_eq!(
-            blk_wthdrs.to_last_finalized_withdrawal().as_slice(),
-            LastFinalizedWithdrawal::pack_block_index(
-                block.number(),
-                LastFinalizedWithdrawal::INDEX_ALL_WITHDRAWALS
-            )
-            .as_slice()
+            blk_wthdrs
+                .to_last_finalized_withdrawal()
+                .unwrap()
+                .as_slice(),
+            packed::WithdrawalCursor::new_builder()
+                .block_number(block.number().pack())
+                .index(packed::WithdrawalCursor::ALL_WITHDRAWALS.pack())
+                .build()
+                .as_slice()
         );
 
         assert!({ blk_wthdrs.verify_witness(&blk_wthdrs.generate_witness().unwrap()) }.is_ok());
@@ -692,16 +715,21 @@ pub(crate) mod tests {
 
         // Diff block
         let other = store.produce_block(10);
-        let last_finalized = BlockWithdrawals::new(other).to_last_finalized_withdrawal();
+        let last_finalized = BlockWithdrawals::new(other)
+            .to_last_finalized_withdrawal()
+            .unwrap();
 
-        let err = BlockWithdrawals::from_rest(block, &last_finalized).unwrap_err();
+        let err = BlockWithdrawals::build_from_remained(block, &last_finalized).unwrap_err();
         assert!({ err.to_string() }.contains("diff block and last finalized withdrawal block"));
 
         // Block no withdrawal
         let block = store.produce_block(0);
-        let last_finalized = LastFinalizedWithdrawal::pack_block_index(block.number(), 0);
+        let last_finalized = packed::WithdrawalCursor::new_builder()
+            .block_number(block.number().pack())
+            .index(0u32.pack())
+            .build();
 
-        let err = BlockWithdrawals::from_rest(block, &last_finalized).unwrap_err();
+        let err = BlockWithdrawals::build_from_remained(block, &last_finalized).unwrap_err();
         assert!({ err.to_string() }.contains("block has withdrawals"));
     }
 

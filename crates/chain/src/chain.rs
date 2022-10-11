@@ -559,11 +559,9 @@ impl Chain {
                     let status: u8 = global_state.status().into();
                     assert_eq!(Status::try_from(status), Ok(Status::Running));
 
-                    let (block_number, index) = global_state
-                        .last_finalized_withdrawal()
-                        .unpack_block_index();
+                    let cursor = global_state.finalized_withdrawal_cursor().unpack_cursor();
 
-                    log::info!("last finalized withdrawal to {} {:?}", block_number, index);
+                    log::info!("last finalized withdrawal to {:?}", cursor);
 
                     Ok(SyncEvent::Success)
                 }

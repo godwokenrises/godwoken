@@ -14,16 +14,17 @@ struct AccountMerkleState {
 
 // NOTE:
 //
+// This structure is used to track the finalized withdrawals
+//
 // special flags:
 // 
-// u32::MAX (aka 4294967295) means all withdrawals in a block are finalized
+// u32::MAX (aka 4294967295) means all withdrawals in the block are processed
 //
-// If a block's `withdrawal_index` is set to above value in the `GlobalState`,
-// we don't need to submit that raw block to verify prev `last_finalized_withdrawal`
-// transition.
-struct LastFinalizedWithdrawal {
+// If a block's `index` is set to above value in the `GlobalState.last_finalized_withdrawal_cursor`,
+// then we can start from the next block to verify the finalized withdrawals.
+struct WithdrawalCursor {
     block_number: Uint64,
-    withdrawal_index: Uint32,
+    index: Uint32,
 }
 
 struct GlobalStateV1 {
@@ -48,7 +49,7 @@ struct GlobalState {
     tip_block_hash: Byte32,
     tip_block_timestamp: Uint64,
     last_finalized_block_number: Uint64,
-    last_finalized_withdrawal: LastFinalizedWithdrawal,
+    finalized_withdrawal_cursor: WithdrawalCursor,
     // 0: running, 1: halting
     status: byte,
     version: byte,

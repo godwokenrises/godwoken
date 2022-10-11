@@ -2,7 +2,7 @@ use ckb_types::bytes::Bytes;
 use sparse_merkle_tree::H256;
 
 use crate::packed::{
-    AccountMerkleState, L2Block, L2Transaction, LastFinalizedWithdrawal, WithdrawalRequestExtra,
+    AccountMerkleState, L2Block, L2Transaction, WithdrawalCursor, WithdrawalRequestExtra,
 };
 
 use super::DepositInfo;
@@ -21,5 +21,5 @@ pub struct BlockParam {
     pub post_merkle_state: AccountMerkleState,
     pub kv_state: Vec<(H256, H256)>,
     pub kv_state_proof: Vec<u8>,
-    pub last_finalized_withdrawal: LastFinalizedWithdrawal,
+    pub last_finalized_withdrawal: WithdrawalCursor,
 }

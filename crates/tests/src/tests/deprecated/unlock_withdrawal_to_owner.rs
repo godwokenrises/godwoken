@@ -31,9 +31,9 @@ use gw_types::core::{AllowedEoaType, DepType, ScriptHashType};
 use gw_types::offchain::{CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext};
 use gw_types::packed::{
     AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositInfoVec,
-    DepositRequest, GlobalState, LastFinalizedWithdrawal, OutPoint, RawWithdrawalRequest,
-    RollupAction, RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, StakeLockArgs,
-    WithdrawalRequest, WithdrawalRequestExtra, WitnessArgs,
+    DepositRequest, GlobalState, OutPoint, RawWithdrawalRequest, RollupAction, RollupActionUnion,
+    RollupConfig, RollupSubmitBlock, Script, StakeLockArgs, WithdrawalCursor, WithdrawalRequest,
+    WithdrawalRequestExtra, WitnessArgs,
 };
 use gw_types::prelude::{Pack, PackVec, Unpack};
 use gw_utils::local_cells::LocalCellsManager;
@@ -799,7 +799,7 @@ fn random_always_success_script(opt_rollup_script_hash: Option<&H256>) -> Script
 
 fn ensure_global_state_v1(global_state: GlobalState) -> GlobalState {
     { global_state.as_builder() }
-        .last_finalized_withdrawal(LastFinalizedWithdrawal::default())
+        .finalized_withdrawal_cursor(WithdrawalCursor::default())
         .version(1u8.into())
         .build()
 }

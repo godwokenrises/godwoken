@@ -601,8 +601,8 @@ impl molecule::prelude::Builder for AccountMerkleStateBuilder {
     }
 }
 #[derive(Clone)]
-pub struct LastFinalizedWithdrawal(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for LastFinalizedWithdrawal {
+pub struct WithdrawalCursor(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for WithdrawalCursor {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -611,44 +611,44 @@ impl ::core::fmt::LowerHex for LastFinalizedWithdrawal {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for LastFinalizedWithdrawal {
+impl ::core::fmt::Debug for WithdrawalCursor {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for LastFinalizedWithdrawal {
+impl ::core::fmt::Display for WithdrawalCursor {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "block_number", self.block_number())?;
-        write!(f, ", {}: {}", "withdrawal_index", self.withdrawal_index())?;
+        write!(f, ", {}: {}", "index", self.index())?;
         write!(f, " }}")
     }
 }
-impl ::core::default::Default for LastFinalizedWithdrawal {
+impl ::core::default::Default for WithdrawalCursor {
     fn default() -> Self {
         let v: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        LastFinalizedWithdrawal::new_unchecked(v.into())
+        WithdrawalCursor::new_unchecked(v.into())
     }
 }
-impl LastFinalizedWithdrawal {
+impl WithdrawalCursor {
     pub const TOTAL_SIZE: usize = 12;
     pub const FIELD_SIZES: [usize; 2] = [8, 4];
     pub const FIELD_COUNT: usize = 2;
     pub fn block_number(&self) -> Uint64 {
         Uint64::new_unchecked(self.0.slice(0..8))
     }
-    pub fn withdrawal_index(&self) -> Uint32 {
+    pub fn index(&self) -> Uint32 {
         Uint32::new_unchecked(self.0.slice(8..12))
     }
-    pub fn as_reader<'r>(&'r self) -> LastFinalizedWithdrawalReader<'r> {
-        LastFinalizedWithdrawalReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> WithdrawalCursorReader<'r> {
+        WithdrawalCursorReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for LastFinalizedWithdrawal {
-    type Builder = LastFinalizedWithdrawalBuilder;
-    const NAME: &'static str = "LastFinalizedWithdrawal";
+impl molecule::prelude::Entity for WithdrawalCursor {
+    type Builder = WithdrawalCursorBuilder;
+    const NAME: &'static str = "WithdrawalCursor";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        LastFinalizedWithdrawal(data)
+        WithdrawalCursor(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -657,10 +657,10 @@ impl molecule::prelude::Entity for LastFinalizedWithdrawal {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        LastFinalizedWithdrawalReader::from_slice(slice).map(|reader| reader.to_entity())
+        WithdrawalCursorReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        LastFinalizedWithdrawalReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        WithdrawalCursorReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
@@ -668,12 +668,12 @@ impl molecule::prelude::Entity for LastFinalizedWithdrawal {
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
             .block_number(self.block_number())
-            .withdrawal_index(self.withdrawal_index())
+            .index(self.index())
     }
 }
 #[derive(Clone, Copy)]
-pub struct LastFinalizedWithdrawalReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for LastFinalizedWithdrawalReader<'r> {
+pub struct WithdrawalCursorReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for WithdrawalCursorReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -682,38 +682,38 @@ impl<'r> ::core::fmt::LowerHex for LastFinalizedWithdrawalReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for LastFinalizedWithdrawalReader<'r> {
+impl<'r> ::core::fmt::Debug for WithdrawalCursorReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for LastFinalizedWithdrawalReader<'r> {
+impl<'r> ::core::fmt::Display for WithdrawalCursorReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "block_number", self.block_number())?;
-        write!(f, ", {}: {}", "withdrawal_index", self.withdrawal_index())?;
+        write!(f, ", {}: {}", "index", self.index())?;
         write!(f, " }}")
     }
 }
-impl<'r> LastFinalizedWithdrawalReader<'r> {
+impl<'r> WithdrawalCursorReader<'r> {
     pub const TOTAL_SIZE: usize = 12;
     pub const FIELD_SIZES: [usize; 2] = [8, 4];
     pub const FIELD_COUNT: usize = 2;
     pub fn block_number(&self) -> Uint64Reader<'r> {
         Uint64Reader::new_unchecked(&self.as_slice()[0..8])
     }
-    pub fn withdrawal_index(&self) -> Uint32Reader<'r> {
+    pub fn index(&self) -> Uint32Reader<'r> {
         Uint32Reader::new_unchecked(&self.as_slice()[8..12])
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for LastFinalizedWithdrawalReader<'r> {
-    type Entity = LastFinalizedWithdrawal;
-    const NAME: &'static str = "LastFinalizedWithdrawalReader";
+impl<'r> molecule::prelude::Reader<'r> for WithdrawalCursorReader<'r> {
+    type Entity = WithdrawalCursor;
+    const NAME: &'static str = "WithdrawalCursorReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        LastFinalizedWithdrawalReader(slice)
+        WithdrawalCursorReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -728,11 +728,11 @@ impl<'r> molecule::prelude::Reader<'r> for LastFinalizedWithdrawalReader<'r> {
     }
 }
 #[derive(Debug, Default)]
-pub struct LastFinalizedWithdrawalBuilder {
+pub struct WithdrawalCursorBuilder {
     pub(crate) block_number: Uint64,
-    pub(crate) withdrawal_index: Uint32,
+    pub(crate) index: Uint32,
 }
-impl LastFinalizedWithdrawalBuilder {
+impl WithdrawalCursorBuilder {
     pub const TOTAL_SIZE: usize = 12;
     pub const FIELD_SIZES: [usize; 2] = [8, 4];
     pub const FIELD_COUNT: usize = 2;
@@ -740,27 +740,27 @@ impl LastFinalizedWithdrawalBuilder {
         self.block_number = v;
         self
     }
-    pub fn withdrawal_index(mut self, v: Uint32) -> Self {
-        self.withdrawal_index = v;
+    pub fn index(mut self, v: Uint32) -> Self {
+        self.index = v;
         self
     }
 }
-impl molecule::prelude::Builder for LastFinalizedWithdrawalBuilder {
-    type Entity = LastFinalizedWithdrawal;
-    const NAME: &'static str = "LastFinalizedWithdrawalBuilder";
+impl molecule::prelude::Builder for WithdrawalCursorBuilder {
+    type Entity = WithdrawalCursor;
+    const NAME: &'static str = "WithdrawalCursorBuilder";
     fn expected_length(&self) -> usize {
         Self::TOTAL_SIZE
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         writer.write_all(self.block_number.as_slice())?;
-        writer.write_all(self.withdrawal_index.as_slice())?;
+        writer.write_all(self.index.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        LastFinalizedWithdrawal::new_unchecked(inner.into())
+        WithdrawalCursor::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
@@ -1113,8 +1113,8 @@ impl ::core::fmt::Display for GlobalState {
         write!(
             f,
             ", {}: {}",
-            "last_finalized_withdrawal",
-            self.last_finalized_withdrawal()
+            "finalized_withdrawal_cursor",
+            self.finalized_withdrawal_cursor()
         )?;
         write!(f, ", {}: {}", "status", self.status())?;
         write!(f, ", {}: {}", "version", self.version())?;
@@ -1160,8 +1160,8 @@ impl GlobalState {
     pub fn last_finalized_block_number(&self) -> Uint64 {
         Uint64::new_unchecked(self.0.slice(180..188))
     }
-    pub fn last_finalized_withdrawal(&self) -> LastFinalizedWithdrawal {
-        LastFinalizedWithdrawal::new_unchecked(self.0.slice(188..200))
+    pub fn finalized_withdrawal_cursor(&self) -> WithdrawalCursor {
+        WithdrawalCursor::new_unchecked(self.0.slice(188..200))
     }
     pub fn status(&self) -> Byte {
         Byte::new_unchecked(self.0.slice(200..201))
@@ -1203,7 +1203,7 @@ impl molecule::prelude::Entity for GlobalState {
             .tip_block_hash(self.tip_block_hash())
             .tip_block_timestamp(self.tip_block_timestamp())
             .last_finalized_block_number(self.last_finalized_block_number())
-            .last_finalized_withdrawal(self.last_finalized_withdrawal())
+            .finalized_withdrawal_cursor(self.finalized_withdrawal_cursor())
             .status(self.status())
             .version(self.version())
     }
@@ -1252,8 +1252,8 @@ impl<'r> ::core::fmt::Display for GlobalStateReader<'r> {
         write!(
             f,
             ", {}: {}",
-            "last_finalized_withdrawal",
-            self.last_finalized_withdrawal()
+            "finalized_withdrawal_cursor",
+            self.finalized_withdrawal_cursor()
         )?;
         write!(f, ", {}: {}", "status", self.status())?;
         write!(f, ", {}: {}", "version", self.version())?;
@@ -1285,8 +1285,8 @@ impl<'r> GlobalStateReader<'r> {
     pub fn last_finalized_block_number(&self) -> Uint64Reader<'r> {
         Uint64Reader::new_unchecked(&self.as_slice()[180..188])
     }
-    pub fn last_finalized_withdrawal(&self) -> LastFinalizedWithdrawalReader<'r> {
-        LastFinalizedWithdrawalReader::new_unchecked(&self.as_slice()[188..200])
+    pub fn finalized_withdrawal_cursor(&self) -> WithdrawalCursorReader<'r> {
+        WithdrawalCursorReader::new_unchecked(&self.as_slice()[188..200])
     }
     pub fn status(&self) -> ByteReader<'r> {
         ByteReader::new_unchecked(&self.as_slice()[200..201])
@@ -1325,7 +1325,7 @@ pub struct GlobalStateBuilder {
     pub(crate) tip_block_hash: Byte32,
     pub(crate) tip_block_timestamp: Uint64,
     pub(crate) last_finalized_block_number: Uint64,
-    pub(crate) last_finalized_withdrawal: LastFinalizedWithdrawal,
+    pub(crate) finalized_withdrawal_cursor: WithdrawalCursor,
     pub(crate) status: Byte,
     pub(crate) version: Byte,
 }
@@ -1361,8 +1361,8 @@ impl GlobalStateBuilder {
         self.last_finalized_block_number = v;
         self
     }
-    pub fn last_finalized_withdrawal(mut self, v: LastFinalizedWithdrawal) -> Self {
-        self.last_finalized_withdrawal = v;
+    pub fn finalized_withdrawal_cursor(mut self, v: WithdrawalCursor) -> Self {
+        self.finalized_withdrawal_cursor = v;
         self
     }
     pub fn status(mut self, v: Byte) -> Self {
@@ -1388,7 +1388,7 @@ impl molecule::prelude::Builder for GlobalStateBuilder {
         writer.write_all(self.tip_block_hash.as_slice())?;
         writer.write_all(self.tip_block_timestamp.as_slice())?;
         writer.write_all(self.last_finalized_block_number.as_slice())?;
-        writer.write_all(self.last_finalized_withdrawal.as_slice())?;
+        writer.write_all(self.finalized_withdrawal_cursor.as_slice())?;
         writer.write_all(self.status.as_slice())?;
         writer.write_all(self.version.as_slice())?;
         Ok(())
