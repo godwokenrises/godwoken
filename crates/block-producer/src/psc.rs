@@ -25,7 +25,10 @@ use gw_utils::{
     since::Since,
 };
 use opentelemetry::trace::TraceContextExt;
-use prometheus_client::metrics::{counter::Counter, gauge::Gauge};
+use prometheus_client::{
+    metrics::{counter::Counter, gauge::Gauge},
+    registry::Unit,
+};
 use tokio::{
     signal::unix::{signal, SignalKind},
     sync::Mutex,
@@ -53,6 +56,8 @@ pub struct PSCMetrics {
     resend: Counter,
     local_blocks: Gauge,
     submitted_blocks: Gauge,
+    witness_size: Counter,
+    tx_size: Counter,
 }
 
 impl PSCMetrics {
@@ -73,6 +78,18 @@ impl PSCMetrics {
             "submitted_blocks",
             "number of submitted (but not yet confirmed) blocks",
             Box::new(self.submitted_blocks.clone()),
+        );
+        registry.register_with_unit(
+            "witness_size",
+            "block submission txs witness size",
+            Unit::Bytes,
+            Box::new(self.witness_size.clone()),
+        );
+        registry.register_with_unit(
+            "tx_size",
+            "block submission txs size",
+            Unit::Bytes,
+            Box::new(self.tx_size.clone()),
         );
     }
 }
@@ -570,6 +587,11 @@ async fn submit_block(
         let store_tx = ctx.store.begin_transaction();
         store_tx.set_block_submit_tx(block_number, &tx.as_reader())?;
         store_tx.commit()?;
+
+        ctx.metrics.tx_size.inc_by(tx.total_size() as u64);
+        ctx.metrics
+            .witness_size
+            .inc_by(tx.witnesses().total_size() as u64);
 
         log::info!("generated submission transaction");
 
