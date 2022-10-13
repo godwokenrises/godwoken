@@ -29,6 +29,14 @@ gw_psc_local_blocks 0
 # HELP gw_psc_submitted_blocks number of submitted (but not yet confirmed) blocks.
 # TYPE gw_psc_submitted_blocks gauge
 gw_psc_submitted_blocks 6
+# HELP gw_psc_witness_size_bytes block submission txs witness size.
+# TYPE gw_psc_witness_size_bytes counter
+# UNIT gw_psc_witness_size_bytes bytes
+gw_psc_witness_size_bytes_total 36165
+# HELP gw_psc_tx_size_bytes block submission txs size.
+# TYPE gw_psc_tx_size_bytes counter
+# UNIT gw_psc_tx_size_bytes bytes
+gw_psc_tx_size_bytes_total 50683
 # EOF
 ```
 
