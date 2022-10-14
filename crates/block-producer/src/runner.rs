@@ -599,7 +599,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         test_mode_control,
         withdrawal_unlocker,
         cleaner,
-        withdrawal_finalizer,
+        _withdrawal_finalizer,
     ) = match config.node_mode {
         NodeMode::ReadOnly => (None, None, None, None, None, None),
         mode => {
