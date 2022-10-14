@@ -636,13 +636,10 @@ impl MemPool {
 
         let is_mem_pool_recovery = old_tip.is_none();
 
-        // query pending deposits for refresh
-        let mut pending_deposits = None;
+        // refresh pending deposits
         if !is_mem_pool_recovery {
-            pending_deposits = Some(
-                self.query_deposit_cells(&db, new_tip, local_cells_manager)
-                    .await?,
-            );
+            self.refresh_deposit_cells(&db, new_tip, local_cells_manager)
+                .await?;
         }
 
         // estimate next l2block timestamp
@@ -699,15 +696,7 @@ impl MemPool {
 
             log::info!("[mem-pool] reset reinject txs: {} mem-block txs: {} reinject withdrawals: {} mem-block withdrawals: {}", reinject_txs.len(), mem_block_txs.len(), reinject_withdrawals.len(), mem_block_withdrawals.len());
             // re-inject txs
-            let txs: Vec<_> = reinject_txs.into_iter().chain(mem_block_txs).collect();
-
-            if !self.has_pending_create_sender(txs.iter())? {
-                if let Some(pending_deposits) = pending_deposits {
-                    log::debug!("[mem-pool] refresh deposits: {}", pending_deposits.len());
-
-                    self.pending_deposits = pending_deposits;
-                }
-            }
+            let txs = reinject_txs.into_iter().chain(mem_block_txs).collect();
 
             // re-inject withdrawals
             let mut withdrawals: Vec<_> = reinject_withdrawals.into_iter().collect();
@@ -899,14 +888,15 @@ impl MemPool {
         Ok(())
     }
 
-    /// query pending deposits
+    /// refresh pending deposits
     #[instrument(skip_all)]
-    async fn query_deposit_cells(
+    async fn refresh_deposit_cells(
         &mut self,
         db: &StoreTransaction,
         new_block_hash: H256,
         local_cells_manager: &LocalCellsManager,
-    ) -> Result<Vec<DepositInfo>> {
+    ) -> Result<()> {
+        // refresh
         let snap = self.mem_pool_state.load();
         let state = snap.state()?;
         let mem_account_count = state.get_account_count()?;
@@ -918,7 +908,7 @@ impl MemPool {
         };
 
         log::debug!(
-            "[mem-pool] query pending deposits, mem_account_count: {}, tip_account_count: {}",
+            "[mem-pool] refresh pending deposits, mem_account_count: {}, tip_account_count: {}",
             mem_account_count,
             tip_account_count
         );
@@ -926,15 +916,18 @@ impl MemPool {
             .provider
             .collect_deposit_cells(local_cells_manager)
             .await?;
-        let pending_deposits = crate::deposit::sanitize_deposit_cells(
+        self.pending_deposits = crate::deposit::sanitize_deposit_cells(
             self.generator.rollup_context(),
             &self.mem_block_config.deposit_timeout_config,
             cells,
             &state,
         );
-        log::debug!("[mem-pool] queried deposits: {}", pending_deposits.len());
+        log::debug!(
+            "[mem-pool] refreshed deposits: {}",
+            self.pending_deposits.len()
+        );
 
-        Ok(pending_deposits)
+        Ok(())
     }
 
     #[instrument(skip_all, fields(deposits_count = deposit_cells.len()))]
@@ -1198,23 +1191,6 @@ impl MemPool {
 
         db.commit()?;
         Ok(())
-    }
-
-    fn has_pending_create_sender<'a>(
-        &self,
-        txs: impl Iterator<Item = &'a L2Transaction>,
-    ) -> Result<bool> {
-        let mem_store = MemStore::new(self.store.get_snapshot());
-        let state = mem_store.state()?;
-
-        for tx in txs {
-            let account_id: u32 = tx.as_reader().raw().from_id().unpack();
-            if state.get_script_hash(account_id)?.is_zero() {
-                return Ok(true);
-            }
-        }
-
-        Ok(false)
     }
 
     // Remove re-injected failed txs in mem pool db before bug fix.
