@@ -577,15 +577,16 @@ pub struct SyscallCyclesConfig {
 impl SyscallCyclesConfig {
     pub fn default() -> Self {
         SyscallCyclesConfig {
-            sys_store_cycles: 0,
-            sys_load_cycles: 0,
-            sys_create_cycles: 0,
-            sys_load_account_script_cycles: 0,
-            sys_store_data_cycles: 0,
-            sys_load_data_cycles: 0,
-            sys_get_block_hash_cycles: 0,
-            sys_recover_account_cycles: 0,
-            sys_log_cycles: 0,
+            sys_store_cycles: 50000,
+            sys_load_cycles: 5000,
+            sys_create_cycles: 50000,
+            sys_load_account_script_cycles: 5000,
+            sys_store_data_cycles: 50000,
+            sys_load_data_cycles: 5000,
+            sys_get_block_hash_cycles: 50000,
+            sys_recover_account_cycles: 50000,
+            sys_log_cycles: 50000,
+
             // default cycles of BN operations
             // estimated_cycles = 3 * (Gas Cost of EIP-1108)
             // see: https://eips.ethereum.org/EIPS/eip-1108
