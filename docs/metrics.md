@@ -43,6 +43,9 @@ gw_psc_tx_size_bytes_total 574481
 ## Read-only node
 
 ```
+# HELP gw_sync_buffer_len Number of messages in the block sync receive buffer.
+# TYPE gw_sync_buffer_len gauge
+gw_sync_buffer_len 0
 # HELP gw_chain_transactions Number of packaged L2 transactions.
 # TYPE gw_chain_transactions counter
 gw_chain_transactions_total 60
