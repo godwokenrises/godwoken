@@ -837,6 +837,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
             p2p_stream_inbox: block_sync_client_p2p_stream_inbox,
             completed_initial_syncing: false,
             liveness: liveness.clone(),
+            buffer_len: Default::default(),
         };
         let shutdown_completed_send = shutdown_completed_send.clone();
         let mut shutdown_event_recv = shutdown_event.subscribe();

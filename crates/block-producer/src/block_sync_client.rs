@@ -21,6 +21,7 @@ use gw_types::{
 };
 use gw_utils::{compression::StreamDecoder, liveness::Liveness};
 use opentelemetry::trace::{SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState};
+use prometheus_client::metrics::gauge::Gauge;
 use tentacle::{
     builder::MetaBuilder,
     service::{ProtocolMeta, ServiceAsyncControl},
@@ -45,6 +46,7 @@ pub struct BlockSyncClient {
     pub p2p_stream_inbox: Arc<std::sync::Mutex<Option<P2PStream>>>,
     pub completed_initial_syncing: bool,
     pub liveness: Arc<Liveness>,
+    pub buffer_len: Gauge,
 }
 
 impl SyncL1Context for BlockSyncClient {
@@ -70,6 +72,11 @@ impl SyncL1Context for BlockSyncClient {
 
 impl BlockSyncClient {
     pub async fn run(mut self) {
+        gw_metrics::REGISTRY.write().unwrap().register(
+            "sync_buffer_len",
+            "Number of messages in the block sync receive buffer",
+            Box::new(self.buffer_len.clone()),
+        );
         let mut p2p_stream = None;
         loop {
             if let Some(ref mut s) = p2p_stream {
@@ -155,6 +162,8 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
     //
     // When there are too many messages in the buffer that haven't been applied,
     // we skip transactions and mem block messages till next block.
+    let buffer_len = client.buffer_len.clone();
+    buffer_len.set(0);
     let recv_handle = tokio::spawn(async move {
         let mut buffer: VecDeque<BlockSync> = VecDeque::new();
         let mut stream_ended = false;
@@ -165,15 +174,14 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
                     if let Some(msg) = recv_result? {
                         BlockSyncReader::from_slice(&msg[..])?;
                         buffer.push_back(BlockSync::new_unchecked(msg));
-                        if buffer.len() % 128 == 0 {
-                            log::info!("receive buffer: {}", buffer.len());
-                        }
+                        buffer_len.set(buffer.len() as u64);
                     } else {
                         stream_ended = true;
                     }
                 }
                 reserve_result = tx.reserve(), if !buffer.is_empty() => {
                     reserve_result?.send(buffer.pop_front().unwrap());
+                    buffer_len.set(buffer.len() as u64);
                 }
                 // No more messages - buffer is empty and stream is ended.
                 else => break,
@@ -192,6 +200,7 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
                     _ => true,
                 });
                 log::info!("receive buffer: {}", buffer.len());
+                buffer_len.set(buffer.len() as u64);
             }
         }
         anyhow::Ok(())
