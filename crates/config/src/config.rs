@@ -571,7 +571,8 @@ pub struct SyscallCyclesConfig {
     pub sys_log_cycles: u64,
     pub sys_bn_add_cycles: u64,
     pub sys_bn_mul_cycles: u64,
-    pub sys_bn_pairing_cycles: u64,
+    pub sys_bn_fixed_pairing_cycles: u64,
+    pub sys_bn_per_pairing_cycles: u64,
 }
 
 impl SyscallCyclesConfig {
@@ -592,7 +593,8 @@ impl SyscallCyclesConfig {
             // see: https://eips.ethereum.org/EIPS/eip-1108
             sys_bn_add_cycles: 450,
             sys_bn_mul_cycles: 18_000,
-            sys_bn_pairing_cycles: 135_000,
+            sys_bn_fixed_pairing_cycles: 135_000,
+            sys_bn_per_pairing_cycles: 102_000,
         }
     }
 }

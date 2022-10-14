@@ -369,7 +369,8 @@ async fn test_block_max_cycles_limit() {
                 sys_log_cycles: MAX_CYCLES_LIMIT,
                 sys_bn_add_cycles: MAX_CYCLES_LIMIT,
                 sys_bn_mul_cycles: MAX_CYCLES_LIMIT,
-                sys_bn_pairing_cycles: MAX_CYCLES_LIMIT,
+                sys_bn_fixed_pairing_cycles: MAX_CYCLES_LIMIT,
+                sys_bn_per_pairing_cycles: MAX_CYCLES_LIMIT,
             },
             ..Default::default()
         },

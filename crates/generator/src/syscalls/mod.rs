@@ -569,8 +569,8 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                     let k: u64 = input_size / 192;
                     if k > 0 {
                         // Subtract additional cycles per pairing
-                        // https://eips.ethereum.org/EIPS/eip-1108
-                        let additional_cycles = k * 34000 * 3;
+                        let additional_cycles =
+                            k * cycles_pool.syscall_config().sys_bn_per_pairing_cycles;
                         self.result.cycles.r#virtual = self
                             .result
                             .cycles
@@ -723,7 +723,7 @@ impl<'a, 'b, S: State, C: ChainView> L2Syscalls<'a, 'b, S, C> {
             SYS_LOG => cycles_config.sys_log_cycles,
             SYS_BN_ADD => cycles_config.sys_bn_add_cycles,
             SYS_BN_MUL => cycles_config.sys_bn_mul_cycles,
-            SYS_BN_PAIRING => cycles_config.sys_bn_pairing_cycles,
+            SYS_BN_PAIRING => cycles_config.sys_bn_fixed_pairing_cycles,
             _ => 0,
         }
     }
