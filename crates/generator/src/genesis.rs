@@ -20,8 +20,8 @@ use gw_types::{
     core::{ScriptHashType, Status},
     offchain::RollupContext,
     packed::{
-        AccountMerkleState, BlockMerkleState, DepositInfoVec,
-        GlobalState, L2Block, NumberHash, RawL2Block, Script, SubmitTransactions,
+        AccountMerkleState, BlockMerkleState, DepositInfoVec, GlobalState, L2Block, NumberHash,
+        RawL2Block, Script, SubmitTransactions,
     },
     prelude::*,
 };

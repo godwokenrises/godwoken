@@ -19,8 +19,8 @@ use gw_types::{
     from_box_should_be_ok,
     offchain::{global_state_from_slice, SMTRevertedBlockHashes},
     packed::{
-        self, ChallengeTarget, DepositInfoVec, NumberHash,
-        NumberHashReader, Script, Transaction, TransactionKey, WithdrawalKey,
+        self, ChallengeTarget, DepositInfoVec, NumberHash, NumberHashReader, Script, Transaction,
+        TransactionKey, WithdrawalKey,
     },
     prelude::*,
 };

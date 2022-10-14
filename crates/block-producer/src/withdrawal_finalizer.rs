@@ -39,7 +39,7 @@ use gw_utils::{
 };
 use tracing::instrument;
 
-use crate::{withdrawal::BlockWithdrawals, custodian::query_finalized_custodians};
+use crate::{custodian::query_finalized_custodians, withdrawal::BlockWithdrawals};
 
 const TRANSACTION_FAILED_TO_RESOLVE_ERROR: &str = "TransactionFailedToResolve";
 

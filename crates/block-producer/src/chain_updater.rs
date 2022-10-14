@@ -16,8 +16,8 @@ use gw_types::{
     packed::{
         CellInfo, CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, DepositInfo,
         DepositInfoVec, DepositLockArgs, DepositRequest, L2Block, OutPoint, RollupAction,
-        RollupActionUnion, Script, Transaction, WithdrawalRequestExtra, WitnessArgs,
-        WitnessArgsReader, ScriptVec,
+        RollupActionUnion, Script, ScriptVec, Transaction, WithdrawalRequestExtra, WitnessArgs,
+        WitnessArgsReader,
     },
     prelude::*,
 };
