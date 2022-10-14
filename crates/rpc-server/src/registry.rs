@@ -268,11 +268,15 @@ impl Registry {
         }
 
         let execute_transaction_metrics = Family::default();
-        gw_metrics::REGISTRY.write().unwrap().register(
-            "execute_transactions",
-            "number of execute_transaction requests",
-            Box::new(execute_transaction_metrics.clone()),
-        );
+        gw_metrics::REGISTRY
+            .write()
+            .unwrap()
+            .sub_registry_with_prefix("rpc")
+            .register(
+                "execute_transactions",
+                "Number of execute_transaction requests",
+                Box::new(execute_transaction_metrics.clone()),
+            );
 
         Self {
             mem_pool,

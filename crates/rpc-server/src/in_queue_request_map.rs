@@ -21,11 +21,15 @@ impl InQueueRequestMap {
             map: Default::default(),
             queue_len: Default::default(),
         };
-        gw_metrics::REGISTRY.write().unwrap().register(
-            "in_queue_requests",
-            "number of in queue requests",
-            Box::new(map.queue_len.clone()),
-        );
+        gw_metrics::REGISTRY
+            .write()
+            .unwrap()
+            .sub_registry_with_prefix("rpc")
+            .register(
+                "in_queue_requests",
+                "Number of in queue requests",
+                Box::new(map.queue_len.clone()),
+            );
         map
     }
 

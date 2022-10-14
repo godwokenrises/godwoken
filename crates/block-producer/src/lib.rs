@@ -6,6 +6,7 @@ pub mod cleaner;
 pub mod custodian;
 pub mod debugger;
 pub mod deposit;
+mod metrics;
 pub mod produce_block;
 pub(crate) mod psc;
 pub mod replay_block;

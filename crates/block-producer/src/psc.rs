@@ -25,10 +25,7 @@ use gw_utils::{
     since::Since,
 };
 use opentelemetry::trace::TraceContextExt;
-use prometheus_client::{
-    metrics::{counter::Counter, gauge::Gauge},
-    registry::{Registry, Unit},
-};
+use prometheus_client::metrics::gauge::Gauge;
 use tokio::{
     signal::unix::{signal, SignalKind},
     sync::Mutex,
@@ -40,6 +37,7 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 use crate::{
     block_producer::{BlockProducer, ComposeSubmitTxArgs, TransactionSizeError},
     chain_updater::ChainUpdater,
+    metrics::PSCMetrics,
     produce_block::ProduceBlockResult,
     sync_l1::{revert, sync_l1, SyncL1Context},
 };
@@ -49,35 +47,6 @@ pub struct ProduceSubmitConfirm {
     context: Arc<PSCContext>,
     local_count: Gauge,
     submitted_count: Gauge,
-}
-
-#[derive(Default)]
-pub struct PSCMetrics {
-    resend: Counter,
-    witness_size: Counter,
-    tx_size: Counter,
-}
-
-impl PSCMetrics {
-    fn register(&self, registry: &mut Registry) {
-        registry.register(
-            "resend",
-            "number of times resending submission transactions",
-            Box::new(self.resend.clone()),
-        );
-        registry.register_with_unit(
-            "witness_size",
-            "block submission txs witness size",
-            Unit::Bytes,
-            Box::new(self.witness_size.clone()),
-        );
-        registry.register_with_unit(
-            "tx_size",
-            "block submission txs size",
-            Unit::Bytes,
-            Box::new(self.tx_size.clone()),
-        );
-    }
 }
 
 pub struct PSCContext {
