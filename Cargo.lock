@@ -1740,6 +1740,7 @@ dependencies = [
  "hex",
  "lazy_static",
  "log",
+ "prometheus-client",
  "thiserror",
  "tokio",
  "toml",
