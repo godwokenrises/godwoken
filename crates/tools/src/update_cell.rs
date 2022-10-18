@@ -15,7 +15,7 @@ use gw_utils::{
 };
 use std::path::{Path, PathBuf};
 
-pub struct UpdateCellArgs<'a> {
+pub struct UpdateCellArgs<'a, P> {
     pub ckb_rpc_url: &'a str,
     pub indexer_rpc_url: &'a str,
     pub tx_hash: [u8; 32],
@@ -26,7 +26,7 @@ pub struct UpdateCellArgs<'a> {
     pub fee_rate: u64,
 }
 
-pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_>) -> Result<()> {
+pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_, P>) -> Result<()> {
     let UpdateCellArgs {
         ckb_rpc_url,
         indexer_rpc_url,
