@@ -1051,7 +1051,7 @@ async fn main() -> Result<()> {
                 buf.push(privkey_path);
                 buf
             };
-            update_cell::update_cell(
+            update_cell::update_cell(update_cell::UpdateCellArgs {
                 ckb_rpc_url,
                 indexer_rpc_url,
                 tx_hash,
@@ -1060,7 +1060,7 @@ async fn main() -> Result<()> {
                 cell_data_path,
                 pk_path,
                 fee_rate,
-            )
+            })
             .await?;
         }
         ("deposit-ckb", Some(m)) => {
