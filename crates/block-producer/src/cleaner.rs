@@ -61,15 +61,22 @@ pub struct Cleaner {
     ckb_genesis_info: CKBGenesisInfo,
     wallet: Wallet,
     consumed_verifiers: ConsumedVerifiers,
+    fee_rate: u64,
 }
 
 impl Cleaner {
-    pub fn new(rpc_client: RPCClient, ckb_genesis_info: CKBGenesisInfo, wallet: Wallet) -> Self {
+    pub fn new(
+        rpc_client: RPCClient,
+        ckb_genesis_info: CKBGenesisInfo,
+        wallet: Wallet,
+        fee_rate: u64,
+    ) -> Self {
         Cleaner {
             rpc_client,
             ckb_genesis_info,
             wallet,
             consumed_verifiers: Arc::new(Mutex::new(Vec::new())),
+            fee_rate,
         }
     }
 
@@ -229,7 +236,13 @@ impl Cleaner {
             .push(to_input_cell_info(owner_input));
 
         let owner_lock = self.wallet.lock_script().to_owned();
-        fill_tx_fee(&mut tx_skeleton, &self.rpc_client.indexer, owner_lock).await?;
+        fill_tx_fee(
+            &mut tx_skeleton,
+            &self.rpc_client.indexer,
+            owner_lock,
+            self.fee_rate,
+        )
+        .await?;
         self.wallet.sign_tx_skeleton(tx_skeleton)
     }
 }

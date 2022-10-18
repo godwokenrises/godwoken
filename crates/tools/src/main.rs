@@ -290,6 +290,7 @@ async fn main() -> Result<()> {
                 .arg(Arg::with_name("type-id").long("type-id").takes_value(true).required(true).help("The type-id of the exist cell"))
                 .arg(Arg::with_name("cell-data-path").long("cell-data-path").takes_value(true).required(true).help("The path of new data"))
                 .arg(arg_privkey_path.clone())
+                .arg(Arg::with_name("fee-rate").long("fee-rate").takes_value(true).required(false).default_value("1000").help("tx fee rate"))
         )
         .subcommand(
             SubCommand::with_name("deposit-ckb")
@@ -1044,6 +1045,7 @@ async fn main() -> Result<()> {
             let type_id = cli_args::to_h256(m.value_of("type-id").unwrap())?;
             let cell_data_path = Path::new(m.value_of("cell-data-path").unwrap());
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
+            let fee_rate: u64 = m.value_of("fee-rate").unwrap().parse()?;
             let pk_path = {
                 let mut buf = PathBuf::new();
                 buf.push(privkey_path);
@@ -1057,6 +1059,7 @@ async fn main() -> Result<()> {
                 type_id,
                 cell_data_path,
                 pk_path,
+                fee_rate,
             )
             .await?;
         }

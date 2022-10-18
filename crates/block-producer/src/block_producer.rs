@@ -876,6 +876,7 @@ impl BlockProducer {
             &mut tx_skeleton,
             &self.rpc_client.indexer,
             self.wallet.lock_script().to_owned(),
+            self.config.fee_rate,
         )
         .await?;
         debug_assert_eq!(

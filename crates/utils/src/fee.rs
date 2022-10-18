@@ -11,9 +11,9 @@ use gw_types::{
 
 /// Calculate tx fee
 /// TODO accept fee rate args
-fn calculate_required_tx_fee(tx_size: usize) -> u64 {
+fn calculate_required_tx_fee(tx_size: usize, fee_rate: u64) -> u64 {
     // tx_size * KB / MIN_FEE_RATE
-    tx_size as u64
+    (tx_size as u64) * fee_rate / 1000
 }
 
 /// Add fee cell to tx skeleton
@@ -21,6 +21,7 @@ pub async fn fill_tx_fee(
     tx_skeleton: &mut TransactionSkeleton,
     client: &CKBIndexerClient,
     lock_script: Script,
+    fee_rate: u64,
 ) -> Result<()> {
     const CHANGE_CELL_CAPACITY: u64 = 61_00000000;
 
@@ -43,7 +44,7 @@ pub async fn fill_tx_fee(
     // calculate required fee
     // Try to generate a change output cell. If input cannot cover fee, query an owner cell.
     let tx_size = estimate_tx_size_with_change(tx_skeleton)?;
-    let tx_fee = calculate_required_tx_fee(tx_size);
+    let tx_fee = calculate_required_tx_fee(tx_size, fee_rate);
     let max_paid_fee = tx_skeleton
         .calculate_fee()?
         .saturating_sub(CHANGE_CELL_CAPACITY);
@@ -86,7 +87,7 @@ pub async fn fill_tx_fee(
             }));
 
         let tx_size = estimate_tx_size_with_change(tx_skeleton)?;
-        let tx_fee = calculate_required_tx_fee(tx_size);
+        let tx_fee = calculate_required_tx_fee(tx_size, fee_rate);
         let max_paid_fee = tx_skeleton
             .calculate_fee()?
             .saturating_sub(CHANGE_CELL_CAPACITY);
