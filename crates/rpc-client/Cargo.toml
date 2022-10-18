@@ -1,6 +1,6 @@
 [package]
 name = "gw-rpc-client"
-version = "1.6.0"
+version = "1.6.1"
 authors = ["Nervos Network"]
 edition = "2018"
 
