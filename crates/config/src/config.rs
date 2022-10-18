@@ -171,6 +171,12 @@ pub struct BlockProducerConfig {
     pub wallet_config: Option<WalletConfig>,
     #[serde(default = "default_withdrawal_unlocker_wallet")]
     pub withdrawal_unlocker_wallet_config: Option<WalletConfig>,
+    #[serde(default = "default_fee_rate")]
+    pub fee_rate: u64,
+}
+
+const fn default_fee_rate() -> u64 {
+    1000
 }
 
 const fn default_check_mem_block_before_submit() -> bool {

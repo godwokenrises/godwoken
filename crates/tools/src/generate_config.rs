@@ -222,6 +222,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         wallet_config: Some(wallet_config),
         check_mem_block_before_submit: false,
         withdrawal_unlocker_wallet_config: None,
+        fee_rate: 1000,
     });
     let genesis: GenesisConfig = GenesisConfig {
         timestamp: rollup_result.timestamp,

@@ -709,12 +709,14 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 contracts_dep_manager.clone(),
                 unlocker_wallet,
                 config.debug.clone(),
+                block_producer_config.fee_rate,
             );
 
             let cleaner = Arc::new(Cleaner::new(
                 rpc_client.clone(),
                 ckb_genesis_info.clone(),
                 wallet,
+                block_producer_config.fee_rate,
             ));
 
             let challenger_wallet = match block_producer_config.wallet_config {
