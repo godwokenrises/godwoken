@@ -51,7 +51,7 @@ use gw_types::{
 
 use ckb_vm::{DefaultMachineBuilder, SupportMachine};
 
-#[cfg(not(has_asm))]
+#[cfg(not(has_aot))]
 use ckb_vm::TraceMachine;
 use gw_utils::script_log::{generate_polyjuice_system_log, GW_LOG_POLYJUICE_SYSTEM};
 use tracing::instrument;
@@ -223,22 +223,22 @@ impl Generator {
                     cycles_pool: &mut cycles_pool,
                     log_buf: &mut sys_log_buf,
                 }))
-                .instruction_cycle_func(Box::new(instruction_cycles));
+                .instruction_cycle_func(&instruction_cycles);
             let default_machine = machine_builder.build();
 
-            #[cfg(has_asm)]
+            #[cfg(has_aot)]
             let aot_code_opt = self
                 .backend_manage
                 .get_aot_code(&backend.checksum.generator, global_vm_version);
-            #[cfg(has_asm)]
+            #[cfg(has_aot)]
             if aot_code_opt.is_none() {
                 log::warn!("[machine_run] Not AOT mode!");
             }
 
-            #[cfg(has_asm)]
-            let mut machine = ckb_vm::machine::asm::AsmMachine::new(default_machine, aot_code_opt);
+            #[cfg(has_aot)]
+            let mut machine = ckb_vm_aot::AotMachine::new(default_machine, aot_code_opt);
 
-            #[cfg(not(has_asm))]
+            #[cfg(not(has_aot))]
             let mut machine = TraceMachine::new(default_machine);
 
             machine.load_program(&backend.generator, &[])?;

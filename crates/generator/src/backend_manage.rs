@@ -4,7 +4,7 @@ use gw_config::{BackendConfig, BackendSwitchConfig, BackendType};
 use gw_types::bytes::Bytes;
 use std::{collections::HashMap, fs};
 
-#[cfg(has_asm)]
+#[cfg(has_aot)]
 use crate::types::vm::AotCode;
 
 #[derive(Default, Clone)]
@@ -75,7 +75,7 @@ pub struct BackendManage {
     backend_switches: Vec<(u64, HashMap<H256, Backend>)>,
     /// define here not in backends,
     /// so we don't need to implement the trait `Clone` of AotCode
-    #[cfg(has_asm)]
+    #[cfg(has_aot)]
     aot_codes: (HashMap<H256, AotCode>, HashMap<H256, AotCode>),
 }
 
@@ -137,7 +137,7 @@ impl BackendManage {
                 validator,
                 generator,
             );
-            #[cfg(has_asm)]
+            #[cfg(has_aot)]
             if compile {
                 self.compile_backend(&backend);
             }
@@ -156,7 +156,7 @@ impl BackendManage {
         Ok(())
     }
 
-    #[cfg(has_asm)]
+    #[cfg(has_aot)]
     fn compile_backend(&mut self, backend: &Backend) {
         self.aot_codes.0.insert(
             backend.checksum.generator,
@@ -194,7 +194,7 @@ impl BackendManage {
             })
     }
 
-    #[cfg(has_asm)]
+    #[cfg(has_aot)]
     fn aot_compile(&self, code_bytes: &Bytes, vm_version: u32) -> Result<AotCode, ckb_vm::Error> {
         log::info!("Compile AotCode with VMVersion::V{}", vm_version);
         let vm_version = match vm_version {
@@ -202,7 +202,7 @@ impl BackendManage {
             1 => crate::types::vm::VMVersion::V1,
             ver => panic!("Unsupport VMVersion: {}", ver),
         };
-        let mut aot_machine = ckb_vm::machine::aot::AotCompilingMachine::load(
+        let mut aot_machine = ckb_vm_aot::AotCompilingMachine::load(
             code_bytes,
             Some(Box::new(crate::vm_cost_model::instruction_cycles)),
             vm_version.vm_isa(),
@@ -212,7 +212,7 @@ impl BackendManage {
     }
 
     /// get aot_code according to special VM version
-    #[cfg(has_asm)]
+    #[cfg(has_aot)]
     pub(crate) fn get_aot_code(&self, code_hash: &H256, vm_version: u32) -> Option<&AotCode> {
         log::debug!(
             "get_aot_code hash: {} version: {}",

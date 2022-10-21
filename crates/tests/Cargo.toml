@@ -27,8 +27,9 @@ gw-polyjuice-sender-recover = { path = "../polyjuice-sender-recover" }
 godwoken-bin = { path = "../godwoken-bin" }
 anyhow = "1.0"
 blake2b-rs = "0.2"
-ckb-vm = { version = "=0.21.3", features = ["detect-asm", "aot"] }
-ckb-vm-definitions = "=0.21.3"
+ckb-vm = "0.22.0"
+ckb-vm-aot = "0.22.0"
+ckb-vm-definitions = "0.22.0"
 thiserror = "1.0"
 lazy_static = "1.4"
 secp256k1 = { version = "0.21", features = ["recovery"] }

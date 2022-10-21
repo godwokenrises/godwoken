@@ -700,7 +700,7 @@ dependencies = [
  "ckb-logger",
  "ckb-traits",
  "ckb-types",
- "ckb-vm",
+ "ckb-vm 0.21.3",
  "faster-hex 0.6.1",
  "serde",
 ]
@@ -787,7 +787,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "cc",
- "ckb-vm-definitions",
+ "ckb-vm-definitions 0.21.7",
  "derive_more",
  "goblin 0.2.3",
  "goblin 0.4.0",
@@ -799,10 +799,51 @@ dependencies = [
 ]
 
 [[package]]
-name = "ckb-vm-definitions"
-version = "0.21.3"
+name = "ckb-vm"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7968c559498b68833791364e87182fdd1a3aba803e8a16c34b1aa45fc08add1c"
+checksum = "0f1126bf0240d100234bc06efa7020f0d50ca35fe90e5ac7cac1b7721e1bacb7"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "cc",
+ "ckb-vm-definitions 0.22.0",
+ "derive_more",
+ "goblin 0.2.3",
+ "goblin 0.4.0",
+ "rand 0.7.3",
+ "scroll",
+ "serde",
+]
+
+[[package]]
+name = "ckb-vm-aot"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97d90662540a6a3b0d71e58d789016efe817d2cd0c4ec6b26bcaf7f9b18fe7cf"
+dependencies = [
+ "cc",
+ "ckb-vm 0.22.0",
+ "ckb-vm-definitions 0.22.0",
+ "derive_more",
+ "goblin 0.2.3",
+ "goblin 0.4.0",
+ "libc",
+ "memmap2",
+ "scroll",
+]
+
+[[package]]
+name = "ckb-vm-definitions"
+version = "0.21.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f7a838aab5ce5999add288511f719fa7af13e6790a5746f74d2538bbc47bb59"
+
+[[package]]
+name = "ckb-vm-definitions"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14739bf59648c169de9257ec7dd6aba1aeb6a41725d636005f1c91853df58fcc"
 
 [[package]]
 name = "clang-sys"
@@ -1794,7 +1835,8 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "blake2b-rs",
- "ckb-vm",
+ "ckb-vm 0.22.0",
+ "ckb-vm-aot",
  "ethabi",
  "gw-ckb-hardfork",
  "gw-common",
@@ -2037,8 +2079,9 @@ dependencies = [
  "ckb-script",
  "ckb-traits",
  "ckb-types",
- "ckb-vm",
- "ckb-vm-definitions",
+ "ckb-vm 0.22.0",
+ "ckb-vm-aot",
+ "ckb-vm-definitions 0.22.0",
  "env_logger",
  "godwoken-bin",
  "gw-block-producer",

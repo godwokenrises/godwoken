@@ -5,10 +5,10 @@ use ckb_vm::{
 use gw_types::packed::{ChallengeTarget, ChallengeWitness};
 use std::fmt::{self, Display};
 
-#[cfg(has_asm)]
+#[cfg(has_aot)]
 use ckb_vm::machine::asm::AsmCoreMachine;
 
-#[cfg(not(has_asm))]
+#[cfg(not(has_aot))]
 use ckb_vm::{DefaultCoreMachine, SparseMemory, WXorXMemory};
 
 /// The type of CKB-VM ISA.
@@ -16,16 +16,16 @@ pub type VmIsa = u8;
 /// /// The type of CKB-VM version.
 pub type VmVersion = u32;
 
-#[cfg(has_asm)]
+#[cfg(has_aot)]
 pub(crate) type CoreMachineType = AsmCoreMachine;
-#[cfg(not(has_asm))]
+#[cfg(not(has_aot))]
 pub(crate) type CoreMachineType = DefaultCoreMachine<u64, WXorXMemory<SparseMemory<u64>>>;
 
 /// The type of core VM machine when uses ASM.
-#[cfg(has_asm)]
+#[cfg(has_aot)]
 pub type CoreMachine = Box<AsmCoreMachine>;
 /// The type of core VM machine when doesn't use ASM.
-#[cfg(not(has_asm))]
+#[cfg(not(has_aot))]
 pub type CoreMachine = DefaultCoreMachine<u64, WXorXMemory<SparseMemory<u64>>>;
 
 /// The version of CKB VM.
@@ -74,8 +74,8 @@ impl VMVersion {
     }
 }
 
-#[cfg(has_asm)]
-pub(crate) use ckb_vm::machine::asm::AotCode;
+#[cfg(has_aot)]
+pub(crate) use ckb_vm_aot::AotCode;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ChallengeContext {
