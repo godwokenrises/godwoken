@@ -725,8 +725,9 @@ async fn check_cell(rpc_client: &RPCClient, out_point: &OutPoint) -> Result<()> 
                     .into_iter()
                     .any(|i| i.previous_output().eq(out_point))
                 {
-                    bail!(anyhow::Error::new(DeadCellError)
-                        .context(format!("consumed by tx 0x{}", hex::encode(tx.hash()))))
+                    bail!(DeadCellError {
+                        consumed_by_tx: Some(tx.hash().into()),
+                    });
                 }
             }
             opt_block = rpc_client
@@ -737,7 +738,9 @@ async fn check_cell(rpc_client: &RPCClient, out_point: &OutPoint) -> Result<()> 
         }
     }
     // Transaction is on chain, but cell is not live, so it is dead.
-    bail!(DeadCellError);
+    bail!(DeadCellError {
+        consumed_by_tx: None,
+    });
 }
 
 /// Send transaction.
@@ -752,6 +755,14 @@ async fn send_transaction_or_check_inputs(
         let code = get_jsonrpc_error_code(&err);
         if code == Some(CkbRpcError::TransactionFailedToResolve as i64) {
             if let Err(e) = check_tx_input(rpc_client, tx).await {
+                // If the input is consumed by tx, tx is actually confirmed.
+                // This can happen if the tx is confirmed right before it is
+                // resent and its inputs is checked.
+                if let Some(dead) = e.downcast_ref::<DeadCellError>() {
+                    if dead.consumed_by_tx == Some(tx.hash().into()) {
+                        return Ok(());
+                    }
+                }
                 err = e.context(err);
                 // Now, ∀T, e.is::<T>() -> err.is::<T>().
             }
@@ -780,8 +791,19 @@ impl Display for ShouldResyncError {
 }
 
 #[derive(thiserror::Error, Debug)]
-#[error("dead cell")]
-struct DeadCellError;
+struct DeadCellError {
+    consumed_by_tx: Option<H256>,
+}
+
+impl Display for DeadCellError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "dead cell")?;
+        if let Some(ref tx) = self.consumed_by_tx {
+            write!(f, ": consumed by tx 0x{}", hex::encode(tx.as_slice()))?;
+        }
+        Ok(())
+    }
+}
 
 #[derive(thiserror::Error, Debug)]
 #[error("previous transaction not confirmed")]
