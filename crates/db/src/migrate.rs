@@ -5,7 +5,8 @@ use crate::{
     error::Error,
     read_only_db::{self, ReadOnlyDB},
     schema::{
-        COLUMN_BLOCK, COLUMN_META, META_TIP_BLOCK_HASH_KEY, REMOVED_COLUMN_BLOCK_DEPOSIT_REQUESTS,
+        COLUMN_BAD_BLOCK, COLUMN_BLOCK, COLUMN_META, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
+        META_TIP_BLOCK_HASH_KEY, REMOVED_COLUMN_BLOCK_DEPOSIT_REQUESTS,
         REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO,
     },
     DBIterator, Result,
@@ -130,6 +131,37 @@ impl Migration for DecoupleBlockProducingSubmissionAndConfirmationMigration {
     }
     fn version(&self) -> &str {
         "20220517"
+    }
+    fn expensive(&self) -> bool {
+        false
+    }
+}
+
+struct BadBlockColumnMigration;
+
+impl Migration for BadBlockColumnMigration {
+    fn migrate(&self, mut db: RocksDB) -> Result<RocksDB> {
+        // Check that there are no bad blocks.
+        if db
+            .get_pinned(COLUMN_META, META_TIP_BLOCK_HASH_KEY)?
+            .as_deref()
+            != db
+                .get_pinned(COLUMN_META, META_LAST_VALID_TIP_BLOCK_HASH_KEY)?
+                .as_deref()
+        {
+            return Err(
+                "Cannot migrate to version 20221024 when there are bad blocks. You have to rewind or revert first"
+                    .to_string()
+                    .into(),
+            );
+        }
+
+        // Clear this reused column.
+        db.drop_cf(COLUMN_BAD_BLOCK)?;
+        Ok(db)
+    }
+    fn version(&self) -> &str {
+        "20221024"
     }
     fn expensive(&self) -> bool {
         false

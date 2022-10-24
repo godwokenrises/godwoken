@@ -5,7 +5,7 @@ use anyhow::Result;
 use gw_common::H256;
 use gw_db::error::Error;
 use gw_db::schema::{
-    COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
+    COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
     COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_GLOBAL_STATE,
     COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY, COLUMN_BLOCK_SUBMIT_TX,
     COLUMN_BLOCK_SUBMIT_TX_HASH, COLUMN_INDEX, COLUMN_MEM_POOL_TRANSACTION,
@@ -153,6 +153,7 @@ pub trait ChainStore: KVStoreRead {
         ))
     }
 
+    /// Get tip block hash. It may be a bad block.
     fn get_tip_block_hash(&self) -> Result<H256, Error> {
         let slice = self
             .get(COLUMN_META, META_TIP_BLOCK_HASH_KEY)
@@ -160,11 +161,17 @@ pub trait ChainStore: KVStoreRead {
         Ok(packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref()).unpack())
     }
 
+    /// Get tip block. The block is NOT necessarily valid, i.e. it may be a bad
+    /// block.
     fn get_tip_block(&self) -> Result<packed::L2Block, Error> {
         let tip_block_hash = self.get_tip_block_hash()?;
-        Ok(self.get_block(&tip_block_hash)?.expect("get tip block"))
+        Ok(self
+            .get_block(&tip_block_hash)?
+            .or_else(|| self.get_bad_block(&tip_block_hash))
+            .expect("get tip block"))
     }
 
+    /// Does NOT return block hash for bad blocks.
     fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, Error> {
         let block_number: packed::Uint64 = number.pack();
         match self.get(COLUMN_INDEX, block_number.as_slice()) {
@@ -175,6 +182,7 @@ pub trait ChainStore: KVStoreRead {
         }
     }
 
+    /// Does NOT return block number for bad blocks.
     fn get_block_number(&self, block_hash: &H256) -> Result<Option<u64>, Error> {
         match self.get(COLUMN_INDEX, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
@@ -184,11 +192,17 @@ pub trait ChainStore: KVStoreRead {
         }
     }
 
+    /// Does NOT return bad blocks.
     fn get_block(&self, block_hash: &H256) -> Result<Option<packed::L2Block>, Error> {
         match self.get(COLUMN_BLOCK, block_hash.as_slice()) {
             Some(slice) => Ok(Some(from_box_should_be_ok!(packed::L2BlockReader, slice))),
             None => Ok(None),
         }
+    }
+
+    fn get_bad_block(&self, block_hash: &H256) -> Option<packed::L2Block> {
+        let slice = self.get(COLUMN_BAD_BLOCK, block_hash.as_slice())?;
+        Some(from_box_should_be_ok!(packed::L2BlockReader, slice))
     }
 
     fn get_transaction(&self, tx_hash: &H256) -> Result<Option<packed::L2Transaction>, Error> {
@@ -265,6 +279,7 @@ pub trait ChainStore: KVStoreRead {
             .map(|slice| from_box_should_be_ok!(packed::WithdrawalRequestExtraReader, slice)))
     }
 
+    /// Works for both valid and bad blocks.
     fn get_block_post_global_state(
         &self,
         block_hash: &H256,
