@@ -7,7 +7,7 @@ use crate::{smt::smt_store::SMTStore, traits::kv_store::KVStoreRead};
 use gw_common::h256_ext::H256Ext;
 use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, H256};
 use gw_db::schema::{
-    Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ASSET_SCRIPT,
+    Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK,
     COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSIT_INFO_VEC,
     COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY,
     COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD,
@@ -377,16 +377,12 @@ impl StoreTransaction {
         global_state: &packed::GlobalState,
     ) -> Result<(), Error> {
         let block_hash = block.hash();
-        let block_number = block.raw().number();
 
         let global_state = global_state.as_slice();
 
         self.insert_raw(COLUMN_BLOCK_GLOBAL_STATE, &block_hash, global_state)?;
 
-        self.insert_raw(COLUMN_BLOCK, &block_hash, block.as_slice())?;
-
-        self.insert_raw(COLUMN_INDEX, block_number.as_slice(), &block_hash)?;
-        self.insert_raw(COLUMN_INDEX, &block_hash, block_number.as_slice())?;
+        self.insert_raw(COLUMN_BAD_BLOCK, &block_hash, block.as_slice())?;
 
         // Add to block smt
         let mut block_smt = self.block_smt()?;
@@ -411,10 +407,6 @@ impl StoreTransaction {
 
         for block in bad_blocks {
             let block_hash = block.hash();
-            let block_number = block.raw().number();
-
-            self.delete(COLUMN_INDEX, &block_hash)?;
-            self.delete(COLUMN_INDEX, block_number.as_slice())?;
 
             // Remove block from smt
             block_smt

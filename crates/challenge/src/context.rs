@@ -38,7 +38,7 @@ pub fn build_challenge_context(
 ) -> Result<ChallengeContext> {
     let block_hash: H256 = target.block_hash().unpack();
     let block = {
-        let opt_ = db.get_block(&block_hash)?;
+        let opt_ = db.get_bad_block(&block_hash);
         opt_.ok_or_else(|| anyhow!("bad block {} not found", hex::encode(block_hash.as_slice())))?
     };
 

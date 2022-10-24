@@ -7,9 +7,18 @@ pub const COLUMNS: u32 = 37;
 /// Column store meta data
 pub const COLUMN_META: Col = 0;
 /// Column store chain index
+///
+/// Block number (little endian) -> Block hash, and
+/// block hash -> block number (little endian).
+///
+/// Only for valid blocks. Bad blocks are not indexed.
 pub const COLUMN_INDEX: Col = 1;
 /// Column store block
 pub const COLUMN_BLOCK: Col = 2;
+/// Column store bad blocks.
+///
+/// Block hash -> L2Block.
+pub const COLUMN_BAD_BLOCK: Col = 3;
 /// Column store block's global state
 pub const COLUMN_BLOCK_GLOBAL_STATE: Col = 4;
 /// Column store transaction
@@ -73,7 +82,8 @@ pub const COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY: Col = 36;
 
 /// chain id
 pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";
-/// META_TIP_BLOCK_HASH_KEY tracks the latest known best block hash
+/// META_TIP_BLOCK_HASH_KEY tracks the latest known block. It may be a bad block
+/// or a valid block.
 pub const META_TIP_BLOCK_HASH_KEY: &[u8] = b"TIP_BLOCK_HASH";
 /// block SMT root
 pub const META_BLOCK_SMT_ROOT_KEY: &[u8] = b"BLOCK_SMT_ROOT_KEY";

@@ -1,6 +1,6 @@
 #![allow(clippy::mutable_key_type)]
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 use gw_challenge::offchain::{verify_tx::TxWithContext, OffChainMockContext};
 use gw_common::{sparse_merkle_tree, state::State, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_config::ChainConfig;
@@ -457,11 +457,7 @@ impl Chain {
                     assert_eq!(Status::try_from(status), Ok(Status::Running));
 
                     let first_reverted_block = reverted_blocks.first().expect("first block");
-                    let first_reverted_block_number =
-                        db.get_block_number(&first_reverted_block.hash().into())?;
-                    if first_reverted_block_number.is_none() {
-                        return Err(anyhow!("chain fork, can't find first reverted block"));
-                    }
+                    let first_reverted_block_number = first_reverted_block.number().unpack();
 
                     // Ensure no valid block is reverted
                     if self.challenge_target.is_none() {
@@ -469,11 +465,11 @@ impl Chain {
                     }
 
                     if let Some(block_hash) = self.bad_block_hash() {
-                        let local_bad_block = db.get_block(&block_hash)?;
+                        let local_bad_block = db.get_bad_block(&block_hash);
                         let local_bad_block_number =
                             local_bad_block.map(|b| b.raw().number().unpack());
 
-                        assert!(first_reverted_block_number >= local_bad_block_number);
+                        assert!(Some(first_reverted_block_number) >= local_bad_block_number);
                     }
 
                     // Both bad blocks and reverted_blocks should be ascended and matched
@@ -803,7 +799,7 @@ impl Chain {
                         }
 
                         let block = db
-                            .get_block(&current_block_hash)?
+                            .get_bad_block(&current_block_hash)
                             .expect("rewind block should exists");
 
                         db.rewind_block_smt(&block)?;
@@ -1073,26 +1069,41 @@ fn parse_global_state(tx: &Transaction, rollup_id: &[u8; 32]) -> Result<GlobalSt
     global_state_from_slice(&output_data).map_err(|_| anyhow!("global state unpacking error"))
 }
 
-fn package_bad_blocks(db: &StoreTransaction, start_block_hash: &H256) -> Result<Vec<L2Block>> {
-    let tip_block = db.get_tip_block()?;
-    if tip_block.hash() == start_block_hash.as_slice() {
-        return Ok(vec![tip_block]);
+struct TipBadBlocksRevIter<'a> {
+    db: &'a StoreTransaction,
+    current: Option<L2Block>,
+}
+
+impl<'a> Iterator for TipBadBlocksRevIter<'a> {
+    type Item = L2Block;
+    fn next(&mut self) -> Option<Self::Item> {
+        let parent = self.current.as_ref()?.raw().parent_block_hash().unpack();
+        let parent = self.db.get_bad_block(&parent);
+        std::mem::replace(&mut self.current, parent)
     }
+}
 
-    let tip_block_number = tip_block.raw().number().unpack();
-    let start_block_number = {
-        let number = db.get_block_number(start_block_hash)?;
-        number.ok_or_else(|| anyhow!("challenge block number not found"))?
-    };
-    assert!(start_block_number < tip_block_number);
+fn tip_bad_blocks_reverse_iter(db: &StoreTransaction) -> Result<TipBadBlocksRevIter<'_>> {
+    let tip_block_hash = db.get_tip_block_hash()?;
+    let tip_bad_block = db.get_bad_block(&tip_block_hash);
+    Ok(TipBadBlocksRevIter {
+        db,
+        current: tip_bad_block,
+    })
+}
 
-    let to_block = |number: u64| {
-        let hash = db.get_block_hash_by_number(number)?;
-        let block = hash.map(|h| db.get_block(&h)).transpose()?.flatten();
-        block.ok_or_else(|| anyhow!("block {} not found", number))
-    };
-
-    (start_block_number..=tip_block_number)
-        .map(to_block)
-        .collect()
+fn package_bad_blocks(db: &StoreTransaction, start_block_hash: &H256) -> Result<Vec<L2Block>> {
+    let start_block = db
+        .get_bad_block(start_block_hash)
+        .context("package_bad_blocks: get start block")?;
+    let start_block_number = start_block.raw().number().unpack();
+    let mut blocks: Vec<L2Block> = tip_bad_blocks_reverse_iter(db)?
+        .take_while(|b| b.raw().number().unpack() >= start_block_number)
+        .collect();
+    blocks.reverse();
+    ensure!(
+        blocks.first().map(|b| b.hash().into()) == Some(*start_block_hash),
+        "package_bad_blocks: start block hash does not match"
+    );
+    Ok(blocks)
 }
