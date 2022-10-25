@@ -1,12 +1,12 @@
 #![allow(clippy::mutable_key_type)]
 
 use crate::testing_tool::chain::{
-    apply_block_result, construct_block, into_deposit_info_cell, produce_empty_block, setup_chain,
-    ALWAYS_SUCCESS_CODE_HASH, DEFAULT_FINALITY_BLOCKS,
+    apply_block_result, construct_block, construct_block_with_timestamp, into_deposit_info_cell,
+    produce_empty_block, setup_chain, ALWAYS_SUCCESS_CODE_HASH, DEFAULT_FINALITY_BLOCKS,
 };
 
 use anyhow::Result;
-use gw_chain::chain::Chain;
+use gw_chain::chain::{Chain, RevertL1ActionContext, RevertedL1Action};
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     ckb_decimal::CKBCapacity,
@@ -521,4 +521,131 @@ async fn test_deposit_faked_ckb() {
     .unwrap_err();
     let err: Error = err.downcast().unwrap();
     assert_eq!(err, Error::Deposit(DepositError::DepositFakedCKB));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_produce_block_after_re_inject_withdrawal() {
+    let rollup_type_script = Script::default();
+    let rollup_script_hash = rollup_type_script.hash();
+    let mut chain = setup_chain(rollup_type_script.clone()).await;
+    let capacity = 600_00000000;
+    let user_script = Script::new_builder()
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.extend(&[42u8; 20]);
+            args.pack()
+        })
+        .build();
+    let user_script_hash = user_script.hash();
+    // deposit
+    deposite_to_chain(
+        &mut chain,
+        user_script,
+        capacity,
+        H256::zero(),
+        Script::default(),
+        0,
+    )
+    .await
+    .unwrap();
+    let (user_id, user_script_hash, user_addr, ckb_balance) = {
+        let mem_pool = chain.mem_pool().as_ref().unwrap().lock().await;
+        let snap = mem_pool.mem_pool_state().load();
+        let tree = snap.state().unwrap();
+        // check user account
+        assert_eq!(
+            tree.get_account_count().unwrap(),
+            4,
+            "3 builtin accounts plus 1 deposit"
+        );
+        let user_id = tree
+            .get_account_id_by_script_hash(&user_script_hash.into())
+            .unwrap()
+            .expect("account exists");
+        assert_ne!(user_id, 0);
+        let user_script_hash = tree.get_script_hash(user_id).unwrap();
+        let user_addr = tree
+            .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &user_script_hash)
+            .unwrap()
+            .unwrap();
+        let ckb_balance = tree
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_addr)
+            .unwrap();
+        assert_eq!(ckb_balance, CKBCapacity::from_layer1(capacity).to_layer2());
+        (user_id, user_script_hash, user_addr, ckb_balance)
+    };
+
+    // wait for deposit finalize
+    for _ in 0..DEFAULT_FINALITY_BLOCKS {
+        produce_empty_block(&mut chain).await.unwrap();
+    }
+
+    // withdrawal
+    let withdraw_capacity = 322_00000000u64;
+    withdrawal_from_chain(
+        &mut chain,
+        user_script_hash,
+        withdraw_capacity,
+        H256::zero(),
+        0,
+    )
+    .await
+    .unwrap();
+
+    // Revert tip block.
+    let l2block = chain.store().get_tip_block().unwrap();
+    let prev_block_hash = l2block.raw().parent_block_hash().unpack();
+    let prev_global_state = chain
+        .store()
+        .get_block_post_global_state(&prev_block_hash)
+        .unwrap()
+        .unwrap();
+    {
+        let db = chain.store().begin_transaction();
+        chain
+            .revert_l1action(
+                &db,
+                RevertedL1Action {
+                    prev_global_state,
+                    context: RevertL1ActionContext::SubmitValidBlock { l2block },
+                },
+            )
+            .unwrap();
+        db.commit().unwrap();
+    }
+    {
+        let mem_pool = chain.mem_pool();
+        let mut mem_pool = mem_pool.as_deref().unwrap().lock().await;
+        mem_pool
+            .notify_new_tip(prev_block_hash, &Default::default())
+            .await
+            .unwrap();
+    }
+
+    // Produce another block. The withdrawal should have been packaged again.
+    let block_result = {
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block_with_timestamp(&chain, &mut mem_pool, Default::default(), 0, false)
+            .await
+            .unwrap()
+    };
+    let asset_scripts = HashSet::new();
+    apply_block_result(&mut chain, block_result, Default::default(), asset_scripts).await;
+
+    // check status
+
+    let db = chain.store().begin_transaction();
+    let tree = db.state_tree(StateContext::ReadOnly).unwrap();
+    let ckb_balance2 = tree
+        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_addr)
+        .unwrap();
+    assert_eq!(
+        ckb_balance,
+        ckb_balance2 + CKBCapacity::from_layer1(withdraw_capacity).to_layer2()
+    );
+    let nonce = tree.get_nonce(user_id).unwrap();
+    assert_eq!(nonce, 1);
 }
