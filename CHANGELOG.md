@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.7.0-rc2] - 2022-10-25
+
+- fix(psc): don't revert if transaction input is consumed by itself [#819](https://github.com/nervosnetwork/godwoken/pull/819)
+
 ## [v1.7.0-rc1] - 2022-09-26
 
 - Decouple block producing, submission and confirming [#776](https://github.com/nervosnetwork/godwoken/pull/776)
