@@ -20,7 +20,6 @@ use gw_types::{
 };
 
 /// Calculate tx fee
-/// TODO accept fee rate args
 fn calculate_required_tx_fee(tx_size: usize, fee_rate: u64) -> u64 {
     // tx_size * KB / MIN_FEE_RATE
     (tx_size as u64) * fee_rate / 1000
@@ -129,8 +128,16 @@ pub async fn fill_tx_fee(
     tx_skeleton: &mut TransactionSkeleton,
     client: &CKBIndexerClient,
     lock_script: Script,
+    fee_rate: u64,
 ) -> Result<()> {
-    fill_tx_fee_with_local(tx_skeleton, client, lock_script, &Default::default()).await
+    fill_tx_fee_with_local(
+        tx_skeleton,
+        client,
+        lock_script,
+        &Default::default(),
+        fee_rate,
+    )
+    .await
 }
 
 /// query payment cells, the returned cells should provide at least required_capacity fee,
