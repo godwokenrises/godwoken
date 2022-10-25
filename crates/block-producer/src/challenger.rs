@@ -249,7 +249,13 @@ impl Challenger {
         let challenger_lock_dep = self.ckb_genesis_info.sighash_dep();
         let challenger_lock = self.wallet.lock_script().to_owned();
         tx_skeleton.cell_deps_mut().push(challenger_lock_dep);
-        fill_tx_fee(&mut tx_skeleton, &self.rpc_client.indexer, challenger_lock).await?;
+        fill_tx_fee(
+            &mut tx_skeleton,
+            &self.rpc_client.indexer,
+            challenger_lock,
+            self.config.fee_rate,
+        )
+        .await?;
 
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
 
@@ -498,7 +504,13 @@ impl Challenger {
         let challenger_lock_dep = self.ckb_genesis_info.sighash_dep();
         let challenger_lock = self.wallet.lock_script().to_owned();
         tx_skeleton.cell_deps_mut().push(challenger_lock_dep);
-        fill_tx_fee(&mut tx_skeleton, &self.rpc_client.indexer, challenger_lock).await?;
+        fill_tx_fee(
+            &mut tx_skeleton,
+            &self.rpc_client.indexer,
+            challenger_lock,
+            self.config.fee_rate,
+        )
+        .await?;
 
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
 
@@ -535,7 +547,13 @@ impl Challenger {
         let challenger_lock_dep = self.ckb_genesis_info.sighash_dep();
         let challenger_lock = self.wallet.lock_script().to_owned();
         tx_skeleton.cell_deps_mut().push(challenger_lock_dep);
-        fill_tx_fee(&mut tx_skeleton, &self.rpc_client.indexer, challenger_lock).await?;
+        fill_tx_fee(
+            &mut tx_skeleton,
+            &self.rpc_client.indexer,
+            challenger_lock,
+            self.config.fee_rate,
+        )
+        .await?;
 
         self.wallet.sign_tx_skeleton(tx_skeleton)
     }
@@ -638,7 +656,13 @@ impl Challenger {
         }
 
         let owner_lock = self.wallet.lock_script().to_owned();
-        fill_tx_fee(&mut tx_skeleton, &self.rpc_client.indexer, owner_lock).await?;
+        fill_tx_fee(
+            &mut tx_skeleton,
+            &self.rpc_client.indexer,
+            owner_lock,
+            self.config.fee_rate,
+        )
+        .await?;
         self.wallet.sign_tx_skeleton(tx_skeleton)
     }
 

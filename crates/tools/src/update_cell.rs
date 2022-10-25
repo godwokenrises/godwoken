@@ -15,15 +15,29 @@ use gw_utils::{
 };
 use std::path::{Path, PathBuf};
 
-pub async fn update_cell<P: AsRef<Path>>(
-    ckb_rpc_url: &str,
-    indexer_rpc_url: &str,
-    tx_hash: [u8; 32],
-    index: u32,
-    type_id: [u8; 32],
-    cell_data_path: P,
-    pk_path: PathBuf,
-) -> Result<()> {
+pub struct UpdateCellArgs<'a, P> {
+    pub ckb_rpc_url: &'a str,
+    pub indexer_rpc_url: &'a str,
+    pub tx_hash: [u8; 32],
+    pub index: u32,
+    pub type_id: [u8; 32],
+    pub cell_data_path: P,
+    pub pk_path: PathBuf,
+    pub fee_rate: u64,
+}
+
+pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_, P>) -> Result<()> {
+    let UpdateCellArgs {
+        ckb_rpc_url,
+        indexer_rpc_url,
+        tx_hash,
+        index,
+        type_id,
+        cell_data_path,
+        pk_path,
+        fee_rate,
+    } = args;
+
     let mut rpc_client = CkbRpcClient::new(ckb_rpc_url);
     let indexer_client = CKBIndexerClient::with_url(indexer_rpc_url)?;
     // check existed_cell
@@ -105,7 +119,13 @@ pub async fn update_cell<P: AsRef<Path>>(
     // use same lock of existed cell to pay fee
     let payment_lock = existed_cell.lock();
     // tx fee cell
-    fill_tx_fee(&mut tx_skeleton, &indexer_client, payment_lock.clone()).await?;
+    fill_tx_fee(
+        &mut tx_skeleton,
+        &indexer_client,
+        payment_lock.clone(),
+        fee_rate,
+    )
+    .await?;
     // sign
     let wallet = Wallet::from_config(&WalletConfig {
         privkey_path: pk_path,

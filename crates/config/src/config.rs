@@ -167,6 +167,8 @@ pub struct RegistryAddressConfig {
 pub struct BlockProducerConfig {
     #[serde(default = "default_check_mem_block_before_submit")]
     pub check_mem_block_before_submit: bool,
+    #[serde(default = "default_fee_rate")]
+    pub fee_rate: u64,
     #[serde(flatten)]
     pub psc_config: PscConfig,
     pub block_producer: RegistryAddressConfig,
@@ -213,6 +215,10 @@ fn test_psc_config_optional() {
         toml::from_str::<BiggerConfig>("_x = 3").unwrap().psc_config,
         PscConfig::default()
     );
+}
+
+const fn default_fee_rate() -> u64 {
+    1000
 }
 
 const fn default_check_mem_block_before_submit() -> bool {

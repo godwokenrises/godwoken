@@ -39,9 +39,15 @@ impl FinalizedWithdrawalUnlocker {
         contracts_dep_manager: ContractsCellDepManager,
         wallet: Wallet,
         debug_config: DebugConfig,
+        fee_rate: u64,
     ) -> Self {
-        let unlocker =
-            DefaultUnlocker::new(rpc_client, ckb_genesis_info, contracts_dep_manager, wallet);
+        let unlocker = DefaultUnlocker::new(
+            rpc_client,
+            ckb_genesis_info,
+            contracts_dep_manager,
+            wallet,
+            fee_rate,
+        );
 
         FinalizedWithdrawalUnlocker {
             unlocker,
@@ -211,6 +217,7 @@ struct DefaultUnlocker {
     ckb_genesis_info: CKBGenesisInfo,
     contracts_dep_manager: ContractsCellDepManager,
     wallet: Wallet,
+    fee_rate: u64,
 }
 
 impl DefaultUnlocker {
@@ -221,12 +228,14 @@ impl DefaultUnlocker {
         ckb_genesis_info: CKBGenesisInfo,
         contracts_dep_manager: ContractsCellDepManager,
         wallet: Wallet,
+        fee_rate: u64,
     ) -> Self {
         DefaultUnlocker {
             rpc_client,
             ckb_genesis_info,
             contracts_dep_manager,
             wallet,
+            fee_rate,
         }
     }
 }
@@ -264,7 +273,13 @@ impl BuildUnlockWithdrawalToOwner for DefaultUnlocker {
         tx_skeleton.cell_deps_mut().push(owner_lock_dep);
 
         let owner_lock = self.wallet.lock_script().to_owned();
-        fill_tx_fee(&mut tx_skeleton, &self.rpc_client.indexer, owner_lock).await?;
+        fill_tx_fee(
+            &mut tx_skeleton,
+            &self.rpc_client.indexer,
+            owner_lock,
+            self.fee_rate,
+        )
+        .await?;
         self.wallet.sign_tx_skeleton(tx_skeleton)
     }
 }
