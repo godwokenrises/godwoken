@@ -441,6 +441,7 @@ impl BlockProducer {
             &self.rpc_client.indexer,
             self.wallet.lock_script().to_owned(),
             local_cells_manager,
+            self.config.fee_rate,
         )
         .await?;
         debug_assert_eq!(

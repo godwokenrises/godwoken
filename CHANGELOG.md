@@ -9,6 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 - Decouple block producing, submission and confirming [#776](https://github.com/nervosnetwork/godwoken/pull/776)
 
+## [v1.6.2] - 2022-10-25
+
+- Increase max return data [#822](https://github.com/godwokenrises/godwoken/pull/822)
+
+## [v1.6.1] - 2022-10-18
+
+- Add `fee_rate` option to block_producer config [#815](https://github.com/godwokenrises/godwoken/pull/815)
+
 ## [v1.6.0] - 2022-09-13
 
 
