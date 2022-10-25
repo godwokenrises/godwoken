@@ -978,7 +978,6 @@ impl MemPool {
         assert!(self.mem_block.finalized_custodians().is_empty());
         assert!(self.mem_block.txs().is_empty());
 
-        let max_withdrawal_capacity = std::u128::MAX;
         let finalized_custodians = self.collect_finalized_custodian_capacity()?;
         let asset_scripts: HashMap<H256, Script> = {
             let sudt_value = finalized_custodians.sudt.values();
@@ -987,7 +986,6 @@ impl MemPool {
         .collect();
         // verify the withdrawals
         let mut unused_withdrawals = Vec::with_capacity(withdrawals.len());
-        let mut total_withdrawal_capacity: u128 = 0;
         let mut withdrawal_verifier = crate::withdrawal::Generator::new(
             self.generator.rollup_context(),
             finalized_custodians,
@@ -1015,21 +1013,6 @@ impl MemPool {
                 unused_withdrawals.push(withdrawal_hash);
                 continue;
             }
-            let capacity: u64 = withdrawal.raw().capacity().unpack();
-            let new_total_withdrwal_capacity = total_withdrawal_capacity
-                .checked_add(capacity as u128)
-                .ok_or_else(|| anyhow!("total withdrawal capacity overflow"))?;
-            // skip package withdrwal if overdraft the Rollup capacity
-            if new_total_withdrwal_capacity > max_withdrawal_capacity {
-                log::info!(
-                    "[mem-pool] max_withdrawal_capacity({}) is not enough to withdraw({})",
-                    max_withdrawal_capacity,
-                    new_total_withdrwal_capacity
-                );
-                unused_withdrawals.push(withdrawal_hash);
-                continue;
-            }
-            total_withdrawal_capacity = new_total_withdrwal_capacity;
 
             if let Err(err) =
                 withdrawal_verifier.include_and_verify(&withdrawal, &L2Block::default())
