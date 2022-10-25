@@ -857,7 +857,7 @@ impl MemPool {
         }
         // Handle state before txs
         // withdrawal
-        self.finalize_withdrawals(state, withdrawals.clone())?;
+        self.finalize_withdrawals(state, db, withdrawals.clone())?;
         // deposits
         self.finalize_deposits(state, deposit_cells.clone())?;
 
@@ -968,6 +968,7 @@ impl MemPool {
     fn finalize_withdrawals(
         &mut self,
         state: &mut MemStateTree<'_>,
+        db: &StoreTransaction,
         withdrawals: Vec<WithdrawalRequestExtra>,
     ) -> Result<()> {
         // check mem block state
@@ -1051,8 +1052,10 @@ impl MemPool {
                     let post_state = state.get_merkle_state();
                     let touched_keys = state.tracker_mut().touched_keys().expect("touched keys");
 
+                    let withdrawal_hash = withdrawal.hash().into();
+                    db.insert_mem_pool_withdrawal(&withdrawal_hash, withdrawal)?;
                     self.mem_block.push_withdrawal(
-                        withdrawal.hash().into(),
+                        withdrawal_hash,
                         post_state,
                         touched_keys.lock().unwrap().drain(),
                     );
