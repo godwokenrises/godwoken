@@ -19,14 +19,16 @@ use gw_types::{
     prelude::Pack,
 };
 
-use crate::testing_tool::{
-    chain::{into_deposit_info_cell, TestChain},
-    eth_wallet::EthWallet,
-    polyjuice::{erc20::SudtErc20ArgsBuilder, PolyjuiceAccount, PolyjuiceSystemLog},
-    rpc_server::{wait_tx_committed, RPCServer},
+use crate::{
+    testing_tool::{
+        chain::{into_deposit_info_cell, TestChain},
+        eth_wallet::EthWallet,
+        polyjuice::{erc20::SudtErc20ArgsBuilder, PolyjuiceAccount, PolyjuiceSystemLog},
+        rpc_server::{wait_tx_committed, RPCServer},
+    },
+    tests::rpc_server::BLOCK_MAX_CYCLES_LIMIT,
 };
 
-const BLOCK_MAX_CYCLES_LIMIT: u64 = 200_0000;
 const META_CONTRACT_ACCOUNT_ID: u32 = RESERVED_ACCOUNT_ID;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

@@ -20,7 +20,7 @@ async fn test_block_max_cycles_limit() {
 
     let mem_pool_config = MemPoolConfig {
         mem_block: MemBlockConfig {
-            max_cycles_limit: 200_0000,
+            max_cycles_limit: crate::tests::rpc_server::BLOCK_MAX_CYCLES_LIMIT,
             ..Default::default()
         },
         ..Default::default()
