@@ -1053,7 +1053,21 @@ impl MemPool {
                     let touched_keys = state.tracker_mut().touched_keys().expect("touched keys");
 
                     let withdrawal_hash = withdrawal.hash().into();
-                    db.insert_mem_pool_withdrawal(&withdrawal_hash, withdrawal)?;
+
+                    // Add to pending list and db if the withdrawal isn't
+                    // already in them. This can happen when the withdrawal is
+                    // re-injected because the L2 block packaging it is
+                    // reverted.
+                    let account_script_hash: H256 = withdrawal.raw().account_script_hash().unpack();
+                    let account_id = state
+                        .get_account_id_by_script_hash(&account_script_hash)?
+                        .expect("get account_id");
+                    let entry_list = self.pending.entry(account_id).or_default();
+                    if !entry_list.withdrawals.contains(&withdrawal) {
+                        entry_list.withdrawals.push(withdrawal.clone());
+                        db.insert_mem_pool_withdrawal(&withdrawal_hash, withdrawal)?;
+                    }
+
                     self.mem_block.push_withdrawal(
                         withdrawal_hash,
                         post_state,
