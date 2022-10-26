@@ -615,14 +615,26 @@ async fn test_produce_block_after_re_inject_withdrawal() {
             .unwrap();
         db.commit().unwrap();
     }
-    {
+    let withdrawal_hash = {
         let mem_pool = chain.mem_pool();
         let mut mem_pool = mem_pool.as_deref().unwrap().lock().await;
         mem_pool
             .notify_new_tip(prev_block_hash, &Default::default())
             .await
             .unwrap();
-    }
+        mem_pool.mem_block().withdrawals()[0]
+    };
+    // The withdrawal should not be in db withdrawals but in db mem pool withdrawals.
+    assert!(chain
+        .store()
+        .get_withdrawal(&withdrawal_hash)
+        .unwrap()
+        .is_none());
+    assert!(chain
+        .store()
+        .get_mem_pool_withdrawal(&withdrawal_hash)
+        .unwrap()
+        .is_some());
 
     // Produce another block. The withdrawal should have been packaged again.
     let block_result = {
@@ -648,4 +660,11 @@ async fn test_produce_block_after_re_inject_withdrawal() {
     );
     let nonce = tree.get_nonce(user_id).unwrap();
     assert_eq!(nonce, 1);
+
+    // The withdrawal should be in db withdrawals and not in db mem pool withdrawals.
+    assert!(db.get_withdrawal(&withdrawal_hash).unwrap().is_some());
+    assert!(db
+        .get_mem_pool_withdrawal(&withdrawal_hash)
+        .unwrap()
+        .is_none());
 }
