@@ -163,21 +163,40 @@ pub struct RegistryAddressConfig {
     pub registry_id: u32,
     pub address: JsonBytes,
 }
-#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct BlockProducerConfig {
-    #[serde(default = "default_check_mem_block_before_submit")]
     pub check_mem_block_before_submit: bool,
-    #[serde(default = "default_fee_rate")]
     pub fee_rate: u64,
     #[serde(flatten)]
     pub psc_config: PscConfig,
     pub block_producer: RegistryAddressConfig,
     pub rollup_config_cell_dep: CellDep,
     pub challenger_config: ChallengerConfig,
-    #[serde(default = "default_block_producer_wallet")]
     pub wallet_config: Option<WalletConfig>,
-    #[serde(default = "default_withdrawal_unlocker_wallet")]
     pub withdrawal_unlocker_wallet_config: Option<WalletConfig>,
+}
+
+impl Default for BlockProducerConfig {
+    fn default() -> Self {
+        BlockProducerConfig {
+            check_mem_block_before_submit: false,
+            fee_rate: 1000,
+            psc_config: PscConfig::default(),
+            block_producer: RegistryAddressConfig::default(),
+            rollup_config_cell_dep: CellDep::default(),
+            challenger_config: ChallengerConfig::default(),
+            wallet_config: None,
+            withdrawal_unlocker_wallet_config: None,
+        }
+    }
+}
+
+#[test]
+fn test_default_block_producer_config() {
+    let config: BlockProducerConfig = toml::from_str("_x = 3").unwrap();
+    assert_eq!(config, BlockProducerConfig::default());
+    assert!(config.fee_rate > 0);
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -215,22 +234,6 @@ fn test_psc_config_optional() {
         toml::from_str::<BiggerConfig>("_x = 3").unwrap().psc_config,
         PscConfig::default()
     );
-}
-
-const fn default_fee_rate() -> u64 {
-    1000
-}
-
-const fn default_check_mem_block_before_submit() -> bool {
-    false
-}
-
-const fn default_withdrawal_unlocker_wallet() -> Option<WalletConfig> {
-    None
-}
-
-const fn default_block_producer_wallet() -> Option<WalletConfig> {
-    None
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
