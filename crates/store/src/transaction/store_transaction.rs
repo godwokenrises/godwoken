@@ -509,6 +509,11 @@ impl StoreTransaction {
             let tx_hash = tx.hash();
             self.delete(COLUMN_TRANSACTION_INFO, &tx_hash)?;
         }
+        // withdrawal info
+        for withdrawal in block.withdrawals() {
+            let withdrawal_hash = withdrawal.hash();
+            self.delete(COLUMN_WITHDRAWAL_INFO, &withdrawal_hash)?;
+        }
 
         let block_hash: H256 = block.hash().into();
 

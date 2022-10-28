@@ -625,12 +625,11 @@ async fn test_produce_block_after_re_inject_withdrawal() {
         mem_pool.mem_block().withdrawals()[0]
     };
     // The withdrawal should not be in db withdrawals but in db mem pool withdrawals.
-    // TODO: fix this and then uncomment.
-    // assert!(chain
-    //     .store()
-    //     .get_withdrawal(&withdrawal_hash)
-    //     .unwrap()
-    //     .is_none());
+    assert!(chain
+        .store()
+        .get_withdrawal(&withdrawal_hash)
+        .unwrap()
+        .is_none());
     assert!(chain
         .store()
         .get_mem_pool_withdrawal(&withdrawal_hash)
