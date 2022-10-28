@@ -36,7 +36,7 @@ use gw_types::{
     offchain::{DepositInfo, FinalizedCustodianCapacity},
     packed::{
         AccountMerkleState, BlockInfo, L2Block, L2Transaction, NextMemBlock, Script, TxReceipt,
-        WithdrawalRequest, WithdrawalRequestExtra,
+        WithdrawalKey, WithdrawalRequest, WithdrawalRequestExtra,
     },
     prelude::{Builder, Entity, Pack, PackVec, Unpack},
 };
@@ -571,13 +571,17 @@ impl MemPool {
                     for index in (0..rem.transactions().len()).rev() {
                         discarded_txs.push_front(rem.transactions().get(index).unwrap());
                     }
+                    let block_hash = rem.hash();
                     // reverse push, so we can keep withdrawals in block's order
                     for index in (0..rem.withdrawals().len()).rev() {
+                        let key =
+                            WithdrawalKey::build_withdrawal_key(block_hash.pack(), index as u32);
                         let withdrawal = rem.withdrawals().get(index).unwrap();
                         let withdrawal_extra = self
                             .store
-                            .get_withdrawal(&withdrawal.hash().into())?
+                            .get_withdrawal_by_key(&key)?
                             .expect("get withdrawal");
+                        assert_eq!(withdrawal, withdrawal_extra.request());
                         discarded_withdrawals.push_front(withdrawal_extra);
                     }
                     rem = self
