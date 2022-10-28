@@ -102,6 +102,10 @@ impl StoreTransaction {
         )
     }
 
+    pub fn delete_bad_block_challenge_target(&self, block_hash: &H256) -> Result<(), Error> {
+        self.delete(COLUMN_BAD_BLOCK_CHALLENGE_TARGET, block_hash.as_slice())
+    }
+
     pub fn set_reverted_block_hashes(
         &self,
         reverted_block_smt_root: &H256,
