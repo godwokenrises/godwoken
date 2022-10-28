@@ -3,11 +3,14 @@
 static GLOBAL_ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 use anyhow::{Context, Result};
-use clap::{App, Arg, CommandFactory, Parser, SubCommand};
+use clap::{Arg, Command, CommandFactory, Parser};
 use godwoken_bin::subcommand::db_block_validator;
 use godwoken_bin::subcommand::export_block::{ExportArgs, ExportBlock};
 use godwoken_bin::subcommand::import_block::{ImportArgs, ImportBlock};
 use godwoken_bin::subcommand::peer_id::{PeerIdCommand, COMMAND_PEER_ID};
+use godwoken_bin::subcommand::rewind_to_last_valid_block::{
+    RewindToLastValidBlockCommand, COMMAND_REWIND_TO_LAST_VALID_BLOCK,
+};
 use gw_block_producer::{runner, trace};
 use gw_config::{BackendSwitchConfig, Config};
 use gw_version::Version;
@@ -50,14 +53,14 @@ fn generate_example_config<P: AsRef<Path>>(path: P) -> Result<()> {
 // TODO: @zeroqn update clap to v3
 async fn run_cli() -> Result<()> {
     let version = Version::current().to_string();
-    let app = App::new("Godwoken")
+    let app = Command::new("Godwoken")
         .about("The layer2 rollup built upon Nervos CKB.")
         .version(version.as_ref())
         .subcommand(
-            SubCommand::with_name(COMMAND_RUN)
+            Command::new(COMMAND_RUN)
                 .about("Run Godwoken node")
                 .arg(
-                    Arg::with_name(ARG_CONFIG)
+                    Arg::new(ARG_CONFIG)
                         .short('c')
                         .takes_value(true)
                         .required(true)
@@ -65,17 +68,17 @@ async fn run_cli() -> Result<()> {
                         .help("The config file path"),
                 )
                 .arg(
-                    Arg::with_name(ARG_SKIP_CONFIG_CHECK)
+                    Arg::new(ARG_SKIP_CONFIG_CHECK)
                         .long(ARG_SKIP_CONFIG_CHECK)
                         .help("Force to accept unsafe config file"),
                 )
                 .display_order(0),
         )
         .subcommand(
-            SubCommand::with_name(COMMAND_EXAMPLE_CONFIG)
+            Command::new(COMMAND_EXAMPLE_CONFIG)
                 .about("Generate an example config file")
                 .arg(
-                    Arg::with_name(ARG_OUTPUT_PATH)
+                    Arg::new(ARG_OUTPUT_PATH)
                         .short('o')
                         .takes_value(true)
                         .required(true)
@@ -85,10 +88,10 @@ async fn run_cli() -> Result<()> {
                 .display_order(1),
         )
         .subcommand(
-            SubCommand::with_name(COMMAND_VERIFY_DB_BLOCK)
+            Command::new(COMMAND_VERIFY_DB_BLOCK)
                 .about("Verify history blocks in db")
                 .arg(
-                    Arg::with_name(ARG_CONFIG)
+                    Arg::new(ARG_CONFIG)
                         .short('c')
                         .takes_value(true)
                         .required(true)
@@ -96,13 +99,13 @@ async fn run_cli() -> Result<()> {
                         .help("The config file path"),
                 )
                 .arg(
-                    Arg::with_name(ARG_FROM_BLOCK)
+                    Arg::new(ARG_FROM_BLOCK)
                         .short('f')
                         .takes_value(true)
                         .help("From block number"),
                 )
                 .arg(
-                    Arg::with_name(ARG_TO_BLOCK)
+                    Arg::new(ARG_TO_BLOCK)
                         .short('t')
                         .takes_value(true)
                         .help("To block number"),
@@ -110,10 +113,10 @@ async fn run_cli() -> Result<()> {
                 .display_order(2),
         )
         .subcommand(
-            SubCommand::with_name(COMMAND_EXPORT_BLOCK)
+            Command::new(COMMAND_EXPORT_BLOCK)
                 .about("Export history blocks in db")
                 .arg(
-                    Arg::with_name(ARG_CONFIG)
+                    Arg::new(ARG_CONFIG)
                         .short('c')
                         .takes_value(true)
                         .required(true)
@@ -121,7 +124,7 @@ async fn run_cli() -> Result<()> {
                         .help("The config file path"),
                 )
                 .arg(
-                    Arg::with_name(ARG_OUTPUT_PATH)
+                    Arg::new(ARG_OUTPUT_PATH)
                         .short('o')
                         .long("output-path")
                         .takes_value(true)
@@ -129,21 +132,21 @@ async fn run_cli() -> Result<()> {
                         .help("The output file for exported blocks"),
                 )
                 .arg(
-                    Arg::with_name(ARG_FROM_BLOCK)
+                    Arg::new(ARG_FROM_BLOCK)
                         .short('f')
                         .long("from-block")
                         .takes_value(true)
                         .help("From block number"),
                 )
                 .arg(
-                    Arg::with_name(ARG_TO_BLOCK)
+                    Arg::new(ARG_TO_BLOCK)
                         .short('t')
                         .long("to-block")
                         .takes_value(true)
                         .help("To block number"),
                 )
                 .arg(
-                    Arg::with_name(ARG_SHOW_PROGRESS)
+                    Arg::new(ARG_SHOW_PROGRESS)
                         .short('p')
                         .long("show-progress")
                         .required(false)
@@ -153,10 +156,10 @@ async fn run_cli() -> Result<()> {
                 .display_order(3),
         )
         .subcommand(
-            SubCommand::with_name(COMMAND_IMPORT_BLOCK)
+            Command::new(COMMAND_IMPORT_BLOCK)
                 .about("Import block from source file")
                 .arg(
-                    Arg::with_name(ARG_CONFIG)
+                    Arg::new(ARG_CONFIG)
                         .short('c')
                         .takes_value(true)
                         .required(true)
@@ -164,7 +167,7 @@ async fn run_cli() -> Result<()> {
                         .help("The config file path"),
                 )
                 .arg(
-                    Arg::with_name(ARG_SOURCE_PATH)
+                    Arg::new(ARG_SOURCE_PATH)
                         .short('s')
                         .long("source-path")
                         .takes_value(true)
@@ -172,28 +175,28 @@ async fn run_cli() -> Result<()> {
                         .help("The source file for exported blocks"),
                 )
                 .arg(
-                    Arg::with_name(ARG_READ_BATCH)
+                    Arg::new(ARG_READ_BATCH)
                         .short('b')
                         .long("read-batch")
                         .takes_value(true)
                         .help("The read block batch size"),
                 )
                 .arg(
-                    Arg::with_name(ARG_TO_BLOCK)
+                    Arg::new(ARG_TO_BLOCK)
                         .short('t')
                         .long("to-block")
                         .takes_value(true)
                         .help("To block number"),
                 )
                 .arg(
-                    Arg::with_name(ARG_REWIND_TO_LAST_VALID_TIP)
+                    Arg::new(ARG_REWIND_TO_LAST_VALID_TIP)
                         .long("rewind-to-last-valid-tip")
                         .required(false)
                         .takes_value(false)
                         .help("Rewind to last valid tip block before import"),
                 )
                 .arg(
-                    Arg::with_name(ARG_SHOW_PROGRESS)
+                    Arg::new(ARG_SHOW_PROGRESS)
                         .short('p')
                         .long("show-progress")
                         .required(false)
@@ -202,7 +205,8 @@ async fn run_cli() -> Result<()> {
                 )
                 .display_order(4),
         )
-        .subcommand(PeerIdCommand::command());
+        .subcommand(PeerIdCommand::command())
+        .subcommand(RewindToLastValidBlockCommand::command());
 
     // handle subcommands
     let matches = app.clone().get_matches();
@@ -267,6 +271,9 @@ async fn run_cli() -> Result<()> {
         }
         Some((COMMAND_PEER_ID, m)) => {
             PeerIdCommand::from_clap(m).run()?;
+        }
+        Some((COMMAND_REWIND_TO_LAST_VALID_BLOCK, m)) => {
+            RewindToLastValidBlockCommand::from_clap(m).run().await?;
         }
         _ => {
             // default command: start a Godwoken node

@@ -338,7 +338,11 @@ impl Chain {
                         db.rollback()?;
 
                         let block_number = l2block.raw().number().unpack();
-                        log::warn!("bad block #{} found, rollback db", block_number,);
+                        log::warn!(
+                            "bad block #{} found, rollback db. If this is accidental, \
+                            you can rewind bad blocks with the rewind-to-last-valid-block subcommand",
+                            block_number
+                        );
 
                         db.insert_bad_block(&l2block, &global_state)?;
                         log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
@@ -807,6 +811,8 @@ impl Chain {
                             .expect("rewind block should exists");
 
                         db.rewind_block_smt(&block)?;
+                        // XXX: delete the bad block?
+                        db.delete_bad_block_challenge_target(&current_block_hash)?;
                         current_block_hash = block.raw().parent_block_hash().unpack();
                     }
                     assert_eq!(current_block_hash, last_valid_tip_block_hash);
