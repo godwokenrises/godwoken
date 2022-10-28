@@ -805,7 +805,9 @@ impl Chain {
                         let block = db
                             .get_bad_block(&current_block_hash)
                             .expect("rewind block should exists");
-
+                        // XXX: maybe the following two functions should be
+                        // merged into one function `detach_bad_block`.
+                        db.delete_bad_block(&current_block_hash)?;
                         db.rewind_block_smt(&block)?;
                         // XXX: delete the bad block?
                         db.delete_bad_block_challenge_target(&current_block_hash)?;

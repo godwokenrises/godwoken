@@ -401,6 +401,13 @@ impl StoreTransaction {
         Ok(())
     }
 
+    /// Delete bad block and block global state.
+    pub fn delete_bad_block(&self, block_hash: &H256) -> Result<(), Error> {
+        self.delete(COLUMN_BAD_BLOCK, block_hash.as_slice())?;
+        self.delete(COLUMN_BLOCK_GLOBAL_STATE, block_hash.as_slice())?;
+        Ok(())
+    }
+
     pub fn revert_bad_blocks(&self, bad_blocks: &[packed::L2Block]) -> Result<(), Error> {
         if bad_blocks.is_empty() {
             return Ok(());
