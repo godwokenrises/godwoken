@@ -10,7 +10,7 @@ edition = "2018"
 gw-types = { path = "../types" }
 gw-config = { path = "../config" }
 gw-utils = { path = "../utils" }
-tokio = "1.15"
+tokio = "1"
 anyhow = "1.0"
 log = "0.4"
 async-trait = "0.1"

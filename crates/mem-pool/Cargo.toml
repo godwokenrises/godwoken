@@ -20,7 +20,7 @@ gw-dynamic-config = { path = "../dynamic-config" }
 gw-p2p-network = { path = "../p2p-network" }
 gw-tx-filter = { path = "../tx-filter" }
 futures = { version = "0.3"}
-tokio = "1.15"
+tokio = "1"
 anyhow = "1.0"
 log = "0.4"
 hex = "0.4"
@@ -28,8 +28,8 @@ async-trait = "0.1"
 tracing = { version = "0.1", features = ["attributes"] }
 tentacle = "0.4.0"
 bytes = "1.2.1"
-opentelemetry = "0.17.0"
-tracing-opentelemetry = "0.17.4"
+opentelemetry = "0.18.0"
+tracing-opentelemetry = "0.18.0"
 
 [dev-dependencies]
 tempfile = "3.2"
