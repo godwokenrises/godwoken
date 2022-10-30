@@ -27,5 +27,5 @@ crossbeam-channel = "0.5"
 toml = "0.5"
 log = "0.4"
 hex = "0.4"
-tracing = { version = "0.1.36", features = ["attributes"] }
+tracing = { version = "0.1", features = ["attributes"] }
 prometheus-client = "0.18.0"

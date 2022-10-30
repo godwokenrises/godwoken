@@ -7,6 +7,8 @@ use gw_chain::chain::Chain;
 use gw_common::H256;
 use gw_config::PscConfig;
 use gw_mem_pool::{block_sync_server::BlockSyncServerState, pool::MemPool};
+use gw_otel::traits::OpenTelemetrySpanExt;
+use gw_otel::traits::TraceContextExt;
 use gw_rpc_client::{
     error::{get_jsonrpc_error_code, CkbRpcError},
     rpc_client::RPCClient,
@@ -24,7 +26,6 @@ use gw_utils::{
     abort_on_drop::spawn_abort_on_drop, liveness::Liveness, local_cells::LocalCellsManager,
     since::Since,
 };
-use opentelemetry::trace::TraceContextExt;
 use prometheus_client::metrics::gauge::Gauge;
 use tokio::{
     signal::unix::{signal, SignalKind},
@@ -32,7 +33,6 @@ use tokio::{
     time::Instant,
 };
 use tracing::instrument;
-use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::{
     block_producer::{check_block_size, BlockProducer, ComposeSubmitTxArgs, TransactionSizeError},

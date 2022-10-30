@@ -19,6 +19,7 @@ gw-config = { path = "../config" }
 gw-db = { path = "../db" }
 gw-generator = { path = "../generator" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
+gw-otel = { path = "../otel" }
 gw-store = { path = "../store" }
 gw-types = { path = "../types" }
 gw-utils = { path = "../utils" }

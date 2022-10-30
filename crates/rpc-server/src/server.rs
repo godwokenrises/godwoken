@@ -4,6 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Error, Result};
+use gw_otel::trace::http::HeaderExtractor;
+use gw_otel::traits::{GwOtelContextNewSpan, GwOtelContextRemote};
 use gw_utils::liveness::Liveness;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{body::HttpBody, server::conn::AddrIncoming, Body, Method, Request, Response, Server};
@@ -11,6 +13,7 @@ use tokio::net::TcpListener;
 
 use jsonrpc_v2::{RequestKind, ResponseObjects, Router, Server as JsonrpcServer};
 use tokio::sync::{broadcast, mpsc};
+use tracing::Instrument;
 
 use crate::registry::Registry;
 
@@ -40,7 +43,13 @@ pub async fn start_jsonrpc_server(
             let liveness = liveness.clone();
             async move {
                 Ok::<_, Error>(service_fn(move |req| {
-                    serve(Arc::clone(&rpc_server), liveness.clone(), req)
+                    let remote_ctx = gw_otel::extract_context(&HeaderExtractor(req.headers()));
+                    let otel_ctx = gw_otel::current_context().with_remote_context(&remote_ctx);
+
+                    let serve_span = otel_ctx.new_span(tracing::info_span!("rpc.serve"));
+                    serve_span.record("path", req.uri().path());
+
+                    serve(Arc::clone(&rpc_server), liveness.clone(), req).instrument(serve_span)
                 }))
             }
         }));
@@ -102,6 +111,7 @@ async fn serve<R: Router + 'static>(
             .body(Body::empty())
             .map_err(|e| anyhow::anyhow!("JSONRPC Preflight Request error: {:?}", e));
     }
+
     // Handler here is adapted from https://github.com/kardeiz/jsonrpc-v2/blob/1acf0b911c698413950d0b101ec4255cabd0d4ec/src/lib.rs#L1302
     let mut buf = if let Some(content_length) = req
         .headers()
@@ -120,7 +130,11 @@ async fn serve<R: Router + 'static>(
         buf.extend(chunk?);
     }
 
-    match rpc.handle(RequestKind::Bytes(buf.freeze())).await {
+    match rpc
+        .handle(RequestKind::Bytes(buf.freeze()))
+        .instrument(tracing::info_span!("rpc.handle"))
+        .await
+    {
         ResponseObjects::Empty => hyper::Response::builder()
             .status(hyper::StatusCode::NO_CONTENT)
             .body(hyper::Body::from(Vec::<u8>::new()))

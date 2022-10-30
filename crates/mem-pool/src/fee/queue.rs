@@ -1,5 +1,6 @@
 use anyhow::Result;
 use gw_common::state::State;
+use gw_otel::traits::{GwOtelContext, GwOtelContextNewSpan, GwOtelSpanExt};
 use std::collections::{BTreeMap, HashMap};
 use tracing::instrument;
 
@@ -11,12 +12,12 @@ const DROP_SIZE: usize = 100;
 use super::types::{FeeEntry, FeeItemSender};
 
 /// Txs & withdrawals queue sorted by fee rate
-pub struct FeeQueue<T> {
+pub struct FeeQueue<T: GwOtelContext> {
     // priority queue to store tx and withdrawal
     queue: BTreeMap<FeeEntry, T>,
 }
 
-impl<T> FeeQueue<T> {
+impl<T: GwOtelContext> FeeQueue<T> {
     #[inline]
     pub fn new() -> Self {
         Self {
@@ -82,6 +83,9 @@ impl<T> FeeQueue<T> {
 
         // Fetch item from PQ
         while let Some((entry, t)) = self.pop_last() {
+            let fetch_span: Option<_> = t.new_span(|_| tracing::info_span!("fee_queue.fetch"));
+            let _enter = fetch_span.enter();
+
             let nonce = match fetched_senders.get(&entry.sender) {
                 Some(&nonce) => nonce,
                 None => match entry.sender {
@@ -144,7 +148,7 @@ impl<T> FeeQueue<T> {
     }
 }
 
-impl<T> Default for FeeQueue<T> {
+impl<T: GwOtelContext> Default for FeeQueue<T> {
     #[inline]
     fn default() -> Self {
         Self::new()

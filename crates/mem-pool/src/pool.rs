@@ -312,7 +312,7 @@ impl MemPool {
     }
 
     /// Push a layer2 tx into pool
-    #[instrument(skip_all, fields(tx_hash = %tx.hash().pack()))]
+    #[instrument(skip_all)]
     fn push_transaction_with_db(
         &mut self,
         db: &StoreTransaction,

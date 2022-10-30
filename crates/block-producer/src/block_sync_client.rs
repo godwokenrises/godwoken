@@ -9,6 +9,10 @@ use futures::TryStreamExt;
 use gw_chain::chain::Chain;
 use gw_generator::generator::CyclesPool;
 use gw_mem_pool::pool::MemPool;
+use gw_otel::{
+    trace::{SpanContext, SpanId, TraceFlags, TraceId, TraceState},
+    traits::{GwOtelContextNewSpan, TraceContextExt},
+};
 use gw_p2p_network::{FnSpawn, P2P_SYNC_PROTOCOL, P2P_SYNC_PROTOCOL_NAME};
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{traits::chain_store::ChainStore, Store};
@@ -20,7 +24,7 @@ use gw_types::{
     prelude::Unpack,
 };
 use gw_utils::{compression::StreamDecoder, liveness::Liveness};
-use opentelemetry::trace::{SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState};
+
 use prometheus_client::metrics::gauge::Gauge;
 use tentacle::{
     builder::MetaBuilder,
@@ -29,7 +33,6 @@ use tentacle::{
 };
 use tokio::{sync::Mutex, task::block_in_place};
 use tracing::{info_span, Instrument};
-use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::{
     chain_updater::ChainUpdater,
@@ -240,8 +243,9 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
                 true,
                 TraceState::default(),
             );
-            let span = info_span!("handle_local_block");
-            span.set_parent(opentelemetry::Context::current().with_remote_span_context(span_cx));
+            let span = gw_otel::current_context()
+                .with_remote_span_context(span_cx)
+                .new_span(info_span!("handle_local_block"));
             handle_local_block(client, l).instrument(span).await?;
             client.liveness.tick();
         }
@@ -301,8 +305,9 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
                 true,
                 TraceState::default(),
             );
-            let span = info_span!("handle_push_transaction");
-            span.set_parent(opentelemetry::Context::current().with_remote_span_context(span_cx));
+            let span = gw_otel::current_context()
+                .with_remote_span_context(span_cx)
+                .new_span(info_span!("handle_push_transaction"));
 
             let tx = push_tx.transaction();
             log::info!("received L2Transaction 0x{}", hex::encode(tx.hash()));

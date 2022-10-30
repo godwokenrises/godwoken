@@ -21,6 +21,7 @@ gw-utils = { path = "../utils" }
 gw-dynamic-config = { path = "../dynamic-config"}
 gw-polyjuice-sender-recover = { path = "../polyjuice-sender-recover" }
 gw-metrics = { path = "../metrics" }
+gw-otel = { path = "../otel" }
 ckb-crypto = "0.105.1"
 ckb-fixed-hash = "0.105.1"
 ckb-types = "0.105.1"
@@ -39,12 +40,7 @@ hex = "0.4"
 async-trait = "0.1"
 semver = "1.0"
 thiserror = "1.0"
-# For latest tracing
 tracing = { version = "0.1", features = ["attributes"] }
-tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "parking_lot", "smallvec", "tracing-log"] }
-tracing-opentelemetry = "0.18.0"
-opentelemetry-jaeger = { version = "0.17.0", features = ["rt-tokio"] }
-opentelemetry = { version = "0.18.0", features = ["rt-tokio"] }
 # unstable features
 tokio-metrics = "0.1.0"
 console-subscriber = "0.1.3"

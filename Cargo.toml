@@ -26,6 +26,7 @@ members = [
   "crates/polyjuice-sender-recover",
   "crates/godwoken-bin",
   "crates/metrics",
+  "crates/otel",
 ]
 
 exclude = [
