@@ -34,7 +34,7 @@ use tracing::instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::{
-    block_producer::{BlockProducer, ComposeSubmitTxArgs, TransactionSizeError},
+    block_producer::{check_block_size, BlockProducer, ComposeSubmitTxArgs, TransactionSizeError},
     chain_updater::ChainUpdater,
     produce_block::ProduceBlockResult,
     sync_l1::{revert, sync_l1, SyncL1Context},
@@ -362,13 +362,25 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
     // quite some pressure on p2p syncing and read-only nodes.
     let mut pool = ctx.mem_pool.lock().await;
 
+    let mut retry_count = 0;
     let ProduceBlockResult {
         block,
         global_state,
         withdrawal_extras,
         deposit_cells,
         remaining_capacity,
-    } = ctx.block_producer.produce_next_block(&mut pool, 0).await?;
+    } = loop {
+        let result = ctx
+            .block_producer
+            .produce_next_block(&mut pool, retry_count)
+            .await?;
+
+        if check_block_size(result.block.as_slice().len()).is_ok() {
+            break result;
+        }
+        retry_count += 1;
+        log::warn!("block too large, retry {retry_count}");
+    };
 
     let number: u64 = block.raw().number().unpack();
     let block_hash: H256 = block.hash().into();
