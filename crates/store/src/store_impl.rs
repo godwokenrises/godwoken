@@ -1,11 +1,12 @@
 //! Storage implementation
 
+use crate::smt::smt_store::SMTBlockStore;
+use crate::state::history::history_state::RWConfig;
+use crate::state::BlockStateDB;
 use crate::traits::chain_store::ChainStore;
 use crate::traits::kv_store::KVStoreRead;
 use crate::write_batch::StoreWriteBatch;
-use crate::{
-    snapshot::StoreSnapshot, state::state_db::StateContext, transaction::StoreTransaction,
-};
+use crate::{snapshot::StoreSnapshot, transaction::StoreTransaction};
 use anyhow::Result;
 use gw_common::error::Error;
 use gw_common::smt::Blake2bHasher;
@@ -62,16 +63,18 @@ impl<'a> Store {
     }
 
     pub fn check_state(&self) -> Result<()> {
-        let db = self.begin_transaction();
-
         // check state tree
-        let tree = db.state_tree(StateContext::ReadOnly)?;
-        tree.check_state()?;
+        {
+            let db = self.begin_transaction();
+            let tree = BlockStateDB::from_store(&db, RWConfig::readonly())?;
+            tree.check_state()?;
+        }
 
         // check block smt
         {
-            let smt = db.block_smt()?;
+            let db = self.get_snapshot();
             let tip_number: u64 = db.get_last_valid_tip_block()?.raw().number().unpack();
+            let smt = SMTBlockStore::new(db).to_smt()?;
             for number in tip_number.saturating_sub(100)..tip_number {
                 let block_hash = self.get_block_hash_by_number(number)?.expect("exist");
                 let block = self.get_block(&block_hash)?.expect("exist");
@@ -82,7 +85,6 @@ impl<'a> Store {
                 assert_eq!(&root, smt.root(), "block smt root consistent");
             }
         }
-        db.rollback()?;
         Ok(())
     }
 

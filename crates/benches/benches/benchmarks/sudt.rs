@@ -1,3 +1,4 @@
+use super::dummy_state::DummyState;
 use criterion::*;
 use gw_common::{
     builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, state::State, H256,
@@ -5,8 +6,7 @@ use gw_common::{
 use gw_config::{BackendConfig, BackendSwitchConfig};
 use gw_generator::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage,
-    constants::L2TX_MAX_CYCLES, dummy_state::DummyState, error::TransactionError, traits::StateExt,
-    Generator,
+    constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, Generator,
 };
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{

@@ -51,7 +51,7 @@ pub async fn sync_l1(ctx: &(dyn SyncL1Context + Sync + Send)) -> Result<()> {
 
 async fn sync_l1_impl(ctx: &(dyn SyncL1Context + Sync + Send)) -> Result<()> {
     log::info!("syncing with L1");
-    let store_tx = ctx.store().begin_transaction();
+    let store_tx = &ctx.store().begin_transaction();
     let last_confirmed_local = store_tx
         .get_last_confirmed_block_number_hash()
         .context("get last confirmed")?;
@@ -86,7 +86,7 @@ async fn sync_l1_impl(ctx: &(dyn SyncL1Context + Sync + Send)) -> Result<()> {
 // accidentally running two godwoken full nodes.
 async fn sync_l1_unknown(
     ctx: &(dyn SyncL1Context + Send + Sync),
-    store_tx: StoreTransaction,
+    store_tx: &StoreTransaction,
     mut last_confirmed: u64,
 ) -> Result<()> {
     log::info!("syncing unknown L2 blocks from L1");
@@ -150,7 +150,7 @@ async fn sync_l1_unknown(
                 }
 
                 log::info!("L2 fork detected, reverting to L2 block {last_confirmed}");
-                revert(ctx, &store_tx, last_confirmed).await?;
+                revert(ctx, store_tx, last_confirmed).await?;
                 // Commit transaction because chain_updater.update_single will open and commit new transactions.
                 store_tx.commit()?;
                 reverted = true;

@@ -14,7 +14,9 @@ use gw_common::{
 use gw_generator::Generator;
 use gw_mem_pool::mem_block::MemBlock;
 use gw_store::{
-    state::state_db::StateContext, traits::chain_store::ChainStore, transaction::StoreTransaction,
+    state::{history::history_state::RWConfig, BlockStateDB},
+    traits::chain_store::ChainStore,
+    transaction::StoreTransaction,
     Store,
 };
 use gw_types::{
@@ -184,7 +186,7 @@ pub fn generate_produce_block_param(
     mem_block: MemBlock,
     post_merkle_state: AccountMerkleState,
 ) -> Result<BlockParam> {
-    let db = store.begin_transaction();
+    let db = &store.begin_transaction();
     let tip_block_number = mem_block.block_info().number().unpack().saturating_sub(1);
     let tip_block_hash = {
         let opt = db.get_block_hash_by_number(tip_block_number)?;
@@ -192,7 +194,7 @@ pub fn generate_produce_block_param(
     };
 
     // generate kv state & merkle proof from tip state
-    let chain_state = db.state_tree(StateContext::ReadOnly)?;
+    let chain_state = BlockStateDB::from_store(db, RWConfig::readonly())?;
 
     let kv_state: Vec<(H256, H256)> = mem_block
         .touched_keys()
@@ -208,9 +210,9 @@ pub fn generate_produce_block_param(
         // nothing need to prove
         Vec::new()
     } else {
-        let account_smt = db.account_smt()?;
+        let state_smt = db.state_smt()?;
 
-        account_smt
+        state_smt
             .merkle_proof(kv_state.iter().map(|(k, _v)| *k).collect())
             .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
             .compile(kv_state.clone())?
@@ -263,7 +265,7 @@ pub fn generate_produce_block_param(
 
         // check smt root
         let expected_kv_state_root: H256 = prev_merkle_state.merkle_root().unpack();
-        let smt = db.account_smt()?;
+        let smt = db.state_smt()?;
         assert_eq!(
             smt.root(),
             &expected_kv_state_root,

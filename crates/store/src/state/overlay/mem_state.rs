@@ -1,8 +1,9 @@
-//! State DB
+//! Mem State DB
+//!
 
-use crate::mem_pool_state::MemStore;
+use crate::smt::smt_store::SMTStateStore;
 use crate::traits::kv_store::KVStoreRead;
-use crate::{smt::smt_store::SMTStore, traits::kv_store::KVStoreWrite};
+use crate::traits::kv_store::KVStoreWrite;
 use anyhow::Result;
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
 use gw_db::schema::{COLUMN_DATA, COLUMN_SCRIPT};
@@ -14,25 +15,19 @@ use gw_types::{
     prelude::*,
 };
 
-use super::state_tracker::StateTracker;
+use super::mem_store::MemStore;
 
-pub struct MemStateTree<'a> {
-    tree: SMT<SMTStore<'a, MemStore>>,
+pub struct MemStateTree {
+    tree: SMT<SMTStateStore<MemStore>>,
     account_count: u32,
-    tracker: StateTracker,
 }
 
-impl<'a> MemStateTree<'a> {
-    pub fn new(tree: SMT<SMTStore<'a, MemStore>>, account_count: u32) -> Self {
+impl MemStateTree {
+    pub fn new(tree: SMT<SMTStateStore<MemStore>>, account_count: u32) -> Self {
         MemStateTree {
             tree,
             account_count,
-            tracker: Default::default(),
         }
-    }
-
-    pub fn tracker_mut(&mut self) -> &mut StateTracker {
-        &mut self.tracker
     }
 
     pub fn get_merkle_state(&self) -> AccountMerkleState {
@@ -42,35 +37,42 @@ impl<'a> MemStateTree<'a> {
             .build()
     }
 
-    pub fn smt(&self) -> &SMT<SMTStore<'a, MemStore>> {
+    pub fn smt(&self) -> &SMT<SMTStateStore<MemStore>> {
         &self.tree
     }
 
-    /// submit tree changes into memory block
-    /// notice, this function do not commit the DBTransaction
-    pub fn submit_tree_to_mem_block(&self) {
-        self.db()
-            .set_mem_block_account_smt_root(*self.tree.root())
-            .expect("set smt root");
-        self.db()
-            .set_mem_block_account_count(self.account_count)
-            .expect("set smt root");
-    }
+    // /// submit tree changes into memory block
+    // /// notice, this function do not commit the DBTransaction
+    // pub fn submit_tree_to_mem_block(&self) {
+    //     self.db()
+    //         .set_mem_block_account_smt_root(*self.tree.root())
+    //         .expect("set smt root");
+    //     self.db()
+    //         .set_mem_block_account_count(self.account_count)
+    //         .expect("set smt root");
+    // }
 
-    fn db(&self) -> &MemStore {
-        self.tree.store().inner_store()
+    fn db(&self) -> &SMTStateStore<MemStore> {
+        self.tree.store()
     }
 }
 
-impl<'a> State for MemStateTree<'a> {
+impl Clone for MemStateTree {
+    fn clone(&self) -> Self {
+        Self {
+            tree: SMT::new(*self.tree.root(), self.tree.store().clone()),
+            account_count: self.account_count,
+        }
+    }
+}
+
+impl State for MemStateTree {
     fn get_raw(&self, key: &H256) -> Result<H256, StateError> {
-        self.tracker.touch_key(key);
         let v = self.tree.get(key)?;
         Ok(v)
     }
 
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), StateError> {
-        self.tracker.touch_key(&key);
         self.tree.update(key, value)?;
         Ok(())
     }
@@ -84,36 +86,48 @@ impl<'a> State for MemStateTree<'a> {
         Ok(())
     }
 
-    fn calculate_root(&self) -> Result<H256, StateError> {
+    fn finalise_root(&mut self) -> Result<H256, StateError> {
         let root = self.tree.root();
         Ok(*root)
     }
 }
 
-impl<'a> CodeStore for MemStateTree<'a> {
+impl CodeStore for MemStateTree {
     fn insert_script(&mut self, script_hash: H256, script: packed::Script) {
         self.db()
+            .inner_store()
             .insert_raw(COLUMN_SCRIPT, script_hash.as_slice(), script.as_slice())
             .expect("insert script");
     }
 
     fn get_script(&self, script_hash: &H256) -> Option<packed::Script> {
         self.db()
+            .inner_store()
             .get(COLUMN_SCRIPT, script_hash.as_slice())
-            .or_else(|| self.db().get(COLUMN_SCRIPT, script_hash.as_slice()))
+            .or_else(|| {
+                self.db()
+                    .inner_store()
+                    .get(COLUMN_SCRIPT, script_hash.as_slice())
+            })
             .map(|slice| from_box_should_be_ok!(packed::ScriptReader, slice))
     }
 
     fn insert_data(&mut self, data_hash: H256, code: Bytes) {
         self.db()
+            .inner_store()
             .insert_raw(COLUMN_DATA, data_hash.as_slice(), &code)
             .expect("insert data");
     }
 
     fn get_data(&self, data_hash: &H256) -> Option<Bytes> {
         self.db()
+            .inner_store()
             .get(COLUMN_DATA, data_hash.as_slice())
-            .or_else(|| self.db().get(COLUMN_DATA, data_hash.as_slice()))
+            .or_else(|| {
+                self.db()
+                    .inner_store()
+                    .get(COLUMN_DATA, data_hash.as_slice())
+            })
             .map(|slice| Bytes::from(slice.to_vec()))
     }
 }

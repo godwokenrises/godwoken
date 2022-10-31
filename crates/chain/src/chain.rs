@@ -13,8 +13,11 @@ use gw_generator::{
 use gw_jsonrpc_types::debugger::ReprMockTransaction;
 use gw_mem_pool::pool::MemPool;
 use gw_store::{
-    chain_view::ChainView, state::state_db::StateContext, traits::chain_store::ChainStore,
-    transaction::StoreTransaction, Store,
+    chain_view::ChainView,
+    state::{history::history_state::RWConfig, BlockStateDB},
+    traits::chain_store::ChainStore,
+    transaction::StoreTransaction,
+    Store,
 };
 use gw_types::{
     bytes::Bytes,
@@ -241,10 +244,10 @@ impl Chain {
         offchain_mock_context: &OffChainMockContext,
         target: ChallengeTarget,
     ) -> Result<ReprMockTransaction> {
-        let db = self.store().begin_transaction();
+        let db = &self.store().begin_transaction();
 
         let verify_context =
-            gw_challenge::context::build_verify_context(Arc::clone(&self.generator), &db, &target)
+            gw_challenge::context::build_verify_context(Arc::clone(&self.generator), db, &target)
                 .with_context(|| "dump cancel challenge tx from chain")?;
 
         let global_state = {
@@ -677,10 +680,8 @@ impl Chain {
                     db.detach_block(&l2block)?;
                     // detach block state from state tree
                     {
-                        let mut tree = db.state_tree(StateContext::DetachBlock(
-                            l2block.raw().number().unpack(),
-                        ))?;
-                        tree.detach_block_state()?;
+                        let mut tree = BlockStateDB::from_store(db, RWConfig::detach_block())?;
+                        tree.detach_block_state(l2block.raw().number().unpack())?;
                     }
 
                     // Check local tip block
@@ -728,10 +729,10 @@ impl Chain {
 
                     // Check current state
                     let expected_state = l2block.raw().prev_account();
-                    let tree = db.state_tree(StateContext::ReadOnly)?;
+                    let mut tree = BlockStateDB::from_store(db, RWConfig::readonly())?;
                     let expected_root: H256 = expected_state.merkle_root().unpack();
                     let expected_count: u32 = expected_state.count().unpack();
-                    assert_eq!(tree.calculate_root()?, expected_root);
+                    assert_eq!(tree.finalise_root()?, expected_root);
                     assert_eq!(tree.get_account_count()?, expected_count);
 
                     // Check genesis state still consistent
@@ -834,13 +835,13 @@ impl Chain {
 
     /// Sync chain from layer1
     pub async fn sync(&mut self, param: SyncParam) -> Result<()> {
-        let db = self.store.begin_transaction();
+        let db = &self.store.begin_transaction();
         let is_l1_revert_happend = !param.reverts.is_empty();
         // revert layer1 actions
         if !param.reverts.is_empty() {
             // revert
             for reverted_action in param.reverts {
-                self.revert_l1action(&db, reverted_action)?;
+                self.revert_l1action(db, reverted_action)?;
             }
         }
         let has_bad_block_before_update = self.challenge_target.is_some();
@@ -851,7 +852,7 @@ impl Chain {
         log::debug!(target: "sync-block", "sync {} actions", updates.len());
         for (i, action) in updates.into_iter().enumerate() {
             let t = Instant::now();
-            self.update_l1action(&db, action)?;
+            self.update_l1action(db, action)?;
             log::debug!(target: "sync-block", "process {}th action cost {}ms", i, t.elapsed().as_millis());
             match self.last_sync_event() {
                 SyncEvent::Success => (),
@@ -890,13 +891,13 @@ impl Chain {
         };
 
         assert_eq!(
-            db.account_smt().unwrap().root(),
+            db.state_smt().unwrap().root(),
             &expected_account.merkle_root().unpack(),
             "account root consistent in DB"
         );
 
-        let tree = db.state_tree(StateContext::ReadOnly)?;
-        let current_account = tree.merkle_state()?;
+        let mut tree = BlockStateDB::from_store(db, RWConfig::readonly())?;
+        let current_account = tree.finalise_merkle_state()?;
 
         assert_eq!(
             current_account.as_slice(),
@@ -997,14 +998,14 @@ impl Chain {
             withdrawals: withdrawals.clone(),
         };
         let tip_block_hash = self.local_state.tip().hash().into();
-        let chain_view = ChainView::new(db, tip_block_hash);
+        let chain_view = ChainView::new(&db, tip_block_hash);
 
         {
-            let tree = db.state_tree(StateContext::ReadOnly)?;
+            let mut tree = BlockStateDB::from_store(db, RWConfig::readonly())?;
 
             let prev_merkle_state = l2block.raw().prev_account();
             assert_eq!(
-                tree.merkle_state()?.as_slice(),
+                tree.finalise_merkle_state()?.as_slice(),
                 prev_merkle_state.as_slice(),
                 "prev account merkle state must be consistent"
             );

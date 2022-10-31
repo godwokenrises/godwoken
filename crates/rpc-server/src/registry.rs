@@ -36,11 +36,10 @@ use gw_polyjuice_sender_recover::{
     mem_execute_tx_state::MemExecuteTxStateTree, recover::PolyjuiceSenderRecover,
 };
 use gw_rpc_client::rpc_client::RPCClient;
+use gw_store::state::history::history_state::RWConfig;
+use gw_store::state::{BlockStateDB, MemStateDB};
 use gw_store::{
-    chain_view::ChainView,
-    mem_pool_state::{MemPoolState, MemStore},
-    state::state_db::StateContext,
-    traits::chain_store::ChainStore,
+    chain_view::ChainView, mem_pool_state::MemPoolState, traits::chain_store::ChainStore,
     CfMemStat, Store,
 };
 use gw_traits::CodeStore;
@@ -223,7 +222,7 @@ impl Registry {
                 mem_pool.mem_pool_state()
             }
             None => Arc::new(MemPoolState::new(
-                Arc::new(MemStore::new(store.get_snapshot())),
+                MemStateDB::from_store(store.get_snapshot()).expect("mem state DB"),
                 true,
             )),
         };
@@ -462,7 +461,7 @@ impl RequestSubmitter {
     async fn in_background(mut self) {
         // First mem pool reinject txs
         {
-            let db = self.store.begin_transaction();
+            let db = &self.store.begin_transaction();
             let mut mem_pool = self.mem_pool.lock().await;
 
             log::info!(
@@ -533,8 +532,7 @@ impl RequestSubmitter {
                         return;
                     }
                 };
-                let snap = self.mem_pool_state.load();
-                let state = snap.state().expect("get mem state");
+                let state = self.mem_pool_state.load_state_db();
                 let kind = req.kind();
                 let hash = req.hash();
                 let dynamic_config_manager = self.dynamic_config_manager.load();
@@ -563,8 +561,7 @@ impl RequestSubmitter {
             }
 
             // push txs to fee priority queue
-            let snap = self.mem_pool_state.load();
-            let state = snap.state().expect("get mem state");
+            let state = self.mem_pool_state.load_state_db();
             while let Ok((handle, req)) = self.submit_rx.try_recv() {
                 let kind = req.kind();
                 let hash = req.hash();
@@ -649,8 +646,7 @@ impl RequestSubmitter {
                     log::error!("[tx from zero] create account {}", err);
                 }
 
-                let snap = self.mem_pool_state.load();
-                let state = snap.state().expect("get mem state");
+                let state = self.mem_pool_state.load_state_db();
                 let mut block_cycles_limit_reached = false;
 
                 for (entry, handle) in items {
@@ -868,7 +864,7 @@ async fn get_block(
     rollup_config: Data<RollupConfig>,
 ) -> Result<Option<L2BlockWithStatus>> {
     let block_hash = to_h256(block_hash);
-    let db = store.begin_transaction();
+    let db = &store.begin_transaction();
     let block = match db.get_block(&block_hash)? {
         Some(block) => block,
         None => return Ok(None),
@@ -904,10 +900,10 @@ async fn get_block(
 
 async fn get_block_by_number(
     Params((block_number,)): Params<(gw_jsonrpc_types::ckb_jsonrpc_types::Uint64,)>,
-    mem_pool_state: Data<Arc<MemPoolState>>,
+    store: Data<Store>,
 ) -> Result<Option<L2BlockView>> {
     let block_number = block_number.value();
-    let snap = mem_pool_state.load();
+    let snap = store.get_snapshot();
     let block_hash = match snap.get_block_hash_by_number(block_number)? {
         Some(hash) => hash,
         None => return Ok(None),
@@ -921,16 +917,16 @@ async fn get_block_by_number(
 
 async fn get_block_hash(
     Params((block_number,)): Params<(gw_jsonrpc_types::ckb_jsonrpc_types::Uint64,)>,
-    mem_pool_state: Data<Arc<MemPoolState>>,
+    store: Data<Store>,
 ) -> Result<Option<JsonH256>> {
     let block_number = block_number.value();
-    let db = mem_pool_state.load();
+    let db = store.get_snapshot();
     let hash_opt = db.get_block_hash_by_number(block_number)?.map(to_jsonh256);
     Ok(hash_opt)
 }
 
-async fn get_tip_block_hash(mem_pool_state: Data<Arc<MemPoolState>>) -> Result<JsonH256> {
-    let tip_block_hash = mem_pool_state.load().get_last_valid_tip_block_hash()?;
+async fn get_tip_block_hash(store: Data<Store>) -> Result<JsonH256> {
+    let tip_block_hash = store.get_last_valid_tip_block_hash()?;
     Ok(to_jsonh256(tip_block_hash))
 }
 
@@ -1014,8 +1010,7 @@ async fn execute_l2transaction(
     // NOTE: for tx from id 0, it's balance will be verified after mock account
     let from_id: u32 = tx.raw().from_id().unpack();
     if 0 != from_id {
-        let snap = ctx.mem_pool_state.load();
-        let state = snap.state()?;
+        let state = ctx.mem_pool_state.load_state_db();
         if let Err(err) = verify_sender_balance(ctx.generator.rollup_context(), &state, &tx.raw()) {
             return Err(RpcError::Full {
                 code: INVALID_REQUEST,
@@ -1029,9 +1024,8 @@ async fn execute_l2transaction(
         let db = ctx.store.get_snapshot();
         let tip_block_hash = db.get_last_valid_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
-        let snap = ctx.mem_pool_state.load();
-        let mem_state = snap.state()?;
-        let mut state = MemExecuteTxStateTree::new(mem_state);
+        let state = ctx.mem_pool_state.load_state_db();
+        let mut state = MemExecuteTxStateTree::new(state);
         let mut cycles_pool = CyclesPool::new(
             ctx.mem_pool_config.mem_block.max_cycles_limit,
             ctx.mem_pool_config.mem_block.syscall_cycles.clone(),
@@ -1116,12 +1110,11 @@ async fn execute_raw_l2transaction(
     let raw_l2tx_bytes = raw_l2tx.into_bytes();
     let raw_l2tx = packed::RawL2Transaction::from_slice(&raw_l2tx_bytes)?;
 
-    let db = ctx.store.begin_transaction();
-
-    let mem_state_snap = ctx.mem_pool_state.load();
+    let db_txn = ctx.store.begin_transaction();
 
     let block_info = match block_number_opt {
         Some(block_number) => {
+            let db = &db_txn;
             let block_hash = match db.get_block_hash_by_number(block_number)? {
                 Some(block_hash) => block_hash,
                 None => return Err(header_not_found_err()),
@@ -1140,8 +1133,9 @@ async fn execute_raw_l2transaction(
                 .number(number.pack())
                 .build()
         }
-        None => mem_state_snap
-            .get_mem_pool_block_info()?
+        None => ctx
+            .mem_pool_state
+            .get_mem_pool_block_info()
             .expect("get mem pool block info"),
     };
 
@@ -1159,12 +1153,12 @@ async fn execute_raw_l2transaction(
     if 0 != from_id {
         let check_balance_result = match block_number_opt {
             Some(block_number) => {
-                let state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
+                let db = &db_txn;
+                let state = BlockStateDB::from_store(db, RWConfig::history_block(block_number))?;
                 verify_sender_balance(ctx.generator.rollup_context(), &state, &raw_l2tx)
             }
             None => {
-                let snap = ctx.mem_pool_state.load();
-                let state = snap.state()?;
+                let state = ctx.mem_pool_state.load_state_db();
                 verify_sender_balance(ctx.generator.rollup_context(), &state, &raw_l2tx)
             }
         };
@@ -1181,6 +1175,7 @@ async fn execute_raw_l2transaction(
     let mut run_result = tokio::task::spawn_blocking(move || {
         let eth_recover = &ctx.polyjuice_sender_recover.eth;
         let rollup_context = ctx.generator.rollup_context();
+        let db = &db_txn;
         let chain_view = {
             let tip_block_hash = db.get_last_valid_tip_block_hash()?;
             ChainView::new(&db, tip_block_hash)
@@ -1188,8 +1183,9 @@ async fn execute_raw_l2transaction(
         // execute tx
         let run_result = match block_number_opt {
             Some(block_number) => {
-                let hist_state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
-                let mut state = MemExecuteTxStateTree::new(hist_state);
+                let history_state =
+                    BlockStateDB::from_store(db, RWConfig::history_block(block_number))?;
+                let mut state = MemExecuteTxStateTree::new(history_state);
                 let raw_l2tx = eth_recover.mock_sender_if_not_exists_from_raw_registry(
                     raw_l2tx,
                     registry_address_opt,
@@ -1210,7 +1206,7 @@ async fn execute_raw_l2transaction(
                 )?
             }
             None => {
-                let state = mem_state_snap.state()?;
+                let state = ctx.mem_pool_state.load_state_db();
                 let mut state = MemExecuteTxStateTree::new(state);
                 let raw_l2tx = eth_recover.mock_sender_if_not_exists_from_raw_registry(
                     raw_l2tx,
@@ -1302,14 +1298,13 @@ async fn submit_l2transaction(
     // check sender's nonce
     {
         // fetch mem-pool state
-        let snap = ctx.mem_pool_state.load();
-        let tree = snap.state()?;
+        let state = ctx.mem_pool_state.load_state_db();
 
         let tx_nonce: u32 = tx.raw().nonce().unpack();
         let sender_nonce: u32 = if 0 == sender_id {
             0
         } else {
-            tree.get_nonce(sender_id)?
+            state.get_nonce(sender_id)?
         };
         if sender_nonce != tx_nonce {
             let err = TransactionError::Nonce {
@@ -1558,13 +1553,12 @@ async fn get_balance(
     let balance = match block_number {
         Some(block_number) => {
             let db = store.begin_transaction();
-            let tree = db.state_tree(StateContext::ReadOnlyHistory(block_number.into()))?;
+            let tree = BlockStateDB::from_store(&db, RWConfig::history_block(block_number.into()))?;
             tree.get_sudt_balance(sudt_id.into(), &address)?
         }
         None => {
-            let snap = mem_pool_state.load();
-            let tree = snap.state()?;
-            tree.get_sudt_balance(sudt_id.into(), &address)?
+            let state = mem_pool_state.load_state_db();
+            state.get_sudt_balance(sudt_id.into(), &address)?
         }
     };
     Ok(balance)
@@ -1591,15 +1585,14 @@ async fn get_storage_at(
     let value = match block_number {
         Some(block_number) => {
             let db = store.begin_transaction();
-            let tree = db.state_tree(StateContext::ReadOnlyHistory(block_number.into()))?;
+            let tree = BlockStateDB::from_store(&db, RWConfig::history_block(block_number.into()))?;
             let key: H256 = to_h256(key);
             tree.get_value(account_id.into(), key.as_slice())?
         }
         None => {
-            let snap = mem_pool_state.load();
-            let tree = snap.state()?;
+            let state = mem_pool_state.load_state_db();
             let key: H256 = to_h256(key);
-            tree.get_value(account_id.into(), key.as_slice())?
+            state.get_value(account_id.into(), key.as_slice())?
         }
     };
 
@@ -1611,12 +1604,11 @@ async fn get_account_id_by_script_hash(
     Params((script_hash,)): Params<(JsonH256,)>,
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<Option<AccountID>, RpcError> {
-    let snap = mem_pool_state.load();
-    let tree = snap.state()?;
+    let state = mem_pool_state.load_state_db();
 
     let script_hash = to_h256(script_hash);
 
-    let account_id_opt = tree
+    let account_id_opt = state
         .get_account_id_by_script_hash(&script_hash)?
         .map(Into::into);
 
@@ -1644,13 +1636,12 @@ async fn get_nonce(
     let nonce = match block_number {
         Some(block_number) => {
             let db = store.begin_transaction();
-            let tree = db.state_tree(StateContext::ReadOnlyHistory(block_number.into()))?;
+            let tree = BlockStateDB::from_store(&db, RWConfig::history_block(block_number.into()))?;
             tree.get_nonce(account_id.into())?
         }
         None => {
-            let snap = mem_pool_state.load();
-            let tree = snap.state()?;
-            tree.get_nonce(account_id.into())?
+            let state = mem_pool_state.load_state_db();
+            state.get_nonce(account_id.into())?
         }
     };
 
@@ -1661,11 +1652,10 @@ async fn get_script(
     Params((script_hash,)): Params<(JsonH256,)>,
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<Option<Script>, RpcError> {
-    let snap = mem_pool_state.load();
-    let tree = snap.state()?;
+    let state = mem_pool_state.load_state_db();
 
     let script_hash = to_h256(script_hash);
-    let script_opt = tree.get_script(&script_hash).map(Into::into);
+    let script_opt = state.get_script(&script_hash).map(Into::into);
 
     Ok(script_opt)
 }
@@ -1674,10 +1664,8 @@ async fn get_script_hash(
     Params((account_id,)): Params<(AccountID,)>,
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<JsonH256, RpcError> {
-    let snap = mem_pool_state.load();
-    let tree = snap.state()?;
-
-    let script_hash = tree.get_script_hash(account_id.into())?;
+    let state = mem_pool_state.load_state_db();
+    let script_hash = state.get_script_hash(account_id.into())?;
     Ok(to_jsonh256(script_hash))
 }
 
@@ -1685,12 +1673,11 @@ async fn get_script_hash_by_registry_address(
     Params((serialized_address,)): Params<(JsonBytes,)>,
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<Option<JsonH256>, RpcError> {
-    let snap = mem_pool_state.load();
-    let tree = snap.state()?;
+    let state = mem_pool_state.load_state_db();
     let addr =
         gw_common::registry_address::RegistryAddress::from_slice(serialized_address.as_bytes())
             .ok_or_else(|| invalid_param_err("Invalid registry address"))?;
-    let script_hash_opt = tree.get_script_hash_by_registry_address(&addr)?;
+    let script_hash_opt = state.get_script_hash_by_registry_address(&addr)?;
     Ok(script_hash_opt.map(to_jsonh256))
 }
 
@@ -1698,10 +1685,9 @@ async fn get_registry_address_by_script_hash(
     Params((script_hash, registry_id)): Params<(JsonH256, Uint32)>,
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<Option<RegistryAddress>, RpcError> {
-    let snap = mem_pool_state.load();
-    let tree = snap.state()?;
+    let state = mem_pool_state.load_state_db();
     let addr =
-        tree.get_registry_address_by_script_hash(registry_id.value(), &to_h256(script_hash))?;
+        state.get_registry_address_by_script_hash(registry_id.value(), &to_h256(script_hash))?;
     Ok(addr.map(Into::into))
 }
 
@@ -1722,10 +1708,8 @@ async fn get_data(
         GetDataParams::Number(p) => p,
     };
 
-    let snap = mem_pool_state.load();
-    let tree = snap.state()?;
-
-    let data_opt = tree
+    let state = mem_pool_state.load_state_db();
+    let data_opt = state
         .get_data(&to_h256(data_hash))
         .map(JsonBytes::from_bytes);
 
@@ -1997,9 +1981,8 @@ async fn get_fee_config(
 async fn get_mem_pool_state_root(
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<JsonH256, RpcError> {
-    let snap = mem_pool_state.load();
-    let tree = snap.state()?;
-    let root = tree.calculate_root()?;
+    let state = mem_pool_state.load_state_db();
+    let root = state.last_state_root();
     Ok(to_jsonh256(root))
 }
 

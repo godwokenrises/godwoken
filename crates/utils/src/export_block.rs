@@ -3,8 +3,7 @@ use std::io::{ErrorKind, Read, Seek, SeekFrom};
 use anyhow::{anyhow, bail, Context, Result};
 use gw_common::{h256_ext::H256Ext, H256};
 use gw_store::{
-    readonly::StoreReadonly, state::state_db::StateContext, traits::chain_store::ChainStore,
-    transaction::StoreTransaction,
+    readonly::StoreReadonly, traits::chain_store::ChainStore, transaction::StoreTransaction,
 };
 use gw_types::{
     bytes::Bytes,
@@ -201,7 +200,7 @@ pub fn check_block_post_state(
 ) -> Result<()> {
     // Check account smt
     let expected_account_smt = post_global_state.account();
-    let replicate_account_smt = tx_db.state_tree(StateContext::ReadOnly)?.get_merkle_state();
+    let replicate_account_smt = tx_db.get_last_valid_tip_block()?.raw().post_account();
     if replicate_account_smt.as_slice() != expected_account_smt.as_slice() {
         bail!("replicate block {} account smt diff", block_number);
     }

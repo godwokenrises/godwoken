@@ -16,7 +16,7 @@ use tracing::instrument;
 
 pub trait StateExt {
     fn create_account_from_script(&mut self, script: Script) -> Result<u32, Error>;
-    fn merkle_state(&self) -> Result<AccountMerkleState, Error>;
+    fn finalise_merkle_state(&mut self) -> Result<AccountMerkleState, Error>;
     fn apply_run_result(&mut self, write: &RunResultWriteState) -> Result<(), Error>;
     fn apply_deposit_request(
         &mut self,
@@ -68,8 +68,10 @@ impl<S: State + CodeStore> StateExt for S {
         Ok(id)
     }
 
-    fn merkle_state(&self) -> Result<AccountMerkleState, Error> {
-        let account_root = self.calculate_root()?;
+    /// Finalise and return current merkle state
+    /// See finalise for drtails
+    fn finalise_merkle_state(&mut self) -> Result<AccountMerkleState, Error> {
+        let account_root = self.finalise_root()?;
         let account_count = self.get_account_count()?;
         let merkle_state = AccountMerkleState::new_builder()
             .merkle_root(account_root.pack())
@@ -254,7 +256,7 @@ impl<S: State + CodeStore> StateExt for S {
         self.set_nonce(id, new_nonce)?;
 
         let post_state = {
-            let account_root = self.calculate_root()?;
+            let account_root = self.finalise_root()?;
             let account_count = self.get_account_count()?;
             AccountMerkleState::new_builder()
                 .merkle_root(account_root.pack())

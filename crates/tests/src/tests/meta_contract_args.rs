@@ -24,8 +24,7 @@ async fn test_backward_compatibility() {
 
     // Deploy erc20 contract for test
     let mem_pool_state = chain.mem_pool_state().await;
-    let snap = mem_pool_state.load();
-    let mut state = snap.state().unwrap();
+    let mut state = mem_pool_state.load_state_db();
 
     let register = EthWallet::random(chain.rollup_type_hash());
     let register_id = register
@@ -74,14 +73,13 @@ async fn test_backward_compatibility() {
         .signature(sign.pack())
         .build();
 
-    mem_pool_state.store(snap.into());
+    mem_pool_state.store_state_db(state.into());
     {
         let mut mem_pool = chain.mem_pool().await;
         mem_pool.push_transaction(create_user_tx).unwrap();
     }
 
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     let opt_user_id = state
         .get_account_id_by_script_hash(&new_user.account_script_hash())

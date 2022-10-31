@@ -8,7 +8,7 @@ use gw_generator::constants::L2TX_MAX_CYCLES;
 use gw_generator::traits::StateExt;
 use gw_generator::Generator;
 use gw_store::chain_view::ChainView;
-use gw_store::mem_pool_state::MemStore;
+use gw_store::state::MemStateDB;
 use gw_store::traits::chain_store::ChainStore;
 use gw_store::Store;
 use gw_types::packed::{BlockInfo, DepositRequest, L2Block, RawL2Block, WithdrawalRequestExtra};
@@ -35,13 +35,12 @@ impl ReplayBlock {
             .get_block(&parent_block_hash)?
             .ok_or_else(|| anyhow!("replay parent block not found"))?;
 
-        let mem_store = MemStore::new(snap);
-        let mut state = mem_store.state()?;
+        let mut state = MemStateDB::from_store(snap)?;
         {
             let parent_post_state = parent_block.raw().post_account();
             assert_eq!(
                 parent_post_state,
-                state.merkle_state()?,
+                state.finalise_merkle_state()?,
                 "merkle state should equals to parent block"
             );
         };
@@ -88,7 +87,7 @@ impl ReplayBlock {
         }
 
         // handle transactions
-        let db = store.begin_transaction();
+        let db = &store.begin_transaction();
         let chain_view = ChainView::new(&db, parent_block_hash);
         for (tx_index, tx) in block.transactions().into_iter().enumerate() {
             generator.check_transaction_signature(&state, &tx)?;

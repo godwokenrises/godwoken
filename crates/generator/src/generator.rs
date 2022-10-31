@@ -36,7 +36,10 @@ use gw_common::{
 };
 
 use gw_config::{ContractLogConfig, SyscallCyclesConfig};
-use gw_store::{state::state_db::StateContext, transaction::StoreTransaction};
+use gw_store::{
+    state::{history::history_state::RWConfig, BlockStateDB},
+    transaction::StoreTransaction,
+};
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
@@ -405,7 +408,7 @@ impl Generator {
             "withdrawal count"
         );
 
-        let mut state = match db.state_tree(StateContext::AttachBlock(block_number)) {
+        let mut state = match BlockStateDB::from_store(db, RWConfig::attach_block(block_number)) {
             Ok(state) => state,
             Err(err) => {
                 log::error!("next state {}", err);
@@ -489,7 +492,12 @@ impl Generator {
             }
         }
 
-        let prev_txs_state = state.get_merkle_state();
+        let prev_txs_state = match state.finalise_merkle_state() {
+            Ok(s) => s,
+            Err(err) => {
+                return ApplyBlockResult::Error(err);
+            }
+        };
 
         // handle transactions
         let mut offchain_used_cycles: u64 = 0;
@@ -613,7 +621,7 @@ impl Generator {
                 }
 
                 let used_cycles = run_result.cycles.execution;
-                let post_state = match state.merkle_state() {
+                let post_state = match state.finalise_merkle_state() {
                     Ok(merkle_state) => merkle_state,
                     Err(err) => return ApplyBlockResult::Error(err),
                 };
@@ -630,7 +638,7 @@ impl Generator {
             let post_merkle_root: H256 = raw_block.post_account().merkle_root().unpack();
             let post_merkle_count: u32 = raw_block.post_account().count().unpack();
             assert_eq!(
-                state.calculate_root().expect("check post root"),
+                state.finalise_root().expect("check post root"),
                 post_merkle_root,
                 "post account merkle root must be consistent"
             );

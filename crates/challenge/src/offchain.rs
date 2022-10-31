@@ -9,7 +9,7 @@ use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig, OffChainValidatorConfig};
 use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_store::state::mem_state_db::MemStateTree;
+use gw_store::state::MemStateDB;
 use gw_store::transaction::StoreTransaction;
 use gw_types::core::DepType;
 use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext, RunResult};
@@ -46,7 +46,7 @@ const MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES: u64 = 5_000_000;
 const MARGIN_OF_MOCK_BLOCK_SAFITY_TX_SIZE_LIMIT: u64 =
     MAX_BLOCK_BYTES - MAX_TX_WITHDRAWAL_PROOF_SIZE;
 
-type MemTree<'a> = MemStateTree<'a>;
+type MemTree = MemStateDB;
 
 #[derive(Debug, Clone)]
 pub struct CKBGenesisInfo {
@@ -241,7 +241,7 @@ impl OffChainCancelChallengeValidator {
     pub fn verify_withdrawal_request(
         &mut self,
         db: &StoreTransaction,
-        mem_tree: &mut MemTree<'_>,
+        mem_tree: &mut MemTree,
         req: WithdrawalRequestExtra,
     ) -> Result<Option<u64>> {
         let block_param = &mut self.block_param;
@@ -317,7 +317,7 @@ impl OffChainCancelChallengeValidator {
     pub fn verify_transaction(
         &mut self,
         db: &StoreTransaction,
-        mem_tree: &mut MemTree<'_>,
+        mem_tree: &mut MemTree,
         tx: L2Transaction,
         run_result: &RunResult,
     ) -> Result<Option<VerifyTxCycles>> {
@@ -334,7 +334,7 @@ impl OffChainCancelChallengeValidator {
         let verify_signature = |tx_with_context: &mut Option<TxWithContext>,
                                 safe_margin: &mut MarginOfMockBlockSafity,
                                 raw_block_flag: &mut RawBlockFlag,
-                                mem_tree: &mut MemTree<'_>|
+                                mem_tree: &mut MemTree|
          -> Result<_> {
             let challenge = block_param.challenge_last_tx_signature(db, mem_tree)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
@@ -369,7 +369,7 @@ impl OffChainCancelChallengeValidator {
                                 safe_margin: &mut MarginOfMockBlockSafity,
                                 raw_block_flag: &mut RawBlockFlag,
                                 load_data_strategy: LoadDataStrategy,
-                                mem_tree: &mut MemTree<'_>|
+                                mem_tree: &mut MemTree|
          -> Result<_> {
             let challenge = block_param.challenge_last_tx_execution(db, mem_tree, run_result)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
@@ -414,7 +414,7 @@ impl OffChainCancelChallengeValidator {
             execution_by_celldep: None,
         };
 
-        let verify = |mem_tree: &mut MemTree<'_>| -> Result<_> {
+        let verify = |mem_tree: &mut MemTree| -> Result<_> {
             if validator_config.verify_tx_signature {
                 cycles.signature = verify_signature(
                     &mut tx_with_context,

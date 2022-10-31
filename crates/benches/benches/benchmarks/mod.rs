@@ -1,3 +1,4 @@
+mod dummy_state;
 pub mod fee_queue;
 pub mod init_db;
 pub mod smt;

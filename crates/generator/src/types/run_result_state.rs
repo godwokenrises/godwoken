@@ -16,7 +16,7 @@ impl<'a> State for RunResultState<'a> {
         self.0.write.write_values.insert(key, value);
         Ok(())
     }
-    fn calculate_root(&self) -> Result<H256, gw_common::error::Error> {
+    fn finalise_root(&mut self) -> Result<H256, gw_common::error::Error> {
         // unsupported operation
         Err(gw_common::error::Error::MissingKey)
     }

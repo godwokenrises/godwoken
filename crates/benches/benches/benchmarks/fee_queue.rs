@@ -7,7 +7,9 @@ use gw_mem_pool::fee::{
     types::{FeeEntry, FeeItem, FeeItemSender},
 };
 use gw_store::{
-    mem_pool_state::MemStore, state::state_db::StateContext, traits::chain_store::ChainStore, Store,
+    state::{history::history_state::RWConfig, BlockStateDB, MemStateDB},
+    traits::chain_store::ChainStore,
+    Store,
 };
 use gw_types::{
     bytes::Bytes,
@@ -23,10 +25,10 @@ fn bench_add_full(b: &mut Bencher) {
     let store = Store::open_tmp().expect("open store");
     setup_genesis(&store);
     {
-        let db = store.begin_transaction();
+        let db = &store.begin_transaction();
         let genesis = db.get_tip_block().expect("tip");
         assert_eq!(genesis.raw().number().unpack(), 0);
-        let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
+        let mut state = BlockStateDB::from_store(db, RWConfig::attach_block(1)).unwrap();
 
         // create accounts
         for i in 0..4 {
@@ -79,10 +81,10 @@ fn bench_add_fetch_20(b: &mut Bencher) {
     let store = Store::open_tmp().expect("open store");
     setup_genesis(&store);
     {
-        let db = store.begin_transaction();
+        let db = &store.begin_transaction();
         let genesis = db.get_tip_block().expect("tip");
         assert_eq!(genesis.raw().number().unpack(), 0);
-        let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
+        let mut state = BlockStateDB::from_store(db, RWConfig::attach_block(1)).unwrap();
 
         // create accounts
         for i in 0..4 {
@@ -108,8 +110,7 @@ fn bench_add_fetch_20(b: &mut Bencher) {
         queue.add(entry1, ());
     }
 
-    let mem_store = MemStore::new(snap);
-    let tree = mem_store.state().unwrap();
+    let tree = MemStateDB::from_store(snap).unwrap();
 
     b.iter(|| {
         for i in 0..20 {

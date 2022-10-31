@@ -3,7 +3,10 @@ use std::{convert::TryInto, time::Instant};
 use crate::setup::Context as ChainContext;
 use anyhow::{anyhow, Result};
 use gw_common::H256;
-use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore};
+use gw_store::{
+    state::{history::history_state::RWConfig, BlockStateDB},
+    traits::chain_store::ChainStore,
+};
 use gw_types::{
     core::ChallengeTargetType,
     packed::Byte32,
@@ -121,7 +124,7 @@ pub fn detach_chain(ctx: ChainContext) -> Result<()> {
 
     // query next block
     while number > 0 {
-        let db = local_store.begin_transaction();
+        let db = &local_store.begin_transaction();
         let detach_block = {
             let block_hash = db.get_block_hash_by_number(number)?.unwrap();
             db.get_block(&block_hash)?.unwrap()
@@ -131,8 +134,8 @@ pub fn detach_chain(ctx: ChainContext) -> Result<()> {
         println!("Detach block: #{} {}", number, hash);
         db.detach_block(&detach_block)?;
         {
-            let mut state = db.state_tree(StateContext::DetachBlock(number))?;
-            state.detach_block_state()?;
+            let mut state = BlockStateDB::from_store(db, RWConfig::detach_block())?;
+            state.detach_block_state(number)?;
         }
         db.commit()?;
         local_store.check_state()?;

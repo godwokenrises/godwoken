@@ -3,13 +3,17 @@ use anyhow::Result;
 use gw_common::{
     blake2b::new_blake2b,
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
-    smt::H256,
+    smt::{H256, SMT},
     state::State,
     CKB_SUDT_SCRIPT_ARGS,
 };
 use gw_config::GenesisConfig;
 use gw_store::{
-    state::state_db::{StateContext, StateTree},
+    smt::smt_store::SMTStateStore,
+    state::{
+        history::history_state::{HistoryState, RWConfig},
+        state_db::StateDB,
+    },
     traits::chain_store::ChainStore,
     transaction::StoreTransaction,
     Store,
@@ -57,9 +61,11 @@ pub fn build_genesis_from_store(
     db.set_block_smt_root(H256::zero())?;
     db.set_reverted_block_smt_root(H256::zero())?;
 
+    // build genesis state tree
     let mut tree = {
-        let smt = db.account_smt_with_merkle_state(AccountMerkleState::default())?;
-        StateTree::new(smt, 0, StateContext::AttachBlock(0))
+        let smt = SMT::new(H256::zero(), SMTStateStore::new(&db));
+        let inner = HistoryState::new(smt, 0, RWConfig::attach_block(0));
+        StateDB::new(inner)
     };
 
     // create a reserved account
@@ -119,7 +125,7 @@ pub fn build_genesis_from_store(
 
     // calculate post state
     let post_account = {
-        let root = tree.calculate_root()?;
+        let root = tree.finalise_root()?;
         let count = tree.get_account_count()?;
         AccountMerkleState::new_builder()
             .merkle_root(root.pack())

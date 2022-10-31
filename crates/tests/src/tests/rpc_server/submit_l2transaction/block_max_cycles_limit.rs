@@ -74,8 +74,7 @@ async fn test_block_max_cycles_limit() {
     chain.produce_block(deposit_info_vec, vec![]).await.unwrap();
 
     let mem_pool_state = chain.mem_pool_state().await;
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     let alice_id = state
         .get_account_id_by_script_hash(&alice_wallet.account_script_hash())
@@ -133,8 +132,7 @@ async fn test_block_max_cycles_limit() {
         .await
         .unwrap();
 
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     // We will submit two txs, expect bob's tx to be packaged in next block due to
     // block max cycles limit.
@@ -254,8 +252,7 @@ async fn test_block_max_cycles_limit() {
     };
 
     let mem_pool_state = chain.mem_pool_state().await;
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     let alice_nonce_before = state.get_nonce(alice_id);
     let available_cycles_before = {
@@ -296,8 +293,7 @@ async fn test_block_max_cycles_limit() {
     let not_in_queue = !rpc_server.is_request_in_queue(bob_tx_hash).await.unwrap();
     assert!(not_in_queue);
 
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     let alice_nonce_after = state.get_nonce(alice_id);
     let available_cycles_after = {
@@ -391,8 +387,7 @@ async fn test_block_max_cycles_limit() {
     };
 
     let mem_pool_state = chain.mem_pool_state().await;
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     let alice_nonce_before = state.get_nonce(alice_id);
 
@@ -429,8 +424,7 @@ async fn test_block_max_cycles_limit() {
     let not_in_queue = !rpc_server.is_request_in_queue(bob_tx_hash).await.unwrap();
     assert!(not_in_queue);
 
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     let alice_nonce_after = state.get_nonce(alice_id);
     assert_eq!(alice_nonce_before, alice_nonce_after);

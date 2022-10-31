@@ -4,7 +4,6 @@
 pub mod account_lock_manage;
 pub mod backend_manage;
 pub mod constants;
-pub mod dummy_state;
 pub mod error;
 pub mod generator;
 pub mod genesis;

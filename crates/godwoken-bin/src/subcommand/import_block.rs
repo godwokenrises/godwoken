@@ -203,7 +203,7 @@ impl ImportBlock {
         // When the node starts it will sync with L1 and correct the last
         // confirmed block.
         if let Some(last_submitted_block) = last_submitted_block {
-            let tx_db = self.chain.store().begin_transaction();
+            let tx_db = &self.chain.store().begin_transaction();
             let block_hash = tx_db
                 .get_block_hash_by_number(last_submitted_block)?
                 .context("get block hash")?;
