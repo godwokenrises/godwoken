@@ -19,8 +19,12 @@ use gw_generator::{
     Generator,
 };
 use gw_store::{
-    mem_pool_state::{MemPoolState, MemStore},
-    state::state_db::{StateContext, StateTree},
+    mem_pool_state::MemPoolState,
+    state::{
+        history::history_state::{HistoryState, RWConfig},
+        state_db::StateDB,
+        MemStateDB,
+    },
     traits::chain_store::ChainStore,
     Store,
 };
@@ -182,7 +186,10 @@ impl BenchExecutionEnvironment {
         );
 
         Self::init_genesis(&store, &genesis_config, accounts);
-        let mem_pool_state = MemPoolState::new(Arc::new(MemStore::new(store.get_snapshot())), true);
+        let mem_pool_state = MemPoolState::new(
+            MemStateDB::from_store(store.get_snapshot()).expect("mem state db"),
+            true,
+        );
 
         BenchExecutionEnvironment {
             generator,
@@ -192,8 +199,7 @@ impl BenchExecutionEnvironment {
     }
 
     fn accounts_transfer(&self, accounts: u32, count: usize) {
-        let snap = self.mem_pool_state.load();
-        let mut state = snap.state().unwrap();
+        let mut state = self.mem_pool_state.load_state_db();
 
         let (block_producer_script, block_producer) = Account::build_script(0);
         let block_info = BlockInfo::new_builder()
@@ -271,10 +277,9 @@ impl BenchExecutionEnvironment {
             }
             transfer_count -= 1;
         }
-        self.mem_pool_state.store(snap.into());
+        self.mem_pool_state.store_state_db(state);
 
-        let snap = self.mem_pool_state.load();
-        let state = snap.state().unwrap();
+        let state = self.mem_pool_state.load_state_db();
         let post_block_producer_balance = state
             .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &block_producer)
             .unwrap();
@@ -322,10 +327,13 @@ impl BenchExecutionEnvironment {
         let (db, genesis_state) = build_genesis_from_store(db, config, Default::default()).unwrap();
 
         let smt = db
-            .account_smt_with_merkle_state(genesis_state.genesis.raw().post_account())
+            .state_smt_with_merkle_state(genesis_state.genesis.raw().post_account())
             .unwrap();
         let account_count = genesis_state.genesis.raw().post_account().count().unpack();
-        let mut state = { StateTree::new(smt, account_count, StateContext::AttachBlock(0)) };
+        let mut state = {
+            let history_state = HistoryState::new(smt, account_count, RWConfig::attach_block(0));
+            StateDB::new(history_state)
+        };
 
         Self::generate_accounts(&mut state, accounts + 1); // Plus block producer
 
@@ -338,7 +346,7 @@ impl BenchExecutionEnvironment {
 
             // calculate post state
             let post_account = {
-                let root = state.calculate_root().unwrap();
+                let root = state.finalise_root().unwrap();
                 let count = state.get_account_count().unwrap();
                 AccountMerkleState::new_builder()
                     .merkle_root(root.pack())

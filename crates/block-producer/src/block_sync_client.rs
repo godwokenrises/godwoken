@@ -326,12 +326,12 @@ async fn handle_local_block(
         "received block {block_number} {}",
         ckb_types::H256::from(block_hash),
     );
-    let store_tx = client.store.begin_transaction();
+    let store_tx = &client.store.begin_transaction();
     let store_block_hash = store_tx.get_block_hash_by_number(block_number)?;
     if let Some(store_block_hash) = store_block_hash {
         if store_block_hash != block_hash.into() {
             log::info!("revert to {}", block_number - 1);
-            revert(client, &store_tx, block_number - 1).await?;
+            revert(client, store_tx, block_number - 1).await?;
             store_tx.commit()?;
         } else {
             log::info!("block already known");

@@ -1,7 +1,11 @@
 use crate::genesis::{build_genesis, init_genesis};
 use gw_common::{sparse_merkle_tree::H256, state::State};
 use gw_config::GenesisConfig;
-use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore, Store};
+use gw_store::{
+    state::{history::history_state::RWConfig, BlockStateDB},
+    traits::chain_store::ChainStore,
+    Store,
+};
 use gw_traits::CodeStore;
 use gw_types::{bytes::Bytes, core::ScriptHashType, packed::RollupConfig, prelude::*};
 use std::convert::TryInto;
@@ -29,10 +33,10 @@ fn test_init_genesis() {
     assert_eq!(genesis_block_hash, GENESIS_BLOCK_HASH);
     let store: Store = Store::open_tmp().unwrap();
     init_genesis(&store, &config, &[0u8; 32], Bytes::default()).unwrap();
-    let db = store.begin_transaction();
+    let db = &store.begin_transaction();
     // check init values
     assert_ne!(db.get_block_smt_root().unwrap(), H256::zero());
-    let tree = db.state_tree(StateContext::ReadOnly).unwrap();
+    let mut tree = BlockStateDB::from_store(db, RWConfig::readonly()).unwrap();
     assert!(tree.get_account_count().unwrap() > 0);
 
     // check prev txs state

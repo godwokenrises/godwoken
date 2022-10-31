@@ -1,19 +1,17 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::state::state_db::{StateContext, StateTree};
+use crate::smt::smt_store::{SMTBlockStore, SMTRevertedBlockStore, SMTStateStore};
 use crate::traits::chain_store::ChainStore;
+use crate::traits::kv_store::KVStoreRead;
 use crate::traits::kv_store::{KVStore, KVStoreWrite};
-use crate::{smt::smt_store::SMTStore, traits::kv_store::KVStoreRead};
 use gw_common::h256_ext::H256Ext;
 use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, H256};
 use gw_db::schema::{
-    Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK,
-    COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSIT_INFO_VEC,
-    COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY,
-    COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD,
-    COLUMN_BLOCK_STATE_REVERSE_RECORD, COLUMN_BLOCK_SUBMIT_TX, COLUMN_BLOCK_SUBMIT_TX_HASH,
-    COLUMN_INDEX, COLUMN_MEM_POOL_TRANSACTION, COLUMN_MEM_POOL_TRANSACTION_RECEIPT,
-    COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_BRANCH,
+    Col, COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
+    COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_GLOBAL_STATE,
+    COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY, COLUMN_BLOCK_SUBMIT_TX,
+    COLUMN_BLOCK_SUBMIT_TX_HASH, COLUMN_INDEX, COLUMN_MEM_POOL_TRANSACTION,
+    COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
     COLUMN_REVERTED_BLOCK_SMT_LEAF, COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION,
     COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT, COLUMN_WITHDRAWAL, COLUMN_WITHDRAWAL_INFO,
     META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY, META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY,
@@ -21,7 +19,6 @@ use gw_db::schema::{
     META_REVERTED_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
 };
 use gw_db::{error::Error, iter::DBIter, DBIterator, IteratorMode, RocksDBTransaction};
-use gw_db::{DBRawIterator, Direction};
 use gw_types::packed::NumberHash;
 use gw_types::{
     from_box_should_be_ok,
@@ -33,13 +30,11 @@ use gw_types::{
 };
 use std::collections::HashSet;
 
-use crate::state::block_state_record::{BlockStateRecordKey, BlockStateRecordKeyReverse};
-
 pub struct StoreTransaction {
     pub(crate) inner: RocksDBTransaction,
 }
 
-impl KVStoreRead for StoreTransaction {
+impl KVStoreRead for &StoreTransaction {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
         self.inner
             .get(col, key)
@@ -48,7 +43,7 @@ impl KVStoreRead for StoreTransaction {
     }
 }
 
-impl KVStoreWrite for StoreTransaction {
+impl KVStoreWrite for &StoreTransaction {
     fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
         self.inner.put(col, key, value)
     }
@@ -57,8 +52,8 @@ impl KVStoreWrite for StoreTransaction {
         self.inner.delete(col, key)
     }
 }
-
-impl KVStore for StoreTransaction {}
+impl KVStore for &StoreTransaction {}
+impl ChainStore for &StoreTransaction {}
 
 impl StoreTransaction {
     pub fn commit(&self) -> Result<(), Error> {
@@ -222,20 +217,16 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn block_smt(&self) -> Result<SMT<SMTStore<Self>>, Error> {
-        let root = self.get_block_smt_root()?;
-        let smt_store = SMTStore::new(COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_SMT_BRANCH, self);
-        Ok(SMT::new(root, smt_store))
+    pub fn block_smt(&self) -> Result<SMT<SMTBlockStore<&Self>>, Error> {
+        SMTBlockStore::new(self)
+            .to_smt()
+            .map_err(|err| Error::from(err.to_string()))
     }
 
-    pub fn reverted_block_smt(&self) -> Result<SMT<SMTStore<Self>>, Error> {
-        let root = self.get_reverted_block_smt_root()?;
-        let smt_store = SMTStore::new(
-            COLUMN_REVERTED_BLOCK_SMT_LEAF,
-            COLUMN_REVERTED_BLOCK_SMT_BRANCH,
-            self,
-        );
-        Ok(SMT::new(root, smt_store))
+    pub fn reverted_block_smt(&self) -> Result<SMT<SMTRevertedBlockStore<&Self>>, Error> {
+        SMTRevertedBlockStore::new(self)
+            .to_smt()
+            .map_err(|err| Error::from(err.to_string()))
     }
 
     // TODO: prune db state
@@ -388,7 +379,7 @@ impl StoreTransaction {
 
         self.insert_raw(COLUMN_BAD_BLOCK, &block_hash, block.as_slice())?;
 
-        // Add to block smt
+        // We add all block that submitted to layer-1 to block smt, even a bad block
         let mut block_smt = self.block_smt()?;
         block_smt
             .update(block.smt_key().into(), block_hash.into())
@@ -574,106 +565,22 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn remove_block_state_record(&self, block_number: u64) -> Result<(), Error> {
-        let iter = self.iter_block_state_record(block_number);
-        for record_key in iter {
-            // delete record key
-            self.delete(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice())?;
-            // delete reverse record key
-            let reverse_key =
-                BlockStateRecordKeyReverse::new(record_key.block_number(), &record_key.state_key());
-            self.delete(COLUMN_BLOCK_STATE_REVERSE_RECORD, reverse_key.as_slice())?;
-        }
-        Ok(())
-    }
-
-    pub fn get_history_state(&self, block_number: u64, state_key: &H256) -> Option<H256> {
-        let key = BlockStateRecordKeyReverse::new(block_number, state_key);
-        let mut raw_iter: DBRawIterator = self
-            .get_iter(COLUMN_BLOCK_STATE_REVERSE_RECORD, IteratorMode::Start)
-            .into();
-        raw_iter.seek_for_prev(key.as_slice());
-
-        if !raw_iter.valid() {
-            return None;
-        }
-        match raw_iter.key() {
-            Some(prev_key) => {
-                // not a some key
-                if &prev_key[..32] != key.state_key().as_slice() {
-                    return None;
-                }
-
-                // get old value
-                let prev_reverse_key = BlockStateRecordKeyReverse::from_slice(prev_key);
-                let prev_key = BlockStateRecordKey::new(
-                    prev_reverse_key.block_number(),
-                    &prev_reverse_key.state_key(),
-                );
-
-                self.get(COLUMN_BLOCK_STATE_RECORD, prev_key.as_slice())
-                    .map(|raw| {
-                        let mut buf = [0u8; 32];
-                        buf.copy_from_slice(&raw);
-                        buf.into()
-                    })
-            }
-            _ => None,
-        }
-    }
-
-    pub fn iter_block_state_record(
-        &self,
-        block_number: u64,
-    ) -> impl Iterator<Item = BlockStateRecordKey> + '_ {
-        let start_key = BlockStateRecordKey::new(block_number, &H256::zero());
-        self.get_iter(
-            COLUMN_BLOCK_STATE_RECORD,
-            IteratorMode::From(start_key.as_slice(), Direction::Forward),
-        )
-        .map(|(key, _value)| BlockStateRecordKey::from_slice(&key))
-        .take_while(move |key| key.block_number() == block_number)
-    }
-
     // FIXME: This method may running into inconsistent state if current state is dirty.
     // We should separate the StateDB into ReadOnly & WriteOnly,
     // The ReadOnly is for fetching history state, and the write only is for writing new state.
     // This function should only be added on the ReadOnly state.
-    pub fn account_smt(&self) -> Result<SMT<SMTStore<'_, Self>>, Error> {
-        let block = self.get_last_valid_tip_block()?;
-        let merkle_state = block.raw().post_account();
-        self.account_smt_with_merkle_state(merkle_state)
+    pub fn state_smt(&self) -> Result<SMT<SMTStateStore<&Self>>, Error> {
+        SMTStateStore::new(self)
+            .to_smt()
+            .map_err(|err| Error::from(err.to_string()))
     }
 
-    pub fn account_smt_store(&self) -> Result<SMTStore<Self>, Error> {
-        let smt_store = SMTStore::new(COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ACCOUNT_SMT_BRANCH, self);
-        Ok(smt_store)
-    }
-
-    pub fn account_smt_with_merkle_state(
+    pub fn state_smt_with_merkle_state(
         &self,
         merkle_state: AccountMerkleState,
-    ) -> Result<SMT<SMTStore<Self>>, Error> {
-        let smt_store = self.account_smt_store()?;
-        Ok(SMT::new(merkle_state.merkle_root().unpack(), smt_store))
-    }
-
-    // get state tree
-    pub fn state_tree(&self, context: StateContext) -> Result<StateTree, Error> {
-        let block = match context {
-            StateContext::ReadOnlyHistory(block_number) => {
-                let block_hash = self
-                    .get_block_hash_by_number(block_number)?
-                    .ok_or_else(|| Error::from("can't find block".to_string()))?;
-                self.get_block(&block_hash)?
-                    .ok_or_else(|| "can't find block".to_string())?
-            }
-            _ => self.get_last_valid_tip_block()?,
-        };
-        let merkle_state = block.raw().post_account();
-        let account_count = merkle_state.count().unpack();
-        let tree = self.account_smt_with_merkle_state(merkle_state)?;
-        Ok(StateTree::new(tree, account_count, context))
+    ) -> Result<SMT<SMTStateStore<&Self>>, Error> {
+        let store = SMTStateStore::new(self);
+        Ok(SMT::new(merkle_state.merkle_root().unpack(), store))
     }
 
     pub fn insert_mem_pool_transaction(
@@ -723,24 +630,6 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn record_block_state(
-        &self,
-        block_number: u64,
-        state_key: H256,
-        value: H256,
-    ) -> Result<(), Error> {
-        // insert block state key value
-        let key = BlockStateRecordKey::new(block_number, &state_key);
-        self.insert_raw(COLUMN_BLOCK_STATE_RECORD, key.as_slice(), value.as_slice())?;
-        // insert block state reverse key
-        let reverse_key = BlockStateRecordKeyReverse::new(block_number, &state_key);
-        self.insert_raw(
-            COLUMN_BLOCK_STATE_REVERSE_RECORD,
-            reverse_key.as_slice(),
-            &[],
-        )
-    }
-
     pub fn get_mem_pool_withdrawal_iter(
         &self,
     ) -> impl Iterator<Item = (H256, packed::WithdrawalRequestExtra)> + '_ {
@@ -765,5 +654,3 @@ impl StoreTransaction {
             })
     }
 }
-
-impl ChainStore for StoreTransaction {}

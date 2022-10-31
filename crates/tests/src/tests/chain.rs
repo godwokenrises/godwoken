@@ -12,7 +12,10 @@ use gw_chain::chain::{
     SyncEvent, SyncParam,
 };
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, state::State, H256};
-use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore};
+use gw_store::{
+    state::{history::history_state::RWConfig, BlockStateDB},
+    traits::chain_store::ChainStore,
+};
 use gw_types::{
     bytes::Bytes,
     core::{ScriptHashType, Status},
@@ -132,7 +135,7 @@ async fn test_produce_blocks() {
     // check state
     {
         let db = chain.store().begin_transaction();
-        let tree = db.state_tree(StateContext::ReadOnly).unwrap();
+        let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
         let script_hash_a: H256 = user_script_a.hash().into();
         let script_hash_b: H256 = user_script_b.hash().into();
         let id_a = tree
@@ -302,7 +305,7 @@ async fn test_layer1_fork() {
     assert_eq!(tip_block_number, 2);
 
     // revert blocks
-    let db = chain.store().begin_transaction();
+    let db = &chain.store().begin_transaction();
     let tip_block_parent_hash: H256 = tip_block.raw().parent_block_hash().unpack();
     let revert_action2 = {
         let prev_global_state = db
@@ -346,8 +349,8 @@ async fn test_layer1_fork() {
     // check account SMT, should be able to calculate account state root
     {
         let db = chain.store().begin_transaction();
-        let tree = db.state_tree(StateContext::ReadOnly).unwrap();
-        let current_account_root = tree.calculate_root().unwrap();
+        let mut tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
+        let current_account_root = tree.finalise_root().unwrap();
         let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
         assert_eq!(
             current_account_root, expected_account_root,
@@ -498,8 +501,8 @@ async fn test_layer1_revert() {
     // check account SMT, should be able to calculate account state root
     {
         let db = chain.store().begin_transaction();
-        let tree = db.state_tree(StateContext::ReadOnly).unwrap();
-        let current_account_root = tree.calculate_root().unwrap();
+        let mut tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
+        let current_account_root = tree.finalise_root().unwrap();
         let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
         assert_eq!(
             current_account_root, expected_account_root,
@@ -552,8 +555,8 @@ async fn test_layer1_revert() {
 
     {
         let db = chain.store().begin_transaction();
-        let tree = db.state_tree(StateContext::ReadOnly).unwrap();
-        let current_account_root = tree.calculate_root().unwrap();
+        let mut tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
+        let current_account_root = tree.finalise_root().unwrap();
         let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
         assert_eq!(
             current_account_root, expected_account_root,
@@ -672,14 +675,14 @@ async fn test_sync_blocks() {
 
     // check state
     {
-        let db = chain2.store().begin_transaction();
+        let db = &chain2.store().begin_transaction();
         let tip_block = db.get_tip_block().unwrap();
         let tip_block_number: u64 = tip_block.raw().number().unpack();
         let tip_block_hash = db.get_tip_block_hash().unwrap();
         assert_eq!(tip_block_hash, tip_block.hash().into());
         assert_eq!(tip_block_number, 3);
 
-        let tree = db.state_tree(StateContext::ReadOnly).unwrap();
+        let tree = BlockStateDB::from_store(db, RWConfig::readonly()).unwrap();
         let script_hash_a: H256 = user_script_a.hash().into();
         let id_a = tree
             .get_account_id_by_script_hash(&script_hash_a)
@@ -891,7 +894,7 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         SyncEvent::WaitChallenge { cell: _, context } => context.post_reverted_block_root,
         _ => unreachable!(),
     };
-    let db = chain.store().begin_transaction();
+    let db = &chain.store().begin_transaction();
     let last_valid_tip_block_hash = db.get_last_valid_tip_block_hash().unwrap();
     let last_valid_tip_block = db.get_last_valid_tip_block().unwrap();
     let block_smt = {

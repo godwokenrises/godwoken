@@ -6,6 +6,7 @@ use gw_common::{
     H256,
 };
 use gw_generator::account_lock_manage::secp256k1::Secp256k1Eth;
+use gw_store::state::{history::history_state::RWConfig, BlockStateDB};
 use gw_types::{
     bytes::Bytes,
     packed::{
@@ -44,8 +45,7 @@ async fn test_polyjuice_erc20_tx() {
     assert!(RegistryAddress::from_slice(&block_producer).is_some());
 
     let mem_pool_state = chain.mem_pool_state().await;
-    let snap = mem_pool_state.load();
-    let mut state = snap.state().unwrap();
+    let mut state = mem_pool_state.load_state_db();
 
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
     let test_account_id = test_wallet
@@ -53,8 +53,6 @@ async fn test_polyjuice_erc20_tx() {
         .unwrap();
 
     let polyjuice_account = PolyjuiceAccount::create(chain.rollup_type_hash(), &mut state).unwrap();
-
-    state.submit_tree_to_mem_block();
 
     // Deploy erc20 contract
     let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18).finish();
@@ -67,7 +65,7 @@ async fn test_polyjuice_erc20_tx() {
         .build();
 
     let reg_addr_bytes = test_wallet.reg_address().to_bytes().into();
-    mem_pool_state.store(snap.into());
+    mem_pool_state.store_state_db(state.into());
 
     let run_result = rpc_server
         .execute_raw_l2transaction(&raw_tx, None, Some(reg_addr_bytes))
@@ -96,8 +94,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     assert!(RegistryAddress::from_slice(&block_producer).is_some());
 
     let mem_pool_state = chain.mem_pool_state().await;
-    let snap = mem_pool_state.load();
-    let mut state = snap.state().unwrap();
+    let mut state = mem_pool_state.load_state_db();
 
     let deployer_wallet = EthWallet::random(chain.rollup_type_hash());
     let deployer_id = deployer_wallet
@@ -112,8 +109,6 @@ async fn test_polyjuice_tx_from_id_zero() {
 
     let polyjuice_account = PolyjuiceAccount::create(chain.rollup_type_hash(), &mut state).unwrap();
 
-    state.submit_tree_to_mem_block();
-
     // Deploy erc20 for test
     let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18).finish();
     let raw_tx = RawL2Transaction::new_builder()
@@ -127,7 +122,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     let deploy_tx = deployer_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
     let deploy_tx_hash: H256 = deploy_tx.hash().into();
 
-    mem_pool_state.store(snap.into());
+    mem_pool_state.store_state_db(state.into());
     {
         let mut mem_pool = chain.mem_pool().await;
         mem_pool.push_transaction(deploy_tx).unwrap();
@@ -136,8 +131,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();
     assert_eq!(system_log.status_code, 0);
 
-    let snap = mem_pool_state.load();
-    let mut state = snap.state().unwrap();
+    let mut state = mem_pool_state.load_state_db();
 
     // Check erc20 balance with existing sender
     let erc20_contract_account_id = system_log.contract_account_id(&state).unwrap();
@@ -168,9 +162,8 @@ async fn test_polyjuice_tx_from_id_zero() {
         .mint_sudt(&mut state, CKB_SUDT_ACCOUNT_ID, test_balance)
         .unwrap();
 
-    mem_pool_state.store(snap.into());
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    mem_pool_state.store_state_db(state.into());
+    let state = mem_pool_state.load_state_db();
 
     let erc20_contract_account_id = system_log.contract_account_id(&state).unwrap();
     let balance_args = SudtErc20ArgsBuilder::balance_of(&test_wallet.registry_address).finish();
@@ -219,8 +212,7 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
 
     // Deploy erc20 contract for test
     let mem_pool_state = chain.mem_pool_state().await;
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     let pre_block1_balance = state
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, test_wallet.reg_address())
@@ -272,8 +264,7 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
         mem_pool.push_transaction(deploy_tx).unwrap();
     }
 
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     // Depoly erc20 contract
     let polyjuice_account_id = state
@@ -300,8 +291,7 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();
     assert_eq!(system_log.status_code, 0);
 
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     let erc20_contract_account_id = system_log.contract_account_id(&state).unwrap();
     let erc20_contract_script_hash = state.get_script_hash(erc20_contract_account_id).unwrap();
@@ -320,8 +310,7 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
     let block_producer: Bytes = chain.last_valid_block().raw().block_producer().unpack();
     assert!(RegistryAddress::from_slice(&block_producer).is_some());
 
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     let expect_polyjuice_account_id = state
         .get_account_id_by_script_hash(&polyjuice_account.hash().into())
@@ -357,8 +346,7 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
         mem_pool.push_transaction(transfer_tx).unwrap();
     }
 
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     let to_balance = state
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_wallet.reg_address())
@@ -396,17 +384,13 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
         .unwrap();
 
     let db = chain.store().begin_transaction();
-    let pre_block1_hist_state = db
-        .state_tree(gw_store::state::state_db::StateContext::ReadOnlyHistory(1))
-        .unwrap();
+    let pre_block1_hist_state = BlockStateDB::from_store(&db, RWConfig::history_block(1)).unwrap();
     let hist_balance = pre_block1_hist_state
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, test_wallet.reg_address())
         .unwrap();
     assert_eq!(hist_balance, pre_block1_balance);
 
-    let post_block1_hist_state = db
-        .state_tree(gw_store::state::state_db::StateContext::ReadOnlyHistory(2))
-        .unwrap();
+    let post_block1_hist_state = BlockStateDB::from_store(&db, RWConfig::history_block(2)).unwrap();
     let hist_balance = post_block1_hist_state
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, test_wallet.reg_address())
         .unwrap();
@@ -474,8 +458,7 @@ async fn test_invalid_registry_address() {
     assert!(RegistryAddress::from_slice(&block_producer).is_some());
 
     let mem_pool_state = chain.mem_pool_state().await;
-    let snap = mem_pool_state.load();
-    let mut state = snap.state().unwrap();
+    let mut state = mem_pool_state.load_state_db();
 
     let deployer_wallet = EthWallet::random(chain.rollup_type_hash());
     let deployer_id = deployer_wallet
@@ -490,8 +473,6 @@ async fn test_invalid_registry_address() {
 
     let polyjuice_account = PolyjuiceAccount::create(chain.rollup_type_hash(), &mut state).unwrap();
 
-    state.submit_tree_to_mem_block();
-
     // Deploy erc20 for test
     let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18).finish();
     let raw_tx = RawL2Transaction::new_builder()
@@ -505,7 +486,7 @@ async fn test_invalid_registry_address() {
     let deploy_tx = deployer_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
     let deploy_tx_hash: H256 = deploy_tx.hash().into();
 
-    mem_pool_state.store(snap.into());
+    mem_pool_state.store_state_db(state.into());
     {
         let mut mem_pool = chain.mem_pool().await;
         mem_pool.push_transaction(deploy_tx).unwrap();
@@ -514,8 +495,7 @@ async fn test_invalid_registry_address() {
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();
     assert_eq!(system_log.status_code, 0);
 
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     // No registry address
     let erc20_contract_account_id = system_log.contract_account_id(&state).unwrap();

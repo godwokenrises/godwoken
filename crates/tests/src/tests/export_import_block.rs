@@ -457,7 +457,7 @@ async fn generate_and_revert_a_bad_block(
         SyncEvent::WaitChallenge { cell: _, context } => context.post_reverted_block_root,
         _ => unreachable!(),
     };
-    let db = chain.store().begin_transaction();
+    let db = &chain.store().begin_transaction();
     let last_valid_tip_block_hash = db.get_last_valid_tip_block_hash().unwrap();
     let last_valid_tip_block = db.get_last_valid_tip_block().unwrap();
     let block_smt = {

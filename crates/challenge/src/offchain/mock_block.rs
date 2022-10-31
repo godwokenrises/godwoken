@@ -14,7 +14,7 @@ use gw_common::state::{
 };
 use gw_common::H256;
 use gw_generator::traits::StateExt;
-use gw_store::state::mem_state_db::MemStateTree;
+use gw_store::state::MemStateDB;
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
 use gw_types::core::{ChallengeTargetType, Status};
@@ -29,7 +29,7 @@ use gw_types::prelude::*;
 
 use std::collections::HashMap;
 
-type MemTree<'a> = MemStateTree<'a>;
+type MemTree = MemStateDB;
 
 #[derive(thiserror::Error, Debug)]
 #[error("{:?}", {0})]
@@ -98,7 +98,7 @@ impl MockBlockParam {
 
     pub fn push_withdrawal_request(
         &mut self,
-        mem_tree: &mut MemTree<'_>,
+        mem_tree: &mut MemTree,
         req: WithdrawalRequestExtra,
     ) -> Result<()> {
         if self.withdrawals.contains(&req) {
@@ -110,7 +110,7 @@ impl MockBlockParam {
             &self.block_producer,
             &req.request(),
         )?;
-        let post_account = mem_tree.merkle_state()?;
+        let post_account = mem_tree.finalise_merkle_state()?;
         let checkpoint = calculate_state_checkpoint(
             &post_account.merkle_root().unpack(),
             post_account.count().unpack(),
@@ -129,7 +129,7 @@ impl MockBlockParam {
 
     pub fn push_transaction(
         &mut self,
-        mem_tree: &mut MemTree<'_>,
+        mem_tree: &mut MemTree,
         tx: L2Transaction,
         run_result: &RunResult,
     ) -> Result<()> {
@@ -139,7 +139,7 @@ impl MockBlockParam {
 
         if self.transactions.inner.is_empty() {
             let checkpoint = {
-                let prev_txs_state = mem_tree.get_merkle_state();
+                let prev_txs_state = mem_tree.finalise_merkle_state()?;
                 calculate_state_checkpoint(
                     &prev_txs_state.merkle_root().unpack(),
                     prev_txs_state.count().unpack(),
@@ -150,7 +150,7 @@ impl MockBlockParam {
         }
 
         mem_tree.apply_run_result(&run_result.write)?;
-        let post_account = mem_tree.merkle_state()?;
+        let post_account = mem_tree.finalise_merkle_state()?;
         let checkpoint = calculate_state_checkpoint(
             &post_account.merkle_root().unpack(),
             post_account.count().unpack(),
@@ -173,7 +173,7 @@ impl MockBlockParam {
     pub fn challenge_last_withdrawal(
         &self,
         db: &StoreTransaction,
-        mem_tree: &mut MemTree<'_>,
+        mem_tree: &mut MemTree,
     ) -> Result<MockChallengeOutput> {
         let target_index = self.withdrawals.inner.len().saturating_sub(1);
         let target_type = ChallengeTargetType::Withdrawal as u8;
@@ -212,7 +212,7 @@ impl MockBlockParam {
     pub fn challenge_last_tx_signature(
         &self,
         db: &StoreTransaction,
-        mem_tree: &mut MemTree<'_>,
+        mem_tree: &mut MemTree,
     ) -> Result<MockChallengeOutput> {
         let target_index = self.transactions.inner.len().saturating_sub(1);
         let target_type = ChallengeTargetType::TxSignature as u8;
@@ -246,7 +246,7 @@ impl MockBlockParam {
     pub fn challenge_last_tx_execution(
         &self,
         db: &StoreTransaction,
-        mem_tree: &mut MemTree<'_>,
+        mem_tree: &mut MemTree,
         run_result: &RunResult,
     ) -> Result<MockChallengeOutput> {
         let target_index = self.transactions.inner.len().saturating_sub(1);
@@ -376,7 +376,7 @@ impl MockBlockParam {
 
     fn build_transaction_signature_verify_context(
         &self,
-        mem_tree: &mut MemTree<'_>,
+        mem_tree: &mut MemTree,
         tx: L2Transaction,
         raw_block: RawL2Block,
     ) -> Result<VerifyContext> {
@@ -407,7 +407,7 @@ impl MockBlockParam {
 
         let touched_keys = kv_state.iter().map(|(key, _)| key.to_owned()).collect();
         let kv_state_proof = {
-            let smt = mem_tree.smt();
+            let smt = mem_tree.inner_smt_tree();
             smt.merkle_proof(touched_keys)?.compile(kv_state.clone())?
         };
 
@@ -438,7 +438,7 @@ impl MockBlockParam {
 
     fn build_transaction_execution_verify_context(
         &self,
-        mem_tree: &mut MemTree<'_>,
+        mem_tree: &mut MemTree,
         tx: L2Transaction,
         raw_block: RawL2Block,
         run_result: &RunResult,
@@ -488,7 +488,7 @@ impl MockBlockParam {
         let touched_keys = kv_state.iter().map(|(key, _)| key.to_owned()).collect();
         let kv_state: Vec<(H256, H256)> = kv_state.into_iter().collect();
         let kv_state_proof = {
-            let smt = mem_tree.smt();
+            let smt = mem_tree.inner_smt_tree();
             smt.merkle_proof(touched_keys)?.compile(kv_state.clone())?
         };
 
@@ -671,7 +671,7 @@ impl RawBlockTransactions {
     }
 }
 
-fn get_script(state: &MemStateTree<'_>, account_id: u32) -> Result<Script> {
+fn get_script(state: &MemTree, account_id: u32) -> Result<Script> {
     let script_hash = state.get_script_hash(account_id)?;
     state
         .get_script(&script_hash)

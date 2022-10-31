@@ -13,8 +13,8 @@ use gw_generator::constants::L2TX_MAX_CYCLES;
 use gw_generator::traits::StateExt;
 use gw_generator::{types::vm::ChallengeContext, Generator};
 use gw_store::chain_view::ChainView;
-use gw_store::state::mem_state_db::MemStateTree;
-use gw_store::state::state_db::StateContext;
+use gw_store::state::history::history_state::{RWConfig, ReadOpt, WriteOpt};
+use gw_store::state::{BlockStateDB, MemStateDB};
 use gw_store::traits::chain_store::ChainStore;
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
@@ -170,9 +170,8 @@ fn build_verify_withdrawal_witness(
     let sender_script_hash: [u8; 32] = withdrawal.raw().account_script_hash().unpack();
     let sender_script = {
         let raw_block = block.raw();
-        let tree = db.state_tree(StateContext::ReadOnlyHistory(
-            raw_block.number().unpack() - 1,
-        ))?;
+        let tree =
+            BlockStateDB::from_store(db, RWConfig::history_block(raw_block.number().unpack() - 1))?;
         tree.get_script(&sender_script_hash.into())
             .ok_or_else(|| anyhow!("sender script not found"))?
     };
@@ -333,7 +332,7 @@ fn build_tx_kv_witness(
 
     // FIXME we need execute block until challenge point
 
-    let mut tree: MemStateTree<'_> = unimplemented!("fetch tx_index state");
+    let mut tree: MemStateDB = unimplemented!("fetch tx_index state");
     // let prev_tx_account_count = tree.get_account_count()?;
 
     // // Check prev tx account state

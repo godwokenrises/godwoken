@@ -33,8 +33,7 @@ async fn test_polyjuice_erc20_tx() {
     let rpc_server = RPCServer::build(&chain, None).await.unwrap();
 
     let mem_pool_state = chain.mem_pool_state().await;
-    let snap = mem_pool_state.load();
-    let mut state = snap.state().unwrap();
+    let mut state = mem_pool_state.load_state_db();
 
     let creator_wallet = EthWallet::random(chain.rollup_type_hash());
     let creator_account_id = creator_wallet
@@ -42,7 +41,6 @@ async fn test_polyjuice_erc20_tx() {
         .unwrap();
 
     let polyjuice_account = PolyjuiceAccount::create(chain.rollup_type_hash(), &mut state).unwrap();
-    state.submit_tree_to_mem_block();
 
     let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18).finish();
     let raw_tx = RawL2Transaction::new_builder()
@@ -54,7 +52,7 @@ async fn test_polyjuice_erc20_tx() {
         .build();
     let deploy_tx = creator_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
 
-    mem_pool_state.store(snap.into());
+    mem_pool_state.store_state_db(state.into());
     let deploy_tx_hash = rpc_server
         .submit_l2transaction(&deploy_tx)
         .await
@@ -67,8 +65,7 @@ async fn test_polyjuice_erc20_tx() {
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();
     assert_eq!(system_log.status_code, 0);
 
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     let erc20_contract_account_id = system_log.contract_account_id(&state).unwrap();
     let to_wallet = EthWallet::random(chain.rollup_type_hash());
@@ -96,8 +93,7 @@ async fn test_polyjuice_erc20_tx() {
     let system_log = PolyjuiceSystemLog::parse_from_tx_hash(&chain, deploy_tx_hash).unwrap();
     assert_eq!(system_log.status_code, 0);
 
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     let balance = state
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_wallet.reg_address())
@@ -113,8 +109,7 @@ async fn test_in_queue_query_with_signature_hash() {
     let chain = TestChain::setup(rollup_type_script).await;
 
     let mem_pool_state = chain.mem_pool_state().await;
-    let snap = mem_pool_state.load();
-    let mut state = snap.state().unwrap();
+    let mut state = mem_pool_state.load_state_db();
 
     let creator_wallet = EthWallet::random(chain.rollup_type_hash());
     creator_wallet
@@ -129,7 +124,6 @@ async fn test_in_queue_query_with_signature_hash() {
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
     let balance: U256 = 1000000u128.into();
     test_wallet.mint_ckb_sudt(&mut state, balance).unwrap();
-    state.submit_tree_to_mem_block();
 
     let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18).finish();
     let raw_tx = RawL2Transaction::new_builder()
@@ -147,7 +141,7 @@ async fn test_in_queue_query_with_signature_hash() {
     };
     let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
 
-    mem_pool_state.store(snap.into());
+    mem_pool_state.store_state_db(state.into());
     let signature_hash = {
         let mut hasher = new_blake2b();
         let sig: Bytes = deploy_tx.signature().unpack();
@@ -181,8 +175,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     let chain = TestChain::setup(rollup_type_script).await;
 
     let mem_pool_state = chain.mem_pool_state().await;
-    let snap = mem_pool_state.load();
-    let mut state = snap.state().unwrap();
+    let mut state = mem_pool_state.load_state_db();
 
     let creator_wallet = EthWallet::random(chain.rollup_type_hash());
     creator_wallet
@@ -197,7 +190,6 @@ async fn test_polyjuice_tx_from_id_zero() {
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
     let balance: U256 = 1000000u128.into();
     test_wallet.mint_ckb_sudt(&mut state, balance).unwrap();
-    state.submit_tree_to_mem_block();
 
     let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18).finish();
     let raw_tx = RawL2Transaction::new_builder()
@@ -217,7 +209,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     };
     let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
 
-    mem_pool_state.store(snap.into());
+    mem_pool_state.store_state_db(state.into());
     rpc_server.submit_l2transaction(&deploy_tx).await.unwrap();
     wait_tx_committed(&chain, &deploy_tx_hash, Duration::from_secs(30))
         .await
@@ -232,8 +224,7 @@ async fn test_polyjuice_tx_from_id_zero() {
         mem_block_txs_count + 2, // one deploy tx and create account tx
     );
 
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     let test_account_id = state
         .get_account_id_by_script_hash(&test_wallet.account_script_hash())
@@ -257,13 +248,11 @@ async fn test_polyjuice_tx_from_id_zero() {
     assert!(balance > balance_after);
 
     // From existing account
-    let snap = mem_pool_state.load();
-    let mut state = snap.state().unwrap();
+    let mut state = mem_pool_state.load_state_db();
 
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
     let balance: U256 = 1000000u128.into();
     let expected_id = test_wallet.create_account(&mut state, balance).unwrap();
-    state.submit_tree_to_mem_block();
 
     let mem_block_txs_count = chain.mem_pool().await.mem_block().txs().len();
 
@@ -282,7 +271,7 @@ async fn test_polyjuice_tx_from_id_zero() {
         raw.hash().into()
     };
     let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
-    mem_pool_state.store(snap.into());
+    mem_pool_state.store_state_db(state.into());
 
     rpc_server.submit_l2transaction(&deploy_tx).await.unwrap();
     wait_tx_committed(&chain, &deploy_tx_hash, Duration::from_secs(30))
@@ -303,8 +292,7 @@ async fn test_polyjuice_tx_from_id_zero() {
         "should not push create account tx"
     );
 
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     let balance_after = state
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, test_wallet.reg_address())
@@ -320,8 +308,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     let chain = TestChain::setup(rollup_type_script).await;
 
     let mem_pool_state = chain.mem_pool_state().await;
-    let snap = mem_pool_state.load();
-    let mut state = snap.state().unwrap();
+    let mut state = mem_pool_state.load_state_db();
 
     let creator_wallet = EthWallet::random(chain.rollup_type_hash());
     creator_wallet
@@ -336,7 +323,6 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     let deployer_id = deployer_wallet
         .create_account(&mut state, 1000000u128.into())
         .unwrap();
-    state.submit_tree_to_mem_block();
 
     let expected_txs_count = chain.mem_pool().await.mem_block().txs().len();
 
@@ -355,7 +341,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .sign_polyjuice_tx(&state, raw_tx.clone())
         .unwrap();
 
-    mem_pool_state.store(snap.into());
+    mem_pool_state.store_state_db(state.into());
     let err = rpc_server_no_creator
         .submit_l2transaction(&deploy_tx)
         .await
@@ -365,8 +351,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     let expected_err = "tx from zero is disabled";
     assert!(err.to_string().contains(&expected_err));
 
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     // Mismatch chain id
     let bad_chain_id_raw_tx = raw_tx
@@ -433,18 +418,16 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .unwrap();
 
     // Insufficient balance
-    let snap = mem_pool_state.load();
-    let mut state = snap.state().unwrap();
+    let mut state = mem_pool_state.load_state_db();
 
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
     let balance: U256 = 100u32.into();
     test_wallet.mint_ckb_sudt(&mut state, balance).unwrap();
-    state.submit_tree_to_mem_block();
 
     let insufficient_balance_deploy_tx = test_wallet
         .sign_polyjuice_tx(&state, raw_tx.clone())
         .unwrap();
-    mem_pool_state.store(snap.into());
+    mem_pool_state.store_state_db(state.into());
 
     rpc_server
         .submit_l2transaction(&insufficient_balance_deploy_tx)
@@ -452,8 +435,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .unwrap();
 
     // Registered to different script
-    let snap = mem_pool_state.load();
-    let mut state = snap.state().unwrap();
+    let mut state = mem_pool_state.load_state_db();
 
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
     let balance: U256 = 9999999u128.into();
@@ -461,18 +443,16 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     state
         .mapping_registry_address_to_script_hash(test_wallet.reg_address().to_owned(), H256::one())
         .unwrap();
-    state.submit_tree_to_mem_block();
 
     let different_script_deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
-    mem_pool_state.store(snap.into());
+    mem_pool_state.store_state_db(state.into());
 
     rpc_server
         .submit_l2transaction(&different_script_deploy_tx)
         .await
         .unwrap();
 
-    let snap = mem_pool_state.load();
-    let mut state = snap.state().unwrap();
+    let mut state = mem_pool_state.load_state_db();
 
     // Account has tx history (nonce isn't zero)
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
@@ -480,7 +460,6 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .create_account(&mut state, 10000000u128.into())
         .unwrap();
     state.set_nonce(test_account_id, 1).unwrap();
-    state.submit_tree_to_mem_block();
 
     let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18).finish();
     let raw_tx = RawL2Transaction::new_builder()
@@ -492,7 +471,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .build();
     let bad_deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
 
-    mem_pool_state.store(snap.into());
+    mem_pool_state.store_state_db(state.into());
     let err = rpc_server
         .submit_l2transaction(&bad_deploy_tx)
         .await

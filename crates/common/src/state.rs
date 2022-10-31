@@ -131,7 +131,8 @@ pub trait State {
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), Error>;
     fn get_account_count(&self) -> Result<u32, Error>;
     fn set_account_count(&mut self, count: u32) -> Result<(), Error>;
-    fn calculate_root(&self) -> Result<H256, Error>;
+    // Refresh dirty state and return current root
+    fn finalise_root(&mut self) -> Result<H256, Error>;
 
     // implementations
     fn get_value(&self, id: u32, key: &[u8]) -> Result<H256, Error> {
@@ -277,8 +278,8 @@ pub trait State {
     }
 
     /// calculate state checkpoint
-    fn calculate_state_checkpoint(&self) -> Result<H256, Error> {
-        let account_root = self.calculate_root()?;
+    fn calculate_state_checkpoint(&mut self) -> Result<H256, Error> {
+        let account_root = self.finalise_root()?;
         let account_count = self.get_account_count()?;
         Ok(calculate_state_checkpoint(&account_root, account_count))
     }

@@ -18,7 +18,10 @@ use gw_generator::{
     sudt::build_l2_sudt_script,
     Error,
 };
-use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore};
+use gw_store::{
+    state::{history::history_state::RWConfig, BlockStateDB},
+    traits::chain_store::ChainStore,
+};
 use gw_types::{
     core::ScriptHashType,
     packed::{
@@ -134,8 +137,7 @@ async fn test_deposit_and_withdrawal() {
     .unwrap();
     let (user_id, user_script_hash, user_addr, ckb_balance, ckb_total_supply) = {
         let mem_pool = chain.mem_pool().as_ref().unwrap().lock().await;
-        let snap = mem_pool.mem_pool_state().load();
-        let tree = snap.state().unwrap();
+        let tree = mem_pool.mem_pool_state().load_state_db();
         // check user account
         assert_eq!(
             tree.get_account_count().unwrap(),
@@ -187,8 +189,7 @@ async fn test_deposit_and_withdrawal() {
     // check tx pool state
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap().lock().await;
-        let snap = mem_pool.mem_pool_state().load();
-        let state = snap.state().unwrap();
+        let state = mem_pool.mem_pool_state().load_state_db();
         assert_eq!(
             state
                 .get_account_id_by_script_hash(&user_script_hash)
@@ -232,7 +233,7 @@ async fn test_deposit_and_withdrawal() {
     );
 
     let db = chain.store().begin_transaction();
-    let tree = db.state_tree(StateContext::ReadOnly).unwrap();
+    let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
     let ckb_balance2 = tree
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_addr)
         .unwrap();
@@ -251,8 +252,7 @@ async fn test_deposit_and_withdrawal() {
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mem_pool = mem_pool.lock().await;
-        let snap = mem_pool.mem_pool_state().load();
-        let state = snap.state().unwrap();
+        let state = mem_pool.mem_pool_state().load_state_db();
         assert_eq!(
             state
                 .get_account_id_by_script_hash(&user_script_hash)
@@ -337,8 +337,7 @@ async fn test_deposit_u128_overflow() {
     .unwrap();
 
     let mem_pool = chain.mem_pool().as_ref().unwrap().lock().await;
-    let snap = mem_pool.mem_pool_state().load();
-    let tree = snap.state().unwrap();
+    let tree = mem_pool.mem_pool_state().load_state_db();
 
     let alice_addr = tree
         .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &alice_script_hash)
@@ -476,8 +475,7 @@ async fn test_overdraft() {
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mem_pool = mem_pool.lock().await;
-        let snap = mem_pool.mem_pool_state().load();
-        let state = snap.state().unwrap();
+        let state = mem_pool.mem_pool_state().load_state_db();
 
         let user_addr = state
             .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &user_script_hash.into())

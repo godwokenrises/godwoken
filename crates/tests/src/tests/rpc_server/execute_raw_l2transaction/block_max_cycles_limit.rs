@@ -50,8 +50,7 @@ async fn test_block_max_cycles_limit() {
     assert!(RegistryAddress::from_slice(&block_producer).is_some());
 
     let mem_pool_state = chain.mem_pool_state().await;
-    let snap = mem_pool_state.load();
-    let mut state = snap.state().unwrap();
+    let mut state = mem_pool_state.load_state_db();
 
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
     let test_account_id = test_wallet
@@ -59,8 +58,6 @@ async fn test_block_max_cycles_limit() {
         .unwrap();
 
     let polyjuice_account = PolyjuiceAccount::create(chain.rollup_type_hash(), &mut state).unwrap();
-
-    state.submit_tree_to_mem_block();
 
     // Deploy erc20 contract
     let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18).finish();
@@ -73,7 +70,7 @@ async fn test_block_max_cycles_limit() {
         .build();
     let reg_addr_bytes = test_wallet.reg_address().to_bytes().into();
 
-    mem_pool_state.store(snap.into());
+    mem_pool_state.store_state_db(state.into());
     let run_result = rpc_server
         .execute_raw_l2transaction(&raw_tx, None, Some(reg_addr_bytes))
         .await
@@ -108,8 +105,7 @@ async fn test_block_max_cycles_limit() {
     };
 
     let mem_pool_state = chain.mem_pool_state().await;
-    let snap = mem_pool_state.load();
-    let mut state = snap.state().unwrap();
+    let mut state = mem_pool_state.load_state_db();
 
     let test_wallet = EthWallet::random(chain.rollup_type_hash());
     let test_account_id = test_wallet
@@ -117,7 +113,6 @@ async fn test_block_max_cycles_limit() {
         .unwrap();
 
     let polyjuice_account = PolyjuiceAccount::create(chain.rollup_type_hash(), &mut state).unwrap();
-    state.submit_tree_to_mem_block();
 
     let raw_tx = RawL2Transaction::new_builder()
         .chain_id(chain.chain_id().pack())
@@ -128,7 +123,7 @@ async fn test_block_max_cycles_limit() {
         .build();
     let reg_addr_bytes = test_wallet.reg_address().to_bytes().into();
 
-    mem_pool_state.store(snap.into());
+    mem_pool_state.store_state_db(state.into());
     let err = rpc_server
         .execute_raw_l2transaction(&raw_tx, None, Some(reg_addr_bytes))
         .await

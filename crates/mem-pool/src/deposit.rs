@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use gw_common::{h256_ext::H256Ext, registry::context::RegistryContext, state::State, H256};
 use gw_config::DepositTimeoutConfig;
-use gw_store::state::mem_state_db::MemStateTree;
+use gw_store::state::MemStateDB;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -18,7 +18,7 @@ pub fn sanitize_deposit_cells(
     ctx: &RollupContext,
     config: &DepositTimeoutConfig,
     unsanitize_deposits: Vec<DepositInfo>,
-    state: &MemStateTree,
+    state: &MemStateDB,
 ) -> Vec<DepositInfo> {
     log::debug!(target: "collect-deposit-cells", "sanitize {} deposits", unsanitize_deposits.len());
     let mut deposit_cells = Vec::with_capacity(unsanitize_deposits.len());
@@ -95,7 +95,7 @@ fn check_deposit_cell(
     ctx: &RollupContext,
     config: &DepositTimeoutConfig,
     cell: &DepositInfo,
-    state: &MemStateTree,
+    state: &MemStateDB,
 ) -> Result<()> {
     let hash_type = ScriptHashType::Type.into();
 

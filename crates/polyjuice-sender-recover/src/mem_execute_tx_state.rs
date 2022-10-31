@@ -66,7 +66,7 @@ impl<S: State + CodeStore> State for MemExecuteTxStateTree<S> {
         Ok(())
     }
 
-    fn calculate_root(&self) -> Result<H256, StateError> {
+    fn finalise_root(&mut self) -> Result<H256, StateError> {
         log::error!("calculate_root is unsupport in executetx state");
         Err(StateError::Store)
     }

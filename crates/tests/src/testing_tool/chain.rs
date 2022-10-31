@@ -613,7 +613,7 @@ pub async fn construct_block_with_timestamp(
         )
     }
     let stake_cell_owner_lock_hash = H256::zero();
-    let db = chain.store().begin_transaction();
+    let db = &chain.store().begin_transaction();
     let generator = chain.generator();
     let rollup_config_hash = (*chain.rollup_config_hash()).into();
 

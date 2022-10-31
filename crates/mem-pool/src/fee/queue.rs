@@ -157,7 +157,8 @@ mod tests {
     use gw_config::GenesisConfig;
     use gw_generator::genesis::init_genesis;
     use gw_store::{
-        mem_pool_state::MemStore, state::state_db::StateContext, traits::chain_store::ChainStore,
+        state::{history::history_state::RWConfig, BlockStateDB, MemStateDB},
+        traits::chain_store::ChainStore,
         Store,
     };
     use gw_types::{
@@ -180,10 +181,10 @@ mod tests {
         let store = Store::open_tmp().expect("open store");
         setup_genesis(&store);
         {
-            let db = store.begin_transaction();
+            let db = &store.begin_transaction();
             let genesis = db.get_tip_block().expect("tip");
             assert_eq!(genesis.raw().number().unpack(), 0);
-            let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
+            let mut state = BlockStateDB::from_store(db, RWConfig::attach_block(1)).unwrap();
 
             // create accounts
             for i in 0..4 {
@@ -231,8 +232,7 @@ mod tests {
         queue.add(entry3, ());
         queue.add(entry4, ());
 
-        let mem_store = MemStore::new(snap);
-        let tree = mem_store.state().unwrap();
+        let tree = MemStateDB::from_store(snap).unwrap();
 
         // fetch 3
         {
@@ -262,10 +262,10 @@ mod tests {
         let store = Store::open_tmp().expect("open store");
         setup_genesis(&store);
         {
-            let db = store.begin_transaction();
+            let db = &store.begin_transaction();
             let genesis = db.get_tip_block().expect("tip");
             assert_eq!(genesis.raw().number().unpack(), 0);
-            let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
+            let mut state = BlockStateDB::from_store(db, RWConfig::attach_block(1)).unwrap();
 
             // create accounts
             for i in 0..4 {
@@ -316,8 +316,7 @@ mod tests {
 
         queue.add(entry4, ());
 
-        let mem_store = MemStore::new(snap);
-        let tree = mem_store.state().unwrap();
+        let tree = MemStateDB::from_store(snap).unwrap();
 
         // fetch 5
         {
@@ -337,10 +336,10 @@ mod tests {
         let store = Store::open_tmp().expect("open store");
         setup_genesis(&store);
         {
-            let db = store.begin_transaction();
+            let db = &store.begin_transaction();
             let genesis = db.get_tip_block().expect("tip");
             assert_eq!(genesis.raw().number().unpack(), 0);
-            let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
+            let mut state = BlockStateDB::from_store(db, RWConfig::attach_block(1)).unwrap();
 
             // create accounts
             for i in 0..4 {
@@ -378,8 +377,7 @@ mod tests {
         queue.add(entry2, ());
 
         let snap = store.get_snapshot();
-        let mem_store = MemStore::new(snap);
-        let tree = mem_store.state().unwrap();
+        let tree = MemStateDB::from_store(snap).unwrap();
 
         // fetch
         {
@@ -397,10 +395,10 @@ mod tests {
         let store = Store::open_tmp().expect("open store");
         setup_genesis(&store);
         {
-            let db = store.begin_transaction();
+            let db = &store.begin_transaction();
             let genesis = db.get_tip_block().expect("tip");
             assert_eq!(genesis.raw().number().unpack(), 0);
-            let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
+            let mut state = BlockStateDB::from_store(db, RWConfig::attach_block(1)).unwrap();
 
             // create accounts
             for i in 0..4 {
@@ -438,8 +436,7 @@ mod tests {
         queue.add(entry2, ());
 
         let snap = store.get_snapshot();
-        let mem_store = MemStore::new(snap);
-        let tree = mem_store.state().unwrap();
+        let tree = MemStateDB::from_store(snap).unwrap();
 
         // fetch
         {
@@ -459,10 +456,10 @@ mod tests {
         let store = Store::open_tmp().expect("open store");
         setup_genesis(&store);
         {
-            let db = store.begin_transaction();
+            let db = &store.begin_transaction();
             let genesis = db.get_tip_block().expect("tip");
             assert_eq!(genesis.raw().number().unpack(), 0);
-            let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
+            let mut state = BlockStateDB::from_store(db, RWConfig::attach_block(1)).unwrap();
 
             // create accounts
             for i in 0..4 {
@@ -520,10 +517,10 @@ mod tests {
         let store = Store::open_tmp().expect("open store");
         setup_genesis(&store);
         {
-            let db = store.begin_transaction();
+            let db = &store.begin_transaction();
             let genesis = db.get_tip_block().expect("tip");
             assert_eq!(genesis.raw().number().unpack(), 0);
-            let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
+            let mut state = BlockStateDB::from_store(db, RWConfig::attach_block(1)).unwrap();
 
             // create accounts
             for i in 0..4 {
@@ -571,8 +568,7 @@ mod tests {
         queue.add(entry3, ());
         queue.add(entry4, ());
 
-        let mem_store = MemStore::new(snap);
-        let tree = mem_store.state().unwrap();
+        let tree = MemStateDB::from_store(snap).unwrap();
 
         // fetch 3
         {
@@ -608,10 +604,10 @@ mod tests {
         let store = Store::open_tmp().expect("open store");
         setup_genesis(&store);
         {
-            let db = store.begin_transaction();
+            let db = &store.begin_transaction();
             let genesis = db.get_tip_block().expect("tip");
             assert_eq!(genesis.raw().number().unpack(), 0);
-            let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
+            let mut state = BlockStateDB::from_store(db, RWConfig::attach_block(1)).unwrap();
 
             // create accounts
             for i in 0..4 {
@@ -662,8 +658,7 @@ mod tests {
 
         queue.add(entry4, ());
 
-        let mem_store = MemStore::new(snap);
-        let tree = mem_store.state().unwrap();
+        let tree = MemStateDB::from_store(snap).unwrap();
 
         // fetch 5
         {
@@ -717,8 +712,7 @@ mod tests {
         queue.add(entry2, ());
 
         let snap = store.get_snapshot();
-        let mem_store = MemStore::new(snap);
-        let tree = mem_store.state().unwrap();
+        let tree = MemStateDB::from_store(snap).unwrap();
 
         // fetch
         {
@@ -764,8 +758,7 @@ mod tests {
         queue.add(entry2, ());
 
         let snap = store.get_snapshot();
-        let mem_store = MemStore::new(snap);
-        let tree = mem_store.state().unwrap();
+        let tree = MemStateDB::from_store(snap).unwrap();
 
         // fetch
         {

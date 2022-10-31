@@ -1,5 +1,5 @@
 use crate::{
-    state::state_db::StateContext,
+    state::{history::history_state::RWConfig, BlockStateDB},
     traits::{chain_store::ChainStore, kv_store::KVStoreWrite},
     transaction::StoreTransaction,
     Store,
@@ -13,9 +13,13 @@ use gw_types::{
     prelude::{Builder, Entity, Pack, Unpack},
 };
 
-fn build_block(state: &impl State, block_number: u64, prev_txs_state_checkpoint: H256) -> L2Block {
+fn build_block(
+    state: &mut impl State,
+    block_number: u64,
+    prev_txs_state_checkpoint: H256,
+) -> L2Block {
     let post_state = AccountMerkleState::new_builder()
-        .merkle_root(state.calculate_root().unwrap().pack())
+        .merkle_root(state.finalise_root().unwrap().pack())
         .count(state.get_account_count().unwrap().pack())
         .build();
     L2Block::new_builder()
@@ -64,7 +68,7 @@ fn test_state_with_version() {
     // block 1
     {
         let db = store.begin_transaction();
-        let mut state = db.state_tree(StateContext::AttachBlock(1)).unwrap();
+        let mut state = BlockStateDB::from_store(&db, RWConfig::attach_block(1)).unwrap();
         state
             .update_raw(H256::from_u32(1), H256::from_u32(2))
             .unwrap();
@@ -83,7 +87,7 @@ fn test_state_with_version() {
         state
             .update_raw(H256::from_u32(4), H256::from_u32(4))
             .unwrap();
-        commit_block(&db, build_block(&state, 1, prev_txs_state_checkpoint));
+        commit_block(&db, build_block(&mut state, 1, prev_txs_state_checkpoint));
         prev_txs_state_checkpoint = state.calculate_state_checkpoint().unwrap();
         db.set_block_submit_tx(1, &Transaction::default().as_reader())
             .unwrap();
@@ -97,8 +101,8 @@ fn test_state_with_version() {
         db.commit().unwrap();
     }
     {
-        let db = store.begin_transaction();
-        let state = db.state_tree(StateContext::ReadOnly).unwrap();
+        let db = &store.begin_transaction();
+        let state = BlockStateDB::from_store(db, RWConfig::readonly()).unwrap();
         let v = state.get_raw(&H256::from_u32(1)).unwrap();
         assert_eq!(v, H256::from_u32(1));
         let v = state.get_raw(&H256::from_u32(2)).unwrap();
@@ -115,8 +119,8 @@ fn test_state_with_version() {
 
     // attach block 2
     {
-        let db = store.begin_transaction();
-        let mut state = db.state_tree(StateContext::AttachBlock(2)).unwrap();
+        let db = &store.begin_transaction();
+        let mut state = BlockStateDB::from_store(db, RWConfig::attach_block(2)).unwrap();
         state
             .update_raw(H256::from_u32(1), H256::from_u32(1))
             .unwrap();
@@ -127,7 +131,7 @@ fn test_state_with_version() {
         state
             .update_raw(H256::from_u32(5), H256::from_u32(25))
             .unwrap();
-        commit_block(&db, build_block(&state, 2, prev_txs_state_checkpoint));
+        commit_block(&db, build_block(&mut state, 2, prev_txs_state_checkpoint));
         db.set_last_confirmed_block_number_hash(
             &NumberHash::new_builder()
                 .number(2.pack())
@@ -144,7 +148,7 @@ fn test_state_with_version() {
     }
     {
         let db = store.begin_transaction();
-        let state = db.state_tree(StateContext::ReadOnly).unwrap();
+        let state = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
         let v = state.get_raw(&H256::from_u32(1)).unwrap();
         assert_eq!(v, H256::from_u32(1));
         let v = state.get_raw(&H256::from_u32(2)).unwrap();
@@ -159,16 +163,16 @@ fn test_state_with_version() {
 
     // detach block 2
     {
-        let db = store.begin_transaction();
+        let db = &store.begin_transaction();
         db.detach_block(&db.get_tip_block().unwrap()).unwrap();
-        let mut state = db.state_tree(StateContext::DetachBlock(2)).unwrap();
-        state.detach_block_state().unwrap();
+        let mut state = BlockStateDB::from_store(db, RWConfig::detach_block()).unwrap();
+        state.detach_block_state(2).unwrap();
         prev_txs_state_checkpoint = state.calculate_state_checkpoint().unwrap();
         db.commit().unwrap();
     }
     {
-        let db = store.begin_transaction();
-        let state = db.state_tree(StateContext::ReadOnly).unwrap();
+        let db = &store.begin_transaction();
+        let state = BlockStateDB::from_store(db, RWConfig::readonly()).unwrap();
         let v = state.get_raw(&H256::from_u32(1)).unwrap();
         assert_eq!(v, H256::from_u32(1));
         let v = state.get_raw(&H256::from_u32(2)).unwrap();
@@ -189,7 +193,7 @@ fn test_state_with_version() {
     // attach 2 again
     {
         let db = store.begin_transaction();
-        let mut state = db.state_tree(StateContext::AttachBlock(2)).unwrap();
+        let mut state = BlockStateDB::from_store(&db, RWConfig::attach_block(2)).unwrap();
         state
             .update_raw(H256::from_u32(1), H256::from_u32(1))
             .unwrap();
@@ -200,12 +204,12 @@ fn test_state_with_version() {
         state
             .update_raw(H256::from_u32(5), H256::from_u32(25))
             .unwrap();
-        commit_block(&db, build_block(&state, 2, prev_txs_state_checkpoint));
+        commit_block(&db, build_block(&mut state, 2, prev_txs_state_checkpoint));
         db.commit().unwrap();
     }
     {
         let db = store.begin_transaction();
-        let state = db.state_tree(StateContext::ReadOnly).unwrap();
+        let state = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
         let v = state.get_raw(&H256::from_u32(1)).unwrap();
         assert_eq!(v, H256::from_u32(1));
         let v = state.get_raw(&H256::from_u32(2)).unwrap();
@@ -221,7 +225,7 @@ fn test_state_with_version() {
     // check block 1
     {
         let db = store.begin_transaction();
-        let state = db.state_tree(StateContext::ReadOnlyHistory(1)).unwrap();
+        let state = BlockStateDB::from_store(&db, RWConfig::history_block(1)).unwrap();
         let v = state.get_raw(&H256::from_u32(1)).unwrap();
         assert_eq!(v, H256::from_u32(1));
         let v = state.get_raw(&H256::from_u32(2)).unwrap();

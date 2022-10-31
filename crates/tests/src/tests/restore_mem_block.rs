@@ -14,7 +14,8 @@ use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::{state::State, H256};
 use gw_rpc_server::registry::Registry;
-use gw_store::state::state_db::StateContext;
+use gw_store::state::history::history_state::RWConfig;
+use gw_store::state::BlockStateDB;
 use gw_types::packed::{
     DepositInfoVec, DepositRequest, Fee, L2Transaction, RawL2Transaction, RawWithdrawalRequest,
     SUDTArgs, SUDTTransfer, Script, WithdrawalRequest, WithdrawalRequestExtra,
@@ -118,7 +119,7 @@ async fn test_restore_mem_block() {
     let random_txs: Vec<_> = {
         let tx_accounts = accounts.iter().skip(withdrawal_count as usize);
         let db = chain.store().begin_transaction();
-        let state = db.state_tree(StateContext::ReadOnly).unwrap();
+        let state = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
         tx_accounts
             .map(|account_script| {
                 let from_id = state

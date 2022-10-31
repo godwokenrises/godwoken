@@ -26,8 +26,7 @@ async fn test_eth_account_creator() {
     let chain = TestChain::setup(rollup_type_script).await;
 
     let mem_pool_state = chain.mem_pool_state().await;
-    let snap = mem_pool_state.load();
-    let mut state = snap.state().unwrap();
+    let mut state = mem_pool_state.load_state_db();
 
     let creator_wallet = EthWallet::random(chain.rollup_type_hash());
     creator_wallet
@@ -35,7 +34,6 @@ async fn test_eth_account_creator() {
         .unwrap();
 
     let polyjuice_account = PolyjuiceAccount::create(chain.rollup_type_hash(), &mut state).unwrap();
-    state.submit_tree_to_mem_block();
 
     let account_ctx = EthAccountContext::new(
         chain.chain_id(),
@@ -89,14 +87,13 @@ async fn test_eth_account_creator() {
         .build_batch_create_tx(&state, recovered_account_scripts)
         .unwrap();
 
-    mem_pool_state.store(snap.into());
+    mem_pool_state.store_state_db(state.into());
     {
         let mut mem_pool = chain.mem_pool().await;
         mem_pool.push_transaction(batch_create_tx).unwrap();
     }
 
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     for wallet in new_users_wallet {
         let opt_user_script_hash = state

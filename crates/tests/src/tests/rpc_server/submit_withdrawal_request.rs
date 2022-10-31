@@ -49,8 +49,7 @@ async fn test_submit_withdrawal_request() {
     }
 
     let mem_pool_state = chain.mem_pool_state().await;
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
 
     let balance_before_withdrawal = state
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, test_wallet.reg_address())
@@ -108,8 +107,7 @@ async fn test_submit_withdrawal_request() {
         .await
         .unwrap();
 
-    let snap = mem_pool_state.load();
-    let state = snap.state().unwrap();
+    let state = mem_pool_state.load_state_db();
     let balance_after_withdrawal = state
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, test_wallet.reg_address())
         .unwrap();
