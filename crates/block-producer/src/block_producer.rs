@@ -41,6 +41,16 @@ use tracing::instrument;
 
 /// 524_288 we choose this value because it is smaller than the MAX_BLOCK_BYTES which is 597K
 const MAX_ROLLUP_WITNESS_SIZE: usize = 1 << 19;
+/// How many extra size are needed for the rollup WitnessArgs compared to the
+/// L2Block if there are no reverted blocks.
+const ROLLUP_WITNESS_OVERHEAD: usize = 48;
+
+pub fn check_block_size(block_size: usize) -> Result<()> {
+    if block_size >= MAX_ROLLUP_WITNESS_SIZE - ROLLUP_WITNESS_OVERHEAD {
+        bail!(TransactionSizeError::WitnessTooLarge)
+    }
+    Ok(())
+}
 
 fn generate_custodian_cells(
     rollup_context: &RollupContext,
@@ -475,4 +485,20 @@ pub enum TransactionSizeError {
     TransactionTooLarge,
     #[error("witness too large")]
     WitnessTooLarge,
+}
+
+#[test]
+fn test_witness_size_overhead() {
+    let block = L2Block::default();
+    let submit = RollupSubmitBlock::new_builder()
+        .block(block.clone())
+        .build();
+    let action = RollupAction::new_builder().set(submit).build();
+    let witness = WitnessArgs::new_builder()
+        .output_type(Some(action.as_bytes()).pack())
+        .build();
+    assert_eq!(
+        witness.as_slice().len() - block.as_slice().len(),
+        ROLLUP_WITNESS_OVERHEAD
+    );
 }
