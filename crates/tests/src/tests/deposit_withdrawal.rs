@@ -550,8 +550,7 @@ async fn test_produce_block_after_re_inject_withdrawal() {
     .unwrap();
     let (user_id, user_script_hash, user_addr, ckb_balance) = {
         let mem_pool = chain.mem_pool().as_ref().unwrap().lock().await;
-        let snap = mem_pool.mem_pool_state().load();
-        let tree = snap.state().unwrap();
+        let tree = mem_pool.mem_pool_state().load_state_db();
         // check user account
         assert_eq!(
             tree.get_account_count().unwrap(),
@@ -647,8 +646,8 @@ async fn test_produce_block_after_re_inject_withdrawal() {
 
     // check status
 
-    let db = chain.store().begin_transaction();
-    let tree = db.state_tree(StateContext::ReadOnly).unwrap();
+    let db = &chain.store().begin_transaction();
+    let tree = BlockStateDB::from_store(db, RWConfig::readonly()).unwrap();
     let ckb_balance2 = tree
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_addr)
         .unwrap();
