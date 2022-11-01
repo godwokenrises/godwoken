@@ -64,6 +64,9 @@ const SYS_RECOVER_ACCOUNT: u64 = 3503;
 const SYS_BN_ADD: u64 = 3601;
 const SYS_BN_MUL: u64 = 3602;
 const SYS_BN_PAIRING: u64 = 3603;
+/* Syscall state revert */
+const SYS_SNAPSHOT: u64 = 3701;
+const SYS_REVERT: u64 = 3702;
 /* CKB compatible syscalls */
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
@@ -592,14 +595,14 @@ impl<'a, 'b, S: State + CodeStore + JournalDB, C: ChainView, Mac: SupportMachine
                         // Subtract additional cycles per pairing
                         let additional_cycles =
                             k * cycles_pool.syscall_config().sys_bn_per_pairing_cycles;
-                        self.result.cycles.r#virtual = self
-                            .result
-                            .cycles
+                        self.context.cycle_meter.r#virtual = self
+                            .context
+                            .cycle_meter
                             .r#virtual
                             .saturating_add(additional_cycles);
                         let execution_and_virtual = machine
                             .cycles()
-                            .saturating_add(self.result.cycles.r#virtual);
+                            .saturating_add(self.context.cycle_meter.r#virtual);
                         if cycles_pool.consume_cycles(additional_cycles).is_none()
                             || execution_and_virtual > cycles_pool.limit()
                         {
@@ -616,7 +619,24 @@ impl<'a, 'b, S: State + CodeStore + JournalDB, C: ChainView, Mac: SupportMachine
                     VMError::Unexpected(err_msg)
                 })?;
                 store_data(machine, output.as_slice())?;
-
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
+            SYS_SNAPSHOT => {
+                let snapshot_addr = machine.registers()[A0].clone();
+                // create snapshot
+                let snapshot_id = self.state.snapshot() as u32;
+                machine
+                    .memory_mut()
+                    .store32(&snapshot_addr, &Mac::REG::from_u32(snapshot_id))?;
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
+            SYS_REVERT => {
+                let snapshot_id = machine.registers()[A0].to_u32();
+                self.state
+                    .revert(snapshot_id as usize)
+                    .map_err(|err| VMError::Unexpected(format!("revert: {}", err)))?;
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
@@ -694,6 +714,8 @@ impl<'a, 'b, S: State, C: ChainView> L2Syscalls<'a, 'b, S, C> {
             SYS_BN_ADD => cycles_config.sys_bn_add_cycles,
             SYS_BN_MUL => cycles_config.sys_bn_mul_cycles,
             SYS_BN_PAIRING => cycles_config.sys_bn_fixed_pairing_cycles,
+            SYS_SNAPSHOT => cycles_config.sys_snapshot_cycles,
+            SYS_REVERT => cycles_config.sys_revert_cycles,
             _ => 0,
         }
     }

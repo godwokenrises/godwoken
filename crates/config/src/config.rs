@@ -573,6 +573,8 @@ pub struct SyscallCyclesConfig {
     pub sys_bn_mul_cycles: u64,
     pub sys_bn_fixed_pairing_cycles: u64,
     pub sys_bn_per_pairing_cycles: u64,
+    pub sys_snapshot_cycles: u64,
+    pub sys_revert_cycles: u64,
 }
 
 impl SyscallCyclesConfig {
@@ -595,6 +597,8 @@ impl SyscallCyclesConfig {
             sys_bn_mul_cycles: 18_000,
             sys_bn_fixed_pairing_cycles: 135_000,
             sys_bn_per_pairing_cycles: 102_000,
+            sys_snapshot_cycles: 2000,
+            sys_revert_cycles: 2000,
         }
     }
 }
