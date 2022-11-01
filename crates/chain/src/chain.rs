@@ -729,10 +729,10 @@ impl Chain {
 
                     // Check current state
                     let expected_state = l2block.raw().prev_account();
-                    let mut tree = BlockStateDB::from_store(db, RWConfig::readonly())?;
+                    let tree = BlockStateDB::from_store(db, RWConfig::readonly())?;
                     let expected_root: H256 = expected_state.merkle_root().unpack();
                     let expected_count: u32 = expected_state.count().unpack();
-                    assert_eq!(tree.finalise_root()?, expected_root);
+                    assert_eq!(tree.calculate_root()?, expected_root);
                     assert_eq!(tree.get_account_count()?, expected_count);
 
                     // Check genesis state still consistent
@@ -896,8 +896,8 @@ impl Chain {
             "account root consistent in DB"
         );
 
-        let mut tree = BlockStateDB::from_store(db, RWConfig::readonly())?;
-        let current_account = tree.finalise_merkle_state()?;
+        let tree = BlockStateDB::from_store(db, RWConfig::readonly())?;
+        let current_account = tree.calculate_merkle_state()?;
 
         assert_eq!(
             current_account.as_slice(),
@@ -1001,11 +1001,11 @@ impl Chain {
         let chain_view = ChainView::new(&db, tip_block_hash);
 
         {
-            let mut tree = BlockStateDB::from_store(db, RWConfig::readonly())?;
+            let tree = BlockStateDB::from_store(db, RWConfig::readonly())?;
 
             let prev_merkle_state = l2block.raw().prev_account();
             assert_eq!(
-                tree.finalise_merkle_state()?.as_slice(),
+                tree.calculate_merkle_state()?.as_slice(),
                 prev_merkle_state.as_slice(),
                 "prev account merkle state must be consistent"
             );

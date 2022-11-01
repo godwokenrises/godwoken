@@ -349,8 +349,8 @@ async fn test_layer1_fork() {
     // check account SMT, should be able to calculate account state root
     {
         let db = chain.store().begin_transaction();
-        let mut tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
-        let current_account_root = tree.finalise_root().unwrap();
+        let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
+        let current_account_root = tree.calculate_root().unwrap();
         let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
         assert_eq!(
             current_account_root, expected_account_root,
@@ -501,8 +501,8 @@ async fn test_layer1_revert() {
     // check account SMT, should be able to calculate account state root
     {
         let db = chain.store().begin_transaction();
-        let mut tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
-        let current_account_root = tree.finalise_root().unwrap();
+        let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
+        let current_account_root = tree.calculate_root().unwrap();
         let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
         assert_eq!(
             current_account_root, expected_account_root,
@@ -555,8 +555,8 @@ async fn test_layer1_revert() {
 
     {
         let db = chain.store().begin_transaction();
-        let mut tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
-        let current_account_root = tree.finalise_root().unwrap();
+        let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
+        let current_account_root = tree.calculate_root().unwrap();
         let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
         assert_eq!(
             current_account_root, expected_account_root,

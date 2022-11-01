@@ -1,7 +1,6 @@
 use crate::types::{VerifyContext, VerifyWitness};
 
 use anyhow::{anyhow, bail, Context, Result};
-use gw_common::blake2b::new_blake2b;
 use gw_common::h256_ext::H256Ext;
 use gw_common::merkle_utils::{
     calculate_ckb_merkle_root, calculate_state_checkpoint, ckb_merkle_leaf_hash, CBMT,
@@ -14,20 +13,18 @@ use gw_common::state::{
 };
 use gw_common::H256;
 use gw_generator::traits::StateExt;
+use gw_store::state::traits::JournalDB;
 use gw_store::state::MemStateDB;
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
 use gw_types::core::{ChallengeTargetType, Status};
 use gw_types::offchain::{RollupContext, RunResult};
 use gw_types::packed::{
-    AccountMerkleState, BlockMerkleState, Byte32, Bytes, CCTransactionSignatureWitness,
-    CCTransactionWitness, CCWithdrawalWitness, CKBMerkleProof, ChallengeTarget, GlobalState,
-    L2Block, L2Transaction, RawL2Block, Script, ScriptVec, SubmitTransactions, SubmitWithdrawals,
-    Uint64, WithdrawalRequestExtra,
+    AccountMerkleState, BlockMerkleState, Byte32, CCTransactionSignatureWitness,
+    CCWithdrawalWitness, CKBMerkleProof, ChallengeTarget, GlobalState, L2Block, L2Transaction,
+    RawL2Block, Script, SubmitTransactions, SubmitWithdrawals, Uint64, WithdrawalRequestExtra,
 };
 use gw_types::prelude::*;
-
-use std::collections::HashMap;
 
 type MemTree = MemStateDB;
 
@@ -110,7 +107,7 @@ impl MockBlockParam {
             &self.block_producer,
             &req.request(),
         )?;
-        let post_account = mem_tree.finalise_merkle_state()?;
+        let post_account = mem_tree.calculate_merkle_state()?;
         let checkpoint = calculate_state_checkpoint(
             &post_account.merkle_root().unpack(),
             post_account.count().unpack(),
@@ -131,7 +128,7 @@ impl MockBlockParam {
         &mut self,
         mem_tree: &mut MemTree,
         tx: L2Transaction,
-        run_result: &RunResult,
+        _run_result: &RunResult,
     ) -> Result<()> {
         if self.transactions.contains(&tx) {
             bail!("duplicate transaction {}", tx.hash().pack());
@@ -139,7 +136,7 @@ impl MockBlockParam {
 
         if self.transactions.inner.is_empty() {
             let checkpoint = {
-                let prev_txs_state = mem_tree.finalise_merkle_state()?;
+                let prev_txs_state = mem_tree.calculate_merkle_state()?;
                 calculate_state_checkpoint(
                     &prev_txs_state.merkle_root().unpack(),
                     prev_txs_state.count().unpack(),
@@ -149,8 +146,8 @@ impl MockBlockParam {
             self.transactions.set_prev_txs_checkpoint(checkpoint);
         }
 
-        mem_tree.apply_run_result(&run_result.write)?;
-        let post_account = mem_tree.finalise_merkle_state()?;
+        mem_tree.finalise()?;
+        let post_account = mem_tree.calculate_merkle_state()?;
         let checkpoint = calculate_state_checkpoint(
             &post_account.merkle_root().unpack(),
             post_account.count().unpack(),
@@ -243,6 +240,7 @@ impl MockBlockParam {
         })
     }
 
+    #[cfg(gw_challenge)]
     pub fn challenge_last_tx_execution(
         &self,
         db: &StoreTransaction,
@@ -436,6 +434,7 @@ impl MockBlockParam {
         })
     }
 
+    #[cfg(gw_challenge)]
     fn build_transaction_execution_verify_context(
         &self,
         mem_tree: &mut MemTree,

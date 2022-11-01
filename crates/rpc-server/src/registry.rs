@@ -32,9 +32,7 @@ use gw_mem_pool::fee::{
     queue::FeeQueue,
     types::{FeeEntry, FeeItem, FeeItemKind, FeeItemSender},
 };
-use gw_polyjuice_sender_recover::{
-    mem_execute_tx_state::MemExecuteTxStateTree, recover::PolyjuiceSenderRecover,
-};
+use gw_polyjuice_sender_recover::recover::PolyjuiceSenderRecover;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::state::history::history_state::RWConfig;
 use gw_store::state::{BlockStateDB, MemStateDB};
@@ -1024,8 +1022,7 @@ async fn execute_l2transaction(
         let db = ctx.store.get_snapshot();
         let tip_block_hash = db.get_last_valid_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
-        let state = ctx.mem_pool_state.load_state_db();
-        let mut state = MemExecuteTxStateTree::new(state);
+        let mut state = ctx.mem_pool_state.load_state_db();
         let mut cycles_pool = CyclesPool::new(
             ctx.mem_pool_config.mem_block.max_cycles_limit,
             ctx.mem_pool_config.mem_block.syscall_cycles.clone(),
@@ -1049,7 +1046,7 @@ async fn execute_l2transaction(
         let raw_tx = tx.raw();
         let run_result = ctx.generator.unchecked_execute_transaction(
             &chain_view,
-            &state,
+            &mut state,
             &block_info,
             &raw_tx,
             100000000,
@@ -1065,7 +1062,7 @@ async fn execute_l2transaction(
             tx_hash: tx_hash.into(),
             block_number: number,
             return_data: run_result.return_data,
-            last_log: run_result.write.logs.pop(),
+            last_log: run_result.logs.pop(),
             exit_code: run_result.exit_code,
         };
 
@@ -1183,9 +1180,8 @@ async fn execute_raw_l2transaction(
         // execute tx
         let run_result = match block_number_opt {
             Some(block_number) => {
-                let history_state =
+                let mut state =
                     BlockStateDB::from_store(db, RWConfig::history_block(block_number))?;
-                let mut state = MemExecuteTxStateTree::new(history_state);
                 let raw_l2tx = eth_recover.mock_sender_if_not_exists_from_raw_registry(
                     raw_l2tx,
                     registry_address_opt,
@@ -1198,7 +1194,7 @@ async fn execute_raw_l2transaction(
 
                 ctx.generator.unchecked_execute_transaction(
                     &chain_view,
-                    &state,
+                    &mut state,
                     &block_info,
                     &raw_l2tx,
                     execute_l2tx_max_cycles,
@@ -1206,8 +1202,7 @@ async fn execute_raw_l2transaction(
                 )?
             }
             None => {
-                let state = ctx.mem_pool_state.load_state_db();
-                let mut state = MemExecuteTxStateTree::new(state);
+                let mut state = ctx.mem_pool_state.load_state_db();
                 let raw_l2tx = eth_recover.mock_sender_if_not_exists_from_raw_registry(
                     raw_l2tx,
                     registry_address_opt,
@@ -1220,7 +1215,7 @@ async fn execute_raw_l2transaction(
 
                 ctx.generator.unchecked_execute_transaction(
                     &chain_view,
-                    &state,
+                    &mut state,
                     &block_info,
                     &raw_l2tx,
                     execute_l2tx_max_cycles,
@@ -1237,7 +1232,7 @@ async fn execute_raw_l2transaction(
             tx_hash,
             block_number,
             return_data: run_result.return_data,
-            last_log: run_result.write.logs.pop(),
+            last_log: run_result.logs.pop(),
             exit_code: run_result.exit_code,
         };
 

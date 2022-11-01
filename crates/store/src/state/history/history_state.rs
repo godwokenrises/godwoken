@@ -221,7 +221,7 @@ impl<Store: KVStore + HistoryStateStore + CodeStore> State for HistoryState<Stor
         Ok(())
     }
 
-    fn finalise_root(&mut self) -> Result<H256, StateError> {
+    fn calculate_root(&self) -> Result<H256, StateError> {
         let root = self.tree.root();
         Ok(*root)
     }

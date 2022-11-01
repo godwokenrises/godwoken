@@ -1,5 +1,5 @@
 use crate::traits::StateExt;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use gw_common::{
     blake2b::new_blake2b,
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
@@ -13,6 +13,7 @@ use gw_store::{
     state::{
         history::history_state::{HistoryState, RWConfig},
         state_db::StateDB,
+        traits::JournalDB,
     },
     traits::chain_store::ChainStore,
     transaction::StoreTransaction,
@@ -32,7 +33,7 @@ use gw_types::{
 
 /// Build genesis block
 pub fn build_genesis(config: &GenesisConfig, secp_data: Bytes) -> Result<GenesisWithGlobalState> {
-    let store = Store::open_tmp()?;
+    let store = Store::open_tmp().with_context(|| "open tmp")?;
     let db = store.begin_transaction();
     build_genesis_from_store(db, config, secp_data)
         .map(|(_db, genesis_with_state)| genesis_with_state)
@@ -118,6 +119,7 @@ pub fn build_genesis_from_store(
     // insert data_hash into tree
     tree.store_data_hash(secp_data_hash.into())?;
 
+    tree.finalise()?;
     let prev_state_checkpoint: [u8; 32] = tree.calculate_state_checkpoint()?.into();
     let submit_txs = SubmitTransactions::new_builder()
         .prev_state_checkpoint(prev_state_checkpoint.pack())
@@ -125,7 +127,8 @@ pub fn build_genesis_from_store(
 
     // calculate post state
     let post_account = {
-        let root = tree.finalise_root()?;
+        tree.finalise()?;
+        let root = tree.calculate_root()?;
         let count = tree.get_account_count()?;
         AccountMerkleState::new_builder()
             .merkle_root(root.pack())

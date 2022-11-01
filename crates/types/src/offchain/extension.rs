@@ -40,13 +40,12 @@ impl TxReceipt {
             .post_state(post_state)
             .read_data_hashes(
                 run_result
-                    .read_data
+                    .read_data_hashes
                     .into_iter()
-                    .map(|(hash, _)| hash.pack())
                     .collect::<Vec<_>>()
                     .pack(),
             )
-            .logs(run_result.write.logs.pack())
+            .logs(run_result.logs.pack())
             .build()
     }
 }

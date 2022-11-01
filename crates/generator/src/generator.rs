@@ -9,7 +9,7 @@ use crate::{
     backend_manage::BackendManage,
     constants::{L2TX_MAX_CYCLES, MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
     error::{BlockError, TransactionValidateError, WithdrawalError},
-    run_result_state::RunResultState,
+    syscalls::RunContext,
     typed_transaction::types::TypedRawTransaction,
     types::vm::VMVersion,
     utils::{get_polyjuice_creator_id, get_tx_type},
@@ -26,28 +26,25 @@ use gw_ckb_hardfork::GLOBAL_VM_VERSION;
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     error::Error as StateError,
-    h256_ext::H256Ext,
     registry_address::RegistryAddress,
-    state::{
-        build_account_field_key, build_account_key, build_sudt_key, State, GW_ACCOUNT_NONCE_TYPE,
-        SUDT_KEY_FLAG_BALANCE, SUDT_TOTAL_SUPPLY_KEY,
-    },
+    state::State,
     H256,
 };
 
 use gw_config::{ContractLogConfig, SyscallCyclesConfig};
 use gw_store::{
-    state::{history::history_state::RWConfig, BlockStateDB},
+    state::{history::history_state::RWConfig, traits::JournalDB, BlockStateDB},
     transaction::StoreTransaction,
 };
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::{ChallengeTargetType, ScriptHashType},
-    offchain::{RollupContext, RunResult, RunResultCycles},
+    offchain::{CycleMeter, RollupContext, RunResult},
     packed::{
         AccountMerkleState, BlockInfo, ChallengeTarget, DepositInfoVec, L2Block, L2Transaction,
-        RawL2Block, RawL2Transaction, TxReceipt, WithdrawalReceipt, WithdrawalRequestExtra,
+        LogItem, RawL2Block, RawL2Transaction, TxReceipt, WithdrawalReceipt,
+        WithdrawalRequestExtra,
     },
     prelude::*,
 };
@@ -142,7 +139,7 @@ impl CyclesPool {
 
 pub struct MachineRunArgs<'a, C, S> {
     chain: &'a C,
-    state: &'a S,
+    state: &'a mut S,
     block_info: &'a BlockInfo,
     raw_tx: &'a RawL2Transaction,
     max_cycles: u64,
@@ -183,10 +180,10 @@ impl Generator {
     }
 
     #[instrument(skip_all, fields(backend = ?args.backend.backend_type))]
-    fn machine_run<S: State + CodeStore, C: ChainView>(
+    fn machine_run<S: State + CodeStore + JournalDB, C: ChainView>(
         &self,
         args: MachineRunArgs<'_, C, S>,
-    ) -> Result<RunResult, TransactionError> {
+    ) -> Result<RunContext, TransactionError> {
         const INVALID_CYCLES_EXIT_CODE: i8 = -1;
 
         let MachineRunArgs {
@@ -199,7 +196,7 @@ impl Generator {
             mut cycles_pool,
         } = args;
 
-        let mut run_result = RunResult::default();
+        let mut context = RunContext::default();
         let used_cycles;
         let exit_code;
         let org_cycles_pool = cycles_pool.as_mut().map(|p| p.clone());
@@ -221,10 +218,9 @@ impl Generator {
                     raw_tx,
                     rollup_context: &self.rollup_context,
                     account_lock_manage: &self.account_lock_manage,
-                    result: &mut run_result,
-                    code_store: state,
                     cycles_pool: &mut cycles_pool,
                     log_buf: &mut sys_log_buf,
+                    context: &mut context,
                 }))
                 .instruction_cycle_func(Box::new(instruction_cycles));
             let default_machine = machine_builder.build();
@@ -252,9 +248,9 @@ impl Generator {
             // Subtract tx execution cycles.
             if let Some(cycles_pool) = &mut cycles_pool {
                 if cycles_pool.consume_cycles(execution_cycles).is_none() {
-                    let cycles = RunResultCycles {
+                    let cycles = CycleMeter {
                         execution: execution_cycles,
-                        r#virtual: run_result.cycles.r#virtual,
+                        r#virtual: context.cycle_meter.r#virtual,
                     };
                     let limit = cycles_pool.limit;
 
@@ -300,10 +296,10 @@ impl Generator {
                 used_cycles
             );
         }
-        run_result.cycles.execution = used_cycles;
-        run_result.exit_code = exit_code;
+        context.cycle_meter.execution = used_cycles;
+        context.exit_code = exit_code;
 
-        Ok(run_result)
+        Ok(context)
     }
 
     /// Check withdrawal request signature
@@ -492,7 +488,11 @@ impl Generator {
             }
         }
 
-        let prev_txs_state = match state.finalise_merkle_state() {
+        // finalise state
+        if let Err(err) = state.finalise() {
+            return ApplyBlockResult::Error(err.into());
+        }
+        let prev_txs_state = match state.calculate_merkle_state() {
             Ok(s) => s,
             Err(err) => {
                 return ApplyBlockResult::Error(err);
@@ -560,7 +560,7 @@ impl Generator {
             // skip whitelist validate since we are validating a committed block
             let run_result = match self.execute_transaction(
                 chain,
-                &state,
+                &mut state,
                 &block_info,
                 &raw_tx,
                 L2TX_MAX_CYCLES,
@@ -584,8 +584,9 @@ impl Generator {
 
             {
                 let now = Instant::now();
-                if let Err(err) = state.apply_run_result(&run_result.write) {
-                    return ApplyBlockResult::Error(err);
+                // finalise tx state
+                if let Err(err) = state.finalise() {
+                    return ApplyBlockResult::Error(err.into());
                 }
                 apply_state_total_ms += now.elapsed().as_millis();
                 let expected_checkpoint = state
@@ -621,7 +622,7 @@ impl Generator {
                 }
 
                 let used_cycles = run_result.cycles.execution;
-                let post_state = match state.finalise_merkle_state() {
+                let post_state = match state.calculate_merkle_state() {
                     Ok(merkle_state) => merkle_state,
                     Err(err) => return ApplyBlockResult::Error(err),
                 };
@@ -638,7 +639,7 @@ impl Generator {
             let post_merkle_root: H256 = raw_block.post_account().merkle_root().unpack();
             let post_merkle_count: u32 = raw_block.post_account().count().unpack();
             assert_eq!(
-                state.finalise_root().expect("check post root"),
+                state.calculate_root().expect("check post root"),
                 post_merkle_root,
                 "post account merkle root must be consistent"
             );
@@ -697,10 +698,10 @@ impl Generator {
 
     /// execute a layer2 tx
     #[instrument(skip_all)]
-    pub fn execute_transaction<S: State + CodeStore, C: ChainView>(
+    pub fn execute_transaction<S: State + CodeStore + JournalDB, C: ChainView>(
         &self,
         chain: &C,
-        state: &S,
+        state: &mut S,
         block_info: &BlockInfo,
         raw_tx: &RawL2Transaction,
         max_cycles: u64,
@@ -719,10 +720,10 @@ impl Generator {
 
     /// execute a layer2 tx, doesn't check exit code
     #[instrument(skip_all, fields(block = block_info.number().unpack(), tx_hash = %raw_tx.hash().pack()))]
-    pub fn unchecked_execute_transaction<S: State + CodeStore, C: ChainView>(
+    pub fn unchecked_execute_transaction<S: State + CodeStore + JournalDB, C: ChainView>(
         &self,
         chain: &C,
-        state: &S,
+        state: &mut S,
         block_info: &BlockInfo,
         raw_tx: &RawL2Transaction,
         max_cycles: u64,
@@ -734,6 +735,11 @@ impl Generator {
             .load_backend(block_info.number().unpack(), state, &script_hash)
             .ok_or(TransactionError::BackendNotFound { script_hash })?;
 
+        let snap = state.snapshot();
+        let sender_id: u32 = raw_tx.from_id().unpack();
+        let nonce_before = state.get_nonce(sender_id)?;
+        state.set_state_tracker(Default::default());
+
         let args = MachineRunArgs {
             chain,
             state,
@@ -744,8 +750,79 @@ impl Generator {
             cycles_pool,
         };
 
-        let run_result: RunResult = self.machine_run(args)?;
-        self.handle_run_result(state, block_info, raw_tx, run_result)
+        let run_context = self.machine_run(args).map_err(|err| {
+            state.revert(snap).expect("revert");
+            err
+        })?;
+
+        if run_context.is_success() {
+            // check sender's nonce is increased by backends
+            let nonce_after = state.get_nonce(sender_id)?;
+            if nonce_after <= nonce_before {
+                log::error!(
+                    "nonce should increased by backends nonce before: {}, nonce after: {}",
+                    nonce_before,
+                    nonce_after
+                );
+                return Err(TransactionError::BackendMustIncreaseNonce);
+            }
+        } else {
+            // handle failure state, this function will revert to snapshot
+            self.handle_failed_transaction(state, snap, nonce_before, block_info, raw_tx)?;
+        }
+
+        let state_tracker = state.take_state_tracker().unwrap();
+
+        // check write data bytes
+        if let Some(data) = state_tracker
+            .write_data()
+            .lock()
+            .unwrap()
+            .values()
+            .find(|data| data.len() > MAX_WRITE_DATA_BYTES_LIMIT)
+        {
+            return Err(TransactionError::ExceededMaxWriteData {
+                max_bytes: MAX_WRITE_DATA_BYTES_LIMIT,
+                used_bytes: data.len(),
+            });
+        }
+        // check read data bytes
+        let read_data_bytes: usize = state_tracker
+            .read_data()
+            .lock()
+            .unwrap()
+            .values()
+            .map(Bytes::len)
+            .sum();
+        if read_data_bytes > MAX_READ_DATA_BYTES_LIMIT {
+            return Err(TransactionError::ExceededMaxReadData {
+                max_bytes: MAX_READ_DATA_BYTES_LIMIT,
+                used_bytes: read_data_bytes,
+            });
+        }
+        let r = RunResult {
+            return_data: run_context.return_data,
+            logs: state.appended_logs().into_iter().cloned().collect(),
+            exit_code: run_context.exit_code,
+            cycles: run_context.cycle_meter,
+            read_data_hashes: state_tracker
+                .read_data()
+                .lock()
+                .unwrap()
+                .keys()
+                .into_iter()
+                .cloned()
+                .collect(),
+            write_data_hashes: state_tracker
+                .write_data()
+                .lock()
+                .unwrap()
+                .keys()
+                .into_iter()
+                .cloned()
+                .collect(),
+        };
+        Ok(r)
     }
 
     pub fn backend_manage(&self) -> &BackendManage {
@@ -765,164 +842,100 @@ impl Generator {
         Ok(self.polyjuice_creator_id.load_full().map(|id| *id))
     }
 
-    // check and handle run_result before return
-    fn handle_run_result<S: State + CodeStore>(
+    // Handle failed transaction
+    fn handle_failed_transaction<S: State + CodeStore + JournalDB>(
         &self,
-        state: &S,
+        state: &mut S,
+        origin_snapshot: usize,
+        nonce_before: u32,
         block_info: &BlockInfo,
         raw_tx: &RawL2Transaction,
-        mut run_result: RunResult,
-    ) -> Result<RunResult, TransactionError> {
+    ) -> Result<(), TransactionError> {
         /// Error code represents EVM internal error
         /// we emit this error from Godwoken side if
         /// Polyjuice failed to generate a system log
         const ERROR_EVM_INTERNAL: i32 = -1;
 
         let sender_id: u32 = raw_tx.from_id().unpack();
-        let nonce_raw_key = build_account_field_key(sender_id, GW_ACCOUNT_NONCE_TYPE);
-        let nonce_before = state.get_nonce(sender_id)?;
 
-        if 0 == run_result.exit_code {
-            // check sender's nonce is increased by backends
-            let nonce_after = {
-                let value = run_result
-                    .write
-                    .write_values
-                    .get(&nonce_raw_key)
-                    .ok_or(TransactionError::BackendMustIncreaseNonce)?;
-                value.to_u32()
-            };
-            if nonce_after <= nonce_before {
-                log::error!(
-                    "nonce should increased by backends nonce before: {}, nonce after: {}",
-                    nonce_before,
-                    nonce_after
-                );
-                return Err(TransactionError::BackendMustIncreaseNonce);
-            }
-        } else {
-            // revert tx
-            let last_run_result_log = run_result.write.logs.pop();
-            run_result.revert_write();
+        // revert tx state
+        let last_run_result_log = state.appended_logs().last().cloned();
+        state.revert(origin_snapshot)?;
 
-            // sender address
-            let payer = {
-                let script_hash = state.get_script_hash(sender_id)?;
-                state
-                    .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &script_hash)?
-                    .ok_or(TransactionError::ScriptHashNotFound)?
-            };
+        // sender address
+        let payer = {
+            let script_hash = state.get_script_hash(sender_id)?;
+            state
+                .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &script_hash)?
+                .ok_or(TransactionError::ScriptHashNotFound)?
+        };
 
-            // block producer address
-            let block_producer =
-                RegistryAddress::from_slice(&block_info.block_producer().raw_data())
-                    .unwrap_or_default();
+        // block producer address
+        let block_producer = RegistryAddress::from_slice(&block_info.block_producer().raw_data())
+            .unwrap_or_default();
 
-            // add charging fee key-values into run result
-            {
-                let sender_sudt_key = {
-                    let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, &payer);
-                    build_account_key(CKB_SUDT_ACCOUNT_ID, &sudt_key)
-                };
-                let block_producer_sudt_key = {
-                    let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, &block_producer);
-                    build_account_key(CKB_SUDT_ACCOUNT_ID, &sudt_key)
-                };
-                let total_supply_key =
-                    build_account_key(CKB_SUDT_ACCOUNT_ID, &SUDT_TOTAL_SUPPLY_KEY);
-                for raw_key in [sender_sudt_key, block_producer_sudt_key, total_supply_key] {
-                    let raw_value = state.get_raw(&raw_key)?;
-                    run_result.read_values.entry(raw_key).or_insert(raw_value);
-                }
-            }
-
-            // handle tx fee
-            let tx_type = get_tx_type(self.rollup_context(), state, raw_tx)?;
-            let typed_tx = TypedRawTransaction::from_tx(raw_tx.to_owned(), tx_type)
-                .expect("Unknown type of tx");
-            let tx_fee = match typed_tx {
-                TypedRawTransaction::EthAddrReg(tx) => tx.consumed(),
-                TypedRawTransaction::Meta(tx) => tx.consumed(),
-                TypedRawTransaction::SimpleUDT(tx) => tx.consumed(),
-                TypedRawTransaction::Polyjuice(ref tx) => {
-                    // push polyjuice system log back to run_result
-                    if let Some(log) = last_run_result_log
-                        .filter(|log| log.service_flag() == GW_LOG_POLYJUICE_SYSTEM.into())
-                    {
-                        run_result.write.logs.push(log);
-                    } else {
+        // handle tx fee
+        let tx_type = get_tx_type(self.rollup_context(), state, raw_tx)?;
+        let typed_tx =
+            TypedRawTransaction::from_tx(raw_tx.to_owned(), tx_type).expect("Unknown type of tx");
+        let tx_fee = match typed_tx {
+            TypedRawTransaction::EthAddrReg(tx) => tx.consumed(),
+            TypedRawTransaction::Meta(tx) => tx.consumed(),
+            TypedRawTransaction::SimpleUDT(tx) => tx.consumed(),
+            TypedRawTransaction::Polyjuice(ref tx) => {
+                // push polyjuice system log back to run_result
+                let system_log = last_run_result_log
+                    .filter(|log| log.service_flag() == GW_LOG_POLYJUICE_SYSTEM.into())
+                    .map(Result::<_, TransactionError>::Ok)
+                    .unwrap_or_else(|| {
                         // generate a system log for polyjuice tx
                         let polyjuice_tx =
                             crate::typed_transaction::types::PolyjuiceTx::new(raw_tx.to_owned());
                         let p = polyjuice_tx.parser().ok_or(TransactionError::NoCost)?;
                         let gas = p.gas();
-                        run_result.write.logs.push(generate_polyjuice_system_log(
+                        Ok(generate_polyjuice_system_log(
                             raw_tx.to_id().unpack(),
                             gas,
                             gas,
                             Default::default(),
                             ERROR_EVM_INTERNAL,
-                        ));
+                        ))
+                    })?;
+                let parser = tx.parser().ok_or(TransactionError::NoCost)?;
+                let gas_used = match read_polyjuice_gas_used(&system_log) {
+                    Some(gas_used) => gas_used,
+                    None => {
+                        log::warn!(
+                            "[gw-generator] failed to parse gas_used, use gas_limit instead"
+                        );
+                        parser.gas()
                     }
-                    let parser = tx.parser().ok_or(TransactionError::NoCost)?;
-                    let gas_used = match read_polyjuice_gas_used(&run_result) {
-                        Some(gas_used) => gas_used,
-                        None => {
-                            log::warn!(
-                                "[gw-generator] failed to parse gas_used, use gas_limit instead"
-                            );
-                            parser.gas()
-                        }
-                    };
-                    gw_types::U256::from(gas_used).checked_mul(parser.gas_price().into())
-                }
+                };
+                // append system log
+                state.append_log(system_log);
+                gw_types::U256::from(gas_used).checked_mul(parser.gas_price().into())
             }
-            .ok_or(TransactionError::NoCost)?;
-
-            let mut run_result_state = RunResultState(&mut run_result);
-
-            run_result_state
-                .pay_fee(&payer, &block_producer, CKB_SUDT_ACCOUNT_ID, tx_fee)
-                .map_err(|err| {
-                    log::error!(
-                        "[gw-generator] failed to pay fee for failure tx, err: {}",
-                        err
-                    );
-                    TransactionError::InsufficientBalance
-                })?;
-
-            // increase sender's nonce
-            let nonce = nonce_before
-                .checked_add(1)
-                .ok_or(TransactionError::NonceOverflow)?;
-            run_result
-                .write
-                .write_values
-                .insert(nonce_raw_key, H256::from_u32(nonce));
         }
+        .ok_or(TransactionError::NoCost)?;
 
-        // check write data bytes
-        if let Some(data) = run_result
-            .write
-            .write_data
-            .values()
-            .find(|data| data.len() > MAX_WRITE_DATA_BYTES_LIMIT)
-        {
-            return Err(TransactionError::ExceededMaxWriteData {
-                max_bytes: MAX_WRITE_DATA_BYTES_LIMIT,
-                used_bytes: data.len(),
-            });
-        }
-        // check read data bytes
-        let read_data_bytes: usize = run_result.read_data.values().map(Bytes::len).sum();
-        if read_data_bytes > MAX_READ_DATA_BYTES_LIMIT {
-            return Err(TransactionError::ExceededMaxReadData {
-                max_bytes: MAX_READ_DATA_BYTES_LIMIT,
-                used_bytes: read_data_bytes,
-            });
-        }
+        // pay tx fee
+        state
+            .pay_fee(&payer, &block_producer, CKB_SUDT_ACCOUNT_ID, tx_fee)
+            .map_err(|err| {
+                log::error!(
+                    "[gw-generator] failed to pay fee for failure tx, err: {}",
+                    err
+                );
+                TransactionError::InsufficientBalance
+            })?;
 
-        Ok(run_result)
+        // increase sender's nonce
+        let nonce = nonce_before
+            .checked_add(1)
+            .ok_or(TransactionError::NonceOverflow)?;
+        state.set_nonce(sender_id, nonce)?;
+
+        Ok(())
     }
 }
 
@@ -947,16 +960,10 @@ fn build_challenge_target(
         .build()
 }
 
-fn read_polyjuice_gas_used(run_result: &RunResult) -> Option<u64> {
+fn read_polyjuice_gas_used(system_log: &LogItem) -> Option<u64> {
     // read polyjuice system log
-    match run_result
-        .write
-        .logs
-        .iter()
-        .find(|item| u8::from(item.service_flag()) == gw_utils::script_log::GW_LOG_POLYJUICE_SYSTEM)
-        .map(gw_utils::script_log::parse_log)
-    {
-        Some(Ok(polyjuice_system_log)) => {
+    match gw_utils::script_log::parse_log(system_log) {
+        Ok(polyjuice_system_log) => {
             if let gw_utils::script_log::GwLog::PolyjuiceSystem { gas_used, .. } =
                 polyjuice_system_log
             {
@@ -967,11 +974,8 @@ fn read_polyjuice_gas_used(run_result: &RunResult) -> Option<u64> {
                 )
             }
         }
-        Some(Err(err)) => {
+        Err(err) => {
             log::warn!("[gw-generator] read_polyjuice_gas_used: an error happend when parsing polyjuice system log, {}", err);
-        }
-        None => {
-            log::warn!("[gw-generator] read_polyjuice_gas_used: Can't find polyjuice system log");
         }
     }
     None
