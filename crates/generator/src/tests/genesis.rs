@@ -36,7 +36,7 @@ fn test_init_genesis() {
     let db = &store.begin_transaction();
     // check init values
     assert_ne!(db.get_block_smt_root().unwrap(), H256::zero());
-    let mut tree = BlockStateDB::from_store(db, RWConfig::readonly()).unwrap();
+    let tree = BlockStateDB::from_store(db, RWConfig::readonly()).unwrap();
     assert!(tree.get_account_count().unwrap() > 0);
 
     // check prev txs state
