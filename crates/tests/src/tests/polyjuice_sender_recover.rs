@@ -87,7 +87,7 @@ async fn test_eth_account_creator() {
         .build_batch_create_tx(&state, recovered_account_scripts)
         .unwrap();
 
-    mem_pool_state.store_state_db(state.into());
+    mem_pool_state.store_state_db(state);
     {
         let mut mem_pool = chain.mem_pool().await;
         mem_pool.push_transaction(batch_create_tx).unwrap();

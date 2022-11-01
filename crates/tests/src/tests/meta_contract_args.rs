@@ -73,7 +73,7 @@ async fn test_backward_compatibility() {
         .signature(sign.pack())
         .build();
 
-    mem_pool_state.store_state_db(state.into());
+    mem_pool_state.store_state_db(state);
     {
         let mut mem_pool = chain.mem_pool().await;
         mem_pool.push_transaction(create_user_tx).unwrap();

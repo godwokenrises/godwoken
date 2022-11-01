@@ -120,7 +120,7 @@ async fn test_block_max_cycles_limit() {
         .build();
     let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
 
-    mem_pool_state.store_state_db(state.into());
+    mem_pool_state.store_state_db(state);
     let err = rpc_server
         .execute_l2transaction(&deploy_tx)
         .await
