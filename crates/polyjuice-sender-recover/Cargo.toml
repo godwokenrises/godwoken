@@ -12,6 +12,7 @@ gw-generator = { path = "../generator" }
 gw-traits = { path = "../traits" }
 gw-types = { path = "../types" }
 gw-utils = { path = "../utils" }
+gw-store = { path = "../store" }
 log = "0.4"
 thiserror = "1.0"
 tracing = { version = "0.1", features = ["attributes"] }

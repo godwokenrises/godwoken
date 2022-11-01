@@ -162,7 +162,7 @@ mod tests {
             self.tree.update(key, value)?;
             Ok(())
         }
-        fn finalise_root(&mut self) -> Result<H256, Error> {
+        fn calculate_root(&self) -> Result<H256, Error> {
             let root = *self.tree.root();
             Ok(root)
         }

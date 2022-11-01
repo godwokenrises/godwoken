@@ -33,11 +33,7 @@ impl SUDTProxyAccountAllowlist {
             return true;
         }
 
-        if run_result.write.new_scripts.is_empty() {
-            return true;
-        }
-
-        for k in run_result.write.write_data.keys() {
+        for k in &run_result.write_data_hashes {
             debug!(
                 "allowlist: from_id: {:?}, code_hash: {:?}",
                 &from_id,

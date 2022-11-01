@@ -1892,6 +1892,7 @@ dependencies = [
  "anyhow",
  "gw-common",
  "gw-generator",
+ "gw-store",
  "gw-traits",
  "gw-types",
  "gw-utils",

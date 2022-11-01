@@ -18,11 +18,12 @@ use gw_common::{
     H256,
 };
 use gw_config::SyscallCyclesConfig;
+use gw_store::state::traits::JournalDB;
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::{RecoverAccount, RollupContext, RunResult},
+    offchain::{CycleMeter, RollupContext},
     packed::{BlockInfo, LogItem, RawL2Transaction, Script},
     prelude::*,
 };
@@ -66,15 +67,27 @@ const SYS_BN_PAIRING: u64 = 3603;
 /* CKB compatible syscalls */
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
+#[derive(Debug, Default)]
+pub struct RunContext {
+    pub cycle_meter: CycleMeter,
+    pub return_data: Bytes,
+    pub exit_code: i8,
+}
+
+impl RunContext {
+    pub fn is_success(&self) -> bool {
+        self.exit_code == 0
+    }
+}
+
 pub(crate) struct L2Syscalls<'a, 'b, S, C> {
     pub(crate) chain: &'a C,
-    pub(crate) state: &'a S,
+    pub(crate) state: &'a mut S,
     pub(crate) rollup_context: &'a RollupContext,
     pub(crate) account_lock_manage: &'a AccountLockManage,
     pub(crate) block_info: &'a BlockInfo,
     pub(crate) raw_tx: &'a RawL2Transaction,
-    pub(crate) code_store: &'a dyn CodeStore,
-    pub(crate) result: &'b mut RunResult,
+    pub(crate) context: &'b mut RunContext,
     pub(crate) cycles_pool: &'b mut Option<&'a mut CyclesPool>,
     pub(crate) log_buf: &'b mut Vec<u8>,
 }
@@ -136,7 +149,7 @@ pub fn store_data<Mac: SupportMachine>(machine: &mut Mac, data: &[u8]) -> Result
     Ok(real_size)
 }
 
-impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
+impl<'a, 'b, S: State + CodeStore + JournalDB, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
     for L2Syscalls<'a, 'b, S, C>
 {
     fn initialize(&mut self, _machine: &mut Mac) -> Result<(), VMError> {
@@ -149,13 +162,16 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
         if let Some(cycles_pool) = self.cycles_pool {
             let syscall_cycles = Self::get_syscall_cycles(code, cycles_pool.syscall_config());
             if 0 != syscall_cycles {
-                self.result.cycles.r#virtual =
-                    self.result.cycles.r#virtual.saturating_add(syscall_cycles);
+                self.context.cycle_meter.r#virtual = self
+                    .context
+                    .cycle_meter
+                    .r#virtual
+                    .saturating_add(syscall_cycles);
 
                 // Subtract cycles to interrupt execution eariler
                 let execution_and_virtual = machine
                     .cycles()
-                    .saturating_add(self.result.cycles.r#virtual);
+                    .saturating_add(self.context.cycle_meter.r#virtual);
                 if cycles_pool.consume_cycles(syscall_cycles).is_none()
                     || execution_and_virtual > cycles_pool.limit()
                 {
@@ -170,7 +186,9 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                 let key = load_data_h256(machine, key_addr)?;
                 let value_addr = machine.registers()[A1].to_u64();
                 let value = load_data_h256(machine, value_addr)?;
-                self.result.write.write_values.insert(key, value);
+                self.state
+                    .update_raw(key, value)
+                    .map_err(|err| VMError::Unexpected(format!("store kv error: {}", err)))?;
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
@@ -178,7 +196,10 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                 let key_addr = machine.registers()[A0].to_u64();
                 let key = load_data_h256(machine, key_addr)?;
                 let value_addr = machine.registers()[A1].to_u64();
-                let value = self.get_raw(&key)?;
+                let value = self
+                    .state
+                    .get_raw(&key)
+                    .map_err(|err| VMError::Unexpected(format!("get raw: {}", err)))?;
                 machine
                     .memory_mut()
                     .store_bytes(value_addr, value.as_slice())?;
@@ -192,7 +213,7 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                     return Err(VMError::Unexpected("exceeded max return data".to_owned()));
                 }
                 let data = load_bytes(machine, data_addr, len as usize)?;
-                self.result.return_data = data.into();
+                self.context.return_data = data.into();
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
@@ -280,15 +301,24 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                 }
 
                 // Same logic from State::create_account()
-                let id = self.get_account_count()?;
-                self.result.write.write_values.insert(
-                    build_account_field_key(id, GW_ACCOUNT_NONCE_TYPE),
-                    H256::zero(),
-                );
-                self.result.write.write_values.insert(
-                    build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH_TYPE),
-                    script_hash.into(),
-                );
+                let id = self
+                    .state
+                    .get_account_count()
+                    .map_err(|err| VMError::Unexpected(format!("get account count: {}", err)))?;
+                self.state
+                    .update_raw(
+                        build_account_field_key(id, GW_ACCOUNT_NONCE_TYPE),
+                        H256::zero(),
+                    )
+                    .map_err(|err| VMError::Unexpected(format!("store nonce error: {}", err)))?;
+                self.state
+                    .update_raw(
+                        build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH_TYPE),
+                        script_hash.into(),
+                    )
+                    .map_err(|err| {
+                        VMError::Unexpected(format!("store script hash error: {}", err))
+                    })?;
                 // script hash to id
                 let script_hash_to_id_value: H256 = {
                     let mut buf: [u8; 32] = H256::from_u32(id).into();
@@ -296,16 +326,19 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                     buf[4] = 1;
                     buf.into()
                 };
-                self.result.write.write_values.insert(
-                    build_script_hash_to_account_id_key(&script_hash[..]),
-                    script_hash_to_id_value,
-                );
+                self.state
+                    .update_raw(
+                        build_script_hash_to_account_id_key(&script_hash[..]),
+                        script_hash_to_id_value,
+                    )
+                    .map_err(|err| {
+                        VMError::Unexpected(format!("store script hash to id error: {}", err))
+                    })?;
                 // insert script
-                self.result
-                    .write
-                    .new_scripts
-                    .insert(script_hash.into(), script);
-                self.set_account_count(id + 1);
+                self.state.insert_script(script_hash.into(), script);
+                self.state
+                    .set_account_count(id + 1)
+                    .map_err(|err| VMError::Unexpected(format!("set acccount: {}", err)))?;
                 machine
                     .memory_mut()
                     .store32(&account_id_addr, &Mac::REG::from_u32(id))?;
@@ -337,7 +370,7 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                     machine.set_register(A0, Mac::REG::from_i8(GW_ERROR_ACCOUNT_NOT_FOUND));
                     return Ok(true);
                 }
-                let script = self.get_script(&script_hash).ok_or_else(|| {
+                let script = self.state.get_script(&script_hash).ok_or_else(|| {
                     let err_msg = format!(
                         "syscall error: script not found by script hash: {:?}",
                         script_hash
@@ -361,22 +394,18 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                 hasher.finalize(&mut data_hash);
                 // insert data hash into SMT
                 let data_hash_key = build_data_hash_key(&data_hash);
-                self.result
-                    .write
-                    .write_values
-                    .insert(data_hash_key, H256::one());
+                self.state
+                    .update_raw(data_hash_key, H256::one())
+                    .map_err(|err| VMError::Unexpected(format!("store data: {}", err)))?;
                 // write data
-                self.result
-                    .write
-                    .write_data
-                    .insert(data_hash.into(), data.into());
+                self.state.insert_data(data_hash.into(), data.into());
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
             SYS_LOAD_DATA => {
                 let data_hash_addr = machine.registers()[A3].to_u64();
                 let data_hash = load_data_h256(machine, data_hash_addr)?;
-                let data = match self.get_data(&data_hash) {
+                let data = match self.state.get_data(&data_hash) {
                     Some(data) => data,
                     None => {
                         machine.set_register(A0, Mac::REG::from_i8(GW_ERROR_NOT_FOUND));
@@ -384,7 +413,6 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                     }
                 };
                 store_data(machine, data.as_ref())?;
-                self.result.read_data.insert(data_hash, data);
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
@@ -437,13 +465,6 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                             .args(Bytes::from(script_args).pack())
                             .build();
 
-                        let recover_account = RecoverAccount {
-                            message: msg,
-                            signature,
-                            lock_script: account_script.clone(),
-                        };
-                        self.result.recover_accounts.insert(recover_account);
-
                         machine.memory_mut().store64(
                             &script_len_addr,
                             &Mac::REG::from_u64(account_script.as_slice().len() as u64),
@@ -469,7 +490,7 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
                 let data_addr = machine.registers()[A3].to_u64();
 
                 let data = load_bytes(machine, data_addr, data_len as usize)?;
-                self.result.write.logs.push(
+                self.state.append_log(
                     LogItem::new_builder()
                         .account_id(account_id.pack())
                         .service_flag(service_flag.into())
@@ -609,61 +630,9 @@ impl<'a, 'b, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
 }
 
 impl<'a, 'b, S: State, C: ChainView> L2Syscalls<'a, 'b, S, C> {
-    fn get_raw(&mut self, key: &H256) -> Result<H256, VMError> {
-        let value = match self.result.write.write_values.get(key) {
-            Some(value) => *value,
-            None => {
-                let tree_value = self
-                    .state
-                    .get_raw(key)
-                    .map_err(|err| VMError::Unexpected(err.to_string()))?;
-                self.result.read_values.insert(*key, tree_value);
-                tree_value
-            }
-        };
-        Ok(value)
-    }
-    fn get_account_count(&self) -> Result<u32, VMError> {
-        if let Some(id) = self.result.write.account_count {
-            Ok(id)
-        } else {
-            self.state.get_account_count().map_err(|err| {
-                let err_msg = format!("syscall error: get account count : {:?}", err);
-                log::error!("{}", err_msg);
-                VMError::Unexpected(err_msg)
-            })
-        }
-    }
-    fn set_account_count(&mut self, count: u32) {
-        self.result.write.account_count = Some(count);
-    }
-    fn get_script(&mut self, script_hash: &H256) -> Option<Script> {
-        let opt_script = self
-            .result
-            .write
-            .new_scripts
-            .get(script_hash)
-            .cloned()
-            .or_else(|| self.code_store.get_script(script_hash));
-
-        if let Some(ref script) = opt_script {
-            self.result
-                .get_scripts
-                .insert(*script_hash, script.to_owned());
-        }
-
-        opt_script
-    }
-    fn get_data(&self, data_hash: &H256) -> Option<Bytes> {
-        self.result
-            .write
-            .write_data
-            .get(data_hash)
-            .cloned()
-            .or_else(|| self.code_store.get_data(data_hash))
-    }
     fn get_script_hash(&mut self, id: u32) -> Result<H256, VMError> {
         let value = self
+            .state
             .get_raw(&build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH_TYPE))
             .map_err(|err| {
                 let err_msg = format!("syscall error: get script hash by account id : {:?}", err);
@@ -677,6 +646,7 @@ impl<'a, 'b, S: State, C: ChainView> L2Syscalls<'a, 'b, S, C> {
         script_hash: &H256,
     ) -> Result<Option<u32>, VMError> {
         let value = self
+            .state
             .get_raw(&build_script_hash_to_account_id_key(script_hash.as_slice()))
             .map_err(|err| {
                 let err_msg = format!("syscall error: get account id by script hash : {:?}", err);

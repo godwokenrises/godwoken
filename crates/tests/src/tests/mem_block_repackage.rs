@@ -57,11 +57,11 @@ async fn test_repackage_mem_block() {
 
     {
         let snap = chain.store().get_snapshot();
-        let mut state = MemStateDB::from_store(snap).unwrap();
+        let state = MemStateDB::from_store(snap).unwrap();
         let tip_block = chain.store().get_tip_block().unwrap();
 
         assert_eq!(
-            state.finalise_merkle_state().unwrap().as_slice(),
+            state.calculate_merkle_state().unwrap().as_slice(),
             tip_block.raw().post_account().as_slice()
         );
     }

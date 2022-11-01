@@ -1,5 +1,5 @@
 use crate::{
-    state::{history::history_state::RWConfig, BlockStateDB},
+    state::{history::history_state::RWConfig, traits::JournalDB, BlockStateDB},
     traits::{chain_store::ChainStore, kv_store::KVStoreWrite},
     transaction::StoreTransaction,
     Store,
@@ -13,13 +13,14 @@ use gw_types::{
     prelude::{Builder, Entity, Pack, Unpack},
 };
 
-fn build_block(
-    state: &mut impl State,
+fn build_block<S: State + JournalDB>(
+    state: &mut S,
     block_number: u64,
     prev_txs_state_checkpoint: H256,
 ) -> L2Block {
+    state.finalise().unwrap();
     let post_state = AccountMerkleState::new_builder()
-        .merkle_root(state.finalise_root().unwrap().pack())
+        .merkle_root(state.calculate_root().unwrap().pack())
         .count(state.get_account_count().unwrap().pack())
         .build();
     L2Block::new_builder()

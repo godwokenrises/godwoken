@@ -1,7 +1,5 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::cancel_challenge::LoadDataStrategy;
-
 use anyhow::{anyhow, bail, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
 use gw_common::registry_address::RegistryAddress;
@@ -12,9 +10,9 @@ use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::state::MemStateDB;
 use gw_store::transaction::StoreTransaction;
 use gw_types::core::DepType;
-use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext, RunResult};
+use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext};
 use gw_types::packed::{
-    CellDep, CellInput, L2Block, L2Transaction, OutPoint, OutPointVec, WithdrawalRequestExtra,
+    CellDep, CellInput, L2Block, OutPoint, OutPointVec, WithdrawalRequestExtra,
 };
 use gw_types::prelude::{Builder, Entity, Unpack};
 use gw_utils::wallet::Wallet;
@@ -314,6 +312,7 @@ impl OffChainCancelChallengeValidator {
         self.block_param.set_prev_txs_checkpoint(checkpoint)
     }
 
+    #[cfg(gw_challenge)]
     pub fn verify_transaction(
         &mut self,
         db: &StoreTransaction,
@@ -502,6 +501,7 @@ struct MarginOfMockBlockSafity {
     prev_raw_block_size: u64,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum RawBlockFlag {
     New,

@@ -24,7 +24,10 @@ impl State for DummyState {
         self.tree.update(key, value)?;
         Ok(())
     }
-    fn finalise_root(&mut self) -> Result<H256, Error> {
+    fn finalise(&mut self) -> Result<(), Error> {
+        Err(Error::Store)
+    }
+    fn calculate_root(&self) -> Result<H256, Error> {
         let root = *self.tree.root();
         Ok(root)
     }

@@ -7,13 +7,16 @@
 //! - FileDB (RocksDB)
 //!
 
-use std::{collections::HashSet, sync::Mutex};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Mutex,
+};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
-    packed,
+    packed::{self, LogItem},
     prelude::{Pack, Unpack},
 };
 
@@ -29,6 +32,7 @@ use crate::{
 use super::{
     history::history_state::RWConfig,
     overlay::{mem_state::MemStateTree, mem_store::MemStore},
+    traits::JournalDB,
     BlockStateDB, MemStateDB,
 };
 
@@ -38,6 +42,7 @@ pub enum JournalEntry {
     SetAccountCount { prev_count: u32 },
     InsertScript { script_hash: H256, prev_exist: bool },
     InsertData { data_hash: H256, prev_exist: bool },
+    AppendLog { index: usize },
 }
 
 impl JournalEntry {
@@ -67,6 +72,10 @@ impl JournalEntry {
                 if !prev_exist {
                     state_db.dirty_data.remove(&data_hash);
                 }
+            }
+            AppendLog { index } => {
+                assert_eq!(state_db.dirty_logs.len(), index + 1);
+                state_db.dirty_logs.pop_back();
             }
         }
     }
@@ -110,6 +119,8 @@ pub struct Revision {
 #[derive(Debug, Default)]
 pub struct StateTracker {
     touched_keys: Mutex<HashSet<H256>>,
+    write_data: Mutex<HashMap<H256, Bytes>>,
+    read_data: Mutex<HashMap<H256, Bytes>>,
 }
 
 impl StateTracker {
@@ -118,14 +129,17 @@ impl StateTracker {
         &self.touched_keys
     }
 
-    /// Record a key in the tracker
-    pub fn touch_key(&self, key: &H256) {
-        self.touched_keys.lock().unwrap().insert(*key);
+    pub fn write_data(&self) -> &Mutex<HashMap<H256, Bytes>> {
+        &self.write_data
+    }
+
+    pub fn read_data(&self) -> &Mutex<HashMap<H256, Bytes>> {
+        &self.read_data
     }
 
     /// Record a key in the tracker
-    pub fn clear(&mut self) {
-        self.touched_keys.lock().unwrap().clear();
+    pub fn touch_key(&self, key: &H256) {
+        self.touched_keys.lock().unwrap().insert(*key);
     }
 }
 
@@ -146,6 +160,8 @@ pub struct StateDB<S> {
     dirty_scripts: im::HashMap<H256, packed::Script>,
     /// dirty data
     dirty_data: im::HashMap<H256, Bytes>,
+    /// dirty logs
+    dirty_logs: im::Vector<LogItem>,
     /// state tracker
     state_tracker: Option<StateTracker>,
     /// last state root
@@ -163,6 +179,7 @@ impl<S: Clone> Clone for StateDB<S> {
             dirty_account_count: self.dirty_account_count,
             dirty_scripts: self.dirty_scripts.clone(),
             dirty_data: self.dirty_data.clone(),
+            dirty_logs: self.dirty_logs.clone(),
             state_tracker: None,
             last_state_root: self.last_state_root,
         }
@@ -207,8 +224,7 @@ impl<Store: ChainStore + HistoryStateStore + CodeStore + KVStore> BlockStateDB<S
 }
 
 impl<S: State + CodeStore> StateDB<S> {
-    pub fn new(mut state: S) -> Self {
-        let last_state_root = state.finalise_root().expect("can't get state root");
+    pub fn new(state: S) -> Self {
         Self {
             state,
             journal: Journal::default(),
@@ -218,8 +234,9 @@ impl<S: State + CodeStore> StateDB<S> {
             dirty_account_count: Default::default(),
             dirty_data: Default::default(),
             dirty_scripts: Default::default(),
+            dirty_logs: Default::default(),
             state_tracker: None,
-            last_state_root,
+            last_state_root: H256::default(),
         }
     }
 
@@ -274,14 +291,38 @@ impl<S: State + CodeStore> StateDB<S> {
         Ok(())
     }
 
-    /// Return last state root
-    /// Invoke `calculate_root` will update this value
     pub fn last_state_root(&self) -> H256 {
         self.last_state_root
     }
 
+    pub(crate) fn is_dirty(&self) -> bool {
+        !self.journal.is_empty()
+            || !self.revisions.is_empty()
+            || self.dirty_account_count.is_some()
+            || !self.dirty_state.is_empty()
+            || !self.dirty_scripts.is_empty()
+            || !self.dirty_data.is_empty()
+            || !self.dirty_logs.is_empty()
+    }
+
+    /// clear journal and dirty
+    fn clear_journal_and_dirty(&mut self) {
+        // clear journal
+        self.journal.clear();
+        // clear revisions
+        self.revisions.clear();
+        // clear dirties
+        self.dirty_account_count = None;
+        self.dirty_state.clear();
+        self.dirty_scripts.clear();
+        self.dirty_data.clear();
+        self.dirty_logs.clear();
+    }
+}
+
+impl<S: State + CodeStore> JournalDB for StateDB<S> {
     /// create snapshot
-    pub fn snapshot(&mut self) -> usize {
+    fn snapshot(&mut self) -> usize {
         let id = self.next_revision_id;
         self.next_revision_id += 1;
         self.revisions.push_back(Revision {
@@ -292,12 +333,15 @@ impl<S: State + CodeStore> StateDB<S> {
     }
 
     /// revert to a snapshot
-    pub fn revert(&mut self, id: usize) -> Result<()> {
+    fn revert(&mut self, id: usize) -> Result<(), StateError> {
         // find revision
         let rev_index = self
             .revisions
             .binary_search_by_key(&id, |r| r.id)
-            .map_err(|_id| anyhow!("Invalid revision id"))?;
+            .map_err(|_id| {
+                log::error!("invalid revision: {}", id);
+                StateError::Store
+            })?;
         let rev = &self.revisions[rev_index];
 
         // replay to revert journal
@@ -310,9 +354,11 @@ impl<S: State + CodeStore> StateDB<S> {
         self.revisions.truncate(rev_index);
         Ok(())
     }
-
     /// write dirty state to DB
-    pub fn finalise(&mut self) -> Result<()> {
+    fn finalise(&mut self) -> Result<(), StateError> {
+        if !self.is_dirty() {
+            return Ok(());
+        }
         // write account count
         if let Some(count) = self.dirty_account_count {
             self.state.set_account_count(count)?;
@@ -330,42 +376,32 @@ impl<S: State + CodeStore> StateDB<S> {
             self.state.insert_data(*data_hash, data.to_owned());
         }
         // clear
-        self.clear_journal_and_dirty()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn is_dirty(&self) -> bool {
-        self.journal.len() != 0
-            || !self.revisions.is_empty()
-            || self.dirty_account_count.is_some()
-            || !self.dirty_state.is_empty()
-            || !self.dirty_scripts.is_empty()
-            || !self.dirty_data.is_empty()
-    }
-
-    /// clear journal and dirty
-    fn clear_journal_and_dirty(&mut self) -> Result<()> {
-        // clear journal
-        self.journal.clear();
-        // clear revisions
-        self.revisions.clear();
-        // clear dirties
-        self.dirty_account_count = None;
-        self.dirty_state.clear();
-        self.dirty_scripts.clear();
-        self.dirty_data.clear();
+        self.clear_journal_and_dirty();
+        // update last state root
+        self.last_state_root = self.calculate_root()?;
         Ok(())
     }
 
-    pub fn set_state_tracker(&mut self, tracker: StateTracker) {
+    fn append_log(&mut self, log: packed::LogItem) {
+        self.journal.push(JournalEntry::AppendLog {
+            index: self.dirty_logs.len(),
+        });
+        self.dirty_logs.push_back(log);
+    }
+
+    fn appended_logs(&self) -> &im::Vector<packed::LogItem> {
+        &self.dirty_logs
+    }
+
+    fn set_state_tracker(&mut self, tracker: StateTracker) {
         self.state_tracker = Some(tracker);
     }
 
-    pub fn state_tracker(&self) -> Option<&StateTracker> {
+    fn state_tracker(&self) -> Option<&StateTracker> {
         self.state_tracker.as_ref()
     }
 
-    pub fn take_state_tracker(&mut self) -> Option<StateTracker> {
+    fn take_state_tracker(&mut self) -> Option<StateTracker> {
         self.state_tracker.take()
     }
 }
@@ -408,15 +444,13 @@ impl<S: State + CodeStore> State for StateDB<S> {
         Ok(())
     }
 
-    /// Finalise in-memory dirty state and calculate root
-    fn finalise_root(&mut self) -> Result<H256, StateError> {
+    /// calculate root
+    fn calculate_root(&self) -> Result<H256, StateError> {
         // finalise dirty state
-        self.finalise().map_err(|err| {
-            log::error!("finalise error: {}", err);
-            StateError::Store
-        })?;
-        self.last_state_root = self.state.finalise_root()?;
-        Ok(self.last_state_root)
+        if self.is_dirty() {
+            return Err(StateError::Store);
+        }
+        self.state.calculate_root()
     }
 }
 
@@ -437,6 +471,13 @@ impl<S: CodeStore> CodeStore for StateDB<S> {
     }
 
     fn insert_data(&mut self, data_hash: H256, code: Bytes) {
+        if let Some(state_tracker) = self.state_tracker.as_ref() {
+            state_tracker
+                .write_data()
+                .lock()
+                .unwrap()
+                .insert(data_hash, code.clone());
+        }
         self.journal.push(JournalEntry::InsertData {
             data_hash,
             prev_exist: self.get_data(&data_hash).is_some(),
@@ -445,10 +486,21 @@ impl<S: CodeStore> CodeStore for StateDB<S> {
     }
 
     fn get_data(&self, data_hash: &H256) -> Option<Bytes> {
-        if let Some(data) = self.dirty_data.get(data_hash) {
-            return Some(data.to_owned());
+        let data = self
+            .dirty_data
+            .get(data_hash)
+            .cloned()
+            .or_else(|| self.state.get_data(data_hash));
+        if let Some(data) = data.as_ref() {
+            if let Some(state_tracker) = self.state_tracker.as_ref() {
+                state_tracker
+                    .read_data()
+                    .lock()
+                    .unwrap()
+                    .insert(*data_hash, data.clone());
+            }
         }
-        self.state.get_data(data_hash)
+        data
     }
 }
 
@@ -462,6 +514,7 @@ mod tests {
         snapshot::StoreSnapshot,
         state::{
             overlay::{mem_state::MemStateTree, mem_store::MemStore},
+            traits::JournalDB,
             MemStateDB,
         },
         Store,
@@ -550,7 +603,7 @@ mod tests {
         assert!(state.is_dirty());
 
         // clear journal and dirty state
-        state.clear_journal_and_dirty().unwrap();
+        state.clear_journal_and_dirty();
         assert!(!state.is_dirty());
         // the dirty state is cleared
         assert!(cmp_dirty_state(&mem_0, &state));

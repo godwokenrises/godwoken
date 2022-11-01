@@ -4,8 +4,9 @@ use gw_common::ckb_decimal::{CKBCapacity, CKB_DECIMAL_POW_EXP};
 use gw_common::registry::context::RegistryContext;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, CKB_SUDT_SCRIPT_ARGS, H256};
+use gw_store::state::traits::JournalDB;
 use gw_traits::CodeStore;
-use gw_types::offchain::{RollupContext, RunResultWriteState};
+use gw_types::offchain::RollupContext;
 use gw_types::U256;
 use gw_types::{
     core::ScriptHashType,
@@ -16,8 +17,7 @@ use tracing::instrument;
 
 pub trait StateExt {
     fn create_account_from_script(&mut self, script: Script) -> Result<u32, Error>;
-    fn finalise_merkle_state(&mut self) -> Result<AccountMerkleState, Error>;
-    fn apply_run_result(&mut self, write: &RunResultWriteState) -> Result<(), Error>;
+    fn calculate_merkle_state(&self) -> Result<AccountMerkleState, Error>;
     fn apply_deposit_request(
         &mut self,
         ctx: &RollupContext,
@@ -38,25 +38,9 @@ pub trait StateExt {
         sudt_id: u32,
         amount: U256,
     ) -> Result<(), Error>;
-
-    fn apply_withdrawal_requests(
-        &mut self,
-        ctx: &RollupContext,
-        block_producer: &RegistryAddress,
-        withdrawal_requests: &[WithdrawalRequest],
-    ) -> Result<Vec<WithdrawalReceipt>, Error> {
-        let mut receipts = Vec::with_capacity(withdrawal_requests.len());
-
-        for request in withdrawal_requests {
-            let receipt = self.apply_withdrawal_request(ctx, block_producer, request)?;
-            receipts.push(receipt);
-        }
-
-        Ok(receipts)
-    }
 }
 
-impl<S: State + CodeStore> StateExt for S {
+impl<S: State + CodeStore + JournalDB> StateExt for S {
     fn create_account_from_script(&mut self, script: Script) -> Result<u32, Error> {
         // Godwoken requires account's script using ScriptHashType::Type
         if script.hash_type() != ScriptHashType::Type.into() {
@@ -68,34 +52,15 @@ impl<S: State + CodeStore> StateExt for S {
         Ok(id)
     }
 
-    /// Finalise and return current merkle state
-    /// See finalise for drtails
-    fn finalise_merkle_state(&mut self) -> Result<AccountMerkleState, Error> {
-        let account_root = self.finalise_root()?;
+    /// return current merkle state
+    fn calculate_merkle_state(&self) -> Result<AccountMerkleState, Error> {
+        let account_root = self.calculate_root()?;
         let account_count = self.get_account_count()?;
         let merkle_state = AccountMerkleState::new_builder()
             .merkle_root(account_root.pack())
             .count(account_count.pack())
             .build();
         Ok(merkle_state)
-    }
-
-    #[instrument(skip_all)]
-    fn apply_run_result(&mut self, write: &RunResultWriteState) -> Result<(), Error> {
-        for (k, v) in &write.write_values {
-            self.update_raw(*k, *v)?;
-        }
-        if let Some(id) = write.account_count {
-            self.set_account_count(id)?;
-        }
-        for (script_hash, script) in &write.new_scripts {
-            self.insert_script(*script_hash, script.to_owned());
-        }
-        for (data_hash, data) in &write.write_data {
-            self.insert_data(*data_hash, data.clone());
-        }
-
-        Ok(())
     }
 
     fn pay_fee(
@@ -256,7 +221,8 @@ impl<S: State + CodeStore> StateExt for S {
         self.set_nonce(id, new_nonce)?;
 
         let post_state = {
-            let account_root = self.finalise_root()?;
+            self.finalise()?;
+            let account_root = self.calculate_root()?;
             let account_count = self.get_account_count()?;
             AccountMerkleState::new_builder()
                 .merkle_root(account_root.pack())

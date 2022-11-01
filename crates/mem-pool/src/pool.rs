@@ -26,7 +26,7 @@ use gw_generator::{
 use gw_store::{
     chain_view::ChainView,
     mem_pool_state::{self, MemPoolState, Shared},
-    state::MemStateDB,
+    state::{traits::JournalDB, MemStateDB},
     traits::chain_store::ChainStore,
     transaction::StoreTransaction,
     Store,
@@ -947,13 +947,14 @@ impl MemPool {
             state.apply_deposit_request(self.generator.rollup_context(), &deposit)?;
             let touched_keys = state.state_tracker().unwrap().touched_keys();
             touched_keys_vec.push(touched_keys.lock().unwrap().drain().collect());
-            post_states.push(state.finalise_merkle_state()?);
+            state.finalise()?;
+            post_states.push(state.calculate_merkle_state()?);
         }
         state.take_state_tracker();
         // calculate state after withdrawals & deposits
         let prev_state_checkpoint = state.calculate_state_checkpoint()?;
         log::debug!("[finalize deposits] deposits: {} state root: {}, account count: {}, prev_state_checkpoint {}",
-         deposit_cells.len(), hex::encode(state.finalise_root()?.as_slice()), state.get_account_count()?, hex::encode(prev_state_checkpoint.as_slice()));
+         deposit_cells.len(), hex::encode(state.calculate_root()?.as_slice()), state.get_account_count()?, hex::encode(prev_state_checkpoint.as_slice()));
 
         self.mem_block.push_deposits(
             deposit_cells,
@@ -1028,13 +1029,15 @@ impl MemPool {
             }
 
             // update the state
+            let snap = state.snapshot();
             match state.apply_withdrawal_request(
                 self.generator.rollup_context(),
                 self.mem_block.block_producer(),
                 &withdrawal.request(),
             ) {
                 Ok(_) => {
-                    let post_state = state.finalise_merkle_state()?;
+                    state.finalise()?;
+                    let post_state = state.calculate_merkle_state()?;
                     let touched_keys = state.state_tracker().unwrap().touched_keys();
 
                     let withdrawal_hash = withdrawal.hash().into();
@@ -1061,6 +1064,7 @@ impl MemPool {
                 }
                 Err(err) => {
                     log::info!("[mem-pool] withdrawal execution failed : {}", err);
+                    state.revert(snap)?;
                     unused_withdrawals.push(withdrawal_hash);
                 }
             }
@@ -1120,14 +1124,21 @@ impl MemPool {
 
         // execute tx
         let raw_tx = tx.raw();
-        let run_result = generator.unchecked_execute_transaction(
-            &chain_view,
-            state,
-            block_info,
-            &raw_tx,
-            L2TX_MAX_CYCLES,
-            Some(cycles_pool),
-        )?;
+        let snap = state.snapshot();
+        let run_result = generator
+            .unchecked_execute_transaction(
+                &chain_view,
+                state,
+                block_info,
+                &raw_tx,
+                L2TX_MAX_CYCLES,
+                Some(cycles_pool),
+            )
+            .map_err(|err| {
+                // revert state
+                state.revert(snap).unwrap();
+                err
+            })?;
 
         // check account id of sudt proxy contract creator is from whitelist
         {
@@ -1138,22 +1149,20 @@ impl MemPool {
                 .get_sudt_proxy_account_whitelist()
                 .validate(&run_result, from_id)
             {
+                // revert state
+                state.revert(snap)?;
                 return Err(TransactionError::InvalidSUDTProxyCreatorAccount {
                     account_id: from_id,
                 }
                 .into());
             }
         }
-        // apply run result
-        let t = Instant::now();
-        state.apply_run_result(&run_result.write)?;
-        log::debug!(
-            "[finalize tx] apply run result: {}ms",
-            t.elapsed().as_millis()
-        );
+
+        state.finalise()?;
+        // finalise dirty state
+        let merkle_state = state.calculate_merkle_state()?;
 
         // generate tx receipt
-        let merkle_state = state.finalise_merkle_state()?;
         let tx_receipt =
             TxReceipt::build_receipt(tx.witness_hash().into(), run_result, merkle_state);
 

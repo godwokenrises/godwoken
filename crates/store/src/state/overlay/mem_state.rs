@@ -41,17 +41,6 @@ impl MemStateTree {
         &self.tree
     }
 
-    // /// submit tree changes into memory block
-    // /// notice, this function do not commit the DBTransaction
-    // pub fn submit_tree_to_mem_block(&self) {
-    //     self.db()
-    //         .set_mem_block_account_smt_root(*self.tree.root())
-    //         .expect("set smt root");
-    //     self.db()
-    //         .set_mem_block_account_count(self.account_count)
-    //         .expect("set smt root");
-    // }
-
     fn db(&self) -> &SMTStateStore<MemStore> {
         self.tree.store()
     }
@@ -86,7 +75,7 @@ impl State for MemStateTree {
         Ok(())
     }
 
-    fn finalise_root(&mut self) -> Result<H256, StateError> {
+    fn calculate_root(&self) -> Result<H256, StateError> {
         let root = self.tree.root();
         Ok(*root)
     }

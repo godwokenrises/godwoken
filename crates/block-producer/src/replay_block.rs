@@ -8,6 +8,7 @@ use gw_generator::constants::L2TX_MAX_CYCLES;
 use gw_generator::traits::StateExt;
 use gw_generator::Generator;
 use gw_store::chain_view::ChainView;
+use gw_store::state::traits::JournalDB;
 use gw_store::state::MemStateDB;
 use gw_store::traits::chain_store::ChainStore;
 use gw_store::Store;
@@ -40,7 +41,7 @@ impl ReplayBlock {
             let parent_post_state = parent_block.raw().post_account();
             assert_eq!(
                 parent_post_state,
-                state.finalise_merkle_state()?,
+                state.calculate_merkle_state()?,
                 "merkle state should equals to parent block"
             );
         };
@@ -107,16 +108,16 @@ impl ReplayBlock {
 
             // build call context
             // NOTICE users only allowed to send HandleMessage CallType txs
-            let run_result = generator.execute_transaction(
+            generator.execute_transaction(
                 &chain_view,
-                &state,
+                &mut state,
                 &block_info,
                 &raw_tx,
                 L2TX_MAX_CYCLES,
                 None,
             )?;
 
-            state.apply_run_result(&run_result.write)?;
+            state.finalise()?;
             let expected_checkpoint = state.calculate_state_checkpoint()?;
             let checkpoint_index = withdrawals.len() + tx_index;
             let block_checkpoint: H256 = match state_checkpoint_list.get(checkpoint_index) {

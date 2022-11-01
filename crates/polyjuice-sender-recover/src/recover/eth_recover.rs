@@ -5,6 +5,7 @@ use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, registry_address::RegistryAddress, state::State, H256,
 };
 use gw_generator::{error::TransactionError, typed_transaction::types::TypedRawTransaction};
+use gw_store::state::{traits::JournalDB, MemStateDB};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
@@ -16,7 +17,7 @@ use gw_types::{
 use gw_utils::wallet::Wallet;
 use tracing::instrument;
 
-use crate::mem_execute_tx_state::MemExecuteTxStateTree;
+use crate::mem_execute_tx_state::mock_account;
 
 use super::{
     error::PolyjuiceTxSenderRecoverError, eth_account_creator::EthAccountCreator,
@@ -205,10 +206,10 @@ impl EthRecover {
         }
     }
 
-    pub fn mock_sender_if_not_exists<S: State + CodeStore>(
+    pub fn mock_sender_if_not_exists(
         &self,
         tx: L2Transaction,
-        state: &mut MemExecuteTxStateTree<S>,
+        state: &mut MemStateDB,
     ) -> Result<L2Transaction, PolyjuiceTxSenderRecoverError> {
         let sender_id: u32 = tx.raw().from_id().unpack();
         if 0 != sender_id {
@@ -228,7 +229,7 @@ impl EthRecover {
                     tx_hash,
                 );
 
-                state.mock_account(registry_address, account_script)?
+                mock_account(state, registry_address, account_script)?
             }
         };
 
@@ -245,11 +246,11 @@ impl EthRecover {
         Ok(tx)
     }
 
-    pub fn mock_sender_if_not_exists_from_raw_registry<S: State + CodeStore>(
+    pub fn mock_sender_if_not_exists_from_raw_registry<S: State + CodeStore + JournalDB>(
         &self,
         raw_tx: RawL2Transaction,
         opt_registry_address: Option<RegistryAddress>,
-        state: &mut MemExecuteTxStateTree<S>,
+        state: &mut S,
     ) -> Result<RawL2Transaction> {
         let sender_id: u32 = raw_tx.from_id().unpack();
         if 0 != sender_id {
@@ -269,7 +270,7 @@ impl EthRecover {
         );
 
         let account_script = self.account_context.to_account_script(&registry_address);
-        let account_id = state.mock_account(registry_address, account_script)?;
+        let account_id = mock_account(state, registry_address, account_script)?;
         let raw_tx = raw_tx.as_builder().from_id(account_id.pack()).build();
 
         log::debug!(
