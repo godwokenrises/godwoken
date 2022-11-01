@@ -70,7 +70,7 @@ async fn test_block_max_cycles_limit() {
         .build();
     let reg_addr_bytes = test_wallet.reg_address().to_bytes().into();
 
-    mem_pool_state.store_state_db(state.into());
+    mem_pool_state.store_state_db(state);
     let run_result = rpc_server
         .execute_raw_l2transaction(&raw_tx, None, Some(reg_addr_bytes))
         .await
@@ -123,7 +123,7 @@ async fn test_block_max_cycles_limit() {
         .build();
     let reg_addr_bytes = test_wallet.reg_address().to_bytes().into();
 
-    mem_pool_state.store_state_db(state.into());
+    mem_pool_state.store_state_db(state);
     let err = rpc_server
         .execute_raw_l2transaction(&raw_tx, None, Some(reg_addr_bytes))
         .await

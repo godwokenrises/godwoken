@@ -1,12 +1,22 @@
-use super::dummy_state::DummyState;
 use criterion::*;
 use gw_common::{
-    builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, state::State, H256,
+    builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, smt::SMT, state::State,
+    H256,
 };
 use gw_config::{BackendConfig, BackendSwitchConfig};
 use gw_generator::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage,
     constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, Generator,
+};
+use gw_store::{
+    smt::smt_store::SMTStateStore,
+    snapshot::StoreSnapshot,
+    state::{
+        overlay::{mem_state::MemStateTree, mem_store::MemStore},
+        traits::JournalDB,
+        MemStateDB,
+    },
+    Store,
 };
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
@@ -62,6 +72,12 @@ impl ChainView for DummyChainStore {
     }
 }
 
+fn new_state(store: StoreSnapshot) -> MemStateDB {
+    let smt = SMT::new(H256::zero(), SMTStateStore::new(MemStore::new(store)));
+    let inner = MemStateTree::new(smt, 0);
+    MemStateDB::new(inner)
+}
+
 fn new_block_info(block_producer: &RegistryAddress, number: u64, timestamp: u64) -> BlockInfo {
     BlockInfo::new_builder()
         .block_producer(Bytes::from(block_producer.to_bytes()).pack())
@@ -70,7 +86,7 @@ fn new_block_info(block_producer: &RegistryAddress, number: u64, timestamp: u64)
         .build()
 }
 
-fn run_contract_get_result<S: State + CodeStore>(
+fn run_contract_get_result<S: State + CodeStore + JournalDB>(
     rollup_config: &RollupConfig,
     tree: &mut S,
     from_id: u32,
@@ -104,12 +120,11 @@ fn run_contract_get_result<S: State + CodeStore>(
         L2TX_MAX_CYCLES,
         None,
     )?;
-    tree.apply_run_result(&run_result.write)
-        .expect("update state");
+    tree.finalise()?;
     Ok(run_result)
 }
 
-fn run_contract<S: State + CodeStore>(
+fn run_contract<S: State + CodeStore + JournalDB>(
     rollup_config: &RollupConfig,
     tree: &mut S,
     from_id: u32,
@@ -128,7 +143,8 @@ pub fn bench(c: &mut Criterion) {
     group.bench_function("sudt", move |b| {
         b.iter_batched(
             || {
-                let mut tree = DummyState::default();
+                let db = Store::open_tmp().unwrap();
+                let mut tree = new_state(db.get_snapshot());
 
                 let always_success_lock_hash = [255u8; 32];
                 let rollup_config = RollupConfig::new_builder()

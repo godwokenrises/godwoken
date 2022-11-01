@@ -132,7 +132,7 @@ fn test_state_with_version() {
         state
             .update_raw(H256::from_u32(5), H256::from_u32(25))
             .unwrap();
-        commit_block(&db, build_block(&mut state, 2, prev_txs_state_checkpoint));
+        commit_block(db, build_block(&mut state, 2, prev_txs_state_checkpoint));
         db.set_last_confirmed_block_number_hash(
             &NumberHash::new_builder()
                 .number(2.pack())

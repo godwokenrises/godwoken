@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
 use gw_common::{
     blake2b::new_blake2b,
@@ -23,6 +21,7 @@ use gw_store::{
     state::{
         history::history_state::{HistoryState, RWConfig},
         state_db::StateDB,
+        traits::JournalDB,
         MemStateDB,
     },
     traits::chain_store::ChainStore,
@@ -257,11 +256,10 @@ impl BenchExecutionEnvironment {
                 .args(args.as_bytes().pack())
                 .build();
 
-            let run_result = self
-                .generator
+            self.generator
                 .execute_transaction(
                     &self.chain,
-                    &state,
+                    &mut state,
                     &block_info,
                     &raw_tx,
                     L2TX_MAX_CYCLES,
@@ -269,7 +267,7 @@ impl BenchExecutionEnvironment {
                 )
                 .unwrap();
 
-            state.apply_run_result(&run_result.write).unwrap();
+            state.finalise().unwrap();
 
             from_id += 1;
             if from_id > end_account_id {
@@ -336,6 +334,7 @@ impl BenchExecutionEnvironment {
         };
 
         Self::generate_accounts(&mut state, accounts + 1); // Plus block producer
+        state.finalise().unwrap();
 
         let (genesis, global_state) = {
             let prev_state_checkpoint: [u8; 32] =
@@ -346,7 +345,7 @@ impl BenchExecutionEnvironment {
 
             // calculate post state
             let post_account = {
-                let root = state.finalise_root().unwrap();
+                let root = state.calculate_root().unwrap();
                 let count = state.get_account_count().unwrap();
                 AccountMerkleState::new_builder()
                     .merkle_root(root.pack())

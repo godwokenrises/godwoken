@@ -642,7 +642,7 @@ pub async fn construct_block_with_timestamp(
         reverted_block_root,
         block_param,
     };
-    produce_block(&db, generator, param).map(|mut r| {
+    produce_block(db, generator, param).map(|mut r| {
         r.remaining_capacity = remaining_capacity;
         r
     })
