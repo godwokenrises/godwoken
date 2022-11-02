@@ -458,7 +458,7 @@ impl<S: CodeStore> CodeStore for StateDB<S> {
     fn insert_script(&mut self, script_hash: H256, script: packed::Script) {
         self.journal.push(JournalEntry::InsertScript {
             script_hash,
-            prev_exist: self.get_script(&script_hash).is_some(),
+            prev_exist: self.dirty_scripts.contains_key(&script_hash),
         });
         self.dirty_scripts.insert(script_hash, script);
     }
@@ -480,7 +480,7 @@ impl<S: CodeStore> CodeStore for StateDB<S> {
         }
         self.journal.push(JournalEntry::InsertData {
             data_hash,
-            prev_exist: self.get_data(&data_hash).is_some(),
+            prev_exist: self.dirty_data.contains_key(&data_hash),
         });
         self.dirty_data.insert(data_hash, code);
     }
