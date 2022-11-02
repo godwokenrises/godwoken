@@ -5,6 +5,7 @@ use gw_common::{
     state::State, H256,
 };
 use gw_polyjuice_sender_recover::recover::error::PolyjuiceTxSenderRecoverError;
+use gw_store::state::traits::JournalDB;
 use gw_types::{
     bytes::Bytes,
     packed::{RawL2Transaction, Script},
@@ -58,6 +59,7 @@ async fn test_polyjuice_erc20_tx() {
         .build();
     let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
 
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
     let run_result = rpc_server.execute_l2transaction(&deploy_tx).await.unwrap();
 
@@ -111,6 +113,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     let deploy_tx = deployer_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
     let deploy_tx_hash: H256 = deploy_tx.hash().into();
 
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
     {
         let mut mem_pool = chain.mem_pool().await;
@@ -159,6 +162,7 @@ async fn test_polyjuice_tx_from_id_zero() {
         .build();
     let balance_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
 
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
     let run_result = rpc_server.execute_l2transaction(&balance_tx).await.unwrap();
 
@@ -209,6 +213,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .unwrap();
     let deploy_tx_hash: H256 = deploy_tx.hash().into();
 
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
     {
         let mut mem_pool = chain.mem_pool().await;
@@ -300,6 +305,8 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
 
     let balance = 100u32.into();
     test_wallet.mint_ckb_sudt(&mut state, balance).unwrap();
+
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
 
     let err = rpc_server
@@ -316,6 +323,8 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     state
         .mapping_registry_address_to_script_hash(test_wallet.reg_address().to_owned(), H256::one())
         .unwrap();
+
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
 
     let err = rpc_server

@@ -4,6 +4,7 @@ use gw_common::{
     state::State,
 };
 use gw_generator::account_lock_manage::secp256k1::Secp256k1Eth;
+use gw_store::state::traits::JournalDB;
 use gw_types::{
     packed::{
         CreateAccount, DeprecatedMetaContractArgs, Fee, L2Transaction, RawL2Transaction, Script,
@@ -73,6 +74,7 @@ async fn test_backward_compatibility() {
         .signature(sign.pack())
         .build();
 
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
     {
         let mut mem_pool = chain.mem_pool().await;

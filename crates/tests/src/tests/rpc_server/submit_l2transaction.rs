@@ -8,6 +8,7 @@ use gw_common::{
     state::State,
     H256,
 };
+use gw_store::state::traits::JournalDB;
 use gw_types::{
     bytes::Bytes,
     packed::{Fee, RawL2Transaction, SUDTArgs, SUDTTransfer, Script},
@@ -52,6 +53,7 @@ async fn test_polyjuice_erc20_tx() {
         .build();
     let deploy_tx = creator_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
 
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
     let deploy_tx_hash = rpc_server
         .submit_l2transaction(&deploy_tx)
@@ -141,6 +143,7 @@ async fn test_in_queue_query_with_signature_hash() {
     };
     let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
 
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
     let signature_hash = {
         let mut hasher = new_blake2b();
@@ -209,6 +212,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     };
     let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
 
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
     rpc_server.submit_l2transaction(&deploy_tx).await.unwrap();
     wait_tx_committed(&chain, &deploy_tx_hash, Duration::from_secs(30))
@@ -271,6 +275,8 @@ async fn test_polyjuice_tx_from_id_zero() {
         raw.hash().into()
     };
     let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
+
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
 
     rpc_server.submit_l2transaction(&deploy_tx).await.unwrap();
@@ -341,6 +347,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .sign_polyjuice_tx(&state, raw_tx.clone())
         .unwrap();
 
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
     let err = rpc_server_no_creator
         .submit_l2transaction(&deploy_tx)
@@ -427,6 +434,8 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     let insufficient_balance_deploy_tx = test_wallet
         .sign_polyjuice_tx(&state, raw_tx.clone())
         .unwrap();
+
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
 
     rpc_server
@@ -445,6 +454,8 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .unwrap();
 
     let different_script_deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
+
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
 
     rpc_server
@@ -471,6 +482,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
         .build();
     let bad_deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
 
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
     let err = rpc_server
         .submit_l2transaction(&bad_deploy_tx)

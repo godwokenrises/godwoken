@@ -1,6 +1,7 @@
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, registry_address::RegistryAddress};
 use gw_config::{MemBlockConfig, MemPoolConfig};
+use gw_store::state::traits::JournalDB;
 use gw_types::{
     bytes::Bytes,
     packed::{RawL2Transaction, Script},
@@ -70,6 +71,7 @@ async fn test_block_max_cycles_limit() {
         .build();
     let reg_addr_bytes = test_wallet.reg_address().to_bytes().into();
 
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
     let run_result = rpc_server
         .execute_raw_l2transaction(&raw_tx, None, Some(reg_addr_bytes))
@@ -123,6 +125,7 @@ async fn test_block_max_cycles_limit() {
         .build();
     let reg_addr_bytes = test_wallet.reg_address().to_bytes().into();
 
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
     let err = rpc_server
         .execute_raw_l2transaction(&raw_tx, None, Some(reg_addr_bytes))

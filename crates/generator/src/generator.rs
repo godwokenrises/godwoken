@@ -802,7 +802,7 @@ impl Generator {
         }
         let r = RunResult {
             return_data: run_context.return_data,
-            logs: state.appended_logs().into_iter().cloned().collect(),
+            logs: state.appended_logs().to_vec(),
             exit_code: run_context.exit_code,
             cycles: run_context.cycle_meter,
             read_data_hashes: state_tracker

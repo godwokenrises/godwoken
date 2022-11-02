@@ -7,6 +7,7 @@ use gw_polyjuice_sender_recover::recover::{
     eth_account_creator::EthAccountCreator, eth_recover::EthAccountContext,
     eth_sender::PolyjuiceTxEthSender,
 };
+use gw_store::state::traits::JournalDB;
 use gw_types::{
     packed::{RawL2Transaction, Script},
     prelude::Pack,
@@ -87,6 +88,7 @@ async fn test_eth_account_creator() {
         .build_batch_create_tx(&state, recovered_account_scripts)
         .unwrap();
 
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
     {
         let mut mem_pool = chain.mem_pool().await;

@@ -10,7 +10,7 @@ pub trait SMTTree<S> {
 pub trait JournalDB {
     fn snapshot(&mut self) -> usize;
     fn revert(&mut self, id: usize) -> Result<(), gw_common::error::Error>;
-    fn appended_logs(&self) -> &im::Vector<LogItem>;
+    fn appended_logs(&self) -> &[LogItem];
     fn append_log(&mut self, log: LogItem);
     fn finalise(&mut self) -> Result<(), gw_common::error::Error>;
     fn set_state_tracker(&mut self, tracker: StateTracker);
