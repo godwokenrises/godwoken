@@ -93,11 +93,6 @@ impl CodeStore for MemStateTree {
         self.db()
             .inner_store()
             .get(COLUMN_SCRIPT, script_hash.as_slice())
-            .or_else(|| {
-                self.db()
-                    .inner_store()
-                    .get(COLUMN_SCRIPT, script_hash.as_slice())
-            })
             .map(|slice| from_box_should_be_ok!(packed::ScriptReader, slice))
     }
 
@@ -112,11 +107,6 @@ impl CodeStore for MemStateTree {
         self.db()
             .inner_store()
             .get(COLUMN_DATA, data_hash.as_slice())
-            .or_else(|| {
-                self.db()
-                    .inner_store()
-                    .get(COLUMN_DATA, data_hash.as_slice())
-            })
             .map(|slice| Bytes::from(slice.to_vec()))
     }
 }
