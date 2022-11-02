@@ -6,7 +6,7 @@ use gw_common::{
     H256,
 };
 use gw_generator::account_lock_manage::secp256k1::Secp256k1Eth;
-use gw_store::state::{history::history_state::RWConfig, BlockStateDB};
+use gw_store::state::{history::history_state::RWConfig, traits::JournalDB, BlockStateDB};
 use gw_types::{
     bytes::Bytes,
     packed::{
@@ -65,6 +65,8 @@ async fn test_polyjuice_erc20_tx() {
         .build();
 
     let reg_addr_bytes = test_wallet.reg_address().to_bytes().into();
+
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
 
     let run_result = rpc_server
@@ -122,6 +124,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     let deploy_tx = deployer_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
     let deploy_tx_hash: H256 = deploy_tx.hash().into();
 
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
     {
         let mut mem_pool = chain.mem_pool().await;
@@ -162,6 +165,7 @@ async fn test_polyjuice_tx_from_id_zero() {
         .mint_sudt(&mut state, CKB_SUDT_ACCOUNT_ID, test_balance)
         .unwrap();
 
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
     let state = mem_pool_state.load_state_db();
 
@@ -486,6 +490,7 @@ async fn test_invalid_registry_address() {
     let deploy_tx = deployer_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
     let deploy_tx_hash: H256 = deploy_tx.hash().into();
 
+    state.finalise().unwrap();
     mem_pool_state.store_state_db(state);
     {
         let mut mem_pool = chain.mem_pool().await;

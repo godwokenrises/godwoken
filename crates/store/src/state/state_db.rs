@@ -75,7 +75,7 @@ impl JournalEntry {
             }
             AppendLog { index } => {
                 assert_eq!(state_db.dirty_logs.len(), index + 1);
-                state_db.dirty_logs.pop_back();
+                state_db.dirty_logs.pop();
             }
         }
     }
@@ -83,7 +83,7 @@ impl JournalEntry {
 
 #[derive(Debug, Default, Clone)]
 pub struct Journal {
-    entries: im::Vector<JournalEntry>,
+    entries: Vec<JournalEntry>,
 }
 
 impl Journal {
@@ -97,12 +97,12 @@ impl Journal {
 
     /// Revert journal to len
     /// Return reverted entries sorted in journal emit order
-    pub fn revert_entries(&mut self, len: usize) -> im::Vector<JournalEntry> {
-        self.entries.slice(len..)
+    pub fn revert_entries(&mut self, len: usize) -> Vec<JournalEntry> {
+        self.entries.split_off(len)
     }
 
     pub fn push(&mut self, entry: JournalEntry) {
-        self.entries.push_back(entry);
+        self.entries.push(entry);
     }
 
     pub fn clear(&mut self) {
@@ -151,25 +151,34 @@ pub struct StateDB<S> {
     /// next_revision_id
     next_revision_id: usize,
     /// revisions
-    revisions: im::Vector<Revision>,
+    revisions: Vec<Revision>,
     /// dirty state in memory
-    dirty_state: im::HashMap<H256, H256>,
+    dirty_state: HashMap<H256, H256>,
     /// dirty account count
     dirty_account_count: Option<u32>,
     /// dirty scripts
-    dirty_scripts: im::HashMap<H256, packed::Script>,
+    dirty_scripts: HashMap<H256, packed::Script>,
     /// dirty data
-    dirty_data: im::HashMap<H256, Bytes>,
+    dirty_data: HashMap<H256, Bytes>,
     /// dirty logs
-    dirty_logs: im::Vector<LogItem>,
+    dirty_logs: Vec<LogItem>,
     /// state tracker
     state_tracker: Option<StateTracker>,
     /// last state root
     last_state_root: H256,
 }
 
-impl<S: Clone> Clone for StateDB<S> {
+impl<S: Clone + State + CodeStore> Clone for StateDB<S> {
+    /// clone StateDB without dirty state
     fn clone(&self) -> Self {
+        Self::new(self.state.clone())
+    }
+}
+
+#[cfg(test)]
+impl<S: State + CodeStore + Clone> StateDB<S> {
+    /// clone StateDB with dirty state
+    pub(crate) fn clone_dirty(&self) -> Self {
         Self {
             state: self.state.clone(),
             journal: self.journal.clone(),
@@ -225,6 +234,7 @@ impl<Store: ChainStore + HistoryStateStore + CodeStore + KVStore> BlockStateDB<S
 
 impl<S: State + CodeStore> StateDB<S> {
     pub fn new(state: S) -> Self {
+        let last_state_root = state.calculate_root().expect("last state root");
         Self {
             state,
             journal: Journal::default(),
@@ -236,7 +246,7 @@ impl<S: State + CodeStore> StateDB<S> {
             dirty_scripts: Default::default(),
             dirty_logs: Default::default(),
             state_tracker: None,
-            last_state_root: H256::default(),
+            last_state_root,
         }
     }
 
@@ -325,7 +335,7 @@ impl<S: State + CodeStore> JournalDB for StateDB<S> {
     fn snapshot(&mut self) -> usize {
         let id = self.next_revision_id;
         self.next_revision_id += 1;
-        self.revisions.push_back(Revision {
+        self.revisions.push(Revision {
             id,
             journal_len: self.journal.len(),
         });
@@ -386,10 +396,10 @@ impl<S: State + CodeStore> JournalDB for StateDB<S> {
         self.journal.push(JournalEntry::AppendLog {
             index: self.dirty_logs.len(),
         });
-        self.dirty_logs.push_back(log);
+        self.dirty_logs.push(log);
     }
 
-    fn appended_logs(&self) -> &im::Vector<packed::LogItem> {
+    fn appended_logs(&self) -> &[packed::LogItem] {
         &self.dirty_logs
     }
 
@@ -561,7 +571,7 @@ mod tests {
     fn test_revert_to_histories_revision() {
         let store = Store::open_tmp().unwrap();
         let mut state = new_state(store.get_snapshot());
-        let mem_0 = state.clone();
+        let mem_0 = state.clone_dirty();
         let snap_0 = state.snapshot();
         state
             .update_raw(H256::from_u32(1), H256::from_u32(1))
@@ -569,14 +579,14 @@ mod tests {
         state
             .update_raw(H256::from_u32(2), H256::from_u32(2))
             .unwrap();
-        let mem_1 = state.clone();
+        let mem_1 = state.clone_dirty();
         let snap_1 = state.snapshot();
 
         // should update the mem DB
         state
             .update_raw(H256::from_u32(3), H256::from_u32(3))
             .unwrap();
-        let mem_2 = state.clone();
+        let mem_2 = state.clone_dirty();
         assert!(!cmp_dirty_state(&mem_1, &mem_2));
 
         // revert to snap_1
@@ -592,7 +602,7 @@ mod tests {
     fn test_clear_dirty_state() {
         let store = Store::open_tmp().unwrap();
         let mut state = new_state(store.get_snapshot());
-        let mem_0 = state.clone();
+        let mem_0 = state.clone_dirty();
         assert!(!state.is_dirty());
         state
             .update_raw(H256::from_u32(1), H256::from_u32(1))
@@ -620,7 +630,7 @@ mod tests {
         state
             .update_raw(H256::from_u32(2), H256::from_u32(2))
             .unwrap();
-        let mem_1 = state.clone();
+        let mem_1 = state.clone_dirty();
         assert!(state.is_dirty());
 
         // finalise
