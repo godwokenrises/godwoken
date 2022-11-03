@@ -10,6 +10,7 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::Mutex,
+    vec::Drain,
 };
 
 use anyhow::Result;
@@ -37,7 +38,7 @@ use super::{
 };
 
 #[derive(Debug, Clone)]
-pub enum JournalEntry {
+enum JournalEntry {
     UpdateRaw { key: H256, prev_value: H256 },
     SetAccountCount { prev_count: u32 },
     InsertScript { script_hash: H256, prev_exist: bool },
@@ -45,67 +46,31 @@ pub enum JournalEntry {
     AppendLog { index: usize },
 }
 
-impl JournalEntry {
-    /// revert journal
-    pub fn revert<S>(self, state_db: &mut StateDB<S>) {
-        use JournalEntry::*;
-
-        match self {
-            UpdateRaw { key, prev_value } => {
-                state_db.dirty_state.insert(key, prev_value);
-            }
-            SetAccountCount { prev_count } => {
-                state_db.dirty_account_count = Some(prev_count);
-            }
-            InsertScript {
-                script_hash,
-                prev_exist,
-            } => {
-                if !prev_exist {
-                    state_db.dirty_scripts.remove(&script_hash);
-                }
-            }
-            InsertData {
-                data_hash,
-                prev_exist,
-            } => {
-                if !prev_exist {
-                    state_db.dirty_data.remove(&data_hash);
-                }
-            }
-            AppendLog { index } => {
-                assert_eq!(state_db.dirty_logs.len(), index + 1);
-                state_db.dirty_logs.pop();
-            }
-        }
-    }
-}
-
 #[derive(Debug, Default, Clone)]
-pub struct Journal {
+struct Journal {
     entries: Vec<JournalEntry>,
 }
 
 impl Journal {
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.entries.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
     /// Revert journal to len
     /// Return reverted entries sorted in journal emit order
-    pub fn revert_entries(&mut self, len: usize) -> Vec<JournalEntry> {
-        self.entries.split_off(len)
+    fn revert_entries(&mut self, len: usize) -> Drain<'_, JournalEntry> {
+        self.entries.drain(len..)
     }
 
-    pub fn push(&mut self, entry: JournalEntry) {
+    fn push(&mut self, entry: JournalEntry) {
         self.entries.push(entry);
     }
 
-    pub fn clear(&mut self) {
+    fn clear(&mut self) {
         self.entries.clear();
     }
 }
@@ -357,8 +322,36 @@ impl<S: State + CodeStore> JournalDB for StateDB<S> {
 
         // replay to revert journal
         let revert_entries = self.journal.revert_entries(rev.journal_len);
-        for entry in revert_entries.into_iter().rev() {
-            entry.revert(self);
+        for entry in revert_entries.rev() {
+            use JournalEntry::*;
+            match entry {
+                UpdateRaw { key, prev_value } => {
+                    self.dirty_state.insert(key, prev_value);
+                }
+                SetAccountCount { prev_count } => {
+                    self.dirty_account_count = Some(prev_count);
+                }
+                InsertScript {
+                    script_hash,
+                    prev_exist,
+                } => {
+                    if !prev_exist {
+                        self.dirty_scripts.remove(&script_hash);
+                    }
+                }
+                InsertData {
+                    data_hash,
+                    prev_exist,
+                } => {
+                    if !prev_exist {
+                        self.dirty_data.remove(&data_hash);
+                    }
+                }
+                AppendLog { index } => {
+                    assert_eq!(self.dirty_logs.len(), index + 1);
+                    self.dirty_logs.pop();
+                }
+            }
         }
 
         // remove expired revisions
