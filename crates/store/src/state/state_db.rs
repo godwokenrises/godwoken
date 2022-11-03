@@ -171,6 +171,7 @@ pub struct StateDB<S> {
 impl<S: Clone + State + CodeStore> Clone for StateDB<S> {
     /// clone StateDB without dirty state
     fn clone(&self) -> Self {
+        debug_assert!(!self.is_dirty(), "can't clone dirty state");
         Self::new(self.state.clone())
     }
 }
@@ -596,6 +597,43 @@ mod tests {
         // revert to snap_0
         state.revert(snap_0).unwrap();
         assert!(cmp_dirty_state(&mem_0, &state));
+    }
+
+    #[test]
+    fn test_revert_to_histories_value() {
+        let store = Store::open_tmp().unwrap();
+        let mut state = new_state(store.get_snapshot());
+        let snap_0 = state.snapshot();
+        state
+            .update_raw(H256::from_u32(1), H256::from_u32(1))
+            .unwrap();
+        let mem_1 = state.clone_dirty();
+        let snap_1 = state.snapshot();
+
+        // should update the mem DB
+        state
+            .update_raw(H256::from_u32(1), H256::from_u32(2))
+            .unwrap();
+        state
+            .update_raw(H256::from_u32(1), H256::from_u32(3))
+            .unwrap();
+        let mem_2 = state.clone_dirty();
+        assert!(!cmp_dirty_state(&mem_1, &mem_2));
+        assert_eq!(
+            state.get_raw(&H256::from_u32(1)).unwrap(),
+            H256::from_u32(3)
+        );
+
+        // revert to snap_1
+        state.revert(snap_1).unwrap();
+        assert_eq!(
+            state.get_raw(&H256::from_u32(1)).unwrap(),
+            H256::from_u32(1)
+        );
+
+        // revert to snap_0
+        state.revert(snap_0).unwrap();
+        assert_eq!(state.get_raw(&H256::from_u32(1)).unwrap(), H256::zero());
     }
 
     #[test]
