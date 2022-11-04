@@ -1,0 +1,12 @@
+[submodule "c/deps/ckb-c-stdlib"]
+	path = c/deps/ckb-c-stdlib
+	url = https://github.com/nervosnetwork/ckb-c-stdlib
+[submodule "c/deps/ckb-production-scripts"]
+	path = c/deps/ckb-production-scripts
+	url = https://github.com/nervosnetwork/ckb-production-scripts.git
+[submodule "c/deps/sparse-merkle-tree"]
+	path = c/deps/sparse-merkle-tree
+	url = https://github.com/nervosnetwork/sparse-merkle-tree.git
+[submodule "c/deps/molecule"]
+	path = c/deps/molecule
+	url = https://github.com/nervosnetwork/molecule.git
