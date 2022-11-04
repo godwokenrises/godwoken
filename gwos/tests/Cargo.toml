@@ -40,6 +40,6 @@ env_logger = "0.8"
 ckb-vm = { version = "=0.20.0-rc5", features = ["detect-asm"] }
 ckb-vm-definitions = "=0.20.0-rc5"
 tentacle-multiaddr = "=0.2.0"
-molecule = "=0.6.0"
+molecule = "=0.7.2"
 tempfile = "3"
 tokio = "1.15"
