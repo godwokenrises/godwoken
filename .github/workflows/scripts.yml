@@ -1,11 +1,20 @@
-name: Rust
+name: Scripts test
 
-on: [push, pull_request]
+on:
+  push:
+    paths:
+      - 'gwos/**'
+  pull_request:
+    paths:
+      - 'gwos/**'
 
 jobs:
   build:
 
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gwos
 
     steps:
     - uses: actions/checkout@v1
