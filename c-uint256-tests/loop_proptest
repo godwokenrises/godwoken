@@ -1,0 +1,11 @@
+#!/bin/bash
+
+export PROPTEST_CASES=100000
+
+counter=1
+while :
+do
+    echo "$counter round"
+    cargo test
+    ((counter++))
+done
