@@ -1,0 +1,42 @@
+version = "0.7.0"
+deployment = "deployment.toml"
+[rust]
+workspace_dir = "contracts"
+toolchain = "nightly-2021-08-16"
+docker_image = "thewawar/ckb-capsule:2021-08-16"
+
+[[contracts]]
+name = "state-validator"
+template_type = "Rust"
+
+[[contracts]]
+name = "deposit-lock"
+template_type = "Rust"
+
+[[contracts]]
+name = "custodian-lock"
+template_type = "Rust"
+
+[[contracts]]
+name = "withdrawal-lock"
+template_type = "Rust"
+
+[[contracts]]
+name = "challenge-lock"
+template_type = "Rust"
+
+[[contracts]]
+name = "stake-lock"
+template_type = "Rust"
+
+[[contracts]]
+name = "always-success"
+template_type = "Rust"
+
+[[contracts]]
+name = "eth-account-lock"
+template_type = "Rust"
+
+[[contracts]]
+name = "tron-account-lock"
+template_type = "Rust"

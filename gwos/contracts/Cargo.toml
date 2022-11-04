@@ -1,0 +1,22 @@
+[workspace]
+members = [
+  "custodian-lock",
+  "deposit-lock",
+  "withdrawal-lock",
+  "challenge-lock",
+  "stake-lock",
+  "state-validator",
+  "always-success",
+  "eth-account-lock",
+  "tron-account-lock",
+  "secp256k1-utils",
+  "ckb-smt",
+  "gw-utils",
+]
+
+[profile.release]
+codegen-units = 1
+lto = false
+opt-level = 's'
+overflow-checks = true
+panic = 'abort'

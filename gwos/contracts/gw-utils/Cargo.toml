@@ -1,0 +1,12 @@
+[package]
+name = "gw-utils"
+version = "0.1.0"
+authors = ["Nervos Network"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ckb-std = "0.9.0"
+gw-types = { git = "https://github.com/nervosnetwork/godwoken.git", rev = "91c324544424292b4d715ce376d31bc45aa3cb5d", default-features = false }
+gw-common = { git = "https://github.com/nervosnetwork/godwoken.git", rev = "91c324544424292b4d715ce376d31bc45aa3cb5d", default-features = false }

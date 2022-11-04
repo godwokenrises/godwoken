@@ -1,0 +1,13 @@
+[package]
+name = "challenge-lock"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+gw-utils = { path = "../gw-utils" }
+gw-state = { path = "../gw-state" }
+sha3 = { version = "0.10", default-features = false }
+ethabi = { version = "16", default-features = false }
+rlp = { version = "0.5.0", default-features = false }
