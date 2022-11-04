@@ -26,9 +26,13 @@ pub struct ContractsCellDepManager {
 }
 
 impl ContractsCellDepManager {
-    pub async fn build(rpc_client: RPCClient, scripts: ContractTypeScriptConfig) -> Result<Self> {
+    pub async fn build(
+        rpc_client: RPCClient,
+        scripts: ContractTypeScriptConfig,
+        rollup_config_cell_dep: CellDep,
+    ) -> Result<Self> {
         let now = Instant::now();
-        let deps = query_cell_deps(&rpc_client, &scripts).await?;
+        let deps = query_cell_deps(&rpc_client, &scripts, rollup_config_cell_dep).await?;
         log::trace!("[contracts dep] build {}ms", now.elapsed().as_millis());
 
         Ok(Self {
@@ -50,8 +54,11 @@ impl ContractsCellDepManager {
     pub async fn refresh(&self) -> Result<()> {
         log::info!("[contracts dep] refresh");
 
+        // rollup_config_cell is identify by data_hash but not type_hash
+        let rollup_config_cell_dep = { self.load().rollup_config.clone() };
+
         let now = Instant::now();
-        let deps = query_cell_deps(&self.rpc_client, &self.scripts).await?;
+        let deps = query_cell_deps(&self.rpc_client, &self.scripts, rollup_config_cell_dep).await?;
         log::trace!("[contracts dep] refresh {}ms", now.elapsed().as_millis());
 
         self.deps.store(Arc::new(deps));
@@ -113,6 +120,7 @@ pub fn check_script(
 pub async fn query_cell_deps(
     rpc_client: &RPCClient,
     script_config: &ContractTypeScriptConfig,
+    rollup_config_cell_dep: CellDep,
 ) -> Result<ContractsCellDep> {
     let query = |contract, type_script: Script| -> _ {
         query_by_type_script(rpc_client, contract, type_script)
@@ -141,6 +149,7 @@ pub async fn query_cell_deps(
     }
 
     Ok(ContractsCellDep {
+        rollup_config: rollup_config_cell_dep,
         rollup_cell_type,
         deposit_cell_lock,
         stake_cell_lock,

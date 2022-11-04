@@ -141,6 +141,7 @@ pub struct ContractTypeScriptConfig {
 
 #[derive(Clone, Debug, Default)]
 pub struct ContractsCellDep {
+    pub rollup_config: CellDep,
     pub rollup_cell_type: CellDep,
     pub deposit_cell_lock: CellDep,
     pub stake_cell_lock: CellDep,
