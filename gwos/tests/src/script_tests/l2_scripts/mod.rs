@@ -25,7 +25,7 @@ mod examples;
 mod meta_contract;
 mod sudt;
 
-const EXAMPLES_DIR: &str = "../../godwoken-scripts/c/build/examples";
+const EXAMPLES_DIR: &str = "../c/build/examples";
 const SUM_BIN_NAME: &str = "sum-generator";
 const ACCOUNT_OP_BIN_NAME: &str = "account-operation-generator";
 const RECOVER_BIN_NAME: &str = "recover-account-generator";

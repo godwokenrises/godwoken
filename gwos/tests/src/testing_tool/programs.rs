@@ -11,7 +11,7 @@ const STATE_VALIDATOR: &str = "state-validator";
 const ALWAYS_SUCCESS_PATH: &str = "always-success";
 const SECP256K1_DATA_PATH: &str = "../c/deps/ckb-production-scripts/build/secp256k1_data";
 const ANYONE_CAN_PAY_LOCK_PATH: &str = "../c/deps/ckb-production-scripts/build/anyone_can_pay";
-const C_SCRIPTS_DIR: &str = "../../godwoken-scripts/c/build";
+const C_SCRIPTS_DIR: &str = "../c/build";
 const META_CONTRACT_BIN_NAME: &str = "meta-contract-validator";
 const ETH_ADDR_REG_BIN_NAME: &str = "eth-addr-reg-generator";
 // account locks
