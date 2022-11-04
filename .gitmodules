@@ -1,6 +1,12 @@
-[submodule "c/deps/ckb-c-stdlib"]
-	path = c/deps/ckb-c-stdlib
+[submodule "gwos/c/deps/ckb-c-stdlib"]
+	path = gwos/c/deps/ckb-c-stdlib
 	url = https://github.com/nervosnetwork/ckb-c-stdlib
-[submodule "c/deps/ckb-miscellaneous-scripts"]
-	path = c/deps/ckb-miscellaneous-scripts
-	url = https://github.com/nervosnetwork/ckb-miscellaneous-scripts.git
+[submodule "gwos/c/deps/ckb-production-scripts"]
+	path = gwos/c/deps/ckb-production-scripts
+	url = https://github.com/nervosnetwork/ckb-production-scripts.git
+[submodule "gwos/c/deps/sparse-merkle-tree"]
+	path = gwos/c/deps/sparse-merkle-tree
+	url = https://github.com/nervosnetwork/sparse-merkle-tree.git
+[submodule "gwos/c/deps/molecule"]
+	path = gwos/c/deps/molecule
+	url = https://github.com/nervosnetwork/molecule.git
