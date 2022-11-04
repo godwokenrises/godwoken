@@ -786,7 +786,7 @@ dependencies = [
  "ckb-rational",
  "derive_more",
  "merkle-cbt",
- "molecule 0.7.2",
+ "molecule",
  "numext-fixed-uint",
  "once_cell",
 ]
@@ -2064,7 +2064,7 @@ dependencies = [
  "gw-types",
  "hex",
  "lazy_static",
- "molecule 0.6.0",
+ "molecule",
  "parking_lot 0.11.2",
  "rand 0.8.5",
  "secp256k1 0.20.3",
@@ -2108,7 +2108,7 @@ dependencies = [
  "ckb-fixed-hash",
  "ckb-types",
  "gw-hash",
- "molecule 0.7.2",
+ "molecule",
  "primitive-types",
  "sparse-merkle-tree",
 ]
@@ -2882,17 +2882,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9f1c5b025cda876f66ef43a113f91ebc9f4ccef34843000e0adf6ebbab84e21"
 dependencies = [
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "molecule"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "663f76cc52219e5957e2f5563cce9d89f98aa8503c9c898b5c412d97df663998"
-dependencies = [
- "bytes 0.5.6",
- "cfg-if 0.1.10",
- "faster-hex 0.4.1",
 ]
 
 [[package]]
@@ -4683,7 +4672,7 @@ dependencies = [
  "js-sys",
  "libc",
  "log",
- "molecule 0.7.2",
+ "molecule",
  "nohash-hasher",
  "once_cell",
  "rand 0.8.5",
@@ -4737,7 +4726,7 @@ dependencies = [
  "futures",
  "hmac 0.12.1",
  "log",
- "molecule 0.7.2",
+ "molecule",
  "openssl",
  "openssl-sys",
  "rand 0.7.3",
