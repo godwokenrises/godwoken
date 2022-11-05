@@ -30,10 +30,10 @@ use gw_types::offchain::{
     CellInfo, CollectedCustodianCells, FinalizedCustodianCapacity, InputCellInfo, RollupContext,
 };
 use gw_types::packed::{
-    self, AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositRequest,
-    GlobalState, OutPoint, RawWithdrawalRequest, RollupAction, RollupActionUnion, RollupConfig,
-    RollupSubmitBlock, Script, StakeLockArgs, WithdrawalRequest, WithdrawalRequestExtra,
-    WitnessArgs,
+    self, AllowedTypeHash, BlockMerkleState, CellDep, CellInput, CellOutput, CustodianLockArgs,
+    DepositRequest, GlobalState, OutPoint, RawWithdrawalRequest, RollupAction, RollupActionUnion,
+    RollupConfig, RollupSubmitBlock, Script, StakeLockArgs, WithdrawalRequest,
+    WithdrawalRequestExtra, WitnessArgs,
 };
 use gw_types::prelude::{Pack, PackVec, Unpack};
 use gw_utils::local_cells::LocalCellsManager;
@@ -133,6 +133,14 @@ async fn test_build_unlock_to_owner_tx() {
     let last_finalized_block_number = 100u64;
     let global_state = GlobalState::new_builder()
         .last_finalized_block_number(last_finalized_block_number.pack())
+        .block(
+            BlockMerkleState::new_builder()
+                .count(
+                    (1 + last_finalized_block_number + rollup_config.finality_blocks().unpack())
+                        .pack(),
+                )
+                .build(),
+        )
         .rollup_config_hash(rollup_config.hash().pack())
         .build();
 
@@ -181,6 +189,10 @@ async fn test_build_unlock_to_owner_tx() {
             .into(),
         custodian_cell_lock: CellDep::new_builder()
             .out_point(custodian_lock_cell.out_point.clone())
+            .build()
+            .into(),
+        rollup_config: CellDep::new_builder()
+            .out_point(rollup_config_cell.out_point.clone())
             .build()
             .into(),
         ..Default::default()
@@ -356,7 +368,6 @@ async fn test_build_unlock_to_owner_tx() {
             .hash_type(ScriptHashType::Type.into())
             .args(lock_args.pack())
             .build();
-
         CellInfo {
             out_point: OutPoint::new_builder()
                 .tx_hash(rand::random::<[u8; 32]>().pack())
@@ -474,7 +485,7 @@ async fn test_build_unlock_to_owner_tx() {
         cell_deps: input_cell_deps,
         inputs,
     };
-    verify_tx(tx_with_context, 7000_0000u64).expect("pass");
+    verify_tx(tx_with_context, 700_000_000_u64).expect("pass");
 
     // Check unlock to owner tx
     let random_withdrawal_cells = {
@@ -497,6 +508,7 @@ async fn test_build_unlock_to_owner_tx() {
         withdrawals: random_withdrawal_cells.clone(),
     };
     let cell_deps = vec![
+        into_input_cell(rollup_config_cell.clone()),
         into_input_cell(rollup_cell.clone()),
         into_input_cell(always_cell.clone()),
         into_input_cell(withdrawal_lock_cell.clone()),
@@ -520,7 +532,7 @@ async fn test_build_unlock_to_owner_tx() {
         inputs,
     };
 
-    verify_tx(tx_with_context, 7000_0000u64).expect("pass");
+    verify_tx(tx_with_context, 700_000_000_u64).expect("pass");
 
     // Simulate rpc client filter no owner lock withdrawal cells
     let last_finalized_block_number = withdrawal_block_result.block.raw().number().unpack();
@@ -556,7 +568,7 @@ async fn test_build_unlock_to_owner_tx() {
         inputs,
     };
 
-    verify_tx(tx_with_context, 7000_0000u64).expect("pass");
+    verify_tx(tx_with_context, 700_000_000_u64).expect("pass");
 
     // Make sure revert withdrawal also work
     const BLOCK_TIMESTAMP2: u64 = BLOCK_TIMESTAMP * 2;
@@ -644,7 +656,6 @@ async fn test_build_unlock_to_owner_tx() {
             .hash_type(ScriptHashType::Type.into())
             .args(lock_args.pack())
             .build();
-
         let output = CellOutput::new_builder()
             .capacity(STAKE_CAPACITY.pack())
             .lock(stake_lock)
@@ -735,7 +746,7 @@ async fn test_build_unlock_to_owner_tx() {
         cell_deps: input_cell_deps,
         inputs,
     };
-    verify_tx(tx_with_context, 7000_0000u64).expect("pass");
+    verify_tx(tx_with_context, 700_000_000_u64).expect("pass");
 }
 
 struct DummyUnlocker {
