@@ -275,10 +275,16 @@ pub fn unlock_to_owner(
         .out_point(rollup_cell.out_point)
         .dep_type(DepType::Code.into())
         .build();
+    let rollup_config_dep = contracts_dep.rollup_config.clone();
     let withdrawal_lock_dep = contracts_dep.withdrawal_cell_lock.clone();
     let sudt_type_dep = contracts_dep.l1_sudt_type.clone();
 
-    let mut cell_deps = vec![rollup_dep, withdrawal_lock_dep.into()];
+    let mut cell_deps = vec![
+        // rollup_dep and rollup_config_dep will be used by withdrawal_lock_script
+        rollup_dep,
+        rollup_config_dep.into(),
+        withdrawal_lock_dep.into(),
+    ];
     if unlocked_to_owner_outputs
         .iter()
         .any(|output| output.0.type_().to_opt().is_some())
@@ -577,7 +583,7 @@ mod test {
         let witness = unlocked.witness_args.first().unwrap().to_owned();
         assert_eq!(expected_witness.as_slice(), witness.as_slice());
 
-        assert_eq!(unlocked.deps.len(), 3);
+        assert_eq!(unlocked.deps.len(), 4);
         let rollup_dep = CellDep::new_builder()
             .out_point(rollup_cell.out_point)
             .dep_type(DepType::Code.into())
@@ -588,10 +594,14 @@ mod test {
         );
         assert_eq!(
             unlocked.deps.get(1).unwrap().as_slice(),
-            CellDep::from(contracts_dep.withdrawal_cell_lock).as_slice(),
+            CellDep::from(contracts_dep.rollup_config).as_slice(),
         );
         assert_eq!(
             unlocked.deps.get(2).unwrap().as_slice(),
+            CellDep::from(contracts_dep.withdrawal_cell_lock).as_slice(),
+        );
+        assert_eq!(
+            unlocked.deps.get(3).unwrap().as_slice(),
             CellDep::from(contracts_dep.l1_sudt_type).as_slice(),
         );
     }
