@@ -31,6 +31,7 @@ use gw_store::{
     Store,
 };
 use gw_traits::CodeStore;
+use gw_types::packed::GlobalState;
 use gw_types::{
     offchain::{DepositInfo, FinalizedCustodianCapacity},
     packed::{
@@ -80,7 +81,7 @@ pub struct MemPool {
     store: Store,
     mem_pool_state: Arc<MemPoolState>,
     /// current tip
-    current_tip: (H256, u64),
+    current_tip: (H256, u64, GlobalState),
     /// generator instance
     generator: Arc<Generator>,
     /// pending queue, contains executable contents
@@ -141,11 +142,19 @@ impl MemPool {
         } = args;
         let pending = Default::default();
 
-        let tip_block = {
+        let tip: (H256, u64, GlobalState) = {
             let db = &store.begin_transaction();
-            db.get_last_valid_tip_block()?
+            let tip_block = db.get_last_valid_tip_block()?;
+            let tip_global_state = db
+                .get_block_post_global_state(&tip_block.hash().into())?
+                .expect("tip block post global");
+            (
+                tip_block.hash().into(),
+                tip_block.raw().number().unpack(),
+                tip_global_state,
+            )
         };
-        let tip = (tip_block.hash().into(), tip_block.raw().number().unpack());
+        let tip_hash = tip.0;
 
         let mut mem_block = MemBlock::with_block_producer(block_producer);
         let mut pending_deposits = vec![];
@@ -202,10 +211,10 @@ impl MemPool {
 
         // set tip
         if matches!(node_mode, NodeMode::ReadOnly) {
-            mem_pool.reset_read_only(Some(tip.0), true)?;
+            mem_pool.reset_read_only(Some(tip_hash), true)?;
         } else {
             mem_pool
-                .reset(None, Some(tip.0), &Default::default())
+                .reset(None, Some(tip_hash), &Default::default())
                 .await?;
         }
 
@@ -398,25 +407,24 @@ impl MemPool {
 
     // TODO: @sopium optimization: collect on reset and cache.
     fn collect_finalized_custodian_capacity(&self) -> Result<FinalizedCustodianCapacity> {
-        let tip = self.current_tip.1;
-        if tip == 0 {
+        if self.current_tip.1 == 0 {
             return Ok(Default::default());
         }
         let snap = self.store.get_snapshot();
         let mut c: FinalizedCustodianCapacity = snap
-            .get_block_post_finalized_custodian_capacity(tip)
+            .get_block_post_finalized_custodian_capacity(self.current_tip.1)
             .ok_or_else(|| anyhow!("failed to get last block post finalized custodian capacity"))?
             .as_reader()
             .unpack();
-        let last_finalized = self
-            .generator
-            .rollup_context()
-            .last_finalized_block_number(tip);
-        if last_finalized > 0 {
-            let last_finalized_deposits = snap
-                .get_block_deposit_info_vec(last_finalized)
+
+        let finalizing_range = snap
+            .get_block_finalizing_range(&self.current_tip.0)
+            .context("get tip block finalizing range")?;
+        for finalizing_number in finalizing_range.range() {
+            let finalizing_deposits = snap
+                .get_block_deposit_info_vec(finalizing_number)
                 .context("get last finalized block deposit")?;
-            for i in last_finalized_deposits {
+            for i in finalizing_deposits {
                 let d = i.request();
                 c.capacity += u128::from(d.capacity().unpack());
                 let amount = d.amount().unpack();
@@ -549,7 +557,15 @@ impl MemPool {
             }
         };
         let new_tip_block = self.store.get_block(&new_tip)?.expect("new tip block");
-        self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
+        let new_tip_global_state = self
+            .store
+            .get_block_post_global_state(&new_tip)?
+            .expect("new tip global state");
+        self.current_tip = (
+            new_tip,
+            new_tip_block.raw().number().unpack(),
+            new_tip_global_state,
+        );
         if update_state {
             // For read only nodes that does not have P2P mem-pool syncing, just
             // reset mem block and mem pool state. Mem block will be mostly
@@ -704,7 +720,15 @@ impl MemPool {
             let mem_block_content = self.mem_block.reset(&new_tip_block, estimated_timestamp);
 
             // set tip
-            self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
+            let new_tip_global_state = self
+                .store
+                .get_block_post_global_state(&new_tip)?
+                .expect("new tip block global state");
+            self.current_tip = (
+                new_tip,
+                new_tip_block.raw().number().unpack(),
+                new_tip_global_state,
+            );
 
             // mem block withdrawals
             let mem_block_withdrawals: Vec<_> = {
