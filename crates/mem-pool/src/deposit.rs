@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use gw_common::{h256_ext::H256Ext, registry::context::RegistryContext, state::State, H256};
 use gw_config::DepositTimeoutConfig;
 use gw_store::state::MemStateDB;
+use gw_types::core::Timepoint;
 use gw_types::{
     bytes::Bytes, core::ScriptHashType, offchain::DepositInfo, packed::DepositLockArgs, prelude::*,
 };
@@ -220,7 +221,10 @@ fn check_deposit_cell(
     }
 
     // check capacity (use dummy block hash and number)
-    if let Err(minimal_capacity) = to_custodian_cell(ctx, &H256::one(), 1, cell) {
+    let dummy_block_timepoint = Timepoint::from_block_number(1);
+    if let Err(minimal_capacity) =
+        to_custodian_cell(ctx, &H256::one(), &dummy_block_timepoint, cell)
+    {
         let deposit_capacity = cell.cell.output.capacity().unpack();
         return Err(anyhow!(
             "Invalid deposit capacity, unable to generate custodian, minimal required: {}, got: {}",

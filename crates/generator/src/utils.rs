@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
 use gw_config::BackendType;
 use gw_traits::CodeStore;
+use gw_types::core::Timepoint;
 use gw_types::{
     bytes::Bytes,
     core::{AllowedContractType, ScriptHashType},
@@ -48,7 +49,7 @@ pub fn build_withdrawal_cell_output(
     rollup_context: &RollupContext,
     req: &WithdrawalRequestExtra,
     block_hash: &H256,
-    block_number: u64,
+    block_timepoint: &Timepoint,
     opt_asset_script: Option<Script>,
 ) -> Result<(CellOutput, Bytes), WithdrawalCellError> {
     let withdrawal_capacity: u64 = req.raw().capacity().unpack();
@@ -56,7 +57,7 @@ pub fn build_withdrawal_cell_output(
         let withdrawal_lock_args = WithdrawalLockArgs::new_builder()
             .account_script_hash(req.raw().account_script_hash())
             .withdrawal_block_hash(Into::<[u8; 32]>::into(*block_hash).pack())
-            .withdrawal_block_number(block_number.pack())
+            .withdrawal_block_number(block_timepoint.full_value().pack())
             .owner_lock_hash(req.raw().owner_lock_hash())
             .build();
 
@@ -143,7 +144,7 @@ mod test {
     use gw_common::h256_ext::H256Ext;
     use gw_common::H256;
     use gw_types::bytes::Bytes;
-    use gw_types::core::ScriptHashType;
+    use gw_types::core::{ScriptHashType, Timepoint};
     use gw_types::packed::{
         RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest, WithdrawalRequestExtra,
     };
@@ -194,12 +195,12 @@ mod test {
             .build();
 
         let block_hash = H256::from_u32(11);
-        let block_number = 11u64;
+        let block_timepoint = Timepoint::from_block_number(11);
         let (output, data) = build_withdrawal_cell_output(
             &rollup_context,
             &withdrawal,
             &block_hash,
-            block_number,
+            &block_timepoint,
             Some(sudt_script.clone()),
         )
         .unwrap();
@@ -232,7 +233,10 @@ mod test {
             req.raw().account_script_hash()
         );
         assert_eq!(lock_args.withdrawal_block_hash(), block_hash.pack());
-        assert_eq!(lock_args.withdrawal_block_number().unpack(), block_number);
+        assert_eq!(
+            lock_args.withdrawal_block_number().unpack(),
+            block_timepoint.full_value()
+        );
         assert_eq!(lock_args.owner_lock_hash(), owner_lock.hash().pack());
 
         // ## None asset script
@@ -240,7 +244,7 @@ mod test {
             &rollup_context,
             &withdrawal,
             &block_hash,
-            block_number,
+            &block_timepoint,
             None,
         )
         .unwrap();
@@ -267,7 +271,7 @@ mod test {
                 .owner_lock(owner_lock)
                 .build(),
             &block_hash,
-            block_number,
+            &block_timepoint,
             Some(sudt_script.clone()),
         )
         .unwrap_err();
@@ -292,7 +296,7 @@ mod test {
                 .owner_lock(err_owner_lock)
                 .build(),
             &block_hash,
-            block_number,
+            &block_timepoint,
             Some(sudt_script),
         )
         .unwrap_err();

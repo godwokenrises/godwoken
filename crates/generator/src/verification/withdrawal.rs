@@ -4,6 +4,7 @@ use gw_common::{
 use gw_config::ForkConfig;
 use gw_traits::CodeStore;
 use gw_types::{
+    core::Timepoint,
     packed::{Script, WithdrawalRequestExtra},
     prelude::*,
     U256,
@@ -69,11 +70,13 @@ impl<'a, S: State + CodeStore> WithdrawalVerifier<'a, S> {
             .ok_or(Error::Account(AccountError::UnknownAccount))?;
 
         // check capacity (use dummy block hash and number)
+        let dummy_block_number = 1;
+        let block_timepoint = Timepoint::from_block_number(dummy_block_number);
         build_withdrawal_cell_output(
             self.rollup_context,
             withdrawal,
             &H256::one(),
-            1,
+            &block_timepoint,
             asset_script,
         )?;
 
