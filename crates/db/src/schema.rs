@@ -3,7 +3,7 @@
 /// Column families alias type
 pub type Col = u8;
 /// Total column number
-pub const COLUMNS: u32 = 37;
+pub const COLUMNS: u32 = 38;
 /// Column store meta data
 pub const COLUMN_META: Col = 0;
 /// Column store chain index
@@ -79,6 +79,8 @@ pub const COLUMN_BLOCK_SUBMIT_TX_HASH: Col = 7;
 pub const COLUMN_BLOCK_DEPOSIT_INFO_VEC: Col = 16;
 /// block number (in big endian) -> FinalizedCustodianCapacity.
 pub const COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY: Col = 36;
+/// block hash -> finalizing block number range
+pub const COLUMN_BLOCK_FINALIZING_RANGE: Col = 37;
 
 /// chain id
 pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";
