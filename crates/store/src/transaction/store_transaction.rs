@@ -8,7 +8,7 @@ use gw_common::h256_ext::H256Ext;
 use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, H256};
 use gw_db::schema::{
     Col, COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
-    COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_GLOBAL_STATE,
+    COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_FINALIZING_RANGE, COLUMN_BLOCK_GLOBAL_STATE,
     COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY, COLUMN_BLOCK_SUBMIT_TX,
     COLUMN_BLOCK_SUBMIT_TX_HASH, COLUMN_INDEX, COLUMN_MEM_POOL_TRANSACTION,
     COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
@@ -355,6 +355,23 @@ impl StoreTransaction {
             COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY,
             &block_number.to_be_bytes(),
         )
+    }
+
+    pub fn set_block_finalizing_range(
+        &self,
+        block_hash: &H256,
+        finalizing_range: &packed::FinalizingRangeReader,
+    ) -> Result<(), Error> {
+        self.insert_raw(
+            COLUMN_BLOCK_FINALIZING_RANGE,
+            block_hash.as_slice(),
+            finalizing_range.as_slice(),
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_block_finalizing_range(&self, block_hash: &H256) -> Result<(), Error> {
+        self.delete(COLUMN_BLOCK_FINALIZING_RANGE, block_hash.as_slice())
     }
 
     pub fn set_reverted_block_smt_root(&self, root: H256) -> Result<(), Error> {

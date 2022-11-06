@@ -525,7 +525,7 @@ pub async fn setup_chain_with_account_lock_manage(
     };
     let mem_pool = MemPool::create(args).await.unwrap();
     Chain::create(
-        &rollup_config,
+        rollup_config,
         &rollup_type_script,
         &ChainConfig::default(),
         store,
@@ -622,7 +622,7 @@ pub async fn construct_block_with_timestamp(
     let stake_cell_owner_lock_hash = H256::zero();
     let db = &chain.store().begin_transaction();
     let generator = chain.generator();
-    let rollup_config_hash = (*chain.rollup_config_hash()).into();
+    let rollup_config_hash = chain.rollup_config_hash().into();
 
     let provider = DummyMemPoolProvider {
         deposit_cells: deposit_info_vec.unpack(),

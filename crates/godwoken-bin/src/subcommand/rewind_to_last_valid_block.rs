@@ -29,7 +29,7 @@ impl RewindToLastValidBlockCommand {
         let base = BaseInitComponents::init(&config, true).await?;
         let store = base.store.clone();
         let mut chain = Chain::create(
-            &base.rollup_config,
+            base.rollup_config,
             &base.rollup_type_script,
             &config.chain,
             base.store,
