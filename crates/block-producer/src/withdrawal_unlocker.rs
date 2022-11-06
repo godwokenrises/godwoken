@@ -9,9 +9,11 @@ use gw_common::H256;
 use gw_config::{ContractsCellDep, DebugConfig};
 use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_types::offchain::{global_state_from_slice, CellInfo, TxStatus};
+use gw_types::offchain::{
+    global_state_from_slice, CellInfo, CompatibleFinalizedTimepoint, TxStatus,
+};
 use gw_types::packed::{OutPoint, RollupConfig, Transaction};
-use gw_types::prelude::{Pack, Unpack};
+use gw_types::prelude::*;
 use gw_utils::fee::fill_tx_fee;
 use gw_utils::genesis_info::CKBGenesisInfo;
 use gw_utils::transaction_skeleton::TransactionSkeleton;
@@ -159,7 +161,7 @@ pub trait BuildUnlockWithdrawalToOwner {
 
     async fn query_unlockable_withdrawals(
         &self,
-        last_finalized_block_number: u64,
+        compatible_finalized_timepoint: &CompatibleFinalizedTimepoint,
         unlocked: &HashSet<OutPoint>,
     ) -> Result<Vec<CellInfo>>;
 
@@ -178,9 +180,12 @@ pub trait BuildUnlockWithdrawalToOwner {
         };
 
         let global_state = global_state_from_slice(&rollup_cell.data)?;
-        let last_finalized_block_number: u64 = global_state.last_finalized_block_number().unpack();
+        let compatible_finalized_timepoint = CompatibleFinalizedTimepoint::from_global_state(
+            &global_state,
+            self.rollup_config().finality_blocks().unpack(),
+        );
         let unlockable_withdrawals = self
-            .query_unlockable_withdrawals(last_finalized_block_number, unlocked)
+            .query_unlockable_withdrawals(&compatible_finalized_timepoint, unlocked)
             .await?;
         log::info!(
             "[unlock withdrawal] find unlockable finalized withdrawals {}",
@@ -256,12 +261,12 @@ impl BuildUnlockWithdrawalToOwner for DefaultUnlocker {
 
     async fn query_unlockable_withdrawals(
         &self,
-        last_finalized_block_number: u64,
+        compatible_finalized_timepoint: &CompatibleFinalizedTimepoint,
         unlocked: &HashSet<OutPoint>,
     ) -> Result<Vec<CellInfo>> {
         self.rpc_client
             .query_finalized_owner_lock_withdrawal_cells(
-                last_finalized_block_number,
+                compatible_finalized_timepoint,
                 unlocked,
                 Self::MAX_WITHDRAWALS_PER_TX,
             )

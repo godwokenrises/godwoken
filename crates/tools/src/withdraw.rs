@@ -13,7 +13,7 @@ use gw_generator::account_lock_manage::{
     eip712::{traits::EIP712Encode, types::Withdrawal},
     secp256k1::Secp256k1Eth,
 };
-use gw_types::core::ScriptHashType;
+use gw_types::core::{ScriptHashType, Timepoint};
 use gw_types::packed::{CellOutput, Script, WithdrawalLockArgs, WithdrawalRequestExtra};
 use gw_types::U256;
 use gw_types::{
@@ -216,13 +216,13 @@ fn parse_capacity(capacity: &str) -> Result<u64> {
 fn minimal_withdrawal_capacity(is_sudt: bool) -> Result<u64> {
     // fixed size, the specific value is not important.
     let dummy_hash = gw_types::core::H256::zero();
-    let dummy_block_number = 0u64;
+    let dummy_timepoint = Timepoint::from_block_number(0);
     let dummy_rollup_type_hash = dummy_hash;
 
     let dummy_withdrawal_lock_args = WithdrawalLockArgs::new_builder()
         .account_script_hash(dummy_hash.pack())
         .withdrawal_block_hash(dummy_hash.pack())
-        .withdrawal_block_number(dummy_block_number.pack())
+        .withdrawal_block_number(dummy_timepoint.full_value().pack())
         .owner_lock_hash(dummy_hash.pack())
         .build();
 

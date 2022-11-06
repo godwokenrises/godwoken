@@ -9,6 +9,8 @@ use gw_rpc_client::{
     indexer_types::{Order, SearchKey, SearchKeyFilter},
     rpc_client::RPCClient,
 };
+use gw_types::core::Timepoint;
+use gw_types::offchain::CompatibleFinalizedTimepoint;
 use gw_types::{
     core::ScriptHashType,
     offchain::{CellInfo, InputCellInfo},
@@ -37,12 +39,20 @@ pub async fn generate(
     local_cells_manager: &LocalCellsManager,
 ) -> Result<GeneratedStake> {
     let owner_lock_hash = lock_script.hash();
+    let stake_timepoint = {
+        let block_number: u64 = block.raw().number().unpack();
+        if rollup_context.global_state_version(block_number) < 2 {
+            Timepoint::from_block_number(block_number)
+        } else {
+            let block_timestamp: u64 = block.raw().timestamp().unpack();
+            Timepoint::from_timestamp(block_timestamp)
+        }
+    };
     let lock_args: Bytes = {
         let stake_lock_args = StakeLockArgs::new_builder()
             .owner_lock_hash(owner_lock_hash.pack())
-            .stake_block_number(block.raw().number())
+            .stake_block_number(stake_timepoint.full_value().pack())
             .build();
-
         let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
         rollup_type_hash
             .chain(stake_lock_args.as_slice().iter())
@@ -128,14 +138,14 @@ pub async fn generate(
 
 /// query stake
 ///
-/// return cell which stake_block_number is less than last_finalized_block_number if the args isn't none
-/// otherwise return stake cell randomly
+/// Returns a finalized stake_state_cell if `compatible_finalize_timepoint_opt` is some,
+/// otherwise returns a random stake_state_cell.
 pub async fn query_stake(
     client: &CKBIndexerClient,
     rollup_context: &RollupContext,
     owner_lock_hash: [u8; 32],
     required_staking_capacity: u64,
-    last_finalized_block_number: Option<u64>,
+    compatible_finalize_timepoint_opt: Option<CompatibleFinalizedTimepoint>,
     local_cells_manager: &LocalCellsManager,
 ) -> Result<Option<CellInfo>> {
     let lock = Script::new_builder()
@@ -170,10 +180,11 @@ pub async fn query_stake(
                 Ok(r) => r,
                 Err(_) => return false,
             };
-            match last_finalized_block_number {
-                Some(last_finalized_block_number) => {
-                    stake_lock_args.stake_block_number().unpack() <= last_finalized_block_number
-                        && stake_lock_args.owner_lock_hash().as_slice() == owner_lock_hash
+            match &compatible_finalize_timepoint_opt {
+                Some(compatible_finalized_timepoint) => {
+                    compatible_finalized_timepoint.is_finalized(&Timepoint::from_full_value(
+                        stake_lock_args.stake_block_number().unpack(),
+                    )) && stake_lock_args.owner_lock_hash().as_slice() == owner_lock_hash
                 }
                 None => stake_lock_args.owner_lock_hash().as_slice() == owner_lock_hash,
             }

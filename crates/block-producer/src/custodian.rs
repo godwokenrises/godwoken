@@ -7,6 +7,8 @@ use gw_rpc_client::{
     indexer_types::{Order, SearchKey, SearchKeyFilter},
     rpc_client::{QueryResult, RPCClient},
 };
+use gw_types::core::Timepoint;
+use gw_types::offchain::CompatibleFinalizedTimepoint;
 use gw_types::{
     core::ScriptHashType,
     offchain::{CellInfo, CollectedCustodianCells},
@@ -16,16 +18,14 @@ use gw_types::{
 use gw_utils::local_cells::{
     collect_local_and_indexer_cells, CollectLocalAndIndexerCursor, LocalCellsManager,
 };
-use tracing::instrument;
 
 pub const MAX_CUSTODIANS: usize = 50;
 
-#[instrument(skip_all, fields(last_finalized_block_number = last_finalized_block_number))]
 pub async fn query_mergeable_custodians(
     local_cells_manager: &LocalCellsManager,
     rpc_client: &RPCClient,
     collected_custodians: CollectedCustodianCells,
-    last_finalized_block_number: u64,
+    compatible_finalized_timepoint: &CompatibleFinalizedTimepoint,
 ) -> Result<QueryResult<CollectedCustodianCells>> {
     if collected_custodians.cells_info.len() >= MAX_CUSTODIANS {
         return Ok(QueryResult::Full(collected_custodians));
@@ -35,7 +35,7 @@ pub async fn query_mergeable_custodians(
         local_cells_manager,
         rpc_client,
         collected_custodians,
-        last_finalized_block_number,
+        compatible_finalized_timepoint,
         MAX_CUSTODIANS,
     )
     .await?;
@@ -46,17 +46,16 @@ pub async fn query_mergeable_custodians(
     query_mergeable_sudt_custodians(
         rpc_client,
         query_result.expect_any(),
-        last_finalized_block_number,
+        compatible_finalized_timepoint,
         local_cells_manager,
     )
     .await
 }
 
-#[instrument(skip_all, fields(last_finalized_block_number = last_finalized_block_number))]
 async fn query_mergeable_sudt_custodians(
     rpc_client: &RPCClient,
     collected: CollectedCustodianCells,
-    last_finalized_block_number: u64,
+    compatible_finalized_timepoint: &CompatibleFinalizedTimepoint,
     local_cells_manager: &LocalCellsManager,
 ) -> Result<QueryResult<CollectedCustodianCells>> {
     if collected.cells_info.len() >= MAX_CUSTODIANS {
@@ -67,7 +66,7 @@ async fn query_mergeable_sudt_custodians(
         local_cells_manager,
         rpc_client,
         collected,
-        last_finalized_block_number,
+        compatible_finalized_timepoint,
         MAX_CUSTODIANS,
     )
     .await
@@ -77,7 +76,7 @@ async fn query_mergeable_ckb_custodians(
     local_cells_manager: &LocalCellsManager,
     rpc_client: &RPCClient,
     mut collected: CollectedCustodianCells,
-    last_finalized_block_number: u64,
+    compatible_finalized_timepoint: &CompatibleFinalizedTimepoint,
     max_cells: usize,
 ) -> Result<QueryResult<CollectedCustodianCells>> {
     const MIN_MERGE_CELLS: usize = 5;
@@ -136,9 +135,9 @@ async fn query_mergeable_ckb_custodians(
                 Ok(r) => r,
                 Err(_) => continue,
             };
-            if custodian_lock_args_reader.deposit_block_number().unpack()
-                > last_finalized_block_number
-            {
+            if !compatible_finalized_timepoint.is_finalized(&Timepoint::from_full_value(
+                custodian_lock_args_reader.deposit_block_number().unpack(),
+            )) {
                 continue;
             }
 
@@ -172,7 +171,7 @@ pub async fn query_mergeable_sudt_custodians_cells(
     local_cells_manager: &LocalCellsManager,
     rpc_client: &RPCClient,
     mut collected: CollectedCustodianCells,
-    last_finalized_block_number: u64,
+    compatible_finalized_timepoint: &CompatibleFinalizedTimepoint,
     max_cells: usize,
 ) -> Result<QueryResult<CollectedCustodianCells>> {
     const MAX_MERGE_SUDTS: usize = 5;
@@ -234,7 +233,7 @@ pub async fn query_mergeable_sudt_custodians_cells(
     };
 
     let sudt_type_scripts = rpc_client
-        .query_random_sudt_type_script(last_finalized_block_number, MAX_MERGE_SUDTS)
+        .query_random_sudt_type_script(compatible_finalized_timepoint, MAX_MERGE_SUDTS)
         .await?;
     log::info!("merge {} random sudt type scripts", sudt_type_scripts.len());
     let mut collected_set: HashSet<_> = {
@@ -248,7 +247,7 @@ pub async fn query_mergeable_sudt_custodians_cells(
         let query_result = rpc_client
             .query_mergeable_sudt_custodians_cells_by_sudt_type_script(
                 &sudt_type_script,
-                last_finalized_block_number,
+                compatible_finalized_timepoint,
                 remain,
                 &collected_set,
             )

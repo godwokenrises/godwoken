@@ -17,7 +17,7 @@ use gw_store::state::traits::JournalDB;
 use gw_store::state::MemStateDB;
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
-use gw_types::core::{ChallengeTargetType, Status};
+use gw_types::core::{ChallengeTargetType, Status, Timepoint};
 use gw_types::offchain::RunResult;
 use gw_types::packed::{
     AccountMerkleState, BlockMerkleState, Byte32, CCTransactionSignatureWitness,
@@ -320,13 +320,17 @@ impl MockBlockParam {
                 .build()
         };
 
-        let last_finalized_block_number = self.number.saturating_sub(self.finality_blocks);
-
+        let last_finalized_timepoint = if self.rollup_context.global_state_version(self.number) < 2
+        {
+            Timepoint::from_block_number(self.number.saturating_sub(self.finality_blocks))
+        } else {
+            unimplemented!()
+        };
         let global_state = GlobalState::new_builder()
             .account(post_account)
             .block(post_block)
             .tip_block_hash(raw_block.hash().pack())
-            .last_finalized_block_number(last_finalized_block_number.pack())
+            .last_finalized_block_number(last_finalized_timepoint.full_value().pack())
             .reverted_block_root(self.reverted_block_root.clone())
             .rollup_config_hash(self.rollup_config_hash.clone())
             .status((Status::Halting as u8).into())

@@ -36,6 +36,7 @@ use godwoken_rpc::GodwokenRpcClient;
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
+use gw_types::offchain::CompatibleFinalizedTimepoint;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -1449,9 +1450,10 @@ async fn main() -> Result<()> {
             let custodian_script_type_hash =
                 cli_args::to_h256(m.value_of("custodian-script-type-hash").unwrap())?;
             let min_capacity: u64 = m.value_of("min-capacity").unwrap_or_default().parse()?;
-            let tip_block_number: u64 =
+            let _tip_block_number: u64 =
                 m.value_of("tip-block-number").unwrap_or_default().parse()?;
-            let finalize_blocks: u64 = m.value_of("finality-blocks").unwrap_or_default().parse()?;
+            let _finalize_blocks: u64 =
+                m.value_of("finality-blocks").unwrap_or_default().parse()?;
             let rpc_client = CKBIndexerClient::with_url(indexer_rpc_url)?;
 
             let alias: HashMap<ckb_types::bytes::Bytes, String> = [
@@ -1485,14 +1487,16 @@ async fn main() -> Result<()> {
             })
             .collect();
 
-            let last_finalized_block_number = tip_block_number.saturating_sub(finalize_blocks);
+            // FIXME @keroro520 get global state, construct CompatibleFinalizedTimepoint
+            let compatible_finalized_timepoint = CompatibleFinalizedTimepoint::default();
+            // tip_block_number.saturating_sub(finalize_blocks);
 
             let stat = stat::stat_custodian_cells(
                 &rpc_client,
                 &rollup_type_hash.into(),
                 &custodian_script_type_hash.into(),
                 Some(min_capacity),
-                last_finalized_block_number,
+                &compatible_finalized_timepoint,
             )
             .await?;
 

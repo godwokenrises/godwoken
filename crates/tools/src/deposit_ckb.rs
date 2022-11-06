@@ -12,6 +12,7 @@ use ckb_types::{
     prelude::Unpack as CKBUnpack,
 };
 use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
+use gw_types::core::Timepoint;
 use gw_types::packed::{CellOutput, CustodianLockArgs};
 use gw_types::U256;
 use gw_types::{
@@ -239,12 +240,12 @@ async fn get_balance_by_script_hash(
 fn minimal_deposit_capacity(deposit_lock_args: &DepositLockArgs) -> Result<u64> {
     // fixed size, the specific value is not important.
     let dummy_hash = gw_types::core::H256::zero();
-    let dummy_block_number = 0u64;
+    let dummy_timepoint = Timepoint::from_block_number(0);
     let dummy_rollup_type_hash = dummy_hash;
 
     let custodian_lock_args = CustodianLockArgs::new_builder()
         .deposit_block_hash(dummy_hash.pack())
-        .deposit_block_number(gw_types::prelude::Pack::pack(&dummy_block_number))
+        .deposit_block_number(gw_types::prelude::Pack::pack(&dummy_timepoint.full_value()))
         .deposit_lock_args(deposit_lock_args.clone())
         .build();
 
