@@ -550,7 +550,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     }
     let chain = Arc::new(Mutex::new(
         Chain::create(
-            &rollup_config,
+            rollup_config.clone(),
             &config.chain.rollup_type_script.clone().into(),
             &config.chain,
             store.clone(),

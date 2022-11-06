@@ -115,7 +115,7 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
     };
 
     let chain = Chain::create(
-        &rollup_config,
+        rollup_config,
         &rollup_type_script,
         &config.chain,
         local_store.clone(),

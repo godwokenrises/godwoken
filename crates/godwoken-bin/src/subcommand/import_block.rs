@@ -51,7 +51,7 @@ impl ImportBlock {
     pub async fn create(args: ImportArgs) -> Result<Self> {
         let base = BaseInitComponents::init(&args.config, true).await?;
         let chain = Chain::create(
-            &base.rollup_config,
+            base.rollup_config.clone(),
             &base.rollup_type_script,
             &args.config.chain,
             base.store,
