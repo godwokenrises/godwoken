@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use crate::testing_tool::chain::{
     build_sync_tx, construct_block, construct_block_with_timestamp, into_deposit_info_cell,
-    produce_empty_block, restart_chain, setup_chain, DEFAULT_FINALITY_BLOCKS, TEST_CHAIN_ID,
+    restart_chain, setup_chain, DEFAULT_FINALITY_BLOCKS, TEST_CHAIN_ID,
 };
 use crate::testing_tool::common::random_always_success_script;
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
@@ -77,7 +77,29 @@ async fn test_restore_mem_pool_pending_withdrawal() {
     assert!(chain.last_sync_event().is_success());
 
     for _ in 0..DEFAULT_FINALITY_BLOCKS {
-        produce_empty_block(&mut chain).await.unwrap();
+        let block_result = {
+            let mem_pool = chain.mem_pool().as_ref().unwrap();
+            let mut mem_pool = mem_pool.lock().await;
+            construct_block(&chain, &mut mem_pool, Default::default())
+                .await
+                .unwrap()
+        };
+        let empty_l1action = L1Action {
+            context: L1ActionContext::SubmitBlock {
+                l2block: block_result.block.clone(),
+                deposit_info_vec: Default::default(),
+                deposit_asset_scripts: Default::default(),
+                withdrawals: Default::default(),
+            },
+            transaction: build_sync_tx(rollup_cell.clone(), block_result),
+        };
+        let param = SyncParam {
+            updates: vec![empty_l1action],
+            reverts: Default::default(),
+        };
+        chain.sync(param).await.unwrap();
+        chain.notify_new_tip().await.unwrap();
+        assert!(chain.last_sync_event().is_success());
     }
 
     // Generate withdrawals

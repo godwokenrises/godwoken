@@ -23,7 +23,7 @@ use gw_generator::account_lock_manage::always_success::AlwaysSuccess;
 use gw_generator::account_lock_manage::secp256k1::Secp256k1Eth;
 use gw_generator::account_lock_manage::AccountLockManage;
 use gw_store::{readonly::StoreReadonly, traits::chain_store::ChainStore, Store};
-use gw_types::core::Status;
+use gw_types::core::{Status, Timepoint};
 use gw_types::packed::DepositInfoVec;
 use gw_types::{
     bytes::Bytes,
@@ -68,9 +68,9 @@ async fn test_export_import_block() {
         .finality_blocks(0u64.pack())
         .build();
 
-    let last_finalized_block_number = 100u64;
+    let last_finalized_timepoint = Timepoint::from_block_number(100);
     let global_state = GlobalState::new_builder()
-        .last_finalized_block_number(last_finalized_block_number.pack())
+        .last_finalized_block_number(last_finalized_timepoint.full_value().pack())
         .rollup_config_hash(rollup_config.hash().pack())
         .build();
 

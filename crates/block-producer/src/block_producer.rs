@@ -22,6 +22,8 @@ use gw_mem_pool::{
 };
 use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
 use gw_store::Store;
+use gw_types::core::Timepoint;
+use gw_types::offchain::{global_state_from_slice, CompatibleFinalizedTimepoint};
 use gw_types::{
     bytes::Bytes,
     offchain::{DepositInfo, InputCellInfo},
@@ -59,9 +61,17 @@ fn generate_custodian_cells(
     deposit_cells: &[DepositInfo],
 ) -> Vec<(CellOutput, Bytes)> {
     let block_hash: H256 = block.hash().into();
-    let block_number = block.raw().number().unpack();
+    let block_timepoint = {
+        let block_number = block.raw().number().unpack();
+        if rollup_context.global_state_version(block_number) < 2 {
+            Timepoint::from_block_number(block_number)
+        } else {
+            let block_timestamp = block.raw().timestamp().unpack();
+            Timepoint::from_timestamp(block_timestamp)
+        }
+    };
     let to_custodian = |deposit| -> _ {
-        to_custodian_cell(rollup_context, &block_hash, block_number, deposit)
+        to_custodian_cell(rollup_context, &block_hash, &block_timepoint, deposit)
             .expect("sanitized deposit")
     };
 
@@ -168,6 +178,7 @@ impl BlockProducer {
             let smt = db.reverted_block_smt()?;
             smt.root().to_owned()
         };
+
         let param = ProduceBlockParam {
             stake_cell_owner_lock_hash: self.wallet.lock_script().hash().into(),
             reverted_block_root,
@@ -332,16 +343,17 @@ impl BlockProducer {
             .outputs_mut()
             .push((generated_stake.output, generated_stake.output_data));
 
-        let last_finalized_block_number = self
-            .generator
-            .rollup_context()
-            .last_finalized_block_number(block.raw().number().unpack() - 1);
+        let prev_global_state = global_state_from_slice(&rollup_cell.data)?;
+        let prev_compatible_finalized_timepoint = CompatibleFinalizedTimepoint::from_global_state(
+            &prev_global_state,
+            rollup_context.rollup_config.finality_blocks().unpack(),
+        );
         let finalized_custodians = gw_mem_pool::custodian::query_finalized_custodians(
             rpc_client,
             &self.store.get_snapshot(),
             withdrawal_extras.iter().map(|w| w.request()),
             rollup_context,
-            last_finalized_block_number,
+            &prev_compatible_finalized_timepoint,
             local_cells_manager,
         )
         .await?
@@ -350,7 +362,7 @@ impl BlockProducer {
             local_cells_manager,
             rpc_client,
             finalized_custodians,
-            last_finalized_block_number,
+            &prev_compatible_finalized_timepoint,
         )
         .await?
         .expect_any();

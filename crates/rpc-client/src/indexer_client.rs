@@ -9,7 +9,8 @@ use anyhow::{Context, Result};
 use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
 use ckb_types::prelude::Entity;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{JsonBytes, Uint32};
-use gw_types::offchain::{CustodianStat, SUDTStat};
+use gw_types::core::Timepoint;
+use gw_types::offchain::{CompatibleFinalizedTimepoint, CustodianStat, SUDTStat};
 use gw_types::packed::CustodianLockArgs;
 use gw_types::{packed::Script, prelude::*};
 use serde::de::DeserializeOwned;
@@ -87,12 +88,11 @@ impl CKBIndexerClient {
         .await
     }
 
-    #[instrument(skip_all, fields(last_finalized_block_number = last_finalized_block_number))]
     pub async fn stat_custodian_cells(
         &self,
         lock: Script,
         min_capacity: Option<u64>,
-        last_finalized_block_number: u64,
+        compatible_finalized_timepoint: &CompatibleFinalizedTimepoint,
     ) -> Result<CustodianStat> {
         let mut sudt_stat: HashMap<ckb_types::packed::Script, SUDTStat> = HashMap::default();
 
@@ -143,7 +143,9 @@ impl CKBIndexerClient {
                 let is_finalized = {
                     let args = cell.output.lock.args.into_bytes();
                     let args = CustodianLockArgs::from_slice(&args[32..]).unwrap();
-                    args.deposit_block_number().unpack() <= last_finalized_block_number
+                    compatible_finalized_timepoint.is_finalized(&Timepoint::from_full_value(
+                        args.deposit_block_number().unpack(),
+                    ))
                 };
                 if is_finalized {
                     finalized_capacity += capacity as u128;

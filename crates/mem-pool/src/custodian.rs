@@ -8,6 +8,8 @@ use gw_rpc_client::{
     rpc_client::{QueryResult, RPCClient},
 };
 use gw_store::traits::chain_store::ChainStore;
+use gw_types::core::Timepoint;
+use gw_types::offchain::CompatibleFinalizedTimepoint;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -29,7 +31,7 @@ use crate::constants::MAX_CUSTODIANS;
 pub fn to_custodian_cell(
     rollup_context: &RollupContext,
     block_hash: &H256,
-    block_number: u64,
+    block_timepoint: &Timepoint,
     deposit_info: &DepositInfo,
 ) -> Result<(CellOutput, Bytes), u128> {
     let lock_args: Bytes = {
@@ -40,7 +42,7 @@ pub fn to_custodian_cell(
 
         let custodian_lock_args = CustodianLockArgs::new_builder()
             .deposit_block_hash(Into::<[u8; 32]>::into(*block_hash).pack())
-            .deposit_block_number(block_number.pack())
+            .deposit_block_number(block_timepoint.full_value().pack())
             .deposit_lock_args(deposit_lock_args)
             .build();
 
@@ -106,13 +108,12 @@ pub fn sum_withdrawals<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> 
     )
 }
 
-#[instrument(skip_all, fields(last_finalized_block_number = last_finalized_block_number))]
 pub async fn query_finalized_custodians<WithdrawalIter: Iterator<Item = WithdrawalRequest>>(
     rpc_client: &RPCClient,
     db: &impl ChainStore,
     withdrawals: WithdrawalIter,
     rollup_context: &RollupContext,
-    last_finalized_block_number: u64,
+    compatible_finalized_timepoint: &CompatibleFinalizedTimepoint,
     local_cells_manager: &LocalCellsManager,
 ) -> Result<QueryResult<CollectedCustodianCells>> {
     let total_withdrawal_amount = sum_withdrawals(withdrawals);
@@ -124,7 +125,7 @@ pub async fn query_finalized_custodians<WithdrawalIter: Iterator<Item = Withdraw
         rollup_context,
         &total_withdrawal_amount,
         total_change_capacity,
-        last_finalized_block_number,
+        compatible_finalized_timepoint,
         None,
         MAX_CUSTODIANS,
     )
@@ -211,7 +212,7 @@ async fn query_finalized_custodian_cells(
     rollup_context: &RollupContext,
     withdrawals_amount: &WithdrawalsAmount,
     custodian_change_capacity: u128,
-    last_finalized_block_number: u64,
+    compatible_finalized_timepoint: &CompatibleFinalizedTimepoint,
     min_capacity: Option<u64>,
     max_cells: usize,
 ) -> Result<QueryResult<CollectedCustodianCells>> {
@@ -294,7 +295,9 @@ async fn query_finalized_custodian_cells(
                 Err(_) => continue,
             };
 
-            if custodian_lock_args.deposit_block_number().unpack() > last_finalized_block_number {
+            if !compatible_finalized_timepoint.is_finalized(&Timepoint::from_full_value(
+                custodian_lock_args.deposit_block_number().unpack(),
+            )) {
                 continue;
             }
 
@@ -373,8 +376,8 @@ mod tests {
     use gw_rpc_client::indexer_client::CKBIndexerClient;
     use gw_rpc_client::rpc_client::QueryResult;
     use gw_types::bytes::Bytes;
-    use gw_types::core::ScriptHashType;
-    use gw_types::offchain::{CellInfo, WithdrawalsAmount};
+    use gw_types::core::{ScriptHashType, Timepoint};
+    use gw_types::offchain::{CellInfo, CompatibleFinalizedTimepoint, WithdrawalsAmount};
     use gw_types::packed::{
         CellOutput, CustodianLockArgs, OutPoint, RollupConfig, Script, Uint128,
     };
@@ -406,17 +409,20 @@ mod tests {
             sudt: HashMap::from([(sudt_script.hash(), 500u128); 1]),
         };
 
-        const FINALIZED_BLOCK_NUMBER: u64 = 100;
+        let last_finalized_block_number = 100;
+        let last_finalized_timepoint = Timepoint::from_block_number(last_finalized_block_number);
+        let compatible_finalized_timepoint =
+            CompatibleFinalizedTimepoint::from_block_number(last_finalized_block_number, 0);
         let ten_ckb_cells = generate_finalized_ckb_custodian_cells(
             10,
             &rollup_context,
-            FINALIZED_BLOCK_NUMBER,
+            &last_finalized_timepoint,
             1000 * CKB,
         );
         let one_sudt_cell = generate_finalized_sudt_custodian_cells(
             1,
             &rollup_context,
-            FINALIZED_BLOCK_NUMBER,
+            &last_finalized_timepoint,
             1000 * CKB,
             sudt_script.clone(),
             1000u128.pack(),
@@ -438,7 +444,7 @@ mod tests {
             &rollup_context,
             &withdrawals_amount,
             change_capacity,
-            FINALIZED_BLOCK_NUMBER,
+            &compatible_finalized_timepoint,
             None,
             max_five_cells,
         )
@@ -451,12 +457,12 @@ mod tests {
     fn generate_finalized_ckb_custodian_cells(
         cell_num: usize,
         rollup_context: &RollupContext,
-        last_finalized_block_number: u64,
+        last_finalized_timepoint: &Timepoint,
         capacity: u64,
     ) -> Vec<CellInfo> {
         let args = {
             let custodian_lock_args = CustodianLockArgs::new_builder()
-                .deposit_block_number(last_finalized_block_number.pack())
+                .deposit_block_number(last_finalized_timepoint.full_value().pack())
                 .build();
 
             let mut args = rollup_context.rollup_script_hash.as_slice().to_vec();
@@ -486,7 +492,7 @@ mod tests {
     fn generate_finalized_sudt_custodian_cells(
         cell_num: usize,
         rollup_context: &RollupContext,
-        last_finalized_block_number: u64,
+        last_finalized_timepoint: &Timepoint,
         capacity: u64,
         sudt_script: Script,
         amount: Uint128,
@@ -494,7 +500,7 @@ mod tests {
         let ckb_cells = generate_finalized_ckb_custodian_cells(
             cell_num,
             rollup_context,
-            last_finalized_block_number,
+            last_finalized_timepoint,
             capacity,
         );
 

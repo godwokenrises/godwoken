@@ -1,7 +1,6 @@
 use gw_config::ForkConfig;
 use gw_types::core::H256;
 use gw_types::packed::RollupConfig;
-use gw_types::prelude::Unpack;
 
 /// A wildly used context, contains several common-used configurations.
 #[derive(Clone)]
@@ -16,10 +15,5 @@ impl RollupContext {
     /// Returns the version of global state for `block_number`.
     pub fn global_state_version(&self, block_number: u64) -> u8 {
         self.fork_config.global_state_version(block_number)
-    }
-
-    pub fn last_finalized_block_number(&self, tip_number: u64) -> u64 {
-        let finality: u64 = self.rollup_config.finality_blocks().unpack();
-        tip_number.saturating_sub(finality)
     }
 }

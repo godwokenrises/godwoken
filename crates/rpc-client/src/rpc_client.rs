@@ -10,7 +10,7 @@ use ckb_types::core::hardfork::HardForkSwitch;
 use ckb_types::prelude::Entity;
 use gw_common::H256;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, Consensus, Uint32};
-use gw_types::offchain::{CellStatus, CellWithStatus, DepositInfo};
+use gw_types::offchain::{CellStatus, CellWithStatus, CompatibleFinalizedTimepoint, DepositInfo};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -27,6 +27,7 @@ use rand::prelude::*;
 use serde_json::json;
 use tracing::instrument;
 
+use gw_types::core::Timepoint;
 use std::{collections::HashSet, time::Duration};
 
 fn to_cell_info(cell: Cell) -> CellInfo {
@@ -883,7 +884,7 @@ impl RPCClient {
     #[instrument(skip_all)]
     pub async fn query_finalized_owner_lock_withdrawal_cells(
         &self,
-        last_finalized_block_number: u64,
+        compatible_finalized_timepoint: &CompatibleFinalizedTimepoint,
         exclusions: &HashSet<OutPoint>,
         max_cells: usize,
     ) -> Result<Vec<CellInfo>> {
@@ -927,7 +928,7 @@ impl RPCClient {
 
                 if let Err(err) = crate::withdrawal::verify_unlockable_to_owner(
                     &info,
-                    last_finalized_block_number,
+                    compatible_finalized_timepoint,
                     &self.rollup_config.l1_sudt_script_type_hash(),
                 ) {
                     log::debug!("[finalized withdrawal] skip, verify failed {}", err);
@@ -1068,7 +1069,7 @@ impl RPCClient {
     #[instrument(skip(self))]
     pub async fn query_random_sudt_type_script(
         &self,
-        last_finalized_block_number: u64,
+        compatible_finalized_timepoint: &CompatibleFinalizedTimepoint,
         max: usize,
     ) -> Result<HashSet<Script>> {
         let custodian_lock = Script::new_builder()
@@ -1133,8 +1134,9 @@ impl RPCClient {
                     Ok(()) => CustodianLockArgs::new_unchecked(args.slice(32..)),
                     Err(_) => continue,
                 };
-                if custodian_lock_args.deposit_block_number().unpack() > last_finalized_block_number
-                {
+                if !compatible_finalized_timepoint.is_finalized(&Timepoint::from_full_value(
+                    custodian_lock_args.deposit_block_number().unpack(),
+                )) {
                     continue;
                 }
 
@@ -1158,11 +1160,10 @@ impl RPCClient {
         Ok(sudt_type_script_set)
     }
 
-    #[instrument(skip_all, fields(last_finalized_block_number = last_finalized_block_number, max_cells = max_cells))]
     pub async fn query_mergeable_sudt_custodians_cells_by_sudt_type_script(
         &self,
         sudt_type_script: &Script,
-        last_finalized_block_number: u64,
+        compatible_finalized_timepoint: &CompatibleFinalizedTimepoint,
         max_cells: usize,
         exclusions: &HashSet<OutPoint>,
     ) -> Result<QueryResult<Vec<CellInfo>>> {
@@ -1231,8 +1232,9 @@ impl RPCClient {
                     Err(_) => continue,
                 };
 
-                if custodian_lock_args.deposit_block_number().unpack() > last_finalized_block_number
-                {
+                if !compatible_finalized_timepoint.is_finalized(&Timepoint::from_full_value(
+                    custodian_lock_args.deposit_block_number().unpack(),
+                )) {
                     continue;
                 }
 
