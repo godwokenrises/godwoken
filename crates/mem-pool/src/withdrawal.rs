@@ -174,7 +174,6 @@ impl<'a> Generator<'a> {
 
         // Verify remained ckb
         let req_ckb = req.raw().capacity().unpack() as u128;
-        dbg!(ckb_custodian.balance, req_ckb);
         match ckb_custodian.balance.checked_sub(req_ckb) {
             Some(_) => Ok(()),
             // Consume all remained ckb

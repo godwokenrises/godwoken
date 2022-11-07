@@ -820,7 +820,6 @@ async fn test_v0_v1_wrong_global_state_tip_block_timestamp_in_submit_block() {
     .witness(CKBPack::pack(&witness.as_bytes()))
     .build();
 
-    dbg!("start verify 111");
     let err = ctx.verify_tx(tx).unwrap_err();
     let expected_err = ScriptError::ValidationFailure(
         format!(
@@ -856,7 +855,6 @@ async fn test_v0_v1_wrong_global_state_tip_block_timestamp_in_submit_block() {
     .witness(CKBPack::pack(&witness.as_bytes()))
     .build();
 
-    dbg!("start verify");
     let err = ctx.verify_tx(tx).unwrap_err();
     let expected_err = ScriptError::ValidationFailure(
         format!(
