@@ -1625,7 +1625,6 @@ dependencies = [
  "futures",
  "gw-chain",
  "gw-challenge",
- "gw-ckb-hardfork",
  "gw-common",
  "gw-config",
  "gw-db",
@@ -1715,16 +1714,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gw-ckb-hardfork"
-version = "1.7.0"
-dependencies = [
- "arc-swap",
- "ckb-types",
- "lazy_static",
- "tokio",
-]
-
-[[package]]
 name = "gw-common"
 version = "1.7.0"
 dependencies = [
@@ -1776,18 +1765,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gw-eoa-mapping"
-version = "1.7.0"
-dependencies = [
- "anyhow",
- "gw-common",
- "gw-traits",
- "gw-types",
- "gw-utils",
- "sha3",
-]
-
-[[package]]
 name = "gw-generator"
 version = "1.7.0"
 dependencies = [
@@ -1796,7 +1773,6 @@ dependencies = [
  "blake2b-rs",
  "ckb-vm",
  "ethabi",
- "gw-ckb-hardfork",
  "gw-common",
  "gw-config",
  "gw-store",
@@ -2049,7 +2025,6 @@ dependencies = [
  "gw-config",
  "gw-db",
  "gw-dynamic-config",
- "gw-eoa-mapping",
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",

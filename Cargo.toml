@@ -19,7 +19,6 @@ members = [
   "crates/benches",
   "crates/version",
   "crates/utils",
-  "crates/ckb-hardfork",
   "crates/tx-filter",
   "crates/replay-chain",
   "crates/dynamic-config",

@@ -76,7 +76,7 @@ pub struct BackendManage {
     /// define here not in backends,
     /// so we don't need to implement the trait `Clone` of AotCode
     #[cfg(has_asm)]
-    aot_codes: (HashMap<H256, AotCode>, HashMap<H256, AotCode>),
+    aot_codes: HashMap<H256, AotCode>,
 }
 
 impl BackendManage {
@@ -158,14 +158,9 @@ impl BackendManage {
 
     #[cfg(has_asm)]
     fn compile_backend(&mut self, backend: &Backend) {
-        self.aot_codes.0.insert(
+        self.aot_codes.insert(
             backend.checksum.generator,
-            self.aot_compile(&backend.generator, 0)
-                .expect("Ahead-of-time compile"),
-        );
-        self.aot_codes.1.insert(
-            backend.checksum.generator,
-            self.aot_compile(&backend.generator, 1)
+            self.aot_compile(&backend.generator)
                 .expect("Ahead-of-time compile"),
         );
     }
@@ -195,13 +190,8 @@ impl BackendManage {
     }
 
     #[cfg(has_asm)]
-    fn aot_compile(&self, code_bytes: &Bytes, vm_version: u32) -> Result<AotCode, ckb_vm::Error> {
-        log::info!("Compile AotCode with VMVersion::V{}", vm_version);
-        let vm_version = match vm_version {
-            0 => crate::types::vm::VMVersion::V0,
-            1 => crate::types::vm::VMVersion::V1,
-            ver => panic!("Unsupport VMVersion: {}", ver),
-        };
+    fn aot_compile(&self, code_bytes: &Bytes) -> Result<AotCode, ckb_vm::Error> {
+        let vm_version = crate::types::vm::VMVersion::V1;
         let mut aot_machine = ckb_vm::machine::aot::AotCompilingMachine::load(
             code_bytes,
             Some(Box::new(crate::vm_cost_model::instruction_cycles)),
@@ -213,20 +203,9 @@ impl BackendManage {
 
     /// get aot_code according to special VM version
     #[cfg(has_asm)]
-    pub(crate) fn get_aot_code(&self, code_hash: &H256, vm_version: u32) -> Option<&AotCode> {
-        log::debug!(
-            "get_aot_code hash: {} version: {}",
-            hex::encode(code_hash.as_slice()),
-            vm_version
-        );
-        match vm_version {
-            0 => self.aot_codes.0.get(code_hash),
-            1 => self.aot_codes.1.get(code_hash),
-            ver => {
-                log::error!("Unsupport VMVersion: {}", ver);
-                None
-            }
-        }
+    pub(crate) fn get_aot_code(&self, code_hash: &H256) -> Option<&AotCode> {
+        log::debug!("get_aot_code hash: {}", hex::encode(code_hash.as_slice()),);
+        self.aot_codes.get(code_hash)
     }
 }
 

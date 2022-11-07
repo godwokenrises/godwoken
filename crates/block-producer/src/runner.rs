@@ -10,11 +10,9 @@ use crate::{
     withdrawal_unlocker::FinalizedWithdrawalUnlocker,
 };
 use anyhow::{anyhow, bail, Context, Result};
-use ckb_types::core::hardfork::HardForkSwitch;
 use futures::future::OptionFuture;
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainMockContextBuildArgs};
-use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH, GLOBAL_VM_VERSION};
 use gw_common::{blake2b::new_blake2b, registry_address::RegistryAddress, H256};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
 use gw_db::migrate::open_or_create_db;
@@ -50,13 +48,13 @@ use gw_types::{
 };
 use gw_utils::{
     exponential_backoff::ExponentialBackoff, genesis_info::CKBGenesisInfo, liveness::Liveness,
-    local_cells::LocalCellsManager, since::EpochNumberWithFraction, wallet::Wallet,
+    local_cells::LocalCellsManager, wallet::Wallet,
 };
 use semver::Version;
 use std::{
     collections::HashMap,
     net::{SocketAddr, ToSocketAddrs},
-    sync::{atomic::Ordering, Arc},
+    sync::Arc,
     time::{Duration, Instant},
 };
 use tentacle::service::ProtocolMeta;
@@ -200,29 +198,6 @@ impl ChainTask {
                         err
                     );
                 }
-            }
-
-            // update global hardfork info
-            let hardfork_switch = self.rpc_client.get_hardfork_switch().await?;
-            let rfc0032_epoch_number = hardfork_switch.rfc_0032();
-            let global_hardfork_switch = GLOBAL_HARDFORK_SWITCH.load();
-            if !is_hardfork_switch_eq(&*global_hardfork_switch, &hardfork_switch) {
-                GLOBAL_HARDFORK_SWITCH.store(Arc::new(hardfork_switch));
-            }
-
-            // when switching the epoch, update the tip epoch number and VM version
-            let tip_epoch = {
-                let tip_epoch: u64 = block.header().raw().epoch().unpack();
-                EpochNumberWithFraction::from_full_value(tip_epoch)
-            };
-            if tip_epoch.index() == 0 || tip_epoch.index() == tip_epoch.length() - 1 {
-                let vm_version: u32 = if tip_epoch.number() >= rfc0032_epoch_number {
-                    1
-                } else {
-                    0
-                };
-                GLOBAL_CURRENT_EPOCH_NUMBER.store(tip_epoch.number(), Ordering::SeqCst);
-                GLOBAL_VM_VERSION.store(vm_version, Ordering::SeqCst);
             }
 
             // update tip
@@ -1091,16 +1066,6 @@ fn check_locks(
     }
 
     Ok(())
-}
-
-fn is_hardfork_switch_eq(l: &HardForkSwitch, r: &HardForkSwitch) -> bool {
-    l.rfc_0028() == r.rfc_0028()
-        && l.rfc_0029() == r.rfc_0029()
-        && l.rfc_0030() == r.rfc_0030()
-        && l.rfc_0031() == r.rfc_0031()
-        && l.rfc_0032() == r.rfc_0032()
-        && l.rfc_0036() == r.rfc_0036()
-        && l.rfc_0038() == r.rfc_0038()
 }
 
 fn is_l1_query_error(err: &anyhow::Error) -> bool {
