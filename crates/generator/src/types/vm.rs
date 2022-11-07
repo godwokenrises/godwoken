@@ -1,7 +1,4 @@
-use ckb_vm::{
-    machine::{VERSION0, VERSION1},
-    ISA_B, ISA_IMC, ISA_MOP,
-};
+use ckb_vm::{machine::VERSION1, ISA_B, ISA_IMC, ISA_MOP};
 use gw_types::packed::{ChallengeTarget, ChallengeWitness};
 use std::fmt::{self, Display};
 
@@ -32,7 +29,7 @@ pub type CoreMachine = DefaultCoreMachine<u64, WXorXMemory<SparseMemory<u64>>>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum VMVersion {
     /// CKB VM 0 with Syscall version 1.
-    V0 = 0,
+    // V0 = 0,
     /// CKB VM 1 with Syscall version 1 and version 2.
     V1 = 1,
 }
@@ -46,7 +43,7 @@ impl VMVersion {
     /// Returns the ISA set of CKB VM in current script version.
     pub fn vm_isa(self) -> VmIsa {
         match self {
-            Self::V0 => ISA_IMC,
+            // Self::V0 => ISA_IMC,
             Self::V1 => ISA_IMC | ISA_B | ISA_MOP,
         }
     }
@@ -54,7 +51,7 @@ impl VMVersion {
     /// Returns the version of CKB VM in current script version.
     pub fn vm_version(self) -> VmVersion {
         match self {
-            Self::V0 => VERSION0,
+            // Self::V0 => VERSION0,
             Self::V1 => VERSION1,
         }
     }

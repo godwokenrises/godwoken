@@ -1,8 +1,4 @@
-use std::{
-    collections::HashSet,
-    sync::{atomic::Ordering::SeqCst, Arc},
-    time::Instant,
-};
+use std::{collections::HashSet, sync::Arc, time::Instant};
 
 use crate::{
     account_lock_manage::AccountLockManage,
@@ -22,7 +18,6 @@ use crate::{
 use crate::{error::AccountError, syscalls::L2Syscalls};
 use crate::{error::LockAlgorithmError, traits::StateExt};
 use arc_swap::ArcSwapOption;
-use gw_ckb_hardfork::GLOBAL_VM_VERSION;
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     error::Error as StateError,
@@ -202,13 +197,7 @@ impl Generator {
         let org_cycles_pool = cycles_pool.as_mut().map(|p| p.clone());
         {
             let t = Instant::now();
-            let global_vm_version = GLOBAL_VM_VERSION.load(SeqCst);
-            let vm_version = match global_vm_version {
-                0 => VMVersion::V0,
-                1 => VMVersion::V1,
-                ver => panic!("Unsupport VMVersion: {}", ver),
-            };
-            let core_machine = vm_version.init_core_machine(max_cycles);
+            let core_machine = VMVersion::V1.init_core_machine(max_cycles);
             let mut sys_log_buf = Vec::with_capacity(1024);
             let machine_builder = DefaultMachineBuilder::new(core_machine)
                 .syscall(Box::new(L2Syscalls {
@@ -228,7 +217,7 @@ impl Generator {
             #[cfg(has_asm)]
             let aot_code_opt = self
                 .backend_manage
-                .get_aot_code(&backend.checksum.generator, global_vm_version);
+                .get_aot_code(&backend.checksum.generator);
             #[cfg(has_asm)]
             if aot_code_opt.is_none() {
                 log::warn!("[machine_run] Not AOT mode!");
