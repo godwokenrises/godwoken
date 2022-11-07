@@ -12,9 +12,6 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: gwos
 
     steps:
     - uses: actions/checkout@v1
@@ -28,21 +25,25 @@ jobs:
           target
         key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
     - name: Install moleculec
+      working-directory: gwos
       run: CARGO_TARGET_DIR=target/ cargo install moleculec --version 0.7.2
     - name: Install capsule
       env:
         CAPSULE_VERSION: v0.7.0
       run: curl -OL https://github.com/nervosnetwork/capsule/releases/download/${CAPSULE_VERSION}/capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz && tar xf capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz && echo `pwd`/capsule_${CAPSULE_VERSION}_x86_64-linux >> $GITHUB_PATH
     - name: Check Tests format
-      run: cargo fmt -- --check
+      run: cargo fmt --all -- --check
     - name: Check Rust format
-      run: cd contracts && cargo fmt -- --check
+      working-directory: gwos/contracts
+      run: cargo fmt -- --check
     - name: Check C format
-      run: cd c && make fmt
+      working-directory: gwos/c
+      run: make fmt
     - name: Init submodules
       run: git submodule init && git submodule update -r
     - name: Compile C contracts
-      run: cd c && make
+      working-directory: gwos/c
+      run: make
     #- name: Cargo clippy check
     #  env:
     #    RUSTFLAGS: -D warnings
@@ -55,11 +56,17 @@ jobs:
         key: ${{ runner.os }}-capsule-cache-${{ hashFiles('contracts/Cargo.lock') }}
     - name: Restore capsule cache
       if: steps.fetch-capsule-cache.outputs.cache-hit == 'true'
+      working-directory: gwos
       run: tools/restore-capsule-cache.sh
     - name: Build Rust contracts
+      working-directory: gwos
       run: capsule build
     - name: Backup capsule cache
       if: steps.fetch-capsule-cache.outputs.cache-hit != 'true'
+      working-directory: gwos
       run: tools/backup-capsule-cache.sh
-    - name: Tests
+    - name: Test C Uint256
+      working-directory: gwos
       run: cargo test
+    - name: Tests
+      run: cargo test --features scripts script-tests
