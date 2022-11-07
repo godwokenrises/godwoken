@@ -415,6 +415,7 @@ impl MemPool {
             .check_withdrawal_signature(state, withdrawal)?;
 
         let finalized_custodian_capacity = self.collect_finalized_custodian_capacity()?;
+        dbg!("check withdrawal", &finalized_custodian_capacity);
         let withdrawal_generator = WithdrawalGenerator::new(
             self.generator.rollup_context(),
             finalized_custodian_capacity,

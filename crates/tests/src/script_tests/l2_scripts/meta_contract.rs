@@ -1,31 +1,27 @@
 use super::super::utils::init_env_log;
 use super::{new_block_info, run_contract};
+use crate::script_tests::l2_scripts::run_contract_get_result;
 use crate::script_tests::utils::context::TestingContext;
-use core::panic;
+use crate::testing_tool::chain::ALWAYS_SUCCESS_CODE_HASH;
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
     state::State,
     H256,
 };
 use gw_generator::{
-    error::TransactionError,
-    syscalls::error_codes::{GW_ERROR_DUPLICATED_SCRIPT_HASH, GW_SUDT_ERROR_INSUFFICIENT_BALANCE},
+    error::TransactionError, syscalls::error_codes::GW_ERROR_DUPLICATED_SCRIPT_HASH,
     traits::StateExt,
 };
 use gw_types::U256;
 use gw_types::{
     core::ScriptHashType,
-    packed::{AllowedTypeHash, CreateAccount, Fee, MetaContractArgs, RollupConfig, Script},
+    packed::{CreateAccount, Fee, MetaContractArgs, Script},
     prelude::*,
 };
 
 #[test]
 fn test_meta_contract() {
-    let dummy_eoa_type_hash = [4u8; 32];
-    let rollup_config = RollupConfig::new_builder()
-        .allowed_eoa_type_hashes(vec![AllowedTypeHash::from_unknown(dummy_eoa_type_hash)].pack())
-        .build();
-    let mut ctx = TestingContext::setup(&rollup_config);
+    let mut ctx = TestingContext::setup();
 
     let a_script = Script::new_builder()
         .code_hash([0u8; 32].pack())
@@ -46,7 +42,7 @@ fn test_meta_contract() {
 
     // create contract
     let contract_script = Script::new_builder()
-        .code_hash(dummy_eoa_type_hash.pack())
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
         .hash_type(ScriptHashType::Type.into())
         .args([42u8; 33].pack())
         .build();
@@ -65,7 +61,7 @@ fn test_meta_contract() {
         .build();
     let sender_nonce = ctx.state.get_nonce(a_id).unwrap();
     let return_data = run_contract(
-        &rollup_config,
+        &ctx.rollup_config,
         &mut ctx.state,
         a_id,
         RESERVED_ACCOUNT_ID,
@@ -97,8 +93,7 @@ fn test_meta_contract() {
 #[test]
 fn test_duplicated_script_hash() {
     init_env_log();
-    let rollup_config = RollupConfig::default();
-    let mut ctx = TestingContext::setup(&rollup_config);
+    let mut ctx = TestingContext::setup();
 
     let a_script = Script::new_builder()
         .code_hash([0u8; 32].pack())
@@ -134,7 +129,7 @@ fn test_duplicated_script_hash() {
     let args = MetaContractArgs::new_builder()
         .set(
             CreateAccount::new_builder()
-                .script(contract_script.clone())
+                .script(contract_script)
                 .fee(
                     Fee::new_builder()
                         .amount(1000u128.pack())
@@ -144,29 +139,21 @@ fn test_duplicated_script_hash() {
                 .build(),
         )
         .build();
-    let err = run_contract(
-        &rollup_config,
+    let result = run_contract_get_result(
+        &ctx.rollup_config,
         &mut ctx.state,
         a_id,
         RESERVED_ACCOUNT_ID,
         args.as_bytes(),
         &block_info,
     )
-    .unwrap_err();
-    let err_code = match err {
-        TransactionError::InvalidExitCode(code) => code,
-        err => panic!("unexpected {:?}", err),
-    };
-    assert_eq!(err_code, GW_ERROR_DUPLICATED_SCRIPT_HASH);
+    .unwrap();
+    assert_eq!(result.exit_code, GW_ERROR_DUPLICATED_SCRIPT_HASH);
 }
 
 #[test]
 fn test_insufficient_balance_to_pay_fee() {
-    let dummy_eoa_type_hash = [4u8; 32];
-    let rollup_config = RollupConfig::new_builder()
-        .allowed_eoa_type_hashes(vec![AllowedTypeHash::from_unknown(dummy_eoa_type_hash)].pack())
-        .build();
-    let mut ctx = TestingContext::setup(&rollup_config);
+    let mut ctx = TestingContext::setup();
 
     let from_script = Script::new_builder()
         .code_hash([0u8; 32].pack())
@@ -182,14 +169,14 @@ fn test_insufficient_balance_to_pay_fee() {
 
     // create contract
     let contract_script = Script::new_builder()
-        .code_hash(dummy_eoa_type_hash.pack())
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
         .hash_type(ScriptHashType::Type.into())
         .args([42u8; 52].pack())
         .build();
     let args = MetaContractArgs::new_builder()
         .set(
             CreateAccount::new_builder()
-                .script(contract_script.clone())
+                .script(contract_script)
                 .fee(
                     Fee::new_builder()
                         .amount(1000u128.pack())
@@ -200,7 +187,7 @@ fn test_insufficient_balance_to_pay_fee() {
         )
         .build();
     let err = run_contract(
-        &rollup_config,
+        &ctx.rollup_config,
         &mut ctx.state,
         from_id,
         RESERVED_ACCOUNT_ID,
@@ -208,20 +195,13 @@ fn test_insufficient_balance_to_pay_fee() {
         &new_block_info(&from_address, 1, 0),
     )
     .unwrap_err();
-    let err_code = match err {
-        TransactionError::InvalidExitCode(code) => code,
-        err => panic!("unexpected {:?}", err),
-    };
-    assert_eq!(
-        err_code,
-        gw_generator::syscalls::error_codes::GW_SUDT_ERROR_INSUFFICIENT_BALANCE
-    );
+    assert_eq!(err, TransactionError::InsufficientBalance);
 
     ctx.state
         .mint_sudt(CKB_SUDT_ACCOUNT_ID, &from_address, U256::from(999u64))
         .expect("mint CKB for account A to pay fee");
     let err = run_contract(
-        &rollup_config,
+        &ctx.rollup_config,
         &mut ctx.state,
         from_id,
         RESERVED_ACCOUNT_ID,
@@ -229,17 +209,13 @@ fn test_insufficient_balance_to_pay_fee() {
         &new_block_info(&from_address, 2, 0),
     )
     .unwrap_err();
-    let err_code = match err {
-        TransactionError::InvalidExitCode(code) => code,
-        err => panic!("unexpected {:?}", err),
-    };
-    assert_eq!(err_code, GW_SUDT_ERROR_INSUFFICIENT_BALANCE);
+    assert_eq!(err, TransactionError::InsufficientBalance);
 
     ctx.state
         .mint_sudt(CKB_SUDT_ACCOUNT_ID, &from_address, U256::from(1000u64))
         .expect("mint CKB for account A to pay fee");
     let _return_data = run_contract(
-        &rollup_config,
+        &ctx.rollup_config,
         &mut ctx.state,
         from_id,
         RESERVED_ACCOUNT_ID,

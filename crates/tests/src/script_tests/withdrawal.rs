@@ -2,10 +2,10 @@ use super::utils::init_env_log;
 use super::utils::layer1::build_simple_tx_with_out_point;
 use super::utils::rollup::{build_rollup_locked_cell, CellContext};
 
-use crate::testing_tool::programs::{
-    ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM, ANYONE_CAN_PAY_LOCK_PROGRAM, SECP256K1_DATA,
-    WITHDRAWAL_LOCK_PROGRAM,
+use crate::script_tests::programs::{
+    ANYONE_CAN_PAY_LOCK_PROGRAM, SECP256K1_DATA, WITHDRAWAL_LOCK_PROGRAM,
 };
+use crate::testing_tool::chain::{ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM};
 
 use ckb_error::assert_error_eq;
 use ckb_script::ScriptError;
@@ -597,7 +597,7 @@ fn sign_tx(tx: TransactionView, witness_idx: usize, sk: &SecretKey) -> Transacti
     let secp = Secp256k1::new();
     let message = Message::from_slice(&message).unwrap();
     let sig = {
-        let sig = secp.sign_recoverable(&message, sk);
+        let sig = secp.sign_ecdsa_recoverable(&message, sk);
         let (rec_id, bytes) = sig.serialize_compact();
         assert!(rec_id.to_i32() >= 0 && rec_id.to_i32() < 4);
 

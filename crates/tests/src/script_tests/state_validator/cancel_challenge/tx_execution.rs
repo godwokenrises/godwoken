@@ -1,8 +1,8 @@
 #![allow(clippy::mutable_key_type)]
 
 use std::collections::HashSet;
-use std::sync::Arc;
 
+use crate::script_tests::programs::STATE_VALIDATOR_CODE_HASH;
 use crate::script_tests::utils::init_env_log;
 use crate::script_tests::utils::layer1::build_simple_tx_with_out_point;
 use crate::script_tests::utils::layer1::random_out_point;
@@ -10,9 +10,9 @@ use crate::script_tests::utils::rollup::{
     build_always_success_cell, build_rollup_locked_cell, build_type_id_script,
     calculate_state_validator_type_id, CellContext, CellContextParam,
 };
-use crate::testing_tool::chain::setup_chain;
+use crate::testing_tool::chain::setup_chain_with_config;
 use crate::testing_tool::chain::{apply_block_result, construct_block};
-use crate::testing_tool::programs::{ALWAYS_SUCCESS_CODE_HASH, STATE_VALIDATOR_CODE_HASH};
+use crate::testing_tool::chain::{into_deposit_info_cell, ALWAYS_SUCCESS_CODE_HASH};
 use ckb_types::{
     packed::{CellInput, CellOutput},
     prelude::{Pack as CKBPack, Unpack},
@@ -21,9 +21,10 @@ use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::merkle_utils::ckb_merkle_leaf_hash;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::{state::State, H256};
-use gw_store::mem_pool_state::MemPoolState;
-use gw_store::mem_pool_state::MemStore;
-use gw_store::state::state_db::StateContext;
+use gw_store::smt::smt_store::SMTStateStore;
+use gw_store::state::history::history_state::RWConfig;
+use gw_store::state::traits::JournalDB;
+use gw_store::state::{BlockStateDB, MemStateDB};
 use gw_traits::CodeStore;
 use gw_types::core::AllowedContractType;
 use gw_types::core::AllowedEoaType;
@@ -42,7 +43,7 @@ use gw_types::{
     },
 };
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_cancel_tx_execute() {
     init_env_log();
     let input_out_point = random_out_point();
@@ -59,8 +60,9 @@ async fn test_cancel_tx_execute() {
     let challenge_lock_type = build_type_id_script(b"challenge_lock_type_id");
     let eoa_lock_type = build_type_id_script(b"eoa_lock_type_id");
     let l2_sudt_type = build_type_id_script(b"l2_sudt_type_id");
-    let challenge_script_type_hash: [u8; 32] = challenge_lock_type.calc_script_hash().unpack();
-    let l2_sudt_type_hash: [u8; 32] = l2_sudt_type.calc_script_hash().unpack();
+    let challenge_script_type_hash: [u8; 32] =
+        challenge_lock_type.calc_script_hash().unpack().into();
+    let l2_sudt_type_hash: [u8; 32] = l2_sudt_type.calc_script_hash().unpack().into();
 
     let finality_blocks = 10;
     let eth_registry_id = gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
@@ -86,7 +88,8 @@ async fn test_cancel_tx_execute() {
         )
         .build();
     // setup chain
-    let mut chain = setup_chain(rollup_type_script.clone(), rollup_config.clone()).await;
+    let mut chain =
+        setup_chain_with_config(rollup_type_script.clone(), rollup_config.clone()).await;
     // create a rollup cell
     let capacity = 1000_00000000u64;
     let rollup_cell = build_always_success_cell(
@@ -116,18 +119,26 @@ async fn test_cancel_tx_execute() {
             .args(Pack::pack(&Bytes::from(receiver_args)))
             .build();
         let receiver_address = RegistryAddress::new(eth_registry_id, vec![2u8; 20]);
+        let rollup_ctx = chain.generator().rollup_context();
         let deposit_requests = vec![
-            DepositRequest::new_builder()
-                .capacity(Pack::pack(&300_00000000u64))
-                .script(sender_script.clone())
-                .registry_id(Pack::pack(&eth_registry_id))
-                .build(),
-            DepositRequest::new_builder()
-                .capacity(Pack::pack(&450_00000000u64))
-                .script(receiver_script.clone())
-                .registry_id(Pack::pack(&eth_registry_id))
-                .build(),
-        ];
+            into_deposit_info_cell(
+                rollup_ctx,
+                DepositRequest::new_builder()
+                    .capacity(Pack::pack(&300_00000000u64))
+                    .script(sender_script.clone())
+                    .registry_id(Pack::pack(&eth_registry_id))
+                    .build(),
+            ),
+            into_deposit_info_cell(
+                rollup_ctx,
+                DepositRequest::new_builder()
+                    .capacity(Pack::pack(&450_00000000u64))
+                    .script(receiver_script.clone())
+                    .registry_id(Pack::pack(&eth_registry_id))
+                    .build(),
+            ),
+        ]
+        .pack();
         let produce_block_result = {
             let mem_pool = chain.mem_pool().as_ref().unwrap();
             let mut mem_pool = mem_pool.lock().await;
@@ -135,18 +146,16 @@ async fn test_cancel_tx_execute() {
                 .await
                 .unwrap()
         };
-        let rollup_cell = gw_types::packed::CellOutput::new_unchecked(rollup_cell.as_bytes());
         let asset_scripts = HashSet::new();
         apply_block_result(
             &mut chain,
-            rollup_cell.clone(),
             produce_block_result,
             deposit_requests,
             asset_scripts,
         )
         .await;
         let db = chain.store().begin_transaction();
-        let tree = db.state_tree(StateContext::ReadOnly).unwrap();
+        let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
         let sender_id = tree
             .get_account_id_by_script_hash(&sender_script.hash().into())
             .unwrap()
@@ -183,17 +192,16 @@ async fn test_cancel_tx_execute() {
         let produce_block_result = {
             let mem_pool = chain.mem_pool().as_ref().unwrap();
             let mut mem_pool = mem_pool.lock().await;
-            mem_pool.push_transaction(tx).await.unwrap();
-            construct_block(&chain, &mut mem_pool, Vec::default())
+            mem_pool.push_transaction(tx).unwrap();
+            construct_block(&chain, &mut mem_pool, Default::default())
                 .await
                 .unwrap()
         };
         let asset_scripts = HashSet::new();
         apply_block_result(
             &mut chain,
-            rollup_cell,
             produce_block_result,
-            vec![],
+            Default::default(),
             asset_scripts,
         )
         .await;
@@ -270,21 +278,14 @@ async fn test_cancel_tx_execute() {
             {
                 db.detach_block(&challenged_block).unwrap();
                 {
-                    let mut tree = db
-                        .state_tree(StateContext::DetachBlock(challenged_block_number))
-                        .unwrap();
-                    tree.detach_block_state().unwrap();
+                    let mut tree = BlockStateDB::from_store(&db, RWConfig::detach_block()).unwrap();
+                    tree.detach_block_state(challenged_block_number).unwrap();
                 }
             }
             db.commit().unwrap();
 
-            let state = {
-                let mem_store = MemStore::new(chain.store().get_snapshot());
-                MemPoolState::new(Arc::new(mem_store), true)
-            };
-            let snap = state.load();
-            let mut tree = snap.state().unwrap();
-            tree.tracker_mut().enable();
+            let mut tree = MemStateDB::from_store(chain.store().get_snapshot()).unwrap();
+            tree.set_state_tracker(Default::default());
             let sender_id = tree
                 .get_account_id_by_script_hash(&sender_script.hash().into())
                 .unwrap()
@@ -306,7 +307,7 @@ async fn test_cancel_tx_execute() {
             .expect("get sender address");
             let account_count = tree.get_account_count().unwrap();
             let touched_keys: Vec<H256> = {
-                let keys = tree.tracker_mut().touched_keys().unwrap();
+                let keys = tree.state_tracker().unwrap().touched_keys();
                 let unlock = keys.lock().unwrap();
                 unlock.clone().into_iter().collect()
             };
@@ -319,9 +320,8 @@ async fn test_cancel_tx_execute() {
                 .collect::<Vec<(H256, H256)>>();
 
             let kv_state_proof: Bytes = {
-                let account_smt = db.account_smt().unwrap();
-                account_smt
-                    .merkle_proof(touched_keys)
+                let smt = SMTStateStore::new(&db).to_smt().unwrap();
+                smt.merkle_proof(touched_keys)
                     .unwrap()
                     .compile(kv_state.clone())
                     .unwrap()

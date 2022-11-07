@@ -1,14 +1,28 @@
-use crate::testing_tool::{
-    chain::META_VALIDATOR_SCRIPT_TYPE_HASH, programs::ETH_ADDR_REG_CONTRACT_CODE_HASH,
+use crate::script_tests::programs::ETH_ADDR_REG_CONTRACT_CODE_HASH;
+use crate::testing_tool::chain::{
+    ALWAYS_SUCCESS_CODE_HASH, ETH_REGISTRY_SCRIPT_TYPE_HASH, META_VALIDATOR_SCRIPT_TYPE_HASH,
+    SUDT_VALIDATOR_SCRIPT_TYPE_HASH,
 };
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
     registry_address::RegistryAddress,
+    smt::SMT,
     state::State,
     CKB_SUDT_SCRIPT_ARGS, H256,
 };
-use gw_generator::{dummy_state::DummyState, traits::StateExt};
+use gw_generator::traits::StateExt;
+use gw_store::{
+    smt::smt_store::SMTStateStore,
+    snapshot::StoreSnapshot,
+    state::{
+        overlay::{mem_state::MemStateTree, mem_store::MemStore},
+        MemStateDB,
+    },
+    Store,
+};
+use gw_types::core::AllowedContractType;
+use gw_types::packed::AllowedTypeHash;
 use gw_types::{
     core::ScriptHashType,
     offchain::RollupContext,
@@ -16,20 +30,57 @@ use gw_types::{
     prelude::*,
 };
 
+fn new_state(store: StoreSnapshot) -> MemStateDB {
+    let smt = SMT::new(H256::zero(), SMTStateStore::new(MemStore::new(store)));
+    let inner = MemStateTree::new(smt, 0);
+    MemStateDB::new(inner)
+}
+
 pub struct TestingContext {
-    pub state: DummyState,
+    pub store: Store,
+    pub state: MemStateDB,
     pub eth_registry_id: u32,
+    pub rollup_config: RollupConfig,
 }
 
 impl TestingContext {
-    pub fn setup(rollup_config: &RollupConfig) -> Self {
+    pub fn default_rollup_config() -> RollupConfig {
+        RollupConfig::new_builder()
+            .allowed_eoa_type_hashes(
+                vec![AllowedTypeHash::from_unknown(*ALWAYS_SUCCESS_CODE_HASH)].pack(),
+            )
+            .allowed_contract_type_hashes(
+                vec![
+                    AllowedTypeHash::new_builder()
+                        .hash(META_VALIDATOR_SCRIPT_TYPE_HASH.pack())
+                        .type_(AllowedContractType::Meta.into())
+                        .build(),
+                    AllowedTypeHash::new_builder()
+                        .hash(SUDT_VALIDATOR_SCRIPT_TYPE_HASH.pack())
+                        .type_(AllowedContractType::Sudt.into())
+                        .build(),
+                    AllowedTypeHash::new_builder()
+                        .hash(ETH_REGISTRY_SCRIPT_TYPE_HASH.pack())
+                        .type_(AllowedContractType::EthAddrReg.into())
+                        .build(),
+                ]
+                .pack(),
+            )
+            .build()
+    }
+
+    pub fn setup() -> Self {
+        Self::setup_with_config(Self::default_rollup_config())
+    }
+    pub fn setup_with_config(rollup_config: RollupConfig) -> Self {
         let rollup_context = RollupContext {
             rollup_config: rollup_config.clone(),
             rollup_script_hash: [42u8; 32].into(),
         };
 
         // deploy registry contract
-        let mut state = DummyState::default();
+        let store = Store::open_tmp().unwrap();
+        let mut state = new_state(store.get_snapshot());
 
         // setup meta_contract
         let meta_contract_id = state
@@ -64,8 +115,10 @@ impl TestingContext {
             .expect("create registry account");
 
         Self {
+            store,
             state,
             eth_registry_id,
+            rollup_config,
         }
     }
 

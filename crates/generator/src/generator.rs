@@ -757,7 +757,14 @@ impl Generator {
             }
         } else {
             // handle failure state, this function will revert to snapshot
-            self.handle_failed_transaction(state, snap, nonce_before, block_info, raw_tx)?;
+            self.handle_failed_transaction(
+                state,
+                snap,
+                nonce_before,
+                block_info,
+                raw_tx,
+                &run_context,
+            )?;
         }
 
         let state_tracker = state.take_state_tracker().unwrap();
@@ -839,6 +846,7 @@ impl Generator {
         nonce_before: u32,
         block_info: &BlockInfo,
         raw_tx: &RawL2Transaction,
+        run_ctx: &RunContext,
     ) -> Result<(), TransactionError> {
         /// Error code represents EVM internal error
         /// we emit this error from Godwoken side if
@@ -865,8 +873,10 @@ impl Generator {
 
         // handle tx fee
         let tx_type = get_tx_type(self.rollup_context(), state, raw_tx)?;
-        let typed_tx =
-            TypedRawTransaction::from_tx(raw_tx.to_owned(), tx_type).expect("Unknown type of tx");
+        let typed_tx = match TypedRawTransaction::from_tx(raw_tx.to_owned(), tx_type) {
+            Some(tx) => tx,
+            None => return Err(TransactionError::UnknownTxType(run_ctx.exit_code)),
+        };
         let tx_fee = match typed_tx {
             TypedRawTransaction::EthAddrReg(tx) => tx.consumed(),
             TypedRawTransaction::Meta(tx) => tx.consumed(),

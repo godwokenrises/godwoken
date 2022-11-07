@@ -1,4 +1,3 @@
-use crate::testing_tool::programs::ALWAYS_SUCCESS_CODE_HASH;
 use ckb_traits::{CellDataProvider, HeaderProvider};
 use ckb_types::{
     bytes::Bytes,
@@ -11,6 +10,8 @@ use ckb_types::{
 };
 use rand::{thread_rng, Rng};
 use std::{collections::HashMap, time::Duration};
+
+use crate::testing_tool::chain::ALWAYS_SUCCESS_CODE_HASH;
 
 /// Transaction since flag
 pub const SINCE_BLOCK_TIMESTAMP_FLAG: u64 = 0x4000_0000_0000_0000;
@@ -125,11 +126,11 @@ pub fn build_resolved_tx(
         .cell_deps()
         .into_iter()
         .map(|dep| {
-            let deps_out_point = dep.clone();
+            let deps_out_point = dep;
             let (dep_output, dep_data) =
                 data_loader.cells.get(&deps_out_point.out_point()).unwrap();
             CellMetaBuilder::from_cell_output(dep_output.to_owned(), dep_data.to_owned())
-                .out_point(deps_out_point.out_point().clone())
+                .out_point(deps_out_point.out_point())
                 .build()
         })
         .collect();

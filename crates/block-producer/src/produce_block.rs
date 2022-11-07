@@ -188,6 +188,7 @@ pub fn generate_produce_block_param(
 ) -> Result<BlockParam> {
     let db = &store.begin_transaction();
     let tip_block_number = mem_block.block_info().number().unpack().saturating_sub(1);
+    dbg!("mem", tip_block_number);
     let tip_block_hash = {
         let opt = db.get_block_hash_by_number(tip_block_number)?;
         opt.ok_or_else(|| anyhow!("[produce block] tip block {} not found", tip_block_number))?
@@ -252,6 +253,8 @@ pub fn generate_produce_block_param(
     // check output block state consistent
     {
         let tip_block = db.get_last_valid_tip_block()?;
+        let n: u64 = tip_block.raw().number().unpack();
+        dbg!("tip block", n);
         assert_eq!(
             parent_block.hash(),
             tip_block.hash(),

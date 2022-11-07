@@ -4,8 +4,9 @@ use gw_common::registry_address::RegistryAddress;
 use gw_common::state::State;
 use gw_common::H256;
 use gw_generator::constants::L2TX_MAX_CYCLES;
+use gw_generator::error::TransactionError;
 use gw_generator::{account_lock_manage::AccountLockManage, Generator};
-use gw_generator::{error::TransactionError, traits::StateExt};
+use gw_store::state::traits::JournalDB;
 use gw_traits::{ChainView, CodeStore};
 use gw_types::offchain::RollupContext;
 use gw_types::U256;
@@ -25,19 +26,22 @@ mod examples;
 mod meta_contract;
 mod sudt;
 
-const EXAMPLES_DIR: &str = "../c/build/examples";
+const EXAMPLES_DIR: &str = "../../gwos/c/build/examples";
 const SUM_BIN_NAME: &str = "sum-generator";
 const ACCOUNT_OP_BIN_NAME: &str = "account-operation-generator";
 const RECOVER_BIN_NAME: &str = "recover-account-generator";
 const SUDT_TOTAL_SUPPLY_BIN_NAME: &str = "sudt-total-supply-generator";
 
 lazy_static! {
-    static ref SUM_PROGRAM: Bytes = {
-        let mut buf = Vec::new();
+    static ref SUM_PROGRAM_PATH: PathBuf = {
         let mut path = PathBuf::new();
         path.push(&EXAMPLES_DIR);
         path.push(&SUM_BIN_NAME);
-        let mut f = fs::File::open(&path).expect("load program");
+        path
+    };
+    static ref SUM_PROGRAM: Bytes = {
+        let mut buf = Vec::new();
+        let mut f = fs::File::open(&*SUM_PROGRAM_PATH).expect("load program");
         f.read_to_end(&mut buf).expect("read program");
         Bytes::from(buf.to_vec())
     };
@@ -48,12 +52,15 @@ lazy_static! {
         hasher.finalize(&mut buf);
         buf
     };
-    static ref ACCOUNT_OP_PROGRAM: Bytes = {
-        let mut buf = Vec::new();
+    static ref ACCOUNT_OP_PROGRAM_PATH: PathBuf = {
         let mut path = PathBuf::new();
         path.push(&EXAMPLES_DIR);
         path.push(&ACCOUNT_OP_BIN_NAME);
-        let mut f = fs::File::open(&path).expect("load program");
+        path
+    };
+    static ref ACCOUNT_OP_PROGRAM: Bytes = {
+        let mut buf = Vec::new();
+        let mut f = fs::File::open(&*ACCOUNT_OP_PROGRAM_PATH).expect("load program");
         f.read_to_end(&mut buf).expect("read program");
         Bytes::from(buf.to_vec())
     };
@@ -64,12 +71,15 @@ lazy_static! {
         hasher.finalize(&mut buf);
         buf
     };
-    static ref RECOVER_PROGRAM: Bytes = {
-        let mut buf = Vec::new();
+    static ref RECOVER_PROGRAM_PATH: PathBuf = {
         let mut path = PathBuf::new();
         path.push(&EXAMPLES_DIR);
         path.push(&RECOVER_BIN_NAME);
-        let mut f = fs::File::open(&path).expect("load program");
+        path
+    };
+    static ref RECOVER_PROGRAM: Bytes = {
+        let mut buf = Vec::new();
+        let mut f = fs::File::open(&*RECOVER_PROGRAM_PATH).expect("load program");
         f.read_to_end(&mut buf).expect("read program");
         Bytes::from(buf.to_vec())
     };
@@ -80,12 +90,15 @@ lazy_static! {
         hasher.finalize(&mut buf);
         buf
     };
-    static ref SUDT_TOTAL_SUPPLY_PROGRAM: Bytes = {
-        let mut buf = Vec::new();
+    static ref SUDT_TOTAL_SUPPLY_PROGRAM_PATH: PathBuf = {
         let mut path = PathBuf::new();
         path.push(&EXAMPLES_DIR);
         path.push(&SUDT_TOTAL_SUPPLY_BIN_NAME);
-        let mut f = fs::File::open(&path).expect("load program");
+        path
+    };
+    static ref SUDT_TOTAL_SUPPLY_PROGRAM: Bytes = {
+        let mut buf = Vec::new();
+        let mut f = fs::File::open(&*SUDT_TOTAL_SUPPLY_PROGRAM_PATH).expect("load program");
         f.read_to_end(&mut buf).expect("read program");
         Bytes::from(buf.to_vec())
     };
@@ -211,11 +224,11 @@ pub fn check_transfer_logs(
     assert_eq!(sudt_transfer_log.sudt_id, sudt_id);
     assert_eq!(&sudt_transfer_log.from_addr, from_addr);
     assert_eq!(&sudt_transfer_log.to_addr, to_addr);
-    assert_eq!(sudt_transfer_log.amount, amount.into());
+    assert_eq!(sudt_transfer_log.amount, amount);
     assert_eq!(sudt_transfer_log.log_type, SudtLogType::Transfer);
 }
 
-pub fn run_contract_get_result<S: State + CodeStore>(
+pub fn run_contract_get_result<S: State + CodeStore + JournalDB>(
     rollup_config: &RollupConfig,
     tree: &mut S,
     from_id: u32,
@@ -234,7 +247,12 @@ pub fn run_contract_get_result<S: State + CodeStore>(
         rollup_config: rollup_config.clone(),
         rollup_script_hash: [42u8; 32].into(),
     };
-    let generator = Generator::new(backend_manage, account_lock_manage, rollup_ctx);
+    let generator = Generator::new(
+        backend_manage,
+        account_lock_manage,
+        rollup_ctx,
+        Default::default(),
+    );
     let chain_view = DummyChainStore;
     let run_result = generator.execute_transaction(
         &chain_view,
@@ -244,11 +262,10 @@ pub fn run_contract_get_result<S: State + CodeStore>(
         L2TX_MAX_CYCLES,
         None,
     )?;
-    tree.apply_run_result(&run_result).expect("update state");
     Ok(run_result)
 }
 
-pub fn run_contract<S: State + CodeStore>(
+pub fn run_contract<S: State + CodeStore + JournalDB>(
     rollup_config: &RollupConfig,
     tree: &mut S,
     from_id: u32,
@@ -258,5 +275,5 @@ pub fn run_contract<S: State + CodeStore>(
 ) -> Result<Vec<u8>, TransactionError> {
     let run_result =
         run_contract_get_result(rollup_config, tree, from_id, to_id, args, block_info)?;
-    Ok(run_result.return_data)
+    Ok(run_result.return_data.to_vec())
 }

@@ -9,27 +9,18 @@ use crate::script_tests::utils::layer1::build_simple_tx_with_out_point;
 use crate::script_tests::utils::layer1::random_out_point;
 use crate::script_tests::utils::layer1::DummyDataLoader;
 use crate::script_tests::utils::layer1::MAX_CYCLES;
-use ckb_chain_spec::consensus::ConsensusBuilder;
+use crate::testing_tool::chain::ALWAYS_SUCCESS_CODE_HASH;
+use crate::testing_tool::chain::ALWAYS_SUCCESS_PROGRAM;
 use ckb_script::TransactionScriptsVerifier;
-use ckb_script::TxVerifyEnv;
-use ckb_types::core::hardfork::HardForkSwitch;
-use ckb_types::core::HeaderView;
 use ckb_types::packed::CellDep;
 use ckb_types::{
     packed::{CellInput, CellOutput},
     prelude::{Pack as CKBPack, Unpack},
 };
-use gw_ckb_hardfork::GLOBAL_CURRENT_EPOCH_NUMBER;
-use gw_ckb_hardfork::GLOBAL_HARDFORK_SWITCH;
 use gw_types::bytes::Bytes;
 use gw_types::prelude::*;
 
-use std::sync::atomic::Ordering;
-
-use crate::testing_tool::programs::{
-    ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM, META_CONTRACT_CODE_HASH,
-    META_CONTRACT_VALIDATOR_PROGRAM,
-};
+use crate::script_tests::programs::{META_CONTRACT_CODE_HASH, META_CONTRACT_VALIDATOR_PROGRAM};
 
 #[test]
 fn test_consume_challenge_resolve_cell() {
@@ -60,7 +51,7 @@ fn test_consume_challenge_resolve_cell() {
             )
             .capacity(CKBPack::pack(&42u64))
             .build();
-        let owner_lock_hash: [u8; 32] = cell.lock().calc_script_hash().unpack();
+        let owner_lock_hash: [u8; 32] = cell.lock().calc_script_hash().unpack().into();
         let owner_lock_out_point = random_out_point();
         ctx.cells
             .insert(owner_lock_out_point.clone(), (cell, Bytes::default()));
@@ -87,7 +78,7 @@ fn test_consume_challenge_resolve_cell() {
 
     let tx = build_simple_tx_with_out_point(
         &mut ctx,
-        (challenge_resolve_cell.clone(), data),
+        (challenge_resolve_cell, data),
         challenge_resolved_out_point,
         (CellOutput::default(), Bytes::default()),
     )
@@ -102,32 +93,8 @@ fn test_consume_challenge_resolve_cell() {
     .cell_dep(CellDep::new_builder().out_point(script_out_point).build())
     .cell_dep(CellDep::new_builder().out_point(lock_out_point).build())
     .build();
-    let hardfork_switch = {
-        let switch = GLOBAL_HARDFORK_SWITCH.load();
-        HardForkSwitch::new_without_any_enabled()
-            .as_builder()
-            .rfc_0028(switch.rfc_0028())
-            .rfc_0029(switch.rfc_0029())
-            .rfc_0030(switch.rfc_0030())
-            .rfc_0031(switch.rfc_0031())
-            .rfc_0032(switch.rfc_0032())
-            .rfc_0036(switch.rfc_0036())
-            .rfc_0038(switch.rfc_0038())
-            .build()
-            .unwrap()
-    };
-    let consensus = ConsensusBuilder::default()
-        .hardfork_switch(hardfork_switch)
-        .build();
-    let current_epoch_number = GLOBAL_CURRENT_EPOCH_NUMBER.load(Ordering::SeqCst);
-    let tx_verify_env = TxVerifyEnv::new_submit(
-        &HeaderView::new_advanced_builder()
-            .epoch(CKBPack::pack(&current_epoch_number))
-            .build(),
-    );
     let resolved_tx = build_resolved_tx(&ctx, &tx);
-    let mut verifier =
-        TransactionScriptsVerifier::new(&resolved_tx, &consensus, &ctx, &tx_verify_env);
+    let mut verifier = TransactionScriptsVerifier::new(&resolved_tx, &ctx);
     verifier.set_debug_printer(|_script, msg| println!("[script debug] {}", msg));
     verifier.verify(MAX_CYCLES).expect("success");
 }

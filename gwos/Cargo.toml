@@ -1,5 +1,0 @@
-[workspace]
-members = [
-  "tests",
-  "c-uint256-tests",
-]

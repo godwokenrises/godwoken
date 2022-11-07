@@ -169,6 +169,7 @@ pub const META_GENERATOR_PATH: &str =
     "../../.tmp/binaries/godwoken-scripts/meta-contract-generator";
 pub const META_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [1u8; 32];
 pub const ETH_REGISTRY_SCRIPT_TYPE_HASH: [u8; 32] = [2u8; 32];
+pub const SUDT_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [3u8; 32];
 
 // simple UDT
 pub const SUDT_VALIDATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/sudt-validator";
