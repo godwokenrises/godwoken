@@ -1,23 +1,17 @@
+use crate::script_tests::programs::{
+    CHALLENGE_LOCK_PROGRAM, ETH_ACCOUNT_LOCK_PROGRAM, SECP256K1_DATA, STATE_VALIDATOR_PROGRAM,
+};
 use crate::script_tests::utils::layer1::{
     always_success_script, build_resolved_tx, random_out_point, DummyDataLoader, MAX_CYCLES,
 };
-use crate::testing_tool::programs::{
-    ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM, CHALLENGE_LOCK_PROGRAM,
-    ETH_ACCOUNT_LOCK_PROGRAM, SECP256K1_DATA, STATE_VALIDATOR_PROGRAM,
-};
-use ckb_chain_spec::consensus::ConsensusBuilder;
-use ckb_script::{TransactionScriptsVerifier, TxVerifyEnv};
-use ckb_types::core::hardfork::HardForkSwitch;
-use ckb_types::core::HeaderView;
+use crate::testing_tool::chain::{ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM};
+use ckb_script::TransactionScriptsVerifier;
 use ckb_types::{
     packed::{CellDep, CellOutput},
     prelude::Pack as CKBPack,
 };
-use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH};
 use gw_common::blake2b::new_blake2b;
 use gw_types::{bytes::Bytes, core::ScriptHashType, packed::RollupConfig, prelude::*};
-
-use std::sync::atomic::Ordering;
 
 pub struct CellContextParam {
     pub stake_lock_type: ckb_types::packed::Script,
@@ -234,7 +228,7 @@ impl CellContext {
                 (
                     CellOutput::new_builder()
                         .capacity(CKBPack::pack(&(ALWAYS_SUCCESS_PROGRAM.len() as u64)))
-                        .type_(CKBPack::pack(&Some(param.withdrawal_lock_type.clone())))
+                        .type_(CKBPack::pack(&Some(param.withdrawal_lock_type)))
                         .build(),
                     ALWAYS_SUCCESS_PROGRAM.clone(),
                 ),
@@ -272,32 +266,8 @@ impl CellContext {
         &self,
         tx: ckb_types::core::TransactionView,
     ) -> Result<ckb_types::core::Cycle, ckb_error::Error> {
-        let hardfork_switch = {
-            let switch = GLOBAL_HARDFORK_SWITCH.load();
-            HardForkSwitch::new_without_any_enabled()
-                .as_builder()
-                .rfc_0028(switch.rfc_0028())
-                .rfc_0029(switch.rfc_0029())
-                .rfc_0030(switch.rfc_0030())
-                .rfc_0031(switch.rfc_0031())
-                .rfc_0032(switch.rfc_0032())
-                .rfc_0036(switch.rfc_0036())
-                .rfc_0038(switch.rfc_0038())
-                .build()
-                .unwrap()
-        };
-        let consensus = ConsensusBuilder::default()
-            .hardfork_switch(hardfork_switch)
-            .build();
-        let current_epoch_number = GLOBAL_CURRENT_EPOCH_NUMBER.load(Ordering::SeqCst);
-        let tx_verify_env = TxVerifyEnv::new_submit(
-            &HeaderView::new_advanced_builder()
-                .epoch(CKBPack::pack(&current_epoch_number))
-                .build(),
-        );
         let resolved_tx = build_resolved_tx(&self.inner, &tx);
-        let mut verifier =
-            TransactionScriptsVerifier::new(&resolved_tx, &consensus, &self.inner, &tx_verify_env);
+        let mut verifier = TransactionScriptsVerifier::new(&resolved_tx, &self.inner);
         verifier.set_debug_printer(|_script, msg| println!("[script debug] {}", msg));
         verifier.verify(MAX_CYCLES)
     }

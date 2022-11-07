@@ -89,7 +89,7 @@ impl BackendManage {
         Ok(backend_manage)
     }
 
-    fn register_backend_switch(
+    pub fn register_backend_switch(
         &mut self,
         config: BackendSwitchConfig,
         #[allow(unused_variables)] compile: bool,

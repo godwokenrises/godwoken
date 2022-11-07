@@ -627,6 +627,12 @@ impl Chain {
                     .context("withdrawal not enough sudt amount")?;
             }
         }
+        dbg!(
+            "finalized custodians",
+            &finalized_custodians,
+            last_finalized_block,
+            block_number
+        );
         db.set_block_post_finalized_custodian_capacity(
             block_number,
             &finalized_custodians.pack().as_reader(),
@@ -867,10 +873,17 @@ impl Chain {
         // will not be reverted.
         let is_bad_block_reverted = has_bad_block_before_update && self.challenge_target.is_none();
         let tip_block_hash: H256 = self.local_state.tip.hash().into();
+        dbg!(
+            &self.last_sync_event,
+            is_l1_revert_happend,
+            is_bad_block_reverted,
+            &self.mem_pool().is_some()
+        );
         if let Some(mem_pool) = &self.mem_pool {
             if matches!(self.last_sync_event, SyncEvent::Success)
                 && (is_l1_revert_happend || is_bad_block_reverted)
             {
+                dbg!("reset pool");
                 // update mem pool state
                 log::debug!(target: "sync-block", "acquire mem-pool",);
                 let t = Instant::now();

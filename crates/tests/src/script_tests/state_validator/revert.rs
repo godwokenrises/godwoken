@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use crate::script_tests::programs::STATE_VALIDATOR_CODE_HASH;
 use crate::script_tests::utils::init_env_log;
 use crate::script_tests::utils::layer1::build_simple_tx_with_out_point;
 use crate::script_tests::utils::layer1::{always_success_script, random_out_point};
@@ -9,8 +10,10 @@ use crate::script_tests::utils::rollup::{
     build_always_success_cell, build_rollup_locked_cell, build_type_id_script,
     calculate_state_validator_type_id, CellContext, CellContextParam,
 };
-use crate::testing_tool::chain::{apply_block_result, construct_block, setup_chain};
-use crate::testing_tool::programs::{ALWAYS_SUCCESS_CODE_HASH, STATE_VALIDATOR_CODE_HASH};
+use crate::testing_tool::chain::{
+    apply_block_result, construct_block, into_deposit_info_cell, setup_chain_with_config,
+    ALWAYS_SUCCESS_CODE_HASH,
+};
 use ckb_types::{
     packed::{CellInput, CellOutput},
     prelude::{Pack as CKBPack, Unpack as CKBUnpack},
@@ -20,7 +23,8 @@ use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, h256_ext::H256Ext,
     sparse_merkle_tree::default_store::DefaultStore, state::State, H256,
 };
-use gw_store::state::state_db::StateContext;
+use gw_store::state::history::history_state::RWConfig;
+use gw_store::state::BlockStateDB;
 use gw_store::traits::chain_store::ChainStore;
 use gw_types::core::{AllowedContractType, AllowedEoaType};
 use gw_types::packed::{AllowedTypeHash, Fee};
@@ -36,7 +40,7 @@ use gw_types::{
 };
 use gw_types::{packed::StakeLockArgs, prelude::*};
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_revert() {
     init_env_log();
     let input_out_point = random_out_point();
@@ -57,12 +61,14 @@ async fn test_revert() {
         .args(CKBPack::pack(&Bytes::from(b"reward_burned_lock".to_vec())))
         .code_hash(CKBPack::pack(&[0u8; 32]))
         .build();
-    let reward_burn_lock_hash: [u8; 32] = reward_burn_lock.calc_script_hash().unpack();
+    let reward_burn_lock_hash: [u8; 32] = reward_burn_lock.calc_script_hash().unpack().into();
     let stake_lock_type = build_type_id_script(b"stake_lock_type_id");
-    let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack();
+    let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack().into();
     let challenge_lock_type = build_type_id_script(b"challenge_lock_type_id");
-    let challenge_script_type_hash: [u8; 32] = challenge_lock_type.calc_script_hash().unpack();
+    let challenge_script_type_hash: [u8; 32] =
+        challenge_lock_type.calc_script_hash().unpack().into();
     let finality_blocks = 10;
+
     let rollup_config = RollupConfig::new_builder()
         .stake_script_type_hash(Pack::pack(&stake_script_type_hash))
         .challenge_script_type_hash(Pack::pack(&challenge_script_type_hash))
@@ -80,8 +86,9 @@ async fn test_revert() {
             vec![AllowedTypeHash::new(AllowedContractType::Sudt, [0u8; 32])].pack(),
         )
         .build();
+
     // setup chain
-    let mut chain = setup_chain(rollup_type_script.clone(), rollup_config.clone()).await;
+    let mut chain = setup_chain_with_config(rollup_type_script.clone(), rollup_config).await;
     // create a rollup cell
     let capacity = 1000_00000000u64;
     let rollup_cell = build_always_success_cell(
@@ -110,17 +117,24 @@ async fn test_revert() {
             .args(Pack::pack(&Bytes::from(receiver_args)))
             .build();
         let deposit_requests = vec![
-            DepositRequest::new_builder()
-                .capacity(Pack::pack(&300_00000000u64))
-                .script(sender_script.clone())
-                .registry_id(Pack::pack(&eth_registry_id))
-                .build(),
-            DepositRequest::new_builder()
-                .capacity(Pack::pack(&450_00000000u64))
-                .script(receiver_script.clone())
-                .registry_id(Pack::pack(&eth_registry_id))
-                .build(),
-        ];
+            into_deposit_info_cell(
+                chain.generator().rollup_context(),
+                DepositRequest::new_builder()
+                    .capacity(Pack::pack(&300_00000000u64))
+                    .script(sender_script.clone())
+                    .registry_id(Pack::pack(&eth_registry_id))
+                    .build(),
+            ),
+            into_deposit_info_cell(
+                chain.generator().rollup_context(),
+                DepositRequest::new_builder()
+                    .capacity(Pack::pack(&450_00000000u64))
+                    .script(receiver_script.clone())
+                    .registry_id(Pack::pack(&eth_registry_id))
+                    .build(),
+            ),
+        ]
+        .pack();
         let produce_block_result = {
             let mem_pool = chain.mem_pool().as_ref().unwrap();
             let mut mem_pool = mem_pool.lock().await;
@@ -128,18 +142,16 @@ async fn test_revert() {
                 .await
                 .unwrap()
         };
-        let rollup_cell = gw_types::packed::CellOutput::new_unchecked(rollup_cell.as_bytes());
         let asset_scripts = HashSet::new();
         apply_block_result(
             &mut chain,
-            rollup_cell.clone(),
             produce_block_result,
             deposit_requests,
             asset_scripts,
         )
         .await;
         let db = chain.store().begin_transaction();
-        let tree = db.state_tree(StateContext::ReadOnly).unwrap();
+        let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
         let sender_id = tree
             .get_account_id_by_script_hash(&sender_script.hash().into())
             .unwrap()
@@ -173,8 +185,8 @@ async fn test_revert() {
                 .build();
             let mem_pool = chain.mem_pool().as_ref().unwrap();
             let mut mem_pool = mem_pool.lock().await;
-            mem_pool.push_transaction(tx).await.unwrap();
-            construct_block(&chain, &mut mem_pool, Vec::default())
+            mem_pool.push_transaction(tx).unwrap();
+            construct_block(&chain, &mut mem_pool, Default::default())
                 .await
                 .unwrap()
         };
@@ -182,9 +194,8 @@ async fn test_revert() {
         let asset_scripts = HashSet::new();
         apply_block_result(
             &mut chain,
-            rollup_cell,
             produce_block_result,
-            vec![],
+            Default::default(),
             asset_scripts,
         )
         .await;
@@ -196,7 +207,7 @@ async fn test_revert() {
         challenge_lock_type,
         ..Default::default()
     };
-    let mut ctx = CellContext::new(&rollup_config, param);
+    let mut ctx = CellContext::new(&chain.generator().rollup_context().rollup_config, param);
     let stake_capacity = 10000_00000000u64;
     let input_stake_cell = {
         let cell = build_rollup_locked_cell(
@@ -232,7 +243,12 @@ async fn test_revert() {
         let out_point = ctx.insert_cell(cell, Bytes::new());
         let since: u64 = {
             let mut since = 1 << 63;
-            since |= rollup_config.challenge_maturity_blocks().unpack();
+            since |= chain
+                .generator()
+                .rollup_context()
+                .rollup_config
+                .challenge_maturity_blocks()
+                .unpack();
             since
         };
         CellInput::new_builder()
@@ -240,7 +256,12 @@ async fn test_revert() {
             .previous_output(out_point)
             .build()
     };
-    let burn_rate: u8 = rollup_config.reward_burn_rate().into();
+    let burn_rate: u8 = chain
+        .generator()
+        .rollup_context()
+        .rollup_config
+        .reward_burn_rate()
+        .into();
     let reward_capacity: u64 = stake_capacity * burn_rate as u64 / 100;
     let received_capacity: u64 = reward_capacity + challenge_capacity;
     let burned_capacity: u64 = stake_capacity - reward_capacity;
@@ -261,7 +282,7 @@ async fn test_revert() {
         .build();
     let initial_rollup_cell_data = global_state.as_bytes();
     let new_tip_block = {
-        let db = chain.store().begin_transaction();
+        let db = &chain.store().begin_transaction();
         let maybe_block = db.get_block(&challenged_block.raw().parent_block_hash().unpack());
         maybe_block.unwrap().unwrap().raw()
     };
@@ -316,7 +337,12 @@ async fn test_revert() {
     };
     let last_finalized_block_number = {
         let number: u64 = challenged_block.raw().number().unpack();
-        let finalize_blocks = rollup_config.finality_blocks().unpack();
+        let finalize_blocks = chain
+            .generator()
+            .rollup_context()
+            .rollup_config
+            .finality_blocks()
+            .unpack();
         (number - 1).saturating_sub(finalize_blocks)
     };
     let rollup_cell_data = global_state

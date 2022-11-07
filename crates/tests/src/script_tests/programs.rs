@@ -4,14 +4,14 @@ use gw_common::blake2b;
 use lazy_static::lazy_static;
 use std::{fs, io::Read, path::PathBuf};
 
-const SCRIPT_DIR: &str = "../build/debug";
+const SCRIPT_DIR: &str = "../../gwos/build/debug";
 const CHALLENGE_LOCK_PATH: &str = "challenge-lock";
 const WITHDRAWAL_LOCK_PATH: &str = "withdrawal-lock";
 const STATE_VALIDATOR: &str = "state-validator";
-const ALWAYS_SUCCESS_PATH: &str = "always-success";
-const SECP256K1_DATA_PATH: &str = "../c/deps/ckb-production-scripts/build/secp256k1_data";
-const ANYONE_CAN_PAY_LOCK_PATH: &str = "../c/deps/ckb-production-scripts/build/anyone_can_pay";
-const C_SCRIPTS_DIR: &str = "../c/build";
+const SECP256K1_DATA_PATH: &str = "../../gwos/c/deps/ckb-production-scripts/build/secp256k1_data";
+const ANYONE_CAN_PAY_LOCK_PATH: &str =
+    "../../gwos/c/deps/ckb-production-scripts/build/anyone_can_pay";
+const C_SCRIPTS_DIR: &str = "../../gwos/c/build";
 const META_CONTRACT_BIN_NAME: &str = "meta-contract-validator";
 const ETH_ADDR_REG_BIN_NAME: &str = "eth-addr-reg-generator";
 // account locks
@@ -19,22 +19,6 @@ const ETH_LOCK_PATH: &str = "eth-account-lock";
 const TRON_LOCK_PATH: &str = "tron-account-lock";
 
 lazy_static! {
-    pub static ref ALWAYS_SUCCESS_PROGRAM: Bytes = {
-        let mut buf = Vec::new();
-        let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&ALWAYS_SUCCESS_PATH);
-        let mut f = fs::File::open(&path).expect("load program");
-        f.read_to_end(&mut buf).expect("read program");
-        Bytes::from(buf.to_vec())
-    };
-    pub static ref ALWAYS_SUCCESS_CODE_HASH: [u8; 32] = {
-        let mut buf = [0u8; 32];
-        let mut hasher = new_blake2b();
-        hasher.update(&ALWAYS_SUCCESS_PROGRAM);
-        hasher.finalize(&mut buf);
-        buf
-    };
     pub static ref CHALLENGE_LOCK_PROGRAM: Bytes = {
         let mut buf = Vec::new();
         let mut path = PathBuf::new();

@@ -169,6 +169,8 @@ pub enum TransactionError {
     NativeTransferInvalidToId(u32),
     #[error("Polyjuice creator id not found.")]
     PolyjuiceCreatorIdNotFound,
+    #[error("Unknown tx type original exit_code {0}.")]
+    UnknownTxType(i8),
 }
 
 impl From<VMError> for TransactionError {

@@ -1,8 +1,8 @@
 #![allow(clippy::mutable_key_type)]
 
 use std::collections::HashSet;
-use std::sync::Arc;
 
+use crate::script_tests::programs::STATE_VALIDATOR_CODE_HASH;
 use crate::script_tests::state_validator::cancel_challenge::build_merkle_proof;
 use crate::script_tests::utils::init_env_log;
 use crate::script_tests::utils::layer1::build_simple_tx_with_out_point;
@@ -11,10 +11,10 @@ use crate::script_tests::utils::rollup::{
     build_always_success_cell, build_rollup_locked_cell, build_type_id_script,
     calculate_state_validator_type_id, CellContext, CellContextParam,
 };
+use crate::testing_tool::chain::into_deposit_info_cell;
 use crate::testing_tool::chain::{
     apply_block_result, construct_block, setup_chain_with_account_lock_manage,
 };
-use crate::testing_tool::programs::STATE_VALIDATOR_CODE_HASH;
 use ckb_types::{
     packed::{CellInput, CellOutput},
     prelude::{Pack as CKBPack, Unpack as CKBUnpack},
@@ -29,8 +29,9 @@ use gw_generator::account_lock_manage::{
     },
     {always_success::AlwaysSuccess, AccountLockManage},
 };
-use gw_store::mem_pool_state::MemPoolState;
-use gw_store::mem_pool_state::MemStore;
+use gw_store::smt::smt_store::SMTStateStore;
+use gw_store::state::traits::JournalDB;
+use gw_store::state::MemStateDB;
 use gw_types::core::AllowedEoaType;
 use gw_types::core::SigningType;
 use gw_types::packed::AllowedTypeHash;
@@ -46,7 +47,7 @@ use gw_types::{
     },
 };
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_cancel_withdrawal() {
     init_env_log();
     let input_out_point = random_out_point();
@@ -62,8 +63,9 @@ async fn test_cancel_withdrawal() {
     let stake_lock_type = build_type_id_script(b"stake_lock_type_id");
     let challenge_lock_type = build_type_id_script(b"challenge_lock_type_id");
     let eoa_lock_type = build_type_id_script(b"eoa_lock_type_id");
-    let challenge_script_type_hash: [u8; 32] = challenge_lock_type.calc_script_hash().unpack();
-    let eoa_lock_type_hash: [u8; 32] = eoa_lock_type.calc_script_hash().unpack();
+    let challenge_script_type_hash: [u8; 32] =
+        challenge_lock_type.calc_script_hash().unpack().into();
+    let eoa_lock_type_hash: [u8; 32] = eoa_lock_type.calc_script_hash().unpack().into();
     let allowed_eoa_type_hashes: Vec<AllowedTypeHash> = vec![AllowedTypeHash::new(
         AllowedEoaType::Eth,
         eoa_lock_type_hash,
@@ -82,9 +84,19 @@ async fn test_cancel_withdrawal() {
         rollup_type_script.clone(),
         rollup_config.clone(),
         account_lock_manage,
+        None,
+        None,
+        None,
     )
     .await;
-    chain.complete_initial_syncing().await.unwrap();
+    chain
+        .mem_pool()
+        .as_ref()
+        .unwrap()
+        .lock()
+        .await
+        .mem_pool_state()
+        .set_completed_initial_syncing();
     // create a rollup cell
     let capacity = 1000_00000000u64;
     let rollup_cell = build_always_success_cell(
@@ -113,18 +125,26 @@ async fn test_cancel_withdrawal() {
             .hash_type(ScriptHashType::Type.into())
             .args(Pack::pack(&Bytes::from(receiver_args)))
             .build();
+        let rollup_ctx = chain.generator().rollup_context();
         let deposit_requests = vec![
-            DepositRequest::new_builder()
-                .capacity(Pack::pack(&450_00000000u64))
-                .script(sender_script.clone())
-                .registry_id(Pack::pack(&eth_registry_id))
-                .build(),
-            DepositRequest::new_builder()
-                .capacity(Pack::pack(&550_00000000u64))
-                .script(receiver_script)
-                .registry_id(Pack::pack(&eth_registry_id))
-                .build(),
-        ];
+            into_deposit_info_cell(
+                rollup_ctx,
+                DepositRequest::new_builder()
+                    .capacity(Pack::pack(&450_00000000u64))
+                    .script(sender_script.clone())
+                    .registry_id(Pack::pack(&eth_registry_id))
+                    .build(),
+            ),
+            into_deposit_info_cell(
+                rollup_ctx,
+                DepositRequest::new_builder()
+                    .capacity(Pack::pack(&550_00000000u64))
+                    .script(receiver_script)
+                    .registry_id(Pack::pack(&eth_registry_id))
+                    .build(),
+            ),
+        ]
+        .pack();
         let produce_block_result = {
             let mem_pool = chain.mem_pool().as_ref().unwrap();
             let mut mem_pool = mem_pool.lock().await;
@@ -132,16 +152,33 @@ async fn test_cancel_withdrawal() {
                 .await
                 .unwrap()
         };
-        let rollup_cell = gw_types::packed::CellOutput::new_unchecked(rollup_cell.as_bytes());
         let asset_scripts = HashSet::new();
         apply_block_result(
             &mut chain,
-            rollup_cell.clone(),
             produce_block_result,
             deposit_requests,
             asset_scripts,
         )
         .await;
+
+        // finalize deposit
+        for _ in 0..10 {
+            let produce_block_result = {
+                let mem_pool = chain.mem_pool().as_ref().unwrap();
+                let mut mem_pool = mem_pool.lock().await;
+                construct_block(&chain, &mut mem_pool, Default::default())
+                    .await
+                    .unwrap()
+            };
+            apply_block_result(
+                &mut chain,
+                produce_block_result,
+                Default::default(),
+                Default::default(),
+            )
+            .await;
+        }
+
         let withdrawal_capacity = 400_00000000u64;
         withdrawal_extra = {
             let owner_lock = Script::default();
@@ -169,16 +206,15 @@ async fn test_cancel_withdrawal() {
                 .push_withdrawal_request(withdrawal_extra.clone())
                 .await
                 .unwrap();
-            construct_block(&chain, &mut mem_pool, Vec::default())
+            construct_block(&chain, &mut mem_pool, Default::default())
                 .await
                 .unwrap()
         };
         let asset_scripts = HashSet::new();
         apply_block_result(
             &mut chain,
-            rollup_cell,
             produce_block_result,
-            vec![],
+            Default::default(),
             asset_scripts,
         )
         .await;
@@ -237,20 +273,15 @@ async fn test_cancel_withdrawal() {
         .withdrawals()
         .get(challenge_target_index as usize)
         .unwrap();
-    let state = {
-        let mem_store = MemStore::new(chain.store().get_snapshot());
-        MemPoolState::new(Arc::new(mem_store), true)
-    };
-    let snap = state.load();
-    let mut tree = snap.state().unwrap();
-    tree.tracker_mut().enable();
+    let mut tree = MemStateDB::from_store(chain.store().get_snapshot()).unwrap();
+    tree.set_state_tracker(Default::default());
     let withdrawal_address = tree
         .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &sender_script.hash().into())
         .unwrap()
         .unwrap();
     let account_count = tree.get_account_count().unwrap();
     let touched_keys: Vec<H256> = {
-        let keys = tree.tracker_mut().touched_keys().unwrap();
+        let keys = tree.state_tracker().unwrap().touched_keys();
         let unlock = keys.lock().unwrap();
         unlock.clone().into_iter().collect()
     };
@@ -263,9 +294,8 @@ async fn test_cancel_withdrawal() {
         .collect::<Vec<(H256, H256)>>();
     let kv_state_proof: Bytes = {
         let db = chain.store().begin_transaction();
-        let account_smt = db.account_smt().unwrap();
-        account_smt
-            .merkle_proof(touched_keys)
+        let smt = SMTStateStore::new(&db).to_smt().unwrap();
+        smt.merkle_proof(touched_keys)
             .unwrap()
             .compile(kv_state.clone())
             .unwrap()
