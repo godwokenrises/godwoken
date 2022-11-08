@@ -63,6 +63,7 @@ use tokio::sync::{mpsc, Mutex};
 use tracing::instrument;
 
 use crate::in_queue_request_map::{InQueueRequestHandle, InQueueRequestMap};
+use crate::utils::{to_h256, to_jsonh256};
 
 static PROFILER_GUARD: Lazy<tokio::sync::Mutex<Option<ProfilerGuard>>> =
     Lazy::new(|| tokio::sync::Mutex::new(None));
@@ -122,16 +123,6 @@ fn invalid_param_err(msg: &'static str) -> RpcError {
 pub trait TestModeRPC {
     async fn get_global_state(&self) -> Result<GlobalState>;
     async fn produce_block(&self, payload: TestModePayload) -> Result<()>;
-}
-
-fn to_h256(v: JsonH256) -> H256 {
-    let h: [u8; 32] = v.into();
-    h.into()
-}
-
-fn to_jsonh256(v: H256) -> JsonH256 {
-    let h: [u8; 32] = v.into();
-    h.into()
 }
 
 pub struct ExecutionTransactionContext {

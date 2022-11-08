@@ -1,5 +1,6 @@
 use gw_common::H256;
 // block_number(8 bytes) | key (32 bytes)
+#[derive(Hash, PartialEq, Eq)]
 pub struct BlockStateRecordKey([u8; 40]);
 
 impl BlockStateRecordKey {

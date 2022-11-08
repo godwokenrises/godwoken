@@ -2,6 +2,7 @@
 //!
 
 use crate::smt::smt_store::SMTStateStore;
+use crate::snapshot::StoreSnapshot;
 use crate::traits::kv_store::KVStoreRead;
 use crate::traits::kv_store::KVStoreWrite;
 use anyhow::Result;
@@ -18,12 +19,12 @@ use gw_types::{
 use super::mem_store::MemStore;
 
 pub struct MemStateTree {
-    tree: SMT<SMTStateStore<MemStore>>,
+    tree: SMT<SMTStateStore<MemStore<StoreSnapshot>>>,
     account_count: u32,
 }
 
 impl MemStateTree {
-    pub fn new(tree: SMT<SMTStateStore<MemStore>>, account_count: u32) -> Self {
+    pub fn new(tree: SMT<SMTStateStore<MemStore<StoreSnapshot>>>, account_count: u32) -> Self {
         MemStateTree {
             tree,
             account_count,
@@ -37,11 +38,11 @@ impl MemStateTree {
             .build()
     }
 
-    pub fn smt(&self) -> &SMT<SMTStateStore<MemStore>> {
+    pub fn smt(&self) -> &SMT<SMTStateStore<MemStore<StoreSnapshot>>> {
         &self.tree
     }
 
-    fn db(&self) -> &SMTStateStore<MemStore> {
+    fn db(&self) -> &SMTStateStore<MemStore<StoreSnapshot>> {
         self.tree.store()
     }
 }
