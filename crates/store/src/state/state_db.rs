@@ -358,6 +358,7 @@ impl<S: State + CodeStore> JournalDB for StateDB<S> {
         self.revisions.truncate(rev_index);
         Ok(())
     }
+
     /// write dirty state to DB
     fn finalise(&mut self) -> Result<(), StateError> {
         if !self.is_dirty() {
@@ -408,6 +409,21 @@ impl<S: State + CodeStore> JournalDB for StateDB<S> {
     fn take_state_tracker(&mut self) -> Option<StateTracker> {
         self.state_tracker.take()
     }
+
+    fn debug_stat(&self) {
+        log::debug!("===== state_db(is_dirty: {}) =====", self.is_dirty());
+        log::debug!("journals: {:?}", self.journal);
+        log::debug!("revisions: {:?}", self.revisions);
+        log::debug!("dirty_account_count: {:?}", self.dirty_account_count);
+        log::debug!("dirty_state: {:?}", self.dirty_state);
+        log::debug!("dirty_scripts: {:?}", self.dirty_scripts);
+        log::debug!("dirty_data: {:?}", self.dirty_data);
+        log::debug!("dirty_logs: {:?}", self.dirty_logs);
+        log::debug!("===== end =====");
+        for (k, v) in &self.dirty_state {
+            assert_eq!(self.state.get_raw(k).unwrap(), *v);
+        }
+    }
 }
 
 impl<S: State + CodeStore> State for StateDB<S> {
@@ -422,6 +438,7 @@ impl<S: State + CodeStore> State for StateDB<S> {
     }
 
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), StateError> {
+        log::info!("update_raw k: {:?}, value: {:?}", key, value);
         if let Some(tracker) = self.state_tracker.as_ref() {
             tracker.touch_key(&key);
         }

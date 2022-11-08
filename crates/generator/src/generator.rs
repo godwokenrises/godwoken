@@ -863,6 +863,9 @@ impl Generator {
         let last_run_result_log = state.appended_logs().last().cloned();
         state.revert(origin_snapshot)?;
 
+        log::debug!("handle failed tx: revert to snapshot {}", origin_snapshot);
+        state.debug_stat();
+
         // sender address
         let payer = {
             let script_hash = state.get_script_hash(sender_id)?;

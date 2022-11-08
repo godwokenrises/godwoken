@@ -16,4 +16,5 @@ pub trait JournalDB {
     fn set_state_tracker(&mut self, tracker: StateTracker);
     fn state_tracker(&self) -> Option<&StateTracker>;
     fn take_state_tracker(&mut self) -> Option<StateTracker>;
+    fn debug_stat(&self);
 }
