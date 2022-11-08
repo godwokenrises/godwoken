@@ -9,10 +9,7 @@ use anyhow::Result;
 use gw_common::H256;
 use gw_db::{
     error::Error,
-    schema::{
-        Col, COLUMN_BLOCK_STATE_RECORD, COLUMN_BLOCK_STATE_REVERSE_RECORD, COLUMN_DATA,
-        COLUMN_SCRIPT,
-    },
+    schema::{Col, COLUMN_DATA, COLUMN_SCRIPT},
 };
 use gw_traits::CodeStore;
 use gw_types::{
@@ -23,11 +20,7 @@ use gw_types::{
 use im::HashMap;
 
 use crate::{
-    snapshot::StoreSnapshot,
-    state::history::{
-        block_state_record::{BlockStateRecordKey, BlockStateRecordKeyReverse},
-        history_state::HistoryStateStore,
-    },
+    state::history::{block_state_record::BlockStateRecordKey, history_state::HistoryStateStore},
     traits::{
         chain_store::ChainStore,
         kv_store::{KVStore, KVStoreRead, KVStoreWrite},
@@ -143,7 +136,7 @@ impl<S: HistoryStateStore> HistoryStateStore for MemStore<S> {
             .and_then(|m| m.get(state_key))
             .cloned()
         {
-            Some(value) => return Some(value),
+            Some(value) => Some(value),
             None => self.inner.get_history_state(block_number, state_key),
         }
     }

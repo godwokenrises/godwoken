@@ -1,3 +1,5 @@
+use core::convert::TryInto;
+
 use crate::packed::{
     AccountMerkleState, Byte32, CompactMemBlock, GlobalState, GlobalStateV0, MemBlock,
     RawWithdrawalRequest, TransactionKey, TxReceipt, WithdrawalKey, WithdrawalRequestExtra,
@@ -15,6 +17,15 @@ impl TransactionKey {
         // use BE, so we have a sorted bytes representation
         key[32..].copy_from_slice(&index.to_be_bytes());
         key.pack()
+    }
+
+    pub fn block_hash(&self) -> H256 {
+        let h: [u8; 32] = self.as_slice()[..32].try_into().unwrap();
+        h.into()
+    }
+
+    pub fn index(&self) -> u32 {
+        u32::from_be_bytes(self.as_slice()[32..].try_into().unwrap())
     }
 }
 
