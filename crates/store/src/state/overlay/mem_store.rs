@@ -1,5 +1,6 @@
 use std::{
     borrow::Borrow,
+    collections::HashSet,
     hash::{Hash, Hasher},
     sync::{Arc, RwLock},
 };
@@ -8,7 +9,10 @@ use anyhow::Result;
 use gw_common::H256;
 use gw_db::{
     error::Error,
-    schema::{Col, COLUMN_DATA, COLUMN_SCRIPT},
+    schema::{
+        Col, COLUMN_BLOCK_STATE_RECORD, COLUMN_BLOCK_STATE_REVERSE_RECORD, COLUMN_DATA,
+        COLUMN_SCRIPT,
+    },
 };
 use gw_traits::CodeStore;
 use gw_types::{
@@ -20,6 +24,10 @@ use im::HashMap;
 
 use crate::{
     snapshot::StoreSnapshot,
+    state::history::{
+        block_state_record::{BlockStateRecordKey, BlockStateRecordKeyReverse},
+        history_state::HistoryStateStore,
+    },
     traits::{
         chain_store::ChainStore,
         kv_store::{KVStore, KVStoreRead, KVStoreWrite},
@@ -33,25 +41,28 @@ enum Value<T> {
 }
 
 type ColumnsKeyValueMap = HashMap<(u8, Vec<u8>), Value<Vec<u8>>>;
+type KeyValueMapByBlock = HashMap<u64, HashMap<H256, H256>>;
 
-pub struct MemStore {
-    inner: Arc<StoreSnapshot>,
+pub struct MemStore<S> {
+    inner: Arc<S>,
     // (column, key) -> value.
     mem: RwLock<ColumnsKeyValueMap>,
+    history_mem: RwLock<KeyValueMapByBlock>,
 }
 
-impl MemStore {
-    pub fn new(inner: impl Into<Arc<StoreSnapshot>>) -> Self {
+impl<S> MemStore<S> {
+    pub fn new(inner: impl Into<Arc<S>>) -> Self {
         Self {
             inner: inner.into(),
-            mem: RwLock::new(HashMap::new()),
+            mem: Default::default(),
+            history_mem: Default::default(),
         }
     }
 }
 
-impl ChainStore for MemStore {}
+impl<S: KVStoreRead> ChainStore for MemStore<S> {}
 
-impl CodeStore for MemStore {
+impl<S: KVStoreRead> CodeStore for MemStore<S> {
     fn insert_script(&mut self, script_hash: H256, script: packed::Script) {
         self.insert_raw(COLUMN_SCRIPT, script_hash.as_slice(), script.as_slice())
             .expect("insert script")
@@ -73,14 +84,9 @@ impl CodeStore for MemStore {
     }
 }
 
-impl KVStoreRead for MemStore {
+impl<S: KVStoreRead> KVStoreRead for MemStore<S> {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
-        match self
-            .mem
-            .read()
-            .expect("get read lock failed")
-            .get(&(col, key) as &dyn Key)
-        {
+        match self.mem.read().unwrap().get(&(col, key) as &dyn Key) {
             Some(Value::Exist(v)) => Some(v.clone().into_boxed_slice()),
             Some(Value::Deleted) => None,
             None => self.inner.get(col, key),
@@ -88,11 +94,11 @@ impl KVStoreRead for MemStore {
     }
 }
 
-impl KVStoreWrite for MemStore {
+impl<S> KVStoreWrite for MemStore<S> {
     fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
         self.mem
             .write()
-            .expect("get write lock failed")
+            .unwrap()
             .insert((col, key.into()), Value::Exist(value.to_vec()));
         Ok(())
     }
@@ -100,15 +106,60 @@ impl KVStoreWrite for MemStore {
     fn delete(&self, col: Col, key: &[u8]) -> Result<(), Error> {
         self.mem
             .write()
-            .expect("get write lock failed")
+            .unwrap()
             .insert((col, key.into()), Value::Deleted);
         Ok(())
     }
 }
 
-impl KVStore for MemStore {}
+impl<S: KVStoreRead> KVStore for MemStore<S> {}
 
-impl Clone for MemStore {
+impl<S: HistoryStateStore> HistoryStateStore for MemStore<S> {
+    type BlockStateRecordKeyIter = HashSet<BlockStateRecordKey>;
+
+    fn iter_block_state_record(&self, block_number: u64) -> Self::BlockStateRecordKeyIter {
+        let mut list = match self.history_mem.read().unwrap().get(&block_number) {
+            Some(map) => map
+                .keys()
+                .map(|k| BlockStateRecordKey::new(block_number, k))
+                .collect(),
+            None => HashSet::new(),
+        };
+        list.extend(self.inner.iter_block_state_record(block_number).into_iter());
+        list
+    }
+
+    fn remove_block_state_record(&self, block_number: u64) -> Result<()> {
+        self.history_mem.write().unwrap().remove(&block_number);
+        Ok(())
+    }
+
+    fn get_history_state(&self, block_number: u64, state_key: &H256) -> Option<H256> {
+        match self
+            .history_mem
+            .read()
+            .unwrap()
+            .get(&block_number)
+            .and_then(|m| m.get(state_key))
+            .cloned()
+        {
+            Some(value) => return Some(value),
+            None => self.inner.get_history_state(block_number, state_key),
+        }
+    }
+
+    fn record_block_state(&self, block_number: u64, state_key: H256, value: H256) -> Result<()> {
+        self.history_mem
+            .write()
+            .unwrap()
+            .entry(block_number)
+            .or_default()
+            .insert(state_key, value);
+        Ok(())
+    }
+}
+
+impl<S> Clone for MemStore<S> {
     /// Make a clone of the store. This is cheap.
     ///
     /// Modifications on the clone will NOT be seen on this store.
@@ -116,6 +167,7 @@ impl Clone for MemStore {
         Self {
             inner: self.inner.clone(),
             mem: RwLock::new(self.mem.read().unwrap().clone()),
+            history_mem: RwLock::new(self.history_mem.read().unwrap().clone()),
         }
     }
 }

@@ -30,8 +30,8 @@ pub enum WriteOpt {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct RWConfig {
-    read: ReadOpt,
-    write: WriteOpt,
+    pub read: ReadOpt,
+    pub write: WriteOpt,
 }
 
 impl RWConfig {
