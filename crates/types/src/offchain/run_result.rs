@@ -33,6 +33,7 @@ pub struct RunResult {
     pub cycles: CycleMeter,
     pub read_data_hashes: HashSet<H256>,
     pub write_data_hashes: HashSet<H256>,
+    pub debug_log_buf: Vec<u8>,
 }
 
 impl CellOutput {

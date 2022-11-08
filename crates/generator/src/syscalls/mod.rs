@@ -75,6 +75,7 @@ pub struct RunContext {
     pub cycle_meter: CycleMeter,
     pub return_data: Bytes,
     pub exit_code: i8,
+    pub debug_log_buf: Vec<u8>,
 }
 
 impl RunContext {
@@ -92,7 +93,6 @@ pub(crate) struct L2Syscalls<'a, 'b, S, C> {
     pub(crate) raw_tx: &'a RawL2Transaction,
     pub(crate) context: &'b mut RunContext,
     pub(crate) cycles_pool: &'b mut Option<&'a mut CyclesPool>,
-    pub(crate) log_buf: &'b mut Vec<u8>,
 }
 
 #[allow(dead_code)]
@@ -695,8 +695,8 @@ impl<'a, 'b, S: State, C: ChainView> L2Syscalls<'a, 'b, S, C> {
             buffer.push(byte);
             addr += 1;
         }
-        self.log_buf.push(b'\n');
-        self.log_buf.extend_from_slice(&buffer);
+        self.context.debug_log_buf.push(b'\n');
+        self.context.debug_log_buf.extend_from_slice(&buffer);
         Ok(())
     }
 
