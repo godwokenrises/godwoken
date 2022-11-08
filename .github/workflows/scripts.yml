@@ -65,8 +65,11 @@ jobs:
       if: steps.fetch-capsule-cache.outputs.cache-hit != 'true'
       working-directory: gwos
       run: tools/backup-capsule-cache.sh
+    # TODO: remove this
+    - name: Copy contracts from prebuild docker images
+      run: devtools/fetch-binaries.sh
     - name: Test C Uint256
       working-directory: gwos
       run: cargo test
-    - name: Tests
-      run: cargo test --features scripts script-tests
+    - name: Script tests
+      run: cargo test --features scripts script_tests
