@@ -10,5 +10,6 @@ pub mod state_db;
 pub mod traits;
 
 // alias types
+
 pub type MemStateDB = state_db::StateDB<overlay::mem_state::MemStateTree>;
 pub type BlockStateDB<S> = state_db::StateDB<history::history_state::HistoryState<S>>;

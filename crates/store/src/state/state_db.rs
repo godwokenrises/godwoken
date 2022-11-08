@@ -175,7 +175,7 @@ impl MemStateDB {
         Ok(Self::new(inner))
     }
 
-    pub fn inner_smt_tree(&self) -> &SMT<SMTStateStore<MemStore>> {
+    pub fn inner_smt_tree(&self) -> &SMT<SMTStateStore<MemStore<StoreSnapshot>>> {
         self.state.smt()
     }
 }
