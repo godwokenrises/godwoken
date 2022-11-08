@@ -57,6 +57,7 @@ pub struct Config {
 pub enum RPCMethods {
     PProf,
     Test,
+    Debug,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -62,6 +62,7 @@ use std::{
 use tokio::sync::{mpsc, Mutex};
 use tracing::instrument;
 
+use crate::apis::debug::replay_transaction;
 use crate::in_queue_request_map::{InQueueRequestHandle, InQueueRequestMap};
 use crate::utils::{to_h256, to_jsonh256};
 
@@ -367,6 +368,9 @@ impl Registry {
                         // .with_method("gw_dump_mem_block", dump_mem_block)
                         .with_method("gw_get_rocksdb_mem_stats", get_rocksdb_memory_stats)
                         .with_method("gw_dump_jemalloc_profiling", dump_jemalloc_profiling)
+                }
+                RPCMethods::Debug => {
+                    server = server.with_method("debug_replay_transaction", replay_transaction)
                 }
             }
         }

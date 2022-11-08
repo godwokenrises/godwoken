@@ -192,13 +192,13 @@ impl Generator {
         } = args;
 
         let mut context = RunContext::default();
+        context.debug_log_buf.reserve(1024);
         let used_cycles;
         let exit_code;
         let org_cycles_pool = cycles_pool.as_mut().map(|p| p.clone());
         {
             let t = Instant::now();
             let core_machine = VMVersion::V1.init_core_machine(max_cycles);
-            let mut sys_log_buf = Vec::with_capacity(1024);
             let machine_builder = DefaultMachineBuilder::new(core_machine)
                 .syscall(Box::new(L2Syscalls {
                     chain,
@@ -208,7 +208,6 @@ impl Generator {
                     rollup_context: &self.rollup_context,
                     account_lock_manage: &self.account_lock_manage,
                     cycles_pool: &mut cycles_pool,
-                    log_buf: &mut sys_log_buf,
                     context: &mut context,
                 }))
                 .instruction_cycle_func(Box::new(instruction_cycles));
@@ -275,7 +274,8 @@ impl Generator {
                 }
             }
             if self.contract_log_config == ContractLogConfig::Verbose || exit_code != 0 {
-                let s = std::str::from_utf8(&sys_log_buf).map_err(TransactionError::Utf8Error)?;
+                let s = std::str::from_utf8(&context.debug_log_buf)
+                    .map_err(TransactionError::Utf8Error)?;
                 log::debug!("[contract debug]: {}", s);
             }
             log::debug!(
@@ -817,6 +817,7 @@ impl Generator {
                 .into_iter()
                 .cloned()
                 .collect(),
+            debug_log_buf: run_context.debug_log_buf,
         };
         Ok(r)
     }
