@@ -39,8 +39,8 @@ use super::{
 
 #[derive(Debug, Clone)]
 enum JournalEntry {
-    UpdateRaw { key: H256, prev_value: H256 },
-    SetAccountCount { prev_count: u32 },
+    UpdateRaw { key: H256, prev_value: Option<H256> },
+    SetAccountCount { prev_count: Option<u32> },
     InsertScript { script_hash: H256, prev_exist: bool },
     InsertData { data_hash: H256, prev_exist: bool },
     AppendLog { index: usize },
@@ -325,11 +325,16 @@ impl<S: State + CodeStore> JournalDB for StateDB<S> {
         for entry in revert_entries.rev() {
             use JournalEntry::*;
             match entry {
-                UpdateRaw { key, prev_value } => {
-                    self.dirty_state.insert(key, prev_value);
-                }
+                UpdateRaw { key, prev_value } => match prev_value {
+                    Some(v) => {
+                        self.dirty_state.insert(key, v);
+                    }
+                    None => {
+                        self.dirty_state.remove(&key);
+                    }
+                },
                 SetAccountCount { prev_count } => {
-                    self.dirty_account_count = Some(prev_count);
+                    self.dirty_account_count = prev_count;
                 }
                 InsertScript {
                     script_hash,
@@ -358,6 +363,7 @@ impl<S: State + CodeStore> JournalDB for StateDB<S> {
         self.revisions.truncate(rev_index);
         Ok(())
     }
+
     /// write dirty state to DB
     fn finalise(&mut self) -> Result<(), StateError> {
         if !self.is_dirty() {
@@ -408,6 +414,18 @@ impl<S: State + CodeStore> JournalDB for StateDB<S> {
     fn take_state_tracker(&mut self) -> Option<StateTracker> {
         self.state_tracker.take()
     }
+
+    fn debug_stat(&self) {
+        log::debug!("===== state_db(is_dirty: {}) =====", self.is_dirty());
+        log::debug!("journals: {:?}", self.journal);
+        log::debug!("revisions: {:?}", self.revisions);
+        log::debug!("dirty_account_count: {:?}", self.dirty_account_count);
+        log::debug!("dirty_state: {:?}", self.dirty_state);
+        log::debug!("dirty_scripts: {:?}", self.dirty_scripts);
+        log::debug!("dirty_data: {:?}", self.dirty_data);
+        log::debug!("dirty_logs: {:?}", self.dirty_logs);
+        log::debug!("===== end =====");
+    }
 }
 
 impl<S: State + CodeStore> State for StateDB<S> {
@@ -427,7 +445,7 @@ impl<S: State + CodeStore> State for StateDB<S> {
         }
         self.journal.push(JournalEntry::UpdateRaw {
             key,
-            prev_value: self.get_raw(&key)?,
+            prev_value: self.dirty_state.get(&key).cloned(),
         });
         self.dirty_state.insert(key, value);
         Ok(())
@@ -442,7 +460,7 @@ impl<S: State + CodeStore> State for StateDB<S> {
 
     fn set_account_count(&mut self, count: u32) -> Result<(), StateError> {
         self.journal.push(JournalEntry::SetAccountCount {
-            prev_count: self.get_account_count()?,
+            prev_count: self.dirty_account_count,
         });
         self.dirty_account_count = Some(count);
         Ok(())

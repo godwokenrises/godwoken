@@ -21,8 +21,9 @@ use arc_swap::ArcSwapOption;
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     error::Error as StateError,
+    h256_ext::H256Ext,
     registry_address::RegistryAddress,
-    state::State,
+    state::{build_account_key, State, SUDT_TOTAL_SUPPLY_KEY},
     H256,
 };
 
@@ -860,6 +861,8 @@ impl Generator {
         let last_run_result_log = state.appended_logs().last().cloned();
         state.revert(origin_snapshot)?;
 
+        log::debug!("handle failed tx: revert to snapshot {}", origin_snapshot);
+
         // sender address
         let payer = {
             let script_hash = state.get_script_hash(sender_id)?;
@@ -928,6 +931,17 @@ impl Generator {
                 );
                 TransactionError::InsufficientBalance
             })?;
+
+        // Note: update simple UDT total supply
+        // This bug cause the ERC-20 pCKB returns wrong total supply. We should fix this logic via a hardfork.
+        {
+            let raw_key = build_account_key(CKB_SUDT_ACCOUNT_ID, &SUDT_TOTAL_SUPPLY_KEY);
+            let mut total_supply = state.get_raw(&raw_key)?.to_u256();
+            total_supply = total_supply
+                .checked_add(tx_fee)
+                .ok_or(TransactionError::InsufficientBalance)?;
+            state.update_raw(raw_key, H256::from_u256(total_supply))?;
+        }
 
         // increase sender's nonce
         let nonce = nonce_before
