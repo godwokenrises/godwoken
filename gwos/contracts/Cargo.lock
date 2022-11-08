@@ -6,7 +6,7 @@ version = 3
 name = "always-success"
 version = "0.1.0"
 dependencies = [
- "ckb-std 0.7.4",
+ "ckb-std",
 ]
 
 [[package]]
@@ -106,33 +106,12 @@ dependencies = [
 
 [[package]]
 name = "ckb-standalone-types"
-version = "0.0.1-pre.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af2cdbdf65ee5b1da71504f5a03d6984bce77d0b4b46daff63f4ba4a3b0eef08"
-dependencies = [
- "cfg-if 0.1.10",
- "molecule 0.6.1",
-]
-
-[[package]]
-name = "ckb-standalone-types"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22d7cbbdab96e6b809a102cf88bfec28795a0a3c06bfdea4abe4de89777801cd"
 dependencies = [
  "cfg-if 1.0.0",
- "molecule 0.7.2",
-]
-
-[[package]]
-name = "ckb-std"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5247e68ff32c17714105e2460db6113fb99efde8c830bbdd99f8bf715100dd64"
-dependencies = [
- "buddy-alloc",
- "cc",
- "ckb-standalone-types 0.0.1-pre.1",
+ "molecule",
 ]
 
 [[package]]
@@ -143,7 +122,7 @@ checksum = "e5761f11372e794d77b8e8a8059b22c5d6ccef907588dd5302a669f056ecce6b"
 dependencies = [
  "buddy-alloc",
  "cc",
- "ckb-standalone-types 0.1.2",
+ "ckb-standalone-types",
  "cstr_core",
 ]
 
@@ -312,7 +291,7 @@ source = "git+https://github.com/nervosnetwork/godwoken.git?rev=91c324544424292b
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
- "molecule 0.7.2",
+ "molecule",
  "primitive-types",
  "sparse-merkle-tree",
 ]
@@ -321,7 +300,7 @@ dependencies = [
 name = "gw-utils"
 version = "0.1.0"
 dependencies = [
- "ckb-std 0.9.0",
+ "ckb-std",
  "gw-common",
  "gw-types",
 ]
@@ -367,15 +346,6 @@ name = "merkle-cbt"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f1ac8428ec02d6caa5a79c15e851d84d5dc7a00df0429a8aa860d104f0a81be"
-dependencies = [
- "cfg-if 0.1.10",
-]
-
-[[package]]
-name = "molecule"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3067ceba3d7f5dcc7427cfc584fc506e756f1161151032fec840455f5a3c2fd5"
 dependencies = [
  "cfg-if 0.1.10",
 ]
