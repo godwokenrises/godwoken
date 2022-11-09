@@ -1,15 +1,22 @@
-name: MainCI
+name: GWOS EVM MainCI
 
 on:
   push:
     branches-ignore:
     - fuzz*
     - mock*
+    paths:
+      - 'gwos-evm/**'
   pull_request:
+    paths:
+      - 'gwos-evm/**'
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gwos-evm
 
     steps:
     - uses: actions/checkout@v2
@@ -44,7 +51,7 @@ jobs:
       run: bash devtools/ci/integration-test.sh
 
     - name: Run Ethereum Test
-      working-directory: polyjuice-tests
+      working-directory: gwos-evm/polyjuice-tests
       run: RUST_LOG=info,gw_generator=debug cargo test --release --test ethereum_test -- ethereum_test --nocapture
 
     - name: Checksums of generator and validator
@@ -53,6 +60,9 @@ jobs:
         sha256sum build/generator build/generator_log build/validator build/validator_log
 
   integration-test:
+    defaults:
+      run:
+        working-directory: gwos-evm
     uses: nervosnetwork/godwoken-tests/.github/workflows/reusable-integration-test-v1.yml@develop
     with:
       extra_github_env: |

@@ -1,10 +1,20 @@
-name: FuzzTest
+name: GWOS EVM FuzzTest
 
-on: [push, pull_request]
+on:
+  push:
+    paths:
+      - 'gwos-evm/**'
+  pull_request:
+    paths:
+      - 'gwos-evm/**'
 
 jobs:
   build-and-run-fuzzing:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gwos-evm
+
     steps:
     - uses: actions/checkout@v2
       with:
@@ -49,10 +59,10 @@ jobs:
         cached: ${{ steps.cache-llvm.outputs.cache-hit }}
 
     - name: test_rlp on x86 with sanitizers
-      working-directory: ./polyjuice-tests/fuzz
+      working-directory: ./gwos-evm/polyjuice-tests/fuzz
       run: make build/test_rlp && ./build/test_rlp
     - name: test_contracts on x86 with sanitizers
-      working-directory: ./polyjuice-tests/fuzz
+      working-directory: ./gwos-evm/polyjuice-tests/fuzz
       run: make build/test_contracts && ./build/test_contracts
 
     - name: Set MAX_FUZZ_TIME for different branches
@@ -66,7 +76,7 @@ jobs:
         fi
 
     - name: Fuzzing Polyjuice Generator 1 hour
-      working-directory: polyjuice-tests/fuzz
+      working-directory: gwos-evm/polyjuice-tests/fuzz
       run: |
         mkdir -p corpus-cache
         ls corpus-cache
@@ -77,7 +87,7 @@ jobs:
       # Max data buffer size: 24KB < 25000 bytes
         
     - name: merge corpus
-      working-directory: polyjuice-tests/fuzz
+      working-directory: gwos-evm/polyjuice-tests/fuzz
       run: |
         mkdir -p corpus-new
         ./build/polyjuice_generator_fuzzer -merge=1 corpus-new corpus-cache corpus
