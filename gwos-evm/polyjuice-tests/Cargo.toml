@@ -1,0 +1,36 @@
+[package]
+name = "polyjuice-tests"
+version = "1.5.0"
+authors = ["Linfeng Qian <thewawar@gmail.com>"]
+edition = "2018"
+
+[lib]
+name = "lib"
+path = "src/lib.rs"
+
+[dependencies]
+gw-types     = { git = "https://github.com/godwokenrises/godwoken.git", branch = "develop" }
+gw-common    = { git = "https://github.com/godwokenrises/godwoken.git", branch = "develop" }
+gw-db        = { git = "https://github.com/godwokenrises/godwoken.git", branch = "develop" }
+gw-store     = { git = "https://github.com/godwokenrises/godwoken.git", branch = "develop" }
+gw-config    = { git = "https://github.com/godwokenrises/godwoken.git", branch = "develop" }
+gw-traits    = { git = "https://github.com/godwokenrises/godwoken.git", branch = "develop" }
+gw-generator = { git = "https://github.com/godwokenrises/godwoken.git", branch = "develop" }
+ckb-vm = { version = "=0.21.3", features = ["detect-asm"] }
+ckb-vm-definitions = "=0.21.3"
+
+lazy_static = "1.4"
+tiny-keccak = "1.4"
+rlp = "0.5.0"
+hex = "0.4.2"
+env_logger = "0.9"
+anyhow = "1.0"
+
+# ethabi = "^17.0.0"
+# rand = "0.7.3"
+# blake2b-rs = "0.2"
+
+[dev-dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+

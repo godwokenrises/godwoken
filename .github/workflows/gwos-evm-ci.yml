@@ -1,0 +1,77 @@
+name: GWOS EVM MainCI
+
+on:
+  push:
+    branches-ignore:
+    - fuzz*
+    - mock*
+    paths:
+      - 'gwos-evm/**'
+  pull_request:
+    paths:
+      - 'gwos-evm/**'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gwos-evm
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: 'recursive'
+
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+    
+    - name: Install Rust components
+      run: rustup component add rustfmt && rustup component add clippy
+    - name: Install moleculec
+      run: |
+        export MOLC_VERSION=$(cat deps/godwoken-scripts/c/Makefile | egrep "MOLC_VERSION :=" | awk '{print $3}')
+        test "$(moleculec --version)" = "Moleculec $MOLC_VERSION" \
+        || CARGO_TARGET_DIR=target/ cargo install moleculec --version $MOLC_VERSION
+    - name: Install ckb-cli from nervos/godwoken-prebuilds:latest
+      run: |
+        docker run --rm -v /bin:/bin-dir nervos/godwoken-prebuilds:latest \
+          cp /bin/ckb-cli /bin-dir/ && echo "Install ckb-cli to /bin/"
+        ckb-cli --version
+
+    - name: Validate the checksum of SudtERC20Proxy Contract.bin
+      run: make contract/sudt-erc20-proxy
+
+    - name: Run Integration-Test
+      run: bash devtools/ci/integration-test.sh
+
+    - name: Run Ethereum Test
+      working-directory: gwos-evm/polyjuice-tests
+      run: RUST_LOG=info,gw_generator=debug cargo test --release --test ethereum_test -- ethereum_test --nocapture
+
+    - name: Checksums of generator and validator
+      run: |
+        ls -lh build
+        sha256sum build/generator build/generator_log build/validator build/validator_log
+
+  integration-test:
+    defaults:
+      run:
+        working-directory: gwos-evm
+    uses: nervosnetwork/godwoken-tests/.github/workflows/reusable-integration-test-v1.yml@develop
+    with:
+      extra_github_env: |
+        GODWOKEN_PREBUILD_IMAGE_NAME=ghcr.io/godwokenrises/godwoken-prebuilds:1.7-rc-202210271055
+        GODWOKEN_KICKER_REF=4892b58fe7157db286000fb831ec8e5cf197c684
+        GODWOKEN_TESTS_REF=55bce8730821c79ffcc0acceb24eb8134feb95cb
+        MANUAL_BUILD_GODWOKEN=true
+        GODWOKEN_GIT_URL=https://github.com/godwokenrises/godwoken
+        GODWOKEN_GIT_CHECKOUT=968b5b33b7d6437ab74b4fc58427a88dad0d1b49
+        MANUAL_BUILD_POLYJUICE=true
+        POLYJUICE_GIT_URL=https://github.com/${{ github.repository }}
+        POLYJUICE_GIT_CHECKOUT=${{ github.ref }}

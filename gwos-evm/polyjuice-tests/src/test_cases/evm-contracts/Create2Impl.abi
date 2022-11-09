@@ -1,0 +1,78 @@
+[
+    {
+        "type": "function",
+        "stateMutability": "view",
+        "outputs": [
+            {
+                "type": "address",
+                "name": "",
+                "internalType": "address"
+            }
+        ],
+        "name": "computeAddress",
+        "inputs": [
+            {
+                "type": "bytes32",
+                "name": "salt",
+                "internalType": "bytes32"
+            },
+            {
+                "type": "bytes32",
+                "name": "codeHash",
+                "internalType": "bytes32"
+            }
+        ]
+    },
+    {
+        "type": "function",
+        "stateMutability": "pure",
+        "outputs": [
+            {
+                "type": "address",
+                "name": "",
+                "internalType": "address"
+            }
+        ],
+        "name": "computeAddressWithDeployer",
+        "inputs": [
+            {
+                "type": "bytes32",
+                "name": "salt",
+                "internalType": "bytes32"
+            },
+            {
+                "type": "bytes32",
+                "name": "codeHash",
+                "internalType": "bytes32"
+            },
+            {
+                "type": "address",
+                "name": "deployer",
+                "internalType": "address"
+            }
+        ]
+    },
+    {
+        "type": "function",
+        "stateMutability": "nonpayable",
+        "outputs": [],
+        "name": "deploy",
+        "inputs": [
+            {
+                "type": "uint256",
+                "name": "value",
+                "internalType": "uint256"
+            },
+            {
+                "type": "bytes32",
+                "name": "salt",
+                "internalType": "bytes32"
+            },
+            {
+                "type": "bytes",
+                "name": "code",
+                "internalType": "bytes"
+            }
+        ]
+    }
+]

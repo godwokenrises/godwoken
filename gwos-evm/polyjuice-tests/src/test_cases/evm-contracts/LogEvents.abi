@@ -1,0 +1,39 @@
+[
+    {
+        "type": "constructor",
+        "stateMutability": "payable",
+        "inputs": []
+    },
+    {
+        "type": "event",
+        "name": "DoLog",
+        "inputs": [
+            {
+                "type": "address",
+                "name": "_from",
+                "internalType": "address",
+                "indexed": true
+            },
+            {
+                "type": "uint256",
+                "name": "_value",
+                "internalType": "uint256",
+                "indexed": false
+            },
+            {
+                "type": "bool",
+                "name": "_is_init",
+                "internalType": "bool",
+                "indexed": false
+            }
+        ],
+        "anonymous": false
+    },
+    {
+        "type": "function",
+        "stateMutability": "payable",
+        "outputs": [],
+        "name": "log",
+        "inputs": []
+    }
+]

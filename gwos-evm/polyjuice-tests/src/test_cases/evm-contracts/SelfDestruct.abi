@@ -1,0 +1,20 @@
+[
+    {
+        "type": "constructor",
+        "stateMutability": "payable",
+        "inputs": [
+            {
+                "type": "address",
+                "name": "_owner",
+                "internalType": "address payable"
+            }
+        ]
+    },
+    {
+        "type": "function",
+        "stateMutability": "nonpayable",
+        "outputs": [],
+        "name": "done",
+        "inputs": []
+    }
+]

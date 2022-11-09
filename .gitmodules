@@ -10,3 +10,30 @@
 [submodule "gwos/c/deps/molecule"]
 	path = gwos/c/deps/molecule
 	url = https://github.com/nervosnetwork/molecule.git
+[submodule "gwos-evm/deps/ckb-c-stdlib"]
+        path = gwos-evm/deps/ckb-c-stdlib
+        url = https://github.com/TheWaWaR/ckb-c-stdlib.git
+[submodule "gwos-evm/deps/ethash"]
+        path = gwos-evm/deps/ethash
+        url = https://github.com/TheWaWaR/ethash
+[submodule "gwos-evm/deps/intx"]
+        path = gwos-evm/deps/intx
+        url = https://github.com/chfast/intx
+[submodule "gwos-evm/deps/evmone"]
+        path = gwos-evm/deps/evmone
+        url = https://github.com/nervosnetwork/evmone
+[submodule "gwos-evm/deps/secp256k1"]
+        path = gwos-evm/deps/secp256k1
+        url = https://github.com/nervosnetwork/secp256k1
+[submodule "gwos-evm/deps/secp256k1-fix"]
+        path = gwos-evm/deps/secp256k1-fix
+        url = https://github.com/TheWaWaR/secp256k1
+[submodule "gwos-evm/deps/crypto-algorithms"]
+        path = gwos-evm/deps/crypto-algorithms
+        url = https://github.com/B-Con/crypto-algorithms.git
+[submodule "gwos-evm/deps/mbedtls"]
+        path = gwos-evm/deps/mbedtls
+        url = https://github.com/nervosnetwork/mbedtls.git
+[submodule "gwos-evm/deps/godwoken-scripts"]
+        path = gwos-evm/deps/godwoken-scripts
+        url = https://github.com/nervosnetwork/godwoken-scripts.git
