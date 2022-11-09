@@ -25,6 +25,7 @@ pub struct Config {
     #[serde(default)]
     pub contract_log_config: ContractLogConfig,
     pub backend_switches: Vec<BackendSwitchConfig>,
+    pub debug_backend_switches: Option<Vec<BackendSwitchConfig>>,
     pub genesis: GenesisConfig,
     pub chain: ChainConfig,
     pub rpc_client: RPCClientConfig,

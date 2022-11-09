@@ -167,6 +167,16 @@ impl Generator {
         }
     }
 
+    pub fn clone_with_new_backends(&self, backend_manage: BackendManage) -> Self {
+        Self {
+            backend_manage,
+            account_lock_manage: self.account_lock_manage.clone(),
+            rollup_context: self.rollup_context.clone(),
+            contract_log_config: self.contract_log_config.clone(),
+            polyjuice_creator_id: ArcSwapOption::from(self.polyjuice_creator_id.load_full()),
+        }
+    }
+
     pub fn rollup_context(&self) -> &RollupContext {
         &self.rollup_context
     }

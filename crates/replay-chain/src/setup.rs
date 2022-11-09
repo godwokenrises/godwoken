@@ -104,7 +104,7 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
             .ok_or_else(|| anyhow!("Eth: No allowed EoA type hashes in the rollup config"))?;
         account_lock_manage.register_lock_algorithm(
             eth_lock_script_type_hash.hash().unpack(),
-            Box::new(Secp256k1Eth::default()),
+            Arc::new(Secp256k1Eth::default()),
         );
         Arc::new(Generator::new(
             backend_manage,

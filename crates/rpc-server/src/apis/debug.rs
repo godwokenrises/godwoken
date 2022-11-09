@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+use std::{convert::TryInto, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256 as JsonH256;
@@ -21,6 +21,12 @@ use jsonrpc_v2::{Data, Params};
 
 use crate::utils::to_h256;
 
+pub(crate) struct DebugTransactionContext {
+    pub store: Store,
+    pub generator: Arc<Generator>,
+    pub debug_generator: Arc<Generator>,
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 pub(crate) enum DebugReplayTxParams {
@@ -29,19 +35,18 @@ pub(crate) enum DebugReplayTxParams {
 
 pub(crate) async fn replay_transaction(
     Params(param): Params<DebugReplayTxParams>,
-    store: Data<Store>,
-    generator: Data<Generator>,
+    ctx: Data<DebugTransactionContext>,
 ) -> Result<Option<DebugRunResult>> {
     let DebugReplayTxParams::Default((tx_hash,)) = param;
     let tx_hash = to_h256(tx_hash);
 
-    if store.get_transaction(&tx_hash)?.is_none() {
+    if ctx.store.get_transaction(&tx_hash)?.is_none() {
         return Ok(None);
     }
 
     // run target tx
     let run_result = tokio::task::spawn_blocking(move || {
-        let db = &store.begin_transaction();
+        let db = &ctx.store.begin_transaction();
 
         // find tx info
         let info = db
@@ -76,7 +81,7 @@ pub(crate) async fn replay_transaction(
         for i in 0..tx_index {
             let tx = block.transactions().get(i as usize).unwrap();
             let raw_tx = tx.raw();
-            generator.unchecked_execute_transaction(
+            ctx.generator.unchecked_execute_transaction(
                 &chain_view,
                 &mut hist_state,
                 &block_info,
@@ -87,10 +92,10 @@ pub(crate) async fn replay_transaction(
             hist_state.finalise()?;
         }
 
-        // execute target
+        // execute target with debug generator
         let tx = block.transactions().get(tx_index as usize).unwrap();
         let raw_tx = tx.raw();
-        let run_result = generator.unchecked_execute_transaction(
+        let run_result = ctx.debug_generator.unchecked_execute_transaction(
             &chain_view,
             &mut hist_state,
             &block_info,

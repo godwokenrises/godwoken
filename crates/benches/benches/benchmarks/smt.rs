@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
 use gw_common::{
     blake2b::new_blake2b,
@@ -173,7 +175,7 @@ impl BenchExecutionEnvironment {
         let account_lock_manage = {
             let mut manage = AccountLockManage::default();
             manage
-                .register_lock_algorithm(ALWAYS_SUCCESS_LOCK_HASH.into(), Box::new(AlwaysSuccess));
+                .register_lock_algorithm(ALWAYS_SUCCESS_LOCK_HASH.into(), Arc::new(AlwaysSuccess));
             manage
         };
 
