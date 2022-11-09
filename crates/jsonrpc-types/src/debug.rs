@@ -36,7 +36,7 @@ pub struct DebugRunResult {
     pub cycles: CycleMeter,
     pub read_data_hashes: Vec<JsonH256>,
     pub write_data_hashes: Vec<JsonH256>,
-    pub debug_log: String,
+    pub debug_log: Vec<String>,
 }
 
 impl TryFrom<offchain::RunResult> for DebugRunResult {
@@ -65,7 +65,10 @@ impl TryFrom<offchain::RunResult> for DebugRunResult {
                 .into_iter()
                 .map(|h| JsonH256::from_slice(h.as_slice()).unwrap())
                 .collect(),
-            debug_log: String::from_utf8(debug_log_buf)?,
+            debug_log: String::from_utf8(debug_log_buf)?
+                .lines()
+                .map(ToString::to_string)
+                .collect(),
         })
     }
 }
