@@ -1,0 +1,196 @@
+[
+    {
+        "type": "function",
+        "stateMutability": "pure",
+        "outputs": [
+            {
+                "type": "bytes32",
+                "name": "",
+                "internalType": "bytes32"
+            }
+        ],
+        "name": "createChoiceHash",
+        "inputs": [
+            {
+                "type": "bool",
+                "name": "choice",
+                "internalType": "bool"
+            },
+            {
+                "type": "string",
+                "name": "secret",
+                "internalType": "string"
+            }
+        ]
+    },
+    {
+        "type": "function",
+        "stateMutability": "payable",
+        "outputs": [],
+        "name": "depositUserOne",
+        "inputs": [
+            {
+                "type": "bytes",
+                "name": "_signedChoiceHash",
+                "internalType": "bytes"
+            },
+            {
+                "type": "uint128",
+                "name": "_stake",
+                "internalType": "uint128"
+            }
+        ]
+    },
+    {
+        "type": "function",
+        "stateMutability": "payable",
+        "outputs": [],
+        "name": "depositUserTwo",
+        "inputs": [
+            {
+                "type": "bool",
+                "name": "choice",
+                "internalType": "bool"
+            }
+        ]
+    },
+    {
+        "type": "function",
+        "stateMutability": "nonpayable",
+        "outputs": [
+            {
+                "type": "bool",
+                "name": "",
+                "internalType": "bool"
+            }
+        ],
+        "name": "revealUserOneChoice",
+        "inputs": [
+            {
+                "type": "bool",
+                "name": "choice",
+                "internalType": "bool"
+            },
+            {
+                "type": "string",
+                "name": "secret",
+                "internalType": "string"
+            }
+        ]
+    },
+    {
+        "type": "function",
+        "stateMutability": "view",
+        "outputs": [
+            {
+                "type": "uint256",
+                "name": "",
+                "internalType": "uint256"
+            }
+        ],
+        "name": "stake",
+        "inputs": []
+    },
+    {
+        "type": "function",
+        "stateMutability": "nonpayable",
+        "outputs": [
+            {
+                "type": "bool",
+                "name": "",
+                "internalType": "bool"
+            }
+        ],
+        "name": "timeout",
+        "inputs": []
+    },
+    {
+        "type": "function",
+        "stateMutability": "view",
+        "outputs": [
+            {
+                "type": "address",
+                "name": "",
+                "internalType": "address payable"
+            }
+        ],
+        "name": "userOneAddress",
+        "inputs": []
+    },
+    {
+        "type": "function",
+        "stateMutability": "view",
+        "outputs": [
+            {
+                "type": "bytes",
+                "name": "",
+                "internalType": "bytes"
+            }
+        ],
+        "name": "userOneSignedChoiceHash",
+        "inputs": []
+    },
+    {
+        "type": "function",
+        "stateMutability": "view",
+        "outputs": [
+            {
+                "type": "address",
+                "name": "",
+                "internalType": "address payable"
+            }
+        ],
+        "name": "userTwoAddress",
+        "inputs": []
+    },
+    {
+        "type": "function",
+        "stateMutability": "view",
+        "outputs": [
+            {
+                "type": "bool",
+                "name": "",
+                "internalType": "bool"
+            }
+        ],
+        "name": "userTwoChoice",
+        "inputs": []
+    },
+    {
+        "type": "function",
+        "stateMutability": "view",
+        "outputs": [
+            {
+                "type": "uint256",
+                "name": "",
+                "internalType": "uint256"
+            }
+        ],
+        "name": "userTwoChoiceSubmittedTime",
+        "inputs": []
+    },
+    {
+        "type": "function",
+        "stateMutability": "pure",
+        "outputs": [
+            {
+                "type": "address",
+                "name": "",
+                "internalType": "address"
+            }
+        ],
+        "name": "verify",
+        "inputs": [
+            {
+                "type": "bytes32",
+                "name": "hash",
+                "internalType": "bytes32"
+            },
+            {
+                "type": "bytes",
+                "name": "signature",
+                "internalType": "bytes"
+            }
+        ]
+    }
+]

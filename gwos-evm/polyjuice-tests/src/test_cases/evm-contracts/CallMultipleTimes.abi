@@ -1,0 +1,44 @@
+[
+  {
+    "type": "constructor",
+    "stateMutability": "payable",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_ss",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "proxySet",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_ss_other",
+        "internalType": "address"
+      },
+      {
+        "type": "uint256",
+        "name": "x",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "address",
+        "name": "",
+        "internalType": "address"
+      }
+    ],
+    "name": "ss",
+    "inputs": []
+  }
+]

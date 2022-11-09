@@ -1,0 +1,65 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build and run polyjuice_generator_fuzzer_log",
+      "type": "shell",
+      "command": "mv build/polyjuice_generator_fuzzer ./ & make build/polyjuice_generator_fuzzer_log && ./build/polyjuice_generator_fuzzer_log corpus -max_total_time=2",
+      "options": {
+        "cwd": "${cwd}/polyjuice-tests/fuzz"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "build and run polyjuice_generator_fuzzer",
+      "type": "shell",
+      "command": "mv build/polyjuice_generator_fuzzer ./ & make build/polyjuice_generator_fuzzer && ./build/polyjuice_generator_fuzzer corpus -jobs=2",
+      "options": {
+        "cwd": "${cwd}/polyjuice-tests/fuzz"
+      },
+      "group": "build",
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "build test_contracts",
+      "type": "shell",
+      "command": "mv build/test_contracts ./ & make -C ./ build/test_contracts && ./build/test_contracts",
+      "options": {
+        "cwd": "${cwd}/polyjuice-tests/fuzz"
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "type": "cppbuild",
+      "label": "==build active file==",
+      "command": "/usr/local/bin/clang++",
+      "args": [
+        "-I${fileDirname}/build",
+        "-I${workspaceFolder}/deps/evmone/evmc/include",
+        "-I${workspaceFolder}/deps/godwoken-scripts/c",
+        "-I${workspaceFolder}/deps/godwoken-scripts/c/deps/ckb-c-stdlib",
+        "-I${workspaceFolder}/deps/ckb-c-stdlib/molecule",
+        "-ferror-limit=1",
+        "-g",
+        "${file}",
+        "-o",
+        "${fileDirname}/${fileBasenameNoExtension}"
+      ],
+      "options": {
+        "cwd": "${fileDirname}"
+      },
+      "problemMatcher": [
+        "$gcc"
+      ],
+      "group": "build",
+      "detail": "compiler: /usr/local/bin/clang++"
+    }
+  ]
+}

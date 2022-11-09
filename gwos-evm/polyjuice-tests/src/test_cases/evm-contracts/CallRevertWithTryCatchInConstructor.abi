@@ -1,0 +1,1 @@
+[{"inputs":[{"internalType":"contract Revert","name":"c","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"inputs":[],"name":"state","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]

@@ -1,0 +1,74 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "clang - debug polyjuice_generator_fuzzer_log",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/polyjuice-tests/fuzz/build/polyjuice_generator_fuzzer_log",
+            "args": [
+                "timeout-7635939a9881e94453a1a5924858567ad3b46987",
+                // "corpus/regression/oom-09125a5f1a09707e5d7cd065158f9a545a07f598",
+                // "crash-9898a2cd67e8dadb6d56c32174446bed5fe43e50",
+                // "timeout-9c268a5f718afb1b790ad324ada4fda8a37562ec",
+                // "corpus",
+
+                // "-merge=1 NEW_CORPUS_DIR corpus",
+                // "-max_len=25000", // Max data buffer size: 24KB < 25000 bytes
+                // "-timeout=120"
+                "-max_total_time=3"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/polyjuice-tests/fuzz",
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(C/C++) Launch active file",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${fileDirname}/${fileBasenameNoExtension}",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ], "preLaunchTask": "==build active file=="
+        },{
+            "name": "clang - Build and debug test_contracts",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/polyjuice-tests/fuzz/build/test_contracts",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/polyjuice-tests/fuzz",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,27 @@
+[submodule "deps/ckb-c-stdlib"]
+	path = deps/ckb-c-stdlib
+	url = https://github.com/TheWaWaR/ckb-c-stdlib.git
+[submodule "deps/ethash"]
+	path = deps/ethash
+	url = https://github.com/TheWaWaR/ethash
+[submodule "deps/intx"]
+	path = deps/intx
+	url = https://github.com/chfast/intx
+[submodule "deps/evmone"]
+	path = deps/evmone
+	url = https://github.com/nervosnetwork/evmone
+[submodule "deps/secp256k1"]
+	path = deps/secp256k1
+	url = https://github.com/nervosnetwork/secp256k1
+[submodule "deps/secp256k1-fix"]
+	path = deps/secp256k1-fix
+	url = https://github.com/TheWaWaR/secp256k1
+[submodule "deps/crypto-algorithms"]
+	path = deps/crypto-algorithms
+	url = https://github.com/B-Con/crypto-algorithms.git
+[submodule "deps/mbedtls"]
+	path = deps/mbedtls
+	url = https://github.com/nervosnetwork/mbedtls.git
+[submodule "deps/godwoken-scripts"]
+	path = deps/godwoken-scripts
+	url = https://github.com/nervosnetwork/godwoken-scripts.git

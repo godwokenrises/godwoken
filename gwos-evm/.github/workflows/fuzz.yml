@@ -1,0 +1,102 @@
+name: FuzzTest
+
+on: [push, pull_request]
+
+jobs:
+  build-and-run-fuzzing:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: 'recursive'
+
+    - name: Cache Rust - Cargo
+      uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+    - name: Install moleculec
+      run: |
+        export MOLC_VERSION=$(cat deps/godwoken-scripts/c/Makefile | egrep "MOLC_VERSION :=" | awk '{print $3}')
+        test "$(moleculec --version)" = "Moleculec $MOLC_VERSION" \
+        || CARGO_TARGET_DIR=target/ cargo install moleculec --version $MOLC_VERSION --force
+    - name: Cache LLVM and Clang
+      id: cache-llvm
+      uses: actions/cache@v2
+      with:
+        path: ./llvm
+        key: clang-11
+    - name: Set the datetime
+      run: echo "DATETIME=$(date +%F_%H:%M)" >> $GITHUB_ENV
+    - name: Cache corpus
+      id: cache-corpus
+      uses: actions/cache@v2
+      with:
+        path: |
+          polyjuice-tests/fuzz/corpus-cache
+        key: corpus-${{ env.DATETIME }}
+        restore-keys: |
+          corpus
+
+    - name: Install LLVM and Clang
+      uses: KyleMayes/install-llvm-action@v1
+      with:
+        version: "11.0"
+        cached: ${{ steps.cache-llvm.outputs.cache-hit }}
+
+    - name: test_rlp on x86 with sanitizers
+      working-directory: ./polyjuice-tests/fuzz
+      run: make build/test_rlp && ./build/test_rlp
+    - name: test_contracts on x86 with sanitizers
+      working-directory: ./polyjuice-tests/fuzz
+      run: make build/test_contracts && ./build/test_contracts
+
+    - name: Set MAX_FUZZ_TIME for different branches
+      run: |
+        if [[ ${{ github.event_name == 'pull_request' }} ]]; then
+          echo "MAX_FUZZ_TIME=6" >> $GITHUB_ENV
+        elif [[ ${{ startsWith(github.base_ref, 'fuzz') }} ]]; then
+          echo "MAX_FUZZ_TIME=3600" >> $GITHUB_ENV
+        else
+          echo "MAX_FUZZ_TIME=60" >> $GITHUB_ENV
+        fi
+
+    - name: Fuzzing Polyjuice Generator 1 hour
+      working-directory: polyjuice-tests/fuzz
+      run: |
+        mkdir -p corpus-cache
+        ls corpus-cache
+        make build/polyjuice_generator_fuzzer && \
+        ./build/polyjuice_generator_fuzzer corpus corpus-cache \
+          -max_total_time=$MAX_FUZZ_TIME -timeout=120 \
+          -max_len=25000 -rss_limit_mb=0
+      # Max data buffer size: 24KB < 25000 bytes
+        
+    - name: merge corpus
+      working-directory: polyjuice-tests/fuzz
+      run: |
+        mkdir -p corpus-new
+        ./build/polyjuice_generator_fuzzer -merge=1 corpus-new corpus-cache corpus
+        rm -rf corpus-cache
+        mv corpus-new corpus-cache
+
+    - name: Archive inputs that triggered crashes or sanitizer failures
+      uses: actions/upload-artifact@v2
+      if: failure()
+      with:
+        name: fuzzing-inputs
+        path: |
+          polyjuice-tests/fuzz/crash-*
+          polyjuice-tests/fuzz/leak-*
+          polyjuice-tests/fuzz/timeout-*
+          polyjuice-tests/fuzz/oom-*
+    - name: Archive corpus
+      uses: actions/upload-artifact@v2
+      with:
+        name: corpus
+        path: |
+          polyjuice-tests/fuzz/corpus-cache/*
