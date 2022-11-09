@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use gw_common::{registry_address::RegistryAddress, H256};
 use gw_types::{
@@ -35,16 +35,16 @@ pub trait LockAlgorithm {
     ) -> Result<(), LockAlgorithmError>;
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct AccountLockManage {
-    locks: HashMap<H256, Box<dyn LockAlgorithm + Send + Sync>>,
+    locks: HashMap<H256, Arc<dyn LockAlgorithm + Send + Sync>>,
 }
 
 impl AccountLockManage {
     pub fn register_lock_algorithm(
         &mut self,
         code_hash: H256,
-        lock_algo: Box<dyn LockAlgorithm + Send + Sync>,
+        lock_algo: Arc<dyn LockAlgorithm + Send + Sync>,
     ) {
         self.locks.insert(code_hash, lock_algo);
     }
@@ -53,7 +53,7 @@ impl AccountLockManage {
     pub fn get_lock_algorithm(
         &self,
         code_hash: &H256,
-    ) -> Option<&Box<dyn LockAlgorithm + Send + Sync>> {
+    ) -> Option<&Arc<dyn LockAlgorithm + Send + Sync>> {
         self.locks.get(code_hash)
     }
 }

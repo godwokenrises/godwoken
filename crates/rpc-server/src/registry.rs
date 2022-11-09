@@ -5,10 +5,11 @@ use gw_common::blake2b::new_blake2b;
 use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
 use gw_common::{state::State, H256};
 use gw_config::{
-    ChainConfig, ConsensusConfig, FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit,
-    RPCServerConfig, SyscallCyclesConfig,
+    BackendSwitchConfig, ChainConfig, ConsensusConfig, FeeConfig, MemPoolConfig, NodeMode,
+    RPCMethods, RPCRateLimit, RPCServerConfig, SyscallCyclesConfig,
 };
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
+use gw_generator::backend_manage::BackendManage;
 use gw_generator::generator::CyclesPool;
 use gw_generator::utils::get_tx_type;
 use gw_generator::{
@@ -62,7 +63,7 @@ use std::{
 use tokio::sync::{mpsc, Mutex};
 use tracing::instrument;
 
-use crate::apis::debug::replay_transaction;
+use crate::apis::debug::{replay_transaction, DebugTransactionContext};
 use crate::in_queue_request_map::{InQueueRequestHandle, InQueueRequestMap};
 use crate::utils::{to_h256, to_jsonh256};
 
@@ -159,6 +160,7 @@ pub struct RegistryArgs<T> {
     pub consensus_config: ConsensusConfig,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     pub polyjuice_sender_recover: PolyjuiceSenderRecover,
+    pub debug_backend_switches: Option<Vec<BackendSwitchConfig>>,
 }
 
 pub struct Registry {
@@ -180,6 +182,7 @@ pub struct Registry {
     mem_pool_state: Arc<MemPoolState>,
     in_queue_request_map: Option<Arc<InQueueRequestMap>>,
     polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
+    debug_backend_switches: Option<Vec<BackendSwitchConfig>>,
 }
 
 impl Registry {
@@ -202,6 +205,7 @@ impl Registry {
             consensus_config,
             dynamic_config_manager,
             polyjuice_sender_recover,
+            debug_backend_switches,
         } = args;
 
         let backend_info = get_backend_info(generator.clone());
@@ -258,6 +262,7 @@ impl Registry {
             mem_pool_state,
             in_queue_request_map,
             polyjuice_sender_recover,
+            debug_backend_switches,
         }
     }
 
@@ -288,7 +293,7 @@ impl Registry {
             }))
             .with_data(Data::new(self.mem_pool.clone()))
             .with_data(Data(self.generator.clone()))
-            .with_data(Data::new(self.store))
+            .with_data(Data::new(self.store.clone()))
             .with_data(Data::new(self.rollup_config))
             .with_data(Data::new(self.mem_pool_config))
             .with_data(Data::new(self.backend_info))
@@ -370,7 +375,23 @@ impl Registry {
                         .with_method("gw_dump_jemalloc_profiling", dump_jemalloc_profiling)
                 }
                 RPCMethods::Debug => {
-                    server = server.with_method("debug_replay_transaction", replay_transaction)
+                    let debug_generator = match self.debug_backend_switches.clone() {
+                        Some(config) => {
+                            let backend_manage = BackendManage::from_config(config)?;
+                            Arc::new(self.generator.clone_with_new_backends(backend_manage))
+                        }
+                        None => {
+                            log::warn!("Enable debug RPC without setting the 'debug_backend_switches' option. Fallback to non-debugging version backends, the debug log may not work");
+                            self.generator.clone()
+                        }
+                    };
+                    server = server
+                        .with_data(Data::new(DebugTransactionContext {
+                            store: self.store.clone(),
+                            generator: self.generator.clone(),
+                            debug_generator,
+                        }))
+                        .with_method("debug_replay_transaction", replay_transaction)
                 }
             }
         }

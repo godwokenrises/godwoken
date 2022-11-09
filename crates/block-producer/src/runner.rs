@@ -368,7 +368,7 @@ impl BaseInitComponents {
                 .ok_or_else(|| anyhow!("Eth: No allowed EoA type hashes in the rollup config"))?;
             account_lock_manage.register_lock_algorithm(
                 eth_lock_script_type_hash.hash().unpack(),
-                Box::new(Secp256k1Eth::default()),
+                Arc::new(Secp256k1Eth::default()),
             );
             Arc::new(Generator::new(
                 backend_manage,
@@ -736,6 +736,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         server_config: config.rpc_server.clone(),
         dynamic_config_manager,
         polyjuice_sender_recover,
+        debug_backend_switches: config.debug_backend_switches.clone(),
     };
 
     let rpc_registry = Registry::create(args).await;

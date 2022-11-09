@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 use std::iter::FromIterator;
+use std::sync::Arc;
 use std::time::SystemTime;
 
 use crate::testing_tool::bad_block::generate_bad_block_using_first_withdrawal;
@@ -103,10 +104,10 @@ async fn test_export_import_block() {
     let mut chain = {
         let mut account_lock_manage = AccountLockManage::default();
         account_lock_manage
-            .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
+            .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Arc::new(AlwaysSuccess));
         account_lock_manage.register_lock_algorithm(
             (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
-            Box::new(Secp256k1Eth::default()),
+            Arc::new(Secp256k1Eth::default()),
         );
         setup_chain_with_account_lock_manage(
             rollup_type_script.clone(),
@@ -208,10 +209,10 @@ async fn test_export_import_block() {
     let import_chain = {
         let mut account_lock_manage = AccountLockManage::default();
         account_lock_manage
-            .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
+            .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Arc::new(AlwaysSuccess));
         account_lock_manage.register_lock_algorithm(
             (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
-            Box::new(Secp256k1Eth::default()),
+            Arc::new(Secp256k1Eth::default()),
         );
         setup_chain_with_account_lock_manage(
             rollup_type_script.clone(),
@@ -293,10 +294,10 @@ async fn test_export_import_block() {
     let import_chain = {
         let mut account_lock_manage = AccountLockManage::default();
         account_lock_manage
-            .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
+            .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Arc::new(AlwaysSuccess));
         account_lock_manage.register_lock_algorithm(
             (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
-            Box::new(Secp256k1Eth::default()),
+            Arc::new(Secp256k1Eth::default()),
         );
         setup_chain_with_account_lock_manage(
             rollup_type_script.clone(),
