@@ -1,0 +1,1104 @@
+[
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "bool",
+        "name": ""
+      }
+    ],
+    "name": "supportsInterface",
+    "inputs": [
+      {
+        "type": "bytes4",
+        "name": "_interfaceID"
+      }
+    ],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "address",
+        "name": ""
+      }
+    ],
+    "name": "cfoAddress",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "string",
+        "name": "infoUrl"
+      }
+    ],
+    "name": "tokenMetadata",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_tokenId"
+      },
+      {
+        "type": "string",
+        "name": "_preferredTransport"
+      }
+    ],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": ""
+      }
+    ],
+    "name": "promoCreatedCount",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "string",
+        "name": ""
+      }
+    ],
+    "name": "name",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "approve",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_to"
+      },
+      {
+        "type": "uint256",
+        "name": "_tokenId"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "address",
+        "name": ""
+      }
+    ],
+    "name": "ceoAddress",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": ""
+      }
+    ],
+    "name": "GEN0_STARTING_PRICE",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "setSiringAuctionAddress",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_address"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": ""
+      }
+    ],
+    "name": "totalSupply",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": ""
+      }
+    ],
+    "name": "pregnantKitties",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "bool",
+        "name": ""
+      }
+    ],
+    "name": "isPregnant",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_kittyId"
+      }
+    ],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": ""
+      }
+    ],
+    "name": "GEN0_AUCTION_DURATION",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "address",
+        "name": ""
+      }
+    ],
+    "name": "siringAuction",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "transferFrom",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_from"
+      },
+      {
+        "type": "address",
+        "name": "_to"
+      },
+      {
+        "type": "uint256",
+        "name": "_tokenId"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "setGeneScienceAddress",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_address"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "setCEO",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_newCEO"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "setCOO",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_newCOO"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "createSaleAuction",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_kittyId"
+      },
+      {
+        "type": "uint256",
+        "name": "_startingPrice"
+      },
+      {
+        "type": "uint256",
+        "name": "_endingPrice"
+      },
+      {
+        "type": "uint256",
+        "name": "_duration"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "unpause",
+    "inputs": [],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "address",
+        "name": ""
+      }
+    ],
+    "name": "sireAllowedToAddress",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": ""
+      }
+    ],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "bool",
+        "name": ""
+      }
+    ],
+    "name": "canBreedWith",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_matronId"
+      },
+      {
+        "type": "uint256",
+        "name": "_sireId"
+      }
+    ],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "address",
+        "name": ""
+      }
+    ],
+    "name": "kittyIndexToApproved",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": ""
+      }
+    ],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "createSiringAuction",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_kittyId"
+      },
+      {
+        "type": "uint256",
+        "name": "_startingPrice"
+      },
+      {
+        "type": "uint256",
+        "name": "_endingPrice"
+      },
+      {
+        "type": "uint256",
+        "name": "_duration"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "setAutoBirthFee",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "val"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "approveSiring",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_addr"
+      },
+      {
+        "type": "uint256",
+        "name": "_sireId"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "setCFO",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_newCFO"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "createPromoKitty",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_genes"
+      },
+      {
+        "type": "address",
+        "name": "_owner"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "setSecondsPerBlock",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "secs"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "bool",
+        "name": ""
+      }
+    ],
+    "name": "paused",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "withdrawBalance",
+    "inputs": [],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "address",
+        "name": "owner"
+      }
+    ],
+    "name": "ownerOf",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_tokenId"
+      }
+    ],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": ""
+      }
+    ],
+    "name": "GEN0_CREATION_LIMIT",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "address",
+        "name": ""
+      }
+    ],
+    "name": "newContractAddress",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "setSaleAuctionAddress",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_address"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": "count"
+      }
+    ],
+    "name": "balanceOf",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_owner"
+      }
+    ],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "setNewAddress",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_v2Address"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": ""
+      }
+    ],
+    "name": "secondsPerBlock",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "pause",
+    "inputs": [],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "uint256[]",
+        "name": "ownerTokens"
+      }
+    ],
+    "name": "tokensOfOwner",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_owner"
+      }
+    ],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": ""
+      }
+    ],
+    "name": "giveBirth",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_matronId"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "withdrawAuctionBalances",
+    "inputs": [],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "string",
+        "name": ""
+      }
+    ],
+    "name": "symbol",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "uint32",
+        "name": ""
+      }
+    ],
+    "name": "cooldowns",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": ""
+      }
+    ],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "address",
+        "name": ""
+      }
+    ],
+    "name": "kittyIndexToOwner",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": ""
+      }
+    ],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "transfer",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_to"
+      },
+      {
+        "type": "uint256",
+        "name": "_tokenId"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "address",
+        "name": ""
+      }
+    ],
+    "name": "cooAddress",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": ""
+      }
+    ],
+    "name": "autoBirthFee",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "address",
+        "name": ""
+      }
+    ],
+    "name": "erc721Metadata",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "createGen0Auction",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_genes"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "bool",
+        "name": ""
+      }
+    ],
+    "name": "isReadyToBreed",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_kittyId"
+      }
+    ],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": ""
+      }
+    ],
+    "name": "PROMO_CREATION_LIMIT",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "outputs": [],
+    "name": "setMetadataAddress",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_contractAddress"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "address",
+        "name": ""
+      }
+    ],
+    "name": "saleAuction",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "bool",
+        "name": "isGestating"
+      },
+      {
+        "type": "bool",
+        "name": "isReady"
+      },
+      {
+        "type": "uint256",
+        "name": "cooldownIndex"
+      },
+      {
+        "type": "uint256",
+        "name": "nextActionAt"
+      },
+      {
+        "type": "uint256",
+        "name": "siringWithId"
+      },
+      {
+        "type": "uint256",
+        "name": "birthTime"
+      },
+      {
+        "type": "uint256",
+        "name": "matronId"
+      },
+      {
+        "type": "uint256",
+        "name": "sireId"
+      },
+      {
+        "type": "uint256",
+        "name": "generation"
+      },
+      {
+        "type": "uint256",
+        "name": "genes"
+      }
+    ],
+    "name": "getKitty",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_id"
+      }
+    ],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "payable",
+    "payable": true,
+    "outputs": [],
+    "name": "bidOnSiringAuction",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_sireId"
+      },
+      {
+        "type": "uint256",
+        "name": "_matronId"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": ""
+      }
+    ],
+    "name": "gen0CreatedCount",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "payable": false,
+    "outputs": [
+      {
+        "type": "address",
+        "name": ""
+      }
+    ],
+    "name": "geneScience",
+    "inputs": [],
+    "constant": true
+  },
+  {
+    "type": "function",
+    "stateMutability": "payable",
+    "payable": true,
+    "outputs": [],
+    "name": "breedWithAuto",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_matronId"
+      },
+      {
+        "type": "uint256",
+        "name": "_sireId"
+      }
+    ],
+    "constant": false
+  },
+  {
+    "type": "constructor",
+    "stateMutability": "nonpayable",
+    "payable": false,
+    "inputs": []
+  },
+  {
+    "type": "fallback",
+    "stateMutability": "payable",
+    "payable": true
+  },
+  {
+    "type": "event",
+    "name": "Pregnant",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "owner",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "matronId",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "sireId",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "cooldownEndBlock",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Transfer",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "from",
+        "indexed": false
+      },
+      {
+        "type": "address",
+        "name": "to",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "tokenId",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Approval",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "owner",
+        "indexed": false
+      },
+      {
+        "type": "address",
+        "name": "approved",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "tokenId",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Birth",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "owner",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "kittyId",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "matronId",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "sireId",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "genes",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ContractUpgrade",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "newContract",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  }
+]

@@ -1,0 +1,20 @@
+[
+    {
+        "type": "constructor",
+        "stateMutability": "payable",
+        "inputs": []
+    },
+    {
+        "type": "function",
+        "stateMutability": "nonpayable",
+        "outputs": [],
+        "name": "proxyDone",
+        "inputs": [
+            {
+                "type": "address",
+                "name": "_target_addr",
+                "internalType": "address"
+            }
+        ]
+    }
+]
