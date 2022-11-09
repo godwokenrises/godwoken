@@ -528,6 +528,7 @@ impl<S: CodeStore> CodeStore for StateDB<S> {
 
 #[cfg(test)]
 mod tests {
+    use anyhow::Result;
     use gw_common::{h256_ext::H256Ext, smt::SMT, state::State, H256};
     use gw_traits::CodeStore;
 
@@ -535,10 +536,12 @@ mod tests {
         smt::smt_store::SMTStateStore,
         snapshot::StoreSnapshot,
         state::{
+            history::history_state::{HistoryState, RWConfig, ReadOpt, WriteOpt},
             overlay::{mem_state::MemStateTree, mem_store::MemStore},
             traits::JournalDB,
-            MemStateDB,
+            BlockStateDB, MemStateDB,
         },
+        transaction::StoreTransaction,
         Store,
     };
 
@@ -546,6 +549,19 @@ mod tests {
         let smt = SMT::new(H256::zero(), SMTStateStore::new(MemStore::new(store)));
         let inner = MemStateTree::new(smt, 0);
         MemStateDB::new(inner)
+    }
+
+    fn new_block_state(store: &StoreTransaction) -> BlockStateDB<&'_ StoreTransaction> {
+        let smt = SMT::new(H256::zero(), SMTStateStore::new(store));
+        let inner = HistoryState::new(
+            smt,
+            0,
+            RWConfig {
+                read: ReadOpt::Any,
+                write: WriteOpt::NoRecord,
+            },
+        );
+        BlockStateDB::new(inner)
     }
 
     fn cmp_dirty_state(state_a: &MemStateDB, state_b: &MemStateDB) -> bool {
@@ -687,5 +703,110 @@ mod tests {
         assert!(!state.is_dirty());
         // the dirty state is cleared, but the state is write into the store
         assert!(cmp_dirty_state(&mem_1, &state));
+    }
+
+    #[test]
+    fn test_state_impl() {
+        // test mem store
+        let store = Store::open_tmp().unwrap();
+        {
+            let mut state = new_state(store.get_snapshot());
+            test_state_update(&mut state).unwrap();
+        }
+        {
+            let mut state_1 = new_state(store.get_snapshot());
+            let mut state_2 = new_state(store.get_snapshot());
+            test_state_revert(&mut state_1, &mut state_2).unwrap();
+        }
+        // test block store
+        let store = Store::open_tmp().unwrap();
+        {
+            let db = &store.begin_transaction();
+            let mut state = new_block_state(db);
+            test_state_update(&mut state).unwrap();
+        }
+        {
+            let db = &store.begin_transaction();
+            let mut state_1 = new_block_state(db);
+            let mut state_2 = new_block_state(db);
+            test_state_revert(&mut state_1, &mut state_2).unwrap();
+        }
+    }
+
+    // test state impl
+    fn test_state_update<S: State + JournalDB>(s: &mut S) -> Result<()> {
+        const EXPECTED_ROOT: [u8; 32] = [
+            47, 126, 107, 9, 48, 223, 122, 36, 186, 207, 67, 227, 132, 95, 98, 89, 160, 178, 227,
+            19, 2, 21, 247, 64, 191, 44, 38, 137, 161, 183, 173, 48,
+        ];
+
+        // test update / get
+        for i in 1..42u32 {
+            let key = H256::from_u32(i);
+            let value = H256::from_u32(i);
+            let value2 = H256::from_u32(i + 1);
+            assert!(s.get_raw(&key)?.is_zero());
+            s.update_raw(key, value).unwrap();
+            assert_eq!(s.get_raw(&key)?, value);
+            s.update_raw(key, value2).unwrap();
+            assert_eq!(s.get_raw(&key)?, value2);
+        }
+        assert!(s.calculate_root().is_err());
+        // test finalise value
+        s.finalise()?;
+        assert_eq!(s.calculate_root()?, EXPECTED_ROOT.into());
+        for i in 1..42u32 {
+            let key = H256::from_u32(i);
+            let value2 = H256::from_u32(i + 1);
+            assert_eq!(s.get_raw(&key)?, value2);
+        }
+        // test set/get account_count
+        s.set_account_count(0)?;
+        assert_eq!(s.get_account_count()?, 0);
+        s.set_account_count(42)?;
+        assert_eq!(s.get_account_count()?, 42);
+        assert!(s.calculate_root().is_err());
+        // test finalise value
+        s.finalise()?;
+        assert_eq!(s.calculate_root()?, EXPECTED_ROOT.into());
+        Ok(())
+    }
+
+    // test state impl
+    fn test_state_revert<S: State + JournalDB>(s: &mut S, s2: &mut S) -> Result<()> {
+        // test update / get
+        let snap = s.snapshot();
+        for i in 1..42u32 {
+            let key = H256::from_u32(i);
+            let value = H256::from_u32(i);
+            let value2 = H256::from_u32(i + 1);
+            assert!(s.get_raw(&key)?.is_zero());
+            s.update_raw(key, value).unwrap();
+            assert_eq!(s.get_raw(&key)?, value);
+            s.update_raw(key, value2).unwrap();
+            assert_eq!(s.get_raw(&key)?, value2);
+        }
+        s.set_account_count(42)?;
+        s.revert(snap)?;
+
+        for i in 21..50u32 {
+            let key = H256::from_u32(i);
+            let value = H256::from_u32(i + 1);
+
+            // update s
+            assert!(s.get_raw(&key)?.is_zero());
+            s.update_raw(key, value).unwrap();
+            assert_eq!(s.get_raw(&key)?, value);
+
+            // update s2
+            assert!(s2.get_raw(&key)?.is_zero());
+            s2.update_raw(key, value).unwrap();
+            assert_eq!(s2.get_raw(&key)?, value);
+        }
+        // test finalise value
+        s.finalise()?;
+        s2.finalise()?;
+        assert_eq!(s.calculate_root()?, s2.calculate_root()?);
+        Ok(())
     }
 }
