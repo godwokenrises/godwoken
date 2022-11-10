@@ -37,6 +37,8 @@ pub struct DebugRunResult {
     pub read_data_hashes: Vec<JsonH256>,
     pub write_data_hashes: Vec<JsonH256>,
     pub debug_log: Vec<String>,
+    pub execution_time_ms: u32,
+    pub write_mem_smt_time_ms: u32,
 }
 
 impl TryFrom<offchain::RunResult> for DebugRunResult {
@@ -69,6 +71,8 @@ impl TryFrom<offchain::RunResult> for DebugRunResult {
                 .lines()
                 .map(ToString::to_string)
                 .collect(),
+            execution_time_ms: 0,
+            write_mem_smt_time_ms: 0,
         })
     }
 }
