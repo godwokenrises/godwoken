@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256 as JsonH256;
 use ckb_types::prelude::{Builder, Entity};
 use gw_generator::{constants::L2TX_MAX_CYCLES, Generator};
-use gw_jsonrpc_types::debug::DebugRunResult;
+use gw_jsonrpc_types::{ckb_jsonrpc_types::Uint64, debug::DebugRunResult};
 use gw_store::{
     chain_view::ChainView,
     state::{
@@ -31,13 +31,17 @@ pub(crate) struct DebugTransactionContext {
 #[serde(untagged)]
 pub(crate) enum DebugReplayTxParams {
     Default((JsonH256,)),
+    WithMaxCycles((JsonH256, Uint64)),
 }
 
 pub(crate) async fn replay_transaction(
     Params(param): Params<DebugReplayTxParams>,
     ctx: Data<DebugTransactionContext>,
 ) -> Result<Option<DebugRunResult>> {
-    let DebugReplayTxParams::Default((tx_hash,)) = param;
+    let (tx_hash, max_cycles) = match param {
+        DebugReplayTxParams::Default((tx_hash,)) => (tx_hash, L2TX_MAX_CYCLES),
+        DebugReplayTxParams::WithMaxCycles((tx_hash, cycles)) => (tx_hash, cycles.value()),
+    };
     let tx_hash = to_h256(tx_hash);
 
     if ctx.store.get_transaction(&tx_hash)?.is_none() {
@@ -101,7 +105,7 @@ pub(crate) async fn replay_transaction(
             &mut hist_state,
             &block_info,
             &raw_tx,
-            L2TX_MAX_CYCLES,
+            max_cycles,
             None,
         )?;
         hist_state.finalise()?;
