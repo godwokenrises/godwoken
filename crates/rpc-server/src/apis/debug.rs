@@ -1,4 +1,4 @@
-use std::{convert::TryInto, sync::Arc};
+use std::{convert::TryInto, sync::Arc, time::Instant};
 
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256 as JsonH256;
@@ -49,7 +49,7 @@ pub(crate) async fn replay_transaction(
     }
 
     // run target tx
-    let run_result = tokio::task::spawn_blocking(move || {
+    let run_result: DebugRunResult = tokio::task::spawn_blocking(move || {
         let db = &ctx.store.begin_transaction();
 
         // find tx info
@@ -100,6 +100,7 @@ pub(crate) async fn replay_transaction(
         // execute target with debug generator
         let tx = block.transactions().get(tx_index as usize).unwrap();
         let raw_tx = tx.raw();
+        let t = Instant::now();
         let run_result = ctx.debug_generator.unchecked_execute_transaction(
             &chain_view,
             &mut hist_state,
@@ -108,12 +109,22 @@ pub(crate) async fn replay_transaction(
             max_cycles,
             None,
         )?;
-        hist_state.finalise()?;
+        let execution_time = t.elapsed();
 
-        Result::<_, anyhow::Error>::Ok(run_result)
+        // finalise
+        let t = Instant::now();
+        hist_state.finalise()?;
+        let write_mem_smt_time = t.elapsed();
+
+        // record time
+        let mut debug_run_result: DebugRunResult = run_result.try_into()?;
+        debug_run_result.execution_time_ms = execution_time.as_millis().try_into()?;
+        debug_run_result.write_mem_smt_time_ms = write_mem_smt_time.as_millis().try_into()?;
+
+        Result::<_, anyhow::Error>::Ok(debug_run_result)
     })
     .await??;
 
     // generate response
-    Ok(Some(run_result.try_into()?))
+    Ok(Some(run_result))
 }
