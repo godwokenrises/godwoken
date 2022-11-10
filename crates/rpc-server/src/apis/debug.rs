@@ -60,11 +60,12 @@ pub(crate) async fn replay_transaction(
 
         // build history state
         let mem_db = MemStore::new(db);
+        let parent_block_number = block_number.saturating_sub(1u64);
         let mut hist_state = BlockStateDB::from_store(
             mem_db,
             RWConfig {
-                read: ReadOpt::Block(block_number),
-                write: WriteOpt::Block(block_number),
+                read: ReadOpt::Block(parent_block_number),
+                write: WriteOpt::Block(parent_block_number),
             },
         )?;
         let tip_block_hash = db.get_last_valid_tip_block_hash()?;
