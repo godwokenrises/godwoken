@@ -264,7 +264,7 @@ impl BenchExecutionEnvironment {
                     &mut state,
                     &block_info,
                     &raw_tx,
-                    u64::MAX,
+                    Some(u64::MAX),
                     None,
                 )
                 .unwrap();

@@ -571,7 +571,7 @@ impl Generator {
                 &mut state,
                 &block_info,
                 &raw_tx,
-                max_cycles,
+                Some(max_cycles),
                 None,
             ) {
                 Ok(run_result) => run_result,
@@ -705,36 +705,14 @@ impl Generator {
     }
 
     /// execute a layer2 tx
-    #[instrument(skip_all)]
+    #[instrument(skip_all, fields(block = block_info.number().unpack(), tx_hash = %raw_tx.hash().pack()))]
     pub fn execute_transaction<S: State + CodeStore + JournalDB, C: ChainView>(
         &self,
         chain: &C,
         state: &mut S,
         block_info: &BlockInfo,
         raw_tx: &RawL2Transaction,
-        max_cycles: u64,
-        cycles_pool: Option<&mut CyclesPool>,
-    ) -> Result<RunResult, TransactionError> {
-        let run_result = self.unchecked_execute_transaction(
-            chain,
-            state,
-            block_info,
-            raw_tx,
-            max_cycles,
-            cycles_pool,
-        )?;
-        Ok(run_result)
-    }
-
-    /// execute a layer2 tx, doesn't check exit code
-    #[instrument(skip_all, fields(block = block_info.number().unpack(), tx_hash = %raw_tx.hash().pack()))]
-    pub fn unchecked_execute_transaction<S: State + CodeStore + JournalDB, C: ChainView>(
-        &self,
-        chain: &C,
-        state: &mut S,
-        block_info: &BlockInfo,
-        raw_tx: &RawL2Transaction,
-        max_cycles: u64,
+        override_max_cycles: Option<u64>,
         cycles_pool: Option<&mut CyclesPool>,
     ) -> Result<RunResult, TransactionError> {
         let account_id = raw_tx.to_id().unpack();
@@ -748,6 +726,11 @@ impl Generator {
         let sender_id: u32 = raw_tx.from_id().unpack();
         let nonce_before = state.get_nonce(sender_id)?;
         state.set_state_tracker(Default::default());
+
+        let max_cycles = override_max_cycles.unwrap_or_else(|| {
+            self.fork_config
+                .max_l2_tx_cycles(block_info.number().unpack())
+        });
 
         let args = MachineRunArgs {
             chain,
