@@ -132,7 +132,8 @@ async fn test_enter_challenge() {
             deposit_requests,
             asset_scripts,
         )
-        .await;
+        .await
+        .unwrap();
         let db = chain.store().begin_transaction();
         let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
         let sender_id = tree
@@ -189,7 +190,8 @@ async fn test_enter_challenge() {
             Default::default(),
             asset_scripts,
         )
-        .await;
+        .await
+        .unwrap();
     }
     // deploy scripts
     let param = CellContextParam {
@@ -370,7 +372,8 @@ async fn test_enter_challenge_finalized_block() {
             deposit_requests,
             asset_scripts,
         )
-        .await;
+        .await
+        .unwrap();
         let db = chain.store().begin_transaction();
         let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
         let sender_id = tree
@@ -540,5 +543,6 @@ async fn produce_block(
         Default::default(),
         asset_scripts,
     )
-    .await;
+    .await
+    .unwrap();
 }

@@ -149,7 +149,8 @@ async fn test_revert() {
             deposit_requests,
             asset_scripts,
         )
-        .await;
+        .await
+        .unwrap();
         let db = chain.store().begin_transaction();
         let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
         let sender_id = tree
@@ -198,7 +199,8 @@ async fn test_revert() {
             Default::default(),
             asset_scripts,
         )
-        .await;
+        .await
+        .unwrap();
         prev_block_merkle
     };
     // deploy scripts

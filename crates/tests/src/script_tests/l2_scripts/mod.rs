@@ -3,7 +3,6 @@ use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::state::State;
 use gw_common::H256;
-use gw_generator::constants::L2TX_MAX_CYCLES;
 use gw_generator::error::TransactionError;
 use gw_generator::{account_lock_manage::AccountLockManage, Generator};
 use gw_store::state::traits::JournalDB;
@@ -249,19 +248,14 @@ pub fn run_contract_get_result<S: State + CodeStore + JournalDB>(
     };
     let generator = Generator::new(
         backend_manage,
+        Default::default(),
         account_lock_manage,
         rollup_ctx,
         Default::default(),
     );
     let chain_view = DummyChainStore;
-    let run_result = generator.execute_transaction(
-        &chain_view,
-        tree,
-        block_info,
-        &raw_tx,
-        L2TX_MAX_CYCLES,
-        None,
-    )?;
+    let run_result =
+        generator.execute_transaction(&chain_view, tree, block_info, &raw_tx, None, None)?;
     Ok(run_result)
 }
 
