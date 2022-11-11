@@ -153,7 +153,8 @@ async fn test_cancel_tx_execute() {
             deposit_requests,
             asset_scripts,
         )
-        .await;
+        .await
+        .unwrap();
         let db = chain.store().begin_transaction();
         let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
         let sender_id = tree
@@ -204,7 +205,8 @@ async fn test_cancel_tx_execute() {
             Default::default(),
             asset_scripts,
         )
-        .await;
+        .await
+        .unwrap();
         (sender_script, receiver_script, sudt_script)
     };
     // deploy scripts
