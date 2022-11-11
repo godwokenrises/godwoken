@@ -12,7 +12,7 @@ use gw_common::{
     state::{build_account_key, build_data_hash_key, State},
     CKB_SUDT_SCRIPT_ARGS, H256,
 };
-use gw_config::{BackendConfig, BackendSwitchConfig, BackendType};
+use gw_config::{BackendConfig, BackendForkConfig, BackendType};
 use gw_db::schema::{COLUMN_INDEX, COLUMN_META, META_TIP_BLOCK_HASH_KEY};
 use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
@@ -440,7 +440,7 @@ impl Context {
 }
 
 struct Config {
-    backends: BackendSwitchConfig,
+    backends: BackendForkConfig,
     rollup: RollupConfig,
     polyjuice_validator_code_hash: [u8; 32],
     eth_addr_reg_code_hash: [u8; 32],
@@ -460,7 +460,7 @@ impl Config {
         let path: PathBuf = [base_path, SECP_DATA_PATH].iter().collect();
         let secp_data = load_program(path.to_str().unwrap());
         let secp_data_hash = load_code_hash(&path);
-        let backends = BackendSwitchConfig {
+        let backends = BackendForkConfig {
             switch_height: 0,
             backends: vec![
                 BackendConfig {

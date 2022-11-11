@@ -6,5 +6,7 @@ pub const MAX_WITHDRAWAL_SIZE: usize = 50_000;
 pub const MAX_WRITE_DATA_BYTES_LIMIT: usize = 25 * 1024;
 // 2MB
 pub const MAX_READ_DATA_BYTES_LIMIT: usize = 1024 * 1024 * 2;
-/// max cycles of a layer2 transaction
-pub const L2TX_MAX_CYCLES: u64 = 150_000_000;
+/// Max cycles of a layer2 transaction
+pub const L2TX_MAX_CYCLES_150M: u64 = 150_000_000;
+/// Max cycles of a layer2 transaction
+pub const L2TX_MAX_CYCLES_500M: u64 = 500_000_000;

@@ -1,6 +1,7 @@
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, h256_ext::H256Ext, state::State, H256,
 };
+use gw_config::ForkConfig;
 use gw_traits::CodeStore;
 use gw_types::{
     offchain::RollupContext,
@@ -11,7 +12,6 @@ use gw_types::{
 use tracing::instrument;
 
 use crate::{
-    constants::MAX_WITHDRAWAL_SIZE,
     error::{AccountError, WithdrawalError},
     sudt::build_l2_sudt_script,
     utils::build_withdrawal_cell_output,
@@ -21,13 +21,19 @@ use crate::{
 pub struct WithdrawalVerifier<'a, S> {
     state: &'a S,
     rollup_context: &'a RollupContext,
+    fork_config: &'a ForkConfig,
 }
 
 impl<'a, S: State + CodeStore> WithdrawalVerifier<'a, S> {
-    pub fn new(state: &'a S, rollup_context: &'a RollupContext) -> Self {
+    pub fn new(
+        state: &'a S,
+        rollup_context: &'a RollupContext,
+        fork_config: &'a ForkConfig,
+    ) -> Self {
         Self {
             state,
             rollup_context,
+            fork_config,
         }
     }
 
@@ -38,11 +44,13 @@ impl<'a, S: State + CodeStore> WithdrawalVerifier<'a, S> {
         &self,
         withdrawal: &WithdrawalRequestExtra,
         asset_script: Option<Script>,
+        block_number: u64,
     ) -> Result<(), Error> {
         // check withdrawal size
-        if withdrawal.as_slice().len() > MAX_WITHDRAWAL_SIZE {
+        let max_withdrawal_size = self.fork_config.max_withdrawal_size(block_number);
+        if withdrawal.as_slice().len() > max_withdrawal_size {
             return Err(WithdrawalError::ExceededMaxWithdrawalSize {
-                max_size: MAX_WITHDRAWAL_SIZE,
+                max_size: max_withdrawal_size,
                 withdrawal_size: withdrawal.as_slice().len(),
             }
             .into());

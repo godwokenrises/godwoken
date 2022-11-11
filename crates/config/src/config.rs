@@ -11,6 +11,8 @@ use std::{
     path::PathBuf,
 };
 
+use crate::{fork_config::BackendForkConfig, ForkConfig};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum Trace {
@@ -24,8 +26,8 @@ pub struct Config {
     pub liveness_duration_secs: Option<u64>,
     #[serde(default)]
     pub contract_log_config: ContractLogConfig,
-    pub backend_switches: Vec<BackendSwitchConfig>,
-    pub debug_backend_switches: Option<Vec<BackendSwitchConfig>>,
+    pub debug_backend_forks: Option<Vec<BackendForkConfig>>,
+    pub fork: ForkConfig,
     pub genesis: GenesisConfig,
     pub chain: ChainConfig,
     pub rpc_client: RPCClientConfig,
@@ -236,35 +238,6 @@ fn test_psc_config_optional() {
         toml::from_str::<BiggerConfig>("_x = 3").unwrap().psc_config,
         PscConfig::default()
     );
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum BackendType {
-    Meta,
-    Sudt,
-    Polyjuice,
-    EthAddrReg,
-    Unknown,
-}
-
-impl Default for BackendType {
-    fn default() -> Self {
-        BackendType::Unknown
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BackendSwitchConfig {
-    pub switch_height: u64,
-    pub backends: Vec<BackendConfig>,
-}
-
-#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BackendConfig {
-    pub validator_path: PathBuf,
-    pub generator_path: PathBuf,
-    pub validator_script_type_hash: H256,
-    pub backend_type: BackendType,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

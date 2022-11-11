@@ -6,7 +6,7 @@ pub use gw_common::{
     CKB_SUDT_SCRIPT_ARGS, H256,
 };
 
-use gw_config::{BackendConfig, BackendSwitchConfig, BackendType};
+use gw_config::{BackendConfig, BackendForkConfig, BackendType};
 use gw_db::schema::{COLUMN_INDEX, COLUMN_META, META_TIP_BLOCK_HASH_KEY};
 use gw_generator::error::TransactionError;
 pub use gw_generator::{
@@ -442,7 +442,7 @@ pub fn setup() -> (Store, DummyState, Generator) {
         .expect("update secp data key");
 
     // ==== Build generator
-    let configs = vec![BackendSwitchConfig {
+    let configs = vec![BackendForkConfig {
         switch_height: 0,
         backends: vec![
             BackendConfig {

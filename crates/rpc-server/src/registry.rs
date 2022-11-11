@@ -5,7 +5,7 @@ use gw_common::blake2b::new_blake2b;
 use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
 use gw_common::{state::State, H256};
 use gw_config::{
-    BackendSwitchConfig, ChainConfig, ConsensusConfig, FeeConfig, MemPoolConfig, NodeMode,
+    BackendForkConfig, ChainConfig, ConsensusConfig, FeeConfig, MemPoolConfig, NodeMode,
     RPCMethods, RPCRateLimit, RPCServerConfig, SyscallCyclesConfig,
 };
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
@@ -160,7 +160,7 @@ pub struct RegistryArgs<T> {
     pub consensus_config: ConsensusConfig,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     pub polyjuice_sender_recover: PolyjuiceSenderRecover,
-    pub debug_backend_switches: Option<Vec<BackendSwitchConfig>>,
+    pub debug_backend_forks: Option<Vec<BackendForkConfig>>,
 }
 
 pub struct Registry {
@@ -182,7 +182,7 @@ pub struct Registry {
     mem_pool_state: Arc<MemPoolState>,
     in_queue_request_map: Option<Arc<InQueueRequestMap>>,
     polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
-    debug_backend_switches: Option<Vec<BackendSwitchConfig>>,
+    debug_backend_forks: Option<Vec<BackendForkConfig>>,
 }
 
 impl Registry {
@@ -205,7 +205,7 @@ impl Registry {
             consensus_config,
             dynamic_config_manager,
             polyjuice_sender_recover,
-            debug_backend_switches,
+            debug_backend_forks,
         } = args;
 
         let backend_info = get_backend_info(generator.clone());
@@ -262,7 +262,7 @@ impl Registry {
             mem_pool_state,
             in_queue_request_map,
             polyjuice_sender_recover,
-            debug_backend_switches,
+            debug_backend_forks,
         }
     }
 
@@ -375,7 +375,7 @@ impl Registry {
                         .with_method("gw_dump_jemalloc_profiling", dump_jemalloc_profiling)
                 }
                 RPCMethods::Debug => {
-                    let debug_generator = match self.debug_backend_switches.clone() {
+                    let debug_generator = match self.debug_backend_forks.clone() {
                         Some(config) => {
                             let backend_manage = BackendManage::from_config(config)?;
                             Arc::new(self.generator.clone_with_new_backends(backend_manage))
@@ -1054,8 +1054,13 @@ async fn execute_l2transaction(
 
         // tx basic verification
         let polyjuice_creator_id = ctx.generator.get_polyjuice_creator_id(&state)?;
-        TransactionVerifier::new(&state, ctx.generator.rollup_context(), polyjuice_creator_id)
-            .verify(&tx)?;
+        TransactionVerifier::new(
+            &state,
+            ctx.generator.rollup_context(),
+            polyjuice_creator_id,
+            ctx.generator.fork_config(),
+        )
+        .verify(&tx, block_info.number().unpack())?;
         // verify tx signature
         ctx.generator.check_transaction_signature(&state, &tx)?;
         // execute tx
@@ -1065,7 +1070,7 @@ async fn execute_l2transaction(
             &mut state,
             &block_info,
             &raw_tx,
-            100000000,
+            ctx.mem_pool_config.execute_l2tx_max_cycles,
             Some(&mut cycles_pool),
         )?;
 

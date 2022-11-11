@@ -16,7 +16,6 @@ use gw_common::{
 use gw_config::{MemBlockConfig, MemPoolConfig, NodeMode, SyscallCyclesConfig};
 use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_generator::{
-    constants::L2TX_MAX_CYCLES,
     error::TransactionError,
     generator::CyclesPool,
     traits::StateExt,
@@ -312,8 +311,13 @@ impl MemPool {
 
         // verify transaction
         let polyjuice_creator_id = self.generator.get_polyjuice_creator_id(state)?;
-        TransactionVerifier::new(state, self.generator.rollup_context(), polyjuice_creator_id)
-            .verify(&tx)?;
+        TransactionVerifier::new(
+            state,
+            self.generator.rollup_context(),
+            polyjuice_creator_id,
+            self.generator.fork_config(),
+        )
+        .verify(&tx, self.mem_block.block_info().number().unpack())?;
         // verify signature
         self.generator.check_transaction_signature(state, &tx)?;
 
@@ -424,9 +428,17 @@ impl MemPool {
         // withdrawal basic verification
         let db = &self.store.begin_transaction();
         let asset_script = db.get_asset_script(&withdrawal.raw().sudt_script_hash().unpack())?;
-        WithdrawalVerifier::new(state, self.generator.rollup_context())
-            .verify(withdrawal, asset_script)
-            .map_err(Into::into)
+        WithdrawalVerifier::new(
+            state,
+            self.generator.rollup_context(),
+            self.generator.fork_config(),
+        )
+        .verify(
+            withdrawal,
+            asset_script,
+            self.mem_block.block_info().number().unpack(),
+        )
+        .map_err(Into::into)
     }
 
     /// Return pending contents
@@ -1009,9 +1021,16 @@ impl MemPool {
             let asset_script = asset_scripts
                 .get(&withdrawal.raw().sudt_script_hash().unpack())
                 .cloned();
-            if let Err(err) = WithdrawalVerifier::new(state, self.generator.rollup_context())
-                .verify(&withdrawal, asset_script)
-            {
+            if let Err(err) = WithdrawalVerifier::new(
+                state,
+                self.generator.rollup_context(),
+                self.generator.fork_config(),
+            )
+            .verify(
+                &withdrawal,
+                asset_script,
+                self.mem_block.block_info().number().unpack(),
+            ) {
                 log::info!("[mem-pool] withdrawal verification error: {:?}", err);
                 unused_withdrawals.push(withdrawal_hash);
                 continue;
@@ -1131,7 +1150,9 @@ impl MemPool {
                 state,
                 block_info,
                 &raw_tx,
-                L2TX_MAX_CYCLES,
+                self.generator
+                    .fork_config()
+                    .max_l2_tx_cycles(block_info.number().unpack()),
                 Some(cycles_pool),
             )
             .map_err(|err| {

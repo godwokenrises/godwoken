@@ -7,10 +7,7 @@ use gw_common::{
     H256,
 };
 use gw_config::{MemBlockConfig, MemPoolConfig, SyscallCyclesConfig};
-use gw_generator::{
-    account_lock_manage::secp256k1::Secp256k1Eth, constants::L2TX_MAX_CYCLES,
-    error::TransactionError,
-};
+use gw_generator::{account_lock_manage::secp256k1::Secp256k1Eth, error::TransactionError};
 use gw_types::{
     packed::{
         CreateAccount, DepositInfoVec, DepositRequest, Fee, L2Transaction, MetaContractArgs,
@@ -32,7 +29,7 @@ use crate::{
 const META_CONTRACT_ACCOUNT_ID: u32 = RESERVED_ACCOUNT_ID;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_block_max_cycles_limit() {
+async fn test_block_max_cycles_limit() -> anyhow::Result<()> {
     let _ = env_logger::builder().is_test(true).try_init();
 
     let mem_pool_config = MemPoolConfig {
@@ -350,7 +347,7 @@ async fn test_block_max_cycles_limit() {
 
     // Test execution cycles < max_cycles_limit but execution + virtual cycles > max_cycles_limit
     // Expect result: TransactionError::ExceededBlockMaxCycles and drop tx
-    const MAX_CYCLES_LIMIT: u64 = L2TX_MAX_CYCLES;
+    const MAX_CYCLES_LIMIT: u64 = 150_000_000;
 
     let mem_pool_config = MemPoolConfig {
         mem_block: MemBlockConfig {
@@ -445,4 +442,5 @@ async fn test_block_max_cycles_limit() {
         assert!(cycles.execution < MAX_CYCLES_LIMIT);
         assert!(cycles.total() > MAX_CYCLES_LIMIT);
     }
+    Ok(())
 }

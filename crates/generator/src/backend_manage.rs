@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use gw_common::{blake2b::new_blake2b, H256};
-use gw_config::{BackendConfig, BackendSwitchConfig, BackendType};
+use gw_config::{BackendConfig, BackendForkConfig, BackendType};
 use gw_types::bytes::Bytes;
 use std::{collections::HashMap, fs};
 
@@ -72,7 +72,7 @@ impl Backend {
 
 #[derive(Default)]
 pub struct BackendManage {
-    backend_switches: Vec<(u64, HashMap<H256, Backend>)>,
+    backend_forks: Vec<(u64, HashMap<H256, Backend>)>,
     /// define here not in backends,
     /// so we don't need to implement the trait `Clone` of AotCode
     #[cfg(has_asm)]
@@ -80,34 +80,34 @@ pub struct BackendManage {
 }
 
 impl BackendManage {
-    pub fn from_config(configs: Vec<BackendSwitchConfig>) -> Result<Self> {
+    pub fn from_config(configs: Vec<BackendForkConfig>) -> Result<Self> {
         let mut backend_manage: BackendManage = Default::default();
         for config in configs {
-            backend_manage.register_backend_switch(config, true)?;
+            backend_manage.register_backend_fork(config, true)?;
         }
 
         Ok(backend_manage)
     }
 
-    pub fn register_backend_switch(
+    pub fn register_backend_fork(
         &mut self,
-        config: BackendSwitchConfig,
+        config: BackendForkConfig,
         #[allow(unused_variables)] compile: bool,
     ) -> Result<()> {
-        if let Some((height, _backends)) = self.backend_switches.last() {
-            if config.switch_height <= *height {
-                bail!("BackendSwitchConfig with switch_height {} is less or equals to the last switch_height {}", config.switch_height, height);
+        if let Some((height, _backends)) = self.backend_forks.last() {
+            if config.fork_height <= *height {
+                bail!("BackendForkConfig with fork_height {} is less or equals to the last fork_height {}", config.fork_height, height);
             }
         }
         // inherit backends
         let mut backends = self
-            .backend_switches
+            .backend_forks
             .last()
             .map(|(_height, backends)| backends)
             .cloned()
             .unwrap_or_default();
 
-        let switch_height = config.switch_height;
+        let fork_height = config.fork_height;
 
         // register backends
         for config in config.backends {
@@ -146,13 +146,13 @@ impl BackendManage {
                 "registry backend {:?}({:?}) at height {}",
                 backend.backend_type,
                 backend.checksum,
-                switch_height
+                fork_height
             );
 
             backends.insert(backend.validator_script_type_hash, backend);
         }
 
-        self.backend_switches.push((config.switch_height, backends));
+        self.backend_forks.push((config.fork_height, backends));
         Ok(())
     }
 
@@ -169,7 +169,7 @@ impl BackendManage {
         &self,
         block_number: u64,
     ) -> Option<&(u64, HashMap<H256, Backend>)> {
-        self.backend_switches
+        self.backend_forks
             .iter()
             .rev()
             .find(|(height, _)| block_number >= *height)
@@ -211,7 +211,7 @@ impl BackendManage {
 
 #[cfg(test)]
 mod tests {
-    use gw_config::{BackendConfig, BackendSwitchConfig, BackendType};
+    use gw_config::{BackendConfig, BackendForkConfig, BackendType};
 
     use super::BackendManage;
 
@@ -229,8 +229,8 @@ mod tests {
         std::fs::write(&meta_v0, "meta_v0").unwrap();
         std::fs::write(&addr_v0, "addr_v0").unwrap();
 
-        let config = BackendSwitchConfig {
-            switch_height: 1,
+        let config = BackendForkConfig {
+            fork_height: 1,
             backends: vec![
                 BackendConfig {
                     validator_script_type_hash: [42u8; 32].into(),
@@ -246,7 +246,7 @@ mod tests {
                 },
             ],
         };
-        m.register_backend_switch(config, false).unwrap();
+        m.register_backend_fork(config, false).unwrap();
         assert!(m.get_backends_at_height(0).is_none(), "no backends at 0");
         assert!(
             m.get_backend(1, &[42u8; 32].into()).is_some(),
@@ -269,8 +269,8 @@ mod tests {
             "get backend at 100"
         );
 
-        let config = BackendSwitchConfig {
-            switch_height: 5,
+        let config = BackendForkConfig {
+            fork_height: 5,
             backends: vec![
                 BackendConfig {
                     validator_script_type_hash: [41u8; 32].into(),
@@ -286,7 +286,7 @@ mod tests {
                 },
             ],
         };
-        m.register_backend_switch(config, false).unwrap();
+        m.register_backend_fork(config, false).unwrap();
         assert!(m.get_backends_at_height(0).is_none(), "no backends at 0");
         // sudt
         assert_eq!(

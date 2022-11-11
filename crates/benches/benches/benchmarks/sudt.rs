@@ -3,10 +3,10 @@ use gw_common::{
     builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, smt::SMT, state::State,
     H256,
 };
-use gw_config::{BackendConfig, BackendSwitchConfig};
+use gw_config::{BackendConfig, BackendForkConfig};
 use gw_generator::{
-    account_lock_manage::AccountLockManage, backend_manage::BackendManage,
-    constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, Generator,
+    account_lock_manage::AccountLockManage, backend_manage::BackendManage, error::TransactionError,
+    traits::StateExt, Generator,
 };
 use gw_store::{
     smt::smt_store::SMTStateStore,
@@ -57,8 +57,8 @@ fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
             backend_type: gw_config::BackendType::Sudt,
         },
     ];
-    BackendManage::from_config(vec![BackendSwitchConfig {
-        switch_height: 0,
+    BackendManage::from_config(vec![BackendForkConfig {
+        fork_height: 0,
         backends: configs,
     }])
     .expect("default backend")
@@ -107,19 +107,14 @@ fn run_contract_get_result<S: State + CodeStore + JournalDB>(
     };
     let generator = Generator::new(
         backend_manage,
+        Default::default(),
         account_lock_manage,
         rollup_ctx,
         Default::default(),
     );
     let chain_view = DummyChainStore;
-    let run_result = generator.execute_transaction(
-        &chain_view,
-        tree,
-        block_info,
-        &raw_tx,
-        L2TX_MAX_CYCLES,
-        None,
-    )?;
+    let run_result =
+        generator.execute_transaction(&chain_view, tree, block_info, &raw_tx, u64::MAX, None)?;
     tree.finalise()?;
     Ok(run_result)
 }

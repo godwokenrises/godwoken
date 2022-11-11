@@ -358,7 +358,7 @@ impl BaseInitComponents {
         }
         let rollup_config_hash: H256 = rollup_config.hash().into();
         let generator = {
-            let backend_manage = BackendManage::from_config(config.backend_switches.clone())
+            let backend_manage = BackendManage::from_config(config.fork.backend_forks.clone())
                 .with_context(|| "config backends")?;
             let mut account_lock_manage = AccountLockManage::default();
             let allowed_eoa_type_hashes = rollup_config.as_reader().allowed_eoa_type_hashes();
@@ -372,6 +372,7 @@ impl BaseInitComponents {
             );
             Arc::new(Generator::new(
                 backend_manage,
+                config.fork.clone(),
                 account_lock_manage,
                 rollup_context.clone(),
                 config.contract_log_config.clone(),
@@ -736,7 +737,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         server_config: config.rpc_server.clone(),
         dynamic_config_manager,
         polyjuice_sender_recover,
-        debug_backend_switches: config.debug_backend_switches.clone(),
+        debug_backend_forks: config.debug_backend_forks.clone(),
     };
 
     let rpc_registry = Registry::create(args).await;

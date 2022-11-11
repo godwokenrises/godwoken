@@ -5,7 +5,7 @@ use gw_block_producer::produce_block::{
 };
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
 use gw_common::{blake2b::new_blake2b, H256};
-use gw_config::{BackendConfig, BackendSwitchConfig, ChainConfig, GenesisConfig, MemPoolConfig};
+use gw_config::{BackendConfig, BackendForkConfig, ChainConfig, GenesisConfig, MemPoolConfig};
 use gw_generator::{
     account_lock_manage::{
         always_success::AlwaysSuccess, secp256k1::Secp256k1Eth, AccountLockManage,
@@ -341,8 +341,8 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
             backend_type: gw_config::BackendType::Polyjuice,
         },
     ];
-    BackendManage::from_config(vec![BackendSwitchConfig {
-        switch_height: 0,
+    BackendManage::from_config(vec![BackendForkConfig {
+        fork_height: 0,
         backends,
     }])
     .expect("default backend")
@@ -468,6 +468,7 @@ pub fn chain_generator(chain: &Chain, rollup_type_script: Script) -> Arc<Generat
     };
     Arc::new(Generator::new(
         backend_manage,
+        Default::default(),
         account_lock_manage,
         rollup_context,
         Default::default(),
@@ -504,6 +505,7 @@ pub async fn setup_chain_with_account_lock_manage(
     };
     let generator = Arc::new(Generator::new(
         backend_manage,
+        Default::default(),
         account_lock_manage,
         rollup_context,
         Default::default(),
@@ -564,7 +566,7 @@ pub async fn apply_block_result(
     block_result: ProduceBlockResult,
     deposit_info_vec: DepositInfoVec,
     deposit_asset_scripts: HashSet<Script>,
-) {
+) -> anyhow::Result<()> {
     let number = block_result.block.raw().number().unpack();
     let hash = block_result.block.hash();
     let store_tx = chain.store().begin_transaction();
@@ -591,6 +593,7 @@ pub async fn apply_block_result(
         .notify_new_tip(hash.into(), &Default::default())
         .await
         .unwrap();
+    Ok(())
 }
 
 pub async fn construct_block(
@@ -699,6 +702,5 @@ pub async fn produce_empty_block(chain: &mut Chain) -> anyhow::Result<()> {
     let asset_scripts = HashSet::new();
 
     // deposit
-    apply_block_result(chain, block_result, Default::default(), asset_scripts).await;
-    Ok(())
+    apply_block_result(chain, block_result, Default::default(), asset_scripts).await
 }

@@ -81,7 +81,7 @@ pub async fn create_sudt_account(
 
     // sudt contract
     let l2_script = {
-        let l2_validator_script_hash = &config.backend_switches[0]
+        let l2_validator_script_hash = &config.fork.backend_forks[0]
             .backends
             .iter()
             .find(|b| b.backend_type == BackendType::Sudt)

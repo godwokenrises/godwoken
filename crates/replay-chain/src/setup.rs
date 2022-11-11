@@ -94,7 +94,7 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
     init_genesis(&local_store, &config.genesis, &genesis_tx_hash, secp_data)
         .with_context(|| "init genesis")?;
     let generator = {
-        let backend_manage = BackendManage::from_config(config.backend_switches.clone())
+        let backend_manage = BackendManage::from_config(config.fork.backend_forks.clone())
             .with_context(|| "config backends")?;
         let mut account_lock_manage = AccountLockManage::default();
         let allowed_eoa_type_hashes = rollup_config.as_reader().allowed_eoa_type_hashes();
@@ -108,6 +108,7 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
         );
         Arc::new(Generator::new(
             backend_manage,
+            config.fork.clone(),
             account_lock_manage,
             rollup_context,
             Default::default(),

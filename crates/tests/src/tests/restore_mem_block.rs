@@ -66,7 +66,8 @@ async fn test_restore_mem_block() {
         deposit_info_vec,
         Default::default(),
     )
-    .await;
+    .await
+    .unwrap();
 
     for _ in 0..DEFAULT_FINALITY_BLOCKS {
         produce_empty_block(&mut chain).await.unwrap();

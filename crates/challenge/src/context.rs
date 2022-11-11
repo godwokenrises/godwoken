@@ -9,7 +9,6 @@ use gw_common::smt::Blake2bHasher;
 use gw_common::sparse_merkle_tree::CompiledMerkleProof;
 use gw_common::state::State;
 use gw_common::{blake2b::new_blake2b, H256};
-use gw_generator::constants::L2TX_MAX_CYCLES;
 use gw_generator::traits::StateExt;
 use gw_generator::{types::vm::ChallengeContext, Generator};
 use gw_store::chain_view::ChainView;
