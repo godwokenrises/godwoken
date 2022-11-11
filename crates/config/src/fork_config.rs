@@ -50,7 +50,7 @@ impl ForkConfig {
     pub fn max_l2_tx_cycles(&self, block_number: u64) -> u64 {
         match self.increase_max_l2_tx_cycles_to_500m {
             None => L2TX_MAX_CYCLES_150M,
-            Some(fork_number) if fork_number < block_number => L2TX_MAX_CYCLES_150M,
+            Some(fork_number) if block_number < fork_number => L2TX_MAX_CYCLES_150M,
             Some(_) => L2TX_MAX_CYCLES_500M,
         }
     }
@@ -69,5 +69,34 @@ impl ForkConfig {
 
     pub fn max_read_data_bytes(&self, _block_number: u64) -> usize {
         MAX_READ_DATA_BYTES_LIMIT
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        constants::{L2TX_MAX_CYCLES_150M, L2TX_MAX_CYCLES_500M},
+        ForkConfig,
+    };
+
+    #[test]
+    fn test_disable_fork() {
+        let fork = ForkConfig::default();
+        assert_eq!(fork.max_l2_tx_cycles(0), L2TX_MAX_CYCLES_150M);
+        assert_eq!(fork.max_l2_tx_cycles(100), L2TX_MAX_CYCLES_150M);
+        assert_eq!(fork.max_l2_tx_cycles(u64::MAX), L2TX_MAX_CYCLES_150M);
+    }
+
+    #[test]
+    fn test_active_fork() {
+        let fork = ForkConfig {
+            increase_max_l2_tx_cycles_to_500m: Some(42),
+            ..Default::default()
+        };
+        assert_eq!(fork.max_l2_tx_cycles(0), L2TX_MAX_CYCLES_150M);
+        assert_eq!(fork.max_l2_tx_cycles(41), L2TX_MAX_CYCLES_150M);
+        assert_eq!(fork.max_l2_tx_cycles(42), L2TX_MAX_CYCLES_500M);
+        assert_eq!(fork.max_l2_tx_cycles(100), L2TX_MAX_CYCLES_500M);
+        assert_eq!(fork.max_l2_tx_cycles(u64::MAX), L2TX_MAX_CYCLES_500M);
     }
 }
