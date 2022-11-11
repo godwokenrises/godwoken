@@ -1,5 +1,6 @@
 use crate::script_tests::l2_scripts::SUDT_TOTAL_SUPPLY_PROGRAM_PATH;
 use crate::testing_tool::chain::ALWAYS_SUCCESS_CODE_HASH;
+use std::sync::Arc;
 
 use super::{
     new_block_info, DummyChainStore, SudtLog, SudtLogType, ACCOUNT_OP_PROGRAM_CODE_HASH,
@@ -17,7 +18,6 @@ use gw_generator::{
     account_lock_manage::{
         always_success::AlwaysSuccess, secp256k1::Secp256k1Eth, AccountLockManage,
     },
-    constants::L2TX_MAX_CYCLES,
     error::TransactionError,
     syscalls::error_codes::{GW_ERROR_ACCOUNT_NOT_FOUND, GW_ERROR_RECOVER, GW_FATAL_UNKNOWN_ARGS},
     traits::StateExt,
@@ -81,7 +81,7 @@ fn test_example_sum() {
     {
         // NOTICE in this test we won't need SUM validator
         let backend_manage = BackendManage::from_config(vec![BackendForkConfig {
-            switch_height: 0,
+            fork_height: 0,
             backends: vec![BackendConfig {
                 validator_path: SUM_PROGRAM_PATH.to_path_buf(),
                 generator_path: SUM_PROGRAM_PATH.to_path_buf(),
@@ -92,13 +92,14 @@ fn test_example_sum() {
         .unwrap();
         let mut account_lock_manage = AccountLockManage::default();
         account_lock_manage
-            .register_lock_algorithm(H256::zero(), Box::new(AlwaysSuccess::default()));
+            .register_lock_algorithm(H256::zero(), Arc::new(AlwaysSuccess::default()));
         let rollup_context = RollupContext {
             rollup_config: Default::default(),
             rollup_script_hash: [42u8; 32].into(),
         };
         let generator = Generator::new(
             backend_manage,
+            Default::default(),
             account_lock_manage,
             rollup_context,
             Default::default(),
@@ -112,14 +113,7 @@ fn test_example_sum() {
                 .args(Bytes::from(add_value.to_le_bytes().to_vec()).pack())
                 .build();
             let run_result = generator
-                .execute_transaction(
-                    &chain_view,
-                    &mut tree,
-                    &block_info,
-                    &raw_tx,
-                    L2TX_MAX_CYCLES,
-                    None,
-                )
+                .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
                 .expect("construct");
             let return_value = {
                 let mut buf = [0u8; 8];
@@ -225,7 +219,7 @@ fn test_example_account_operation() {
         .expect("create account");
 
     let backend_manage = BackendManage::from_config(vec![BackendForkConfig {
-        switch_height: 0,
+        fork_height: 0,
         backends: vec![BackendConfig {
             validator_path: ACCOUNT_OP_PROGRAM_PATH.clone(),
             generator_path: ACCOUNT_OP_PROGRAM_PATH.clone(),
@@ -235,7 +229,7 @@ fn test_example_account_operation() {
     }])
     .unwrap();
     let mut account_lock_manage = AccountLockManage::default();
-    account_lock_manage.register_lock_algorithm(H256::zero(), Box::new(AlwaysSuccess::default()));
+    account_lock_manage.register_lock_algorithm(H256::zero(), Arc::new(AlwaysSuccess::default()));
     let rollup_context = RollupContext {
         rollup_config: RollupConfig::new_builder()
             .allowed_contract_type_hashes(
@@ -250,6 +244,7 @@ fn test_example_account_operation() {
     };
     let generator = Generator::new(
         backend_manage,
+        Default::default(),
         account_lock_manage,
         rollup_context,
         Default::default(),
@@ -271,14 +266,7 @@ fn test_example_account_operation() {
             .args(Bytes::from(args.to_vec()).pack())
             .build();
         let run_result = generator
-            .execute_transaction(
-                &chain_view,
-                &mut tree,
-                &block_info,
-                &raw_tx,
-                L2TX_MAX_CYCLES,
-                None,
-            )
+            .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect("result");
         assert_eq!(run_result.return_data, vec![0u8; 32]);
     }
@@ -295,14 +283,7 @@ fn test_example_account_operation() {
             .args(Bytes::from(args.to_vec()).pack())
             .build();
         let err = generator
-            .execute_transaction(
-                &chain_view,
-                &mut tree,
-                &block_info,
-                &raw_tx,
-                L2TX_MAX_CYCLES,
-                None,
-            )
+            .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect_err("err");
         let err_code = match err {
             TransactionError::UnknownTxType(code) => code,
@@ -325,14 +306,7 @@ fn test_example_account_operation() {
             .args(Bytes::from(args.to_vec()).pack())
             .build();
         let run_result = generator
-            .execute_transaction(
-                &chain_view,
-                &mut tree,
-                &block_info,
-                &raw_tx,
-                L2TX_MAX_CYCLES,
-                None,
-            )
+            .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect("result");
         assert_eq!(run_result.return_data, Vec::<u8>::new());
     }
@@ -350,14 +324,7 @@ fn test_example_account_operation() {
             .args(Bytes::from(args.to_vec()).pack())
             .build();
         let err = generator
-            .execute_transaction(
-                &chain_view,
-                &mut tree,
-                &block_info,
-                &raw_tx,
-                L2TX_MAX_CYCLES,
-                None,
-            )
+            .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect_err("err");
         let err_code = match err {
             TransactionError::UnknownTxType(code) => code,
@@ -376,14 +343,7 @@ fn test_example_account_operation() {
             .args(Bytes::from(args.to_vec()).pack())
             .build();
         let run_result = generator
-            .execute_transaction(
-                &chain_view,
-                &mut tree,
-                &block_info,
-                &raw_tx,
-                L2TX_MAX_CYCLES,
-                None,
-            )
+            .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect("result");
         assert_eq!(run_result.return_data, 0u32.to_le_bytes().to_vec());
     }
@@ -397,14 +357,7 @@ fn test_example_account_operation() {
             .args(Bytes::from(args.to_vec()).pack())
             .build();
         let err = generator
-            .execute_transaction(
-                &chain_view,
-                &mut tree,
-                &block_info,
-                &raw_tx,
-                L2TX_MAX_CYCLES,
-                None,
-            )
+            .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect_err("err");
         let err_code = match err {
             TransactionError::UnknownTxType(code) => code,
@@ -438,14 +391,7 @@ fn test_example_account_operation() {
             .args(Bytes::from(args.to_vec()).pack())
             .build();
         let run_result = generator
-            .execute_transaction(
-                &chain_view,
-                &mut tree,
-                &block_info,
-                &raw_tx,
-                L2TX_MAX_CYCLES,
-                None,
-            )
+            .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect("result");
         let log = SudtLog::from_log_item(&run_result.logs[0]).unwrap();
         assert_eq!(log.sudt_id, account_id);
@@ -469,14 +415,7 @@ fn test_example_account_operation() {
             .args(Bytes::from(args.to_vec()).pack())
             .build();
         let err = generator
-            .execute_transaction(
-                &chain_view,
-                &mut tree,
-                &block_info,
-                &raw_tx,
-                L2TX_MAX_CYCLES,
-                None,
-            )
+            .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect_err("err");
         let err_code = match err {
             TransactionError::UnknownTxType(code) => code,
@@ -517,7 +456,7 @@ fn test_example_recover_account() {
         .expect("create account");
 
     let backend_manage = BackendManage::from_config(vec![BackendForkConfig {
-        switch_height: 0,
+        fork_height: 0,
         backends: vec![BackendConfig {
             validator_path: RECOVER_PROGRAM_PATH.clone(),
             generator_path: RECOVER_PROGRAM_PATH.clone(),
@@ -529,7 +468,7 @@ fn test_example_recover_account() {
     let mut account_lock_manage = AccountLockManage::default();
     let secp256k1_code_hash = H256::from_u32(11);
     account_lock_manage
-        .register_lock_algorithm(secp256k1_code_hash, Box::new(Secp256k1Eth::default()));
+        .register_lock_algorithm(secp256k1_code_hash, Arc::new(Secp256k1Eth::default()));
     let rollup_script_hash: H256 = [42u8; 32].into();
     let rollup_context = RollupContext {
         rollup_config: RollupConfig::new_builder()
@@ -545,6 +484,7 @@ fn test_example_recover_account() {
     };
     let generator = Generator::new(
         backend_manage,
+        Default::default(),
         account_lock_manage,
         rollup_context,
         Default::default(),
@@ -568,14 +508,7 @@ fn test_example_recover_account() {
             .args(Bytes::from(args).pack())
             .build();
         let run_result = generator
-            .execute_transaction(
-                &chain_view,
-                &mut tree,
-                &block_info,
-                &raw_tx,
-                L2TX_MAX_CYCLES,
-                None,
-            )
+            .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect("result");
         let mut script_args = vec![0u8; 32 + 20];
         script_args[0..32].copy_from_slice(rollup_script_hash.as_slice());
@@ -603,14 +536,7 @@ fn test_example_recover_account() {
             .args(Bytes::from(args).pack())
             .build();
         let err = generator
-            .execute_transaction(
-                &chain_view,
-                &mut tree,
-                &block_info,
-                &raw_tx,
-                L2TX_MAX_CYCLES,
-                None,
-            )
+            .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect_err("err");
         let err_code = match err {
             TransactionError::UnknownTxType(exit_code) => exit_code,
@@ -634,14 +560,7 @@ fn test_example_recover_account() {
             .args(Bytes::from(args).pack())
             .build();
         let err = generator
-            .execute_transaction(
-                &chain_view,
-                &mut tree,
-                &block_info,
-                &raw_tx,
-                L2TX_MAX_CYCLES,
-                None,
-            )
+            .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect_err("err");
         let err_code = match err {
             TransactionError::UnknownTxType(code) => code,
@@ -717,7 +636,7 @@ fn test_sudt_total_supply() {
     {
         // NOTICE in this test we won't need SUM validator
         let backend_manage = BackendManage::from_config(vec![BackendForkConfig {
-            switch_height: 0,
+            fork_height: 0,
             backends: vec![BackendConfig {
                 validator_path: SUDT_TOTAL_SUPPLY_PROGRAM_PATH.clone(),
                 generator_path: SUDT_TOTAL_SUPPLY_PROGRAM_PATH.clone(),
@@ -729,7 +648,7 @@ fn test_sudt_total_supply() {
         let mut account_lock_manage = AccountLockManage::default();
         account_lock_manage.register_lock_algorithm(
             (*ALWAYS_SUCCESS_CODE_HASH).into(),
-            Box::new(AlwaysSuccess::default()),
+            Arc::new(AlwaysSuccess::default()),
         );
         let rollup_context = RollupContext {
             rollup_config,
@@ -737,6 +656,7 @@ fn test_sudt_total_supply() {
         };
         let generator = Generator::new(
             backend_manage,
+            Default::default(),
             account_lock_manage,
             rollup_context,
             Default::default(),
@@ -748,14 +668,7 @@ fn test_sudt_total_supply() {
             .args(Bytes::from(sudt_id.to_le_bytes().to_vec()).pack())
             .build();
         let run_result = generator
-            .execute_transaction(
-                &chain_view,
-                &mut tree,
-                &block_info,
-                &raw_tx,
-                L2TX_MAX_CYCLES,
-                None,
-            )
+            .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect("construct");
         let return_value = {
             let mut buf = [0u8; 32];

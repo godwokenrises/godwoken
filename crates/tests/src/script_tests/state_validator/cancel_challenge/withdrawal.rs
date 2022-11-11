@@ -1,6 +1,7 @@
 #![allow(clippy::mutable_key_type)]
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use crate::script_tests::programs::STATE_VALIDATOR_CODE_HASH;
 use crate::script_tests::state_validator::cancel_challenge::build_merkle_proof;
@@ -79,7 +80,7 @@ async fn test_cancel_withdrawal() {
         .build();
     // setup chain
     let mut account_lock_manage = AccountLockManage::default();
-    account_lock_manage.register_lock_algorithm(eoa_lock_type_hash.into(), Box::new(AlwaysSuccess));
+    account_lock_manage.register_lock_algorithm(eoa_lock_type_hash.into(), Arc::new(AlwaysSuccess));
     let mut chain = setup_chain_with_account_lock_manage(
         rollup_type_script.clone(),
         rollup_config.clone(),
@@ -159,7 +160,8 @@ async fn test_cancel_withdrawal() {
             deposit_requests,
             asset_scripts,
         )
-        .await;
+        .await
+        .unwrap();
 
         // finalize deposit
         for _ in 0..10 {
@@ -176,7 +178,8 @@ async fn test_cancel_withdrawal() {
                 Default::default(),
                 Default::default(),
             )
-            .await;
+            .await
+            .unwrap();
         }
 
         let withdrawal_capacity = 400_00000000u64;
@@ -217,7 +220,8 @@ async fn test_cancel_withdrawal() {
             Default::default(),
             asset_scripts,
         )
-        .await;
+        .await
+        .unwrap();
         sender_script
     };
     // deploy scripts
