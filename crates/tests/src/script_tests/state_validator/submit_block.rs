@@ -11,8 +11,8 @@ use crate::script_tests::utils::layer1::{
     build_simple_tx_with_out_point_and_since, random_out_point, since_timestamp,
 };
 use crate::script_tests::utils::rollup::{
-    build_always_success_cell, build_rollup_locked_cell, build_type_id_script,
-    calculate_state_validator_type_id, CellContext, CellContextParam,
+    build_always_success_cell, build_rollup_locked_cell, calculate_type_id,
+    named_always_success_script, CellContext, CellContextParam,
 };
 use ckb_error::assert_error_eq;
 use ckb_script::ScriptError;
@@ -37,7 +37,7 @@ use gw_types::{
     },
 };
 
-const INVALID_BLOCK_ERROR: i8 = 20;
+const INVALID_BLOCK: i8 = 20;
 const INVALID_POST_GLOBAL_STATE: i8 = 23;
 
 fn timestamp_now() -> u64 {
@@ -53,7 +53,7 @@ async fn test_submit_block() {
     let capacity = 1000_00000000u64;
     let spend_cell = build_always_success_cell(capacity, None);
     let input_out_point = random_out_point();
-    let type_id = calculate_state_validator_type_id(input_out_point.clone());
+    let type_id = calculate_type_id(input_out_point.clone());
     let rollup_type_script = {
         Script::new_builder()
             .code_hash(Pack::pack(&*STATE_VALIDATOR_CODE_HASH))
@@ -62,7 +62,7 @@ async fn test_submit_block() {
             .build()
     };
     // rollup lock & config
-    let stake_lock_type = build_type_id_script(b"stake_lock_type_id");
+    let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
     let stake_script_type_hash: [u8; 32] =
         Unpack::<ckb_types::H256>::unpack(&stake_lock_type.calc_script_hash()).into();
     let rollup_config = RollupConfig::new_builder()
@@ -173,7 +173,7 @@ async fn test_downgrade_rollup_cell() {
     let capacity = 1000_00000000u64;
     let spend_cell = build_always_success_cell(capacity, None);
     let input_out_point = random_out_point();
-    let type_id = calculate_state_validator_type_id(input_out_point.clone());
+    let type_id = calculate_type_id(input_out_point.clone());
     let rollup_type_script = {
         Script::new_builder()
             .code_hash(Pack::pack(&*STATE_VALIDATOR_CODE_HASH))
@@ -182,7 +182,7 @@ async fn test_downgrade_rollup_cell() {
             .build()
     };
     // rollup lock & config
-    let stake_lock_type = build_type_id_script(b"stake_lock_type_id");
+    let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
     let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack().into();
     let rollup_config = RollupConfig::new_builder()
         .stake_script_type_hash(Pack::pack(&stake_script_type_hash))
@@ -307,7 +307,7 @@ async fn test_v1_block_timestamp_smaller_or_equal_than_previous_block_in_submit_
     let capacity = 1000_00000000u64;
     let spend_cell = build_always_success_cell(capacity, None);
     let input_out_point = random_out_point();
-    let type_id = calculate_state_validator_type_id(input_out_point.clone());
+    let type_id = calculate_type_id(input_out_point.clone());
     let rollup_type_script = {
         Script::new_builder()
             .code_hash(Pack::pack(&*STATE_VALIDATOR_CODE_HASH))
@@ -316,7 +316,7 @@ async fn test_v1_block_timestamp_smaller_or_equal_than_previous_block_in_submit_
             .build()
     };
     // rollup lock & config
-    let stake_lock_type = build_type_id_script(b"stake_lock_type_id");
+    let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
     let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack().into();
     let rollup_config = RollupConfig::new_builder()
         .stake_script_type_hash(Pack::pack(&stake_script_type_hash))
@@ -441,7 +441,7 @@ async fn test_v1_block_timestamp_smaller_or_equal_than_previous_block_in_submit_
             "by-data-hash/{}",
             ckb_types::H256(*STATE_VALIDATOR_CODE_HASH)
         ),
-        INVALID_BLOCK_ERROR,
+        INVALID_POST_GLOBAL_STATE,
     )
     .input_type_script(0);
     assert_error_eq!(err, expected_err);
@@ -505,7 +505,7 @@ async fn test_v1_block_timestamp_smaller_or_equal_than_previous_block_in_submit_
             "by-data-hash/{}",
             ckb_types::H256(*STATE_VALIDATOR_CODE_HASH)
         ),
-        INVALID_BLOCK_ERROR,
+        INVALID_POST_GLOBAL_STATE,
     )
     .input_type_script(0);
     assert_error_eq!(err, expected_err);
@@ -517,7 +517,7 @@ async fn test_v1_block_timestamp_bigger_than_rollup_input_since_in_submit_block(
     let capacity = 1000_00000000u64;
     let spend_cell = build_always_success_cell(capacity, None);
     let input_out_point = random_out_point();
-    let type_id = calculate_state_validator_type_id(input_out_point.clone());
+    let type_id = calculate_type_id(input_out_point.clone());
     let rollup_type_script = {
         Script::new_builder()
             .code_hash(Pack::pack(&*STATE_VALIDATOR_CODE_HASH))
@@ -526,7 +526,7 @@ async fn test_v1_block_timestamp_bigger_than_rollup_input_since_in_submit_block(
             .build()
     };
     // rollup lock & config
-    let stake_lock_type = build_type_id_script(b"stake_lock_type_id");
+    let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
     let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack().into();
     let rollup_config = RollupConfig::new_builder()
         .stake_script_type_hash(Pack::pack(&stake_script_type_hash))
@@ -646,7 +646,7 @@ async fn test_v1_block_timestamp_bigger_than_rollup_input_since_in_submit_block(
             "by-data-hash/{}",
             ckb_types::H256(*STATE_VALIDATOR_CODE_HASH)
         ),
-        INVALID_BLOCK_ERROR,
+        INVALID_POST_GLOBAL_STATE,
     )
     .input_type_script(0);
     assert_error_eq!(err, expected_err);
@@ -658,7 +658,7 @@ async fn test_v0_v1_wrong_global_state_tip_block_timestamp_in_submit_block() {
     let capacity = 1000_00000000u64;
     let spend_cell = build_always_success_cell(capacity, None);
     let input_out_point = random_out_point();
-    let type_id = calculate_state_validator_type_id(input_out_point.clone());
+    let type_id = calculate_type_id(input_out_point.clone());
     let rollup_type_script = {
         Script::new_builder()
             .code_hash(Pack::pack(&*STATE_VALIDATOR_CODE_HASH))
@@ -667,7 +667,7 @@ async fn test_v0_v1_wrong_global_state_tip_block_timestamp_in_submit_block() {
             .build()
     };
     // rollup lock & config
-    let stake_lock_type = build_type_id_script(b"stake_lock_type_id");
+    let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
     let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack().into();
     let rollup_config = RollupConfig::new_builder()
         .stake_script_type_hash(Pack::pack(&stake_script_type_hash))
@@ -788,7 +788,7 @@ async fn test_v0_v1_wrong_global_state_tip_block_timestamp_in_submit_block() {
             "by-data-hash/{}",
             ckb_types::H256(*STATE_VALIDATOR_CODE_HASH)
         ),
-        INVALID_POST_GLOBAL_STATE,
+        INVALID_BLOCK,
     )
     .input_type_script(0);
     assert_error_eq!(err, expected_err);
@@ -826,7 +826,7 @@ async fn test_v0_v1_wrong_global_state_tip_block_timestamp_in_submit_block() {
             "by-data-hash/{}",
             ckb_types::H256(*STATE_VALIDATOR_CODE_HASH)
         ),
-        INVALID_BLOCK_ERROR,
+        INVALID_BLOCK,
     )
     .input_type_script(0);
     assert_error_eq!(err, expected_err);
@@ -861,7 +861,7 @@ async fn test_v0_v1_wrong_global_state_tip_block_timestamp_in_submit_block() {
             "by-data-hash/{}",
             ckb_types::H256(*STATE_VALIDATOR_CODE_HASH)
         ),
-        INVALID_BLOCK_ERROR,
+        INVALID_POST_GLOBAL_STATE,
     )
     .input_type_script(0);
     assert_error_eq!(err, expected_err);
@@ -871,7 +871,7 @@ async fn test_v0_v1_wrong_global_state_tip_block_timestamp_in_submit_block() {
 async fn test_check_reverted_cells_in_submit_block() {
     let capacity = 1000_00000000u64;
     let input_out_point = random_out_point();
-    let type_id = calculate_state_validator_type_id(input_out_point.clone());
+    let type_id = calculate_type_id(input_out_point.clone());
     let rollup_type_script = {
         Script::new_builder()
             .code_hash(Pack::pack(&*STATE_VALIDATOR_CODE_HASH))
@@ -880,14 +880,14 @@ async fn test_check_reverted_cells_in_submit_block() {
             .build()
     };
     // rollup lock & config
-    let stake_lock_type = build_type_id_script(b"stake_lock_type_id");
+    let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
     let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack().into();
-    let deposit_lock_type = build_type_id_script(b"deposit_lock_type_id");
+    let deposit_lock_type = named_always_success_script(b"deposit_lock_type_id");
     let deposit_script_type_hash: [u8; 32] = deposit_lock_type.calc_script_hash().unpack().into();
-    let custodian_lock_type = build_type_id_script(b"custodian_lock_type_id");
+    let custodian_lock_type = named_always_success_script(b"custodian_lock_type_id");
     let custodian_script_type_hash: [u8; 32] =
         custodian_lock_type.calc_script_hash().unpack().into();
-    let withdrawal_lock_type = build_type_id_script(b"withdrawal_lock_type_id");
+    let withdrawal_lock_type = named_always_success_script(b"withdrawal_lock_type_id");
     let withdrawal_script_type_hash: [u8; 32] =
         withdrawal_lock_type.calc_script_hash().unpack().into();
     let rollup_config = RollupConfig::new_builder()
@@ -1129,7 +1129,7 @@ async fn test_withdrawal_cell_lock_args_with_owner_lock_in_submit_block() {
 
     let capacity = 1000_00000000u64;
     let input_out_point = random_out_point();
-    let type_id = calculate_state_validator_type_id(input_out_point.clone());
+    let type_id = calculate_type_id(input_out_point.clone());
     let rollup_type_script = {
         Script::new_builder()
             .code_hash(Pack::pack(&*STATE_VALIDATOR_CODE_HASH))
@@ -1139,12 +1139,12 @@ async fn test_withdrawal_cell_lock_args_with_owner_lock_in_submit_block() {
     };
 
     // rollup lock & config
-    let stake_lock_type = build_type_id_script(b"stake_lock_type_id");
+    let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
     let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack().into();
-    let custodian_lock_type = build_type_id_script(b"custodian_lock_type_id");
+    let custodian_lock_type = named_always_success_script(b"custodian_lock_type_id");
     let custodian_script_type_hash: [u8; 32] =
         custodian_lock_type.calc_script_hash().unpack().into();
-    let withdrawal_lock_type = build_type_id_script(b"withdrawal_lock_type_id");
+    let withdrawal_lock_type = named_always_success_script(b"withdrawal_lock_type_id");
     let withdrawal_script_type_hash: [u8; 32] =
         withdrawal_lock_type.calc_script_hash().unpack().into();
     let rollup_config = RollupConfig::new_builder()

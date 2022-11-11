@@ -15,6 +15,7 @@ use gw_utils::gw_types::packed::{L2BlockReader, WithdrawalRequestReader};
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
 use crate::ckb_std::{ckb_constants::Source, debug};
 use gw_state::kv_state::KVState;
+use gw_utils::finality::{finality_as_duration, is_finalized};
 use gw_utils::gw_common::{self, ckb_decimal::CKBCapacity};
 use gw_utils::gw_types::{self, U256};
 
@@ -30,6 +31,7 @@ use gw_utils::{
         utils::build_l2_sudt_script,
     },
     error::Error,
+    Timepoint,
 };
 
 use gw_common::{
@@ -73,10 +75,17 @@ fn check_withdrawal_cells<'a>(
     for cell in withdrawal_cells {
         // check withdrawal cell block info
         let withdrawal_block_hash: H256 = cell.args.withdrawal_block_hash().unpack();
-        if withdrawal_block_hash != context.block_hash
-            || cell.args.withdrawal_block_number().unpack() != context.number
-        {
+        if withdrawal_block_hash != context.block_hash {
             debug!("withdrawal cell mismatch block_hash");
+            return Err(Error::InvalidWithdrawalCell);
+        }
+
+        if cell.args.withdrawal_block_number().unpack() != context.block_timepoint().full_value() {
+            debug!(
+                "withdrawal_cell.args.withdrawal_block_number != context.block_timepoint, {} != {}",
+                cell.args.withdrawal_block_number().unpack(),
+                context.block_timepoint().full_value()
+            );
             return Err(Error::InvalidWithdrawalCell);
         }
 
@@ -116,6 +125,7 @@ fn check_withdrawal_cells<'a>(
 
 fn check_input_custodian_cells(
     config: &RollupConfig,
+    prev_global_state: &GlobalState,
     context: &BlockContext,
     output_withdrawal_cells: Vec<WithdrawalCell>,
 ) -> Result<BTreeMap<H256, u128>, Error> {
@@ -124,8 +134,11 @@ fn check_input_custodian_cells(
         collect_custodian_locks(&context.rollup_type_hash, config, Source::Input)?
             .into_iter()
             .partition(|cell| {
-                let number: u64 = cell.args.deposit_block_number().unpack();
-                number <= context.finalized_number
+                is_finalized(
+                    config,
+                    prev_global_state,
+                    &Timepoint::from_full_value(cell.args.deposit_block_number().unpack()),
+                )
             });
     // check unfinalized custodian cells == reverted deposit requests
     let mut reverted_deposit_cells =
@@ -160,6 +173,7 @@ fn check_input_custodian_cells(
 
 fn check_output_custodian_cells(
     config: &RollupConfig,
+    prev_global_state: &GlobalState,
     context: &BlockContext,
     mut deposit_cells: Vec<DepositRequestCell>,
     input_finalized_assets: BTreeMap<H256, u128>,
@@ -169,15 +183,23 @@ fn check_output_custodian_cells(
         collect_custodian_locks(&context.rollup_type_hash, config, Source::Output)?
             .into_iter()
             .partition(|cell| {
-                let number: u64 = cell.args.deposit_block_number().unpack();
-                number <= context.finalized_number
+                is_finalized(
+                    config,
+                    prev_global_state,
+                    &Timepoint::from_full_value(cell.args.deposit_block_number().unpack()),
+                )
             });
     // check deposits request cells == unfinalized custodian cells
+    // check l2block's timepoint == unfinalized custodian cells' deposit_block_timepoint
+    // check l2block's block_hash == unfinalized custodian cells' deposit_block_hash
     for custodian_cell in unfinalized_custodian_cells {
         let index = deposit_cells
             .iter()
             .position(|cell| {
                 custodian_cell.args.deposit_lock_args() == cell.args
+                    && custodian_cell.args.deposit_block_hash() == context.block_hash.pack()
+                    && custodian_cell.args.deposit_block_number().unpack()
+                        == context.block_timepoint().full_value()
                     && custodian_cell.value == cell.value
             })
             .ok_or(Error::InvalidCustodianCell)?;
@@ -375,7 +397,7 @@ fn check_layer2_withdrawal(
 
 fn load_block_context_and_state<'a>(
     rollup_type_hash: H256,
-    config: &RollupConfig,
+    rollup_config: &RollupConfig,
     tree_buffer: &'a mut [Pair],
     kv_state_proof: &'a Bytes,
     l2block: &L2BlockReader,
@@ -396,7 +418,7 @@ fn load_block_context_and_state<'a>(
     }
 
     let timestamp: u64 = raw_block.timestamp().unpack();
-    check_block_timestamp(prev_global_state, post_global_state, timestamp)?;
+    check_block_timestamp(rollup_config, post_global_state, timestamp)?;
 
     // verify parent block hash
     if raw_block.parent_block_hash().as_slice() != prev_global_state.tip_block_hash().as_slice() {
@@ -465,9 +487,9 @@ fn load_block_context_and_state<'a>(
     }
 
     // Generate context
+    let post_version: u8 = post_global_state.version().into();
     let account_count: u32 = prev_global_state.account().count().unpack();
     let prev_account_root = prev_global_state.account().merkle_root().unpack();
-    let finalized_number = number.saturating_sub(config.finality_blocks().unpack());
 
     // Check pre account merkle proof
     let kv_state = KVState::build(
@@ -484,12 +506,29 @@ fn load_block_context_and_state<'a>(
 
     let context = BlockContext {
         number,
-        finalized_number,
         timestamp,
         rollup_type_hash,
         block_hash,
         prev_account_root,
+        post_version,
     };
+
+    debug!(
+        "[load_block_context_and_state] BlockContext: {{
+            rollup_type_hash: {:?},
+            number: {},
+            timestamp: {},
+            block_hash: {:#x},
+            post_version: {},
+            prev_account_root: {:#x}
+        }}",
+        context.rollup_type_hash.pack(),
+        context.number,
+        context.timestamp,
+        context.block_hash.pack(),
+        context.post_version,
+        context.prev_account_root.pack()
+    );
 
     Ok((context, kv_state))
 }
@@ -528,7 +567,7 @@ fn verify_block_producer(
         let expected_stake_lock_args = input_stake_cell
             .args
             .as_builder()
-            .stake_block_number(raw_block.number().to_entity())
+            .stake_block_number(context.block_timepoint().full_value().pack())
             .build();
         if expected_stake_lock_args != output_stake_cell.args
             || input_stake_cell.capacity > output_stake_cell.capacity
@@ -682,58 +721,136 @@ fn check_block_withdrawals(block: &L2BlockReader) -> Result<(), Error> {
     Ok(())
 }
 
+// Assert l2block.timestamp == post_global_state.tip_block_timestamp
+// Assert l2block.timestamp <= l1tx.since
+// Assert l2block.timestamp <=
+//      post_global_state.last_finalized_timepoint
+//      + rollup_config.finality_as_duration()
+//      + 4h
+// Assert l2block.timestamp >=
+//      post_global_state.last_finalized_timepoint
+//      + rollup_config.finality_as_duration()
+//      - 4h
 fn check_block_timestamp(
-    prev_global_state: &GlobalState,
+    rollup_config: &RollupConfig,
     post_global_state: &GlobalState,
     block_timestamp: u64,
 ) -> Result<(), Error> {
-    let prev_version: u8 = prev_global_state.version().into();
-    let post_version: u8 = post_global_state.version().into();
+    let post_block_timestamp: u64 = post_global_state.tip_block_timestamp().unpack();
+    if block_timestamp != post_block_timestamp {
+        debug!(
+            "[check_block_timestamp] block.timestamp is not same as post_global_state.tip_block_timestamp, {} != {}",
+            block_timestamp, post_block_timestamp
+        );
+        return Err(Error::InvalidBlock);
+    }
 
-    if 0 == post_version && post_global_state.tip_block_timestamp().unpack() != 0 {
-        debug!("v0 global state tip block timestamp isn't 0");
+    let post_version: u8 = post_global_state.version().into();
+    if post_version >= 1 {
+        let rollup_input_since = Since::new(load_input_since(0, Source::GroupInput)?);
+        let rollup_input_timestamp = match (
+            rollup_input_since.is_absolute(),
+            rollup_input_since.extract_lock_value(),
+        ) {
+            (true, Some(LockValue::Timestamp(time_ms))) => time_ms,
+            _ => return Err(Error::InvalidSince),
+        };
+        if rollup_input_timestamp <= block_timestamp {
+            return Err(Error::InvalidPostGlobalState);
+        }
+    }
+
+    if post_version >= 2 {
+        // 4 hours, 4 * 60 * 60 * 1000 = 14400000ms
+        const BACKBONE_BIAS: u64 = 14400000;
+        let backbone = post_global_state.last_finalized_block_number().unpack()
+            + finality_as_duration(rollup_config);
+        if !(backbone.saturating_sub(BACKBONE_BIAS) <= block_timestamp
+            && block_timestamp <= backbone.saturating_add(BACKBONE_BIAS))
+        {
+            debug!(
+                "[check_block_timestamp] block.timestamp is out of available range, block.timestamp: {}, backbone range: [{}-{}, {}+{}]",
+                block_timestamp,
+                backbone, BACKBONE_BIAS,
+                backbone, BACKBONE_BIAS
+            );
+            return Err(Error::InvalidBlock);
+        }
+    }
+
+    Ok(())
+}
+
+fn check_global_state_tip_block_timestamp(
+    prev_global_state: &GlobalState,
+    post_global_state: &GlobalState,
+) -> Result<(), Error> {
+    let prev_block_timestamp: u64 = prev_global_state.tip_block_timestamp().unpack();
+    let post_block_timestamp: u64 = post_global_state.tip_block_timestamp().unpack();
+    if !(prev_block_timestamp < post_block_timestamp) {
+        debug!(
+            "[check_global_state_tip_block_timestamp] prev_block_timestamp: {}, post_block_timestamp: {}",
+            prev_block_timestamp,
+            post_block_timestamp
+        );
+        return Err(Error::InvalidPostGlobalState);
+    }
+    Ok(())
+}
+
+fn check_global_state_last_finalized_timepoint(
+    rollup_config: &RollupConfig,
+    context: &BlockContext,
+    prev_global_state: &GlobalState,
+    post_global_state: &GlobalState,
+) -> Result<(), Error> {
+    // skip
+    // if context.post_version == 0 { }
+
+    if prev_global_state.last_finalized_block_number().unpack()
+        > post_global_state.last_finalized_block_number().unpack()
+    {
         return Err(Error::InvalidPostGlobalState);
     }
 
-    // NOTE: Downgrade already checked in main
-    if 0 == post_version {
-        debug!("[check block timestamp] skip block timestamp");
+    let last_finalized_timepoint =
+        Timepoint::from_full_value(post_global_state.last_finalized_block_number().unpack());
+
+    if context.post_version == 1 {
+        match last_finalized_timepoint {
+            Timepoint::BlockNumber(last_finalized_block_number) => {
+                let finality_as_blocks = rollup_config.finality_blocks().unpack();
+                if last_finalized_block_number.saturating_add(finality_as_blocks) != context.number
+                {
+                    return Err(Error::InvalidPostGlobalState);
+                }
+            }
+            Timepoint::Timestamp(_) => {
+                return Err(Error::InvalidPostGlobalState);
+            }
+        }
         return Ok(());
     }
 
     let rollup_input_since = Since::new(load_input_since(0, Source::GroupInput)?);
-    if !rollup_input_since.is_absolute() {
-        return Err(Error::InvalidSince);
-    }
-
-    let rollup_input_timestamp = match rollup_input_since.extract_lock_value() {
-        Some(LockValue::Timestamp(time)) => time,
+    let rollup_input_timestamp = match (
+        rollup_input_since.is_absolute(),
+        rollup_input_since.extract_lock_value(),
+    ) {
+        (true, Some(LockValue::Timestamp(time_ms))) => time_ms,
         _ => return Err(Error::InvalidSince),
     };
-    debug!(
-        "[check block timestamp] input since timestamp {}",
-        rollup_input_timestamp
-    );
-
-    let tip_block_timestamp = prev_global_state.tip_block_timestamp().unpack();
-    if prev_version > 0 && tip_block_timestamp >= rollup_input_timestamp {
-        debug!("[check block timestamp] input since is smaller than tip block timestamp");
-        return Err(Error::InvalidSince);
-    }
-
-    let post_block_timestamp: u64 = post_global_state.tip_block_timestamp().unpack();
-    if block_timestamp != post_block_timestamp
-        || block_timestamp > rollup_input_timestamp
-        || (prev_version != 0 && block_timestamp <= tip_block_timestamp)
-    {
-        debug!(
-            "[check block timestamp] invalid block timestamp {}, post block timestamp {}, rollup input timestamp {} tip block timestamp {}",
-            block_timestamp,
-            post_block_timestamp,
-            rollup_input_timestamp,
-            tip_block_timestamp
-        );
-        return Err(Error::InvalidBlock);
+    match last_finalized_timepoint {
+        Timepoint::BlockNumber(_) => {
+            return Err(Error::InvalidPostGlobalState);
+        }
+        Timepoint::Timestamp(last_finalized_timestamp) => {
+            if !(last_finalized_timestamp + finality_as_duration(rollup_config)
+                < rollup_input_timestamp)
+            {
+                return Err(Error::InvalidPostGlobalState);
+            }
+        }
     }
 
     Ok(())
@@ -778,9 +895,11 @@ pub fn verify(
     let withdrawal_requests_vec = block.withdrawals();
     let withdrawal_requests = withdrawal_requests_vec.iter().collect();
     check_withdrawal_cells(&context, withdrawal_requests, &withdrawal_cells)?;
-    let input_finalized_assets = check_input_custodian_cells(config, &context, withdrawal_cells)?;
+    let input_finalized_assets =
+        check_input_custodian_cells(config, prev_global_state, &context, withdrawal_cells)?;
     check_output_custodian_cells(
         config,
+        prev_global_state,
         &context,
         deposit_cells.clone(),
         input_finalized_assets,
@@ -799,6 +918,14 @@ pub fn verify(
     // Check transactions
     check_block_transactions(block, &kv_state)?;
 
+    check_global_state_tip_block_timestamp(prev_global_state, post_global_state)?;
+    check_global_state_last_finalized_timepoint(
+        &config,
+        &context,
+        prev_global_state,
+        post_global_state,
+    )?;
+
     // Verify Post state
     let actual_post_global_state = {
         // because of the optimistic challenge mechanism,
@@ -807,10 +934,11 @@ pub fn verify(
         let account_merkle_state = block.raw().post_account();
         // we have verified the post block merkle state
         let block_merkle_state = post_global_state.block();
-        // last finalized block number
-        let last_finalized_block_number = context.finalized_number;
-        let version = post_global_state.version();
-        let tip_block_timestamp = if version == 0.into() {
+
+        // check_global_state_tip_block_timestamp() has checked post_global_state.tip_block_timestamp
+        // check_global_state_last_finalized_timepoint() has checked post_global_state.last_finalized_block_number
+        let last_finalized_block_number = post_global_state.last_finalized_block_number();
+        let tip_block_timestamp = if context.post_version == 0 {
             0
         } else {
             context.timestamp
@@ -823,8 +951,8 @@ pub fn verify(
             .block(block_merkle_state)
             .tip_block_hash(context.block_hash.pack())
             .tip_block_timestamp(tip_block_timestamp.pack())
-            .last_finalized_block_number(last_finalized_block_number.pack())
-            .version(version)
+            .last_finalized_block_number(last_finalized_block_number)
+            .version(context.post_version.into())
             .build()
     };
 
