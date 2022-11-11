@@ -16,10 +16,12 @@ use crate::ckb_std::{
 };
 
 use gw_utils::cells::{
-    rollup::{search_rollup_cell, search_rollup_state},
+    rollup::{load_rollup_config, search_rollup_cell, search_rollup_state},
     utils::search_lock_hash,
 };
+use gw_utils::finality::is_finalized;
 use gw_utils::gw_types;
+use gw_utils::Timepoint;
 
 use gw_types::{
     packed::{StakeLockArgs, StakeLockArgsReader},
@@ -52,12 +54,15 @@ pub fn main() -> Result<(), Error> {
     // Unlock by User
     // read global state from rollup cell in deps
     if let Some(global_state) = search_rollup_state(&rollup_type_hash, Source::CellDep)? {
-        let stake_block_number: u64 = lock_args.stake_block_number().unpack();
-        let last_finalized_block_number: u64 = global_state.last_finalized_block_number().unpack();
-
-        // 1. check if stake_block_number is finalized
+        // 1. check if stake_block_timepoint is finalized
         // 2. check if owner_lock_hash exists in input cells
-        if stake_block_number <= last_finalized_block_number
+        let config = load_rollup_config(&global_state.rollup_config_hash().unpack())?;
+        let is_finalized = is_finalized(
+            &config,
+            &global_state,
+            &Timepoint::from_full_value(lock_args.stake_block_timepoint().unpack()),
+        );
+        if is_finalized
             && search_lock_hash(&lock_args.owner_lock_hash().unpack(), Source::Input).is_some()
         {
             return Ok(());

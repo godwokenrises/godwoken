@@ -6,6 +6,7 @@ use crate::script_tests::utils::layer1::{
 };
 use crate::testing_tool::chain::{ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM};
 use ckb_script::TransactionScriptsVerifier;
+use ckb_traits::CellDataProvider;
 use ckb_types::{
     packed::{CellDep, CellOutput},
     prelude::Pack as CKBPack,
@@ -28,15 +29,15 @@ pub struct CellContextParam {
 impl Default for CellContextParam {
     fn default() -> Self {
         Self {
-            stake_lock_type: random_type_id_script(),
-            challenge_lock_type: random_type_id_script(),
-            deposit_lock_type: random_type_id_script(),
-            custodian_lock_type: random_type_id_script(),
-            withdrawal_lock_type: random_type_id_script(),
-            l2_sudt_type: random_type_id_script(),
-            always_success_type: random_type_id_script(),
-            eoa_lock_type: random_type_id_script(),
-            eth_lock_type: random_type_id_script(),
+            stake_lock_type: random_always_success_script(),
+            challenge_lock_type: random_always_success_script(),
+            deposit_lock_type: random_always_success_script(),
+            custodian_lock_type: random_always_success_script(),
+            withdrawal_lock_type: random_always_success_script(),
+            l2_sudt_type: random_always_success_script(),
+            always_success_type: random_always_success_script(),
+            eoa_lock_type: random_always_success_script(),
+            eth_lock_type: random_always_success_script(),
         }
     }
 }
@@ -271,18 +272,24 @@ impl CellContext {
         verifier.set_debug_printer(|_script, msg| println!("[script debug] {}", msg));
         verifier.verify(MAX_CYCLES)
     }
+
+    pub fn rollup_config(&self) -> RollupConfig {
+        let rollup_config_out_point = self.rollup_config_dep.out_point();
+        let rollup_config_data = self.inner.get_cell_data(&rollup_config_out_point).unwrap();
+        RollupConfig::new_unchecked(rollup_config_data)
+    }
 }
 
-pub fn build_type_id_script(name: &[u8]) -> ckb_types::packed::Script {
+pub fn named_always_success_script(name: &[u8]) -> ckb_types::packed::Script {
     ckb_types::packed::Script::new_builder()
         .code_hash(CKBPack::pack(&ALWAYS_SUCCESS_CODE_HASH.clone()))
         .args(CKBPack::pack(&Bytes::from(name.to_vec())))
         .build()
 }
 
-fn random_type_id_script() -> ckb_types::packed::Script {
+pub fn random_always_success_script() -> ckb_types::packed::Script {
     let random_bytes: [u8; 32] = rand::random();
-    build_type_id_script(&random_bytes)
+    named_always_success_script(&random_bytes)
 }
 
 pub fn build_rollup_locked_cell(
@@ -318,7 +325,8 @@ pub fn build_always_success_cell(
         .build()
 }
 
-pub fn calculate_state_validator_type_id(input_out_point: ckb_types::packed::OutPoint) -> [u8; 32] {
+/// Calculate type_id according to the CKB built-in TYPE_ID rule
+pub fn calculate_type_id(input_out_point: ckb_types::packed::OutPoint) -> [u8; 32] {
     let input = ckb_types::packed::CellInput::new_builder()
         .previous_output(input_out_point)
         .build();

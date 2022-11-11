@@ -7,6 +7,8 @@ use std::{fs, io::Read, path::PathBuf};
 const SCRIPT_DIR: &str = "../../gwos/build/debug";
 const CHALLENGE_LOCK_PATH: &str = "challenge-lock";
 const WITHDRAWAL_LOCK_PATH: &str = "withdrawal-lock";
+const CUSTODIAN_LOCK_PATH: &str = "custodian-lock";
+const STAKE_LOCK_PATH: &str = "stake-lock";
 const STATE_VALIDATOR: &str = "state-validator";
 const SECP256K1_DATA_PATH: &str = "../../gwos/c/deps/ckb-production-scripts/build/secp256k1_data";
 const ANYONE_CAN_PAY_LOCK_PATH: &str =
@@ -48,6 +50,39 @@ lazy_static! {
         let mut buf = [0u8; 32];
         let mut hasher = new_blake2b();
         hasher.update(&STATE_VALIDATOR_PROGRAM);
+        hasher.finalize(&mut buf);
+        buf
+    };
+    pub static ref CUSTODIAN_LOCK_PROGRAM: Bytes = {
+        let mut buf = Vec::new();
+        let mut path = PathBuf::new();
+        path.push(&SCRIPT_DIR);
+        path.push(&CUSTODIAN_LOCK_PATH);
+        let mut f = fs::File::open(&path).expect("load custodian lock program");
+        f.read_to_end(&mut buf)
+            .expect("read custodian lock program");
+        Bytes::from(buf.to_vec())
+    };
+    pub static ref CUSTODIAN_LOCK_CODE_HASH: [u8; 32] = {
+        let mut buf = [0u8; 32];
+        let mut hasher = new_blake2b();
+        hasher.update(&CUSTODIAN_LOCK_PROGRAM);
+        hasher.finalize(&mut buf);
+        buf
+    };
+    pub static ref STAKE_LOCK_PROGRAM: Bytes = {
+        let mut buf = Vec::new();
+        let mut path = PathBuf::new();
+        path.push(&SCRIPT_DIR);
+        path.push(&STAKE_LOCK_PATH);
+        let mut f = fs::File::open(&path).expect("load stake lock program");
+        f.read_to_end(&mut buf).expect("read stake lock program");
+        Bytes::from(buf.to_vec())
+    };
+    pub static ref STAKE_LOCK_CODE_HASH: [u8; 32] = {
+        let mut buf = [0u8; 32];
+        let mut hasher = new_blake2b();
+        hasher.update(&STAKE_LOCK_PROGRAM);
         hasher.finalize(&mut buf);
         buf
     };
