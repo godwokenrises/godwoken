@@ -27,7 +27,9 @@ use gw_types::{
     },
     prelude::*,
 };
+use gw_utils::finality::is_finalized;
 use gw_utils::gw_types;
+use gw_utils::Timepoint;
 
 use crate::error::Error;
 
@@ -58,11 +60,14 @@ pub fn main() -> Result<(), Error> {
         Some(state) => state,
         None => return Err(Error::RollupCellNotFound),
     };
+    let config = load_rollup_config(&global_state.rollup_config_hash().unpack())?;
 
-    let deposit_block_number: u64 = lock_args.deposit_block_number().unpack();
-    let last_finalized_block_number: u64 = global_state.last_finalized_block_number().unpack();
-
-    if deposit_block_number <= last_finalized_block_number {
+    let is_finalized = is_finalized(
+        &config,
+        &global_state,
+        &Timepoint::from_full_value(lock_args.deposit_block_number().unpack()),
+    );
+    if is_finalized {
         // this custodian lock is already finalized, rollup will handle the logic
         return Ok(());
     }

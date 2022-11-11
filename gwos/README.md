@@ -73,11 +73,11 @@ The `lock` fields of the Rollup cell have relatively standalone rules, in the or
 ### Stake lock
 
 A block producer is required to provide a stake cell to perform the `RollupSubmitBlock` action.
-The stake lock args is `StakeLockArgs`, after submitting a layer-2 block, the `args.stake_block_number` is updated to the latest block number.
+The stake lock args is `StakeLockArgs`, after submitting a layer-2 block, the `args.stake_block_timepoint` is updated to the latest block's timepoint.
 
 Stake lock can be unlocked in two paths:
 
-1. Unlock by the submitter after `args.stake_block_number`'s block is finalized.
+1. Unlock by the submitter after `args.stake_block_timepoint`'s block is finalized.
 2. Unlock by the challenger in the `RollupRevert` action.
 
 ### Deposit lock
@@ -88,9 +88,9 @@ The sender can unlock a deposit cell after `cancel_timeout` if the deposit is no
 
 ### Custodian lock
 
-Rollup uses the custodian lock to hold the deposited assets. Custodian lock's args is a structure `CustodianLockArgs`, the field `deposit_block_number` represents the block number that the deposit is processed.
+Rollup uses the custodian lock to hold the deposited assets. Custodian lock's args is a structure `CustodianLockArgs`, the field `deposit_block_timepoint` represents the block that the deposit is processed.
 
-The `deposit_block_number` also denotes whether the custodian lock is finalized or unfinalized.
+The `deposit_block_timepoint` also denotes whether the custodian lock is finalized or unfinalized.
 For unfinalized custodian cells, once the deposit block is reverted, these cells must be also reverted to the deposit cells.
 For finalized custodian cells, since they are finalized, we can free merge or split these cells.
 

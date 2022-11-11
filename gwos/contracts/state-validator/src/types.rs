@@ -3,6 +3,7 @@
 
 use gw_common::sparse_merkle_tree::H256;
 use gw_utils::gw_common;
+use gw_utils::Timepoint;
 
 #[derive(Clone)]
 pub struct DepositRequest {
@@ -27,11 +28,22 @@ pub struct WithdrawalRequest {
     // Withdrawal request hash
     pub hash: H256,
 }
+
 pub struct BlockContext {
     pub number: u64,
-    pub finalized_number: u64,
     pub timestamp: u64,
     pub block_hash: H256,
     pub rollup_type_hash: H256,
     pub prev_account_root: H256,
+    pub post_version: u8,
+}
+
+impl BlockContext {
+    pub const fn block_timepoint(&self) -> Timepoint {
+        if self.post_version < 2 {
+            Timepoint::from_block_number(self.number)
+        } else {
+            Timepoint::from_timestamp(self.timestamp)
+        }
+    }
 }
