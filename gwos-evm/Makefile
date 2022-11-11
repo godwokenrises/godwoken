@@ -9,7 +9,7 @@ OBJCOPY := $(TARGET)-objcopy
 
 SECP_DIR := deps/secp256k1-fix
 SECP256K1_SRC := $(SECP_DIR)/src/ecmult_static_pre_context.h
-GW_SCRIPTS := deps/gwos/c
+GW_SCRIPTS := ../gwos/c
 
 CFLAGS_CKB_STD = -Ideps/ckb-c-stdlib -Ideps/ckb-c-stdlib/molecule
 CFLAGS_SECP := -isystem $(SECP_DIR)/src -isystem $(SECP_DIR)
@@ -63,7 +63,7 @@ all: build/blockchain.h build/godwoken.h \
 
 all-via-docker: generate-protocol fetch-gw-scripts
 	mkdir -p build
-	docker run --rm -v `pwd`:/code -w /code ${BUILDER_DOCKER} make
+	docker run --rm -v `readlink -f ..`:/code -w /code/gwos-evm ${BUILDER_DOCKER} make
 	make patch-generator && make patch-generator_log
 log-version-via-docker: generate-protocol
 	mkdir -p build

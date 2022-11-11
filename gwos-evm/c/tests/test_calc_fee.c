@@ -1,6 +1,6 @@
 #include "test_utils.h"
-#include "../../gwos/c/gw_def.h"
-#include "../../gwos/c/generator_utils.h"
+#include "gw_def.h"
+#include "generator_utils.h"
 #include "../polyjuice_utils.h"
 #include <assert.h>
 

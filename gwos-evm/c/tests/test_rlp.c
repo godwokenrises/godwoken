@@ -11,8 +11,8 @@
 #include <ethash/keccak.hpp>
 #include <evmc/evmc.h>
 
-#include "../../gwos/c/gw_syscalls.h"
-#include "../../gwos/c/common.h"
+#include "gw_syscalls.h"
+#include "common.h"
 #include "./test_utils.h"
 #include "../polyjuice_utils.h"
 
