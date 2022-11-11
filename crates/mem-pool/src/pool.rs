@@ -1145,14 +1145,12 @@ impl MemPool {
         let raw_tx = tx.raw();
         let snap = state.snapshot();
         let run_result = generator
-            .unchecked_execute_transaction(
+            .execute_transaction(
                 &chain_view,
                 state,
                 block_info,
                 &raw_tx,
-                self.generator
-                    .fork_config()
-                    .max_l2_tx_cycles(block_info.number().unpack()),
+                None,
                 Some(cycles_pool),
             )
             .map_err(|err| {

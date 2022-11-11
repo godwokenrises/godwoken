@@ -82,17 +82,16 @@ pub(crate) async fn replay_transaction(
                 .number(raw.number())
                 .build()
         };
-        let default_max_tx_cycles = ctx.generator.fork_config().max_l2_tx_cycles(block_number);
         // execute prev txs
         for i in 0..tx_index {
             let tx = block.transactions().get(i as usize).unwrap();
             let raw_tx = tx.raw();
-            ctx.generator.unchecked_execute_transaction(
+            ctx.generator.execute_transaction(
                 &chain_view,
                 &mut hist_state,
                 &block_info,
                 &raw_tx,
-                default_max_tx_cycles,
+                None,
                 None,
             )?;
             hist_state.finalise()?;
@@ -102,12 +101,12 @@ pub(crate) async fn replay_transaction(
         let tx = block.transactions().get(tx_index as usize).unwrap();
         let raw_tx = tx.raw();
         let t = Instant::now();
-        let run_result = ctx.debug_generator.unchecked_execute_transaction(
+        let run_result = ctx.debug_generator.execute_transaction(
             &chain_view,
             &mut hist_state,
             &block_info,
             &raw_tx,
-            max_cycles.unwrap_or(default_max_tx_cycles),
+            max_cycles,
             None,
         )?;
         let execution_time = t.elapsed();

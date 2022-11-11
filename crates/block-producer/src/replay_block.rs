@@ -89,7 +89,6 @@ impl ReplayBlock {
         // handle transactions
         let db = &store.begin_transaction();
         let chain_view = ChainView::new(&db, parent_block_hash);
-        let max_l2_tx_cycles = generator.fork_config().max_l2_tx_cycles(block_number);
         for (tx_index, tx) in block.transactions().into_iter().enumerate() {
             generator.check_transaction_signature(&state, &tx)?;
 
@@ -113,7 +112,7 @@ impl ReplayBlock {
                 &mut state,
                 &block_info,
                 &raw_tx,
-                max_l2_tx_cycles,
+                None,
                 None,
             )?;
 
