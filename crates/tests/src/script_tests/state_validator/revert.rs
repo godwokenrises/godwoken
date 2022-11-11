@@ -7,8 +7,8 @@ use crate::script_tests::utils::init_env_log;
 use crate::script_tests::utils::layer1::build_simple_tx_with_out_point;
 use crate::script_tests::utils::layer1::{always_success_script, random_out_point};
 use crate::script_tests::utils::rollup::{
-    build_always_success_cell, build_rollup_locked_cell, build_type_id_script,
-    calculate_state_validator_type_id, CellContext, CellContextParam,
+    build_always_success_cell, build_rollup_locked_cell, calculate_type_id,
+    named_always_success_script, CellContext, CellContextParam,
 };
 use crate::testing_tool::chain::{
     apply_block_result, construct_block, into_deposit_info_cell, setup_chain_with_config,
@@ -44,7 +44,7 @@ use gw_types::{packed::StakeLockArgs, prelude::*};
 async fn test_revert() {
     init_env_log();
     let input_out_point = random_out_point();
-    let type_id = calculate_state_validator_type_id(input_out_point.clone());
+    let type_id = calculate_type_id(input_out_point.clone());
     let rollup_type_script = {
         Script::new_builder()
             .code_hash(Pack::pack(&*STATE_VALIDATOR_CODE_HASH))
@@ -62,9 +62,9 @@ async fn test_revert() {
         .code_hash(CKBPack::pack(&[0u8; 32]))
         .build();
     let reward_burn_lock_hash: [u8; 32] = reward_burn_lock.calc_script_hash().unpack().into();
-    let stake_lock_type = build_type_id_script(b"stake_lock_type_id");
+    let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
     let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack().into();
-    let challenge_lock_type = build_type_id_script(b"challenge_lock_type_id");
+    let challenge_lock_type = named_always_success_script(b"challenge_lock_type_id");
     let challenge_script_type_hash: [u8; 32] =
         challenge_lock_type.calc_script_hash().unpack().into();
     let finality_blocks = 10;
