@@ -11,7 +11,7 @@ use gw_common::{
     builtins::ETH_REGISTRY_ACCOUNT_ID, h256_ext::H256Ext, registry_address::RegistryAddress,
     state::State, H256,
 };
-use gw_config::{BackendConfig, BackendSwitchConfig, BackendType};
+use gw_config::{BackendConfig, BackendForkConfig, BackendType};
 use gw_generator::backend_manage::BackendManage;
 use gw_generator::{
     account_lock_manage::{
@@ -80,7 +80,7 @@ fn test_example_sum() {
     // run handle message
     {
         // NOTICE in this test we won't need SUM validator
-        let backend_manage = BackendManage::from_config(vec![BackendSwitchConfig {
+        let backend_manage = BackendManage::from_config(vec![BackendForkConfig {
             switch_height: 0,
             backends: vec![BackendConfig {
                 validator_path: SUM_PROGRAM_PATH.to_path_buf(),
@@ -224,7 +224,7 @@ fn test_example_account_operation() {
         )
         .expect("create account");
 
-    let backend_manage = BackendManage::from_config(vec![BackendSwitchConfig {
+    let backend_manage = BackendManage::from_config(vec![BackendForkConfig {
         switch_height: 0,
         backends: vec![BackendConfig {
             validator_path: ACCOUNT_OP_PROGRAM_PATH.clone(),
@@ -516,7 +516,7 @@ fn test_example_recover_account() {
         )
         .expect("create account");
 
-    let backend_manage = BackendManage::from_config(vec![BackendSwitchConfig {
+    let backend_manage = BackendManage::from_config(vec![BackendForkConfig {
         switch_height: 0,
         backends: vec![BackendConfig {
             validator_path: RECOVER_PROGRAM_PATH.clone(),
@@ -716,7 +716,7 @@ fn test_sudt_total_supply() {
     // run handle message
     {
         // NOTICE in this test we won't need SUM validator
-        let backend_manage = BackendManage::from_config(vec![BackendSwitchConfig {
+        let backend_manage = BackendManage::from_config(vec![BackendForkConfig {
             switch_height: 0,
             backends: vec![BackendConfig {
                 validator_path: SUDT_TOTAL_SUPPLY_PROGRAM_PATH.clone(),

@@ -2,12 +2,12 @@ use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     state::State,
 };
+use gw_config::ForkConfig;
 use gw_traits::CodeStore;
 use gw_types::{offchain::RollupContext, packed::L2Transaction, prelude::*};
 use tracing::instrument;
 
 use crate::{
-    constants::MAX_TX_SIZE,
     error::{AccountError, TransactionError, TransactionValidateError},
     typed_transaction::types::TypedRawTransaction,
     utils::get_tx_type,
@@ -17,6 +17,7 @@ pub struct TransactionVerifier<'a, S> {
     state: &'a S,
     rollup_context: &'a RollupContext,
     polyjuice_creator_id: Option<u32>,
+    fork_config: &'a ForkConfig,
 }
 
 impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
@@ -24,24 +25,31 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
         state: &'a S,
         rollup_context: &'a RollupContext,
         polyjuice_creator_id: Option<u32>,
+        fork_config: &'a ForkConfig,
     ) -> Self {
         Self {
             state,
             rollup_context,
             polyjuice_creator_id,
+            fork_config,
         }
     }
     /// verify transaction
     /// Notice this function do not perform signature check
     #[instrument(skip_all)]
-    pub fn verify(&self, tx: &L2Transaction) -> Result<(), TransactionValidateError> {
+    pub fn verify(
+        &self,
+        tx: &L2Transaction,
+        block_number: u64,
+    ) -> Result<(), TransactionValidateError> {
         let raw_tx = tx.raw();
         let sender_id: u32 = raw_tx.from_id().unpack();
 
         // check tx size
-        if tx.as_slice().len() > MAX_TX_SIZE {
+        let max_tx_size = self.fork_config.max_tx_size(block_number);
+        if tx.as_slice().len() > max_tx_size {
             return Err(TransactionError::ExceededMaxTxSize {
-                max_size: MAX_TX_SIZE,
+                max_size: max_tx_size,
                 tx_size: tx.as_slice().len(),
             }
             .into());

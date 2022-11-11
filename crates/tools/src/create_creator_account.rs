@@ -47,7 +47,7 @@ pub async fn create_creator_account(
     log::info!("from id: {}", from_id);
 
     let polyjuice_validator_script_hash = {
-        let mut backends = config.backend_switches[0].backends.iter();
+        let mut backends = config.fork.backend_forks[0].backends.iter();
         let polyjuice_backend = backends
             .find(|backend| backend.backend_type == BackendType::Polyjuice)
             .ok_or_else(|| anyhow!("polyjuice backend not found in config"))?;

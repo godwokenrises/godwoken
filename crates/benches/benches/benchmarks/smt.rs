@@ -8,12 +8,11 @@ use gw_common::{
     state::State,
     H256,
 };
-use gw_config::{BackendConfig, BackendSwitchConfig, GenesisConfig, StoreConfig};
+use gw_config::{BackendConfig, BackendForkConfig, GenesisConfig, StoreConfig};
 use gw_db::{schema::COLUMNS, RocksDB};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::BackendManage,
-    constants::L2TX_MAX_CYCLES,
     genesis::build_genesis_from_store,
     traits::StateExt,
     Generator,
@@ -165,8 +164,8 @@ impl BenchExecutionEnvironment {
                     backend_type: gw_config::BackendType::Sudt,
                 },
             ];
-            BackendManage::from_config(vec![BackendSwitchConfig {
-                switch_height: 0,
+            BackendManage::from_config(vec![BackendForkConfig {
+                fork_height: 0,
                 backends: configs,
             }])
             .expect("bench backend")
@@ -181,6 +180,7 @@ impl BenchExecutionEnvironment {
 
         let generator = Generator::new(
             backend_manage,
+            Default::default(),
             account_lock_manage,
             rollup_context,
             Default::default(),
@@ -264,7 +264,7 @@ impl BenchExecutionEnvironment {
                     &mut state,
                     &block_info,
                     &raw_tx,
-                    L2TX_MAX_CYCLES,
+                    u64::MAX,
                     None,
                 )
                 .unwrap();

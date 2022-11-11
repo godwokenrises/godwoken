@@ -66,7 +66,9 @@ async fn deposite_to_chain(
     };
 
     // deposit
-    apply_block_result(chain, block_result, deposit_info_vec, asset_scripts).await;
+    apply_block_result(chain, block_result, deposit_info_vec, asset_scripts)
+        .await
+        .unwrap();
     Ok(())
 }
 
@@ -104,7 +106,9 @@ async fn withdrawal_from_chain(
     };
 
     // deposit
-    apply_block_result(chain, block_result, Default::default(), HashSet::new()).await;
+    apply_block_result(chain, block_result, Default::default(), HashSet::new())
+        .await
+        .unwrap();
     Ok(())
 }
 
@@ -642,7 +646,9 @@ async fn test_produce_block_after_re_inject_withdrawal() {
             .unwrap()
     };
     let asset_scripts = HashSet::new();
-    apply_block_result(&mut chain, block_result, Default::default(), asset_scripts).await;
+    apply_block_result(&mut chain, block_result, Default::default(), asset_scripts)
+        .await
+        .unwrap();
 
     // check status
 

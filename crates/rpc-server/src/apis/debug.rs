@@ -3,7 +3,7 @@ use std::{convert::TryInto, sync::Arc, time::Instant};
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256 as JsonH256;
 use ckb_types::prelude::{Builder, Entity};
-use gw_generator::{constants::L2TX_MAX_CYCLES, Generator};
+use gw_generator::Generator;
 use gw_jsonrpc_types::{ckb_jsonrpc_types::Uint64, debug::DebugRunResult};
 use gw_store::{
     chain_view::ChainView,
@@ -39,8 +39,8 @@ pub(crate) async fn replay_transaction(
     ctx: Data<DebugTransactionContext>,
 ) -> Result<Option<DebugRunResult>> {
     let (tx_hash, max_cycles) = match param {
-        DebugReplayTxParams::Default((tx_hash,)) => (tx_hash, L2TX_MAX_CYCLES),
-        DebugReplayTxParams::WithMaxCycles((tx_hash, cycles)) => (tx_hash, cycles.value()),
+        DebugReplayTxParams::Default((tx_hash,)) => (tx_hash, None),
+        DebugReplayTxParams::WithMaxCycles((tx_hash, cycles)) => (tx_hash, Some(cycles.value())),
     };
     let tx_hash = to_h256(tx_hash);
 
@@ -82,6 +82,7 @@ pub(crate) async fn replay_transaction(
                 .number(raw.number())
                 .build()
         };
+        let default_max_tx_cycles = ctx.generator.fork_config().max_l2_tx_cycles(block_number);
         // execute prev txs
         for i in 0..tx_index {
             let tx = block.transactions().get(i as usize).unwrap();
@@ -91,7 +92,7 @@ pub(crate) async fn replay_transaction(
                 &mut hist_state,
                 &block_info,
                 &raw_tx,
-                L2TX_MAX_CYCLES,
+                default_max_tx_cycles,
                 None,
             )?;
             hist_state.finalise()?;
@@ -106,7 +107,7 @@ pub(crate) async fn replay_transaction(
             &mut hist_state,
             &block_info,
             &raw_tx,
-            max_cycles,
+            max_cycles.unwrap_or(default_max_tx_cycles),
             None,
         )?;
         let execution_time = t.elapsed();

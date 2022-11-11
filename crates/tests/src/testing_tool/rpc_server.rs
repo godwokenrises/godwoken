@@ -82,7 +82,7 @@ impl RPCServer {
             consensus_config: Default::default(),
             dynamic_config_manager: Default::default(),
             polyjuice_sender_recover,
-            debug_backend_switches: None,
+            debug_backend_forks: None,
         }
     }
 

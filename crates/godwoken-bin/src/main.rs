@@ -12,7 +12,7 @@ use godwoken_bin::subcommand::rewind_to_last_valid_block::{
     RewindToLastValidBlockCommand, COMMAND_REWIND_TO_LAST_VALID_BLOCK,
 };
 use gw_block_producer::{runner, trace};
-use gw_config::{BackendSwitchConfig, Config};
+use gw_config::{BackendForkConfig, Config};
 use gw_version::Version;
 use std::{env, fs, path::Path};
 
@@ -40,8 +40,8 @@ fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
 
 fn generate_example_config<P: AsRef<Path>>(path: P) -> Result<()> {
     let mut config = Config::default();
-    config.backend_switches.push(BackendSwitchConfig {
-        switch_height: 0,
+    config.fork.backend_forks.push(BackendForkConfig {
+        fork_height: 0,
         backends: Default::default(),
     });
     config.block_producer = Some(Default::default());

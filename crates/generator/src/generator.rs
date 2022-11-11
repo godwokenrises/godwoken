@@ -3,7 +3,6 @@ use std::{collections::HashSet, sync::Arc, time::Instant};
 use crate::{
     account_lock_manage::AccountLockManage,
     backend_manage::BackendManage,
-    constants::{L2TX_MAX_CYCLES, MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
     error::{BlockError, TransactionValidateError, WithdrawalError},
     syscalls::RunContext,
     typed_transaction::types::TypedRawTransaction,
@@ -27,7 +26,7 @@ use gw_common::{
     H256,
 };
 
-use gw_config::{ContractLogConfig, SyscallCyclesConfig};
+use gw_config::{ContractLogConfig, ForkConfig, SyscallCyclesConfig};
 use gw_store::{
     state::{history::history_state::RWConfig, traits::JournalDB, BlockStateDB},
     transaction::StoreTransaction,
@@ -146,6 +145,7 @@ pub struct MachineRunArgs<'a, C, S> {
 pub struct Generator {
     backend_manage: BackendManage,
     account_lock_manage: AccountLockManage,
+    fork_config: ForkConfig,
     rollup_context: RollupContext,
     contract_log_config: ContractLogConfig,
     polyjuice_creator_id: ArcSwapOption<u32>,
@@ -154,6 +154,7 @@ pub struct Generator {
 impl Generator {
     pub fn new(
         backend_manage: BackendManage,
+        fork_config: ForkConfig,
         account_lock_manage: AccountLockManage,
         rollup_context: RollupContext,
         contract_log_config: ContractLogConfig,
@@ -161,6 +162,7 @@ impl Generator {
         Generator {
             backend_manage,
             account_lock_manage,
+            fork_config,
             rollup_context,
             contract_log_config,
             polyjuice_creator_id: ArcSwapOption::from(None),
@@ -170,6 +172,7 @@ impl Generator {
     pub fn clone_with_new_backends(&self, backend_manage: BackendManage) -> Self {
         Self {
             backend_manage,
+            fork_config: self.fork_config.clone(),
             account_lock_manage: self.account_lock_manage.clone(),
             rollup_context: self.rollup_context.clone(),
             contract_log_config: self.contract_log_config.clone(),
@@ -179,6 +182,10 @@ impl Generator {
 
     pub fn rollup_context(&self) -> &RollupContext {
         &self.rollup_context
+    }
+
+    pub fn fork_config(&self) -> &ForkConfig {
+        &self.fork_config
     }
 
     pub fn account_lock_manage(&self) -> &AccountLockManage {
@@ -510,6 +517,7 @@ impl Generator {
                 hex::encode(&block_hash)
             );
         }
+        let max_cycles = self.fork_config.max_l2_tx_cycles(block_number);
         for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {
             log::debug!(
                 "[apply block] execute tx index: {} hash: {}",
@@ -563,7 +571,7 @@ impl Generator {
                 &mut state,
                 &block_info,
                 &raw_tx,
-                L2TX_MAX_CYCLES,
+                max_cycles,
                 None,
             ) {
                 Ok(run_result) => run_result,
@@ -734,6 +742,7 @@ impl Generator {
         let backend = self
             .load_backend(block_info.number().unpack(), state, &script_hash)
             .ok_or(TransactionError::BackendNotFound { script_hash })?;
+        let block_number = block_info.number().unpack();
 
         let snap = state.snapshot();
         let sender_id: u32 = raw_tx.from_id().unpack();
@@ -781,19 +790,21 @@ impl Generator {
         let state_tracker = state.take_state_tracker().unwrap();
 
         // check write data bytes
+        let max_write_data_bytes = self.fork_config.max_write_data_bytes(block_number);
         if let Some(data) = state_tracker
             .write_data()
             .lock()
             .unwrap()
             .values()
-            .find(|data| data.len() > MAX_WRITE_DATA_BYTES_LIMIT)
+            .find(|data| data.len() > max_write_data_bytes)
         {
             return Err(TransactionError::ExceededMaxWriteData {
-                max_bytes: MAX_WRITE_DATA_BYTES_LIMIT,
+                max_bytes: max_write_data_bytes,
                 used_bytes: data.len(),
             });
         }
         // check read data bytes
+        let max_read_data_bytes = self.fork_config.max_read_data_bytes(block_number);
         let read_data_bytes: usize = state_tracker
             .read_data()
             .lock()
@@ -801,9 +812,9 @@ impl Generator {
             .values()
             .map(Bytes::len)
             .sum();
-        if read_data_bytes > MAX_READ_DATA_BYTES_LIMIT {
+        if read_data_bytes > max_read_data_bytes {
             return Err(TransactionError::ExceededMaxReadData {
-                max_bytes: MAX_READ_DATA_BYTES_LIMIT,
+                max_bytes: max_read_data_bytes,
                 used_bytes: read_data_bytes,
             });
         }
