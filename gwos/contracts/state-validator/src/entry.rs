@@ -33,7 +33,7 @@ use gw_utils::gw_types;
 
 use gw_utils::error::Error;
 
-const MAX_ROLLUP_VERSION: u8 = 1;
+const MAX_ROLLUP_VERSION: u8 = 2;
 
 pub fn parse_global_state(source: Source) -> Result<GlobalState, Error> {
     let data = load_cell_data(0, source)?;

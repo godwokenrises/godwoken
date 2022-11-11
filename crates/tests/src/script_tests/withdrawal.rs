@@ -13,13 +13,13 @@ use ckb_types::core::TransactionView;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::blake2b::new_blake2b;
 use gw_types::bytes::Bytes;
-use gw_types::core::ScriptHashType;
+use gw_types::core::{ScriptHashType, Timepoint};
 use gw_types::packed::{
-    CellDep, CellInput, CellOutput, GlobalState, OutPoint, RollupConfig, Script,
-    UnlockWithdrawalViaFinalize, UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion,
+    BlockMerkleState, Byte32, CellDep, CellInput, CellOutput, GlobalState, OutPoint, RollupConfig,
+    Script, UnlockWithdrawalViaFinalize, UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion,
     WithdrawalLockArgs, WitnessArgs,
 };
-use gw_types::prelude::Pack;
+use gw_types::prelude::{Pack, Unpack};
 use secp256k1::rand::rngs::OsRng;
 use secp256k1::{Message, Secp256k1, SecretKey};
 
@@ -35,10 +35,17 @@ fn test_unlock_withdrawal_via_finalize_by_input_owner_cell() {
     let rollup_type_hash = rollup_type_script.hash();
     let (mut verify_ctx, script_ctx) = build_verify_context();
 
-    let last_finalized_block_number = rand::random::<u64>() + 100;
+    let withdrawal_timepoint = Timepoint::from_block_number(rand::random::<u32>() as u64 + 100);
+    let (block_merkle_state, last_finalized_timepoint) =
+        mock_global_state_timepoint_by_finalized_timepoint(
+            &verify_ctx.rollup_config(),
+            &withdrawal_timepoint,
+        );
     let rollup_cell = {
         let global_state = GlobalState::new_builder()
-            .last_finalized_block_number(last_finalized_block_number.pack())
+            .rollup_config_hash(verify_ctx.rollup_config().hash().pack())
+            .last_finalized_block_number(last_finalized_timepoint.full_value().pack())
+            .block(block_merkle_state)
             .build();
 
         let output = CellOutput::new_builder()
@@ -84,7 +91,7 @@ fn test_unlock_withdrawal_via_finalize_by_input_owner_cell() {
         let lock_args = WithdrawalLockArgs::new_builder()
             .account_script_hash(random_always_success_script().hash().pack())
             .withdrawal_block_hash(random_always_success_script().hash().pack())
-            .withdrawal_block_number(last_finalized_block_number.saturating_sub(1).pack())
+            .withdrawal_block_number(withdrawal_timepoint.full_value().pack())
             .owner_lock_hash(owner_lock.hash().pack())
             .build();
         let mut args = Vec::new();
@@ -153,6 +160,7 @@ fn test_unlock_withdrawal_via_finalize_by_input_owner_cell() {
     .cell_dep(script_ctx.acp.dep.to_ckb())
     .cell_dep(script_ctx.secp256k1_data.dep.to_ckb())
     .cell_dep(rollup_dep.to_ckb())
+    .cell_dep(verify_ctx.rollup_config_dep.clone())
     .build();
 
     let err_sign_tx = sign_tx(tx.clone(), 1, &err_sk);
@@ -174,10 +182,17 @@ fn test_unlock_withdrawal_via_finalize_by_switch_indexed_output_to_owner_lock() 
     let rollup_type_hash = rollup_type_script.hash();
     let (mut verify_ctx, script_ctx) = build_verify_context();
 
-    let last_finalized_block_number = rand::random::<u64>() + 100;
+    let withdrawal_timepoint = Timepoint::from_block_number(rand::random::<u32>() as u64 + 100);
+    let (block_merkle_state, last_finalized_timepoint) =
+        mock_global_state_timepoint_by_finalized_timepoint(
+            &verify_ctx.rollup_config(),
+            &withdrawal_timepoint,
+        );
     let rollup_cell = {
         let global_state = GlobalState::new_builder()
-            .last_finalized_block_number(last_finalized_block_number.pack())
+            .rollup_config_hash(verify_ctx.rollup_config().hash().pack())
+            .last_finalized_block_number(last_finalized_timepoint.full_value().pack())
+            .block(block_merkle_state)
             .build();
 
         let output = CellOutput::new_builder()
@@ -198,7 +213,7 @@ fn test_unlock_withdrawal_via_finalize_by_switch_indexed_output_to_owner_lock() 
         let lock_args = WithdrawalLockArgs::new_builder()
             .account_script_hash(random_always_success_script().hash().pack())
             .withdrawal_block_hash(random_always_success_script().hash().pack())
-            .withdrawal_block_number(last_finalized_block_number.saturating_sub(1).pack())
+            .withdrawal_block_number(withdrawal_timepoint.full_value().pack())
             .owner_lock_hash(owner_lock.hash().pack())
             .build();
 
@@ -261,6 +276,7 @@ fn test_unlock_withdrawal_via_finalize_by_switch_indexed_output_to_owner_lock() 
     .witness(unlock_via_finalize_witness.as_bytes().to_ckb())
     .cell_dep(script_ctx.withdrawal.dep.to_ckb())
     .cell_dep(rollup_dep.to_ckb())
+    .cell_dep(verify_ctx.rollup_config_dep.clone())
     .build();
 
     verify_ctx.verify_tx(tx.clone()).expect("success");
@@ -343,10 +359,17 @@ fn test_unlock_withdrawal_via_finalize_fallback_to_input_owner_cell() {
     let rollup_type_hash = rollup_type_script.hash();
     let (mut verify_ctx, script_ctx) = build_verify_context();
 
-    let last_finalized_block_number = rand::random::<u64>() + 100;
+    let withdrawal_timepoint = Timepoint::from_block_number(rand::random::<u32>() as u64 + 100);
+    let (block_merkle_state, last_finalized_timepoint) =
+        mock_global_state_timepoint_by_finalized_timepoint(
+            &verify_ctx.rollup_config(),
+            &withdrawal_timepoint,
+        );
     let rollup_cell = {
         let global_state = GlobalState::new_builder()
-            .last_finalized_block_number(last_finalized_block_number.pack())
+            .rollup_config_hash(verify_ctx.rollup_config().hash().pack())
+            .last_finalized_block_number(last_finalized_timepoint.full_value().pack())
+            .block(block_merkle_state)
             .build();
 
         let output = CellOutput::new_builder()
@@ -387,7 +410,7 @@ fn test_unlock_withdrawal_via_finalize_fallback_to_input_owner_cell() {
         let lock_args = WithdrawalLockArgs::new_builder()
             .account_script_hash(random_always_success_script().hash().pack())
             .withdrawal_block_hash(random_always_success_script().hash().pack())
-            .withdrawal_block_number(last_finalized_block_number.saturating_sub(1).pack())
+            .withdrawal_block_number(withdrawal_timepoint.full_value().pack())
             .owner_lock_hash(owner_lock.hash().pack())
             .build();
 
@@ -455,6 +478,7 @@ fn test_unlock_withdrawal_via_finalize_fallback_to_input_owner_cell() {
     .witness(unlock_via_finalize_witness.as_bytes().to_ckb())
     .cell_dep(script_ctx.withdrawal.dep.to_ckb())
     .cell_dep(rollup_dep.to_ckb())
+    .cell_dep(verify_ctx.rollup_config_dep.clone())
     .build();
 
     let err = verify_ctx.verify_tx(tx.clone()).unwrap_err();
@@ -476,6 +500,7 @@ fn test_unlock_withdrawal_via_finalize_fallback_to_input_owner_cell() {
         .cell_dep(script_ctx.acp.dep.to_ckb())
         .cell_dep(script_ctx.secp256k1_data.dep.to_ckb())
         .cell_dep(rollup_dep.to_ckb())
+        .cell_dep(verify_ctx.rollup_config_dep.clone())
         .build();
 
     let sign_tx = sign_tx(tx, 1, &sk);
@@ -616,8 +641,31 @@ fn sign_tx(tx: TransactionView, witness_idx: usize, sk: &SecretKey) -> Transacti
         .build()
 }
 
+// To make the `target_finalized_timepoint` to be finalized for GlobalState,
+// returns the mocked `GlobalState.block` and
+// `GlobalState.last_finalized_timepoint` fields
+fn mock_global_state_timepoint_by_finalized_timepoint(
+    rollup_config: &RollupConfig,
+    target_finalized_timepoint: &Timepoint,
+) -> (BlockMerkleState, Timepoint) {
+    match target_finalized_timepoint {
+        Timepoint::BlockNumber(block_number) => {
+            let finality_as_blocks: u64 = rollup_config.finality_blocks().unpack();
+            let tip_number = block_number + finality_as_blocks;
+            let block_count = tip_number + 1;
+            let block_merkle_state = BlockMerkleState::new_builder()
+                .count(block_count.pack())
+                .build();
+            (block_merkle_state, target_finalized_timepoint.clone())
+        }
+        Timepoint::Timestamp(_) => (Default::default(), target_finalized_timepoint.clone()),
+    }
+}
+
 mod conversion {
-    use ckb_types::packed::{Bytes, CellDep, CellInput, CellOutput, OutPoint, Script, WitnessArgs};
+    use ckb_types::packed::{
+        Byte32, Bytes, CellDep, CellInput, CellOutput, OutPoint, Script, WitnessArgs,
+    };
     use ckb_types::prelude::{Entity, Pack};
 
     pub trait ToCKBType<T> {
@@ -638,6 +686,7 @@ mod conversion {
     impl_to_ckb!(CellOutput);
     impl_to_ckb!(WitnessArgs);
     impl_to_ckb!(CellDep);
+    impl_to_ckb!(Byte32);
 
     impl ToCKBType<Bytes> for super::Bytes {
         fn to_ckb(&self) -> Bytes {
@@ -662,6 +711,7 @@ mod conversion {
     impl_to_gw!(OutPoint);
     impl_to_gw!(CellOutput);
     impl_to_gw!(Script);
+    impl_to_gw!(Byte32);
 }
 
 use conversion::{ToCKBType, ToGWType};

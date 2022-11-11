@@ -11,9 +11,9 @@ dependencies = [
 
 [[package]]
 name = "blake2b-ref"
-version = "0.2.1"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95916998c798756098a4eb1b3f2cd510659705a9817bf203d61abd30fbec3e7b"
+checksum = "294d17c72e0ba59fad763caa112368d0672083779cdebbb97164f4bb4c1e339a"
 
 [[package]]
 name = "blake2b-rs"
@@ -258,8 +258,8 @@ dependencies = [
 
 [[package]]
 name = "gw-common"
-version = "0.1.0"
-source = "git+https://github.com/nervosnetwork/godwoken.git?rev=91c324544424292b4d715ce376d31bc45aa3cb5d#91c324544424292b4d715ce376d31bc45aa3cb5d"
+version = "1.7.1"
+source = "git+https://github.com/nervosnetwork/godwoken.git?rev=64f0576b527720226501fe8f0df305ce766aea0e#64f0576b527720226501fe8f0df305ce766aea0e"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
@@ -270,8 +270,8 @@ dependencies = [
 
 [[package]]
 name = "gw-hash"
-version = "0.1.0"
-source = "git+https://github.com/nervosnetwork/godwoken.git?rev=91c324544424292b4d715ce376d31bc45aa3cb5d#91c324544424292b4d715ce376d31bc45aa3cb5d"
+version = "1.7.1"
+source = "git+https://github.com/nervosnetwork/godwoken.git?rev=64f0576b527720226501fe8f0df305ce766aea0e#64f0576b527720226501fe8f0df305ce766aea0e"
 dependencies = [
  "blake2b-ref",
 ]
@@ -286,8 +286,8 @@ dependencies = [
 
 [[package]]
 name = "gw-types"
-version = "0.1.0"
-source = "git+https://github.com/nervosnetwork/godwoken.git?rev=91c324544424292b4d715ce376d31bc45aa3cb5d#91c324544424292b4d715ce376d31bc45aa3cb5d"
+version = "1.7.1"
+source = "git+https://github.com/nervosnetwork/godwoken.git?rev=64f0576b527720226501fe8f0df305ce766aea0e#64f0576b527720226501fe8f0df305ce766aea0e"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",

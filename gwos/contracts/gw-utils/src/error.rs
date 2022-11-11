@@ -52,6 +52,8 @@ pub enum Error {
     DuplicatedScriptHash = 42,
     RegistryAddressNotFound = 43,
     DuplicatedRegistryAddress = 44,
+    NotFinalized = 45,
+    HeaderDepsNotFound = 46,
 }
 
 impl From<SysError> for Error {

@@ -8,6 +8,7 @@ use gw_types::{
     packed::{BlockMerkleState, Byte32, GlobalState, RawL2Block, RollupConfig},
     prelude::*,
 };
+use gw_utils::finality::finality_as_duration;
 use gw_utils::gw_types;
 use gw_utils::{
     cells::{
@@ -28,6 +29,7 @@ use gw_utils::{
 use gw_utils::{
     gw_common,
     gw_types::packed::{RawL2BlockReader, RollupRevertReader},
+    Timepoint,
 };
 
 use super::{check_rollup_lock_cells_except_stake, check_status};
@@ -247,12 +249,27 @@ fn check_reverted_blocks(
     };
     let account_merkle_state = reverted_blocks[0].prev_account();
     let tip_block_hash = reverted_blocks[0].parent_block_hash();
-    let last_finalized_block_number = {
-        let number: u64 = reverted_blocks[0].number().unpack();
-        number
+    let post_version: u8 = post_global_state.version().into();
+    let last_finalized = if post_version < 2 {
+        let tip_number: u64 = reverted_blocks[0].number().unpack();
+        let finalized_number = tip_number
             .saturating_sub(1)
-            .saturating_sub(config.finality_blocks().unpack())
+            .saturating_sub(config.finality_blocks().unpack());
+        Timepoint::from_block_number(finalized_number)
+    } else {
+        let rollup_input_since = Since::new(load_input_since(0, Source::GroupInput)?);
+        let rollup_input_timestamp = match (
+            rollup_input_since.is_absolute(),
+            rollup_input_since.extract_lock_value(),
+        ) {
+            (true, Some(LockValue::Timestamp(time_ms))) => time_ms,
+            _ => return Err(Error::InvalidSince),
+        };
+        let l1_timestamp = rollup_input_timestamp;
+        let finalized_timestamp = l1_timestamp.saturating_sub(finality_as_duration(&config));
+        Timepoint::from_timestamp(finalized_timestamp)
     };
+
     let new_tip_block = revert_args.new_tip_block();
     if new_tip_block.hash() != tip_block_hash.as_slice() {
         debug!("[verify revert] reverted new_tip_block doesn't match");
@@ -269,7 +286,7 @@ fn check_reverted_blocks(
             .block(block_merkle_state)
             .tip_block_hash(tip_block_hash.to_entity())
             .tip_block_timestamp(tip_block_timestamp.to_entity())
-            .last_finalized_block_number(last_finalized_block_number.pack())
+            .last_finalized_block_number(last_finalized.full_value().pack())
             .reverted_block_root(reverted_block_root)
             .status(status.into())
             .build()
