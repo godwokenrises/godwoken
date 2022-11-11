@@ -107,7 +107,7 @@ Polyjuice only provides contract accounts. Godwoken's user account is leveraged 
 
 ```sh
 cargo install moleculec --version 0.7.2
-git submodule update --init  --recursive
+git submodule update --init --recursive --depth=1
 make dist
 ```
 
