@@ -1035,7 +1035,7 @@ impl Chain {
                 log::warn!("verify #{} state transition error {}", block_number, error);
                 return Ok(Some(target));
             }
-            ApplyBlockResult::Error(err) => return Err(err.into()),
+            ApplyBlockResult::Error(err) => return Err(err),
         };
 
         // update chain

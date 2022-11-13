@@ -113,14 +113,9 @@ fn run_contract_get_result<S: State + CodeStore + JournalDB>(
         Default::default(),
     );
     let chain_view = DummyChainStore;
-    let run_result = generator.execute_transaction(
-        &chain_view,
-        tree,
-        block_info,
-        &raw_tx,
-        Some(u64::MAX),
-        None,
-    )?;
+    let run_result = generator
+        .execute_transaction(&chain_view, tree, block_info, &raw_tx, Some(u64::MAX), None)
+        .map_err(|err| err.downcast::<TransactionError>().expect("tx error"))?;
     tree.finalise()?;
     Ok(run_result)
 }

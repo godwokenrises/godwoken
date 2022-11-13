@@ -6,7 +6,7 @@ use gw_types::{offchain::CycleMeter, packed::Byte32};
 use thiserror::Error;
 
 /// Error
-#[derive(Error, PartialEq, Eq, Debug, Clone)]
+#[derive(Error, PartialEq, Eq, Debug)]
 pub enum Error {
     #[error("Transaction error {0}")]
     Transaction(TransactionError),

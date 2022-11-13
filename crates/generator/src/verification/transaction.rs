@@ -77,7 +77,8 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
         let balance = self
             .state
             .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &sender_address)?;
-        let tx_type = get_tx_type(self.rollup_context, self.state, &tx.raw())?;
+        let tx_type = get_tx_type(self.rollup_context, self.state, &tx.raw())
+            .map_err(|err| err.downcast::<TransactionError>().expect("tx error"))?;
         let typed_tx =
             TypedRawTransaction::from_tx(tx.raw(), tx_type).ok_or(AccountError::UnknownScript)?;
         // reject txs has no cost, these transaction can only be execute without modify state tree
