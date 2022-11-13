@@ -18,13 +18,14 @@ use gw_store::state::MemStateDB;
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
 use gw_types::core::{ChallengeTargetType, Status};
-use gw_types::offchain::{RollupContext, RunResult};
+use gw_types::offchain::RunResult;
 use gw_types::packed::{
     AccountMerkleState, BlockMerkleState, Byte32, CCTransactionSignatureWitness,
     CCWithdrawalWitness, CKBMerkleProof, ChallengeTarget, GlobalState, L2Block, L2Transaction,
     RawL2Block, Script, SubmitTransactions, SubmitWithdrawals, Uint64, WithdrawalRequestExtra,
 };
 use gw_types::prelude::*;
+use gw_utils::RollupContext;
 
 type MemTree = MemStateDB;
 

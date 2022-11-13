@@ -31,7 +31,6 @@ use gw_store::state::traits::JournalDB;
 use gw_store::state::MemStateDB;
 use gw_store::Store;
 use gw_types::core::AllowedContractType;
-use gw_types::offchain::RollupContext;
 use gw_types::packed::AllowedTypeHash;
 use gw_types::{
     bytes::Bytes,
@@ -40,6 +39,7 @@ use gw_types::{
     prelude::*,
     U256,
 };
+use gw_utils::RollupContext;
 
 fn new_state(store: StoreSnapshot) -> MemStateDB {
     let smt = SMT::new(H256::zero(), SMTStateStore::new(MemStore::new(store)));

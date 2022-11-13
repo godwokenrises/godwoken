@@ -11,13 +11,14 @@ use gw_rpc_client::{
 };
 use gw_types::{
     core::ScriptHashType,
-    offchain::{CellInfo, InputCellInfo, RollupContext},
+    offchain::{CellInfo, InputCellInfo},
     packed::{CellDep, CellInput, CellOutput, L2Block, Script, StakeLockArgs, StakeLockArgsReader},
     prelude::*,
 };
 use gw_utils::local_cells::{
     collect_local_and_indexer_cells, CollectLocalAndIndexerCursor, LocalCellsManager,
 };
+use gw_utils::RollupContext;
 
 pub struct GeneratedStake {
     pub deps: Vec<CellDep>,

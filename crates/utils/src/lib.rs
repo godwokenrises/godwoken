@@ -8,6 +8,7 @@ pub mod liveness;
 pub mod local_cells;
 pub mod polyjuice_parser;
 mod query_rollup_cell;
+mod rollup_context;
 pub mod script_log;
 pub mod since;
 pub mod transaction_skeleton;
@@ -15,3 +16,4 @@ pub mod wallet;
 pub mod withdrawal;
 
 pub use query_rollup_cell::query_rollup_cell;
+pub use rollup_context::RollupContext;

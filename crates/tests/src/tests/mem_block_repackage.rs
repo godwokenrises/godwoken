@@ -15,10 +15,11 @@ use gw_mem_pool::pool::OutputParam;
 use gw_store::{state::MemStateDB, traits::chain_store::ChainStore};
 use gw_types::{
     core::ScriptHashType,
-    offchain::{CellInfo, DepositInfo, RollupContext},
+    offchain::{CellInfo, DepositInfo},
     packed::{CellOutput, DepositLockArgs, DepositRequest, OutPoint, Script},
     prelude::*,
 };
+use gw_utils::RollupContext;
 
 use std::time::Duration;
 

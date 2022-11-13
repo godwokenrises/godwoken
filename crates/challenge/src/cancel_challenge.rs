@@ -5,7 +5,7 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_common::H256;
 use gw_config::ContractsCellDep;
 use gw_types::core::{DepType, SigningType, Status};
-use gw_types::offchain::{CellInfo, InputCellInfo, RecoverAccount, RollupContext};
+use gw_types::offchain::{CellInfo, InputCellInfo, RecoverAccount};
 use gw_types::packed::{
     CCTransactionSignatureWitness, CCTransactionWitness, CCWithdrawalWitness, CellDep, CellInput,
     CellOutput, GlobalState, OutPoint, RollupAction, RollupActionUnion, RollupCancelChallenge,
@@ -13,6 +13,7 @@ use gw_types::packed::{
 };
 use gw_types::prelude::Unpack;
 use gw_types::{bytes::Bytes, prelude::Pack as GWPack};
+use gw_utils::RollupContext;
 use std::collections::{HashMap, HashSet};
 
 pub struct CancelChallenge<'a, W: Entity> {

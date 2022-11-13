@@ -42,10 +42,10 @@ use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     core::AllowedEoaType,
-    offchain::RollupContext,
     packed::{Byte32, CellDep, NumberHash, RollupConfig, Script},
     prelude::*,
 };
+use gw_utils::RollupContext;
 use gw_utils::{
     exponential_backoff::ExponentialBackoff, genesis_info::CKBGenesisInfo, liveness::Liveness,
     local_cells::LocalCellsManager, wallet::Wallet,
@@ -284,7 +284,7 @@ impl BaseInitComponents {
                 ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
             RPCClient::new(
                 rollup_type_script,
-                rollup_context.clone(),
+                rollup_context.rollup_config.clone(),
                 ckb_client,
                 indexer_client,
             )

@@ -4,11 +4,11 @@ use gw_common::{
 use gw_config::ForkConfig;
 use gw_traits::CodeStore;
 use gw_types::{
-    offchain::RollupContext,
     packed::{Script, WithdrawalRequestExtra},
     prelude::*,
     U256,
 };
+use gw_utils::RollupContext;
 use tracing::instrument;
 
 use crate::{

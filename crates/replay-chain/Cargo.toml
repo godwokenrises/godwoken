@@ -18,6 +18,7 @@ gw-db = { path = "../db" }
 gw-traits = { path = "../traits" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-rpc-client = { path = "../rpc-client" }
+gw-utils = { path = "../utils" }
 async-jsonrpc-client = { version = "0.3.0", default-features = false, features = ["http-tokio"] }
 clap = "3"
 ckb-fixed-hash = "0.104.0"

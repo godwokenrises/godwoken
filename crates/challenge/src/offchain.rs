@@ -10,12 +10,13 @@ use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::state::MemStateDB;
 use gw_store::transaction::StoreTransaction;
 use gw_types::core::DepType;
-use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext};
+use gw_types::offchain::{CellInfo, InputCellInfo};
 use gw_types::packed::{
     CellDep, CellInput, L2Block, OutPoint, OutPointVec, WithdrawalRequestExtra,
 };
 use gw_types::prelude::{Builder, Entity, Unpack};
 use gw_utils::wallet::Wallet;
+use gw_utils::RollupContext;
 
 use std::{
     collections::{HashMap, HashSet},

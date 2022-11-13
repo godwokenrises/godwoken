@@ -89,11 +89,12 @@ async fn query_mergeable_ckb_custodians(
         return Ok(QueryResult::NotEnough(collected));
     }
 
-    let rollup_context = &rpc_client.rollup_context;
+    let rollup_config = &rpc_client.rollup_config;
+    let rollup_type_script = &rpc_client.rollup_type_script;
     let custodian_lock = Script::new_builder()
-        .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+        .code_hash(rollup_config.custodian_script_type_hash())
         .hash_type(ScriptHashType::Type.into())
-        .args(rollup_context.rollup_script_hash.as_slice().pack())
+        .args(rollup_type_script.calc_script_hash().as_bytes().pack())
         .build();
     let filter = Some(SearchKeyFilter {
         output_data_len_range: Some([0.into(), 1.into()]), // [inclusive, exclusive]

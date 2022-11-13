@@ -3,9 +3,9 @@ use std::{collections::HashMap, sync::Arc};
 use gw_common::{registry_address::RegistryAddress, H256};
 use gw_types::{
     bytes::Bytes,
-    offchain::RollupContext,
     packed::{L2Transaction, Script, WithdrawalRequestExtra},
 };
+use gw_utils::RollupContext;
 
 #[cfg(any(debug_assertions, feature = "enable-always-success-lock"))]
 pub mod always_success;

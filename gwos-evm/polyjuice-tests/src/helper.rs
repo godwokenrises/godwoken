@@ -31,11 +31,11 @@ use gw_types::{
     U256,
 };
 use gw_types::{
-    offchain::RollupContext,
     packed::{ETHAddrRegArgs, ETHAddrRegArgsUnion},
 };
 use rlp::RlpStream;
 use std::{convert::TryInto, fs, io::Read, path::PathBuf};
+use gw_utils::RollupContext;
 
 pub use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID, RESERVED_ACCOUNT_ID};
 

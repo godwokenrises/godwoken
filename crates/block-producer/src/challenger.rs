@@ -24,9 +24,7 @@ use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::bytes::Bytes;
 use gw_types::core::{ChallengeTargetType, Status};
-use gw_types::offchain::{
-    global_state_from_slice, CellInfo, InputCellInfo, RollupContext, TxStatus,
-};
+use gw_types::offchain::{global_state_from_slice, CellInfo, InputCellInfo, TxStatus};
 use gw_types::packed::{
     CellDep, CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, ChallengeTarget,
     GlobalState, OutPoint, Script, Transaction, WitnessArgs,
@@ -36,6 +34,7 @@ use gw_utils::fee::fill_tx_fee;
 use gw_utils::genesis_info::CKBGenesisInfo;
 use gw_utils::transaction_skeleton::TransactionSkeleton;
 use gw_utils::wallet::Wallet;
+use gw_utils::RollupContext;
 use tokio::sync::Mutex;
 use tracing::instrument;
 
