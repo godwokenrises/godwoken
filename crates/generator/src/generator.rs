@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use std::{collections::HashSet, sync::Arc, time::Instant};
 
 use crate::{
@@ -68,7 +69,7 @@ pub enum ApplyBlockResult {
         target: ChallengeTarget,
         error: Error,
     },
-    Error(Error),
+    Error(anyhow::Error),
 }
 
 #[derive(Debug)]
@@ -414,8 +415,7 @@ impl Generator {
         let mut state = match BlockStateDB::from_store(db, RWConfig::attach_block(block_number)) {
             Ok(state) => state,
             Err(err) => {
-                log::error!("next state {}", err);
-                return ApplyBlockResult::Error(Error::State(StateError::Store));
+                return ApplyBlockResult::Error(err);
             }
         };
 
@@ -426,9 +426,7 @@ impl Generator {
             match RegistryAddress::from_slice(&block_producer) {
                 Some(address) => address,
                 None => {
-                    return ApplyBlockResult::Error(Error::Block(
-                        BlockError::BlockProducerNotExists,
-                    ));
+                    return ApplyBlockResult::Error(BlockError::BlockProducerNotExists.into());
                 }
             }
         };
@@ -468,7 +466,7 @@ impl Generator {
                 &request.request(),
             ) {
                 Ok(receipt) => receipt,
-                Err(err) => return ApplyBlockResult::Error(err),
+                Err(err) => return ApplyBlockResult::Error(err.into()),
             };
             let expected_checkpoint = state
                 .calculate_state_checkpoint()
@@ -491,7 +489,7 @@ impl Generator {
 
         for req in args.deposit_info_vec.into_iter().map(|i| i.request()) {
             if let Err(err) = state.apply_deposit_request(&self.rollup_context, &req) {
-                return ApplyBlockResult::Error(err);
+                return ApplyBlockResult::Error(err.into());
             }
         }
 
@@ -502,7 +500,7 @@ impl Generator {
         let prev_txs_state = match state.calculate_merkle_state() {
             Ok(s) => s,
             Err(err) => {
-                return ApplyBlockResult::Error(err);
+                return ApplyBlockResult::Error(err.into());
             }
         };
 
@@ -542,7 +540,7 @@ impl Generator {
             // check nonce
             let raw_tx = tx.raw();
             let expected_nonce = match state.get_nonce(raw_tx.from_id().unpack()) {
-                Err(err) => return ApplyBlockResult::Error(Error::from(err)),
+                Err(err) => return ApplyBlockResult::Error(err.into()),
                 Ok(nonce) => nonce,
             };
             let actual_nonce: u32 = raw_tx.nonce().unpack();
@@ -582,10 +580,21 @@ impl Generator {
                         tx_index as u32,
                     );
 
-                    return ApplyBlockResult::Challenge {
-                        target,
-                        error: Error::Transaction(err),
-                    };
+                    match err.downcast() {
+                        Ok(err) => {
+                            return ApplyBlockResult::Challenge {
+                                target,
+                                error: Error::Transaction(err),
+                            };
+                        }
+                        Err(err) => {
+                            log::error!(
+                                "Unexpected error {} returned from execute transaction",
+                                err
+                            );
+                            return ApplyBlockResult::Error(err);
+                        }
+                    }
                 }
             };
             execute_tx_total_ms += now.elapsed().as_millis();
@@ -632,7 +641,7 @@ impl Generator {
                 let used_cycles = run_result.cycles.execution;
                 let post_state = match state.calculate_merkle_state() {
                     Ok(merkle_state) => merkle_state,
-                    Err(err) => return ApplyBlockResult::Error(err),
+                    Err(err) => return ApplyBlockResult::Error(err.into()),
                 };
                 let tx_receipt =
                     TxReceipt::build_receipt(tx.witness_hash().into(), run_result, post_state);
@@ -714,7 +723,7 @@ impl Generator {
         raw_tx: &RawL2Transaction,
         override_max_cycles: Option<u64>,
         cycles_pool: Option<&mut CyclesPool>,
-    ) -> Result<RunResult, TransactionError> {
+    ) -> Result<RunResult> {
         let account_id = raw_tx.to_id().unpack();
         let script_hash = state.get_script_hash(account_id)?;
         let backend = self
@@ -756,7 +765,7 @@ impl Generator {
                     nonce_before,
                     nonce_after
                 );
-                return Err(TransactionError::BackendMustIncreaseNonce);
+                return Err(TransactionError::BackendMustIncreaseNonce.into());
             }
         } else {
             // handle failure state, this function will revert to snapshot
@@ -784,7 +793,8 @@ impl Generator {
             return Err(TransactionError::ExceededMaxWriteData {
                 max_bytes: max_write_data_bytes,
                 used_bytes: data.len(),
-            });
+            }
+            .into());
         }
         // check read data bytes
         let max_read_data_bytes = self.fork_config.max_read_data_bytes(block_number);
@@ -799,7 +809,8 @@ impl Generator {
             return Err(TransactionError::ExceededMaxReadData {
                 max_bytes: max_read_data_bytes,
                 used_bytes: read_data_bytes,
-            });
+            }
+            .into());
         }
         let r = RunResult {
             return_data: run_context.return_data,
@@ -853,7 +864,7 @@ impl Generator {
         block_info: &BlockInfo,
         raw_tx: &RawL2Transaction,
         run_ctx: &RunContext,
-    ) -> Result<(), TransactionError> {
+    ) -> Result<()> {
         /// Error code represents EVM internal error
         /// we emit this error from Godwoken side if
         /// Polyjuice failed to generate a system log
@@ -872,7 +883,8 @@ impl Generator {
             let script_hash = state.get_script_hash(sender_id)?;
             state
                 .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &script_hash)?
-                .ok_or(TransactionError::ScriptHashNotFound)?
+                .ok_or_else(|| anyhow::Error::from(TransactionError::ScriptHashNotFound))
+                .context("failed to find sender's account")?
         };
 
         // block producer address
@@ -883,7 +895,7 @@ impl Generator {
         let tx_type = get_tx_type(self.rollup_context(), state, raw_tx)?;
         let typed_tx = match TypedRawTransaction::from_tx(raw_tx.to_owned(), tx_type) {
             Some(tx) => tx,
-            None => return Err(TransactionError::UnknownTxType(run_ctx.exit_code)),
+            None => return Err(TransactionError::UnknownTxType(run_ctx.exit_code).into()),
         };
         let tx_fee = match typed_tx {
             TypedRawTransaction::EthAddrReg(tx) => tx.consumed(),
