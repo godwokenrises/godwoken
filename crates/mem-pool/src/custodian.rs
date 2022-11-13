@@ -11,7 +11,7 @@ use gw_store::traits::chain_store::ChainStore;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupContext, WithdrawalsAmount},
+    offchain::{CellInfo, CollectedCustodianCells, DepositInfo, WithdrawalsAmount},
     packed::{
         CellOutput, CustodianLockArgs, CustodianLockArgsReader, DepositLockArgs, Script,
         WithdrawalRequest,
@@ -21,6 +21,7 @@ use gw_types::{
 use gw_utils::local_cells::{
     collect_local_and_indexer_cells, CollectLocalAndIndexerCursor, LocalCellsManager,
 };
+use gw_utils::RollupContext;
 use tracing::instrument;
 
 use crate::constants::MAX_CUSTODIANS;
@@ -373,12 +374,13 @@ mod tests {
     use gw_rpc_client::rpc_client::QueryResult;
     use gw_types::bytes::Bytes;
     use gw_types::core::ScriptHashType;
-    use gw_types::offchain::{CellInfo, RollupContext, WithdrawalsAmount};
+    use gw_types::offchain::{CellInfo, WithdrawalsAmount};
     use gw_types::packed::{
         CellOutput, CustodianLockArgs, OutPoint, RollupConfig, Script, Uint128,
     };
     use gw_types::prelude::{Builder, Entity, Pack, Unpack};
     use gw_utils::local_cells::LocalCellsManager;
+    use gw_utils::RollupContext;
 
     const CKB: u64 = 100_000_000;
 

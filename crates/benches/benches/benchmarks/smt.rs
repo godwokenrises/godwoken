@@ -32,7 +32,6 @@ use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::{AllowedEoaType, ScriptHashType, Status},
-    offchain::RollupContext,
     packed::{
         AccountMerkleState, AllowedTypeHash, BlockInfo, BlockMerkleState, Fee, GlobalState,
         L2Block, RawL2Block, RawL2Transaction, RollupConfig, SUDTArgs, SUDTTransfer, Script,
@@ -41,6 +40,7 @@ use gw_types::{
     prelude::*,
     U256,
 };
+use gw_utils::RollupContext;
 use pprof::criterion::{Output, PProfProfiler};
 
 // meta contract

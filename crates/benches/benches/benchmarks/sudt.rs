@@ -22,12 +22,13 @@ use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::{AllowedEoaType, ScriptHashType},
-    offchain::{RollupContext, RunResult},
+    offchain::RunResult,
     packed::{AllowedTypeHash, BlockInfo, Fee},
     packed::{RawL2Transaction, RollupConfig, SUDTArgs, SUDTTransfer, Script},
     prelude::*,
     U256,
 };
+use gw_utils::RollupContext;
 
 const DUMMY_SUDT_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [3u8; 32];
 

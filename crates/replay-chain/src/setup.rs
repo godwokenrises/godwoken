@@ -15,9 +15,8 @@ use gw_rpc_client::{
     ckb_client::CKBClient, indexer_client::CKBIndexerClient, rpc_client::RPCClient,
 };
 use gw_store::Store;
-use gw_types::{
-    core::AllowedEoaType, offchain::RollupContext, packed::RollupConfig, prelude::Unpack,
-};
+use gw_types::{core::AllowedEoaType, packed::RollupConfig, prelude::Unpack};
+use gw_utils::RollupContext;
 
 pub struct SetupArgs {
     pub from_db_store: PathBuf,
@@ -67,7 +66,7 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
                 ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
             RPCClient::new(
                 rollup_type_script,
-                rollup_context.clone(),
+                rollup_context.rollup_config.clone(),
                 ckb_client,
                 indexer_client,
             )

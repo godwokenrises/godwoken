@@ -36,7 +36,7 @@ use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::{ChallengeTargetType, ScriptHashType},
-    offchain::{CycleMeter, RollupContext, RunResult},
+    offchain::{CycleMeter, RunResult},
     packed::{
         AccountMerkleState, BlockInfo, ChallengeTarget, DepositInfoVec, L2Block, L2Transaction,
         LogItem, RawL2Block, RawL2Transaction, TxReceipt, WithdrawalReceipt,
@@ -44,6 +44,7 @@ use gw_types::{
     },
     prelude::*,
 };
+use gw_utils::RollupContext;
 
 use ckb_vm::{DefaultMachineBuilder, SupportMachine};
 

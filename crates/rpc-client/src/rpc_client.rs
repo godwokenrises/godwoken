@@ -10,15 +10,16 @@ use ckb_types::core::hardfork::HardForkSwitch;
 use ckb_types::prelude::Entity;
 use gw_common::H256;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, Consensus, Uint32};
-use gw_types::offchain::{CellStatus, CellWithStatus, DepositInfo, RollupContext};
+use gw_types::offchain::{CellStatus, CellWithStatus, DepositInfo};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
     offchain::CellInfo,
     packed::{
         Block, CellOutput, CustodianLockArgs, CustodianLockArgsReader, DepositLockArgs,
-        DepositLockArgsReader, DepositRequest, NumberHash, OutPoint, Script, StakeLockArgs,
-        StakeLockArgsReader, Transaction, WithdrawalLockArgs, WithdrawalLockArgsReader,
+        DepositLockArgsReader, DepositRequest, NumberHash, OutPoint, RollupConfig, Script,
+        StakeLockArgs, StakeLockArgsReader, Transaction, WithdrawalLockArgs,
+        WithdrawalLockArgsReader,
     },
     prelude::*,
 };
@@ -111,21 +112,21 @@ pub struct RPCClient {
     pub indexer: CKBIndexerClient,
     pub ckb: CKBClient,
     pub rollup_type_script: ckb_types::packed::Script,
-    pub rollup_context: RollupContext,
+    pub rollup_config: RollupConfig,
 }
 
 impl RPCClient {
     pub fn new(
         rollup_type_script: ckb_types::packed::Script,
-        rollup_context: RollupContext,
+        rollup_config: RollupConfig,
         ckb: CKBClient,
         indexer: CKBIndexerClient,
     ) -> Self {
         Self {
             indexer,
             ckb,
-            rollup_context,
             rollup_type_script,
+            rollup_config,
         }
     }
 
@@ -422,17 +423,10 @@ impl RPCClient {
         let tip_number = self.get_tip().await?.number().unpack();
         let mut deposit_infos = Vec::new();
 
-        let rollup_type_hash: Bytes = self
-            .rollup_context
-            .rollup_script_hash
-            .as_slice()
-            .to_vec()
-            .into();
-
         let script = Script::new_builder()
-            .args(rollup_type_hash.pack())
-            .code_hash(self.rollup_context.rollup_config.deposit_script_type_hash())
+            .code_hash(self.rollup_config.deposit_script_type_hash())
             .hash_type(ScriptHashType::Type.into())
+            .args(self.rollup_type_script.calc_script_hash().as_bytes().pack())
             .build();
 
         let script = {
@@ -554,9 +548,9 @@ impl RPCClient {
         owner_lock_hashes: impl Iterator<Item = [u8; 32]>,
     ) -> Result<Vec<CellInfo>> {
         let lock = Script::new_builder()
-            .code_hash(self.rollup_context.rollup_config.stake_script_type_hash())
+            .code_hash(self.rollup_config.stake_script_type_hash())
             .hash_type(ScriptHashType::Type.into())
-            .args(self.rollup_context.rollup_script_hash.as_slice().pack())
+            .args(self.rollup_type_script.calc_script_hash().as_bytes().pack())
             .build();
 
         let search_key = SearchKey {
@@ -624,12 +618,10 @@ impl RPCClient {
         &self,
         block_hashes: &HashSet<H256>,
     ) -> Result<(Vec<CellInfo>, HashSet<H256>)> {
-        let rollup_context = &self.rollup_context;
-
         let custodian_lock = Script::new_builder()
-            .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+            .code_hash(self.rollup_config.custodian_script_type_hash())
             .hash_type(ScriptHashType::Type.into())
-            .args(rollup_context.rollup_script_hash.as_slice().pack())
+            .args(self.rollup_type_script.calc_script_hash().as_bytes().pack())
             .build();
 
         let search_key = SearchKey {
@@ -689,16 +681,14 @@ impl RPCClient {
         &self,
         sudt_script_hash: &[u8; 32],
     ) -> Result<Option<Script>> {
-        let rollup_context = &self.rollup_context;
-
         let custodian_lock = Script::new_builder()
-            .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+            .code_hash(self.rollup_config.custodian_script_type_hash())
             .hash_type(ScriptHashType::Type.into())
-            .args(rollup_context.rollup_script_hash.as_slice().pack())
+            .args(self.rollup_type_script.calc_script_hash().as_bytes().pack())
             .build();
 
         let l1_sudt_type = Script::new_builder()
-            .code_hash(rollup_context.rollup_config.l1_sudt_script_type_hash())
+            .code_hash(self.rollup_config.l1_sudt_script_type_hash())
             .hash_type(ScriptHashType::Type.into())
             .build();
 
@@ -763,12 +753,10 @@ impl RPCClient {
         &self,
         block_hashes: &HashSet<H256>,
     ) -> Result<(Vec<CellInfo>, HashSet<H256>)> {
-        let rollup_context = &self.rollup_context;
-
         let withdrawal_lock = Script::new_builder()
-            .code_hash(rollup_context.rollup_config.withdrawal_script_type_hash())
+            .code_hash(self.rollup_config.withdrawal_script_type_hash())
             .hash_type(ScriptHashType::Type.into())
-            .args(rollup_context.rollup_script_hash.as_slice().pack())
+            .args(self.rollup_type_script.calc_script_hash().as_bytes().pack())
             .build();
 
         let search_key = SearchKey {
@@ -833,7 +821,7 @@ impl RPCClient {
         let lock = Script::new_builder()
             .code_hash(allowed_script_type_hash.pack())
             .hash_type(ScriptHashType::Type.into())
-            .args(self.rollup_context.rollup_script_hash.as_slice().pack())
+            .args(self.rollup_type_script.calc_script_hash().as_bytes().pack())
             .build();
 
         let search_key = SearchKey {
@@ -899,12 +887,10 @@ impl RPCClient {
         exclusions: &HashSet<OutPoint>,
         max_cells: usize,
     ) -> Result<Vec<CellInfo>> {
-        let rollup_context = &self.rollup_context;
-
         let withdrawal_lock = Script::new_builder()
-            .code_hash(rollup_context.rollup_config.withdrawal_script_type_hash())
+            .code_hash(self.rollup_config.withdrawal_script_type_hash())
             .hash_type(ScriptHashType::Type.into())
-            .args(rollup_context.rollup_script_hash.as_slice().pack())
+            .args(self.rollup_type_script.calc_script_hash().as_bytes().pack())
             .build();
 
         let search_key = SearchKey {
@@ -942,7 +928,7 @@ impl RPCClient {
                 if let Err(err) = crate::withdrawal::verify_unlockable_to_owner(
                     &info,
                     last_finalized_block_number,
-                    &rollup_context.rollup_config.l1_sudt_script_type_hash(),
+                    &self.rollup_config.l1_sudt_script_type_hash(),
                 ) {
                     log::debug!("[finalized withdrawal] skip, verify failed {}", err);
                     continue;
@@ -1085,15 +1071,13 @@ impl RPCClient {
         last_finalized_block_number: u64,
         max: usize,
     ) -> Result<HashSet<Script>> {
-        let rollup_context = &self.rollup_context;
-
         let custodian_lock = Script::new_builder()
-            .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+            .code_hash(self.rollup_config.custodian_script_type_hash())
             .hash_type(ScriptHashType::Type.into())
-            .args(rollup_context.rollup_script_hash.as_slice().pack())
+            .args(self.rollup_type_script.calc_script_hash().as_bytes().pack())
             .build();
         let l1_sudt_type = Script::new_builder()
-            .code_hash(rollup_context.rollup_config.l1_sudt_script_type_hash())
+            .code_hash(self.rollup_config.l1_sudt_script_type_hash())
             .hash_type(ScriptHashType::Type.into())
             .build();
         let filter = Some(SearchKeyFilter {
@@ -1155,8 +1139,7 @@ impl RPCClient {
                 }
 
                 // Double check invalid custodian type script
-                let l1_sudt_script_type_hash =
-                    rollup_context.rollup_config.l1_sudt_script_type_hash();
+                let l1_sudt_script_type_hash = self.rollup_config.l1_sudt_script_type_hash();
                 if sudt_type_script.code_hash() != l1_sudt_script_type_hash
                     || sudt_type_script.hash_type() != ScriptHashType::Type.into()
                 {
@@ -1183,8 +1166,6 @@ impl RPCClient {
         max_cells: usize,
         exclusions: &HashSet<OutPoint>,
     ) -> Result<QueryResult<Vec<CellInfo>>> {
-        let rollup_context = &self.rollup_context;
-
         let parse_sudt_amount = |info: &CellInfo| -> Result<u128> {
             if info.output.type_().is_none() {
                 return Err(anyhow!("no a sudt cell"));
@@ -1196,9 +1177,9 @@ impl RPCClient {
         };
 
         let custodian_lock = Script::new_builder()
-            .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+            .code_hash(self.rollup_config.custodian_script_type_hash())
             .hash_type(ScriptHashType::Type.into())
-            .args(rollup_context.rollup_script_hash.as_slice().pack())
+            .args(self.rollup_type_script.calc_script_hash().as_bytes().pack())
             .build();
         let filter = Some(SearchKeyFilter {
             script: Some(

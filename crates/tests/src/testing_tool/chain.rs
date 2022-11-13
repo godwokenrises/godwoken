@@ -19,7 +19,7 @@ use gw_store::{mem_pool_state::MemPoolState, traits::chain_store::ChainStore, St
 use gw_types::{
     bytes::Bytes,
     core::{AllowedContractType, AllowedEoaType, ScriptHashType},
-    offchain::{CellInfo, DepositInfo, RollupContext},
+    offchain::{CellInfo, DepositInfo},
     packed::{
         AllowedTypeHash, CellOutput, DepositInfoVec, DepositLockArgs, DepositRequest, L2Block,
         OutPoint, RawTransaction, RollupAction, RollupActionUnion, RollupConfig, RollupSubmitBlock,
@@ -27,6 +27,7 @@ use gw_types::{
     },
     prelude::*,
 };
+use gw_utils::RollupContext;
 use lazy_static::lazy_static;
 use tokio::sync::{Mutex, MutexGuard};
 

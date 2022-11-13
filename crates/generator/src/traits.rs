@@ -6,13 +6,13 @@ use gw_common::registry_address::RegistryAddress;
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_store::state::traits::JournalDB;
 use gw_traits::CodeStore;
-use gw_types::offchain::RollupContext;
 use gw_types::U256;
 use gw_types::{
     core::ScriptHashType,
     packed::{AccountMerkleState, DepositRequest, Script, WithdrawalReceipt, WithdrawalRequest},
     prelude::*,
 };
+use gw_utils::RollupContext;
 use tracing::instrument;
 
 pub trait StateExt {

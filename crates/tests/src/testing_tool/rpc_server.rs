@@ -55,7 +55,7 @@ impl RPCServer {
                 ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
             RPCClient::new(
                 rollup_type_script,
-                rollup_context,
+                rollup_context.rollup_config,
                 ckb_client,
                 indexer_client,
             )

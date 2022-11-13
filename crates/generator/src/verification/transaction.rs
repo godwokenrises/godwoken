@@ -4,7 +4,8 @@ use gw_common::{
 };
 use gw_config::ForkConfig;
 use gw_traits::CodeStore;
-use gw_types::{offchain::RollupContext, packed::L2Transaction, prelude::*};
+use gw_types::{packed::L2Transaction, prelude::*};
+use gw_utils::RollupContext;
 use tracing::instrument;
 
 use crate::{
