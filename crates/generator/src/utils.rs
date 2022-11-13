@@ -1,5 +1,6 @@
 use std::convert::TryInto;
 
+use anyhow::{Context, Result};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
 use gw_config::BackendType;
 use gw_traits::CodeStore;
@@ -19,12 +20,13 @@ pub fn get_tx_type<S: State + CodeStore>(
     rollup_context: &RollupContext,
     state: &S,
     raw_tx: &RawL2Transaction,
-) -> Result<AllowedContractType, TransactionError> {
+) -> Result<AllowedContractType> {
     let to_id: u32 = raw_tx.to_id().unpack();
     let receiver_script_hash = state.get_script_hash(to_id)?;
     let receiver_script = state
         .get_script(&receiver_script_hash)
-        .ok_or(TransactionError::ScriptHashNotFound)?;
+        .ok_or_else(|| anyhow::Error::from(TransactionError::ScriptHashNotFound))
+        .context("failed to get tx type")?;
     rollup_context
         .rollup_config
         .allowed_contract_type_hashes()
@@ -34,9 +36,12 @@ pub fn get_tx_type<S: State + CodeStore>(
             let type_: u8 = type_hash.type_().into();
             type_.try_into().unwrap_or(AllowedContractType::Unknown)
         })
-        .ok_or(TransactionError::BackendNotFound {
-            script_hash: receiver_script_hash,
+        .ok_or_else(|| {
+            anyhow::Error::from(TransactionError::BackendNotFound {
+                script_hash: receiver_script_hash,
+            })
         })
+        .context("failed to get tx type")
 }
 
 pub fn build_withdrawal_cell_output(

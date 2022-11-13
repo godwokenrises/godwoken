@@ -1126,7 +1126,8 @@ impl MemPool {
                 Ok(_) => (),
                 Err(Error::Common(err)) => return Err(TransactionError::from(err).into()),
                 Err(Error::ScriptHashNotFound) => {
-                    return Err(TransactionError::ScriptHashNotFound.into())
+                    return Result::<_>::Err(TransactionError::ScriptHashNotFound.into())
+                        .context("failed to check contract creator allowlist")
                 }
                 Err(Error::PermissionDenied { account_id }) => {
                     return Err(TransactionError::InvalidContractCreatorAccount {
