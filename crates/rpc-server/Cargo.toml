@@ -1,6 +1,6 @@
 [package]
 name = "gw-rpc-server"
-version = "1.7.0"
+version = "1.7.1"
 authors = ["jjy <jjyruby@gmail.com>"]
 edition = "2018"
 
