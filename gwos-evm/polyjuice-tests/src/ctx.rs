@@ -406,6 +406,7 @@ impl Context {
         let rollup_context = RollupContext {
             rollup_script_hash: ROLLUP_SCRIPT_HASH.into(),
             rollup_config: config.rollup,
+            fork_config: Default::default(),
         };
         let generator = Generator::new(
             backend_manage,
