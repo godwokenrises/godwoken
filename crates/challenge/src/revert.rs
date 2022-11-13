@@ -6,7 +6,7 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_common::smt::Blake2bHasher;
 use gw_common::H256;
 use gw_types::core::Status;
-use gw_types::offchain::{CellInfo, RollupContext};
+use gw_types::offchain::CellInfo;
 use gw_types::packed::BlockMerkleState;
 use gw_types::packed::ChallengeLockArgsReader;
 use gw_types::packed::RawL2Block;
@@ -17,6 +17,7 @@ use gw_types::packed::{
 };
 use gw_types::prelude::Unpack;
 use gw_types::{bytes::Bytes, prelude::Pack};
+use gw_utils::RollupContext;
 
 pub struct Revert<'a> {
     finality_blocks: u64,

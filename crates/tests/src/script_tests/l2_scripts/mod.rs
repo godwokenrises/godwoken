@@ -7,7 +7,6 @@ use gw_generator::error::TransactionError;
 use gw_generator::{account_lock_manage::AccountLockManage, Generator};
 use gw_store::state::traits::JournalDB;
 use gw_traits::{ChainView, CodeStore};
-use gw_types::offchain::RollupContext;
 use gw_types::U256;
 use gw_types::{
     bytes::Bytes,
@@ -15,6 +14,7 @@ use gw_types::{
     packed::{BlockInfo, LogItem, RawL2Transaction, RollupConfig},
     prelude::*,
 };
+use gw_utils::RollupContext;
 use lazy_static::lazy_static;
 use std::convert::TryInto;
 use std::{fs, io::Read, path::PathBuf};

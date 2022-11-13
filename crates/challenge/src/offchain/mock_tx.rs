@@ -16,12 +16,13 @@ use gw_common::H256;
 use gw_config::{BlockProducerConfig, ContractsCellDep};
 use gw_generator::types::vm::ChallengeContext;
 use gw_types::bytes::Bytes;
-use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext};
+use gw_types::offchain::{CellInfo, InputCellInfo};
 use gw_types::packed::{
     Byte32, CellDep, CellInput, CellOutput, ChallengeTarget, ChallengeWitness, GlobalState,
     OutPoint, Script, ScriptOpt, Transaction, WitnessArgs,
 };
 use gw_types::prelude::{Builder, Entity, Pack, Unpack};
+use gw_utils::RollupContext;
 
 use std::collections::{HashMap, HashSet};
 use std::{sync::Arc, time::Duration};

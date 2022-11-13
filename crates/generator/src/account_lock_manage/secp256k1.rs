@@ -8,7 +8,6 @@ use crate::error::LockAlgorithmError;
 use anyhow::bail;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::H256;
-use gw_types::offchain::RollupContext;
 use gw_types::packed::WithdrawalRequestExtra;
 use gw_types::prelude::*;
 use gw_types::{
@@ -16,6 +15,7 @@ use gw_types::{
     packed::{L2Transaction, RawL2Transaction, Script},
 };
 use gw_utils::polyjuice_parser::PolyjuiceParser;
+use gw_utils::RollupContext;
 use lazy_static::lazy_static;
 use secp256k1::recovery::{RecoverableSignature, RecoveryId};
 use sha3::{Digest, Keccak256};

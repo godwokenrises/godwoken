@@ -1,9 +1,9 @@
 use gw_common::{registry_address::RegistryAddress, H256};
 use gw_types::{
     bytes::Bytes,
-    offchain::RollupContext,
     packed::{L2Transaction, Script},
 };
+use gw_utils::RollupContext;
 
 use crate::error::LockAlgorithmError;
 

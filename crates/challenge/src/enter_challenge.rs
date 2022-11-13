@@ -2,12 +2,12 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_common::H256;
 use gw_generator::types::vm::ChallengeContext;
 use gw_types::core::{ScriptHashType, Status};
-use gw_types::offchain::RollupContext;
 use gw_types::packed::{
     Byte32, CellOutput, ChallengeLockArgs, ChallengeTarget, ChallengeWitness, GlobalState,
     RollupAction, RollupActionUnion, RollupEnterChallenge, Script, WitnessArgs,
 };
 use gw_types::{bytes::Bytes, prelude::Pack};
+use gw_utils::RollupContext;
 
 pub struct EnterChallenge {
     rollup_type_hash: H256,

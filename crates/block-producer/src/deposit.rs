@@ -3,12 +3,13 @@ use ckb_types::prelude::Entity;
 use gw_config::ContractsCellDep;
 use gw_types::bytes::Bytes;
 use gw_types::core::ScriptHashType;
-use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext};
+use gw_types::offchain::{CellInfo, InputCellInfo};
 use gw_types::packed::{
     CellDep, CellInput, CellOutput, CustodianLockArgs, Script, UnlockCustodianViaRevertWitness,
     WitnessArgs,
 };
 use gw_types::prelude::{Builder, Pack, Unpack};
+use gw_utils::RollupContext;
 
 pub struct RevertedDeposits {
     pub deps: Vec<CellDep>,

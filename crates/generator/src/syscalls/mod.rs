@@ -23,10 +23,11 @@ use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::{CycleMeter, RollupContext},
+    offchain::CycleMeter,
     packed::{BlockInfo, LogItem, RawL2Transaction, Script},
     prelude::*,
 };
+use gw_utils::RollupContext;
 use std::cmp;
 
 use self::error_codes::{

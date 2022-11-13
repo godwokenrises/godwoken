@@ -1,6 +1,6 @@
 use anyhow::Result;
-use gw_types::offchain::RollupContext;
 use gw_utils::wallet::Wallet;
+use gw_utils::RollupContext;
 
 pub mod error;
 pub mod eth_account_creator;

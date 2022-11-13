@@ -23,13 +23,13 @@ use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     core::{ScriptHashType, Status},
-    offchain::RollupContext,
     packed::{
         AccountMerkleState, BlockMerkleState, DepositInfoVec, FinalizedCustodianCapacity,
         GlobalState, L2Block, NumberHash, RawL2Block, Script, SubmitTransactions,
     },
     prelude::*,
 };
+use gw_utils::RollupContext;
 
 /// Build genesis block
 pub fn build_genesis(config: &GenesisConfig, secp_data: Bytes) -> Result<GenesisWithGlobalState> {

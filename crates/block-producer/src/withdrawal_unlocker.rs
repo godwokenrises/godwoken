@@ -9,8 +9,8 @@ use gw_common::H256;
 use gw_config::{ContractsCellDep, DebugConfig};
 use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_types::offchain::{global_state_from_slice, CellInfo, RollupContext, TxStatus};
-use gw_types::packed::{OutPoint, Transaction};
+use gw_types::offchain::{global_state_from_slice, CellInfo, TxStatus};
+use gw_types::packed::{OutPoint, RollupConfig, Transaction};
 use gw_types::prelude::{Pack, Unpack};
 use gw_utils::fee::fill_tx_fee;
 use gw_utils::genesis_info::CKBGenesisInfo;
@@ -151,7 +151,7 @@ impl FinalizedWithdrawalUnlocker {
 
 #[async_trait]
 pub trait BuildUnlockWithdrawalToOwner {
-    fn rollup_context(&self) -> &RollupContext;
+    fn rollup_config(&self) -> &RollupConfig;
 
     fn contracts_dep(&self) -> Guard<Arc<ContractsCellDep>>;
 
@@ -189,7 +189,7 @@ pub trait BuildUnlockWithdrawalToOwner {
 
         let to_unlock = match crate::withdrawal::unlock_to_owner(
             rollup_cell,
-            self.rollup_context(),
+            self.rollup_config(),
             &self.contracts_dep(),
             unlockable_withdrawals,
         )? {
@@ -242,8 +242,8 @@ impl DefaultUnlocker {
 
 #[async_trait]
 impl BuildUnlockWithdrawalToOwner for DefaultUnlocker {
-    fn rollup_context(&self) -> &RollupContext {
-        &self.rpc_client.rollup_context
+    fn rollup_config(&self) -> &RollupConfig {
+        &self.rpc_client.rollup_config
     }
 
     fn contracts_dep(&self) -> Guard<Arc<ContractsCellDep>> {

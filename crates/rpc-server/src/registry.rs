@@ -42,7 +42,6 @@ use gw_store::{
     CfMemStat, Store,
 };
 use gw_traits::CodeStore;
-use gw_types::offchain::RollupContext;
 use gw_types::packed::RawL2Transaction;
 use gw_types::{
     bytes::Bytes,
@@ -50,6 +49,7 @@ use gw_types::{
     prelude::*,
     U256,
 };
+use gw_utils::RollupContext;
 use gw_version::Version;
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
 use lru::LruCache;
