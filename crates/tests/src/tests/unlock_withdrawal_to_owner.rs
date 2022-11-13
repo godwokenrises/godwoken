@@ -169,6 +169,7 @@ async fn test_build_unlock_to_owner_tx() {
     let rollup_context = RollupContext {
         rollup_script_hash,
         rollup_config,
+        fork_config: Default::default(),
     };
 
     let contracts_dep = ContractsCellDep {

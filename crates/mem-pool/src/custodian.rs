@@ -392,6 +392,7 @@ mod tests {
                 .custodian_script_type_hash([2u8; 32].pack())
                 .l1_sudt_script_type_hash([3u8; 32].pack())
                 .build(),
+            fork_config: Default::default(),
         };
 
         let sudt_script = Script::new_builder()

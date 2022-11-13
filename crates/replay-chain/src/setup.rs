@@ -57,6 +57,7 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
             let rollup_script_hash: [u8; 32] = config.genesis.rollup_type_hash.clone().into();
             rollup_script_hash.into()
         },
+        fork_config: config.fork.clone(),
     };
     let secp_data: Bytes = {
         let rpc_client = {
