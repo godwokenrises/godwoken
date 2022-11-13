@@ -275,6 +275,7 @@ impl BaseInitComponents {
                 let rollup_script_hash: [u8; 32] = config.genesis.rollup_type_hash.clone().into();
                 rollup_script_hash.into()
             },
+            fork_config: config.fork.clone(),
         };
         let rollup_type_script: Script = config.chain.rollup_type_script.clone().into();
         let rpc_client = {
