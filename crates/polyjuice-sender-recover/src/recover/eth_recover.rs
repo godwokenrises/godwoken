@@ -10,11 +10,11 @@ use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     core::{AllowedContractType, AllowedEoaType, ScriptHashType},
-    offchain::RollupContext,
     packed::{L2Transaction, RawL2Transaction, Script},
     prelude::{Builder, Entity, Pack, Unpack},
 };
 use gw_utils::wallet::Wallet;
+use gw_utils::RollupContext;
 use tracing::instrument;
 
 use crate::mem_execute_tx_state::mock_account;

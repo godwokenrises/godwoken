@@ -3,13 +3,10 @@ use gw_common::{h256_ext::H256Ext, registry::context::RegistryContext, state::St
 use gw_config::DepositTimeoutConfig;
 use gw_store::state::MemStateDB;
 use gw_types::{
-    bytes::Bytes,
-    core::ScriptHashType,
-    offchain::{DepositInfo, RollupContext},
-    packed::DepositLockArgs,
-    prelude::*,
+    bytes::Bytes, core::ScriptHashType, offchain::DepositInfo, packed::DepositLockArgs, prelude::*,
 };
 use gw_utils::since::{LockValue, Since};
+use gw_utils::RollupContext;
 
 use crate::custodian::to_custodian_cell;
 

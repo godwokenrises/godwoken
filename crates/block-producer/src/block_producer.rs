@@ -24,7 +24,7 @@ use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
-    offchain::{DepositInfo, InputCellInfo, RollupContext},
+    offchain::{DepositInfo, InputCellInfo},
     packed::{
         CellDep, CellInput, CellOutput, GlobalState, L2Block, RollupAction, RollupActionUnion,
         RollupSubmitBlock, Transaction, WithdrawalRequestExtra, WitnessArgs,
@@ -34,6 +34,7 @@ use gw_types::{
 use gw_utils::{
     fee::fill_tx_fee_with_local, genesis_info::CKBGenesisInfo, local_cells::LocalCellsManager,
     query_rollup_cell, since::Since, transaction_skeleton::TransactionSkeleton, wallet::Wallet,
+    RollupContext,
 };
 use std::{collections::HashSet, sync::Arc, time::Instant};
 use tokio::sync::Mutex;

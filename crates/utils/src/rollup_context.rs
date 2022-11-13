@@ -1,9 +1,10 @@
-use sparse_merkle_tree::H256;
+use gw_types::core::H256;
+use gw_types::{packed::RollupConfig, prelude::Unpack};
 
-use crate::{packed::RollupConfig, prelude::Unpack};
-
+/// A wildly used context, contains several common-used configurations.
 #[derive(Clone)]
 pub struct RollupContext {
+    /// rollup_state_cell's type hash
     pub rollup_script_hash: H256,
     pub rollup_config: RollupConfig,
 }

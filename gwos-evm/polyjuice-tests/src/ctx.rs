@@ -30,11 +30,12 @@ use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     core::{AllowedContractType, AllowedEoaType, ScriptHashType},
-    offchain::{RollupContext, RunResult},
+    offchain::{RunResult},
     packed::{AllowedTypeHash, BlockInfo, RawL2Transaction, RollupConfig, Script, Uint64},
     prelude::*,
     U256,
 };
+use gw_utils::RollupContext;
 
 use crate::{
     helper::{

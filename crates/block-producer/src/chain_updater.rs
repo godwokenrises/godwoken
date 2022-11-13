@@ -12,7 +12,6 @@ use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::RollupContext,
     packed::{
         CellInfo, CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, DepositInfo,
         DepositInfoVec, DepositLockArgs, DepositRequest, L2Block, OutPoint, RollupAction,
@@ -21,6 +20,7 @@ use gw_types::{
     },
     prelude::*,
 };
+use gw_utils::RollupContext;
 use tokio::sync::Mutex;
 use tracing::instrument;
 

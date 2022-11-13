@@ -7,9 +7,7 @@ use gw_mem_pool::{custodian::sum_withdrawals, withdrawal::Generator};
 use gw_types::{
     bytes::Bytes,
     core::{DepType, ScriptHashType},
-    offchain::{
-        global_state_from_slice, CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext,
-    },
+    offchain::{global_state_from_slice, CellInfo, CollectedCustodianCells, InputCellInfo},
     packed::{
         CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, L2Block, Script,
         UnlockWithdrawalViaFinalize, UnlockWithdrawalViaRevert, UnlockWithdrawalWitness,
@@ -17,7 +15,9 @@ use gw_types::{
     },
     prelude::*,
 };
+use gw_utils::RollupContext;
 
+use gw_types::packed::RollupConfig;
 use std::{
     collections::HashMap,
     time::{SystemTime, UNIX_EPOCH},
@@ -199,7 +199,7 @@ pub struct UnlockedWithdrawals {
 
 pub fn unlock_to_owner(
     rollup_cell: CellInfo,
-    rollup_context: &RollupContext,
+    rollup_config: &RollupConfig,
     contracts_dep: &ContractsCellDep,
     withdrawal_cells: Vec<CellInfo>,
 ) -> Result<Option<UnlockedWithdrawals>> {
@@ -225,7 +225,7 @@ pub fn unlock_to_owner(
 
     let global_state = global_state_from_slice(&rollup_cell.data)?;
     let last_finalized_block_number: u64 = global_state.last_finalized_block_number().unpack();
-    let l1_sudt_script_hash = rollup_context.rollup_config.l1_sudt_script_type_hash();
+    let l1_sudt_script_hash = rollup_config.l1_sudt_script_type_hash();
     for withdrawal_cell in withdrawal_cells {
         // Double check
         if let Err(err) = gw_rpc_client::withdrawal::verify_unlockable_to_owner(
@@ -303,6 +303,7 @@ mod test {
     use gw_config::ContractsCellDep;
     use gw_types::core::{DepType, ScriptHashType};
     use gw_types::offchain::{CellInfo, CollectedCustodianCells, InputCellInfo};
+    use gw_types::packed::RollupConfig;
     use gw_types::packed::{
         CellDep, CellInput, CellOutput, GlobalState, L2Block, OutPoint, RawL2Block,
         RawWithdrawalRequest, Script, UnlockWithdrawalViaFinalize, UnlockWithdrawalWitness,
@@ -310,7 +311,7 @@ mod test {
         WithdrawalRequestExtra, WitnessArgs,
     };
     use gw_types::prelude::{Builder, Entity, Pack, PackVec, Unpack};
-    use gw_types::{offchain::RollupContext, packed::RollupConfig};
+    use gw_utils::RollupContext;
 
     use crate::withdrawal::generate;
 
@@ -518,7 +519,7 @@ mod test {
 
         let unlocked = unlock_to_owner(
             rollup_cell.clone(),
-            &rollup_context,
+            &rollup_context.rollup_config,
             &contracts_dep,
             vec![
                 withdrawal_without_owner_lock,

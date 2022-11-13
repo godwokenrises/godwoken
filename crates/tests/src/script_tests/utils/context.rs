@@ -25,10 +25,10 @@ use gw_types::core::AllowedContractType;
 use gw_types::packed::AllowedTypeHash;
 use gw_types::{
     core::ScriptHashType,
-    offchain::RollupContext,
     packed::{RollupConfig, Script},
     prelude::*,
 };
+use gw_utils::RollupContext;
 
 fn new_state(store: StoreSnapshot) -> MemStateDB {
     let smt = SMT::new(H256::zero(), SMTStateStore::new(MemStore::new(store)));

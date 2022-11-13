@@ -3,10 +3,11 @@ use gw_common::H256;
 use gw_generator::generator::WithdrawalCellError;
 use gw_types::{
     bytes::Bytes,
-    offchain::{FinalizedCustodianCapacity, RollupContext},
+    offchain::FinalizedCustodianCapacity,
     packed::{CellOutput, L2Block, Script, WithdrawalRequest, WithdrawalRequestExtra},
     prelude::*,
 };
+use gw_utils::RollupContext;
 
 use std::collections::HashMap;
 
@@ -314,12 +315,13 @@ mod test {
 
     use gw_common::h256_ext::H256Ext;
     use gw_common::H256;
-    use gw_types::offchain::{FinalizedCustodianCapacity, RollupContext};
+    use gw_types::offchain::FinalizedCustodianCapacity;
     use gw_types::packed::{
         L2Block, RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest,
         WithdrawalRequestExtra,
     };
     use gw_types::prelude::{Builder, Entity, Pack, Unpack};
+    use gw_utils::RollupContext;
 
     use crate::withdrawal::Generator;
 

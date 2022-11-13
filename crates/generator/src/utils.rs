@@ -7,10 +7,10 @@ use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     core::{AllowedContractType, ScriptHashType},
-    offchain::RollupContext,
     packed::{CellOutput, RawL2Transaction, Script, WithdrawalLockArgs, WithdrawalRequestExtra},
     prelude::*,
 };
+use gw_utils::RollupContext;
 
 use crate::{
     backend_manage::BackendManage, error::TransactionError, generator::WithdrawalCellError,
@@ -144,11 +144,11 @@ mod test {
     use gw_common::H256;
     use gw_types::bytes::Bytes;
     use gw_types::core::ScriptHashType;
-    use gw_types::offchain::RollupContext;
     use gw_types::packed::{
         RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest, WithdrawalRequestExtra,
     };
     use gw_types::prelude::{Builder, Entity, Pack, Unpack};
+    use gw_utils::RollupContext;
 
     use crate::generator::WithdrawalCellError;
     use crate::utils::build_withdrawal_cell_output;

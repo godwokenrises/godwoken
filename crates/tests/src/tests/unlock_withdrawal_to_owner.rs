@@ -27,7 +27,7 @@ use gw_config::ContractsCellDep;
 use gw_types::bytes::Bytes;
 use gw_types::core::{AllowedEoaType, DepType, ScriptHashType};
 use gw_types::offchain::{
-    CellInfo, CollectedCustodianCells, FinalizedCustodianCapacity, InputCellInfo, RollupContext,
+    CellInfo, CollectedCustodianCells, FinalizedCustodianCapacity, InputCellInfo,
 };
 use gw_types::packed::{
     self, AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositRequest,
@@ -38,6 +38,7 @@ use gw_types::packed::{
 use gw_types::prelude::{Pack, PackVec, Unpack};
 use gw_utils::local_cells::LocalCellsManager;
 use gw_utils::transaction_skeleton::TransactionSkeleton;
+use gw_utils::RollupContext;
 
 const CKB: u64 = 100000000;
 const MAX_MEM_BLOCK_WITHDRAWALS: u8 = 50;
@@ -747,8 +748,8 @@ struct DummyUnlocker {
 
 #[async_trait]
 impl BuildUnlockWithdrawalToOwner for DummyUnlocker {
-    fn rollup_context(&self) -> &RollupContext {
-        &self.rollup_context
+    fn rollup_config(&self) -> &RollupConfig {
+        &self.rollup_context.rollup_config
     }
 
     fn contracts_dep(&self) -> Guard<Arc<ContractsCellDep>> {
