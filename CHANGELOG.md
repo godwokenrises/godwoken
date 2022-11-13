@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.7.1] - 2022-11-13
+
+- fix: Support revert inner call state [#835](https://github.com/godwokenrises/godwoken/pull/835)
+- refactor(monorepo): Add godwoken-scripts [#839](https://github.com/godwokenrises/godwoken/pull/839) and godwoken-polyjuice [#849](https://github.com/godwokenrises/godwoken/pull/849) to monorepo
+- fork(consensus): Increase l2 tx max cycles from 150M to 500M [#852](https://github.com/godwokenrises/godwoken/pull/852)
+
 ## [v1.7.0] - 2022-11-03
 
 - fix(pool): insert re-injected withdrawals to db [#828](https://github.com/godwokenrises/godwoken/pull/828)
