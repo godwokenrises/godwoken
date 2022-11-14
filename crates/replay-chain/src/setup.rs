@@ -108,7 +108,6 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
         );
         Arc::new(Generator::new(
             backend_manage,
-            config.fork.clone(),
             account_lock_manage,
             rollup_context,
             Default::default(),
