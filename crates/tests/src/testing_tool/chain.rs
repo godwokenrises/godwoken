@@ -470,7 +470,6 @@ pub fn chain_generator(chain: &Chain, rollup_type_script: Script) -> Arc<Generat
     };
     Arc::new(Generator::new(
         backend_manage,
-        Default::default(),
         account_lock_manage,
         rollup_context,
         Default::default(),
@@ -508,7 +507,6 @@ pub async fn setup_chain_with_account_lock_manage(
     };
     let generator = Arc::new(Generator::new(
         backend_manage,
-        Default::default(),
         account_lock_manage,
         rollup_context,
         Default::default(),

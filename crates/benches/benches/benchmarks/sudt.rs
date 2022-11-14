@@ -109,7 +109,6 @@ fn run_contract_get_result<S: State + CodeStore + JournalDB>(
     };
     let generator = Generator::new(
         backend_manage,
-        Default::default(),
         account_lock_manage,
         rollup_ctx,
         Default::default(),
