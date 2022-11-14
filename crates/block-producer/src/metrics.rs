@@ -1,17 +1,29 @@
-use prometheus_client::{
-    metrics::counter::Counter,
+use gw_otel::metric::{
+    counter::Counter,
+    gauge::Gauge,
     registry::{Registry, Unit},
+    Lazy,
 };
 
+pub static BP_METRICS: Lazy<BlockProducerMetrics> = Lazy::new(|| {
+    let metrics = BlockProducerMetrics::default();
+    let mut registry = gw_otel::metric::global();
+    metrics.register(&mut registry.sub_registry_with_prefix("block_producer"));
+    metrics
+});
+
 #[derive(Default)]
-pub struct PSCMetrics {
+pub struct BlockProducerMetrics {
     pub resend: Counter,
     pub witness_size: Counter,
     pub tx_size: Counter,
+    pub sync_buffer_len: Gauge,
+    pub local_blocks: Gauge,
+    pub submitted_blocks: Gauge,
 }
 
-impl PSCMetrics {
-    pub fn register(&self, registry: &mut Registry) {
+impl BlockProducerMetrics {
+    fn register(&self, registry: &mut Registry) {
         registry.register(
             "resend",
             "Number of times resending submission transactions",
@@ -28,6 +40,21 @@ impl PSCMetrics {
             "Block submission txs size",
             Unit::Bytes,
             Box::new(self.tx_size.clone()),
+        );
+        registry.register(
+            "sync_buffer_len",
+            "Number of messages in the block sync receive buffer",
+            Box::new(self.sync_buffer_len.clone()),
+        );
+        registry.register(
+            "local_blocks",
+            "Number of local blocks",
+            Box::new(self.local_blocks.clone()),
+        );
+        registry.register(
+            "submitted_blocks",
+            "Number of submitted blocks",
+            Box::new(self.submitted_blocks.clone()),
         );
     }
 }

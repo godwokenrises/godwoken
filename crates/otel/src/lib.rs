@@ -1,4 +1,5 @@
 pub mod trace;
+pub mod metric;
 pub mod traits;
 
 pub mod opentelemetry {

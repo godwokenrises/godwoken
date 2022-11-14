@@ -17,7 +17,7 @@ gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-utils = { path = "../utils" }
-gw-metrics = { path = "../metrics" }
+gw-otel = { path = "../otel" }
 ckb-fixed-hash = "0.105.1"
 anyhow = "1.0"
 thiserror = "1.0"
@@ -28,4 +28,3 @@ toml = "0.5"
 log = "0.4"
 hex = "0.4"
 tracing = { version = "0.1", features = ["attributes"] }
-prometheus-client = "0.18.0"

@@ -86,11 +86,7 @@ async fn serve<R: Router + 'static>(
         let mut buf = Vec::new();
         // XXX: HEAD response won't have content-length header.
         if req.method() != Method::HEAD {
-            buf.reserve(2048);
-            prometheus_client::encoding::text::encode(
-                &mut buf,
-                &*gw_metrics::REGISTRY.read().unwrap(),
-            )?;
+            gw_otel::metric::scrape(&mut buf)?;
         }
         return hyper::Response::builder()
             .status(hyper::StatusCode::OK)

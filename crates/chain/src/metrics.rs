@@ -1,7 +1,15 @@
-use prometheus_client::{
-    metrics::{counter::Counter, gauge::Gauge},
+use gw_otel::metric::{
     registry::Registry,
+    Lazy,
+    {counter::Counter, gauge::Gauge},
 };
+
+pub static CHAIN_METRICS: Lazy<ChainMetrics> = Lazy::new(|| {
+    let metrics = ChainMetrics::default();
+    let mut registry = gw_otel::metric::global();
+    metrics.register(&mut registry.sub_registry_with_prefix("chain"));
+    metrics
+});
 
 #[derive(Default)]
 pub struct ChainMetrics {
@@ -12,7 +20,7 @@ pub struct ChainMetrics {
 }
 
 impl ChainMetrics {
-    pub fn register(&self, registry: &mut Registry) {
+    fn register(&self, registry: &mut Registry) {
         registry.register(
             "transactions",
             "Number of packaged L2 transactions",

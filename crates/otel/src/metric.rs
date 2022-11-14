@@ -12,12 +12,25 @@
 //!
 //! When you add/modify some metrics, make sure to update the metrics document
 //! in docs/metrics.md.
+//!
+use std::sync::{RwLock, RwLockWriteGuard};
 
-use std::sync::RwLock;
+pub use once_cell::sync::{Lazy, OnceCell};
+pub use prometheus_client::{encoding, metrics::*, registry};
 
-use once_cell::sync::Lazy;
-use prometheus_client::{encoding::text::SendSyncEncodeMetric, registry::Registry};
+use encoding::text::SendSyncEncodeMetric;
+use registry::Registry;
 
 /// Global metrics registry.
 pub static REGISTRY: Lazy<RwLock<Registry<Box<dyn SendSyncEncodeMetric>>>> =
     Lazy::new(|| Registry::with_prefix("gw").into());
+
+pub fn global<'a>() -> RwLockWriteGuard<'a, Registry<Box<dyn SendSyncEncodeMetric>>> {
+    REGISTRY.write().unwrap()
+}
+
+pub fn scrape(buf: &mut Vec<u8>) -> Result<(), std::io::Error> {
+    buf.reserve(2048);
+    encoding::text::encode(buf, &*REGISTRY.read().unwrap())?;
+    Ok(())
+}

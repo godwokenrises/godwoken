@@ -35,7 +35,7 @@ use std::{collections::HashSet, convert::TryFrom, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
 use tracing::instrument;
 
-use crate::metrics::ChainMetrics;
+use crate::metrics::CHAIN_METRICS;
 
 #[derive(Debug, Clone)]
 pub struct ChallengeCell {
@@ -153,7 +153,6 @@ pub struct Chain {
     generator: Arc<Generator>,
     mem_pool: Option<Arc<Mutex<MemPool>>>,
     skipped_invalid_block_list: HashSet<H256>,
-    metrics: ChainMetrics,
 }
 
 impl Chain {
@@ -194,13 +193,6 @@ impl Chain {
                 h.into()
             })
             .collect();
-        let metrics = ChainMetrics::default();
-        metrics.register(
-            gw_metrics::REGISTRY
-                .write()
-                .unwrap()
-                .sub_registry_with_prefix("chain"),
-        );
         Ok(Chain {
             store,
             challenge_target: None,
@@ -211,7 +203,6 @@ impl Chain {
             rollup_type_script_hash,
             rollup_config,
             skipped_invalid_block_list,
-            metrics,
         })
     }
 
@@ -1071,9 +1062,9 @@ impl Chain {
         };
 
         // update chain
-        let deposit_info_vec_len = deposit_info_vec.len();
-        let withdrawals_len = withdrawals.len();
-        let tx_receipts_len = tx_receipts.len();
+        let deposit_info_vec_len = deposit_info_vec.len() as u64;
+        let withdrawals_len = withdrawals.len() as u64;
+        let tx_receipts_len = tx_receipts.len() as u64;
         db.insert_block(
             l2block.clone(),
             global_state.clone(),
@@ -1087,13 +1078,10 @@ impl Chain {
         db.attach_block(l2block.clone())?;
 
         // Update metrics.
-
-        self.metrics
-            .block_height
-            .set(l2block.raw().number().unpack());
-        self.metrics.deposits.inc_by(deposit_info_vec_len as u64);
-        self.metrics.withdrawals.inc_by(withdrawals_len as u64);
-        self.metrics.transactions.inc_by(tx_receipts_len as u64);
+        CHAIN_METRICS.block_height.set(block_number);
+        CHAIN_METRICS.deposits.inc_by(deposit_info_vec_len);
+        CHAIN_METRICS.withdrawals.inc_by(withdrawals_len);
+        CHAIN_METRICS.transactions.inc_by(tx_receipts_len);
 
         self.local_state.tip = l2block;
         self.local_state.last_global_state = global_state;

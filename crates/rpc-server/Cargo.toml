@@ -23,7 +23,6 @@ gw-utils = { path = "../utils" }
 gw-polyjuice-sender-recover = { path = "../polyjuice-sender-recover" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-dynamic-config = { path = "../dynamic-config"}
-gw-metrics = { path = "../metrics"}
 gw-otel = { path = "../otel" }
 faster-hex = "0.4"
 ckb-crypto = "0.105.1"

@@ -25,7 +25,6 @@ members = [
   "crates/p2p-network",
   "crates/polyjuice-sender-recover",
   "crates/godwoken-bin",
-  "crates/metrics",
   "crates/otel",
 ]
 

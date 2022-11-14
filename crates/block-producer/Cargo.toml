@@ -20,7 +20,6 @@ gw-rpc-client = { path = "../rpc-client" }
 gw-utils = { path = "../utils" }
 gw-dynamic-config = { path = "../dynamic-config"}
 gw-polyjuice-sender-recover = { path = "../polyjuice-sender-recover" }
-gw-metrics = { path = "../metrics" }
 gw-otel = { path = "../otel" }
 ckb-crypto = "0.105.1"
 ckb-fixed-hash = "0.105.1"
@@ -41,10 +40,6 @@ async-trait = "0.1"
 semver = "1.0"
 thiserror = "1.0"
 tracing = { version = "0.1", features = ["attributes"] }
-# unstable features
-tokio-metrics = "0.1.0"
-console-subscriber = "0.1.3"
 tentacle = "0.4.0"
 gw-p2p-network = { path = "../p2p-network" }
 bytes = "1.2.0"
-prometheus-client = "0.18.0"
