@@ -42,10 +42,27 @@ pub struct BackendConfig {
 pub struct ForkConfig {
     /// Enable this to increase l2 tx cycles limit to 500M
     pub increase_max_l2_tx_cycles_to_500m: Option<u64>,
+
+    /// Bump GlobalState.version from v1 to v2.
+    /// Fork changes:
+    ///   - Optimize finality mechanism
+    ///   - Remove `state_checkpoints` from RawL2Block
+    pub upgrade_global_state_version_to_v2: Option<u64>,
+
+    /// Backend fork configs
     pub backend_forks: Vec<BackendForkConfig>,
 }
 
 impl ForkConfig {
+    /// Returns the version of global state for `block_number`.
+    pub fn global_state_version(&self, block_number: u64) -> u8 {
+        match self.upgrade_global_state_version_to_v2 {
+            None => 1,
+            Some(fork_number) if block_number < fork_number => 1,
+            Some(_) => 2,
+        }
+    }
+
     /// Return l2 tx cycles limit by block height
     pub fn max_l2_tx_cycles(&self, block_number: u64) -> u64 {
         match self.increase_max_l2_tx_cycles_to_500m {
