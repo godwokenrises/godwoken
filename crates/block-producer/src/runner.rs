@@ -373,7 +373,6 @@ impl BaseInitComponents {
             );
             Arc::new(Generator::new(
                 backend_manage,
-                config.fork.clone(),
                 account_lock_manage,
                 rollup_context.clone(),
                 config.contract_log_config.clone(),
