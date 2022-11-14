@@ -147,7 +147,6 @@ pub struct MachineRunArgs<'a, C, S> {
 pub struct Generator {
     backend_manage: BackendManage,
     account_lock_manage: AccountLockManage,
-    fork_config: ForkConfig,
     rollup_context: RollupContext,
     contract_log_config: ContractLogConfig,
     polyjuice_creator_id: ArcSwapOption<u32>,
@@ -156,7 +155,6 @@ pub struct Generator {
 impl Generator {
     pub fn new(
         backend_manage: BackendManage,
-        fork_config: ForkConfig,
         account_lock_manage: AccountLockManage,
         rollup_context: RollupContext,
         contract_log_config: ContractLogConfig,
@@ -164,7 +162,6 @@ impl Generator {
         Generator {
             backend_manage,
             account_lock_manage,
-            fork_config,
             rollup_context,
             contract_log_config,
             polyjuice_creator_id: ArcSwapOption::from(None),
@@ -174,7 +171,6 @@ impl Generator {
     pub fn clone_with_new_backends(&self, backend_manage: BackendManage) -> Self {
         Self {
             backend_manage,
-            fork_config: self.fork_config.clone(),
             account_lock_manage: self.account_lock_manage.clone(),
             rollup_context: self.rollup_context.clone(),
             contract_log_config: self.contract_log_config.clone(),
@@ -187,7 +183,7 @@ impl Generator {
     }
 
     pub fn fork_config(&self) -> &ForkConfig {
-        &self.fork_config
+        &self.rollup_context.fork_config
     }
 
     pub fn account_lock_manage(&self) -> &AccountLockManage {
@@ -516,7 +512,10 @@ impl Generator {
                 hex::encode(&block_hash)
             );
         }
-        let max_cycles = self.fork_config.max_l2_tx_cycles(block_number);
+        let max_cycles = self
+            .rollup_context
+            .fork_config
+            .max_l2_tx_cycles(block_number);
         for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {
             log::debug!(
                 "[apply block] execute tx index: {} hash: {}",
@@ -738,7 +737,8 @@ impl Generator {
         state.set_state_tracker(Default::default());
 
         let max_cycles = override_max_cycles.unwrap_or_else(|| {
-            self.fork_config
+            self.rollup_context
+                .fork_config
                 .max_l2_tx_cycles(block_info.number().unpack())
         });
 
@@ -783,7 +783,10 @@ impl Generator {
         let state_tracker = state.take_state_tracker().unwrap();
 
         // check write data bytes
-        let max_write_data_bytes = self.fork_config.max_write_data_bytes(block_number);
+        let max_write_data_bytes = self
+            .rollup_context
+            .fork_config
+            .max_write_data_bytes(block_number);
         if let Some(data) = state_tracker
             .write_data()
             .lock()
@@ -798,7 +801,10 @@ impl Generator {
             .into());
         }
         // check read data bytes
-        let max_read_data_bytes = self.fork_config.max_read_data_bytes(block_number);
+        let max_read_data_bytes = self
+            .rollup_context
+            .fork_config
+            .max_read_data_bytes(block_number);
         let read_data_bytes: usize = state_tracker
             .read_data()
             .lock()

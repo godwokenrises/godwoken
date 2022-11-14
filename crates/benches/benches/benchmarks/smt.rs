@@ -181,7 +181,6 @@ impl BenchExecutionEnvironment {
 
         let generator = Generator::new(
             backend_manage,
-            Default::default(),
             account_lock_manage,
             rollup_context,
             Default::default(),

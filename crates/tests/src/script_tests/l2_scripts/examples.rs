@@ -100,7 +100,6 @@ fn test_example_sum() {
         };
         let generator = Generator::new(
             backend_manage,
-            Default::default(),
             account_lock_manage,
             rollup_context,
             Default::default(),
@@ -246,7 +245,6 @@ fn test_example_account_operation() {
     };
     let generator = Generator::new(
         backend_manage,
-        Default::default(),
         account_lock_manage,
         rollup_context,
         Default::default(),
@@ -487,7 +485,6 @@ fn test_example_recover_account() {
     };
     let generator = Generator::new(
         backend_manage,
-        Default::default(),
         account_lock_manage,
         rollup_context,
         Default::default(),
@@ -660,7 +657,6 @@ fn test_sudt_total_supply() {
         };
         let generator = Generator::new(
             backend_manage,
-            Default::default(),
             account_lock_manage,
             rollup_context,
             Default::default(),
