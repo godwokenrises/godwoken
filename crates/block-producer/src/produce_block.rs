@@ -137,7 +137,7 @@ pub fn produce_block(
     let block_proof = block_smt
         .merkle_proof(vec![H256::from_u64(number)])
         .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
-        .compile(vec![(H256::from_u64(number), H256::zero())])?;
+        .compile(vec![H256::from_u64(number)])?;
     let packed_kv_state = kv_state.pack();
     let withdrawal_requests = withdrawals.iter().map(|w| w.request());
     let block = L2Block::new_builder()
@@ -228,10 +228,11 @@ pub fn generate_produce_block_param(
     } else {
         let state_smt = db.state_smt()?;
 
+        let keys: Vec<H256> = kv_state.iter().map(|(k, _v)| *k).collect();
         state_smt
-            .merkle_proof(kv_state.iter().map(|(k, _v)| *k).collect())
+            .merkle_proof(keys.clone())
             .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
-            .compile(kv_state.clone())?
+            .compile(keys)?
             .0
     };
 

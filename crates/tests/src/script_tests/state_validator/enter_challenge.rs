@@ -230,10 +230,7 @@ async fn test_enter_challenge() {
                 .merkle_proof(vec![challenged_block.smt_key().into()])
                 .unwrap();
             proof
-                .compile(vec![(
-                    challenged_block.smt_key().into(),
-                    challenged_block.hash().into(),
-                )])
+                .compile(vec![(challenged_block.smt_key().into())])
                 .unwrap()
                 .0
                 .into()
@@ -442,10 +439,7 @@ async fn test_enter_challenge_finalized_block() {
                 .merkle_proof(vec![challenged_block.smt_key().into()])
                 .unwrap();
             proof
-                .compile(vec![(
-                    challenged_block.smt_key().into(),
-                    challenged_block.hash().into(),
-                )])
+                .compile(vec![(challenged_block.smt_key().into())])
                 .unwrap()
                 .0
                 .into()

@@ -16,6 +16,6 @@ molecule = { version = "0.7.2", default-features = false }
 cfg-if = "0.1"
 gw-hash = { path = "../hash", default-features = false }
 ckb-fixed-hash = { version = "0.105.1", optional = true }
-sparse-merkle-tree = { version = "0.5.2-rc1", default-features = false }
+sparse-merkle-tree = { version = "0.6.1", default-features = false }
 ckb-types = { version = "0.105.1", default-features = false, optional = true }
 primitive-types = { version = "0.10", default-features = false, features = [ "impl-serde", "impl-rlp" ] }

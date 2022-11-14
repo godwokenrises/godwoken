@@ -722,9 +722,8 @@ async fn test_build_unlock_to_owner_tx() {
     let reverted_block_hash = withdrawal_block_result.block.hash();
     let reverted_block_proof = {
         let keys: Vec<H256> = vec![reverted_block_hash.into()];
-        let leaves = keys.iter().map(|hash| (*hash, H256::one()));
         let merkle_proof = reverted_block_smt.merkle_proof(keys.clone()).unwrap();
-        merkle_proof.compile(leaves.collect()).unwrap()
+        merkle_proof.compile(keys).unwrap()
     };
 
     let rollup_witness = {

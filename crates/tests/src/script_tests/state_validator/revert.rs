@@ -300,10 +300,7 @@ async fn test_revert() {
                 .merkle_proof(vec![challenged_block.smt_key().into()])
                 .unwrap();
             proof
-                .compile(vec![(
-                    challenged_block.smt_key().into(),
-                    challenged_block.hash().into(),
-                )])
+                .compile(vec![(challenged_block.smt_key().into())])
                 .unwrap()
                 .0
                 .into()
@@ -312,7 +309,7 @@ async fn test_revert() {
             reverted_block_tree
                 .merkle_proof(vec![challenged_block.hash().into()])
                 .unwrap()
-                .compile(vec![(challenged_block.hash().into(), H256::zero())])
+                .compile(vec![challenged_block.hash().into()])
                 .unwrap()
                 .0
                 .into()

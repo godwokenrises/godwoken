@@ -372,7 +372,7 @@ impl BenchExecutionEnvironment {
                 let block_proof = smt
                     .merkle_proof(vec![block_key.into()])
                     .unwrap()
-                    .compile(vec![(block_key.into(), genesis_hash.into())])
+                    .compile(vec![block_key.into()])
                     .unwrap();
                 let block_root = *smt.root();
                 (block_root, block_proof)

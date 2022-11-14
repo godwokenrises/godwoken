@@ -62,7 +62,7 @@ pub fn generate_bad_block_using_first_withdrawal(
             .unwrap()
             .merkle_proof(vec![H256::from_u64(block_number)])
             .unwrap()
-            .compile(vec![(H256::from_u64(block_number), H256::zero())])
+            .compile(vec![H256::from_u64(block_number)])
             .unwrap();
 
         // Generate new block smt for global state

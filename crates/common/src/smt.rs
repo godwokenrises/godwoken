@@ -2,9 +2,7 @@ use gw_hash::blake2b::{new_blake2b, Blake2b};
 use sparse_merkle_tree::{traits::Hasher, SparseMerkleTree};
 
 // re-exports
-pub use sparse_merkle_tree::{
-    default_store, error::Error, traits::Store, CompiledMerkleProof, MerkleProof, H256,
-};
+pub use sparse_merkle_tree::{default_store, error::Error, CompiledMerkleProof, MerkleProof, H256};
 
 pub type SMT<S> = SparseMerkleTree<Blake2bHasher, H256, S>;
 

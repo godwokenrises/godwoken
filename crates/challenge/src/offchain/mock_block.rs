@@ -307,7 +307,7 @@ impl MockBlockParam {
         let block_proof = block_smt
             .merkle_proof(vec![H256::from_u64(self.number)])
             .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
-            .compile(vec![(H256::from_u64(self.number), H256::zero())])?;
+            .compile(vec![H256::from_u64(self.number)])?;
         let post_block = {
             let post_block_root = block_proof.compute_root::<Blake2bHasher>(vec![(
                 raw_block.smt_key().into(),
@@ -411,10 +411,11 @@ impl MockBlockParam {
             Unpack::<u32>::unpack(&tx.raw().nonce())
         );
 
-        let touched_keys = kv_state.iter().map(|(key, _)| key.to_owned()).collect();
+        let touched_keys: Vec<H256> = kv_state.iter().map(|(key, _)| key.to_owned()).collect();
         let kv_state_proof = {
             let smt = mem_tree.inner_smt_tree();
-            smt.merkle_proof(touched_keys)?.compile(kv_state.clone())?
+            smt.merkle_proof(touched_keys.clone())?
+                .compile(touched_keys)?
         };
 
         let account_count = mem_tree.get_account_count()?;
