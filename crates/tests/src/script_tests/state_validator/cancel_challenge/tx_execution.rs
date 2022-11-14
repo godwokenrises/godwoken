@@ -323,9 +323,9 @@ async fn test_cancel_tx_execute() {
 
             let kv_state_proof: Bytes = {
                 let smt = SMTStateStore::new(&db).to_smt().unwrap();
-                smt.merkle_proof(touched_keys)
+                smt.merkle_proof(touched_keys.clone())
                     .unwrap()
-                    .compile(kv_state.clone())
+                    .compile(touched_keys)
                     .unwrap()
                     .0
                     .into()
@@ -342,10 +342,7 @@ async fn test_cancel_tx_execute() {
                 let smt = db.block_smt().unwrap();
                 smt.merkle_proof(vec![challenged_block.smt_key().into()])
                     .unwrap()
-                    .compile(vec![(
-                        challenged_block.smt_key().into(),
-                        challenged_block.hash().into(),
-                    )])
+                    .compile(vec![(challenged_block.smt_key().into())])
                     .unwrap()
                     .0
                     .into()

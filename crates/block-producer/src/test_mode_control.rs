@@ -207,7 +207,7 @@ impl TestModeControl {
             let bad_block_proof = db
                 .block_smt()?
                 .merkle_proof(vec![H256::from_u64(block_number)])?
-                .compile(vec![(H256::from_u64(block_number), H256::zero())])?;
+                .compile(vec![H256::from_u64(block_number)])?;
 
             // Generate new block smt for global state
             let bad_block_smt = {
@@ -262,10 +262,7 @@ impl TestModeControl {
         let block_proof = db
             .block_smt()?
             .merkle_proof(vec![raw_l2block.smt_key().into()])?
-            .compile(vec![(
-                raw_l2block.smt_key().into(),
-                raw_l2block.hash().into(),
-            )])?;
+            .compile(vec![raw_l2block.smt_key().into()])?;
 
         let target_type = match target_type {
             ChallengeType::TxExecution => ChallengeTargetType::TxExecution,

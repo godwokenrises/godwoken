@@ -7,8 +7,8 @@ use gw_common::{
     smt::SMT,
     sparse_merkle_tree::{
         error::Error as SMTError,
-        traits::Store,
-        tree::{BranchKey, BranchNode},
+        traits::{StoreReadOps, StoreWriteOps},
+        BranchKey, BranchNode,
     },
     H256,
 };
@@ -35,7 +35,7 @@ impl<DB: KVStore> SMTBlockStore<DB> {
     }
 }
 
-impl<DB: KVStore> Store<H256> for SMTBlockStore<DB> {
+impl<DB: KVStore> StoreReadOps<H256> for SMTBlockStore<DB> {
     fn get_branch(&self, branch_key: &BranchKey) -> Result<Option<BranchNode>, SMTError> {
         match self
             .0
@@ -56,7 +56,9 @@ impl<DB: KVStore> Store<H256> for SMTBlockStore<DB> {
             None => Ok(None),
         }
     }
+}
 
+impl<DB: KVStore> StoreWriteOps<H256> for SMTBlockStore<DB> {
     fn insert_branch(&mut self, branch_key: BranchKey, branch: BranchNode) -> Result<(), SMTError> {
         self.0
             .insert_raw(

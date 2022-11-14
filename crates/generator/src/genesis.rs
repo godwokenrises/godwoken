@@ -156,7 +156,7 @@ pub fn build_genesis_from_store(
         smt.update(block_key.into(), genesis_hash.into())?;
         let block_proof = smt
             .merkle_proof(vec![block_key.into()])?
-            .compile(vec![(block_key.into(), genesis_hash.into())])?;
+            .compile(vec![(block_key.into())])?;
         let block_root = *smt.root();
         (block_root, block_proof)
     };

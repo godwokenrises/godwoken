@@ -12,7 +12,7 @@ use crate::{
 use anyhow::{bail, ensure, Context, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
 use gw_chain::chain::Chain;
-use gw_common::{h256_ext::H256Ext, H256};
+use gw_common::H256;
 use gw_config::BlockProducerConfig;
 use gw_generator::Generator;
 use gw_jsonrpc_types::test_mode::TestModePayload;
@@ -270,13 +270,12 @@ impl BlockProducer {
                 assert_eq!(local_root, &global_revert_block_root);
 
                 let keys: Vec<H256> = collected_block_hashes.into_iter().collect();
-                let leaves = keys.iter().map(|hash| (*hash, H256::one()));
-                let proof = block_smt
-                    .merkle_proof(keys.clone())?
-                    .compile(leaves.collect())?;
                 for key in keys.iter() {
                     log::info!("submit revert block {:?}", hex::encode(key.as_slice()));
                 }
+                let proof = block_smt
+                    .merkle_proof(keys.clone())?
+                    .compile(keys.clone())?;
 
                 RollupSubmitBlock::new_builder()
                     .reverted_block_hashes(keys.pack())

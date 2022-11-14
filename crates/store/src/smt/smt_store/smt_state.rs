@@ -7,13 +7,12 @@ use gw_common::{
     smt::SMT,
     sparse_merkle_tree::{
         error::Error as SMTError,
-        traits::Store,
-        tree::{BranchKey, BranchNode},
+        traits::{StoreReadOps, StoreWriteOps},
+        BranchKey, BranchNode,
     },
     H256,
 };
 use gw_db::schema::{COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF};
-use gw_types::prelude::Unpack;
 
 use crate::smt::serde::{branch_key_to_vec, branch_node_to_vec, slice_to_branch_node};
 
@@ -27,14 +26,8 @@ impl<DB: Clone> Clone for SMTStateStore<DB> {
 
 impl<DB: KVStore + ChainStore> SMTStateStore<DB> {
     pub fn to_smt(self) -> anyhow::Result<SMT<Self>> {
-        let root = self
-            .inner_store()
-            .get_last_valid_tip_block()?
-            .raw()
-            .post_account()
-            .merkle_root()
-            .unpack();
-        Ok(SMT::new(root, self))
+        let smt = SMT::new_with_store(self)?;
+        Ok(smt)
     }
 }
 
@@ -52,7 +45,7 @@ impl<DB: KVStore> SMTStateStore<DB> {
     }
 }
 
-impl<DB: KVStore> Store<H256> for SMTStateStore<DB> {
+impl<DB: KVStore> StoreReadOps<H256> for SMTStateStore<DB> {
     fn get_branch(&self, branch_key: &BranchKey) -> Result<Option<BranchNode>, SMTError> {
         match self
             .0
@@ -73,7 +66,8 @@ impl<DB: KVStore> Store<H256> for SMTStateStore<DB> {
             None => Ok(None),
         }
     }
-
+}
+impl<DB: KVStore> StoreWriteOps<H256> for SMTStateStore<DB> {
     fn insert_branch(&mut self, branch_key: BranchKey, branch: BranchNode) -> Result<(), SMTError> {
         self.0
             .insert_raw(

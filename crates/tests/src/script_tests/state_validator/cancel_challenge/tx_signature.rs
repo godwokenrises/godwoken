@@ -352,9 +352,9 @@ async fn test_cancel_tx_signature() {
 
             let kv_state_proof: Bytes = {
                 let smt = SMTStateStore::new(&db).to_smt().unwrap();
-                smt.merkle_proof(touched_keys)
+                smt.merkle_proof(touched_keys.clone())
                     .unwrap()
-                    .compile(kv_state.clone())
+                    .compile(touched_keys)
                     .unwrap()
                     .0
                     .into()

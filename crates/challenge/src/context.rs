@@ -44,7 +44,7 @@ pub fn build_challenge_context(
     let block_smt = db.block_smt()?;
     let block_proof = block_smt
         .merkle_proof(vec![block.smt_key().into()])?
-        .compile(vec![(block.smt_key().into(), block.hash().into())])?;
+        .compile(vec![block.smt_key().into()])?;
 
     let witness = ChallengeWitness::new_builder()
         .raw_l2block(block.raw())
@@ -91,7 +91,6 @@ pub fn build_revert_context(
     let (post_reverted_block_root, reverted_block_proof) = {
         let mut smt = db.reverted_block_smt()?;
         let to_key = |b: &RawL2Block| H256::from(b.hash());
-        let to_leave = |b: &RawL2Block| (to_key(b), H256::one());
 
         let keys: Vec<H256> = reverted_raw_blocks.iter().map(to_key).collect();
         for key in keys.iter() {
@@ -99,8 +98,7 @@ pub fn build_revert_context(
         }
 
         let root = smt.root().to_owned();
-        let leaves = reverted_raw_blocks.iter().map(to_leave).collect();
-        let proof = smt.merkle_proof(keys)?.compile(leaves)?;
+        let proof = smt.merkle_proof(keys.clone())?.compile(keys.clone())?;
 
         (root, proof)
     };
@@ -528,12 +526,9 @@ fn build_block_proof(
 
     let block_proof = {
         let smt = db.block_smt()?;
-        let to_leave = |b: &RawL2Block| (b.smt_key().into(), b.hash().into());
 
-        let smt_keys = raw_blocks.iter().map(|rb| rb.smt_key().into());
-        let leaves = raw_blocks.iter().map(to_leave);
-        smt.merkle_proof(smt_keys.collect())?
-            .compile(leaves.collect())?
+        let smt_keys: Vec<H256> = raw_blocks.iter().map(|rb| rb.smt_key().into()).collect();
+        smt.merkle_proof(smt_keys.clone())?.compile(smt_keys)?
     };
 
     Ok((block_hashes, block_proof))
