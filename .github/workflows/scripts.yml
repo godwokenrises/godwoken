@@ -4,9 +4,11 @@ on:
   push:
     paths:
       - 'gwos/**'
+      - 'crates/tests/src/script_tests/**'
   pull_request:
     paths:
       - 'gwos/**'
+      - 'crates/tests/src/script_tests/**'
 
 jobs:
   build:
