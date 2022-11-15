@@ -23,7 +23,7 @@ jobs:
       - name: Cargo clippy check
         env:
           RUSTFLAGS: -D warnings
-        run: cargo clippy --all-targets
+        run: cargo clippy --tests --all-features --all-targets
       - name: Copy contracts from prebuild docker images
         run: devtools/fetch-binaries.sh
       - name: Tests
