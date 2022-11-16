@@ -138,6 +138,7 @@ pub struct ExecutionTransactionContext {
 
 pub struct SubmitTransactionContext {
     in_queue_request_map: Option<Arc<InQueueRequestMap>>,
+    generator: Arc<Generator>,
     submit_tx: mpsc::Sender<(InQueueRequestHandle, Request)>,
     mem_pool_state: Arc<MemPoolState>,
     rate_limiter: Option<SendTransactionRateLimiter>,
@@ -286,6 +287,7 @@ impl Registry {
             .with_data(Data::new(SubmitTransactionContext {
                 in_queue_request_map: self.in_queue_request_map.clone(),
                 submit_tx: self.submit_tx.clone(),
+                generator: self.generator.clone(),
                 mem_pool_state: self.mem_pool_state.clone(),
                 rate_limiter: send_transaction_rate_limiter,
                 rate_limit_config: self.send_tx_rate_limit,
@@ -1091,7 +1093,12 @@ async fn execute_l2transaction(
 
         Result::<_, anyhow::Error>::Ok(run_result)
     })
-    .await??;
+    .await?
+    .map_err(|err| RpcError::Full {
+        code: INVALID_REQUEST,
+        message: err.to_string(),
+        data: None,
+    })?;
 
     if run_result.exit_code != 0 {
         let receipt = gw_types::offchain::ErrorTxReceipt {
@@ -1324,6 +1331,33 @@ async fn submit_l2transaction(
             }
         }
         rate_limiter.put(sender_id, Instant::now());
+    }
+
+    // TODO use TransactionVerifier after remove sender auto creator
+    // verify tx size
+    {
+        // block info
+        let block_info = ctx
+            .mem_pool_state
+            .load_shared()
+            .mem_block
+            .expect("mem block info");
+        // check tx size
+        let max_tx_size = ctx
+            .generator
+            .fork_config()
+            .max_tx_size(block_info.number().unpack());
+        if tx.as_slice().len() > max_tx_size {
+            let err = TransactionError::ExceededMaxTxSize {
+                max_size: max_tx_size,
+                tx_size: tx.as_slice().len(),
+            };
+            return Err(RpcError::Full {
+                code: INVALID_REQUEST,
+                message: err.to_string(),
+                data: None,
+            });
+        }
     }
 
     // check sender's nonce
