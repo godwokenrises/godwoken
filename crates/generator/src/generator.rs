@@ -801,10 +801,10 @@ impl Generator {
             .into());
         }
         // check read data bytes
-        let max_read_data_bytes = self
+        let max_total_read_data_bytes = self
             .rollup_context
             .fork_config
-            .max_read_data_bytes(block_number);
+            .max_total_read_data_bytes(block_number);
         let read_data_bytes: usize = state_tracker
             .read_data()
             .lock()
@@ -812,9 +812,9 @@ impl Generator {
             .values()
             .map(Bytes::len)
             .sum();
-        if read_data_bytes > max_read_data_bytes {
-            return Err(TransactionError::ExceededMaxReadData {
-                max_bytes: max_read_data_bytes,
+        if read_data_bytes > max_total_read_data_bytes {
+            return Err(TransactionError::ExceededMaxTotalReadData {
+                max_bytes: max_total_read_data_bytes,
                 used_bytes: read_data_bytes,
             }
             .into());
