@@ -134,8 +134,8 @@ pub enum TransactionError {
     State(StateError),
     #[error("can't find backend for script_hash {script_hash:?}")]
     BackendNotFound { script_hash: H256 },
-    #[error("Exceeded maximum read data: max bytes {max_bytes}, readed bytes {used_bytes}")]
-    ExceededMaxReadData { max_bytes: usize, used_bytes: usize },
+    #[error("Exceeded maximum total read data: max bytes {max_bytes}, readed bytes {used_bytes}")]
+    ExceededMaxTotalReadData { max_bytes: usize, used_bytes: usize },
     #[error("Exceeded maximum write data: max bytes {max_bytes}, writen bytes {used_bytes}")]
     ExceededMaxWriteData { max_bytes: usize, used_bytes: usize },
     #[error("Cannot create sUDT proxy contract from account id: {account_id}.")]
