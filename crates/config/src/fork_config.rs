@@ -24,12 +24,14 @@ impl Default for BackendType {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BackendForkConfig {
     pub fork_height: u64,
     pub backends: Vec<BackendConfig>,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BackendConfig {
     pub validator_path: PathBuf,
     pub generator_path: PathBuf,
@@ -39,6 +41,7 @@ pub struct BackendConfig {
 
 /// Fork changes and activation heights.
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ForkConfig {
     /// Enable this to increase l2 tx cycles limit to 500M
     pub increase_max_l2_tx_cycles_to_500m: Option<u64>,
