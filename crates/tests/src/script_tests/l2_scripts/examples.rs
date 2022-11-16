@@ -285,8 +285,8 @@ fn test_example_account_operation() {
         let err = generator
             .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect_err("err");
-        let err_code = match err {
-            TransactionError::UnknownTxType(code) => code,
+        let err_code = match err.downcast::<TransactionError>() {
+            Ok(TransactionError::UnknownTxType(code)) => code,
             err => panic!("unexpected {:?}", err),
         };
         assert_eq!(err_code, GW_ERROR_ACCOUNT_NOT_FOUND as i8);
@@ -326,8 +326,8 @@ fn test_example_account_operation() {
         let err = generator
             .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect_err("err");
-        let err_code = match err {
-            TransactionError::UnknownTxType(code) => code,
+        let err_code = match err.downcast::<TransactionError>() {
+            Ok(TransactionError::UnknownTxType(code)) => code,
             err => panic!("unexpected {:?}", err),
         };
         assert_eq!(err_code, GW_ERROR_ACCOUNT_NOT_FOUND as i8);
@@ -359,8 +359,8 @@ fn test_example_account_operation() {
         let err = generator
             .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect_err("err");
-        let err_code = match err {
-            TransactionError::UnknownTxType(code) => code,
+        let err_code = match err.downcast::<TransactionError>() {
+            Ok(TransactionError::UnknownTxType(code)) => code,
             err => panic!("unexpected {:?}", err),
         };
         assert_eq!(err_code, GW_ERROR_ACCOUNT_NOT_FOUND as i8);
@@ -417,8 +417,8 @@ fn test_example_account_operation() {
         let err = generator
             .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect_err("err");
-        let err_code = match err {
-            TransactionError::UnknownTxType(code) => code,
+        let err_code = match err.downcast::<TransactionError>() {
+            Ok(TransactionError::UnknownTxType(code)) => code,
             err => panic!("unexpected {:?}", err),
         };
         assert_eq!(err_code, GW_ERROR_ACCOUNT_NOT_FOUND as i8);
@@ -538,8 +538,8 @@ fn test_example_recover_account() {
         let err = generator
             .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect_err("err");
-        let err_code = match err {
-            TransactionError::UnknownTxType(exit_code) => exit_code,
+        let err_code = match err.downcast::<TransactionError>() {
+            Ok(TransactionError::UnknownTxType(code)) => code,
             err => panic!("unexpected {:?}", err),
         };
         println!("err_code: {}", err_code);
@@ -562,8 +562,8 @@ fn test_example_recover_account() {
         let err = generator
             .execute_transaction(&chain_view, &mut tree, &block_info, &raw_tx, None, None)
             .expect_err("err");
-        let err_code = match err {
-            TransactionError::UnknownTxType(code) => code,
+        let err_code = match err.downcast::<TransactionError>() {
+            Ok(TransactionError::UnknownTxType(code)) => code,
             err => panic!("unexpected {:?}", err),
         };
         println!("err_code: {}", err_code);
