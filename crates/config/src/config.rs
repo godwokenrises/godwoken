@@ -21,6 +21,7 @@ pub enum Trace {
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     pub node_mode: NodeMode,
     pub liveness_duration_secs: Option<u64>,
@@ -64,6 +65,7 @@ pub enum RPCMethods {
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RPCServerConfig {
     pub listen: String,
     #[serde(default)]
@@ -71,6 +73,7 @@ pub struct RPCServerConfig {
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RPCClientConfig {
     pub indexer_url: String,
     pub ckb_url: String,
@@ -93,6 +96,7 @@ pub struct RPCRateLimit {
 
 /// Onchain rollup cell config
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ChainConfig {
     /// Ignore invalid state caused by blocks
     #[serde(default)]
@@ -103,6 +107,7 @@ pub struct ChainConfig {
 
 /// Genesis config
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GenesisConfig {
     pub timestamp: u64,
     pub rollup_type_hash: H256,
@@ -130,6 +135,7 @@ pub struct ChallengerConfig {
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ContractTypeScriptConfig {
     pub state_validator: Script,
     pub deposit_lock: Script,
@@ -168,7 +174,7 @@ pub struct RegistryAddressConfig {
     pub address: JsonBytes,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct BlockProducerConfig {
     pub check_mem_block_before_submit: bool,
     pub fee_rate: u64,
@@ -198,7 +204,7 @@ impl Default for BlockProducerConfig {
 
 #[test]
 fn test_default_block_producer_config() {
-    let config: BlockProducerConfig = toml::from_str("_x = 3").unwrap();
+    let config: BlockProducerConfig = toml::from_str("").unwrap();
     assert_eq!(config, BlockProducerConfig::default());
     assert!(config.fee_rate > 0);
 }
@@ -241,6 +247,7 @@ fn test_psc_config_optional() {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DebugConfig {
     pub output_l1_tx_cycles: bool,
     pub expected_l1_tx_upper_bound_cycles: u64,
@@ -291,6 +298,7 @@ impl Default for OffChainValidatorConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct P2PNetworkConfig {
     /// Multiaddr listen address, e.g. /ip4/1.2.3.4/tcp/443
     pub listen: Option<String>,
@@ -302,6 +310,7 @@ pub struct P2PNetworkConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SyncServerConfig {
     pub buffer_capacity: u64,
     pub broadcast_channel_capacity: usize,
@@ -317,6 +326,7 @@ impl Default for SyncServerConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MemPoolConfig {
     pub execute_l2tx_max_cycles: u64,
     #[serde(default = "default_restore_path")]
@@ -439,6 +449,7 @@ impl Default for NodeMode {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DBBlockValidatorConfig {
     pub verify_max_cycles: u64,
     pub parallel_verify_blocks: bool,
@@ -458,6 +469,7 @@ impl Default for DBBlockValidatorConfig {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct StoreConfig {
     #[serde(default)]
     pub path: PathBuf,
@@ -504,6 +516,7 @@ impl Default for FeeConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GithubConfigUrl {
     pub org: String,
     pub repo: String,
@@ -514,13 +527,14 @@ pub struct GithubConfigUrl {
 
 // Configs in DynamicConfig can be hot reloaded from remote. But GithubConfigUrl must be setup.
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DynamicConfig {
     pub fee_config: FeeConfig,
     pub rpc_config: RPCConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
 pub enum ContractLogConfig {
     Verbose,
     Error,
