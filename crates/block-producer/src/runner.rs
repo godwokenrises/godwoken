@@ -24,6 +24,7 @@ use gw_generator::{
     ArcSwap, Generator,
 };
 use gw_mem_pool::{
+    account_creator::AccountCreator,
     block_sync_server::{block_sync_server_protocol, BlockSyncServerState},
     default_provider::DefaultMemPoolProvider,
     pool::{MemPool, MemPoolCreateArgs},
@@ -502,6 +503,20 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                         .as_bytes()
                         .to_vec(),
                 );
+                let account_creator = {
+                    match config.block_producer.as_ref().map(|c| &c.wallet_config) {
+                        Some(Some(c)) => {
+                            log::info!("pool account creator use block producer wallet");
+                            let w = Wallet::from_config(c).with_context(|| "pool wallet")?;
+                            Some(AccountCreator::create(base.generator.rollup_context(), w)?)
+                        }
+                        _ if config.node_mode == NodeMode::FullNode => {
+                            log::warn!("no wallet config for mem pool account creator");
+                            None
+                        }
+                        _ => None,
+                    }
+                };
                 let args = MemPoolCreateArgs {
                     block_producer,
                     store: base.store.clone(),
@@ -511,6 +526,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     node_mode: config.node_mode,
                     dynamic_config_manager: base.dynamic_config_manager.clone(),
                     sync_server: block_sync_server_state.clone(),
+                    account_creator,
                 };
                 Arc::new(Mutex::new(
                     MemPool::create(args)

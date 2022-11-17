@@ -1,8 +1,9 @@
 use core::convert::TryInto;
 
 use crate::packed::{
-    AccountMerkleState, Byte32, CompactMemBlock, GlobalState, GlobalStateV0, MemBlock,
-    RawWithdrawalRequest, TransactionKey, TxReceipt, WithdrawalKey, WithdrawalRequestExtra,
+    AccountMerkleState, Byte32, CompactMemBlock, DeprecatedCompactMemBlock, GlobalState,
+    GlobalStateV0, MemBlock, RawWithdrawalRequest, TransactionKey, TxReceipt, WithdrawalKey,
+    WithdrawalRequestExtra,
 };
 use crate::prelude::*;
 use ckb_types::error::VerificationError;
@@ -82,7 +83,17 @@ impl CompactMemBlock {
     pub fn from_full_compatible_slice(slice: &[u8]) -> Result<CompactMemBlock, VerificationError> {
         match CompactMemBlock::from_slice(slice) {
             Ok(block) => Ok(block),
-            Err(_) => MemBlock::from_slice(slice).map(Into::into),
+            Err(_) => match DeprecatedCompactMemBlock::from_slice(slice) {
+                Ok(deprecated) => {
+                    let block = CompactMemBlock::new_builder()
+                        .txs(deprecated.txs())
+                        .withdrawals(deprecated.withdrawals())
+                        .deposits(deprecated.deposits())
+                        .build();
+                    Ok(block)
+                }
+                Err(_) => MemBlock::from_slice(slice).map(Into::into),
+            },
         }
     }
 }

@@ -1,6 +1,7 @@
 use sparse_merkle_tree::H256;
 
 use crate::offchain::{CellInfo, DepositInfo, FinalizedCustodianCapacity, SudtCustodian};
+use crate::registry_address::RegistryAddress;
 use crate::{packed, prelude::*, vec::Vec};
 
 impl Pack<packed::CellInfo> for CellInfo {
@@ -98,9 +99,32 @@ impl<'r> Unpack<FinalizedCustodianCapacity> for packed::FinalizedCustodianCapaci
     }
 }
 
+impl Pack<packed::RegistryAddress> for RegistryAddress {
+    fn pack(&self) -> packed::RegistryAddress {
+        packed::RegistryAddress::new_builder()
+            .registry_id(self.registry_id.pack())
+            .address(self.address.pack())
+            .build()
+    }
+}
+
+impl<'r> Unpack<RegistryAddress> for packed::RegistryAddressReader<'r> {
+    fn unpack(&self) -> RegistryAddress {
+        RegistryAddress {
+            registry_id: self.registry_id().unpack(),
+            address: self.address().unpack(),
+        }
+    }
+}
+
 impl_conversion_for_packed_iterator_pack!(AccountMerkleState, AccountMerkleStateVec);
 impl_conversion_for_vector!(DepositInfo, DepositInfoVec, DepositInfoVecReader);
 impl_conversion_for_vector!(SudtCustodian, SudtCustodianVec, SudtCustodianVecReader);
 impl_conversion_for_packed_iterator_pack!(WithdrawalRequestExtra, WithdrawalRequestExtraVec);
 impl_conversion_for_packed_iterator_pack!(DepositInfo, DepositInfoVec);
 impl_conversion_for_option!(H256, Byte32Opt, Byte32OptReader);
+impl_conversion_for_vector!(
+    RegistryAddress,
+    RegistryAddressVec,
+    RegistryAddressVecReader
+);

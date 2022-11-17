@@ -1,7 +1,7 @@
 use crate::vec::Vec;
 use core::convert::TryInto;
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct RegistryAddress {
     pub registry_id: u32,
     pub address: Vec<u8>,
