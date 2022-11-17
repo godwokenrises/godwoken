@@ -165,7 +165,7 @@ impl AccountCreator {
         tracing::info!("create account {:?}", create_accounts);
 
         let create_accounts = { create_accounts.into_iter() }
-            .map(|a| self.to_account_script(&a))
+            .map(|a| self.to_account_script(a))
             .collect::<Vec<_>>();
         let next_batch = { new_addrs.into_iter() }
             .skip(Self::MAX_CREATE_ACCOUNTS_PER_BATCH)
