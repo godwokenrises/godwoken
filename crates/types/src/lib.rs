@@ -8,8 +8,8 @@ pub mod core;
 mod extension;
 mod generated;
 pub mod prelude;
-mod std_traits;
 pub mod registry_address;
+mod std_traits;
 
 pub use generated::packed;
 pub use molecule::bytes;
