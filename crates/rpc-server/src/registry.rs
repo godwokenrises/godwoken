@@ -132,11 +132,18 @@ pub trait TestModeRPC {
 pub struct RequestContext {
     _in_queue_handle: InQueueRequestHandle,
     trace: gw_otel::Context,
+    in_queue_span: tracing::Span,
 }
 
 impl GwOtelContext for RequestContext {
     fn otel_context(&self) -> Option<&gw_otel::Context> {
         Some(&self.trace)
+    }
+}
+
+impl Drop for RequestContext {
+    fn drop(&mut self) {
+        let _drop = self.trace.new_span(tracing::info_span!("drop")).entered();
     }
 }
 
@@ -554,7 +561,7 @@ impl RequestSubmitter {
             // wait next tx if queue is empty
             if queue.is_empty() {
                 // blocking current task until we receive a tx
-                let (req, ctx) = match self.submit_rx.recv().await {
+                let (req, mut ctx) = match self.submit_rx.recv().await {
                     Some(req) => req,
                     None => {
                         log::error!("rpc submit tx is closed");
@@ -562,8 +569,9 @@ impl RequestSubmitter {
                     }
                 };
 
-                let add_span = ctx.new_span(|_| tracing::info_span!("fee_queue.add"));
-                let _entered = add_span.enter();
+                gw_otel::with_span_ref(&ctx.in_queue_span, |span| span.end());
+                ctx.in_queue_span = ctx.trace.new_span(tracing::info_span!("fee_queue.add"));
+                let _entered = ctx.in_queue_span.clone().entered();
 
                 let state = self.mem_pool_state.load_state_db();
 
@@ -596,9 +604,10 @@ impl RequestSubmitter {
 
             // push txs to fee priority queue
             let state = self.mem_pool_state.load_state_db();
-            while let Ok((req, ctx)) = self.submit_rx.try_recv() {
-                let add_span = ctx.new_span(|_| tracing::info_span!("fee_queue.add"));
-                let _entered = add_span.enter();
+            while let Ok((req, mut ctx)) = self.submit_rx.try_recv() {
+                gw_otel::with_span_ref(&ctx.in_queue_span, |span| span.end());
+                ctx.in_queue_span = ctx.trace.new_span(tracing::info_span!("fee_queue.add"));
+                let _entered = ctx.in_queue_span.clone().entered();
 
                 let kind = req.kind();
                 let hash = req.hash();
@@ -687,6 +696,7 @@ impl RequestSubmitter {
                 let mut block_cycles_limit_reached = false;
 
                 for (entry, ctx) in items {
+                    gw_otel::with_span_ref(&ctx.in_queue_span, |span| span.end());
                     let push_span = ctx.new_span(|_| tracing::info_span!("mem_pool.push"));
                     let _entered = push_span.enter();
 
@@ -1012,7 +1022,7 @@ async fn get_transaction_receipt(
         .map(Into::into))
 }
 
-#[instrument(skip_all)]
+#[instrument(skip_all, err(Debug))]
 fn verify_sender_balance<S: State + CodeStore>(
     ctx: &RollupContext,
     state: &S,
@@ -1084,7 +1094,10 @@ async fn execute_l2transaction(
         }
     }
 
+    let execution_span = tracing::info_span!("execution");
     let mut run_result = tokio::task::spawn_blocking(move || {
+        let _entered = execution_span.entered();
+
         let db = ctx.store.get_snapshot();
         let tip_block_hash = db.get_last_valid_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
@@ -1132,7 +1145,6 @@ async fn execute_l2transaction(
         message: err.to_string(),
         data: None,
     })?;
-
     RPC_METRICS.execute_transactions(run_result.exit_code).inc();
 
     if run_result.exit_code != 0 {
@@ -1247,7 +1259,10 @@ async fn execute_raw_l2transaction(
     }
 
     // execute tx in task
+    let execution_span = tracing::info_span!("execution");
     let mut run_result = tokio::task::spawn_blocking(move || {
+        let _entered = execution_span.entered();
+
         let eth_recover = &ctx.polyjuice_sender_recover.eth;
         let rollup_context = ctx.generator.rollup_context();
         let db = &db_txn;
@@ -1304,7 +1319,6 @@ async fn execute_raw_l2transaction(
         Result::<_, anyhow::Error>::Ok(run_result)
     })
     .await??;
-
     RPC_METRICS.execute_transactions(run_result.exit_code).inc();
 
     if run_result.exit_code != 0 {
@@ -1458,10 +1472,12 @@ async fn submit_l2transaction(
         .insert(tx_hash_in_queue, request.clone())
     {
         // Send if the request wasn't already in the map.
-        tracing::info_span!("submit_queue.send");
+        let in_queue_span = tracing::info_span!("submit_queue.send");
+        let _entered = in_queue_span.clone().entered();
         let ctx = RequestContext {
             _in_queue_handle: handle,
             trace: gw_otel::current_context(),
+            in_queue_span,
         };
         permit.send((request, ctx));
     }
@@ -1532,9 +1548,12 @@ async fn submit_withdrawal_request(
         .insert(withdrawal_hash.into(), request.clone())
     {
         // Send if the request wasn't already in the map.
+        let in_queue_span = tracing::info_span!("submit_queue.send");
+        let _entered = in_queue_span.clone().entered();
         let ctx = RequestContext {
             _in_queue_handle: handle,
             trace: gw_otel::current_context(),
+            in_queue_span,
         };
         permit.send((request, ctx));
     }

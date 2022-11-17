@@ -1,5 +1,5 @@
-pub mod trace;
 pub mod metric;
+pub mod trace;
 pub mod traits;
 
 pub mod opentelemetry {
@@ -24,4 +24,17 @@ pub fn current_context() -> Context {
     use tracing_opentelemetry::OpenTelemetrySpanExt;
 
     crate::current_span().context()
+}
+
+use ::opentelemetry::trace::SpanRef;
+pub fn with_span_ref<F, O>(span: &tracing::Span, f: F) -> O
+where
+    F: Fn(&SpanRef<'_>) -> O,
+{
+    use ::opentelemetry::trace::TraceContextExt;
+    use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+    let ctx = span.context();
+    let span = ctx.span();
+    f(&span)
 }

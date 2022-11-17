@@ -1,8 +1,8 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use gw_common::state::State;
-use gw_otel::traits::{GwOtelContext, GwOtelContextNewSpan, GwOtelSpanExt};
+use gw_otel::traits::{GwOtelContext, GwOtelContextNewSpan, GwOtelSpanExt, TraceContextExt};
 use std::collections::{BTreeMap, HashMap};
-use tracing::instrument;
+use tracing::{field, instrument};
 
 /// Max queue size
 const MAX_QUEUE_SIZE: usize = 100_000;
@@ -48,8 +48,18 @@ impl<T: GwOtelContext> FeeQueue<T> {
 
         // drop items if full
         if self.is_full() {
+            #[allow(clippy::mutable_key_type)]
             if let Some(first_to_keep) = self.queue.keys().nth(DROP_SIZE + 1).cloned() {
-                self.queue = self.queue.split_off(&first_to_keep);
+                let keep = self.queue.split_off(&first_to_keep);
+                let drop = std::mem::replace(&mut self.queue, keep);
+
+                for (_, handle) in drop.iter() {
+                    if let Some(cx) = handle.otel_context() {
+                        let span = cx.span();
+                        span.record_error(anyhow!("queue is full").as_ref());
+                        span.set_status(gw_otel::trace::Status::error("queue is full"));
+                    }
+                }
             }
             log::debug!(
                 "QueueLen: {} | Fee queue is full, drop {} items",
@@ -73,7 +83,7 @@ impl<T: GwOtelContext> FeeQueue<T> {
     }
 
     /// Fetch items by fee sort
-    #[instrument(skip_all, fields(count = count))]
+    #[instrument(skip_all, err(Debug), fields(count = count, remain = field::Empty))]
     pub fn fetch(&mut self, state: &impl State, count: usize) -> Result<Vec<(FeeEntry, T)>> {
         // sorted fee items
         let mut fetched_items = Vec::with_capacity(count as usize);
@@ -105,6 +115,13 @@ impl<T: GwOtelContext> FeeQueue<T> {
                     future_queue.push((entry, t));
                 }
                 _ => {
+                    if let Some(cx) = t.otel_context() {
+                        let err = anyhow!("nonce {} expect {}", entry.item.nonce(), nonce);
+                        let span = cx.span();
+                        span.record_error(err.as_ref());
+                        span.set_status(gw_otel::trace::Status::error("drop future nonce"));
+                    }
+
                     log::debug!(
                         "QueueLen: {} | delete entry: {:?} {} entry_nonce {} nonce {}",
                         self.len(),
@@ -127,6 +144,13 @@ impl<T: GwOtelContext> FeeQueue<T> {
             if fetched_senders.contains_key(&entry.sender) {
                 self.add(entry, t);
             } else {
+                if let Some(cx) = t.otel_context() {
+                    let err = anyhow!("future nonce {}", entry.item.nonce());
+                    let span = cx.span();
+                    span.record_error(err.as_ref());
+                    span.set_status(gw_otel::trace::Status::error("drop future nonce"));
+                }
+
                 log::debug!(
                     "QueueLen: {} | drop future entry: {:?} {} entry_nonce {}",
                     self.len(),
@@ -135,6 +159,11 @@ impl<T: GwOtelContext> FeeQueue<T> {
                     entry.item.nonce(),
                 );
             }
+        }
+
+        {
+            let span = tracing::Span::current();
+            span.record("remain", self.len());
         }
 
         log::debug!(

@@ -7,8 +7,7 @@ use gw_chain::chain::Chain;
 use gw_common::H256;
 use gw_config::PscConfig;
 use gw_mem_pool::{block_sync_server::BlockSyncServerState, pool::MemPool};
-use gw_otel::traits::OpenTelemetrySpanExt;
-use gw_otel::traits::TraceContextExt;
+use gw_otel::traits::{OpenTelemetrySpanExt, TraceContextExt};
 use gw_rpc_client::{
     error::{get_jsonrpc_error_code, CkbRpcError},
     rpc_client::RPCClient,
