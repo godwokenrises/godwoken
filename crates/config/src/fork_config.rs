@@ -4,8 +4,8 @@ use ckb_fixed_hash::H256;
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{
-    L2TX_MAX_CYCLES_150M, L2TX_MAX_CYCLES_500M, MAX_TOTAL_READ_DATA_BYTES_LIMIT, MAX_TX_SIZE,
-    MAX_WITHDRAWAL_SIZE, MAX_WRITE_DATA_BYTES_LIMIT,
+    L2TX_MAX_CYCLES_150M, L2TX_MAX_CYCLES_500M, MAX_TOTAL_READ_DATA_BYTES, MAX_TX_SIZE,
+    MAX_WITHDRAWAL_SIZE, MAX_WRITE_DATA_BYTES,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -64,11 +64,11 @@ impl ForkConfig {
     }
 
     pub fn max_write_data_bytes(&self, _block_number: u64) -> usize {
-        MAX_WRITE_DATA_BYTES_LIMIT
+        MAX_WRITE_DATA_BYTES
     }
 
     pub fn max_total_read_data_bytes(&self, _block_number: u64) -> usize {
-        MAX_TOTAL_READ_DATA_BYTES_LIMIT
+        MAX_TOTAL_READ_DATA_BYTES
     }
 }
 
