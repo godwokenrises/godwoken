@@ -187,8 +187,8 @@ mod tests {
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     use gw_common::registry_address::RegistryAddress;
-    use gw_types::packed;
-    use gw_types::prelude::Entity;
+    use gw_types::packed::{self, CompactMemBlock, DeprecatedCompactMemBlock};
+    use gw_types::prelude::{Builder, Entity, Pack};
 
     use crate::mem_block::MemBlock;
 
@@ -262,5 +262,28 @@ mod tests {
             packed::CompactMemBlock::from(full_mem_block).as_slice(),
             restored_packed.as_slice()
         );
+
+        // Should able to restore from deprecated compact mem block
+        let deprecated = DeprecatedCompactMemBlock::new_builder()
+            .txs(vec![[1u8; 32]].pack())
+            .build();
+        let expected = CompactMemBlock::new_builder()
+            .txs(vec![[1u8; 32]].pack())
+            .build();
+
+        let latest_timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .saturating_add(Duration::from_secs(233))
+            .as_millis();
+        let file_path = restore_manager.block_file_path(latest_timestamp);
+        write(file_path, deprecated.as_slice()).unwrap();
+
+        let (restored_packed, _) = restore_manager
+            .restore_from_latest()
+            .unwrap()
+            .expect("saved");
+
+        assert_eq!(expected.as_slice(), restored_packed.as_slice());
     }
 }

@@ -52,8 +52,13 @@ use tokio::task::block_in_place;
 use tracing::instrument;
 
 use crate::{
-    block_sync_server::BlockSyncServerState, mem_block::MemBlock, restore_manager::RestoreManager,
-    traits::MemPoolProvider, types::EntryList, withdrawal::Generator as WithdrawalGenerator,
+    account_creator::{AccountCreator, CkbTransfer},
+    block_sync_server::BlockSyncServerState,
+    mem_block::MemBlock,
+    restore_manager::RestoreManager,
+    traits::MemPoolProvider,
+    types::EntryList,
+    withdrawal::Generator as WithdrawalGenerator,
 };
 
 type StateDB = gw_store::state::MemStateDB;
@@ -95,6 +100,8 @@ pub struct MemPool {
     mem_block_config: MemBlockConfig,
     /// Cycles Pool
     cycles_pool: CyclesPool,
+    /// Account creator
+    account_creator: Option<AccountCreator>,
 }
 
 pub struct MemPoolCreateArgs {
@@ -106,6 +113,7 @@ pub struct MemPoolCreateArgs {
     pub node_mode: NodeMode,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     pub sync_server: Option<Arc<std::sync::Mutex<BlockSyncServerState>>>,
+    pub account_creator: Option<AccountCreator>,
 }
 
 impl Drop for MemPool {
@@ -129,6 +137,7 @@ impl MemPool {
             node_mode,
             dynamic_config_manager,
             sync_server,
+            account_creator,
         } = args;
         let pending = Default::default();
 
@@ -151,6 +160,7 @@ impl MemPool {
 
             pending_restored_tx_hashes = VecDeque::from(Unpack::<Vec<_>>::unpack(&restored.txs()));
             pending_deposits = restored.deposits().unpack();
+            mem_block.append_new_addresses(restored.as_reader().new_addresses().unpack());
         }
 
         mem_block.clear_txs();
@@ -180,6 +190,7 @@ impl MemPool {
             sync_server,
             mem_block_config: config.mem_block,
             cycles_pool,
+            account_creator,
         };
         mem_pool.restore_pending_withdrawals().await?;
         mem_pool.remove_reinjected_failed_txs()?;
@@ -271,6 +282,10 @@ impl MemPool {
         &mut self.pending_restored_tx_hashes
     }
 
+    pub fn set_account_creator(&mut self, creator: AccountCreator) {
+        self.account_creator = Some(creator);
+    }
+
     /// Push a layer2 tx into pool
     #[instrument(skip_all)]
     pub fn push_transaction(&mut self, tx: L2Transaction) -> Result<()> {
@@ -325,6 +340,14 @@ impl MemPool {
         let t = Instant::now();
         let tx_receipt = self.execute_tx(db, state, tx.clone())?;
         log::debug!("[push tx] finalize tx time: {}ms", t.elapsed().as_millis());
+
+        // save new addresses
+        if self.account_creator.is_some() {
+            let logs = tx_receipt.as_reader().logs();
+            if let Some(new_addresses) = CkbTransfer::filter_new_address(logs.iter(), state) {
+                self.mem_block.append_new_addresses(new_addresses);
+            }
+        }
 
         // save tx receipt in mem pool
         let post_state = tx_receipt.post_state();
@@ -736,6 +759,24 @@ impl MemPool {
                 self.pending_deposits.clone(),
                 txs,
             )?;
+
+            // create account for new addresses
+            if let Some(account_creator) = self.account_creator.as_ref() {
+                match account_creator
+                    .build_batch_create_tx(&state_db, mem_block_content.new_addresses)
+                {
+                    Ok(Some((tx, next_batch))) => {
+                        self.mem_block.append_new_addresses(next_batch);
+                        if let Err(err) = self.push_transaction_with_db(db, &mut state_db, tx) {
+                            tracing::error!("account creator err {}", err);
+                        }
+                    }
+                    Err(err) => {
+                        tracing::error!("account creator err {}", err);
+                    }
+                    Ok(None) => (),
+                }
+            }
 
             // Update block remained cycles
             let used_cycles = self.cycles_pool.cycles_used();

@@ -34,7 +34,21 @@ table FinalizedCustodianCapacity {
 
 vector AccountMerkleStateVec <AccountMerkleState>;
 
+table RegistryAddress {
+    registry_id: Uint32,
+    address: Bytes,
+}
+
+vector RegistryAddressVec <RegistryAddress>;
+
 table CompactMemBlock {
+    txs: Byte32Vec,
+    withdrawals: Byte32Vec,
+    deposits: DepositInfoVec,
+    new_addresses: RegistryAddressVec,
+}
+
+table DeprecatedCompactMemBlock {
     txs: Byte32Vec,
     withdrawals: Byte32Vec,
     deposits: DepositInfoVec,

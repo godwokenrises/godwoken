@@ -13,6 +13,7 @@ use gw_types::{
 pub struct MemBlockContent {
     pub withdrawals: Vec<H256>,
     pub txs: Vec<H256>,
+    pub new_addresses: HashSet<RegistryAddress>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -47,6 +48,8 @@ pub struct MemBlock {
     /// Touched keys vector
     withdrawal_touched_keys_vec: Vec<Vec<H256>>,
     deposit_touched_keys_vec: Vec<Vec<H256>>,
+    /// New addresses
+    new_addresses: HashSet<RegistryAddress>,
 }
 
 impl MemBlock {
@@ -93,6 +96,7 @@ impl MemBlock {
         let content = MemBlockContent {
             txs: self.txs.clone(),
             withdrawals: self.withdrawals.clone(),
+            new_addresses: self.new_addresses.drain().collect(),
         };
         // reset status
         self.clear();
@@ -114,6 +118,7 @@ impl MemBlock {
         self.tx_post_states.clear();
         self.withdrawal_touched_keys_vec.clear();
         self.deposit_touched_keys_vec.clear();
+        self.new_addresses.clear();
     }
 
     pub(crate) fn push_withdrawal<I: IntoIterator<Item = H256>>(
@@ -224,6 +229,17 @@ impl MemBlock {
 
     pub(crate) fn append_touched_keys<I: IntoIterator<Item = H256>>(&mut self, keys: I) {
         self.touched_keys.extend(keys)
+    }
+
+    pub(crate) fn append_new_addresses(
+        &mut self,
+        addrs: impl IntoIterator<Item = RegistryAddress>,
+    ) {
+        self.new_addresses.extend(addrs)
+    }
+
+    pub fn new_addresses(&mut self) -> &HashSet<RegistryAddress> {
+        &self.new_addresses
     }
 
     pub fn withdrawals(&self) -> &[H256] {
@@ -400,10 +416,13 @@ impl MemBlock {
     }
 
     pub(crate) fn pack_compact(&self) -> packed::CompactMemBlock {
+        let new_addresses: Vec<_> = self.new_addresses.iter().cloned().collect();
+
         packed::CompactMemBlock::new_builder()
             .txs(self.txs.pack())
             .withdrawals(self.withdrawals.pack())
             .deposits(self.deposits.pack())
+            .new_addresses(new_addresses.pack())
             .build()
     }
 
@@ -503,6 +522,10 @@ impl MemBlock {
 
         if self.deposit_touched_keys_vec != other.deposit_touched_keys_vec {
             return Diff("deposit touched keys vec");
+        }
+
+        if self.new_addresses != other.new_addresses {
+            return Diff("new addresses");
         }
 
         Same
