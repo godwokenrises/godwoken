@@ -17,7 +17,10 @@ use gw_utils::{
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
 use crate::{
-    ckb_std::{ckb_constants::Source, high_level::load_script_hash},
+    ckb_std::{
+        ckb_constants::Source,
+        high_level::{load_cell_lock_hash, load_script_hash},
+    },
     verifications,
 };
 
@@ -70,11 +73,23 @@ pub fn main() -> Result<(), Error> {
         let mut type_id = [0u8; TYPE_ID_SIZE];
         type_id.copy_from_slice(&args[..TYPE_ID_SIZE]);
         check_type_id(type_id)?;
-    }
+    };
+
     // return success if we are in the initialization
     if check_initialization()? {
         return Ok(());
     }
+
+    // check lock
+    {
+        let rollup_lock_hash = load_cell_lock_hash(0, Source::GroupInput);
+        let output_rollup_lock_hash = load_cell_lock_hash(0, Source::GroupOutput);
+        if rollup_lock_hash != output_rollup_lock_hash {
+            debug!("Rollup cell's lock changed");
+            return Err(Error::InvalidOutput);
+        }
+    }
+
     // basic verification
     let prev_global_state = parse_global_state(Source::GroupInput)?;
     let post_global_state = parse_global_state(Source::GroupOutput)?;

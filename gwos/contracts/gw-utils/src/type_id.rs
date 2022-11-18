@@ -10,8 +10,9 @@ use crate::error::Error;
 
 pub const TYPE_ID_SIZE: usize = 32;
 
-// type_id: usually the first 32-bytes of the current script.args
-// notice the type_id must be included in the script.args
+/// check type id
+/// type_id: the first 32-bytes of the current script.args
+/// notice the type_id must be included in the script.args
 pub fn check_type_id(type_id: [u8; 32]) -> Result<(), Error> {
     // check there is only one type id cell in each input/output group
     let has_second_input_type_id_cell = has_type_id_cell(1, Source::GroupInput);
