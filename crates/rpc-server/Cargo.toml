@@ -46,4 +46,3 @@ jemalloc-ctl = { package = "tikv-jemalloc-ctl", version = "0.4.2" }
 jemalloc-sys = { package = "tikv-jemalloc-sys", version = "0.4.2" }
 errno = "*"
 tracing = { version = "0.1", features = ["attributes"] }
-prometheus-client = "0.18.0"

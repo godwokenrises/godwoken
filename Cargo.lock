@@ -2031,7 +2031,6 @@ dependencies = [
  "lru 0.7.8",
  "once_cell",
  "pprof",
- "prometheus-client",
  "serde",
  "serde_json",
  "socket2",
