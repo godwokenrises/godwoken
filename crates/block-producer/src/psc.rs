@@ -32,7 +32,7 @@ use tokio::{
 };
 use tracing::instrument;
 
-use crate::metrics::BP_METRICS;
+use crate::metrics::{BP_METRICS, CUSTODIAN_METRICS};
 use crate::{
     block_producer::{check_block_size, BlockProducer, ComposeSubmitTxArgs, TransactionSizeError},
     chain_updater::ChainUpdater,
@@ -134,6 +134,7 @@ impl ProduceSubmitConfirm {
         let submitted_count = last_submitted - last_confirmed;
         BP_METRICS.local_blocks.set(local_count);
         BP_METRICS.submitted_blocks.set(submitted_count);
+        CUSTODIAN_METRICS.finalized_custodians(&context.store);
 
         Ok(Self {
             context,
@@ -211,6 +212,7 @@ impl ProduceSubmitConfirm {
                         self.submitted_count = last_submitted - last_confirmed;
                         BP_METRICS.local_blocks.set(self.local_count);
                         BP_METRICS.submitted_blocks.set(self.submitted_count);
+                        CUSTODIAN_METRICS.finalized_custodians(&self.context.store);
                     } else {
                         bail!(e);
                     }
@@ -353,6 +355,7 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                 } else {
                     state.local_count += 1;
                     BP_METRICS.local_blocks.inc();
+                    CUSTODIAN_METRICS.finalized_custodians(&state.context.store);
                 }
             }
         }

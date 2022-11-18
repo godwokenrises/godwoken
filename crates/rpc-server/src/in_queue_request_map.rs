@@ -17,9 +17,11 @@ pub struct InQueueRequestMap {
 
 impl InQueueRequestMap {
     pub(crate) fn insert(self: &Arc<Self>, k: H256, v: Request) -> Option<InQueueRequestHandle> {
+        RPC_METRICS.in_queue_requests(&v).inc();
+
         let mut map = self.map.write().unwrap();
         let inserted = map.insert(k, v).is_none();
-        RPC_METRICS.queue_len.set(map.len() as u64);
+
         if inserted {
             Some(InQueueRequestHandle {
                 map: Arc::downgrade(self),
@@ -32,8 +34,9 @@ impl InQueueRequestMap {
 
     fn remove(&self, k: &H256) {
         let mut map = self.map.write().unwrap();
-        map.remove(k);
-        RPC_METRICS.queue_len.set(map.len() as u64);
+        if let Some(v) = map.remove(k) {
+            RPC_METRICS.in_queue_requests(&v).dec();
+        }
     }
 
     pub(crate) fn get_transaction(&self, k: &H256) -> Option<L2Transaction> {
