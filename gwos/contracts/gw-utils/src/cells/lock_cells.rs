@@ -79,6 +79,11 @@ pub fn fetch_capacity_and_sudt_value(
             let mut buf = [0u8; 16];
             buf.copy_from_slice(&data[..16]);
             let amount = u128::from_le_bytes(buf);
+
+            if sudt_script_hash == CKB_SUDT_SCRIPT_ARGS && amount != 0 {
+                return Err(Error::InvalidSUDTCell);
+            }
+
             CellValue {
                 sudt_script_hash: sudt_script_hash.into(),
                 amount,
@@ -116,7 +121,7 @@ pub fn collect_stake_cells(
                 Err(err) => return Some(Err(err)),
             };
             // we only accept CKB as staking assets for now
-            if value.sudt_script_hash != CKB_SUDT_SCRIPT_ARGS.into() || value.amount != 0 {
+            if !value.is_ckb_only() {
                 debug!("found a stake cell with simple UDT");
                 return Some(Err(Error::InvalidStakeCell));
             }
@@ -184,7 +189,7 @@ pub fn find_challenge_cell(
                     return Some(Err(err));
                 }
             };
-            if value.sudt_script_hash != CKB_SUDT_SCRIPT_ARGS.into() || value.amount != 0 {
+            if !value.is_ckb_only() {
                 debug!("found a challenge cell with simple UDT");
                 return None;
             }
