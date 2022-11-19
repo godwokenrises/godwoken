@@ -324,6 +324,13 @@ fn check_layer2_withdrawal(
 
     for request in withdrawals.iter() {
         let raw = request.raw();
+        // check chain_id
+
+        if raw.chain_id().unpack() != config.chain_id().unpack() {
+            debug!("withdrawal with wrong chain_id");
+            return Err(Error::InvalidWithdrawalRequest);
+        }
+
         // find EOA
         let account_script_hash: H256 = raw.account_script_hash().unpack();
         let id = kv_state
@@ -344,6 +351,11 @@ fn check_layer2_withdrawal(
             CKBCapacity::from_layer1(raw.capacity().unpack()).to_layer2(),
         )?;
         let nonce = kv_state.get_nonce(id)?;
+        // check nonce
+        let withdrawal_nonce: u32 = raw.nonce().unpack();
+        if nonce != withdrawal_nonce {
+            return Err(Error::InvalidWithdrawalRequest);
+        }
         // withdraw Simple UDT account
         match build_l2_sudt_script(rollup_type_hash, config, &raw.sudt_script_hash().unpack()) {
             Some(script) => {
@@ -353,11 +365,6 @@ fn check_layer2_withdrawal(
                     .ok_or(StateError::MissingKey)?;
                 // burn sudt
                 kv_state.burn_sudt(sudt_id, &address, raw.amount().unpack().into())?;
-                // update nonce
-                let withdrawal_nonce: u32 = raw.nonce().unpack();
-                if nonce != withdrawal_nonce {
-                    return Err(Error::InvalidWithdrawalRequest);
-                }
             }
             None if raw.amount().unpack() != 0 => {
                 // Invalid Simple UDT withdraw
@@ -367,6 +374,7 @@ fn check_layer2_withdrawal(
                 // Only withdraw CKB
             }
         }
+        // update nonce
         kv_state.set_nonce(id, nonce.saturating_add(1))?;
     }
 
