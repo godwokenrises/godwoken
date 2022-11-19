@@ -1,6 +1,6 @@
 //! Cell types
 
-use crate::gw_common::sparse_merkle_tree::H256;
+use crate::gw_common::{sparse_merkle_tree::H256, CKB_SUDT_SCRIPT_ARGS};
 use crate::gw_types::packed::{
     ChallengeLockArgs, CustodianLockArgs, DepositLockArgs, Script, StakeLockArgs,
     WithdrawalLockArgs,
@@ -11,6 +11,12 @@ pub struct CellValue {
     pub sudt_script_hash: H256,
     pub amount: u128,
     pub capacity: u64,
+}
+
+impl CellValue {
+    pub fn is_ckb_only(&self) -> bool {
+        self.sudt_script_hash == CKB_SUDT_SCRIPT_ARGS.into() && self.amount == 0
+    }
 }
 
 #[derive(Debug)]
