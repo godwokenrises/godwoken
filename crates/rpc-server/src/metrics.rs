@@ -1,6 +1,6 @@
 use gw_otel::metric::{
-    counter::Counter, encoding::text::Encode, family::Family, gauge::Gauge, registry::Registry,
-    Lazy,
+    counter::Counter, encoding::text::Encode, family::Family, gauge::Gauge, prometheus_client,
+    registry::Registry, Lazy,
 };
 
 use crate::registry::Request;
