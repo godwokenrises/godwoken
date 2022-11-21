@@ -32,7 +32,6 @@ use tokio::{
 };
 use tracing::instrument;
 
-use crate::metrics;
 use crate::{
     block_producer::{check_block_size, BlockProducer, ComposeSubmitTxArgs, TransactionSizeError},
     chain_updater::ChainUpdater,
@@ -45,6 +44,30 @@ pub struct ProduceSubmitConfirm {
     context: Arc<PSCContext>,
     local_count: u64,
     submitted_count: u64,
+}
+
+impl ProduceSubmitConfirm {
+    fn new(context: Arc<PSCContext>) -> Self {
+        Self {
+            context,
+            local_count: 0,
+            submitted_count: 0,
+        }
+    }
+
+    fn set_local_count(&mut self, count: u64) {
+        self.local_count = count;
+
+        use crate::metrics;
+        metrics::bp().local_blocks.set(count);
+        metrics::custodian().finalized_custodians(&self.context.store);
+    }
+
+    fn set_submitted_count(&mut self, count: u64) {
+        self.submitted_count = count;
+
+        crate::metrics::bp().submitted_blocks.set(count);
+    }
 }
 
 pub struct PSCContext {
@@ -130,17 +153,11 @@ impl ProduceSubmitConfirm {
             last_confirmed
         );
 
-        let local_count = last_valid - last_submitted;
-        let submitted_count = last_submitted - last_confirmed;
-        metrics::bp().local_blocks.set(local_count);
-        metrics::bp().submitted_blocks.set(submitted_count);
-        metrics::custodian().finalized_custodians(&context.store);
+        let mut psc = Self::new(context);
+        psc.set_local_count(last_valid - last_submitted);
+        psc.set_submitted_count(last_submitted - last_confirmed);
 
-        Ok(Self {
-            context,
-            local_count,
-            submitted_count,
-        })
+        Ok(psc)
     }
 
     /// Run the producing, submitting and confirming loop.
@@ -208,11 +225,8 @@ impl ProduceSubmitConfirm {
                                 .notify_new_tip(new_tip, &local_cells_manager)
                                 .await?;
                         }
-                        self.local_count = last_valid - last_submitted;
-                        self.submitted_count = last_submitted - last_confirmed;
-                        metrics::bp().local_blocks.set(self.local_count);
-                        metrics::bp().submitted_blocks.set(self.submitted_count);
-                        metrics::custodian().finalized_custodians(&self.context.store);
+                        self.set_local_count(last_valid - last_submitted);
+                        self.set_submitted_count(last_submitted - last_confirmed);
                     } else {
                         bail!(e);
                     }
@@ -222,12 +236,13 @@ impl ProduceSubmitConfirm {
     }
 }
 
-async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
+async fn run(state: &mut ProduceSubmitConfirm) -> Result<()> {
     let mut submitting = false;
     let mut submit_handle = spawn_abort_on_drop(async { anyhow::Ok(NumberHash::default()) });
     let mut confirming = false;
     let mut confirm_handle = spawn_abort_on_drop(async { anyhow::Ok(NumberHash::default()) });
-    let config = &state.context.psc_config;
+    let ctx = state.context.clone();
+    let config = &ctx.psc_config;
     let mut interval = tokio::time::interval(Duration::from_secs(config.block_interval_secs));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
@@ -318,8 +333,7 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                             let mut sync_server = sync_server.lock().unwrap();
                             publish_confirmed(&mut sync_server, &state.context.store.get_snapshot(), nh.number().unpack())?;
                         }
-                        state.submitted_count -= 1;
-                        metrics::bp().submitted_blocks.dec();
+                        state.set_submitted_count(state.submitted_count - 1);
                     }
                     _ => {}
                 }
@@ -338,10 +352,8 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                             let mut sync_server = sync_server.lock().unwrap();
                             publish_submitted(&mut sync_server, &state.context.store.get_snapshot(), nh.number().unpack())?;
                         }
-                        state.submitted_count += 1;
-                        state.local_count -= 1;
-                        metrics::bp().submitted_blocks.inc();
-                        metrics::bp().local_blocks.dec();
+                        state.set_local_count(state.local_count - 1);
+                        state.set_submitted_count(state.submitted_count + 1);
                     }
                     _ => {}
                 }
@@ -353,9 +365,7 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                 if let Err(e) = produce_local_block(&state.context).await {
                     log::warn!("failed to produce local block: {:#}", e);
                 } else {
-                    state.local_count += 1;
-                    metrics::bp().local_blocks.inc();
-                    metrics::custodian().finalized_custodians(&state.context.store);
+                    state.set_local_count(state.local_count + 1);
                 }
             }
         }
@@ -553,8 +563,8 @@ async fn submit_block(
         store_tx.set_block_submit_tx(block_number, &tx.as_reader())?;
         store_tx.commit()?;
 
-        metrics::bp().tx_size.inc_by(tx.total_size() as u64);
-        metrics::bp()
+        crate::metrics::bp().tx_size.inc_by(tx.total_size() as u64);
+        crate::metrics::bp()
             .witness_size
             .inc_by(tx.witnesses().total_size() as u64);
 
@@ -620,12 +630,11 @@ async fn submit_block(
         .build())
 }
 
-async fn poll_tx_confirmed(context: &PSCContext, tx: &Transaction) -> Result<()> {
+async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<()> {
     log::info!("waiting for tx 0x{}", hex::encode(tx.hash()));
     let mut last_sent = Instant::now();
     loop {
-        let status = context
-            .rpc_client
+        let status = rpc_client
             .ckb
             .get_transaction_status(tx.hash().into())
             .await?;
@@ -646,21 +655,20 @@ async fn poll_tx_confirmed(context: &PSCContext, tx: &Transaction) -> Result<()>
         };
         if should_resend {
             log::info!("resend transaction 0x{}", hex::encode(tx.hash()));
-            send_transaction_or_check_inputs(&context.rpc_client, tx).await?;
+            send_transaction_or_check_inputs(rpc_client, tx).await?;
             last_sent = Instant::now();
-            metrics::bp().resend.inc();
+            crate::metrics::bp().resend.inc();
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
     // Wait for indexer syncing the L1 block.
-    let block_number = context
-        .rpc_client
+    let block_number = rpc_client
         .ckb
         .get_transaction_block_number(tx.hash().into())
         .await?
         .context("get tx block hash")?;
     loop {
-        let tip = context.rpc_client.get_tip().await?;
+        let tip = rpc_client.get_tip().await?;
         if tip.number().unpack() >= block_number {
             break;
         }
@@ -693,15 +701,17 @@ async fn confirm_block(
         .get_block_submit_tx(block_number)
         .expect("get submit tx");
     drop(snap);
-    poll_tx_confirmed(context, &tx).await.map_err(|e| {
-        if e.is::<UnknownCellError>() {
-            e.context(ShouldResyncError)
-        } else if e.is::<DeadCellError>() {
-            e.context(ShouldRevertError(block_number))
-        } else {
-            e
-        }
-    })?;
+    poll_tx_confirmed(&context.rpc_client, &tx)
+        .await
+        .map_err(|e| {
+            if e.is::<UnknownCellError>() {
+                e.context(ShouldResyncError)
+            } else if e.is::<DeadCellError>() {
+                e.context(ShouldRevertError(block_number))
+            } else {
+                e
+            }
+        })?;
     log::info!("block confirmed");
     context.local_cells_manager.lock().await.confirm_tx(&tx);
     Ok(NumberHash::new_builder()
