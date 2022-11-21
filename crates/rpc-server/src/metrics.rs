@@ -7,7 +7,7 @@ use crate::registry::Request;
 
 pub static RPC_METRICS: Lazy<RPCMetrics> = Lazy::new(|| {
     let metrics = RPCMetrics::default();
-    let mut registry = gw_otel::metric::global();
+    let mut registry = gw_otel::metric::global_registry();
     metrics.register(registry.sub_registry_with_prefix("rpc"));
     metrics
 });

@@ -20,7 +20,7 @@ pub const ENV_METRIC_MONITOR_CUSTODIAN_VEC_JSON: &str = "METRIC_MONITOR_CUSTODIA
 
 pub static BP_METRICS: Lazy<BlockProducerMetrics> = Lazy::new(|| {
     let metrics = BlockProducerMetrics::default();
-    let mut registry = gw_otel::metric::global();
+    let mut registry = gw_otel::metric::global_registry();
     metrics.register(registry.sub_registry_with_prefix("block_producer"));
     metrics
 });
@@ -32,7 +32,7 @@ pub static CUSTODIAN_METRICS: Lazy<CustodianMetrics> = Lazy::new(|| {
     let maybe_enable = std::env::var(ENV_METRIC_MONITOR_CUSTODIAN_ENABLE);
     if matches!(maybe_enable.as_deref(), Ok("true")) {
         metrics.enabled = true;
-        let mut registry = gw_otel::metric::global();
+        let mut registry = gw_otel::metric::global_registry();
         metrics.register(registry.sub_registry_with_prefix("custodian"));
     }
 

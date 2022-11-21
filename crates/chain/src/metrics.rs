@@ -6,7 +6,7 @@ use gw_otel::metric::{
 
 pub static CHAIN_METRICS: Lazy<ChainMetrics> = Lazy::new(|| {
     let metrics = ChainMetrics::default();
-    let mut registry = gw_otel::metric::global();
+    let mut registry = gw_otel::metric::global_registry();
     metrics.register(registry.sub_registry_with_prefix("chain"));
     metrics
 });

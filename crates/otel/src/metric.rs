@@ -26,7 +26,7 @@ use registry::Registry;
 pub static REGISTRY: Lazy<RwLock<Registry<Box<dyn SendSyncEncodeMetric>>>> =
     Lazy::new(|| Registry::with_prefix("gw").into());
 
-pub fn global<'a>() -> RwLockWriteGuard<'a, Registry<Box<dyn SendSyncEncodeMetric>>> {
+pub fn global_registry<'a>() -> RwLockWriteGuard<'a, Registry<Box<dyn SendSyncEncodeMetric>>> {
     REGISTRY.write().unwrap()
 }
 
