@@ -32,7 +32,7 @@ use tokio::{
 };
 use tracing::instrument;
 
-use crate::metrics::{BP_METRICS, CUSTODIAN_METRICS};
+use crate::metrics;
 use crate::{
     block_producer::{check_block_size, BlockProducer, ComposeSubmitTxArgs, TransactionSizeError},
     chain_updater::ChainUpdater,
@@ -132,9 +132,9 @@ impl ProduceSubmitConfirm {
 
         let local_count = last_valid - last_submitted;
         let submitted_count = last_submitted - last_confirmed;
-        BP_METRICS.local_blocks.set(local_count);
-        BP_METRICS.submitted_blocks.set(submitted_count);
-        CUSTODIAN_METRICS.finalized_custodians(&context.store);
+        metrics::bp().local_blocks.set(local_count);
+        metrics::bp().submitted_blocks.set(submitted_count);
+        metrics::custodian().finalized_custodians(&context.store);
 
         Ok(Self {
             context,
@@ -210,9 +210,9 @@ impl ProduceSubmitConfirm {
                         }
                         self.local_count = last_valid - last_submitted;
                         self.submitted_count = last_submitted - last_confirmed;
-                        BP_METRICS.local_blocks.set(self.local_count);
-                        BP_METRICS.submitted_blocks.set(self.submitted_count);
-                        CUSTODIAN_METRICS.finalized_custodians(&self.context.store);
+                        metrics::bp().local_blocks.set(self.local_count);
+                        metrics::bp().submitted_blocks.set(self.submitted_count);
+                        metrics::custodian().finalized_custodians(&self.context.store);
                     } else {
                         bail!(e);
                     }
@@ -319,7 +319,7 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                             publish_confirmed(&mut sync_server, &state.context.store.get_snapshot(), nh.number().unpack())?;
                         }
                         state.submitted_count -= 1;
-                        BP_METRICS.submitted_blocks.dec();
+                        metrics::bp().submitted_blocks.dec();
                     }
                     _ => {}
                 }
@@ -340,8 +340,8 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                         }
                         state.submitted_count += 1;
                         state.local_count -= 1;
-                        BP_METRICS.submitted_blocks.inc();
-                        BP_METRICS.local_blocks.dec();
+                        metrics::bp().submitted_blocks.inc();
+                        metrics::bp().local_blocks.dec();
                     }
                     _ => {}
                 }
@@ -354,8 +354,8 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                     log::warn!("failed to produce local block: {:#}", e);
                 } else {
                     state.local_count += 1;
-                    BP_METRICS.local_blocks.inc();
-                    CUSTODIAN_METRICS.finalized_custodians(&state.context.store);
+                    metrics::bp().local_blocks.inc();
+                    metrics::custodian().finalized_custodians(&state.context.store);
                 }
             }
         }
@@ -553,8 +553,8 @@ async fn submit_block(
         store_tx.set_block_submit_tx(block_number, &tx.as_reader())?;
         store_tx.commit()?;
 
-        BP_METRICS.tx_size.inc_by(tx.total_size() as u64);
-        BP_METRICS
+        metrics::bp().tx_size.inc_by(tx.total_size() as u64);
+        metrics::bp()
             .witness_size
             .inc_by(tx.witnesses().total_size() as u64);
 
@@ -648,7 +648,7 @@ async fn poll_tx_confirmed(context: &PSCContext, tx: &Transaction) -> Result<()>
             log::info!("resend transaction 0x{}", hex::encode(tx.hash()));
             send_transaction_or_check_inputs(&context.rpc_client, tx).await?;
             last_sent = Instant::now();
-            BP_METRICS.resend.inc();
+            metrics::bp().resend.inc();
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }

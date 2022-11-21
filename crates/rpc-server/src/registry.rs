@@ -66,7 +66,6 @@ use tracing::instrument;
 
 use crate::apis::debug::{replay_transaction, DebugTransactionContext};
 use crate::in_queue_request_map::{InQueueRequestHandle, InQueueRequestMap};
-use crate::metrics::RPC_METRICS;
 use crate::utils::{to_h256, to_jsonh256};
 
 static PROFILER_GUARD: Lazy<tokio::sync::Mutex<Option<ProfilerGuard>>> =
@@ -1145,7 +1144,9 @@ async fn execute_l2transaction(
         message: err.to_string(),
         data: None,
     })?;
-    RPC_METRICS.execute_transactions(run_result.exit_code).inc();
+    crate::metrics::rpc()
+        .execute_transactions(run_result.exit_code)
+        .inc();
 
     if run_result.exit_code != 0 {
         let receipt = gw_types::offchain::ErrorTxReceipt {
@@ -1319,7 +1320,9 @@ async fn execute_raw_l2transaction(
         Result::<_, anyhow::Error>::Ok(run_result)
     })
     .await??;
-    RPC_METRICS.execute_transactions(run_result.exit_code).inc();
+    crate::metrics::rpc()
+        .execute_transactions(run_result.exit_code)
+        .inc();
 
     if run_result.exit_code != 0 {
         let receipt = gw_types::offchain::ErrorTxReceipt {

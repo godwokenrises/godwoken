@@ -4,7 +4,6 @@ use std::{collections::HashMap, sync::Weak};
 use gw_common::H256;
 use gw_types::packed::{L2Transaction, WithdrawalRequestExtra};
 
-use crate::metrics::RPC_METRICS;
 use crate::registry::Request;
 
 /// Hold in queue transactions and withdrawal requests.
@@ -17,7 +16,7 @@ pub struct InQueueRequestMap {
 
 impl InQueueRequestMap {
     pub(crate) fn insert(self: &Arc<Self>, k: H256, v: Request) -> Option<InQueueRequestHandle> {
-        RPC_METRICS.in_queue_requests(&v).inc();
+        crate::metrics::rpc().in_queue_requests(&v).inc();
 
         let mut map = self.map.write().unwrap();
         let inserted = map.insert(k, v).is_none();
@@ -35,7 +34,7 @@ impl InQueueRequestMap {
     fn remove(&self, k: &H256) {
         let mut map = self.map.write().unwrap();
         if let Some(v) = map.remove(k) {
-            RPC_METRICS.in_queue_requests(&v).dec();
+            crate::metrics::rpc().in_queue_requests(&v).dec();
         }
     }
 

@@ -8,7 +8,7 @@ use gw_otel::metric::{
     gauge::Gauge,
     prometheus_client,
     registry::{Registry, Unit},
-    Lazy, OnceCell,
+    OnceCell,
 };
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::prelude::Unpack;
@@ -18,26 +18,32 @@ use tracing::instrument;
 pub const ENV_METRIC_MONITOR_CUSTODIAN_ENABLE: &str = "METRIC_MONITOR_CUSTODIAN_ENABLE";
 pub const ENV_METRIC_MONITOR_CUSTODIAN_VEC_JSON: &str = "METRIC_MONITOR_CUSTODIAN_VEC_JSON";
 
-pub static BP_METRICS: Lazy<BlockProducerMetrics> = Lazy::new(|| {
-    let metrics = BlockProducerMetrics::default();
-    let mut registry = gw_otel::metric::global_registry();
-    metrics.register(registry.sub_registry_with_prefix("block_producer"));
-    metrics
-});
-
-pub static CUSTODIAN_METRICS: Lazy<CustodianMetrics> = Lazy::new(|| {
-    let mut metrics = CustodianMetrics::default();
-    debug_assert!(!metrics.enabled);
-
-    let maybe_enable = std::env::var(ENV_METRIC_MONITOR_CUSTODIAN_ENABLE);
-    if matches!(maybe_enable.as_deref(), Ok("true")) {
-        metrics.enabled = true;
+pub fn bp() -> &'static BlockProducerMetrics {
+    static METRICS: OnceCell<BlockProducerMetrics> = OnceCell::new();
+    METRICS.get_or_init(|| {
+        let metrics = BlockProducerMetrics::default();
         let mut registry = gw_otel::metric::global_registry();
-        metrics.register(registry.sub_registry_with_prefix("custodian"));
-    }
+        metrics.register(registry.sub_registry_with_prefix("block_producer"));
+        metrics
+    })
+}
 
-    metrics
-});
+pub fn custodian() -> &'static CustodianMetrics {
+    static METRICS: OnceCell<CustodianMetrics> = OnceCell::new();
+    METRICS.get_or_init(|| {
+        let mut metrics = CustodianMetrics::default();
+        debug_assert!(!metrics.enabled);
+
+        let maybe_enable = std::env::var(ENV_METRIC_MONITOR_CUSTODIAN_ENABLE);
+        if matches!(maybe_enable.as_deref(), Ok("true")) {
+            metrics.enabled = true;
+            let mut registry = gw_otel::metric::global_registry();
+            metrics.register(registry.sub_registry_with_prefix("custodian"));
+        }
+
+        metrics
+    })
+}
 
 #[derive(Default)]
 pub struct BlockProducerMetrics {

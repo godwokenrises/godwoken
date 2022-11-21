@@ -1,15 +1,18 @@
 use gw_otel::metric::{
     registry::Registry,
-    Lazy,
+    OnceCell,
     {counter::Counter, gauge::Gauge},
 };
 
-pub static CHAIN_METRICS: Lazy<ChainMetrics> = Lazy::new(|| {
-    let metrics = ChainMetrics::default();
-    let mut registry = gw_otel::metric::global_registry();
-    metrics.register(registry.sub_registry_with_prefix("chain"));
-    metrics
-});
+pub fn chain() -> &'static ChainMetrics {
+    static METRICS: OnceCell<ChainMetrics> = OnceCell::new();
+    METRICS.get_or_init(|| {
+        let metrics = ChainMetrics::default();
+        let mut registry = gw_otel::metric::global_registry();
+        metrics.register(registry.sub_registry_with_prefix("chain"));
+        metrics
+    })
+}
 
 #[derive(Default)]
 pub struct ChainMetrics {

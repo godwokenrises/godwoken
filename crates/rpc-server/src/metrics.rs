@@ -1,16 +1,19 @@
 use gw_otel::metric::{
     counter::Counter, encoding::text::Encode, family::Family, gauge::Gauge, prometheus_client,
-    registry::Registry, Lazy,
+    registry::Registry, OnceCell,
 };
 
 use crate::registry::Request;
 
-pub static RPC_METRICS: Lazy<RPCMetrics> = Lazy::new(|| {
-    let metrics = RPCMetrics::default();
-    let mut registry = gw_otel::metric::global_registry();
-    metrics.register(registry.sub_registry_with_prefix("rpc"));
-    metrics
-});
+pub fn rpc() -> &'static RPCMetrics {
+    static METRICS: OnceCell<RPCMetrics> = OnceCell::new();
+    METRICS.get_or_init(|| {
+        let metrics = RPCMetrics::default();
+        let mut registry = gw_otel::metric::global_registry();
+        metrics.register(registry.sub_registry_with_prefix("rpc"));
+        metrics
+    })
+}
 
 #[derive(Default)]
 pub struct RPCMetrics {

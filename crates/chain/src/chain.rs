@@ -35,8 +35,6 @@ use std::{collections::HashSet, convert::TryFrom, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
 use tracing::instrument;
 
-use crate::metrics::CHAIN_METRICS;
-
 #[derive(Debug, Clone)]
 pub struct ChallengeCell {
     pub input: CellInput,
@@ -1078,10 +1076,11 @@ impl Chain {
         db.attach_block(l2block.clone())?;
 
         // Update metrics.
-        CHAIN_METRICS.block_height.set(block_number);
-        CHAIN_METRICS.deposits.inc_by(deposit_info_vec_len);
-        CHAIN_METRICS.withdrawals.inc_by(withdrawals_len);
-        CHAIN_METRICS.transactions.inc_by(tx_receipts_len);
+        use crate::metrics;
+        metrics::chain().block_height.set(block_number);
+        metrics::chain().deposits.inc_by(deposit_info_vec_len);
+        metrics::chain().withdrawals.inc_by(withdrawals_len);
+        metrics::chain().transactions.inc_by(tx_receipts_len);
 
         self.local_state.tip = l2block;
         self.local_state.last_global_state = global_state;
