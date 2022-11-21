@@ -245,7 +245,7 @@ fn minimal_deposit_capacity(deposit_lock_args: &DepositLockArgs) -> Result<u64> 
 
     let custodian_lock_args = CustodianLockArgs::new_builder()
         .deposit_block_hash(dummy_hash.pack())
-        .deposit_block_number(gw_types::prelude::Pack::pack(&dummy_timepoint.full_value()))
+        .deposit_block_timepoint(gw_types::prelude::Pack::pack(&dummy_timepoint.full_value()))
         .deposit_lock_args(deposit_lock_args.clone())
         .build();
 

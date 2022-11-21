@@ -136,7 +136,9 @@ async fn query_mergeable_ckb_custodians(
                 Err(_) => continue,
             };
             if !compatible_finalized_timepoint.is_finalized(&Timepoint::from_full_value(
-                custodian_lock_args_reader.deposit_block_number().unpack(),
+                custodian_lock_args_reader
+                    .deposit_block_timepoint()
+                    .unpack(),
             )) {
                 continue;
             }

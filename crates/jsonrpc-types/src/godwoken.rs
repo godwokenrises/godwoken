@@ -1339,7 +1339,7 @@ impl From<WithdrawalLockArgs> for packed::WithdrawalLockArgs {
         packed::WithdrawalLockArgs::new_builder()
             .account_script_hash(account_script_hash.pack())
             .withdrawal_block_hash(withdrawal_block_hash.pack())
-            .withdrawal_block_number(withdrawal_block_number.value().pack())
+            .withdrawal_block_timepoint(withdrawal_block_number.value().pack())
             .owner_lock_hash(owner_lock_hash.pack())
             .build()
     }
@@ -1347,7 +1347,7 @@ impl From<WithdrawalLockArgs> for packed::WithdrawalLockArgs {
 
 impl From<packed::WithdrawalLockArgs> for WithdrawalLockArgs {
     fn from(data: packed::WithdrawalLockArgs) -> WithdrawalLockArgs {
-        let withdrawal_block_number: u64 = data.withdrawal_block_number().unpack();
+        let withdrawal_block_number: u64 = data.withdrawal_block_timepoint().unpack();
         Self {
             account_script_hash: data.account_script_hash().unpack(),
             owner_lock_hash: data.owner_lock_hash().unpack(),
