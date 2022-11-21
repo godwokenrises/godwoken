@@ -1,3 +1,4 @@
+mod calc_finalizing_range;
 mod chain;
 mod deposit_withdrawal;
 mod export_import_block;
