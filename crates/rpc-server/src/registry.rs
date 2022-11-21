@@ -33,7 +33,6 @@ use gw_mem_pool::fee::{
     queue::FeeQueue,
     types::{FeeEntry, FeeItem, FeeItemKind, FeeItemSender},
 };
-use gw_otel::traits::{GwOtelContext, GwOtelContextNewSpan, GwOtelSpanExt};
 use gw_polyjuice_sender_recover::recover::PolyjuiceSenderRecover;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::state::history::history_state::RWConfig;
@@ -42,6 +41,7 @@ use gw_store::{
     chain_view::ChainView, mem_pool_state::MemPoolState, traits::chain_store::ChainStore,
     CfMemStat, Store,
 };
+use gw_telemetry::traits::{GwOtelContext, GwOtelContextNewSpan, GwOtelSpanExt};
 use gw_traits::CodeStore;
 use gw_types::packed::RawL2Transaction;
 use gw_types::{
@@ -130,12 +130,12 @@ pub trait TestModeRPC {
 
 pub struct RequestContext {
     _in_queue_handle: InQueueRequestHandle,
-    trace: gw_otel::Context,
+    trace: gw_telemetry::Context,
     in_queue_span: tracing::Span,
 }
 
 impl GwOtelContext for RequestContext {
-    fn otel_context(&self) -> Option<&gw_otel::Context> {
+    fn otel_context(&self) -> Option<&gw_telemetry::Context> {
         Some(&self.trace)
     }
 }
@@ -568,7 +568,7 @@ impl RequestSubmitter {
                     }
                 };
 
-                gw_otel::with_span_ref(&ctx.in_queue_span, |span| span.end());
+                gw_telemetry::with_span_ref(&ctx.in_queue_span, |span| span.end());
                 ctx.in_queue_span = ctx.trace.new_span(tracing::info_span!("fee_queue.add"));
                 let _entered = ctx.in_queue_span.clone().entered();
 
@@ -604,7 +604,7 @@ impl RequestSubmitter {
             // push txs to fee priority queue
             let state = self.mem_pool_state.load_state_db();
             while let Ok((req, mut ctx)) = self.submit_rx.try_recv() {
-                gw_otel::with_span_ref(&ctx.in_queue_span, |span| span.end());
+                gw_telemetry::with_span_ref(&ctx.in_queue_span, |span| span.end());
                 ctx.in_queue_span = ctx.trace.new_span(tracing::info_span!("fee_queue.add"));
                 let _entered = ctx.in_queue_span.clone().entered();
 
@@ -695,7 +695,7 @@ impl RequestSubmitter {
                 let mut block_cycles_limit_reached = false;
 
                 for (entry, ctx) in items {
-                    gw_otel::with_span_ref(&ctx.in_queue_span, |span| span.end());
+                    gw_telemetry::with_span_ref(&ctx.in_queue_span, |span| span.end());
                     let push_span = ctx.new_span(|_| tracing::info_span!("mem_pool.push"));
                     let _entered = push_span.enter();
 
@@ -1479,7 +1479,7 @@ async fn submit_l2transaction(
         let _entered = in_queue_span.clone().entered();
         let ctx = RequestContext {
             _in_queue_handle: handle,
-            trace: gw_otel::current_context(),
+            trace: gw_telemetry::current_context(),
             in_queue_span,
         };
         permit.send((request, ctx));
@@ -1555,7 +1555,7 @@ async fn submit_withdrawal_request(
         let _entered = in_queue_span.clone().entered();
         let ctx = RequestContext {
             _in_queue_handle: handle,
-            trace: gw_otel::current_context(),
+            trace: gw_telemetry::current_context(),
             in_queue_span,
         };
         permit.send((request, ctx));

@@ -14,7 +14,7 @@ use godwoken_bin::subcommand::rewind_to_last_valid_block::{
 };
 use gw_block_producer::runner;
 use gw_config::{BackendForkConfig, Config};
-use gw_otel::trace;
+use gw_telemetry::trace;
 use gw_version::Version;
 use std::{env, fs, path::Path};
 

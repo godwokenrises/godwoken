@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
-use gw_otel::metric::{
+use gw_store::{traits::chain_store::ChainStore, Store};
+use gw_telemetry::metric::{
     counter::Counter,
     encoding::text::Encode,
     family::Family,
@@ -10,7 +11,6 @@ use gw_otel::metric::{
     registry::{Registry, Unit},
     OnceCell,
 };
-use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::prelude::Unpack;
 use serde::Deserialize;
 use tracing::instrument;
@@ -22,7 +22,7 @@ pub fn bp() -> &'static BlockProducerMetrics {
     static METRICS: OnceCell<BlockProducerMetrics> = OnceCell::new();
     METRICS.get_or_init(|| {
         let metrics = BlockProducerMetrics::default();
-        let mut registry = gw_otel::metric::global_registry();
+        let mut registry = gw_telemetry::metric::global_registry();
         metrics.register(registry.sub_registry_with_prefix("block_producer"));
         metrics
     })
@@ -37,7 +37,7 @@ pub fn custodian() -> &'static CustodianMetrics {
         let maybe_enable = std::env::var(ENV_METRIC_MONITOR_CUSTODIAN_ENABLE);
         if matches!(maybe_enable.as_deref(), Ok("true")) {
             metrics.enabled = true;
-            let mut registry = gw_otel::metric::global_registry();
+            let mut registry = gw_telemetry::metric::global_registry();
             metrics.register(registry.sub_registry_with_prefix("custodian"));
         }
 

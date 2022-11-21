@@ -20,7 +20,7 @@ gw-rpc-client = { path = "../rpc-client" }
 gw-utils = { path = "../utils" }
 gw-dynamic-config = { path = "../dynamic-config"}
 gw-polyjuice-sender-recover = { path = "../polyjuice-sender-recover" }
-gw-otel = { path = "../otel" }
+gw-telemetry = { path = "../telemetry" }
 ckb-crypto = "0.105.1"
 ckb-fixed-hash = "0.105.1"
 ckb-types = "0.105.1"

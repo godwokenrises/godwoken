@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use gw_common::state::State;
-use gw_otel::traits::{GwOtelContext, GwOtelContextNewSpan, GwOtelSpanExt, TraceContextExt};
+use gw_telemetry::traits::{GwOtelContext, GwOtelContextNewSpan, GwOtelSpanExt, TraceContextExt};
 use std::collections::{BTreeMap, HashMap};
 use tracing::{field, instrument};
 
@@ -57,7 +57,7 @@ impl<T: GwOtelContext> FeeQueue<T> {
                     if let Some(cx) = handle.otel_context() {
                         let span = cx.span();
                         span.record_error(anyhow!("queue is full").as_ref());
-                        span.set_status(gw_otel::trace::Status::error("queue is full"));
+                        span.set_status(gw_telemetry::trace::Status::error("queue is full"));
                     }
                 }
             }
@@ -119,7 +119,7 @@ impl<T: GwOtelContext> FeeQueue<T> {
                         let err = anyhow!("nonce {} expect {}", entry.item.nonce(), nonce);
                         let span = cx.span();
                         span.record_error(err.as_ref());
-                        span.set_status(gw_otel::trace::Status::error("drop future nonce"));
+                        span.set_status(gw_telemetry::trace::Status::error("drop future nonce"));
                     }
 
                     log::debug!(
@@ -148,7 +148,7 @@ impl<T: GwOtelContext> FeeQueue<T> {
                     let err = anyhow!("future nonce {}", entry.item.nonce());
                     let span = cx.span();
                     span.record_error(err.as_ref());
-                    span.set_status(gw_otel::trace::Status::error("drop future nonce"));
+                    span.set_status(gw_telemetry::trace::Status::error("drop future nonce"));
                 }
 
                 log::debug!(

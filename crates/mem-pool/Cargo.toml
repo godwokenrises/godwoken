@@ -19,7 +19,7 @@ gw-utils = { path = "../utils" }
 gw-dynamic-config = { path = "../dynamic-config" }
 gw-p2p-network = { path = "../p2p-network" }
 gw-tx-filter = { path = "../tx-filter" }
-gw-otel = { path = "../otel" }
+gw-telemetry = { path = "../telemetry" }
 futures = { version = "0.3"}
 tokio = "1"
 anyhow = "1.0"

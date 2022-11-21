@@ -17,7 +17,7 @@ gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-utils = { path = "../utils" }
-gw-otel = { path = "../otel" }
+gw-telemetry = { path = "../telemetry" }
 ckb-fixed-hash = "0.105.1"
 anyhow = "1.0"
 thiserror = "1.0"

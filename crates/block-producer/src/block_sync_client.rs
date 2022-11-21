@@ -9,13 +9,13 @@ use futures::TryStreamExt;
 use gw_chain::chain::Chain;
 use gw_generator::generator::CyclesPool;
 use gw_mem_pool::pool::MemPool;
-use gw_otel::{
-    trace::{SpanContext, SpanId, TraceFlags, TraceId, TraceState},
-    traits::{GwOtelContextNewSpan, TraceContextExt},
-};
 use gw_p2p_network::{FnSpawn, P2P_SYNC_PROTOCOL, P2P_SYNC_PROTOCOL_NAME};
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{traits::chain_store::ChainStore, Store};
+use gw_telemetry::{
+    trace::{SpanContext, SpanId, TraceFlags, TraceId, TraceState},
+    traits::{GwOtelContextNewSpan, TraceContextExt},
+};
 use gw_types::{
     packed::{
         BlockSync, BlockSyncReader, BlockSyncUnion, NumberHash, P2PSyncRequest,
@@ -238,7 +238,7 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
                 true,
                 TraceState::default(),
             );
-            let span = gw_otel::current_context()
+            let span = gw_telemetry::current_context()
                 .with_remote_span_context(span_cx)
                 .new_span(info_span!("handle_local_block"));
             handle_local_block(client, l).instrument(span).await?;
@@ -300,7 +300,7 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
                 true,
                 TraceState::default(),
             );
-            let span = gw_otel::current_context()
+            let span = gw_telemetry::current_context()
                 .with_remote_span_context(span_cx)
                 .new_span(info_span!("handle_push_transaction"));
 

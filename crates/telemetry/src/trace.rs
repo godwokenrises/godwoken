@@ -61,7 +61,7 @@ pub fn init() -> Result<TraceGuard, TraceInitError> {
     let trace_layer = match trace_exporter {
         TraceExporter::Jaeger => {
             // TODO: opentelemetry-otpl requires protoc cli, wait next release
-            // Reference: https://github.com/open-telemetry/opentelemetry-rust/pull/881
+            // Reference: https://github.com/open-telemetry\/telemetry-rust/pull/881
             opentelemetry::global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
 
             // Set serivce name through `OTEL_SERVICE_NAME` or `OTEL_RESOURCE_ATTRIBUTES: service.name`

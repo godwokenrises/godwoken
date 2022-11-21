@@ -9,8 +9,8 @@ use bytes::Bytes;
 use futures::{StreamExt, TryStreamExt};
 use gw_common::H256;
 use gw_config::SyncServerConfig;
-use gw_otel::traits::{OpenTelemetrySpanExt, TraceContextExt};
 use gw_p2p_network::{FnSpawn, P2P_SYNC_PROTOCOL, P2P_SYNC_PROTOCOL_NAME};
+use gw_telemetry::traits::{OpenTelemetrySpanExt, TraceContextExt};
 use gw_types::{
     packed::{
         self, BlockSync, BlockSyncUnion, Confirmed, Found, L2Transaction, LocalBlock, NextMemBlock,

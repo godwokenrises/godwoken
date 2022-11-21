@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Error, Result};
-use gw_otel::trace::http::HeaderExtractor;
-use gw_otel::traits::{GwOtelContextNewSpan, GwOtelContextRemote};
+use gw_telemetry::trace::http::HeaderExtractor;
+use gw_telemetry::traits::{GwOtelContextNewSpan, GwOtelContextRemote};
 use gw_utils::liveness::Liveness;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{body::HttpBody, server::conn::AddrIncoming, Body, Method, Request, Response, Server};
@@ -43,8 +43,8 @@ pub async fn start_jsonrpc_server(
             let liveness = liveness.clone();
             async move {
                 Ok::<_, Error>(service_fn(move |req| {
-                    let remote_ctx = gw_otel::extract_context(&HeaderExtractor(req.headers()));
-                    let otel_ctx = gw_otel::current_context().with_remote_context(&remote_ctx);
+                    let remote_ctx = gw_telemetry::extract_context(&HeaderExtractor(req.headers()));
+                    let otel_ctx = gw_telemetry::current_context().with_remote_context(&remote_ctx);
 
                     let serve_span = otel_ctx.new_span(tracing::info_span!("rpc.serve"));
                     serve_span.record("path", req.uri().path());
@@ -86,7 +86,7 @@ async fn serve<R: Router + 'static>(
         let mut buf = Vec::new();
         // XXX: HEAD response won't have content-length header.
         if req.method() != Method::HEAD {
-            gw_otel::metric::scrape(&mut buf)?;
+            gw_telemetry::metric::scrape(&mut buf)?;
         }
         return hyper::Response::builder()
             .status(hyper::StatusCode::OK)

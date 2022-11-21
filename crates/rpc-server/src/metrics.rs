@@ -1,4 +1,4 @@
-use gw_otel::metric::{
+use gw_telemetry::metric::{
     counter::Counter, encoding::text::Encode, family::Family, gauge::Gauge, prometheus_client,
     registry::Registry, OnceCell,
 };
@@ -9,7 +9,7 @@ pub fn rpc() -> &'static RPCMetrics {
     static METRICS: OnceCell<RPCMetrics> = OnceCell::new();
     METRICS.get_or_init(|| {
         let metrics = RPCMetrics::default();
-        let mut registry = gw_otel::metric::global_registry();
+        let mut registry = gw_telemetry::metric::global_registry();
         metrics.register(registry.sub_registry_with_prefix("rpc"));
         metrics
     })
