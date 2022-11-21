@@ -7482,8 +7482,8 @@ impl ::core::fmt::Display for CustodianLockArgs {
         write!(
             f,
             ", {}: {}",
-            "deposit_block_number",
-            self.deposit_block_number()
+            "deposit_block_timepoint",
+            self.deposit_block_timepoint()
         )?;
         write!(f, ", {}: {}", "deposit_lock_args", self.deposit_lock_args())?;
         let extra_count = self.count_extra_fields();
@@ -7531,7 +7531,7 @@ impl CustodianLockArgs {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         Byte32::new_unchecked(self.0.slice(start..end))
     }
-    pub fn deposit_block_number(&self) -> Uint64 {
+    pub fn deposit_block_timepoint(&self) -> Uint64 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
@@ -7575,7 +7575,7 @@ impl molecule::prelude::Entity for CustodianLockArgs {
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
             .deposit_block_hash(self.deposit_block_hash())
-            .deposit_block_number(self.deposit_block_number())
+            .deposit_block_timepoint(self.deposit_block_timepoint())
             .deposit_lock_args(self.deposit_lock_args())
     }
 }
@@ -7602,8 +7602,8 @@ impl<'r> ::core::fmt::Display for CustodianLockArgsReader<'r> {
         write!(
             f,
             ", {}: {}",
-            "deposit_block_number",
-            self.deposit_block_number()
+            "deposit_block_timepoint",
+            self.deposit_block_timepoint()
         )?;
         write!(f, ", {}: {}", "deposit_lock_args", self.deposit_lock_args())?;
         let extra_count = self.count_extra_fields();
@@ -7637,7 +7637,7 @@ impl<'r> CustodianLockArgsReader<'r> {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         Byte32Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn deposit_block_number(&self) -> Uint64Reader<'r> {
+    pub fn deposit_block_timepoint(&self) -> Uint64Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
@@ -7712,7 +7712,7 @@ impl<'r> molecule::prelude::Reader<'r> for CustodianLockArgsReader<'r> {
 #[derive(Debug, Default)]
 pub struct CustodianLockArgsBuilder {
     pub(crate) deposit_block_hash: Byte32,
-    pub(crate) deposit_block_number: Uint64,
+    pub(crate) deposit_block_timepoint: Uint64,
     pub(crate) deposit_lock_args: DepositLockArgs,
 }
 impl CustodianLockArgsBuilder {
@@ -7721,8 +7721,8 @@ impl CustodianLockArgsBuilder {
         self.deposit_block_hash = v;
         self
     }
-    pub fn deposit_block_number(mut self, v: Uint64) -> Self {
-        self.deposit_block_number = v;
+    pub fn deposit_block_timepoint(mut self, v: Uint64) -> Self {
+        self.deposit_block_timepoint = v;
         self
     }
     pub fn deposit_lock_args(mut self, v: DepositLockArgs) -> Self {
@@ -7736,7 +7736,7 @@ impl molecule::prelude::Builder for CustodianLockArgsBuilder {
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.deposit_block_hash.as_slice().len()
-            + self.deposit_block_number.as_slice().len()
+            + self.deposit_block_timepoint.as_slice().len()
             + self.deposit_lock_args.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
@@ -7745,7 +7745,7 @@ impl molecule::prelude::Builder for CustodianLockArgsBuilder {
         offsets.push(total_size);
         total_size += self.deposit_block_hash.as_slice().len();
         offsets.push(total_size);
-        total_size += self.deposit_block_number.as_slice().len();
+        total_size += self.deposit_block_timepoint.as_slice().len();
         offsets.push(total_size);
         total_size += self.deposit_lock_args.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
@@ -7753,7 +7753,7 @@ impl molecule::prelude::Builder for CustodianLockArgsBuilder {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
         writer.write_all(self.deposit_block_hash.as_slice())?;
-        writer.write_all(self.deposit_block_number.as_slice())?;
+        writer.write_all(self.deposit_block_timepoint.as_slice())?;
         writer.write_all(self.deposit_lock_args.as_slice())?;
         Ok(())
     }
@@ -7943,8 +7943,8 @@ impl ::core::fmt::Display for WithdrawalLockArgs {
         write!(
             f,
             ", {}: {}",
-            "withdrawal_block_number",
-            self.withdrawal_block_number()
+            "withdrawal_block_timepoint",
+            self.withdrawal_block_timepoint()
         )?;
         write!(
             f,
@@ -7974,7 +7974,7 @@ impl WithdrawalLockArgs {
     pub fn withdrawal_block_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
-    pub fn withdrawal_block_number(&self) -> Uint64 {
+    pub fn withdrawal_block_timepoint(&self) -> Uint64 {
         Uint64::new_unchecked(self.0.slice(32..40))
     }
     pub fn account_script_hash(&self) -> Byte32 {
@@ -8011,7 +8011,7 @@ impl molecule::prelude::Entity for WithdrawalLockArgs {
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
             .withdrawal_block_hash(self.withdrawal_block_hash())
-            .withdrawal_block_number(self.withdrawal_block_number())
+            .withdrawal_block_timepoint(self.withdrawal_block_timepoint())
             .account_script_hash(self.account_script_hash())
             .owner_lock_hash(self.owner_lock_hash())
     }
@@ -8044,8 +8044,8 @@ impl<'r> ::core::fmt::Display for WithdrawalLockArgsReader<'r> {
         write!(
             f,
             ", {}: {}",
-            "withdrawal_block_number",
-            self.withdrawal_block_number()
+            "withdrawal_block_timepoint",
+            self.withdrawal_block_timepoint()
         )?;
         write!(
             f,
@@ -8064,7 +8064,7 @@ impl<'r> WithdrawalLockArgsReader<'r> {
     pub fn withdrawal_block_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
-    pub fn withdrawal_block_number(&self) -> Uint64Reader<'r> {
+    pub fn withdrawal_block_timepoint(&self) -> Uint64Reader<'r> {
         Uint64Reader::new_unchecked(&self.as_slice()[32..40])
     }
     pub fn account_script_hash(&self) -> Byte32Reader<'r> {
@@ -8098,7 +8098,7 @@ impl<'r> molecule::prelude::Reader<'r> for WithdrawalLockArgsReader<'r> {
 #[derive(Debug, Default)]
 pub struct WithdrawalLockArgsBuilder {
     pub(crate) withdrawal_block_hash: Byte32,
-    pub(crate) withdrawal_block_number: Uint64,
+    pub(crate) withdrawal_block_timepoint: Uint64,
     pub(crate) account_script_hash: Byte32,
     pub(crate) owner_lock_hash: Byte32,
 }
@@ -8110,8 +8110,8 @@ impl WithdrawalLockArgsBuilder {
         self.withdrawal_block_hash = v;
         self
     }
-    pub fn withdrawal_block_number(mut self, v: Uint64) -> Self {
-        self.withdrawal_block_number = v;
+    pub fn withdrawal_block_timepoint(mut self, v: Uint64) -> Self {
+        self.withdrawal_block_timepoint = v;
         self
     }
     pub fn account_script_hash(mut self, v: Byte32) -> Self {
@@ -8131,7 +8131,7 @@ impl molecule::prelude::Builder for WithdrawalLockArgsBuilder {
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         writer.write_all(self.withdrawal_block_hash.as_slice())?;
-        writer.write_all(self.withdrawal_block_number.as_slice())?;
+        writer.write_all(self.withdrawal_block_timepoint.as_slice())?;
         writer.write_all(self.account_script_hash.as_slice())?;
         writer.write_all(self.owner_lock_hash.as_slice())?;
         Ok(())
@@ -8850,8 +8850,8 @@ impl ::core::fmt::Display for StakeLockArgs {
         write!(
             f,
             ", {}: {}",
-            "stake_block_number",
-            self.stake_block_number()
+            "stake_block_timepoint",
+            self.stake_block_timepoint()
         )?;
         write!(f, " }}")
     }
@@ -8872,7 +8872,7 @@ impl StakeLockArgs {
     pub fn owner_lock_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
-    pub fn stake_block_number(&self) -> Uint64 {
+    pub fn stake_block_timepoint(&self) -> Uint64 {
         Uint64::new_unchecked(self.0.slice(32..40))
     }
     pub fn as_reader<'r>(&'r self) -> StakeLockArgsReader<'r> {
@@ -8903,7 +8903,7 @@ impl molecule::prelude::Entity for StakeLockArgs {
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
             .owner_lock_hash(self.owner_lock_hash())
-            .stake_block_number(self.stake_block_number())
+            .stake_block_timepoint(self.stake_block_timepoint())
     }
 }
 #[derive(Clone, Copy)]
@@ -8929,8 +8929,8 @@ impl<'r> ::core::fmt::Display for StakeLockArgsReader<'r> {
         write!(
             f,
             ", {}: {}",
-            "stake_block_number",
-            self.stake_block_number()
+            "stake_block_timepoint",
+            self.stake_block_timepoint()
         )?;
         write!(f, " }}")
     }
@@ -8942,7 +8942,7 @@ impl<'r> StakeLockArgsReader<'r> {
     pub fn owner_lock_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
-    pub fn stake_block_number(&self) -> Uint64Reader<'r> {
+    pub fn stake_block_timepoint(&self) -> Uint64Reader<'r> {
         Uint64Reader::new_unchecked(&self.as_slice()[32..40])
     }
 }
@@ -8970,7 +8970,7 @@ impl<'r> molecule::prelude::Reader<'r> for StakeLockArgsReader<'r> {
 #[derive(Debug, Default)]
 pub struct StakeLockArgsBuilder {
     pub(crate) owner_lock_hash: Byte32,
-    pub(crate) stake_block_number: Uint64,
+    pub(crate) stake_block_timepoint: Uint64,
 }
 impl StakeLockArgsBuilder {
     pub const TOTAL_SIZE: usize = 40;
@@ -8980,8 +8980,8 @@ impl StakeLockArgsBuilder {
         self.owner_lock_hash = v;
         self
     }
-    pub fn stake_block_number(mut self, v: Uint64) -> Self {
-        self.stake_block_number = v;
+    pub fn stake_block_timepoint(mut self, v: Uint64) -> Self {
+        self.stake_block_timepoint = v;
         self
     }
 }
@@ -8993,7 +8993,7 @@ impl molecule::prelude::Builder for StakeLockArgsBuilder {
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         writer.write_all(self.owner_lock_hash.as_slice())?;
-        writer.write_all(self.stake_block_number.as_slice())?;
+        writer.write_all(self.stake_block_timepoint.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {

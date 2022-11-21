@@ -1135,7 +1135,7 @@ impl RPCClient {
                     Err(_) => continue,
                 };
                 if !compatible_finalized_timepoint.is_finalized(&Timepoint::from_full_value(
-                    custodian_lock_args.deposit_block_number().unpack(),
+                    custodian_lock_args.deposit_block_timepoint().unpack(),
                 )) {
                     continue;
                 }
@@ -1233,7 +1233,7 @@ impl RPCClient {
                 };
 
                 if !compatible_finalized_timepoint.is_finalized(&Timepoint::from_full_value(
-                    custodian_lock_args.deposit_block_number().unpack(),
+                    custodian_lock_args.deposit_block_timepoint().unpack(),
                 )) {
                     continue;
                 }

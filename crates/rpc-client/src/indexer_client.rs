@@ -144,7 +144,7 @@ impl CKBIndexerClient {
                     let args = cell.output.lock.args.into_bytes();
                     let args = CustodianLockArgs::from_slice(&args[32..]).unwrap();
                     compatible_finalized_timepoint.is_finalized(&Timepoint::from_full_value(
-                        args.deposit_block_number().unpack(),
+                        args.deposit_block_timepoint().unpack(),
                     ))
                 };
                 if is_finalized {
