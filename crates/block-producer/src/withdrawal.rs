@@ -497,7 +497,7 @@ mod test {
         let withdrawal_without_owner_lock = {
             let lock_args = WithdrawalLockArgs::new_builder()
                 .owner_lock_hash(owner_lock.hash().pack())
-                .withdrawal_block_number(last_finalized_timepoint.full_value().pack())
+                .withdrawal_block_timepoint(last_finalized_timepoint.full_value().pack())
                 .build();
 
             let mut args = rollup_type.hash().to_vec();
@@ -513,7 +513,7 @@ mod test {
         let withdrawal_with_owner_lock = {
             let lock_args = WithdrawalLockArgs::new_builder()
                 .owner_lock_hash(owner_lock.hash().pack())
-                .withdrawal_block_number(last_finalized_timepoint.full_value().pack())
+                .withdrawal_block_timepoint(last_finalized_timepoint.full_value().pack())
                 .build();
 
             let mut args = rollup_type.hash().to_vec();

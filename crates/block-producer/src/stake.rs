@@ -39,7 +39,7 @@ pub async fn generate(
     local_cells_manager: &LocalCellsManager,
 ) -> Result<GeneratedStake> {
     let owner_lock_hash = lock_script.hash();
-    let stake_timepoint = {
+    let stake_block_timepoint = {
         let block_number: u64 = block.raw().number().unpack();
         if rollup_context.global_state_version(block_number) < 2 {
             Timepoint::from_block_number(block_number)
@@ -51,7 +51,7 @@ pub async fn generate(
     let lock_args: Bytes = {
         let stake_lock_args = StakeLockArgs::new_builder()
             .owner_lock_hash(owner_lock_hash.pack())
-            .stake_block_number(stake_timepoint.full_value().pack())
+            .stake_block_timepoint(stake_block_timepoint.full_value().pack())
             .build();
         let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
         rollup_type_hash
@@ -183,7 +183,7 @@ pub async fn query_stake(
             match &compatible_finalize_timepoint_opt {
                 Some(compatible_finalized_timepoint) => {
                     compatible_finalized_timepoint.is_finalized(&Timepoint::from_full_value(
-                        stake_lock_args.stake_block_number().unpack(),
+                        stake_lock_args.stake_block_timepoint().unpack(),
                     )) && stake_lock_args.owner_lock_hash().as_slice() == owner_lock_hash
                 }
                 None => stake_lock_args.owner_lock_hash().as_slice() == owner_lock_hash,
