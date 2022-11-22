@@ -100,3 +100,22 @@ Polyjuice only provides contract accounts. Godwoken's user account is leveraged 
 * [Addition Features](docs/Addition-Features.md)
 * [Life of a Polyjuice Transaction](https://github.com/nervosnetwork/godwoken/blob/develop/docs/life_of_a_polyjuice_transaction.md)
 * [Life of a Godwoken Transaction](https://github.com/nervosnetwork/godwoken/blob/develop/docs/life_of_a_godwoken_transaction.md)
+
+## Development
+
+### Build
+
+```sh
+cargo install moleculec --version 0.7.2
+git submodule update --init  --recursive
+make dist
+```
+
+### Test
+
+```sh
+cd polyjuice-tests
+cargo test --lib # unit test
+
+cargo test --test ethereum_test  -- ethereum_test 
+```

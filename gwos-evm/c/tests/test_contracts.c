@@ -11,9 +11,9 @@
 #include <ethash/keccak.hpp>
 #include <evmc/evmc.h>
 
-#include "gw_syscalls.h"
-#include "common.h"
-#include "sudt_utils.h"
+#include "../../gwos/c/gw_syscalls.h"
+#include "../../gwos/c/common.h"
+#include "../../gwos/c/sudt_utils.h"
 #include "./test_utils.h"
 #include "../generator/secp256k1_helper.h"
 #include "../contracts.h"
