@@ -17,7 +17,7 @@ toml = "0.5"
 tempfile = "3.1"
 lazy_static = "1.3"
 secp256k1 = "0.24"
-sha3 = "0.9.1"
+sha3 = "0.10.6"
 reqwest = { version = "0.11", features = ["json"] }
 ckb-jsonrpc-types = "0.105.1"
 ckb-types = "0.105.1"

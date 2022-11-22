@@ -54,6 +54,9 @@ pub struct Config {
     pub p2p_network_config: Option<P2PNetworkConfig>,
     #[serde(default)]
     pub sync_server: SyncServerConfig,
+    /// Gasless tx support is enabled when this config presents.
+    #[serde(default)]
+    pub gasless_tx_support: Option<GaslessTxSupportConfig>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -275,6 +278,12 @@ impl Default for DebugConfig {
             enable_debug_rpc: false,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct GaslessTxSupportConfig {
+    /// Gasless tx entrypoint address.
+    pub entrypoint_address: H160,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

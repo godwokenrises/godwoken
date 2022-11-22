@@ -342,11 +342,10 @@ mod tests {
             .args(Bytes::from(receiver_args).pack())
             .build();
         let ctx = RollupContext {
-            rollup_script_hash: Default::default(),
             rollup_config: RollupConfig::new_builder()
                 .chain_id(chain_id.pack())
                 .build(),
-            fork_config: Default::default(),
+            ..Default::default()
         };
         eth.verify_tx(&ctx, sender_address, sender_script, receiver_script, tx)
             .expect("verify signature");
@@ -406,11 +405,10 @@ mod tests {
             .args(args.pack())
             .build();
         let ctx = RollupContext {
-            rollup_script_hash: Default::default(),
             rollup_config: RollupConfig::new_builder()
                 .chain_id(chain_id.pack())
                 .build(),
-            fork_config: Default::default(),
+            ..Default::default()
         };
         let eth = Secp256k1Eth::default();
         eth.verify_tx(&ctx, sender_reg_addr, sender_script, receive_script, tx)
@@ -474,11 +472,10 @@ mod tests {
             .args(Bytes::from(receiver_args).pack())
             .build();
         let ctx = RollupContext {
-            rollup_script_hash: Default::default(),
             rollup_config: RollupConfig::new_builder()
                 .chain_id(chain_id.pack())
                 .build(),
-            fork_config: Default::default(),
+            ..Default::default()
         };
 
         eth.verify_tx(&ctx, sender_address, sender_script, receiver_script, tx)
@@ -535,11 +532,10 @@ mod tests {
             .args(Bytes::from(receiver_args).pack())
             .build();
         let ctx = RollupContext {
-            rollup_script_hash: Default::default(),
             rollup_config: RollupConfig::new_builder()
                 .chain_id(chain_id.pack())
                 .build(),
-            fork_config: Default::default(),
+            ..Default::default()
         };
         eth.verify_tx(&ctx, sender_address, sender_script, receiver_script, tx)
             .expect("verify signature");
@@ -581,11 +577,10 @@ mod tests {
             .args(Bytes::from(receiver_args).pack())
             .build();
         let ctx = RollupContext {
-            rollup_script_hash: Default::default(),
             rollup_config: RollupConfig::new_builder()
                 .chain_id(chain_id.pack())
                 .build(),
-            fork_config: Default::default(),
+            ..Default::default()
         };
         eth.verify_tx(&ctx, sender_address, sender_script, receiver_script, tx)
             .expect("verify signature");
@@ -646,9 +641,8 @@ mod tests {
             .args(Bytes::from(receiver_args).pack())
             .build();
         let ctx = RollupContext {
-            rollup_script_hash: Default::default(),
             rollup_config: RollupConfig::new_builder().chain_id(0.pack()).build(),
-            fork_config: Default::default(),
+            ..Default::default()
         };
         let eth = Secp256k1Eth::default();
         eth.verify_tx(&ctx, sender_address, sender_script, receiver_script, tx)

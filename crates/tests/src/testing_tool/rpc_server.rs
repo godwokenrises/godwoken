@@ -81,6 +81,7 @@ impl RPCServer {
             chain_config: Default::default(),
             consensus_config: Default::default(),
             dynamic_config_manager: Default::default(),
+            gasless_tx_support_config: None,
             polyjuice_sender_recover,
             debug_backend_forks: None,
         }

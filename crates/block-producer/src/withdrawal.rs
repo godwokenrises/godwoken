@@ -334,7 +334,7 @@ mod test {
                 .withdrawal_script_type_hash(H256::from_u32(100).pack())
                 .finality_blocks(1u64.pack())
                 .build(),
-            fork_config: Default::default(),
+            ..Default::default()
         };
 
         let sudt_script = Script::new_builder()
@@ -464,7 +464,7 @@ mod test {
                 .l1_sudt_script_type_hash(sudt_script.code_hash())
                 .finality_blocks(1u64.pack())
                 .build(),
-            fork_config: Default::default(),
+            ..Default::default()
         };
 
         let contracts_dep = {

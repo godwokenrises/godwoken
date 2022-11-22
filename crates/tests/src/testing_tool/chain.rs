@@ -466,7 +466,7 @@ pub fn chain_generator(chain: &Chain, rollup_type_script: Script) -> Arc<Generat
     let rollup_context = RollupContext {
         rollup_script_hash: rollup_type_script.hash().into(),
         rollup_config,
-        fork_config: Default::default(),
+        ..Default::default()
     };
     Arc::new(Generator::new(
         backend_manage,
@@ -503,7 +503,7 @@ pub async fn setup_chain_with_account_lock_manage(
     let rollup_context = RollupContext {
         rollup_script_hash: rollup_script_hash.into(),
         rollup_config: rollup_config.clone(),
-        fork_config: Default::default(),
+        ..Default::default()
     };
     let generator = Arc::new(Generator::new(
         backend_manage,

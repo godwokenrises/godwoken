@@ -5,8 +5,8 @@ use gw_common::blake2b::new_blake2b;
 use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
 use gw_common::{state::State, H256};
 use gw_config::{
-    BackendForkConfig, ChainConfig, ConsensusConfig, FeeConfig, MemPoolConfig, NodeMode,
-    RPCMethods, RPCRateLimit, RPCServerConfig, SyscallCyclesConfig,
+    BackendForkConfig, ChainConfig, ConsensusConfig, FeeConfig, GaslessTxSupportConfig,
+    MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig, SyscallCyclesConfig,
 };
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
 use gw_generator::backend_manage::BackendManage;
@@ -178,6 +178,7 @@ pub struct RegistryArgs<T> {
     pub server_config: RPCServerConfig,
     pub chain_config: ChainConfig,
     pub consensus_config: ConsensusConfig,
+    pub gasless_tx_support_config: Option<GaslessTxSupportConfig>,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     pub polyjuice_sender_recover: PolyjuiceSenderRecover,
     pub debug_backend_forks: Option<Vec<BackendForkConfig>>,
@@ -226,6 +227,7 @@ impl Registry {
             dynamic_config_manager,
             polyjuice_sender_recover,
             debug_backend_forks,
+            gasless_tx_support_config,
         } = args;
 
         let backend_info = get_backend_info(generator.clone());
@@ -258,6 +260,7 @@ impl Registry {
                 store: store.clone(),
                 polyjuice_sender_recover: Arc::clone(&polyjuice_sender_recover),
                 mem_pool_config: mem_pool_config.clone(),
+                gasless_tx_support_config,
             };
             tokio::spawn(submitter.in_background());
         }
@@ -453,11 +456,13 @@ struct RequestSubmitter {
     store: Store,
     polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
     mem_pool_config: MemPoolConfig,
+    gasless_tx_support_config: Option<GaslessTxSupportConfig>,
 }
 
 #[instrument(skip_all, fields(req_kind = req.kind()))]
 fn req_to_entry(
     fee_config: &FeeConfig,
+    gasless_tx_support_config: Option<&GaslessTxSupportConfig>,
     generator: Arc<Generator>,
     req: Request,
     state: &(impl State + CodeStore),
@@ -471,7 +476,13 @@ fn req_to_entry(
                 .load_backend(0, state, &script_hash)
                 .ok_or_else(|| anyhow!("can't find backend for receiver: {}", receiver))?
                 .backend_type;
-            FeeEntry::from_tx(tx, fee_config, backend_type, order)
+            FeeEntry::from_tx(
+                tx,
+                gasless_tx_support_config,
+                fee_config,
+                backend_type,
+                order,
+            )
         }
         Request::Withdrawal(withdraw) => {
             let script_hash = withdraw.raw().account_script_hash().unpack();
@@ -578,7 +589,14 @@ impl RequestSubmitter {
                 let hash = req.hash();
                 let dynamic_config_manager = self.dynamic_config_manager.load();
                 let fee_config = dynamic_config_manager.get_fee_config();
-                match req_to_entry(fee_config, self.generator.clone(), req, &state, queue.len()) {
+                match req_to_entry(
+                    fee_config,
+                    self.gasless_tx_support_config.as_ref(),
+                    self.generator.clone(),
+                    req,
+                    &state,
+                    queue.len(),
+                ) {
                     Ok(entry) => {
                         if entry.cycles_limit > self.mem_pool_config.mem_block.max_cycles_limit {
                             log::info!(
@@ -612,7 +630,14 @@ impl RequestSubmitter {
                 let hash = req.hash();
                 let dynamic_config_manager = self.dynamic_config_manager.load();
                 let fee_config = dynamic_config_manager.get_fee_config();
-                match req_to_entry(fee_config, self.generator.clone(), req, &state, queue.len()) {
+                match req_to_entry(
+                    fee_config,
+                    self.gasless_tx_support_config.as_ref(),
+                    self.generator.clone(),
+                    req,
+                    &state,
+                    queue.len(),
+                ) {
                     Ok(entry) => {
                         if entry.cycles_limit > self.mem_pool_config.mem_block.max_cycles_limit {
                             log::info!(

@@ -761,6 +761,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         dynamic_config_manager,
         polyjuice_sender_recover,
         debug_backend_forks: config.debug_backend_forks.clone(),
+        gasless_tx_support_config: config.gasless_tx_support.clone(),
     };
 
     let rpc_registry = Registry::create(args).await;
