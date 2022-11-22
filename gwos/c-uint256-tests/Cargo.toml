@@ -10,7 +10,7 @@ cty = "0.2"
 
 [dev-dependencies]
 proptest = "1.0"
-primitive-types = { version = "0.10", default-features = false, features = [ "impl-serde", "impl-rlp" ] }
+primitive-types = { version = "0.12", default-features = false, features = [ "impl-serde", "impl-rlp" ] }
 
 [build-dependencies]
 cc = "1.0"

@@ -34,7 +34,7 @@ thiserror = "1.0"
 lazy_static = "1.4"
 secp256k1 = { version = "0.21", features = ["recovery", "rand-std"] }
 async-jsonrpc-client = { version = "0.3.0", default-features = false, features = ["http-tokio"] }
-sha3 = "0.9.1"
+sha3 = "0.10.6"
 hex = "0.4.2"
 ckb-script = "0.105.1"
 ckb-types = "0.105.1"

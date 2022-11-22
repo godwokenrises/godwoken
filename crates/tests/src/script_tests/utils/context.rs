@@ -76,7 +76,7 @@ impl TestingContext {
         let rollup_context = RollupContext {
             rollup_config: rollup_config.clone(),
             rollup_script_hash: [42u8; 32].into(),
-            fork_config: Default::default(),
+            ..Default::default()
         };
 
         // deploy registry contract

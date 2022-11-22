@@ -345,7 +345,7 @@ mod test {
             rollup_config: RollupConfig::new_builder()
                 .withdrawal_script_type_hash(H256::from_u32(100).pack())
                 .build(),
-            fork_config: Default::default(),
+            ..Default::default()
         };
 
         let sudt_script = Script::new_builder()

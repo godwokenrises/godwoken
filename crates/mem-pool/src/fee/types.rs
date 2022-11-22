@@ -1,6 +1,8 @@
-use anyhow::{anyhow, Result};
+use std::cmp::Ordering;
+
+use anyhow::{anyhow, ensure, Context, Result};
 use gw_common::H256;
-use gw_config::{BackendType, FeeConfig};
+use gw_config::{BackendType, FeeConfig, GaslessTxSupportConfig};
 use gw_types::{
     packed::{
         ETHAddrRegArgs, ETHAddrRegArgsUnion, L2Transaction, MetaContractArgs,
@@ -8,7 +10,10 @@ use gw_types::{
     },
     prelude::{Entity, Unpack},
 };
-use std::{cmp::Ordering, convert::TryInto};
+use gw_utils::{
+    gasless::{gasless_tx_fee, is_gasless_tx},
+    polyjuice_parser::PolyjuiceParser,
+};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum FeeItemKind {
@@ -130,12 +135,18 @@ impl Ord for FeeEntry {
 impl FeeEntry {
     pub fn from_tx(
         tx: L2Transaction,
+        gasless_tx_support_config: Option<&GaslessTxSupportConfig>,
         fee_config: &FeeConfig,
         backend_type: BackendType,
         order: usize,
     ) -> Result<Self> {
         let raw_l2tx = tx.raw();
-        let fee = parse_l2tx_fee_rate(fee_config, &raw_l2tx, backend_type)?;
+        let fee = parse_l2tx_fee_rate(
+            gasless_tx_support_config,
+            fee_config,
+            &raw_l2tx,
+            backend_type,
+        )?;
         let item = FeeItem::Tx(tx);
 
         let from_id: u32 = raw_l2tx.from_id().unpack();
@@ -194,6 +205,7 @@ fn parse_withdraw_fee_rate(
 
 /// parse tx fee rate
 fn parse_l2tx_fee_rate(
+    gasless_tx_support_config: Option<&GaslessTxSupportConfig>,
     fee_config: &FeeConfig,
     raw_l2tx: &gw_types::packed::RawL2Transaction,
     backend_type: BackendType,
@@ -236,15 +248,22 @@ fn parse_l2tx_fee_rate(
             Ok(L2Fee { fee, cycles_limit })
         }
         BackendType::Polyjuice => {
-            // verify the args of a polyjuice L2TX
-            // https://github.com/nervosnetwork/godwoken-polyjuice/blob/aee95c0/README.md#polyjuice-arguments
-            if raw_l2tx_args.len() < (8 + 8 + 16 + 16 + 4) {
-                return Err(anyhow!("Invalid PolyjuiceArgs"));
-            }
+            let poly_args =
+                PolyjuiceParser::from_raw_l2_tx(raw_l2tx).context("parse polyjuice args")?;
             // Note: Polyjuice use CKB_SUDT to pay fee by default
-            let poly_args = raw_l2tx_args.as_ref();
-            let gas_limit = u64::from_le_bytes(poly_args[8..16].try_into()?);
-            let gas_price = u128::from_le_bytes(poly_args[16..32].try_into()?);
+            let (gas_limit, gas_price) = if poly_args.gas_price() > 0 {
+                (poly_args.gas(), poly_args.gas_price())
+            } else {
+                // Check possible gasless tx.
+                if is_gasless_tx(gasless_tx_support_config, &poly_args) {
+                    let data = poly_args.data();
+                    let fee = gasless_tx_fee(data).context("get gasless tx fee from payload")?;
+                    ensure!(poly_args.gas() == fee.gas_limit);
+                    (fee.gas_limit, fee.gas_price)
+                } else {
+                    (poly_args.gas(), poly_args.gas_price())
+                }
+            };
             Ok(L2Fee {
                 fee: gas_price.saturating_mul(gas_limit.into()),
                 cycles_limit: gas_limit,

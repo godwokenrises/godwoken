@@ -96,7 +96,7 @@ fn test_example_sum() {
         let rollup_context = RollupContext {
             rollup_config: Default::default(),
             rollup_script_hash: [42u8; 32].into(),
-            fork_config: Default::default(),
+            ..Default::default()
         };
         let generator = Generator::new(
             backend_manage,
@@ -241,7 +241,7 @@ fn test_example_account_operation() {
             )
             .build(),
         rollup_script_hash: [42u8; 32].into(),
-        fork_config: Default::default(),
+        ..Default::default()
     };
     let generator = Generator::new(
         backend_manage,
@@ -481,7 +481,7 @@ fn test_example_recover_account() {
             )
             .build(),
         rollup_script_hash,
-        fork_config: Default::default(),
+        ..Default::default()
     };
     let generator = Generator::new(
         backend_manage,
@@ -653,7 +653,7 @@ fn test_sudt_total_supply() {
         let rollup_context = RollupContext {
             rollup_config,
             rollup_script_hash: [42u8; 32].into(),
-            fork_config: Default::default(),
+            ..Default::default()
         };
         let generator = Generator::new(
             backend_manage,

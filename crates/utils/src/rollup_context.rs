@@ -3,7 +3,7 @@ use gw_types::core::H256;
 use gw_types::packed::RollupConfig;
 
 /// A wildly used context, contains several common-used configurations.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct RollupContext {
     /// rollup_state_cell's type hash
     pub rollup_script_hash: H256,
