@@ -41,7 +41,7 @@ use gw_store::{
     chain_view::ChainView, mem_pool_state::MemPoolState, traits::chain_store::ChainStore,
     CfMemStat, Store,
 };
-use gw_telemetry::traits::{GwOtelContext, GwOtelContextNewSpan, GwOtelSpanExt};
+use gw_telemetry::traits::{TelemetryContext, TelemetryContextNewSpan, TelemetrySpanExt};
 use gw_traits::CodeStore;
 use gw_types::packed::RawL2Transaction;
 use gw_types::{
@@ -134,8 +134,8 @@ pub struct RequestContext {
     in_queue_span: tracing::Span,
 }
 
-impl GwOtelContext for RequestContext {
-    fn otel_context(&self) -> Option<&gw_telemetry::Context> {
+impl TelemetryContext for RequestContext {
+    fn telemetry_context(&self) -> Option<&gw_telemetry::Context> {
         Some(&self.trace)
     }
 }

@@ -1,6 +1,8 @@
 use anyhow::{anyhow, Result};
 use gw_common::state::State;
-use gw_telemetry::traits::{GwOtelContext, GwOtelContextNewSpan, GwOtelSpanExt, TraceContextExt};
+use gw_telemetry::traits::{
+    TelemetryContext, TelemetryContextNewSpan, TelemetrySpanExt, TraceContextExt,
+};
 use std::collections::{BTreeMap, HashMap};
 use tracing::{field, instrument};
 
@@ -12,12 +14,12 @@ const DROP_SIZE: usize = 100;
 use super::types::{FeeEntry, FeeItemSender};
 
 /// Txs & withdrawals queue sorted by fee rate
-pub struct FeeQueue<T: GwOtelContext> {
+pub struct FeeQueue<T: TelemetryContext> {
     // priority queue to store tx and withdrawal
     queue: BTreeMap<FeeEntry, T>,
 }
 
-impl<T: GwOtelContext> FeeQueue<T> {
+impl<T: TelemetryContext> FeeQueue<T> {
     #[inline]
     pub fn new() -> Self {
         Self {
@@ -54,7 +56,7 @@ impl<T: GwOtelContext> FeeQueue<T> {
                 let drop = std::mem::replace(&mut self.queue, keep);
 
                 for (_, handle) in drop.iter() {
-                    if let Some(cx) = handle.otel_context() {
+                    if let Some(cx) = handle.telemetry_context() {
                         let span = cx.span();
                         span.record_error(anyhow!("queue is full").as_ref());
                         span.set_status(gw_telemetry::trace::Status::error("queue is full"));
@@ -115,7 +117,7 @@ impl<T: GwOtelContext> FeeQueue<T> {
                     future_queue.push((entry, t));
                 }
                 _ => {
-                    if let Some(cx) = t.otel_context() {
+                    if let Some(cx) = t.telemetry_context() {
                         let err = anyhow!("nonce {} expect {}", entry.item.nonce(), nonce);
                         let span = cx.span();
                         span.record_error(err.as_ref());
@@ -144,7 +146,7 @@ impl<T: GwOtelContext> FeeQueue<T> {
             if fetched_senders.contains_key(&entry.sender) {
                 self.add(entry, t);
             } else {
-                if let Some(cx) = t.otel_context() {
+                if let Some(cx) = t.telemetry_context() {
                     let err = anyhow!("future nonce {}", entry.item.nonce());
                     let span = cx.span();
                     span.record_error(err.as_ref());
@@ -177,7 +179,7 @@ impl<T: GwOtelContext> FeeQueue<T> {
     }
 }
 
-impl<T: GwOtelContext> Default for FeeQueue<T> {
+impl<T: TelemetryContext> Default for FeeQueue<T> {
     #[inline]
     fn default() -> Self {
         Self::new()

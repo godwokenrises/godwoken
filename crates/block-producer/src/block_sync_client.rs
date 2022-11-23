@@ -14,7 +14,7 @@ use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_telemetry::{
     trace::{SpanContext, SpanId, TraceFlags, TraceId, TraceState},
-    traits::{GwOtelContextNewSpan, TraceContextExt},
+    traits::{TelemetryContextNewSpan, TraceContextExt},
 };
 use gw_types::{
     packed::{

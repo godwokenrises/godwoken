@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::{Error, Result};
 use gw_telemetry::trace::http::HeaderExtractor;
-use gw_telemetry::traits::{GwOtelContextNewSpan, GwOtelContextRemote};
+use gw_telemetry::traits::{TelemetryContextNewSpan, TelemetryContextRemote};
 use gw_utils::liveness::Liveness;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{body::HttpBody, server::conn::AddrIncoming, Body, Method, Request, Response, Server};
