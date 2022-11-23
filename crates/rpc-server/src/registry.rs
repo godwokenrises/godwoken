@@ -914,17 +914,29 @@ async fn get_block(
     }))
 }
 
+// Why do we read from `MemPoolState` instead of `Store` for these “get block”
+// RPCs:
+//
+// `MemPoolState` can fall behind `Store` (at the moment after a new block is
+// inserted but mem pool state hasn't been updated). If we read from `Store`, we
+// may get a block that is not in `MemPoolState` yet. If we then try to get
+// scripts for accounts in the block, we may get an error response, because the
+// `get_script` / `get_script_hash` RPCs use `MemPoolState`.
+//
+// Instead if we always read from `MemPoolState`, it is much less likely that we
+// get an error response when getting scripts for accounts in the new block.
+
 async fn get_block_by_number(
     Params((block_number,)): Params<(gw_jsonrpc_types::ckb_jsonrpc_types::Uint64,)>,
-    store: Data<Store>,
+    mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<Option<L2BlockView>> {
     let block_number = block_number.value();
-    let snap = store.get_snapshot();
-    let block_hash = match snap.get_block_hash_by_number(block_number)? {
+    let mem_store = mem_pool_state.load_mem_store();
+    let block_hash = match mem_store.get_block_hash_by_number(block_number)? {
         Some(hash) => hash,
         None => return Ok(None),
     };
-    let block_opt = snap.get_block(&block_hash)?.map(|block| {
+    let block_opt = mem_store.get_block(&block_hash)?.map(|block| {
         let block_view: L2BlockView = block.into();
         block_view
     });
@@ -933,16 +945,19 @@ async fn get_block_by_number(
 
 async fn get_block_hash(
     Params((block_number,)): Params<(gw_jsonrpc_types::ckb_jsonrpc_types::Uint64,)>,
-    store: Data<Store>,
+    mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<Option<JsonH256>> {
     let block_number = block_number.value();
-    let db = store.get_snapshot();
-    let hash_opt = db.get_block_hash_by_number(block_number)?.map(to_jsonh256);
+    let mem_store = mem_pool_state.load_mem_store();
+    let hash_opt = mem_store
+        .get_block_hash_by_number(block_number)?
+        .map(to_jsonh256);
     Ok(hash_opt)
 }
 
-async fn get_tip_block_hash(store: Data<Store>) -> Result<JsonH256> {
-    let tip_block_hash = store.get_last_valid_tip_block_hash()?;
+async fn get_tip_block_hash(mem_pool_state: Data<Arc<MemPoolState>>) -> Result<JsonH256> {
+    let mem_store = mem_pool_state.load_mem_store();
+    let tip_block_hash = mem_store.get_last_valid_tip_block_hash()?;
     Ok(to_jsonh256(tip_block_hash))
 }
 

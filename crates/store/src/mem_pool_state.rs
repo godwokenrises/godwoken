@@ -6,7 +6,10 @@ use std::sync::{
 use arc_swap::ArcSwap;
 use gw_types::packed::{self, BlockInfo};
 
-use crate::state::MemStateDB;
+use crate::{
+    snapshot::StoreSnapshot,
+    state::{overlay::mem_store::MemStore, MemStateDB},
+};
 
 pub const META_MEM_BLOCK_INFO: &[u8] = b"MEM_BLOCK_INFO";
 /// account SMT root
@@ -56,6 +59,16 @@ impl MemPoolState {
 
     pub fn get_mem_pool_block_info(&self) -> Option<packed::BlockInfo> {
         self.inner.load().mem_block.clone()
+    }
+
+    pub fn load_mem_store(&self) -> MemStore<StoreSnapshot> {
+        self.inner
+            .load()
+            .state_db
+            .inner_smt_tree()
+            .store()
+            .inner_store()
+            .clone()
     }
 
     /// Load shared
