@@ -86,7 +86,7 @@ async fn serve<R: Router + 'static>(
         let mut buf = Vec::new();
         // XXX: HEAD response won't have content-length header.
         if req.method() != Method::HEAD {
-            gw_telemetry::metric::scrape(&mut buf)?;
+            gw_metrics::scrape(&mut buf)?;
         }
         return hyper::Response::builder()
             .status(hyper::StatusCode::OK)

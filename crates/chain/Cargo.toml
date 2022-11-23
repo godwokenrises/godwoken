@@ -18,6 +18,7 @@ gw-traits = { path = "../traits" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-utils = { path = "../utils" }
 gw-telemetry = { path = "../telemetry" }
+gw-metrics = { path = "../metrics" }
 ckb-fixed-hash = "0.105.1"
 anyhow = "1.0"
 thiserror = "1.0"

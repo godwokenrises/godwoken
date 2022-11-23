@@ -8,7 +8,7 @@ pub fn chain() -> &'static ChainMetrics {
     static METRICS: OnceCell<ChainMetrics> = OnceCell::new();
     METRICS.get_or_init(|| {
         let metrics = ChainMetrics::default();
-        let mut registry = gw_telemetry::metric::global_registry();
+        let mut registry = crate::global_registry();
         metrics.register(registry.sub_registry_with_prefix("chain"));
         metrics
     })

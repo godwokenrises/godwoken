@@ -58,15 +58,14 @@ impl ProduceSubmitConfirm {
     fn set_local_count(&mut self, count: u64) {
         self.local_count = count;
 
-        use crate::metrics;
-        metrics::bp().local_blocks.set(count);
-        metrics::custodian().finalized_custodians(&self.context.store);
+        gw_metrics::block_producer().local_blocks.set(count);
+        gw_metrics::custodian().finalized_custodians(&self.context.store);
     }
 
     fn set_submitted_count(&mut self, count: u64) {
         self.submitted_count = count;
 
-        crate::metrics::bp().submitted_blocks.set(count);
+        gw_metrics::block_producer().submitted_blocks.set(count);
     }
 }
 
@@ -563,8 +562,10 @@ async fn submit_block(
         store_tx.set_block_submit_tx(block_number, &tx.as_reader())?;
         store_tx.commit()?;
 
-        crate::metrics::bp().tx_size.inc_by(tx.total_size() as u64);
-        crate::metrics::bp()
+        gw_metrics::block_producer()
+            .tx_size
+            .inc_by(tx.total_size() as u64);
+        gw_metrics::block_producer()
             .witness_size
             .inc_by(tx.witnesses().total_size() as u64);
 
@@ -657,7 +658,7 @@ async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<(
             log::info!("resend transaction 0x{}", hex::encode(tx.hash()));
             send_transaction_or_check_inputs(rpc_client, tx).await?;
             last_sent = Instant::now();
-            crate::metrics::bp().resend.inc();
+            gw_metrics::block_producer().resend.inc();
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }

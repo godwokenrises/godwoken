@@ -443,6 +443,15 @@ impl Request {
     }
 }
 
+impl From<&Request> for gw_metrics::rpc::RequestKind {
+    fn from(req: &Request) -> gw_metrics::rpc::RequestKind {
+        match req {
+            Request::Tx(_) => gw_metrics::rpc::RequestKind::Tx,
+            Request::Withdrawal(_) => gw_metrics::rpc::RequestKind::Withdrawal,
+        }
+    }
+}
+
 struct RequestSubmitter {
     mem_pool: Arc<Mutex<gw_mem_pool::pool::MemPool>>,
     submit_rx: mpsc::Receiver<(Request, RequestContext)>,
@@ -1144,7 +1153,7 @@ async fn execute_l2transaction(
         message: err.to_string(),
         data: None,
     })?;
-    crate::metrics::rpc()
+    gw_metrics::rpc()
         .execute_transactions(run_result.exit_code)
         .inc();
 
@@ -1320,7 +1329,7 @@ async fn execute_raw_l2transaction(
         Result::<_, anyhow::Error>::Ok(run_result)
     })
     .await??;
-    crate::metrics::rpc()
+    gw_metrics::rpc()
         .execute_transactions(run_result.exit_code)
         .inc();
 

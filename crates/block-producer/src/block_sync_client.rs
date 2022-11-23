@@ -35,7 +35,6 @@ use tracing::{info_span, Instrument};
 
 use crate::{
     chain_updater::ChainUpdater,
-    metrics,
     sync_l1::{revert, sync_l1, SyncL1Context},
 };
 
@@ -172,14 +171,14 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
                         if buffer.len() % 128 == 0 {
                             log::info!("receive buffer: {}", buffer.len());
                         }
-                        metrics::bp().sync_buffer_len.set(buffer.len() as u64);
+                        gw_metrics::block_producer().sync_buffer_len.set(buffer.len() as u64);
                     } else {
                         stream_ended = true;
                     }
                 }
                 reserve_result = tx.reserve(), if !buffer.is_empty() => {
                     reserve_result?.send(buffer.pop_front().unwrap());
-                    metrics::bp().sync_buffer_len.set(buffer.len() as u64);
+                    gw_metrics::block_producer().sync_buffer_len.set(buffer.len() as u64);
                 }
                 // No more messages - buffer is empty and stream is ended.
                 else => break,
@@ -198,7 +197,9 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
                     _ => true,
                 });
                 log::info!("receive buffer: {}", buffer.len());
-                metrics::bp().sync_buffer_len.set(buffer.len() as u64);
+                gw_metrics::block_producer()
+                    .sync_buffer_len
+                    .set(buffer.len() as u64);
             }
         }
         anyhow::Ok(())

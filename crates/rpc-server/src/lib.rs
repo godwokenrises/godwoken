@@ -3,5 +3,4 @@ pub mod registry;
 pub mod server;
 
 mod apis;
-mod metrics;
 mod utils;

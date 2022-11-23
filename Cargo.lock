@@ -1668,6 +1668,7 @@ dependencies = [
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
+ "gw-metrics",
  "gw-p2p-network",
  "gw-polyjuice-sender-recover",
  "gw-rpc-client",
@@ -1702,8 +1703,8 @@ dependencies = [
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
+ "gw-metrics",
  "gw-store",
- "gw-telemetry",
  "gw-traits",
  "gw-types",
  "gw-utils",
@@ -1877,6 +1878,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "gw-metrics"
+version = "1.7.1"
+dependencies = [
+ "gw-common",
+ "gw-store",
+ "gw-telemetry",
+ "gw-types",
+ "hex",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
 name = "gw-p2p-network"
 version = "1.7.3"
 dependencies = [
@@ -1996,6 +2011,7 @@ dependencies = [
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
+ "gw-metrics",
  "gw-polyjuice-sender-recover",
  "gw-rpc-client",
  "gw-store",

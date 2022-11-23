@@ -24,6 +24,7 @@ gw-polyjuice-sender-recover = { path = "../polyjuice-sender-recover" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-dynamic-config = { path = "../dynamic-config"}
 gw-telemetry = { path = "../telemetry" }
+gw-metrics = { path = "../metrics" }
 faster-hex = "0.4"
 ckb-crypto = "0.105.1"
 ckb-fixed-hash = "0.105.1"

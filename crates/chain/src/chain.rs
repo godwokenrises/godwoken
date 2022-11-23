@@ -1076,11 +1076,10 @@ impl Chain {
         db.attach_block(l2block.clone())?;
 
         // Update metrics.
-        use crate::metrics;
-        metrics::chain().block_height.set(block_number);
-        metrics::chain().deposits.inc_by(deposit_info_vec_len);
-        metrics::chain().withdrawals.inc_by(withdrawals_len);
-        metrics::chain().transactions.inc_by(tx_receipts_len);
+        gw_metrics::chain().block_height.set(block_number);
+        gw_metrics::chain().deposits.inc_by(deposit_info_vec_len);
+        gw_metrics::chain().withdrawals.inc_by(withdrawals_len);
+        gw_metrics::chain().transactions.inc_by(tx_receipts_len);
 
         self.local_state.tip = l2block;
         self.local_state.last_global_state = global_state;
