@@ -1611,6 +1611,7 @@ dependencies = [
  "gw-db",
  "gw-generator",
  "gw-jsonrpc-types",
+ "gw-metrics",
  "gw-store",
  "gw-telemetry",
  "gw-types",
@@ -1881,13 +1882,16 @@ dependencies = [
 name = "gw-metrics"
 version = "1.7.1"
 dependencies = [
+ "arc-swap",
  "gw-common",
+ "gw-config",
  "gw-store",
  "gw-telemetry",
  "gw-types",
  "hex",
  "serde",
  "serde_json",
+ "smol_str",
  "tracing",
 ]
 
@@ -4203,6 +4207,15 @@ name = "smallvec"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fd0db749597d91ff862fd1d55ea87f7855a744a8425a64695b6fca237d1dad1"
+
+[[package]]
+name = "smol_str"
+version = "0.1.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7475118a28b7e3a2e157ce0131ba8c5526ea96e90ee601d9f6bb2e286a35ab44"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "socket2"

@@ -70,3 +70,12 @@ impl Drop for InQueueRequestHandle {
         }
     }
 }
+
+impl From<&Request> for gw_metrics::rpc::RequestKind {
+    fn from(req: &Request) -> gw_metrics::rpc::RequestKind {
+        match req {
+            Request::Tx(_) => gw_metrics::rpc::RequestKind::Tx,
+            Request::Withdrawal(_) => gw_metrics::rpc::RequestKind::Withdrawal,
+        }
+    }
+}

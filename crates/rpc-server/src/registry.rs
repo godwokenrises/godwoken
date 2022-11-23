@@ -443,15 +443,6 @@ impl Request {
     }
 }
 
-impl From<&Request> for gw_metrics::rpc::RequestKind {
-    fn from(req: &Request) -> gw_metrics::rpc::RequestKind {
-        match req {
-            Request::Tx(_) => gw_metrics::rpc::RequestKind::Tx,
-            Request::Withdrawal(_) => gw_metrics::rpc::RequestKind::Withdrawal,
-        }
-    }
-}
-
 struct RequestSubmitter {
     mem_pool: Arc<Mutex<gw_mem_pool::pool::MemPool>>,
     submit_rx: mpsc::Receiver<(Request, RequestContext)>,

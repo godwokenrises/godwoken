@@ -218,6 +218,7 @@ async fn run_cli() -> Result<()> {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
             let _guard = trace::init()?;
+            gw_metrics::init(&config);
             runner::run(config, m.is_present(ARG_SKIP_CONFIG_CHECK)).await?;
         }
         Some((COMMAND_EXAMPLE_CONFIG, m)) => {
@@ -286,6 +287,7 @@ async fn run_cli() -> Result<()> {
             let config_path = "./config.toml";
             let config = read_config(&config_path)?;
             let _guard = trace::init()?;
+            gw_metrics::init(&config);
             runner::run(config, false).await?;
         }
     };

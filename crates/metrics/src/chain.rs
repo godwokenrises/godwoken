@@ -1,17 +1,13 @@
 use gw_telemetry::metric::{
     registry::Registry,
-    OnceCell,
+    Lazy,
     {counter::Counter, gauge::Gauge},
 };
 
+static CHAIN_METRICS: Lazy<ChainMetrics> = Lazy::new(|| ChainMetrics::default());
+
 pub fn chain() -> &'static ChainMetrics {
-    static METRICS: OnceCell<ChainMetrics> = OnceCell::new();
-    METRICS.get_or_init(|| {
-        let metrics = ChainMetrics::default();
-        let mut registry = crate::global_registry();
-        metrics.register(registry.sub_registry_with_prefix("chain"));
-        metrics
-    })
+    &CHAIN_METRICS
 }
 
 #[derive(Default)]
@@ -23,26 +19,29 @@ pub struct ChainMetrics {
 }
 
 impl ChainMetrics {
-    fn register(&self, registry: &mut Registry) {
-        registry.register(
-            "transactions",
-            "Number of packaged L2 transactions",
-            Box::new(self.transactions.clone()),
-        );
-        registry.register(
-            "deposits",
-            "Number of packaged deposits",
-            Box::new(self.deposits.clone()),
-        );
-        registry.register(
-            "withdrawals",
-            "Number of packaged withdrawals",
-            Box::new(self.withdrawals.clone()),
-        );
+    pub(crate) fn register(&self, config: &crate::Config, registry: &mut Registry) {
         registry.register(
             "block_height",
             "Number of the highest known block",
             Box::new(self.block_height.clone()),
         );
+
+        if config.node_mode == gw_config::NodeMode::FullNode {
+            registry.register(
+                "transactions",
+                "Number of packaged L2 transactions",
+                Box::new(self.transactions.clone()),
+            );
+            registry.register(
+                "deposits",
+                "Number of packaged deposits",
+                Box::new(self.deposits.clone()),
+            );
+            registry.register(
+                "withdrawals",
+                "Number of packaged withdrawals",
+                Box::new(self.withdrawals.clone()),
+            );
+        }
     }
 }

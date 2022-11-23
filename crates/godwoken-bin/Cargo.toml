@@ -24,6 +24,7 @@ gw-store = { path = "../store" }
 gw-types = { path = "../types" }
 gw-utils = { path = "../utils" }
 gw-version = { path = "../version" }
+gw-metrics = { path = "../metrics" }
 log = "0.4.14"
 num_cpus = "1.13.1"
 rayon = "1.5"

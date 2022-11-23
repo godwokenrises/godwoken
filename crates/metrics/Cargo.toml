@@ -10,8 +10,11 @@ gw-common = { path = "../common" }
 gw-store = { path = "../store" }
 gw-telemetry = { path = "../telemetry" }
 gw-types = { path = "../types" }
+gw-config = { path = "../config" }
 
+arc-swap = "1.5"
 hex = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+smol_str = "0.1"
 tracing = { version = "0.1", features = ["attributes"] }
