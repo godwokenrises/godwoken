@@ -66,8 +66,6 @@ jobs:
     uses: nervosnetwork/godwoken-tests/.github/workflows/reusable-integration-test-v1.yml@develop
     with:
       extra_github_env: |
-        GODWOKEN_KICKER_REF=develop
-        GODWOKEN_TESTS_REF=develop
         MANUAL_BUILD_GODWOKEN=true
         GODWOKEN_GIT_URL=https://github.com/${{ github.repository }}
         GODWOKEN_GIT_CHECKOUT=${{ github.ref }}
