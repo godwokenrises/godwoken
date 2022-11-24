@@ -4,7 +4,7 @@ use gw_telemetry::metric::{
     {counter::Counter, gauge::Gauge},
 };
 
-static CHAIN_METRICS: Lazy<ChainMetrics> = Lazy::new(|| ChainMetrics::default());
+static CHAIN_METRICS: Lazy<ChainMetrics> = Lazy::new(ChainMetrics::default);
 
 pub fn chain() -> &'static ChainMetrics {
     &CHAIN_METRICS

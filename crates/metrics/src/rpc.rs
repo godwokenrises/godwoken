@@ -3,7 +3,7 @@ use gw_telemetry::metric::{
     registry::Registry, Lazy,
 };
 
-static RPC_METRICS: Lazy<RPCMetrics> = Lazy::new(|| RPCMetrics::default());
+static RPC_METRICS: Lazy<RPCMetrics> = Lazy::new(RPCMetrics::default);
 
 pub fn rpc() -> &'static RPCMetrics {
     &RPC_METRICS

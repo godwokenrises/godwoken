@@ -7,7 +7,7 @@ use gw_telemetry::metric::{
 use gw_types::prelude::Unpack;
 use smol_str::SmolStr;
 
-static CUSTODIAN_METRICS: Lazy<CustodianMetrics> = Lazy::new(|| CustodianMetrics::default());
+static CUSTODIAN_METRICS: Lazy<CustodianMetrics> = Lazy::new(CustodianMetrics::default);
 
 pub fn custodian() -> &'static CustodianMetrics {
     &CUSTODIAN_METRICS

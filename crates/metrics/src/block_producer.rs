@@ -6,7 +6,7 @@ use gw_telemetry::metric::{
 };
 
 static BLOCK_PRODUCER_METRICS: Lazy<BlockProducerMetrics> =
-    Lazy::new(|| BlockProducerMetrics::default());
+    Lazy::new(BlockProducerMetrics::default);
 
 pub fn block_producer() -> &'static BlockProducerMetrics {
     &BLOCK_PRODUCER_METRICS
