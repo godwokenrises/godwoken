@@ -94,9 +94,9 @@ impl MemBlock {
         self.prev_merkle_state = tip.raw().post_account();
         // mem block content
         let content = MemBlockContent {
-            txs: self.txs.clone(),
-            withdrawals: self.withdrawals.clone(),
-            new_addresses: self.new_addresses.drain().collect(),
+            txs: std::mem::take(&mut self.txs),
+            withdrawals: std::mem::take(&mut self.withdrawals),
+            new_addresses: std::mem::take(&mut self.new_addresses),
         };
         // reset status
         self.clear();
