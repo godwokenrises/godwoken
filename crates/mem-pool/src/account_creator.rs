@@ -28,53 +28,49 @@ const META_CONTRACT_ACCOUNT_ID: u32 = RESERVED_ACCOUNT_ID;
 const ONE_CKB: u64 = 10u64.pow(8);
 pub const MIN_BALANCE: u64 = ONE_CKB;
 
-pub struct CkbTransfer;
+pub fn filter_new_address<'a>(
+    logs: impl IntoIterator<Item = LogItemReader<'a>>,
+    state: &impl State,
+) -> Option<Vec<RegistryAddress>> {
+    let do_filter = |log: LogItemReader<'_>| -> Result<Option<RegistryAddress>> {
+        if (GW_LOG_SUDT_TRANSFER, CKB_SUDT_ACCOUNT_ID)
+            != (log.service_flag().into(), log.account_id().unpack())
+        {
+            return Ok(None);
+        }
 
-impl CkbTransfer {
-    pub fn filter_new_address<'a>(
-        logs: impl IntoIterator<Item = LogItemReader<'a>>,
-        state: &impl State,
-    ) -> Option<Vec<RegistryAddress>> {
-        let do_filter = |log: LogItemReader<'_>| -> Result<Option<RegistryAddress>> {
-            if !matches!(log.service_flag().into(), GW_LOG_SUDT_TRANSFER)
-                || !matches!(log.account_id().unpack(), CKB_SUDT_ACCOUNT_ID)
-            {
-                return Ok(None);
-            }
-
-            let to = match parse_log(&log.to_entity())? {
-                GwLog::SudtTransfer { to_address, .. } => to_address,
-                _ => return Ok(None),
-            };
-
-            if state.get_script_hash_by_registry_address(&to)?.is_some() {
-                return Ok(None);
-            }
-
-            let min_balance: U256 = CKBCapacity::from_layer1(MIN_BALANCE).to_layer2();
-            let to_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &to)?;
-            if to_balance < min_balance {
-                tracing::info!("new address {:?} balance less than {}", to, min_balance);
-                return Ok(None);
-            }
-
-            Ok(Some(to))
+        let to = match parse_log(&log.to_entity())? {
+            GwLog::SudtTransfer { to_address, .. } => to_address,
+            _ => return Ok(None),
         };
 
-        let filtered = logs.into_iter().filter_map(|log| match do_filter(log) {
-            Err(err) => {
-                tracing::error!("parse log {}", err);
-                None
-            }
-            Ok(new) => new,
-        });
-
-        let new: Vec<_> = filtered.collect();
-        if new.is_empty() {
-            None
-        } else {
-            Some(new)
+        if state.get_script_hash_by_registry_address(&to)?.is_some() {
+            return Ok(None);
         }
+
+        let min_balance: U256 = CKBCapacity::from_layer1(MIN_BALANCE).to_layer2();
+        let to_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &to)?;
+        if to_balance < min_balance {
+            tracing::info!("new address {:?} balance less than {}", to, min_balance);
+            return Ok(None);
+        }
+
+        Ok(Some(to))
+    };
+
+    let filtered = logs.into_iter().filter_map(|log| match do_filter(log) {
+        Err(err) => {
+            tracing::error!("parse log {}", err);
+            None
+        }
+        Ok(new) => new,
+    });
+
+    let new: Vec<_> = filtered.collect();
+    if new.is_empty() {
+        None
+    } else {
+        Some(new)
     }
 }
 

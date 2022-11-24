@@ -52,7 +52,7 @@ use tokio::task::block_in_place;
 use tracing::instrument;
 
 use crate::{
-    account_creator::{AccountCreator, CkbTransfer},
+    account_creator::{filter_new_address, AccountCreator},
     block_sync_server::BlockSyncServerState,
     mem_block::MemBlock,
     restore_manager::RestoreManager,
@@ -344,7 +344,7 @@ impl MemPool {
         // save new addresses
         if self.account_creator.is_some() {
             let logs = tx_receipt.as_reader().logs();
-            if let Some(new_addresses) = CkbTransfer::filter_new_address(logs.iter(), state) {
+            if let Some(new_addresses) = filter_new_address(logs.iter(), state) {
                 self.mem_block.append_new_addresses(new_addresses);
             }
         }
