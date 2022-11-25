@@ -29,10 +29,6 @@ use gw_utils::RollupContext;
 
 type MemTree = MemStateDB;
 
-#[derive(thiserror::Error, Debug)]
-#[error("{:?}", {0})]
-pub struct RollBackSavePointError(gw_db::error::Error);
-
 pub struct MockBlockParam {
     rollup_context: RollupContext,
     finality_blocks: u64,

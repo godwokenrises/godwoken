@@ -91,6 +91,14 @@ impl<'a> Store {
     pub fn get_snapshot(&self) -> StoreSnapshot {
         StoreSnapshot::new(self.db.get_snapshot())
     }
+
+    pub fn as_inner(&self) -> &RocksDB {
+        &self.db
+    }
+
+    pub fn into_inner(self) -> RocksDB {
+        self.db
+    }
 }
 
 impl ChainStore for Store {}

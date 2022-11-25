@@ -1,15 +1,16 @@
-use gw_db::{error::Error, schema::Col, RocksDBWriteBatch};
+use anyhow::Result;
+use gw_db::{schema::Col, RocksDBWriteBatch};
 
 pub struct StoreWriteBatch {
     pub(crate) inner: RocksDBWriteBatch,
 }
 
 impl StoreWriteBatch {
-    pub fn put(&mut self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
+    pub fn put(&mut self, col: Col, key: &[u8], value: &[u8]) -> Result<()> {
         self.inner.put(col, key, value)
     }
 
-    pub fn delete(&mut self, col: Col, key: &[u8]) -> Result<(), Error> {
+    pub fn delete(&mut self, col: Col, key: &[u8]) -> Result<()> {
         self.inner.delete(col, key)
     }
 
@@ -25,7 +26,7 @@ impl StoreWriteBatch {
         self.inner.is_empty()
     }
 
-    pub fn clear(&mut self) -> Result<(), Error> {
+    pub fn clear(&mut self) -> Result<()> {
         self.inner.clear()
     }
 }

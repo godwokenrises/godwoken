@@ -74,8 +74,8 @@ impl BlockSyncClient {
         loop {
             if let Some(ref mut s) = p2p_stream {
                 if let Err(err) = run_with_p2p_stream(&mut self, s).await {
-                    if err.is::<gw_db::error::Error>() {
-                        // Cannot recover from db error.
+                    if err.is::<gw_db::transaction::CommitError>() {
+                        // Cannot recover from db commit error.
                         log::error!("db error, exiting: {:#}", err);
                         return;
                     }
@@ -93,7 +93,7 @@ impl BlockSyncClient {
                     continue;
                 }
                 if let Err(err) = run_once_without_p2p_stream(&mut self).await {
-                    if err.is::<gw_db::error::Error>() {
+                    if err.is::<gw_db::transaction::CommitError>() {
                         // Cannot recover from db error.
                         log::error!("db error, exiting: {:#}", err);
                         return;

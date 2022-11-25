@@ -28,7 +28,6 @@ use std::{
 pub mod mock_block;
 pub mod mock_tx;
 pub mod verify_tx;
-pub use mock_block::RollBackSavePointError;
 pub use mock_tx::mock_cancel_challenge_tx;
 pub use verify_tx::dump_tx;
 

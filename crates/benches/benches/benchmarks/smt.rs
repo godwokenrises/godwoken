@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::Result;
 use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
 use gw_common::{
     blake2b::new_blake2b,
@@ -114,7 +115,7 @@ impl Account {
 
 struct BenchChain;
 impl ChainView for BenchChain {
-    fn get_block_hash_by_number(&self, _: u64) -> Result<Option<H256>, gw_db::error::Error> {
+    fn get_block_hash_by_number(&self, _: u64) -> Result<Option<H256>> {
         unreachable!("bench chain store")
     }
 }

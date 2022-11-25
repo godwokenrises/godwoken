@@ -1,7 +1,7 @@
 //! TODO(doc): @quake
 use crate::db::cf_handle;
 use crate::schema::Col;
-use crate::{internal_error, Result};
+use anyhow::Result;
 use rocksdb::{OptimisticTransactionDB, WriteBatch};
 use std::sync::Arc;
 
@@ -30,13 +30,13 @@ impl RocksDBWriteBatch {
     /// TODO(doc): @quake
     pub fn put(&mut self, col: Col, key: &[u8], value: &[u8]) -> Result<()> {
         let cf = cf_handle(&self.db, col)?;
-        self.inner.put_cf(cf, key, value).map_err(internal_error)
+        Ok(self.inner.put_cf(cf, key, value)?)
     }
 
     /// TODO(doc): @quake
     pub fn delete(&mut self, col: Col, key: &[u8]) -> Result<()> {
         let cf = cf_handle(&self.db, col)?;
-        self.inner.delete_cf(cf, key).map_err(internal_error)
+        Ok(self.inner.delete_cf(cf, key)?)
     }
 
     /// Remove database entries from start key to end key.
@@ -46,13 +46,11 @@ impl RocksDBWriteBatch {
     /// keys exist in the range ["begin_key", "end_key").
     pub fn delete_range(&mut self, col: Col, from: &[u8], to: &[u8]) -> Result<()> {
         let cf = cf_handle(&self.db, col)?;
-        self.inner
-            .delete_range_cf(cf, from, to)
-            .map_err(internal_error)
+        Ok(self.inner.delete_range_cf(cf, from, to)?)
     }
 
     /// TODO(doc): @quake
     pub fn clear(&mut self) -> Result<()> {
-        self.inner.clear().map_err(internal_error)
+        Ok(self.inner.clear()?)
     }
 }

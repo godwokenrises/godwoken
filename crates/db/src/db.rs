@@ -3,7 +3,8 @@ use crate::schema::Col;
 use crate::snapshot::RocksDBSnapshot;
 use crate::transaction::RocksDBTransaction;
 use crate::write_batch::RocksDBWriteBatch;
-use crate::{internal_error, CfMemStat, Result};
+use crate::CfMemStat;
+use anyhow::{bail, Context, Result};
 use gw_config::StoreConfig;
 use rocksdb::ops::{
     CreateCF, DropCF, GetColumnFamilys, GetPinned, GetPinnedCF, IterateCF, OpenCF, Put, SetOptions,
@@ -29,15 +30,11 @@ impl RocksDB {
 
         let (mut opts, cf_descriptors) = if let Some(ref file) = config.options_file {
             let mut full_opts = FullOptions::load_from_file(file, config.cache_size, false)
-                .map_err(|err| {
-                    internal_error(format!("failed to load the options file: {}", err))
-                })?;
+                .context("load options from file")?;
             let cf_names_str: Vec<&str> = cf_names.iter().map(|s| s.as_str()).collect();
             full_opts
                 .complete_column_families(&cf_names_str, false)
-                .map_err(|err| {
-                    internal_error(format!("failed to check all column families: {}", err))
-                })?;
+                .context("complete column families")?;
             let FullOptions {
                 db_opts,
                 cf_descriptors,
@@ -71,32 +68,24 @@ impl RocksDB {
                     &config.path,
                     cf_descriptors.clone(),
                 )
-                .map_err(|err| {
-                    internal_error(format!("failed to open a new created database: {}", err))
-                })?;
+                .context("open a new created database")?;
                 Ok(db)
             } else if err.as_ref().starts_with("Corruption:") {
                 eprintln!("Repairing the rocksdb since {} ...", err);
                 let mut repair_opts = Options::default();
                 repair_opts.create_if_missing(false);
                 repair_opts.create_missing_column_families(false);
-                OptimisticTransactionDB::repair(repair_opts, &config.path).map_err(|err| {
-                    internal_error(format!("failed to repair the database: {}", err))
-                })?;
+                OptimisticTransactionDB::repair(repair_opts, &config.path)
+                    .context("repair database")?;
                 eprintln!("Opening the repaired rocksdb ...");
                 OptimisticTransactionDB::open_cf_descriptors(
                     &opts,
                     &config.path,
                     cf_descriptors.clone(),
                 )
-                .map_err(|err| {
-                    internal_error(format!("failed to open the repaired database: {}", err))
-                })
+                .context("open repaired database")
             } else {
-                Err(internal_error(format!(
-                    "failed to open the database: {}",
-                    err
-                )))
+                bail!("failed to open database: {}", err);
             }
         })?;
 
@@ -107,7 +96,7 @@ impl RocksDB {
                 .map(|(k, v)| (k.as_str(), v.as_str()))
                 .collect();
             db.set_options(&rocksdb_options)
-                .map_err(|_| internal_error("failed to set database option"))?;
+                .context("failed to set database option")?;
         }
 
         Ok(RocksDB {
@@ -130,11 +119,11 @@ impl RocksDB {
 
     pub fn get_pinned(&self, col: Col, key: &[u8]) -> Result<Option<DBPinnableSlice>> {
         let cf = cf_handle(&self.inner, col)?;
-        self.inner.get_pinned_cf(cf, &key).map_err(internal_error)
+        Ok(self.inner.get_pinned_cf(cf, &key)?)
     }
 
     pub fn get_pinned_default(&self, key: &[u8]) -> Result<Option<DBPinnableSlice>> {
-        self.inner.get_pinned(&key).map_err(internal_error)
+        Ok(self.inner.get_pinned(&key)?)
     }
 
     pub fn put_default<K, V>(&self, key: K, value: V) -> Result<()>
@@ -142,7 +131,7 @@ impl RocksDB {
         K: AsRef<[u8]>,
         V: AsRef<[u8]>,
     {
-        self.inner.put(key, value).map_err(internal_error)
+        Ok(self.inner.put(key, value)?)
     }
 
     pub fn traverse<F>(&self, col: Col, mut callback: F) -> Result<()>
@@ -150,10 +139,7 @@ impl RocksDB {
         F: FnMut(&[u8], &[u8]) -> Result<()>,
     {
         let cf = cf_handle(&self.inner, col)?;
-        let iter = self
-            .inner
-            .full_iterator_cf(cf, IteratorMode::Start)
-            .map_err(internal_error)?;
+        let iter = self.inner.full_iterator_cf(cf, IteratorMode::Start)?;
         for (key, val) in iter {
             callback(&key, &val)?;
         }
@@ -180,7 +166,7 @@ impl RocksDB {
     }
 
     pub fn write(&self, batch: &RocksDBWriteBatch) -> Result<()> {
-        self.inner.write(&batch.inner).map_err(internal_error)
+        Ok(self.inner.write(&batch.inner)?)
     }
 
     pub fn get_snapshot(&self) -> RocksDBSnapshot {
@@ -195,18 +181,14 @@ impl RocksDB {
     }
 
     pub fn create_cf(&mut self, col: Col) -> Result<()> {
-        let inner = Arc::get_mut(&mut self.inner)
-            .ok_or_else(|| internal_error("create_cf get_mut failed"))?;
+        let inner = Arc::get_mut(&mut self.inner).context("create_cf get_mut")?;
         let opts = Options::default();
-        inner
-            .create_cf(&col.to_string(), &opts)
-            .map_err(internal_error)
+        Ok(inner.create_cf(&col.to_string(), &opts)?)
     }
 
     pub fn drop_cf(&mut self, col: Col) -> Result<()> {
-        let inner = Arc::get_mut(&mut self.inner)
-            .ok_or_else(|| internal_error("drop_cf get_mut failed"))?;
-        inner.drop_cf(&col.to_string()).map_err(internal_error)
+        let inner = Arc::get_mut(&mut self.inner).context("drop_cf get_mut")?;
+        Ok(inner.drop_cf(&col.to_string())?)
     }
 
     pub fn gather_mem_stats(&self) -> Vec<CfMemStat> {
@@ -217,7 +199,7 @@ impl RocksDB {
 #[inline]
 pub(crate) fn cf_handle(db: &OptimisticTransactionDB, col: Col) -> Result<&ColumnFamily> {
     db.cf_handle(&col.to_string())
-        .ok_or_else(|| internal_error(format!("column {} not found", col)))
+        .with_context(|| format!("column family {col} not found"))
 }
 
 #[cfg(test)]

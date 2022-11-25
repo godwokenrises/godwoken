@@ -3,7 +3,6 @@
 use crate::traits::kv_store::KVStoreRead;
 use anyhow::Result;
 use gw_common::H256;
-use gw_db::error::Error;
 use gw_db::schema::{
     COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
     COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_GLOBAL_STATE,
@@ -38,7 +37,7 @@ pub trait ChainStore: KVStoreRead {
         Ok(self.get_block_hash_by_number(0)?.is_some())
     }
 
-    fn get_chain_id(&self) -> Result<H256, Error> {
+    fn get_chain_id(&self) -> Result<H256> {
         let slice = self
             .get(COLUMN_META, META_CHAIN_ID_KEY)
             .expect("must has chain_id");
@@ -48,7 +47,7 @@ pub trait ChainStore: KVStoreRead {
         Ok(chain_id.into())
     }
 
-    fn get_block_smt_root(&self) -> Result<H256, Error> {
+    fn get_block_smt_root(&self) -> Result<H256> {
         let slice = self
             .get(COLUMN_META, META_BLOCK_SMT_ROOT_KEY)
             .expect("must has root");
@@ -58,7 +57,7 @@ pub trait ChainStore: KVStoreRead {
         Ok(root.into())
     }
 
-    fn get_reverted_block_smt_root(&self) -> Result<H256, Error> {
+    fn get_reverted_block_smt_root(&self) -> Result<H256> {
         let slice = self
             .get(COLUMN_META, META_REVERTED_BLOCK_SMT_ROOT_KEY)
             .expect("must has root");
@@ -68,7 +67,7 @@ pub trait ChainStore: KVStoreRead {
         Ok(root.into())
     }
 
-    fn get_prev_reverted_block_smt_root(&self, root: &H256) -> Result<Option<H256>, Error> {
+    fn get_prev_reverted_block_smt_root(&self, root: &H256) -> Result<Option<H256>> {
         match self.get(COLUMN_REVERTED_BLOCK_SMT_ROOT, root.as_slice()) {
             Some(slice) => {
                 let block_hashes = packed::Byte32VecReader::from_slice_should_be_ok(slice.as_ref());
@@ -78,7 +77,7 @@ pub trait ChainStore: KVStoreRead {
         }
     }
 
-    fn get_last_valid_tip_block(&self) -> Result<packed::L2Block, Error> {
+    fn get_last_valid_tip_block(&self) -> Result<packed::L2Block> {
         let block_hash = self.get_last_valid_tip_block_hash()?;
         let block = self
             .get_block(&block_hash)?
@@ -87,7 +86,7 @@ pub trait ChainStore: KVStoreRead {
         Ok(block)
     }
 
-    fn get_last_valid_tip_block_hash(&self) -> Result<H256, Error> {
+    fn get_last_valid_tip_block_hash(&self) -> Result<H256> {
         let slice = self
             .get(COLUMN_META, META_LAST_VALID_TIP_BLOCK_HASH_KEY)
             .expect("get last valid tip block hash");
@@ -154,7 +153,7 @@ pub trait ChainStore: KVStoreRead {
     }
 
     /// Get tip block hash. It may be a bad block.
-    fn get_tip_block_hash(&self) -> Result<H256, Error> {
+    fn get_tip_block_hash(&self) -> Result<H256> {
         let slice = self
             .get(COLUMN_META, META_TIP_BLOCK_HASH_KEY)
             .expect("get tip block hash");
@@ -163,7 +162,7 @@ pub trait ChainStore: KVStoreRead {
 
     /// Get tip block. The block is NOT necessarily valid, i.e. it may be a bad
     /// block.
-    fn get_tip_block(&self) -> Result<packed::L2Block, Error> {
+    fn get_tip_block(&self) -> Result<packed::L2Block> {
         let tip_block_hash = self.get_tip_block_hash()?;
         Ok(self
             .get_block(&tip_block_hash)?
@@ -172,7 +171,7 @@ pub trait ChainStore: KVStoreRead {
     }
 
     /// Does NOT return block hash for bad blocks.
-    fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, Error> {
+    fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>> {
         let block_number: packed::Uint64 = number.pack();
         match self.get(COLUMN_INDEX, block_number.as_slice()) {
             Some(slice) => Ok(Some(
@@ -183,7 +182,7 @@ pub trait ChainStore: KVStoreRead {
     }
 
     /// Does NOT return block number for bad blocks.
-    fn get_block_number(&self, block_hash: &H256) -> Result<Option<u64>, Error> {
+    fn get_block_number(&self, block_hash: &H256) -> Result<Option<u64>> {
         match self.get(COLUMN_INDEX, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
                 packed::Uint64Reader::from_slice_should_be_ok(slice.as_ref()).unpack(),
@@ -193,7 +192,7 @@ pub trait ChainStore: KVStoreRead {
     }
 
     /// Does NOT return bad blocks.
-    fn get_block(&self, block_hash: &H256) -> Result<Option<packed::L2Block>, Error> {
+    fn get_block(&self, block_hash: &H256) -> Result<Option<packed::L2Block>> {
         match self.get(COLUMN_BLOCK, block_hash.as_slice()) {
             Some(slice) => Ok(Some(from_box_should_be_ok!(packed::L2BlockReader, slice))),
             None => Ok(None),
@@ -205,17 +204,14 @@ pub trait ChainStore: KVStoreRead {
         Some(from_box_should_be_ok!(packed::L2BlockReader, slice))
     }
 
-    fn get_transaction(&self, tx_hash: &H256) -> Result<Option<packed::L2Transaction>, Error> {
+    fn get_transaction(&self, tx_hash: &H256) -> Result<Option<packed::L2Transaction>> {
         match self.get_transaction_info(tx_hash)? {
             Some(tx_info) => self.get_transaction_by_key(&tx_info.key()),
             None => Ok(None),
         }
     }
 
-    fn get_transaction_info(
-        &self,
-        tx_hash: &H256,
-    ) -> Result<Option<packed::TransactionInfo>, Error> {
+    fn get_transaction_info(&self, tx_hash: &H256) -> Result<Option<packed::TransactionInfo>> {
         let tx_info_opt = self
             .get(COLUMN_TRANSACTION_INFO, tx_hash.as_slice())
             .map(|slice| from_box_should_be_ok!(packed::TransactionInfoReader, slice));
@@ -225,13 +221,13 @@ pub trait ChainStore: KVStoreRead {
     fn get_transaction_by_key(
         &self,
         tx_key: &TransactionKey,
-    ) -> Result<Option<packed::L2Transaction>, Error> {
+    ) -> Result<Option<packed::L2Transaction>> {
         Ok(self
             .get(COLUMN_TRANSACTION, tx_key.as_slice())
             .map(|slice| from_box_should_be_ok!(packed::L2TransactionReader, slice)))
     }
 
-    fn get_transaction_receipt(&self, tx_hash: &H256) -> Result<Option<packed::TxReceipt>, Error> {
+    fn get_transaction_receipt(&self, tx_hash: &H256) -> Result<Option<packed::TxReceipt>> {
         if let Some(slice) = self.get(COLUMN_TRANSACTION_INFO, tx_hash.as_slice()) {
             let info = from_box_should_be_ok!(packed::TransactionInfoReader, slice);
             let tx_key = info.key();
@@ -244,7 +240,7 @@ pub trait ChainStore: KVStoreRead {
     fn get_transaction_receipt_by_key(
         &self,
         key: &TransactionKey,
-    ) -> Result<Option<packed::TxReceipt>, Error> {
+    ) -> Result<Option<packed::TxReceipt>> {
         Ok(self
             .get(COLUMN_TRANSACTION_RECEIPT, key.as_slice())
             .map(|slice| from_box_should_be_ok!(packed::TxReceiptReader, slice)))
@@ -253,7 +249,7 @@ pub trait ChainStore: KVStoreRead {
     fn get_withdrawal(
         &self,
         withdrawal_hash: &H256,
-    ) -> Result<Option<packed::WithdrawalRequestExtra>, Error> {
+    ) -> Result<Option<packed::WithdrawalRequestExtra>> {
         match self.get_withdrawal_info(withdrawal_hash)? {
             Some(withdrawal_info) => self.get_withdrawal_by_key(&withdrawal_info.key()),
             None => Ok(None),
@@ -263,7 +259,7 @@ pub trait ChainStore: KVStoreRead {
     fn get_withdrawal_info(
         &self,
         withdrawal_hash: &H256,
-    ) -> Result<Option<packed::WithdrawalInfo>, Error> {
+    ) -> Result<Option<packed::WithdrawalInfo>> {
         let withdrawal_info_opt = self
             .get(COLUMN_WITHDRAWAL_INFO, withdrawal_hash.as_slice())
             .map(|slice| from_box_should_be_ok!(packed::WithdrawalInfoReader, slice));
@@ -273,7 +269,7 @@ pub trait ChainStore: KVStoreRead {
     fn get_withdrawal_by_key(
         &self,
         withdrawal_key: &WithdrawalKey,
-    ) -> Result<Option<packed::WithdrawalRequestExtra>, Error> {
+    ) -> Result<Option<packed::WithdrawalRequestExtra>> {
         Ok(self
             .get(COLUMN_WITHDRAWAL, withdrawal_key.as_slice())
             .map(|slice| from_box_should_be_ok!(packed::WithdrawalRequestExtraReader, slice)))
@@ -283,7 +279,7 @@ pub trait ChainStore: KVStoreRead {
     fn get_block_post_global_state(
         &self,
         block_hash: &H256,
-    ) -> Result<Option<packed::GlobalState>, Error> {
+    ) -> Result<Option<packed::GlobalState>> {
         match self.get(COLUMN_BLOCK_GLOBAL_STATE, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
                 global_state_from_slice(slice.as_ref()).expect("global state should be ok"),
@@ -292,10 +288,7 @@ pub trait ChainStore: KVStoreRead {
         }
     }
 
-    fn get_bad_block_challenge_target(
-        &self,
-        block_hash: &H256,
-    ) -> Result<Option<ChallengeTarget>, Error> {
+    fn get_bad_block_challenge_target(&self, block_hash: &H256) -> Result<Option<ChallengeTarget>> {
         match self.get(COLUMN_BAD_BLOCK_CHALLENGE_TARGET, block_hash.as_slice()) {
             Some(slice) => {
                 let target = packed::ChallengeTargetReader::from_slice_should_be_ok(slice.as_ref());
@@ -308,7 +301,7 @@ pub trait ChainStore: KVStoreRead {
     fn get_reverted_block_hashes_by_root(
         &self,
         reverted_block_smt_root: &H256,
-    ) -> Result<Option<SMTRevertedBlockHashes>, Error> {
+    ) -> Result<Option<SMTRevertedBlockHashes>> {
         match self.get(
             COLUMN_REVERTED_BLOCK_SMT_ROOT,
             reverted_block_smt_root.as_slice(),
@@ -333,17 +326,14 @@ pub trait ChainStore: KVStoreRead {
         }
     }
 
-    fn get_asset_script(&self, script_hash: &H256) -> Result<Option<Script>, Error> {
+    fn get_asset_script(&self, script_hash: &H256) -> Result<Option<Script>> {
         match self.get(COLUMN_ASSET_SCRIPT, script_hash.as_slice()) {
             Some(slice) => Ok(Some(from_box_should_be_ok!(packed::ScriptReader, slice))),
             None => Ok(None),
         }
     }
 
-    fn get_mem_pool_transaction(
-        &self,
-        tx_hash: &H256,
-    ) -> Result<Option<packed::L2Transaction>, Error> {
+    fn get_mem_pool_transaction(&self, tx_hash: &H256) -> Result<Option<packed::L2Transaction>> {
         Ok(self
             .get(COLUMN_MEM_POOL_TRANSACTION, tx_hash.as_slice())
             .map(|slice| from_box_should_be_ok!(packed::L2TransactionReader, slice)))
@@ -352,7 +342,7 @@ pub trait ChainStore: KVStoreRead {
     fn get_mem_pool_transaction_receipt(
         &self,
         tx_hash: &H256,
-    ) -> Result<Option<packed::TxReceipt>, Error> {
+    ) -> Result<Option<packed::TxReceipt>> {
         Ok(self
             .get(COLUMN_MEM_POOL_TRANSACTION_RECEIPT, tx_hash.as_slice())
             .map(|slice| from_box_should_be_ok!(packed::TxReceiptReader, slice)))
@@ -361,15 +351,13 @@ pub trait ChainStore: KVStoreRead {
     fn get_mem_pool_withdrawal(
         &self,
         withdrawal_hash: &H256,
-    ) -> Result<Option<packed::WithdrawalRequestExtra>, Error> {
+    ) -> Result<Option<packed::WithdrawalRequestExtra>> {
         let maybe_withdrawal =
-            match self.get(COLUMN_MEM_POOL_WITHDRAWAL, withdrawal_hash.as_slice()) {
-                Some(slice) => packed::WithdrawalRequestExtra::from_slice(slice.as_ref()),
-                None => return Ok(None),
+            if let Some(slice) = self.get(COLUMN_MEM_POOL_WITHDRAWAL, withdrawal_hash.as_slice()) {
+                Some(packed::WithdrawalRequestExtra::from_slice(slice.as_ref())?)
+            } else {
+                None
             };
-
-        maybe_withdrawal
-            .map(Some)
-            .map_err(|err| Error::from(format!("invalid withdrawal request {}", err)))
+        Ok(maybe_withdrawal)
     }
 }

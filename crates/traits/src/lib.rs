@@ -1,5 +1,5 @@
+use anyhow::Result;
 use gw_common::H256;
-use gw_db::error::Error as DBError;
 use gw_types::{bytes::Bytes, packed::Script};
 
 pub trait CodeStore {
@@ -10,5 +10,5 @@ pub trait CodeStore {
 }
 
 pub trait ChainView {
-    fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, DBError>;
+    fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>>;
 }
