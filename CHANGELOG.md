@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.7.2] - 2022-11-25
+
+- fix: use mem pool state for “get block” RPCs [#871](https://github.com/godwokenrises/godwoken/pull/871)
+
 ## [v1.7.1] - 2022-11-13
 
 - fix: Support revert inner call state [#835](https://github.com/godwokenrises/godwoken/pull/835)

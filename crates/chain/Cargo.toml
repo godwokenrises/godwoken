@@ -1,6 +1,6 @@
 [package]
 name = "gw-chain"
-version = "1.7.1"
+version = "1.7.2"
 authors = ["Nervos Network"]
 edition = "2018"
 
