@@ -7,6 +7,7 @@ use clap::{Arg, Command, CommandFactory, Parser};
 use godwoken_bin::subcommand::db_block_validator;
 use godwoken_bin::subcommand::export_block::{ExportArgs, ExportBlock};
 use godwoken_bin::subcommand::import_block::{ImportArgs, ImportBlock};
+use godwoken_bin::subcommand::migrate::{MigrateCommand, COMMAND_MIGRATE};
 use godwoken_bin::subcommand::peer_id::{PeerIdCommand, COMMAND_PEER_ID};
 use godwoken_bin::subcommand::rewind_to_last_valid_block::{
     RewindToLastValidBlockCommand, COMMAND_REWIND_TO_LAST_VALID_BLOCK,
@@ -206,7 +207,8 @@ async fn run_cli() -> Result<()> {
                 .display_order(4),
         )
         .subcommand(PeerIdCommand::command())
-        .subcommand(RewindToLastValidBlockCommand::command());
+        .subcommand(RewindToLastValidBlockCommand::command())
+        .subcommand(MigrateCommand::command());
 
     // handle subcommands
     let matches = app.clone().get_matches();
@@ -274,6 +276,9 @@ async fn run_cli() -> Result<()> {
         }
         Some((COMMAND_REWIND_TO_LAST_VALID_BLOCK, m)) => {
             RewindToLastValidBlockCommand::from_clap(m).run().await?;
+        }
+        Some((COMMAND_MIGRATE, m)) => {
+            MigrateCommand::from_clap(m).run()?;
         }
         _ => {
             // default command: start a Godwoken node

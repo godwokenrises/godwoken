@@ -5,7 +5,8 @@ use crate::{
     error::Error,
     read_only_db::{self, ReadOnlyDB},
     schema::{
-        COLUMN_BAD_BLOCK, COLUMN_BLOCK, COLUMN_META, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
+        COLUMN_ACCOUNT_SMT_LEAF, COLUMN_BAD_BLOCK, COLUMN_BLOCK, COLUMN_BLOCK_SMT_LEAF,
+        COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_LEAF, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
         META_TIP_BLOCK_HASH_KEY, REMOVED_COLUMN_BLOCK_DEPOSIT_REQUESTS,
         REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO,
     },
@@ -20,10 +21,9 @@ use crate::{
     RocksDB,
 };
 
-pub fn open_or_create_db(config: &StoreConfig) -> Result<RocksDB> {
+pub fn open_or_create_db(config: &StoreConfig, factory: MigrationFactory) -> Result<RocksDB> {
     let read_only_db =
         read_only_db::ReadOnlyDB::open_cf(&config.path, vec![COLUMN_META.to_string()])?;
-    let factory = init_migration_factory();
     if let Some(db) = read_only_db {
         match check_readonly_db_version(&db, factory.last_db_version())? {
             Ordering::Greater => {
@@ -40,9 +40,6 @@ pub fn open_or_create_db(config: &StoreConfig) -> Result<RocksDB> {
             Ordering::Equal => Ok(RocksDB::open(config, COLUMNS)),
             Ordering::Less => {
                 log::info!("process fast migrations ...");
-                // TODO: Currently, there is only one migration: Add db version.
-                // So we can add db version by running default migration here.
-                // We should stop the process if we have more migrations and use **migration** command to run migration instead.
                 let db = RocksDB::open(config, COLUMNS);
                 let _ = factory.migrate(db)?;
 
@@ -92,11 +89,10 @@ fn is_non_empty_rdb(db: &ReadOnlyDB) -> bool {
     false
 }
 
-trait Migration {
+pub trait Migration {
     fn migrate(&self, db: RocksDB) -> Result<RocksDB>;
     // Version can be genereated with: date '+%Y%m%d%H%M%S'
     fn version(&self) -> &str;
-    fn expensive(&self) -> bool;
 }
 
 struct DefaultMigration;
@@ -107,9 +103,6 @@ impl Migration for DefaultMigration {
     #[allow(clippy::needless_return)]
     fn version(&self) -> &str {
         return "20211229181750";
-    }
-    fn expensive(&self) -> bool {
-        false
     }
 }
 
@@ -131,9 +124,6 @@ impl Migration for DecoupleBlockProducingSubmissionAndConfirmationMigration {
     }
     fn version(&self) -> &str {
         "20220517"
-    }
-    fn expensive(&self) -> bool {
-        false
     }
 }
 
@@ -163,22 +153,46 @@ impl Migration for BadBlockColumnMigration {
     fn version(&self) -> &str {
         "20221024"
     }
-    fn expensive(&self) -> bool {
-        false
+}
+
+struct SMTTrieMigrationPlaceHolder;
+
+impl Migration for SMTTrieMigrationPlaceHolder {
+    fn migrate(&self, db: RocksDB) -> Result<RocksDB> {
+        // Nothing to do if SMT leaves are empty.
+        let smts_all_empty = [
+            COLUMN_BLOCK_SMT_LEAF,
+            COLUMN_ACCOUNT_SMT_LEAF,
+            COLUMN_REVERTED_BLOCK_SMT_LEAF,
+        ]
+        .iter()
+        .all(|col| {
+            db.iter(*col, rocksdb::IteratorMode::Start)
+                .map_or(false, |mut i| i.next().is_none())
+        });
+        if smts_all_empty {
+            return Ok(db);
+        }
+
+        Err("Cannot automatically migrate to version 20221125 (SMTTrieMigration). Use “godwoken migrate” command".to_string().into())
+    }
+    fn version(&self) -> &str {
+        "20221125"
     }
 }
 
-struct MigrationFactory {
+pub struct MigrationFactory {
     migration_map: BTreeMap<String, Box<dyn Migration>>,
 }
 
-fn init_migration_factory() -> MigrationFactory {
+pub fn init_migration_factory() -> MigrationFactory {
     let mut factory = MigrationFactory::create();
     let migration = DefaultMigration;
     factory.insert(Box::new(migration));
     factory.insert(Box::new(
         DecoupleBlockProducingSubmissionAndConfirmationMigration,
     ));
+    factory.insert(Box::new(SMTTrieMigrationPlaceHolder));
     factory
 }
 
@@ -188,9 +202,13 @@ impl MigrationFactory {
         Self { migration_map }
     }
 
-    fn insert(&mut self, migration: Box<dyn Migration>) {
+    /// Insert a new migration.
+    ///
+    /// Returns whether the migration replaces a previously inserted one.
+    pub fn insert(&mut self, migration: Box<dyn Migration>) -> bool {
         self.migration_map
-            .insert(migration.version().to_string(), migration);
+            .insert(migration.version().to_string(), migration)
+            .is_some()
     }
 
     fn migrate(&self, db: RocksDB) -> Result<RocksDB> {
@@ -269,7 +287,7 @@ mod tests {
             options_file: None,
             cache_size: None,
         };
-        let db = open_or_create_db(&config)?;
+        let db = open_or_create_db(&config, init_migration_factory())?;
         let v = db.get_pinned_default(MIGRATION_VERSION_KEY)?;
         assert!(v.is_some());
         let factory = init_migration_factory();
