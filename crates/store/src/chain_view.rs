@@ -1,7 +1,7 @@
 //! ChainView implement ChainStore
 
+use anyhow::{bail, Result};
 use gw_common::H256;
-use gw_db::error::Error;
 use gw_traits::ChainView as ChainViewTrait;
 
 use crate::traits::chain_store::ChainStore;
@@ -21,7 +21,7 @@ impl<'db, DB: ChainStore> ChainView<'db, DB> {
 }
 
 impl<'db, DB: ChainStore> ChainViewTrait for ChainView<'db, DB> {
-    fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, Error> {
+    fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>> {
         // if we can read block number from db index, we are in the main chain
         if let Some(tip_number) = self.db.get_block_number(&self.tip_block_hash)? {
             if !is_number_in_a_valid_range(tip_number, number) {
@@ -37,9 +37,7 @@ impl<'db, DB: ChainStore> ChainViewTrait for ChainView<'db, DB> {
         // we are on a forked chain
         // since we always execute transactions based on main chain
         // it is a bug in the current version
-        Err("shouldn't execute transaction on forked chain"
-            .to_string()
-            .into())
+        bail!("shouldn't execute transaction on forked chain")
     }
 }
 

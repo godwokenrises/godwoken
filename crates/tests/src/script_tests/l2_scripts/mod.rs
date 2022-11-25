@@ -1,3 +1,4 @@
+use anyhow::{bail, Result};
 use gw_common::blake2b::new_blake2b;
 use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
 use gw_common::registry_address::RegistryAddress;
@@ -120,8 +121,8 @@ pub fn new_block_info(block_producer: &RegistryAddress, number: u64, timestamp: 
 
 struct DummyChainStore;
 impl ChainView for DummyChainStore {
-    fn get_block_hash_by_number(&self, _number: u64) -> Result<Option<H256>, gw_db::error::Error> {
-        Err("dummy chain store".to_string().into())
+    fn get_block_hash_by_number(&self, _number: u64) -> Result<Option<H256>> {
+        bail!("dummy chain store")
     }
 }
 

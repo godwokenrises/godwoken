@@ -2,10 +2,8 @@
 use crate::db::cf_handle;
 use crate::read_only_db::ReadOnlyDB;
 use crate::schema::Col;
-use crate::{
-    internal_error, Result, RocksDB, RocksDBSnapshot, RocksDBTransaction,
-    RocksDBTransactionSnapshot,
-};
+use crate::{RocksDB, RocksDBSnapshot, RocksDBTransaction, RocksDBTransactionSnapshot};
+use anyhow::{Context, Result};
 use rocksdb::ops::GetColumnFamilys;
 use rocksdb::{ops::IterateCF, ReadOptions};
 pub use rocksdb::{DBIterator as DBIter, Direction, IteratorMode};
@@ -28,35 +26,28 @@ pub trait DBIterator {
 impl DBIterator for RocksDB {
     fn iter_opt(&self, col: Col, mode: IteratorMode, readopts: &ReadOptions) -> Result<DBIter> {
         let cf = cf_handle(&self.inner, col)?;
-        self.inner
-            .iterator_cf_opt(cf, mode, readopts)
-            .map_err(internal_error)
+        Ok(self.inner.iterator_cf_opt(cf, mode, readopts)?)
     }
 }
 
 impl DBIterator for RocksDBTransaction {
     fn iter_opt(&self, col: Col, mode: IteratorMode, readopts: &ReadOptions) -> Result<DBIter> {
         let cf = cf_handle(&self.db, col)?;
-        self.inner
-            .iterator_cf_opt(cf, mode, readopts)
-            .map_err(internal_error)
+        Ok(self.inner.iterator_cf_opt(cf, mode, readopts)?)
     }
 }
 
 impl<'a> DBIterator for RocksDBTransactionSnapshot<'a> {
     fn iter_opt(&self, col: Col, mode: IteratorMode, readopts: &ReadOptions) -> Result<DBIter> {
         let cf = cf_handle(&self.db, col)?;
-        self.inner
-            .iterator_cf_opt(cf, mode, readopts)
-            .map_err(internal_error)
+        Ok(self.inner.iterator_cf_opt(cf, mode, readopts)?)
     }
 }
 
 impl DBIterator for RocksDBSnapshot {
     fn iter_opt(&self, col: Col, mode: IteratorMode, readopts: &ReadOptions) -> Result<DBIter> {
         let cf = cf_handle(&self.db, col)?;
-        self.iterator_cf_opt(cf, mode, readopts)
-            .map_err(internal_error)
+        Ok(self.iterator_cf_opt(cf, mode, readopts)?)
     }
 }
 
@@ -65,9 +56,7 @@ impl DBIterator for ReadOnlyDB {
         let cf = self
             .inner
             .cf_handle(&col.to_string())
-            .ok_or_else(|| internal_error(format!("column {} not found", col)))?;
-        self.inner
-            .iterator_cf_opt(cf, mode, readopts)
-            .map_err(internal_error)
+            .with_context(|| format!("column {col} not found"))?;
+        Ok(self.inner.iterator_cf_opt(cf, mode, readopts)?)
     }
 }

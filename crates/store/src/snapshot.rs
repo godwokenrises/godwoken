@@ -1,3 +1,4 @@
+use anyhow::{bail, Result};
 use gw_db::{
     schema::{Col, COLUMN_MEM_POOL_TRANSACTION},
     DBIterator, RocksDBSnapshot,
@@ -31,12 +32,12 @@ impl KVStoreRead for StoreSnapshot {
 
 /// We implement the write for snapshot for readonly operations
 impl KVStoreWrite for StoreSnapshot {
-    fn insert_raw(&self, _col: Col, _key: &[u8], _value: &[u8]) -> Result<(), gw_db::error::Error> {
-        Err("Can't write to snapshot".to_string().into())
+    fn insert_raw(&self, _col: Col, _key: &[u8], _value: &[u8]) -> Result<()> {
+        bail!("Can't write to snapshot")
     }
 
-    fn delete(&self, _col: Col, _key: &[u8]) -> Result<(), gw_db::error::Error> {
-        Err("Can't delete key from snapshot".to_string().into())
+    fn delete(&self, _col: Col, _key: &[u8]) -> Result<()> {
+        bail!("Can't delete key from snapshot")
     }
 }
 

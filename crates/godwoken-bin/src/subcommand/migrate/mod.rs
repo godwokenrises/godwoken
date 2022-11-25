@@ -20,14 +20,15 @@ pub struct MigrateCommand {
 
 impl MigrateCommand {
     pub fn run(self) -> Result<()> {
-        // TODO: logging.
+        let _guard = gw_block_producer::trace::init(None)?;
 
-        let config: Config = None.unwrap();
+        let content = std::fs::read(&self.config)
+            .with_context(|| format!("read config file from {}", self.config.to_string_lossy()))?;
+        let config: Config = toml::from_slice(&content).context("parse config file")?;
 
         // Replace migration placeholders with real migrations, and run the migrations.
         let mut factory = init_migration_factory();
-        let replaced = factory.insert(Box::new(smt_trie::SMTTrieMigration));
-        assert!(replaced);
+        assert!(factory.insert(Box::new(smt_trie::SMTTrieMigration)));
         open_or_create_db(&config.store, factory).context("open and migrate database")?;
 
         Ok(())

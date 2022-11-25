@@ -7,10 +7,7 @@ use std::{
 
 use anyhow::Result;
 use gw_common::H256;
-use gw_db::{
-    error::Error,
-    schema::{Col, COLUMN_DATA, COLUMN_SCRIPT},
-};
+use gw_db::schema::{Col, COLUMN_DATA, COLUMN_SCRIPT};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
@@ -88,7 +85,7 @@ impl<S: KVStoreRead> KVStoreRead for MemStore<S> {
 }
 
 impl<S> KVStoreWrite for MemStore<S> {
-    fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
+    fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<()> {
         self.mem
             .write()
             .unwrap()
@@ -96,7 +93,7 @@ impl<S> KVStoreWrite for MemStore<S> {
         Ok(())
     }
 
-    fn delete(&self, col: Col, key: &[u8]) -> Result<(), Error> {
+    fn delete(&self, col: Col, key: &[u8]) -> Result<()> {
         self.mem
             .write()
             .unwrap()

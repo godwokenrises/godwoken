@@ -1648,6 +1648,7 @@ dependencies = [
 name = "gw-benches"
 version = "1.7.3"
 dependencies = [
+ "anyhow",
  "criterion",
  "gw-common",
  "gw-config",
@@ -1793,13 +1794,13 @@ dependencies = [
 name = "gw-db"
 version = "1.7.3"
 dependencies = [
+ "anyhow",
  "ckb-rocksdb",
  "gw-config",
  "libc",
  "log",
  "serde",
  "tempfile",
- "thiserror",
 ]
 
 [[package]]
@@ -2052,7 +2053,6 @@ dependencies = [
  "gw-types",
  "im",
  "log",
- "thiserror",
 ]
 
 [[package]]
@@ -2156,6 +2156,7 @@ dependencies = [
 name = "gw-traits"
 version = "1.7.3"
 dependencies = [
+ "anyhow",
  "gw-common",
  "gw-db",
  "gw-types",

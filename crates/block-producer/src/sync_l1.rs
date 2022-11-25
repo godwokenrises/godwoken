@@ -35,7 +35,7 @@ pub async fn sync_l1(ctx: &(dyn SyncL1Context + Sync + Send)) -> Result<()> {
     let mut backoff = ExponentialBackoff::new(Duration::from_secs(1));
     loop {
         if let Err(err) = sync_l1_impl(ctx).await {
-            if err.is::<gw_db::error::Error>() {
+            if err.is::<gw_db::transaction::CommitError>() {
                 // We cannot recover from db commit error because Chain
                 // local_state would be wrong. Chain always assumes that commit
                 // will success.

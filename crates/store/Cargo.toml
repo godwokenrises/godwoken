@@ -13,7 +13,6 @@ gw-config = { path = "../config" }
 gw-common = { path = "../common" }
 gw-traits = { path = "../traits" }
 anyhow = "1.0"
-thiserror = "1.0"
 arc-swap = "1.5.0"
 log = "0.4"
 im = "15.1.0"

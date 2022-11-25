@@ -1,7 +1,7 @@
 //! TODO(doc): @quake
 use crate::db::cf_handle;
 use crate::schema::Col;
-use crate::{internal_error, Result};
+use anyhow::Result;
 use libc::{self, c_char, size_t};
 use rocksdb::ops::{GetPinnedCF, Iterate, IterateCF, Read};
 use rocksdb::{
@@ -36,8 +36,7 @@ impl RocksDBSnapshot {
     /// TODO(doc): @quake
     pub fn get_pinned(&self, col: Col, key: &[u8]) -> Result<Option<DBPinnableSlice>> {
         let cf = cf_handle(&self.db, col)?;
-        self.get_pinned_cf_full(Some(cf), &key, None)
-            .map_err(internal_error)
+        Ok(self.get_pinned_cf_full(Some(cf), &key, None)?)
     }
 }
 

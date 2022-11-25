@@ -1,3 +1,4 @@
+use anyhow::{bail, Result};
 use criterion::*;
 use gw_common::{
     builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, smt::SMT, state::State,
@@ -68,8 +69,8 @@ fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
 struct DummyChainStore;
 
 impl ChainView for DummyChainStore {
-    fn get_block_hash_by_number(&self, _number: u64) -> Result<Option<H256>, gw_db::error::Error> {
-        Err("dummy chain store".to_string().into())
+    fn get_block_hash_by_number(&self, _number: u64) -> Result<Option<H256>> {
+        bail!("dummy chain store")
     }
 }
 

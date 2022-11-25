@@ -1,6 +1,6 @@
 //! ReadOnlyDB wrapper base on rocksdb read_only_open mode
 use crate::schema::Col;
-use crate::{internal_error, Result};
+use anyhow::{bail, Context, Result};
 use rocksdb::ops::{GetColumnFamilys, GetPinned, GetPinnedCF, OpenCF};
 use rocksdb::{DBPinnableSlice, Options, ReadOnlyDB as RawReadOnlyDB};
 use std::path::Path;
@@ -40,12 +40,9 @@ impl ReadOnlyDB {
                         See https://github.com/facebook/rocksdb/wiki/RocksDB-Repairer for detail",
                         err_str
                     );
-                    Err(internal_error("DB corrupted"))
+                    bail!("DB corrupted");
                 } else {
-                    Err(internal_error(format!(
-                        "failed to open the database: {}",
-                        err
-                    )))
+                    bail!("failed to open the database: {err}");
                 }
             },
             |db| {
@@ -59,7 +56,7 @@ impl ReadOnlyDB {
     /// Return the value associated with a key using RocksDB's PinnableSlice from the default column
     /// so as to avoid unnecessary memory copy.
     pub fn get_pinned_default(&self, key: &[u8]) -> Result<Option<DBPinnableSlice>> {
-        self.inner.get_pinned(&key).map_err(internal_error)
+        Ok(self.inner.get_pinned(&key)?)
     }
 
     /// Return the value associated with a key using RocksDB's PinnableSlice from the given column
@@ -68,7 +65,7 @@ impl ReadOnlyDB {
         let cf = self
             .inner
             .cf_handle(&col.to_string())
-            .ok_or_else(|| internal_error(format!("column {} not found", col)))?;
-        self.inner.get_pinned_cf(cf, &key).map_err(internal_error)
+            .with_context(|| format!("column {col} not found"))?;
+        Ok(self.inner.get_pinned_cf(cf, &key)?)
     }
 }

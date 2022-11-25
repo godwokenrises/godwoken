@@ -1,24 +1,21 @@
 // This mod is used to init a db version when the db version is absent at the first time.
 // And check present db version is still compatible. Godwoken must run on a valid db.
 // If godwoken with an advanced verion runs on an old db, this is the time we can run migrations.
-use crate::{
-    error::Error,
-    read_only_db::{self, ReadOnlyDB},
-    schema::{
-        COLUMN_ACCOUNT_SMT_LEAF, COLUMN_BAD_BLOCK, COLUMN_BLOCK, COLUMN_BLOCK_SMT_LEAF,
-        COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_LEAF, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
-        META_TIP_BLOCK_HASH_KEY, REMOVED_COLUMN_BLOCK_DEPOSIT_REQUESTS,
-        REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO,
-    },
-    DBIterator, Result,
-};
+
 use std::{cmp::Ordering, collections::BTreeMap};
 
+use anyhow::{bail, Result};
 use gw_config::StoreConfig;
 
 use crate::{
-    schema::{COLUMNS, MIGRATION_VERSION_KEY},
-    RocksDB,
+    read_only_db::{self, ReadOnlyDB},
+    schema::{
+        COLUMNS, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_BAD_BLOCK, COLUMN_BLOCK, COLUMN_BLOCK_SMT_LEAF,
+        COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_LEAF, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
+        META_TIP_BLOCK_HASH_KEY, MIGRATION_VERSION_KEY, REMOVED_COLUMN_BLOCK_DEPOSIT_REQUESTS,
+        REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO,
+    },
+    DBIterator, RocksDB,
 };
 
 pub fn open_or_create_db(config: &StoreConfig, factory: MigrationFactory) -> Result<RocksDB> {
@@ -32,10 +29,7 @@ pub fn open_or_create_db(config: &StoreConfig, factory: MigrationFactory) -> Res
                      so that the current executable binary couldn't open this database.\n\
                      Please download the latest executable binary."
                 );
-                Err(Error {
-                    message: "The database is created by a higher version executable binary"
-                        .to_string(),
-                })
+                bail!("The database is created by a higher version executable binary");
             }
             Ordering::Equal => Ok(RocksDB::open(config, COLUMNS)),
             Ordering::Less => {
@@ -115,7 +109,7 @@ impl Migration for DecoupleBlockProducingSubmissionAndConfirmationMigration {
             .next()
             .is_some()
         {
-            return Err("Cannot migrate a database with existing data to version 20220517. You have to deploy a new node".to_string().into());
+            bail!("Cannot migrate a database with existing data to version 20220517. You have to deploy a new node");
         }
 
         db.drop_cf(REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO)?;
@@ -139,11 +133,7 @@ impl Migration for BadBlockColumnMigration {
                 .get_pinned(COLUMN_META, META_LAST_VALID_TIP_BLOCK_HASH_KEY)?
                 .as_deref()
         {
-            return Err(
-                "Cannot migrate to version 20221024 when there are bad blocks. You have to rewind or revert first"
-                    .to_string()
-                    .into(),
-            );
+            bail!("Cannot migrate to version 20221024 when there are bad blocks. You have to rewind or revert first");
         }
 
         // Clear this reused column.
@@ -155,7 +145,7 @@ impl Migration for BadBlockColumnMigration {
     }
 }
 
-struct SMTTrieMigrationPlaceHolder;
+pub struct SMTTrieMigrationPlaceHolder;
 
 impl Migration for SMTTrieMigrationPlaceHolder {
     fn migrate(&self, db: RocksDB) -> Result<RocksDB> {
@@ -174,7 +164,7 @@ impl Migration for SMTTrieMigrationPlaceHolder {
             return Ok(db);
         }
 
-        Err("Cannot automatically migrate to version 20221125 (SMTTrieMigration). Use “godwoken migrate” command".to_string().into())
+        bail!("Cannot automatically migrate to version 20221125 (SMTTrieMigration). Use “godwoken migrate” command");
     }
     fn version(&self) -> &str {
         "20221125"
@@ -240,9 +230,9 @@ impl MigrationFactory {
 
 #[cfg(test)]
 mod tests {
-    use crate::Result;
     use std::collections::HashMap;
 
+    use anyhow::Result;
     use gw_config::StoreConfig;
 
     use crate::{
