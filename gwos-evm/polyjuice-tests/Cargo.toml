@@ -9,13 +9,14 @@ name = "lib"
 path = "src/lib.rs"
 
 [dependencies]
-gw-types     = { git = "https://github.com/godwokenrises/godwoken.git", branch = "develop" }
-gw-common    = { git = "https://github.com/godwokenrises/godwoken.git", branch = "develop" }
-gw-db        = { git = "https://github.com/godwokenrises/godwoken.git", branch = "develop" }
-gw-store     = { git = "https://github.com/godwokenrises/godwoken.git", branch = "develop" }
-gw-config    = { git = "https://github.com/godwokenrises/godwoken.git", branch = "develop" }
-gw-traits    = { git = "https://github.com/godwokenrises/godwoken.git", branch = "develop" }
-gw-generator = { git = "https://github.com/godwokenrises/godwoken.git", branch = "develop" }
+gw-types     = { path = "../../crates/types/" }
+gw-common    = { path = "../../crates/common/" }
+gw-db        = { path = "../../crates/db/" }
+gw-store     = { path = "../../crates/store/" }
+gw-utils     = { path = "../../crates/utils/" }
+gw-config    = { path = "../../crates/config/" }
+gw-traits    = { path = "../../crates/traits/" }
+gw-generator = { path = "../../crates/generator/" }
 ckb-vm = { version = "=0.21.3", features = ["detect-asm"] }
 ckb-vm-definitions = "=0.21.3"
 

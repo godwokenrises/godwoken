@@ -28,7 +28,9 @@ members = [
 ]
 
 exclude = [
-  "gwos-evm"
+ "gwos-evm/polyjuice-tests",
+ "gwos-evm/mainnet-sudt-address",
+ "gwos-evm/deps/ckb-binary-patcher"
 ]
 
 [profile.release]
@@ -39,3 +41,4 @@ opt-level = 3
 
 [profile.bench.build-override]
 opt-level = 3
+

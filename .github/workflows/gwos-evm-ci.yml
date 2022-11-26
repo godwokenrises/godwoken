@@ -63,12 +63,9 @@ jobs:
     uses: nervosnetwork/godwoken-tests/.github/workflows/reusable-integration-test-v1.yml@develop
     with:
       extra_github_env: |
-        GODWOKEN_PREBUILD_IMAGE_NAME=ghcr.io/godwokenrises/godwoken-prebuilds:1.7-rc-202210271055
-        GODWOKEN_KICKER_REF=4892b58fe7157db286000fb831ec8e5cf197c684
-        GODWOKEN_TESTS_REF=55bce8730821c79ffcc0acceb24eb8134feb95cb
         MANUAL_BUILD_GODWOKEN=true
-        GODWOKEN_GIT_URL=https://github.com/godwokenrises/godwoken
-        GODWOKEN_GIT_CHECKOUT=968b5b33b7d6437ab74b4fc58427a88dad0d1b49
+        GODWOKEN_GIT_URL=https://github.com/${{ github.repository }}
+        GODWOKEN_GIT_CHECKOUT=${{ github.ref }}
         MANUAL_BUILD_POLYJUICE=true
         POLYJUICE_GIT_URL=https://github.com/${{ github.repository }}
         POLYJUICE_GIT_CHECKOUT=${{ github.ref }}

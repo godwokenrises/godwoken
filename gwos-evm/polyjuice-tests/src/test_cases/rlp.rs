@@ -82,11 +82,7 @@ fn test_rlp() {
     let binary: gw_types::bytes::Bytes = BINARY.to_vec().into();
 
     let params = AsmCoreMachineParams::with_version(1).unwrap();
-    let core_machine = AsmCoreMachine::new(
-        params.vm_isa,
-        params.vm_version,
-        crate::helper::L2TX_MAX_CYCLES,
-    );
+    let core_machine = AsmCoreMachine::new(params.vm_isa, params.vm_version, 7000_0000);
 
     let machine_builder = DefaultMachineBuilder::new(core_machine).syscall(Box::new(L2Syscalls));
     let mut machine = AsmMachine::new(machine_builder.build(), None);

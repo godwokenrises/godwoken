@@ -34,6 +34,3 @@
 [submodule "gwos-evm/deps/mbedtls"]
         path = gwos-evm/deps/mbedtls
         url = https://github.com/nervosnetwork/mbedtls.git
-[submodule "gwos-evm/deps/godwoken-scripts"]
-        path = gwos-evm/deps/godwoken-scripts
-        url = https://github.com/nervosnetwork/godwoken-scripts.git

@@ -152,7 +152,7 @@ fn test_contracts() {
     tree.insert(build_data_hash_key(SECP_DATA_HASH.as_slice()), H256::one());
 
     let params = AsmCoreMachineParams::with_version(1).unwrap();
-    let core_machine = AsmCoreMachine::new(params.vm_isa, params.vm_version, L2TX_MAX_CYCLES);
+    let core_machine = AsmCoreMachine::new(params.vm_isa, params.vm_version, 7000_0000);
 
     let machine_builder =
         DefaultMachineBuilder::new(core_machine).syscall(Box::new(L2Syscalls { data, tree }));
