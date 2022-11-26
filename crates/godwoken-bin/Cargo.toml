@@ -37,6 +37,7 @@ tikv-jemallocator = { version = "0.4.0", features = ["unprefixed_malloc_on_suppo
 
 [features]
 profiling = ["tikv-jemallocator/profiling"]
+smt-trie = ["gw-common/smt-trie", "gw-db/smt-trie", "gw-store/smt-trie"]
 
 [lib]
 path = "src/lib.rs"
