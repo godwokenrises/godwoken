@@ -10,8 +10,7 @@ use gw_config::StoreConfig;
 use crate::{
     read_only_db::{self, ReadOnlyDB},
     schema::{
-        COLUMNS, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_BAD_BLOCK, COLUMN_BLOCK, COLUMN_BLOCK_SMT_LEAF,
-        COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_LEAF, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
+        COLUMNS, COLUMN_BAD_BLOCK, COLUMN_BLOCK, COLUMN_META, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
         META_TIP_BLOCK_HASH_KEY, MIGRATION_VERSION_KEY, REMOVED_COLUMN_BLOCK_DEPOSIT_REQUESTS,
         REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO,
     },
@@ -145,10 +144,16 @@ impl Migration for BadBlockColumnMigration {
     }
 }
 
+#[cfg(feature = "smt-trie")]
 pub struct SMTTrieMigrationPlaceHolder;
 
+#[cfg(feature = "smt-trie")]
 impl Migration for SMTTrieMigrationPlaceHolder {
     fn migrate(&self, db: RocksDB) -> Result<RocksDB> {
+        use crate::schema::{
+            COLUMN_ACCOUNT_SMT_LEAF, COLUMN_BLOCK_SMT_LEAF, COLUMN_REVERTED_BLOCK_SMT_LEAF,
+        };
+
         // Nothing to do if SMT leaves are empty.
         let smts_all_empty = [
             COLUMN_BLOCK_SMT_LEAF,
@@ -167,7 +172,7 @@ impl Migration for SMTTrieMigrationPlaceHolder {
         bail!("Cannot automatically migrate to version 20221125 (SMTTrieMigration). Use “godwoken migrate” command");
     }
     fn version(&self) -> &str {
-        "20221125"
+        "9999-20221125-smt-trie"
     }
 }
 
@@ -182,6 +187,7 @@ pub fn init_migration_factory() -> MigrationFactory {
     factory.insert(Box::new(
         DecoupleBlockProducingSubmissionAndConfirmationMigration,
     ));
+    #[cfg(feature = "smt-trie")]
     factory.insert(Box::new(SMTTrieMigrationPlaceHolder));
     factory
 }

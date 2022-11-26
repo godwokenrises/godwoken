@@ -5,6 +5,7 @@ use clap::Parser;
 use gw_config::Config;
 use gw_db::migrate::{init_migration_factory, open_or_create_db};
 
+#[cfg(feature = "smt-trie")]
 mod smt_trie;
 
 pub const COMMAND_MIGRATE: &str = "migrate";
@@ -27,7 +28,9 @@ impl MigrateCommand {
         let config: Config = toml::from_slice(&content).context("parse config file")?;
 
         // Replace migration placeholders with real migrations, and run the migrations.
+        #[allow(unused_mut)]
         let mut factory = init_migration_factory();
+        #[cfg(feature = "smt-trie")]
         assert!(factory.insert(Box::new(smt_trie::SMTTrieMigration)));
         open_or_create_db(&config.store, factory).context("open and migrate database")?;
 
