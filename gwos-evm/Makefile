@@ -9,6 +9,7 @@ OBJCOPY := $(TARGET)-objcopy
 
 SECP_DIR := deps/secp256k1-fix
 SECP256K1_SRC := $(SECP_DIR)/src/ecmult_static_pre_context.h
+GW_SCRIPTS := ../gwos/c
 
 CFLAGS_CKB_STD = -Ideps/ckb-c-stdlib -Ideps/ckb-c-stdlib/molecule
 CFLAGS_SECP := -isystem $(SECP_DIR)/src -isystem $(SECP_DIR)
@@ -17,8 +18,8 @@ CFLAGS_ETHASH := -Ideps/ethash/include -Ideps/ethash/lib/ethash -Ideps/ethash/li
 CFLAGS_CRYPTO_ALGORITHMS := -Ideps/crypto-algorithms
 CFLAGS_MBEDTLS := -Ideps/mbedtls/include
 CFLAGS_EVMONE := -Ideps/evmone/lib/evmone -Ideps/evmone/include -Ideps/evmone/evmc/include
-CFLAGS_SMT := -Ideps/godwoken-scripts/c/deps/sparse-merkle-tree/c
-CFLAGS_GODWOKEN := -Ideps/godwoken-scripts/c
+CFLAGS_SMT := -I$(GW_SCRIPTS)/deps/sparse-merkle-tree/c
+CFLAGS_GODWOKEN := -I$(GW_SCRIPTS)
 
 # -O3: Higher level of optmization. Slower compile-time, better for production builds.
 CFLAGS := -O3 -Ic/ripemd160 $(CFLAGS_INTX) $(CFLAGS_CKB_STD) $(CFLAGS_EVMONE) $(CFLAGS_ETHASH) $(CFLAGS_CRYPTO_ALGORITHMS) $(CFLAGS_MBEDTLS) $(CFLAGS_SMT) $(CFLAGS_GODWOKEN) $(CFLAGS_SECP)
@@ -37,8 +38,8 @@ GENERATOR_FLAGS := -DGW_GENERATOR
 VALIDATOR_FLAGS := -DGW_VALIDATOR
 
 MOLC := moleculec
-MOLC_VERSION := $(shell cat deps/godwoken-scripts/c/Makefile | egrep "MOLC_VERSION :=" | awk '{print $$3}')
-PROTOCOL_VERSION := $(shell cat deps/godwoken-scripts/c/Makefile | egrep "PROTOCOL_VERSION :=" | awk '{print $$3}')
+MOLC_VERSION := $(shell cat $(GW_SCRIPTS)/Makefile | egrep "MOLC_VERSION :=" | awk '{print $$3}')
+PROTOCOL_VERSION := $(shell cat $(GW_SCRIPTS)/Makefile | egrep "PROTOCOL_VERSION :=" | awk '{print $$3}')
 PROTOCOL_SCHEMA_URL := https://raw.githubusercontent.com/nervosnetwork/godwoken/${PROTOCOL_VERSION}/crates/types/schemas
 
 ALL_OBJS := build/execution_state.o build/baseline.o build/analysis.o build/instruction_metrics.o build/instruction_names.o build/execution.o build/instructions.o build/instructions_calls.o build/evmone.o \
@@ -62,7 +63,7 @@ all: build/blockchain.h build/godwoken.h \
 
 all-via-docker: generate-protocol fetch-gw-scripts
 	mkdir -p build
-	docker run --rm -v `pwd`:/code -w /code ${BUILDER_DOCKER} make
+	docker run --rm -v `readlink -f ..`:/code -w /code/gwos-evm ${BUILDER_DOCKER} make
 	make patch-generator && make patch-generator_log
 log-version-via-docker: generate-protocol
 	mkdir -p build

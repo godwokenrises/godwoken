@@ -23,7 +23,7 @@ fn test_sudt_erc20_proxy_inner(
     state: &mut DummyState,
     new_sudt_id: u32,
     decimals: Option<u8>,
-) -> Result<(), TransactionError> {
+) -> anyhow::Result<()> {
     let decimals = decimals.unwrap_or(18);
     let block_producer_id = crate::helper::create_block_producer(state);
 
@@ -310,7 +310,7 @@ fn test_sudt_erc20_proxy_inner(
             None
         )?;
         if run_result.exit_code != 0 {
-            return Err(TransactionError::InvalidExitCode(run_result.exit_code));
+            return Err(anyhow::anyhow!(TransactionError::InvalidExitCode(run_result.exit_code)));
         }
         print_gas_used(&format!("SudtERC20Proxy {}: ", action), &run_result.logs);
 
@@ -412,9 +412,8 @@ fn test_sudt_erc20_proxy_user_defined_decimals() {
     let new_sudt_id = state.create_account_from_script(new_sudt_script).unwrap();
 
     assert_eq!(CKB_SUDT_ACCOUNT_ID, 1);
-    assert_eq!(
-        test_sudt_erc20_proxy_inner(&generator, &store, &mut state, new_sudt_id, Some(8)),
-        Ok(())
+    assert!(
+        test_sudt_erc20_proxy_inner(&generator, &store, &mut state, new_sudt_id, Some(8)).is_ok()
     );
 }
 
@@ -429,8 +428,10 @@ fn test_error_sudt_id_sudt_erc20_proxy() {
 
     assert_eq!(CKB_SUDT_ACCOUNT_ID, 1);
     assert_eq!(
-        test_sudt_erc20_proxy_inner(&generator, &store, &mut state, error_new_sudt_id, None),
-        Err(TransactionError::InvalidExitCode(
+        test_sudt_erc20_proxy_inner(&generator, &store, &mut state, error_new_sudt_id, None)
+            .unwrap_err()
+            .downcast_ref::<TransactionError>(),
+        Some(&TransactionError::InvalidExitCode(
             FATAL_PRECOMPILED_CONTRACTS
         ))
     );

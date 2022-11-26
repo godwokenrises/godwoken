@@ -6,7 +6,6 @@ use crate::helper::{
     CREATOR_ACCOUNT_ID, L2TX_MAX_CYCLES,
 };
 use gw_common::state::State;
-use gw_generator::error::TransactionError;
 use gw_store::traits::chain_store::ChainStore;
 use gw_store::{chain_view::ChainView, state::traits::JournalDB};
 use gw_types::{bytes::Bytes, packed::RawL2Transaction, prelude::*};
@@ -174,6 +173,9 @@ fn test_recursion_contract_call() {
             L2TX_MAX_CYCLES,
             None,
         );
-        assert_eq!(err.unwrap_err(), TransactionError::InsufficientBalance);
+        assert_eq!(
+            format!("{}", err.unwrap_err().root_cause()),
+            "Insufficient balance"
+        );
     }
 }

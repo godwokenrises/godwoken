@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    sync::Arc,
     time::SystemTime,
 };
 
@@ -30,7 +31,7 @@ use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     core::{AllowedContractType, AllowedEoaType, ScriptHashType},
-    offchain::{RunResult},
+    offchain::RunResult,
     packed::{AllowedTypeHash, BlockInfo, RawL2Transaction, RollupConfig, Script, Uint64},
     prelude::*,
     U256,
@@ -85,7 +86,7 @@ pub struct MockChain {
     block_producer: RegistryAddress,
     block_number: u64,
     timestamp: SystemTime,
-    l2tx_cycle_limit: u64,
+    l2tx_cycle_limit: Option<u64>,
 }
 
 impl MockChain {
@@ -107,7 +108,7 @@ impl MockChain {
     }
 
     pub fn set_max_cycles(&mut self, max_cycles: u64) {
-        self.l2tx_cycle_limit = max_cycles;
+        self.l2tx_cycle_limit = Some(max_cycles);
     }
 
     fn new_block_info(&self) -> anyhow::Result<BlockInfo> {
@@ -401,7 +402,7 @@ impl Context {
         let mut account_lock_manage = AccountLockManage::default();
         account_lock_manage.register_lock_algorithm(
             SECP_LOCK_CODE_HASH.into(),
-            Box::new(Secp256k1Eth::default()),
+            Arc::new(Secp256k1Eth::default()),
         );
         let rollup_context = RollupContext {
             rollup_script_hash: ROLLUP_SCRIPT_HASH.into(),
@@ -463,7 +464,7 @@ impl Config {
         let secp_data = load_program(path.to_str().unwrap());
         let secp_data_hash = load_code_hash(&path);
         let backends = BackendForkConfig {
-            switch_height: 0,
+            fork_height: 0,
             backends: vec![
                 BackendConfig {
                     backend_type: BackendType::Meta,
