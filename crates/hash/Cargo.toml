@@ -1,6 +1,6 @@
 [package]
 name = "gw-hash"
-version = "1.7.2"
+version = "1.7.3"
 authors = ["Nervos Network"]
 edition = "2018"
 
