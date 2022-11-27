@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.7.3] - 2022-11-27
+
+- config: deny unknown fields in the config toml file [#862](https://github.com/godwokenrises/godwoken/pull/862)
+- Cherry pick commits from develop branch to fix CI script tests [#878](https://github.com/godwokenrises/godwoken/pull/878)
+
 ## [v1.7.2] - 2022-11-25
 
 - fix: use mem pool state for “get block” RPCs [#871](https://github.com/godwokenrises/godwoken/pull/871)
