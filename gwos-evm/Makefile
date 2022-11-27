@@ -90,16 +90,16 @@ patch-generator: install/ckb-binary-patcher
 	ckb-binary-patcher --remove-a -i build/generator -o build/generator.aot
 	mv build/generator build/generator.asm
 	cp build/generator.aot build/generator
-patch-generator_log: build/ckb-binary-patcher
-	${CKB_BIN_PATCHER} --remove-a -i build/generator_log -o build/generator_log.aot
+patch-generator_log: install/ckb-binary-patcher
+	ckb-binary-patcher --remove-a -i build/generator_log -o build/generator_log.aot
 	mv build/generator_log build/generator_log.asm
 	cp build/generator_log.aot build/generator_log
-# patch-validator: build/ckb-binary-patcher
-# 	${CKB_BIN_PATCHER} --remove-a -i build/validator -o build/validator.aot
-# patch-validator_log: build/ckb-binary-patcher
-# 	${CKB_BIN_PATCHER} --remove-a -i build/validator_log -o build/validator_log.aot
-# patch-test_contracts: build/ckb-binary-patcher
-# 	${CKB_BIN_PATCHER} --remove-a -i build/test_contracts -o build/test_contracts.aot
+# patch-validator: install/ckb-binary-patcher
+# 	ckb-binary-patcher --remove-a -i build/validator -o build/validator.aot
+# patch-validator_log: install/ckb-binary-patcher
+# 	ckb-binary-patcher --remove-a -i build/validator_log -o build/validator_log.aot
+# patch-test_contracts: install/ckb-binary-patcher
+# 	ckb-binary-patcher --remove-a -i build/test_contracts -o build/test_contracts.aot
 
 build/generator: c/generator.c $(GENERATOR_DEPS)
 	cd $(SECP_DIR) && (git apply workaround-fix-g++-linking.patch || true) && cd - # apply patch
