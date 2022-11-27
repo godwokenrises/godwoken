@@ -90,11 +90,11 @@ install/ckb-binary-patcher:
 patch-generator: install/ckb-binary-patcher
 	ckb-binary-patcher --remove-a -i build/generator -o build/generator.aot
 	mv build/generator build/generator.asm
-	cp build/generator.aot build/generator
+	mv build/generator.aot build/generator
 patch-generator_log: install/ckb-binary-patcher
 	ckb-binary-patcher --remove-a -i build/generator_log -o build/generator_log.aot
 	mv build/generator_log build/generator_log.asm
-	cp build/generator_log.aot build/generator_log
+	mv build/generator_log.aot build/generator_log
 # patch-validator: install/ckb-binary-patcher
 # 	ckb-binary-patcher --remove-a -i build/validator -o build/validator.aot
 # patch-validator_log: install/ckb-binary-patcher
