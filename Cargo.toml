@@ -28,8 +28,7 @@ members = [
 ]
 
 exclude = [
- "gwos-evm/polyjuice-tests",
- "gwos-evm/deps/ckb-binary-patcher"
+ "gwos-evm/polyjuice-tests"
 ]
 
 [profile.release]
