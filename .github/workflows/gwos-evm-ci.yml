@@ -60,9 +60,6 @@ jobs:
         sha256sum build/generator build/generator_log build/validator build/validator_log
 
   integration-test:
-    defaults:
-      run:
-        working-directory: gwos-evm
     uses: nervosnetwork/godwoken-tests/.github/workflows/reusable-integration-test-v1.yml@develop
     with:
       extra_github_env: |
