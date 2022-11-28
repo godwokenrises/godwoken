@@ -16,14 +16,23 @@ pub struct SMTTrieMigration;
 
 impl Migration for SMTTrieMigration {
     fn migrate(&self, db: RocksDB) -> Result<RocksDB> {
+        let store = Store::new(db);
+
+        // Get state smt root before migration.
+        let old_state_smt_root = {
+            let tx = &store.begin_transaction();
+            let state_smt = tx.state_smt().context("state_smt")?;
+            *state_smt.root()
+        };
+
         // Delete all branches.
         {
-            let mut wb = db.new_write_batch();
+            let mut wb = store.as_inner().new_write_batch();
 
             wb.delete_range(COLUMN_ACCOUNT_SMT_BRANCH, &[], &[255; 64])
                 .context("delete account smt branches")?;
             // So that if we exit in the middle of this migration, the smt branches
-            // columns are not empty and SMTTrieMigrationPlaceholder won't return success.
+            // columns are not empty and SMTTrieMigrationPlaceholder won't just succeed.
             wb.put(COLUMN_ACCOUNT_SMT_BRANCH, b"migrating", b"migrating")
                 .context("put migrating")?;
             wb.delete_range(COLUMN_BLOCK_SMT_BRANCH, &[], &[255; 64])
@@ -31,10 +40,8 @@ impl Migration for SMTTrieMigration {
             wb.delete_range(COLUMN_REVERTED_BLOCK_SMT_BRANCH, &[], &[255; 64])
                 .context("delete reverted block smt branches")?;
 
-            db.write(&wb)?;
+            store.as_inner().write(&wb)?;
         }
-
-        let store = Store::new(db);
 
         {
             let tx = store.begin_transaction();
@@ -52,8 +59,7 @@ impl Migration for SMTTrieMigration {
                     )
                     .context("update state_smt")?;
             }
-            // TODO: check state smt root.
-            // assert_eq!((&tx).get_state_smt_root().unwrap(), *state_smt.root());
+            ensure!(old_state_smt_root == *state_smt.root());
             tx.commit().context("commit state_smt")?;
         }
 
