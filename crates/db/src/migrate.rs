@@ -169,9 +169,13 @@ impl Migration for SMTTrieMigrationPlaceHolder {
             return Ok(db);
         }
 
-        bail!("Cannot automatically migrate to version 20221125 (SMTTrieMigration). Use “godwoken migrate” command");
+        bail!(
+            "Cannot automatically migrate to version {}. Use “godwoken migrate” command instead",
+            Self.version(),
+        );
     }
     fn version(&self) -> &str {
+        // Use a very large version so that enabling smt-trie feature always needs migration.
         "9999-20221125-smt-trie"
     }
 }
