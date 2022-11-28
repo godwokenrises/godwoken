@@ -16,6 +16,7 @@ pub struct SMTTrieMigration;
 
 impl Migration for SMTTrieMigration {
     fn migrate(&self, db: RocksDB) -> Result<RocksDB> {
+        log::info!("SMTTrieMigration running");
         let store = Store::new(db);
 
         // Get state smt root before migration.
@@ -25,7 +26,7 @@ impl Migration for SMTTrieMigration {
             *state_smt.root()
         };
 
-        // Delete all branches.
+        log::info!("deleting old SMT branches");
         {
             let mut wb = store.as_inner().new_write_batch();
 
@@ -43,6 +44,7 @@ impl Migration for SMTTrieMigration {
             store.as_inner().write(&wb)?;
         }
 
+        log::info!("migrating state smt");
         {
             let tx = store.begin_transaction();
             let mut state_smt = tx.state_smt().context("state_smt")?;
@@ -63,6 +65,7 @@ impl Migration for SMTTrieMigration {
             tx.commit().context("commit state_smt")?;
         }
 
+        log::info!("migrating block smt");
         {
             let tx = &store.begin_transaction();
             let mut block_smt = tx.block_smt().context("block_smt")?;
@@ -82,6 +85,7 @@ impl Migration for SMTTrieMigration {
             tx.commit().context("commit block smt")?;
         }
 
+        log::info!("migrating reverted block smt");
         {
             let tx = &store.begin_transaction();
             let mut reverted_block_smt = tx.reverted_block_smt().context("reverted_block_smt")?;
@@ -107,6 +111,7 @@ impl Migration for SMTTrieMigration {
             tx.commit()?;
         }
 
+        log::info!("SMTTrieMigration completed");
         Ok(store.into_inner())
     }
     fn version(&self) -> &str {
