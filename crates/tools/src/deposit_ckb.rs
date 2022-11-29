@@ -2,10 +2,10 @@ use crate::account::{privkey_to_eth_address, read_privkey};
 use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::hasher::CkbHasher;
 use crate::types::ScriptsDeploymentResult;
+use crate::utils::sdk::{Address, AddressPayload, CkbRpcClient, HumanCapacity, SECP256K1};
 use crate::utils::transaction::{get_network_type, read_config, run_cmd};
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
-use ckb_sdk::{Address, AddressPayload, CkbRpcClient, HumanCapacity, SECP256K1};
 use ckb_types::{
     bytes::Bytes as CKBBytes, core::ScriptHashType, packed::Script as CKBScript,
     prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity, prelude::Pack as CKBPack,

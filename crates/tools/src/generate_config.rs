@@ -4,9 +4,9 @@ use crate::types::{
     BuildScriptsResult, OmniLockConfig, RollupDeploymentResult, ScriptsDeploymentResult,
     UserRollupConfig,
 };
+use crate::utils::sdk::CkbRpcClient;
 use anyhow::{anyhow, Result};
 use ckb_jsonrpc_types::{CellDep, JsonBytes};
-use ckb_sdk::CkbRpcClient;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_config::{

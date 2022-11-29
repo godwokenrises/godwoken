@@ -2,11 +2,11 @@ use crate::account::{eth_sign, privkey_to_l2_script_hash, read_privkey};
 use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::hasher::CkbHasher;
 use crate::types::ScriptsDeploymentResult;
+use crate::utils::sdk::{Address, HumanCapacity};
 use crate::utils::transaction::read_config;
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
-use ckb_sdk::{Address, HumanCapacity};
 use ckb_types::{prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity};
 use gw_common::{builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress};
 use gw_generator::account_lock_manage::{

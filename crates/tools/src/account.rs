@@ -3,8 +3,8 @@ use crate::hasher::CkbHasher;
 use crate::types::ScriptsDeploymentResult;
 use anyhow::{anyhow, Result};
 use ckb_crypto::secp::Privkey;
+use ckb_crypto::secp::SECP256K1;
 use ckb_fixed_hash::H256;
-use ckb_sdk::SECP256K1;
 use ckb_types::{
     bytes::Bytes as CKBBytes, core::ScriptHashType, prelude::Builder as CKBBuilder,
     prelude::Entity as CKBEntity,

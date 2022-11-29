@@ -8,7 +8,7 @@ edition = "2018"
 
 [features]
 default = ["detect-asm"]
-detect-asm = ["ckb-vm/detect-asm", "ckb-vm/aot"]
+detect-asm = ["ckb-vm/detect-asm", "ckb-vm-aot"]
 enable-always-success-lock = []
 
 [dependencies]
@@ -20,7 +20,8 @@ gw-traits = { path = "../traits" }
 gw-utils = { path = "../utils"}
 anyhow = "1.0"
 blake2b-rs = "0.2"
-ckb-vm = { version = "=0.21.3", features = ["detect-asm"] }
+ckb-vm = { version = "=0.22.0", default-features = false }
+ckb-vm-aot = { version = "=0.22.0", optional = true }
 thiserror = "1.0"
 lazy_static = "1.4"
 rlp = "0.5.0"

@@ -14,11 +14,11 @@ gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-store = { path = "../store" }
 anyhow = "1.0"
 faster-hex = "0.4"
-ckb-crypto = "0.104.0"
+ckb-crypto = "0.105.1"
 sha3 = "0.9.1"
 secp256k1 = "0.21"
 log = "0.4"
 rand = { version = "0.8.5", features = ["min_const_gen"] }
-ckb-types = "0.104.0"
+ckb-types = "0.105.1"
 tokio = "1"
 zstd = "0.11.2"

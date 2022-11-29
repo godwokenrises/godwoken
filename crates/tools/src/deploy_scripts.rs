@@ -1,3 +1,4 @@
+use crate::utils::sdk::{Address, AddressPayload, CkbRpcClient, HumanCapacity};
 use crate::{
     types::{BuildScriptsResult, DeployItem, Programs, ScriptsDeploymentResult},
     utils::transaction::{get_network_type, run_cmd, TYPE_ID_CODE_HASH},
@@ -5,7 +6,6 @@ use crate::{
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{CellDep, DepType, OutPoint, Script};
-use ckb_sdk::{Address, AddressPayload, CkbRpcClient, HumanCapacity};
 use ckb_types::{
     bytes::Bytes,
     core::{Capacity, ScriptHashType},

@@ -1,11 +1,11 @@
 //! Transaction related utils
 //! NOTICE: Some functions should be moved to a more proper module than this.
 
+use crate::utils::sdk::CkbRpcClient;
+use crate::utils::sdk::NetworkType;
 use anyhow::anyhow;
 use anyhow::Result;
 use ckb_fixed_hash::{h256, H256};
-use ckb_sdk::CkbRpcClient;
-use ckb_sdk::NetworkType;
 use gw_config::Config;
 use gw_jsonrpc_types::godwoken::TxReceipt;
 use std::fs;

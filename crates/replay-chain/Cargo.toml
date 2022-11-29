@@ -21,8 +21,8 @@ gw-rpc-client = { path = "../rpc-client" }
 gw-utils = { path = "../utils" }
 async-jsonrpc-client = { version = "0.3.0", default-features = false, features = ["http-tokio"] }
 clap = "3"
-ckb-fixed-hash = "0.104.0"
-ckb-types = "0.104.0"
+ckb-fixed-hash = "0.105.1"
+ckb-types = "0.105.1"
 anyhow = "1.0"
 thiserror = "1.0"
 lazy_static = "1.4"

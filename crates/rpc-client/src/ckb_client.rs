@@ -7,7 +7,10 @@ use crate::{
 use anyhow::{anyhow, bail, Context, Result};
 use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
 use gw_common::H256;
-use gw_jsonrpc_types::{blockchain::CellDep, ckb_jsonrpc_types};
+use gw_jsonrpc_types::{
+    blockchain::CellDep,
+    ckb_jsonrpc_types::{self, Either},
+};
 use gw_types::{offchain::TxStatus, packed::Transaction, prelude::*};
 use serde::de::DeserializeOwned;
 use serde_json::json;
@@ -86,7 +89,7 @@ impl CKBClient {
     pub async fn get_transaction_with_status(
         &self,
         tx_hash: H256,
-    ) -> Result<Option<ckb_jsonrpc_types::TransactionWithStatus>> {
+    ) -> Result<Option<ckb_jsonrpc_types::TransactionWithStatusResponse>> {
         self.request(
             "get_transaction",
             Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
@@ -97,12 +100,17 @@ impl CKBClient {
     #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]
     pub async fn get_transaction(&self, tx_hash: H256) -> Result<Option<Transaction>> {
         let tx_with_status = self.get_transaction_with_status(tx_hash).await?;
-        Ok(tx_with_status
+        tx_with_status
             .and_then(|tx_with_status| tx_with_status.transaction)
             .map(|tv| {
+                let tv: ckb_jsonrpc_types::TransactionView = match tv.inner {
+                    Either::Left(v) => v,
+                    Either::Right(v) => serde_json::from_slice(v.as_bytes())?,
+                };
                 let tx: ckb_types::packed::Transaction = tv.inner.into();
-                Transaction::new_unchecked(tx.as_bytes())
-            }))
+                Ok(Transaction::new_unchecked(tx.as_bytes()))
+            })
+            .transpose()
     }
 
     #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]
@@ -178,24 +186,31 @@ impl CKBClient {
         contract: &str,
         cell_dep: CellDep,
     ) -> Result<gw_jsonrpc_types::blockchain::Script> {
-        use ckb_jsonrpc_types::TransactionWithStatus;
+        use ckb_jsonrpc_types::TransactionWithStatusResponse;
 
         let tx_hash = cell_dep.out_point.tx_hash;
-        let tx_with_status: Option<TransactionWithStatus> = self
+        let tx_with_status: Option<TransactionWithStatusResponse> = self
             .request(
                 "get_transaction",
                 Some(ClientParams::Array(vec![json!(tx_hash)])),
             )
             .await?;
-        let tx = match tx_with_status {
-            Some(TransactionWithStatus {
+        let tx: ckb_jsonrpc_types::TransactionView = match tx_with_status {
+            Some(TransactionWithStatusResponse {
                 transaction: Some(tv),
                 ..
-            }) => tv.inner,
+            }) => match tv.inner {
+                Either::Left(v) => v,
+                Either::Right(v) => serde_json::from_slice(v.as_bytes())?,
+            },
             _ => bail!("{} {} tx not found", contract, tx_hash),
         };
 
-        match tx.outputs.get(cell_dep.out_point.index.value() as usize) {
+        match tx
+            .inner
+            .outputs
+            .get(cell_dep.out_point.index.value() as usize)
+        {
             Some(output) => match output.type_.as_ref() {
                 Some(script) => Ok(script.to_owned().into()),
                 None => Err(anyhow!("{} {} tx hasn't type script", contract, tx_hash)),

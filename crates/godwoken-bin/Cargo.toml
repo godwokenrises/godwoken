@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
-ckb-types = "0.104.0"
+ckb-types = "0.105.1"
 clap = { version = "3", features = ["derive"] }
 indicatif = "0.16"
 gw-block-producer = { path = "../block-producer" }
