@@ -20,7 +20,7 @@ use crate::ckb_std::{
     high_level::load_script, high_level::load_witness_args,
 };
 use gw_types::{
-    core::ScriptHashType,
+    core::{ScriptHashType, Timepoint},
     packed::{
         CustodianLockArgs, CustodianLockArgsReader, UnlockCustodianViaRevertWitness,
         UnlockCustodianViaRevertWitnessReader,
@@ -29,7 +29,6 @@ use gw_types::{
 };
 use gw_utils::finality::is_finalized;
 use gw_utils::gw_types;
-use gw_utils::Timepoint;
 
 use crate::error::Error;
 

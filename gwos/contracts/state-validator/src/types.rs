@@ -4,7 +4,7 @@
 use gw_common::sparse_merkle_tree::H256;
 use gw_utils::fork::Fork;
 use gw_utils::gw_common;
-use gw_utils::Timepoint;
+use gw_utils::gw_types::core::Timepoint;
 
 #[derive(Clone)]
 pub struct DepositRequest {

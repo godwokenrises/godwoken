@@ -4,7 +4,7 @@ use gw_common::{
     H256,
 };
 use gw_types::{
-    core::Status,
+    core::{Status, Timepoint},
     packed::{BlockMerkleState, Byte32, GlobalState, RawL2Block, RollupConfig},
     prelude::*,
 };
@@ -27,10 +27,9 @@ use gw_utils::{
     },
 };
 use gw_utils::{
+    fork::Fork,
     gw_common,
     gw_types::packed::{RawL2BlockReader, RollupRevertReader},
-    Timepoint,
-    fork::Fork,
 };
 
 use super::{check_rollup_lock_cells_except_stake, check_status};

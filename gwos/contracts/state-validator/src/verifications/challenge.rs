@@ -2,13 +2,12 @@ use alloc::vec;
 use core::convert::TryInto;
 use gw_common::{smt::Blake2bHasher, sparse_merkle_tree::CompiledMerkleProof, H256};
 use gw_types::{
-    core::{ChallengeTargetType, Status},
+    core::{ChallengeTargetType, Status, Timepoint},
     packed::{GlobalState, RollupConfig},
     prelude::*,
 };
 use gw_utils::finality::is_finalized;
 use gw_utils::fork::Fork;
-use gw_utils::Timepoint;
 use gw_utils::{
     cells::lock_cells::{collect_burn_cells, find_challenge_cell},
     ckb_std::{ckb_constants::Source, debug},

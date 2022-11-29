@@ -32,7 +32,6 @@ use gw_utils::{
     },
     error::Error,
     fork::Fork,
-    Timepoint,
 };
 
 use gw_common::{
@@ -45,7 +44,7 @@ use gw_common::{
 };
 use gw_types::{
     bytes::Bytes,
-    core::{ScriptHashType, Status},
+    core::{ScriptHashType, Status, Timepoint},
     packed::{Byte32, GlobalState, RawL2Block, RollupConfig},
     prelude::*,
 };
