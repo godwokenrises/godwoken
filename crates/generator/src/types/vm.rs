@@ -72,7 +72,7 @@ impl VMVersion {
 }
 
 #[cfg(has_asm)]
-pub(crate) use ckb_vm::machine::asm::AotCode;
+pub(crate) use ckb_vm_aot::AotCode;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ChallengeContext {

@@ -1010,7 +1010,7 @@ impl RPCClient {
             let tx = ckb_types::packed::Transaction::new_unchecked(tx.as_bytes());
             tx.into()
         };
-        let dry_run_result: ckb_jsonrpc_types::DryRunResult = self
+        let dry_run_result: ckb_jsonrpc_types::EstimateCycles = self
             .ckb
             .request(
                 "dry_run_transaction",

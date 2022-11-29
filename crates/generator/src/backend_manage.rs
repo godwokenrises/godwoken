@@ -192,7 +192,7 @@ impl BackendManage {
     #[cfg(has_asm)]
     fn aot_compile(&self, code_bytes: &Bytes) -> Result<AotCode, ckb_vm::Error> {
         let vm_version = crate::types::vm::VMVersion::V1;
-        let mut aot_machine = ckb_vm::machine::aot::AotCompilingMachine::load(
+        let mut aot_machine = ckb_vm_aot::AotCompilingMachine::load(
             code_bytes,
             Some(Box::new(crate::vm_cost_model::instruction_cycles)),
             vm_version.vm_isa(),

@@ -226,7 +226,7 @@ impl Generator {
                     cycles_pool: &mut cycles_pool,
                     context: &mut context,
                 }))
-                .instruction_cycle_func(Box::new(instruction_cycles));
+                .instruction_cycle_func(&instruction_cycles);
             let default_machine = machine_builder.build();
 
             #[cfg(has_asm)]
@@ -239,7 +239,7 @@ impl Generator {
             }
 
             #[cfg(has_asm)]
-            let mut machine = ckb_vm::machine::asm::AsmMachine::new(default_machine, aot_code_opt);
+            let mut machine = ckb_vm_aot::AotMachine::new(default_machine, aot_code_opt);
 
             #[cfg(not(has_asm))]
             let mut machine = TraceMachine::new(default_machine);

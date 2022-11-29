@@ -1,6 +1,6 @@
+use crate::utils::sdk::CkbRpcClient;
 use anyhow::{anyhow, Result};
-use ckb_jsonrpc_types::OutputsValidator;
-use ckb_sdk::CkbRpcClient;
+use ckb_jsonrpc_types::{Either, OutputsValidator};
 use ckb_types::prelude::{Entity, Unpack as CKBUnpack};
 use gw_config::WalletConfig;
 use gw_rpc_client::{ckb_client::CKBClient, indexer_client::CKBIndexerClient};
@@ -45,10 +45,15 @@ pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_, P>) -> Result<
         .get_transaction(tx_hash.into())
         .map_err(|err| anyhow!("{}", err))?
         .ok_or_else(|| anyhow!("can't found transaction"))?;
-    let tx = tx_with_status
+    let tv = match tx_with_status
         .transaction
         .ok_or_else(|| anyhow!("tx {:x} not found", tx_hash.pack()))?
-        .inner;
+        .inner
+    {
+        Either::Left(v) => v,
+        Either::Right(v) => serde_json::from_slice(v.as_bytes())?,
+    };
+    let tx = tv.inner;
     let existed_cell = tx
         .outputs
         .get(index as usize)

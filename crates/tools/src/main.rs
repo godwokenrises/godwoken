@@ -22,9 +22,11 @@ mod update_cell;
 mod utils;
 mod withdraw;
 
+pub use crate::utils::sdk;
+
+use crate::utils::sdk::constants::ONE_CKB;
 use account::read_privkey;
 use anyhow::{anyhow, Result};
-use ckb_sdk::constants::ONE_CKB;
 use ckb_types::prelude::Unpack;
 use clap::{value_t, App, Arg, SubCommand};
 use deploy_genesis::DeployRollupCellArgs;
