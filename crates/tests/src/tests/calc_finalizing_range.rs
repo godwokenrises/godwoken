@@ -23,13 +23,13 @@ async fn test_calc_finalizing_range() {
     // }
     //
     // block[0].ts = 0
-    // block[i].ts = block[i-1].ts + random(1, rollup_config.finality_as_duration())
-    // global_state[i].last_finalized_timepoint = block[i].ts - rollup_config.finality_as_duration()
+    // block[i].ts = block[i-1].ts + random(1, rollup_config.finality_time_in_ms())
+    // global_state[i].last_finalized_timepoint = block[i].ts - rollup_config.finality_time_in_ms()
     //
     // Assertions:
     // - No overlapped finalizing ranges
     // - For i <  100+6, { block[i].finalizing_range | j == i - 6 }
-    // - For i >= 100+6, { block[i].finalizing_range | block[j].ts + finality_as_duration <= block[i].ts }
+    // - For i >= 100+6, { block[i].finalizing_range | block[j].ts + finality_time_in_ms <= block[i].ts }
 
     let chain = setup_chain(Default::default()).await;
     let fork_config = ForkConfig {
@@ -44,7 +44,7 @@ async fn test_calc_finalizing_range() {
         (0..=fork_config.upgrade_global_state_version_to_v2.unwrap() * 2)
             .map(|number| {
                 let timestamp =
-                    parent_timestamp + rng.gen_range(1..rollup_config.finality_as_duration());
+                    parent_timestamp + rng.gen_range(1..rollup_config.finality_time_in_ms());
                 let raw = RawL2Block::new_builder()
                     .number(number.pack())
                     .timestamp(timestamp.pack())
@@ -74,8 +74,8 @@ async fn test_calc_finalizing_range() {
                 let finality_as_blocks = rollup_config.finality_blocks().unpack();
                 Timepoint::from_block_number(number.saturating_sub(finality_as_blocks))
             } else {
-                let finality_as_durations = rollup_config.finality_as_duration();
-                Timepoint::from_timestamp(timestamp.saturating_sub(finality_as_durations))
+                let finality_time_in_mss = rollup_config.finality_time_in_ms();
+                Timepoint::from_timestamp(timestamp.saturating_sub(finality_time_in_mss))
             };
             GlobalState::new_builder()
                 .version(version.into())
@@ -113,7 +113,7 @@ async fn test_calc_finalizing_range() {
     // ## Assert
     let fork_height = fork_config.upgrade_global_state_version_to_v2.unwrap();
     let finality_as_blocks = rollup_config.finality_blocks().unpack();
-    let finality_as_durations = rollup_config.finality_as_duration();
+    let finality_time_in_mss = rollup_config.finality_time_in_ms();
     for i in 1..blocks.len() {
         let block = &blocks[i];
         let block_number = block.raw().number().unpack();
@@ -134,7 +134,7 @@ async fn test_calc_finalizing_range() {
                     assert_eq!(nb, block_number.saturating_sub(finality_as_blocks));
                 } else {
                     let ts = blocks[nb as usize].raw().timestamp().unpack();
-                    assert!(ts + finality_as_durations <= block_timestamp);
+                    assert!(ts + finality_time_in_mss <= block_timestamp);
                 }
             }
         }

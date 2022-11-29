@@ -62,7 +62,7 @@ fn is_block_number_finalized(
     ret
 }
 
-pub fn finality_as_duration(rollup_config: &RollupConfig) -> u64 {
+pub fn finality_time_in_ms(rollup_config: &RollupConfig) -> u64 {
     let finality_blocks = rollup_config.finality_blocks().unpack();
     finality_blocks.saturating_mul(BLOCK_INTERVAL_IN_MILLISECONDS)
 }
