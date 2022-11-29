@@ -7,6 +7,7 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::finality::is_finalized;
+use gw_utils::fork::Fork;
 use gw_utils::Timepoint;
 use gw_utils::{
     cells::lock_cells::{collect_burn_cells, find_challenge_cell},
@@ -43,10 +44,10 @@ pub fn verify_enter_challenge(
 
     // check challenged block isn't finazlied
     let post_version: u8 = post_global_state.version().into();
-    let block_timepoint = if post_version < 2 {
-        Timepoint::from_block_number(challenged_block.number().unpack())
-    } else {
+    let block_timepoint = if Fork::use_timestamp_as_timepoint(post_version) {
         Timepoint::from_timestamp(challenged_block.timestamp().unpack())
+    } else {
+        Timepoint::from_block_number(challenged_block.number().unpack())
     };
     let is_block_finalized = is_finalized(config, post_global_state, &block_timepoint);
     if is_block_finalized {

@@ -31,6 +31,7 @@ use gw_utils::{
         utils::build_l2_sudt_script,
     },
     error::Error,
+    fork::Fork,
     Timepoint,
 };
 
@@ -80,7 +81,8 @@ fn check_withdrawal_cells<'a>(
             return Err(Error::InvalidWithdrawalCell);
         }
 
-        if cell.args.withdrawal_block_timepoint().unpack() != context.block_timepoint().full_value() {
+        if cell.args.withdrawal_block_timepoint().unpack() != context.block_timepoint().full_value()
+        {
             debug!(
                 "withdrawal_cell.args.withdrawal_block_timepoint != context.block_timepoint, {} != {}",
                 cell.args.withdrawal_block_timepoint().unpack(),
@@ -754,7 +756,7 @@ fn check_block_timestamp(
     }
 
     let post_version: u8 = post_global_state.version().into();
-    if post_version >= 1 {
+    if Fork::enforce_block_timestamp_lower_than_since(post_version) {
         let rollup_input_since = Since::new(load_input_since(0, Source::GroupInput)?);
         let rollup_input_timestamp = match (
             rollup_input_since.is_absolute(),
@@ -768,7 +770,7 @@ fn check_block_timestamp(
         }
     }
 
-    if post_version >= 2 {
+    if Fork::enforce_block_timestamp_in_l1_backbone_range(post_version) {
         // 4 hours, 4 * 60 * 60 * 1000 = 14400000ms
         const BACKBONE_BIAS: u64 = 14400000;
         let backbone = post_global_state.last_finalized_block_number().unpack()
@@ -818,49 +820,51 @@ fn check_global_state_last_finalized_timepoint(
     if prev_global_state.last_finalized_block_number().unpack()
         > post_global_state.last_finalized_block_number().unpack()
     {
+        debug!(
+            "check_global_state_last_finalized_timepoint prev last_finalized_block_number > post last_finalized_block_number, {} > {}",
+            prev_global_state.last_finalized_block_number().unpack(),
+            post_global_state.last_finalized_block_number().unpack()
+        );
         return Err(Error::InvalidPostGlobalState);
     }
 
     let last_finalized_timepoint =
         Timepoint::from_full_value(post_global_state.last_finalized_block_number().unpack());
 
-    if context.post_version == 1 {
-        match last_finalized_timepoint {
-            Timepoint::BlockNumber(last_finalized_block_number) => {
-                let finality_as_blocks = rollup_config.finality_blocks().unpack();
-                if last_finalized_block_number != context.number.saturating_sub(finality_as_blocks)
-                {
-                    return Err(Error::InvalidPostGlobalState);
-                }
-            }
-            Timepoint::Timestamp(_) => {
+    match (
+        Fork::use_timestamp_as_timepoint(context.post_version),
+        last_finalized_timepoint,
+    ) {
+        (false, Timepoint::BlockNumber(last_finalized_block_number)) => {
+            let finality_as_blocks = rollup_config.finality_blocks().unpack();
+            if last_finalized_block_number != context.number.saturating_sub(finality_as_blocks) {
                 return Err(Error::InvalidPostGlobalState);
             }
         }
-        return Ok(());
-    }
-
-    let rollup_input_since = Since::new(load_input_since(0, Source::GroupInput)?);
-    let rollup_input_timestamp = match (
-        rollup_input_since.is_absolute(),
-        rollup_input_since.extract_lock_value(),
-    ) {
-        (true, Some(LockValue::Timestamp(time_ms))) => time_ms,
-        _ => return Err(Error::InvalidSince),
-    };
-    match last_finalized_timepoint {
-        Timepoint::BlockNumber(_) => {
-            return Err(Error::InvalidPostGlobalState);
-        }
-        Timepoint::Timestamp(last_finalized_timestamp) => {
+        (true, Timepoint::Timestamp(last_finalized_timestamp)) => {
+            let rollup_input_since = Since::new(load_input_since(0, Source::GroupInput)?);
+            let rollup_input_timestamp = match (
+                rollup_input_since.is_absolute(),
+                rollup_input_since.extract_lock_value(),
+            ) {
+                (true, Some(LockValue::Timestamp(time_ms))) => time_ms,
+                _ => return Err(Error::InvalidSince),
+            };
             if !(last_finalized_timestamp + finality_time_in_ms(rollup_config)
                 < rollup_input_timestamp)
             {
                 return Err(Error::InvalidPostGlobalState);
             }
         }
+        (enabled, timepoint) => {
+            debug!(
+                "timestamp_as_timepoint feature switch is not matched, enabled: {}, timepoint: {}",
+                enabled,
+                timepoint.full_value()
+            );
+            return Err(Error::InvalidPostGlobalState);
+        }
     }
-
     Ok(())
 }
 

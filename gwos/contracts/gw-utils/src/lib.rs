@@ -12,6 +12,7 @@ pub use gw_types;
 pub mod cells;
 pub mod error;
 pub mod finality;
+pub mod fork;
 pub mod signature;
 mod timepoint;
 pub mod type_id;
