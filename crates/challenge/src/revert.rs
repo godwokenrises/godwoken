@@ -101,22 +101,22 @@ impl<'a> Revert<'a> {
         };
         let last_finalized_timepoint = if self
             .rollup_context
-            .global_state_version(first_reverted_block.number().unpack())
-            < 2
+            .fork_config
+            .use_timestamp_as_timepoint(first_reverted_block.number().unpack())
         {
+            Timepoint::Timestamp(
+                first_reverted_block
+                    .timestamp()
+                    .unpack()
+                    .saturating_sub(self.rollup_context.rollup_config.finality_time_in_ms()),
+            )
+        } else {
             Timepoint::from_block_number(
                 first_reverted_block
                     .number()
                     .unpack()
                     .saturating_sub(1)
                     .saturating_sub(self.finality_blocks),
-            )
-        } else {
-            Timepoint::Timestamp(
-                first_reverted_block
-                    .timestamp()
-                    .unpack()
-                    .saturating_sub(self.rollup_context.rollup_config.finality_as_duration()),
             )
         };
         let running_status: u8 = Status::Running.into();
