@@ -63,11 +63,14 @@ fn generate_custodian_cells(
     let block_hash: H256 = block.hash().into();
     let block_timepoint = {
         let block_number = block.raw().number().unpack();
-        if rollup_context.global_state_version(block_number) < 2 {
-            Timepoint::from_block_number(block_number)
-        } else {
+        if rollup_context
+            .fork_config
+            .use_timestamp_as_timepoint(block_number)
+        {
             let block_timestamp = block.raw().timestamp().unpack();
             Timepoint::from_timestamp(block_timestamp)
+        } else {
+            Timepoint::from_block_number(block_number)
         }
     };
     let to_custodian = |deposit| -> _ {

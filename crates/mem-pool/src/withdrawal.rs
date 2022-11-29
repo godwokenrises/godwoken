@@ -119,11 +119,15 @@ impl<'a> Generator<'a> {
         let block_hash: H256 = block.hash().into();
         let block_timepoint = {
             let block_number = block.raw().number().unpack();
-            if self.rollup_context.global_state_version(block_number) < 2 {
-                Timepoint::from_block_number(block_number)
-            } else {
+            if self
+                .rollup_context
+                .fork_config
+                .use_timestamp_as_timepoint(block_number)
+            {
                 let block_timestamp = block.raw().timestamp().unpack();
                 Timepoint::from_timestamp(block_timestamp)
+            } else {
+                Timepoint::from_block_number(block_number)
             }
         };
         let output = match gw_generator::utils::build_withdrawal_cell_output(
