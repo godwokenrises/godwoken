@@ -590,6 +590,7 @@ impl Chain {
         let block_hash = db
             .get_block_hash_by_number(block_number)?
             .context("get block hash")?;
+        let block = db.get_block(&block_hash)?.context("get block")?;
         let parent_finalized_custodians = db
             .get_block_post_finalized_custodian_capacity(block_number - 1)
             .context("get parent block remaining finalized custodians")?
@@ -600,10 +601,13 @@ impl Chain {
         // Update finalized_custodians with the finalizing deposit requests for the current block
         //
         // The finalizing range is represents in the form of `(from, to]`.
-        let finalizing_range = db
-            .get_block_finalizing_range(&block_hash)
-            .context("get block finalizing range")?;
-        for finalizing_number in finalizing_range.range() {
+        let finalizing_range = calc_finalizing_range(
+            &self.rollup_config,
+            self.generator.fork_config(),
+            &db,
+            &block,
+        )?;
+        for finalizing_number in finalizing_range {
             let deposits = db
                 .get_block_deposit_info_vec(finalizing_number)
                 .context("get finalizing block deposit info vec")?;
@@ -1067,16 +1071,6 @@ impl Chain {
         )?;
         db.insert_asset_scripts(deposit_asset_scripts)?;
         db.attach_block(l2block.clone())?;
-        db.set_block_finalizing_range(
-            &l2block.hash().into(),
-            &calc_finalizing_range(
-                &self.rollup_config,
-                self.generator.fork_config(),
-                db,
-                &l2block,
-            )?
-            .as_reader(),
-        )?;
 
         self.local_state.tip = l2block;
         self.local_state.last_global_state = global_state;

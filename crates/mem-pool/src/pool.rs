@@ -40,6 +40,7 @@ use gw_types::{
     },
     prelude::{Builder, Entity, Pack, PackVec, Unpack},
 };
+use gw_utils::calc_finalizing_range;
 use gw_utils::local_cells::LocalCellsManager;
 use std::{
     cmp::{max, min},
@@ -411,16 +412,23 @@ impl MemPool {
             return Ok(Default::default());
         }
         let snap = self.store.get_snapshot();
+        let block: L2Block = snap
+            .get_block(&self.current_tip.0)
+            .context("get block")?
+            .ok_or_else(|| anyhow!("failed to get last block"))?;
         let mut c: FinalizedCustodianCapacity = snap
             .get_block_post_finalized_custodian_capacity(self.current_tip.1)
             .ok_or_else(|| anyhow!("failed to get last block post finalized custodian capacity"))?
             .as_reader()
             .unpack();
 
-        let finalizing_range = snap
-            .get_block_finalizing_range(&self.current_tip.0)
-            .context("get tip block finalizing range")?;
-        for finalizing_number in finalizing_range.range() {
+        let finalizing_range = calc_finalizing_range(
+            &self.generator.rollup_context().rollup_config,
+            &self.generator.rollup_context().fork_config,
+            &snap,
+            &block,
+        )?;
+        for finalizing_number in finalizing_range {
             let finalizing_deposits = snap
                 .get_block_deposit_info_vec(finalizing_number)
                 .context("get last finalized block deposit")?;
