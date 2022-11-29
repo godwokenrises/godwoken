@@ -18,9 +18,11 @@ use gw_types::{
 use gw_utils::local_cells::{
     collect_local_and_indexer_cells, CollectLocalAndIndexerCursor, LocalCellsManager,
 };
+use tracing::instrument;
 
 pub const MAX_CUSTODIANS: usize = 50;
 
+#[instrument(skip_all, err(Debug), fields(timepoint = ?compatible_finalized_timepoint))]
 pub async fn query_mergeable_custodians(
     local_cells_manager: &LocalCellsManager,
     rpc_client: &RPCClient,
@@ -52,6 +54,7 @@ pub async fn query_mergeable_custodians(
     .await
 }
 
+#[instrument(skip_all, err(Debug), fields(timepoint = ?compatible_finalized_timepoint))]
 async fn query_mergeable_sudt_custodians(
     rpc_client: &RPCClient,
     collected: CollectedCustodianCells,

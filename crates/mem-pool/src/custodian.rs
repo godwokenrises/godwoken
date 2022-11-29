@@ -108,6 +108,7 @@ pub fn sum_withdrawals<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> 
     )
 }
 
+#[instrument(skip_all, err(Debug), fields(timepoint = ?compatible_finalized_timepoint))]
 pub async fn query_finalized_custodians<WithdrawalIter: Iterator<Item = WithdrawalRequest>>(
     rpc_client: &RPCClient,
     db: &impl ChainStore,
