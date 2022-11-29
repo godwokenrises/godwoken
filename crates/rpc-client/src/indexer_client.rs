@@ -88,6 +88,7 @@ impl CKBIndexerClient {
         .await
     }
 
+    #[instrument(skip_all, err(Debug), fields(timepoint = ?compatible_finalized_timepoint))]
     pub async fn stat_custodian_cells(
         &self,
         lock: Script,

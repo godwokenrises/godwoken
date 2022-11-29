@@ -370,10 +370,6 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn delete_block_finalizing_range(&self, block_hash: &H256) -> Result<(), Error> {
-        self.delete(COLUMN_BLOCK_FINALIZING_RANGE, block_hash.as_slice())
-    }
-
     pub fn set_reverted_block_smt_root(&self, root: H256) -> Result<(), Error> {
         self.insert_raw(
             COLUMN_META,
