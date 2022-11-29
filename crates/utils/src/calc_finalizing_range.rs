@@ -1,4 +1,5 @@
 use anyhow::Result;
+use gw_config::ForkConfig;
 use gw_store::{traits::chain_store::ChainStore, transaction::StoreTransaction};
 use gw_types::{
     core::Timepoint,
@@ -18,6 +19,7 @@ use gw_types::{
 ///   - when from_block_number = to_block_number, no any blocks are finalizing
 pub fn calc_finalizing_range(
     rollup_config: &RollupConfig,
+    fork_config: &ForkConfig,
     db: &StoreTransaction,
     current_block: &L2Block,
 ) -> Result<FinalizingRange> {
@@ -58,14 +60,13 @@ pub fn calc_finalizing_range(
             .get_block_post_global_state(&older_block_hash)?
             .expect("get finalizing block global state");
 
-        // NOTE: It is determined which finality rule to apply based on the global_state.version of
-        // older block, but not the version of the current block.
-        let older_global_state_version: u8 = older_global_state.version().into();
-        let older_timepoint = if older_global_state_version < 2 {
-            Timepoint::from_block_number(older_block_number)
-        } else {
+        // NOTE: It is determined which finality rule to apply by older block, but not the the
+        // current block.
+        let older_timepoint = if fork_config.use_timestamp_as_timepoint(older_block_number) {
             // We know global_state.tip_block_timestamp is equal to l2block.timestamp
             Timepoint::from_timestamp(older_global_state.tip_block_timestamp().unpack())
+        } else {
+            Timepoint::from_block_number(older_block_number)
         };
         if !compatible_finalized_timepoint.is_finalized(&older_timepoint) {
             break;

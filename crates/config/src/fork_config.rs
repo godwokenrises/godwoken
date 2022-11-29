@@ -66,6 +66,11 @@ impl ForkConfig {
         }
     }
 
+    /// Returns if use timestamp as timepoint
+    pub fn use_timestamp_as_timepoint(&self, block_number: u64) -> bool {
+        self.global_state_version(block_number) >= 2
+    }
+
     /// Return l2 tx cycles limit by block height
     pub fn max_l2_tx_cycles(&self, block_number: u64) -> u64 {
         match self.increase_max_l2_tx_cycles_to_500m {
