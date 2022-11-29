@@ -2,6 +2,7 @@
 //! supports read / write to global state
 
 use gw_common::sparse_merkle_tree::H256;
+use gw_utils::fork::Fork;
 use gw_utils::gw_common;
 use gw_utils::Timepoint;
 
@@ -40,10 +41,10 @@ pub struct BlockContext {
 
 impl BlockContext {
     pub const fn block_timepoint(&self) -> Timepoint {
-        if self.post_version < 2 {
-            Timepoint::from_block_number(self.number)
-        } else {
+        if Fork::use_timestamp_as_timepoint(self.post_version) {
             Timepoint::from_timestamp(self.timestamp)
+        } else {
+            Timepoint::from_block_number(self.number)
         }
     }
 }

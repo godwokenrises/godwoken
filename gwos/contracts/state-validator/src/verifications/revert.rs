@@ -30,6 +30,7 @@ use gw_utils::{
     gw_common,
     gw_types::packed::{RawL2BlockReader, RollupRevertReader},
     Timepoint,
+    fork::Fork,
 };
 
 use super::{check_rollup_lock_cells_except_stake, check_status};
@@ -250,13 +251,7 @@ fn check_reverted_blocks(
     let account_merkle_state = reverted_blocks[0].prev_account();
     let tip_block_hash = reverted_blocks[0].parent_block_hash();
     let post_version: u8 = post_global_state.version().into();
-    let last_finalized = if post_version < 2 {
-        let tip_number: u64 = reverted_blocks[0].number().unpack();
-        let finalized_number = tip_number
-            .saturating_sub(1)
-            .saturating_sub(config.finality_blocks().unpack());
-        Timepoint::from_block_number(finalized_number)
-    } else {
+    let last_finalized = if Fork::use_timestamp_as_timepoint(post_version) {
         let rollup_input_since = Since::new(load_input_since(0, Source::GroupInput)?);
         let rollup_input_timestamp = match (
             rollup_input_since.is_absolute(),
@@ -268,6 +263,12 @@ fn check_reverted_blocks(
         let l1_timestamp = rollup_input_timestamp;
         let finalized_timestamp = l1_timestamp.saturating_sub(finality_time_in_ms(&config));
         Timepoint::from_timestamp(finalized_timestamp)
+    } else {
+        let tip_number: u64 = reverted_blocks[0].number().unpack();
+        let finalized_number = tip_number
+            .saturating_sub(1)
+            .saturating_sub(config.finality_blocks().unpack());
+        Timepoint::from_block_number(finalized_number)
     };
 
     let new_tip_block = revert_args.new_tip_block();
