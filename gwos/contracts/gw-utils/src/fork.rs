@@ -3,8 +3,10 @@ pub struct Fork;
 
 impl Fork {
     // Fork feature: block.timestamp < input.since
+    //
+    // NOTE: This feature is only enabled for v1.
     pub const fn enforce_block_timestamp_lower_than_since(global_state_version: u8) -> bool {
-        global_state_version >= 1
+        global_state_version == 1
     }
 
     // Fork feature: block.timestamp in the backbone range
