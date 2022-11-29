@@ -1,7 +1,6 @@
 use crate::testing_tool::chain::setup_chain;
 use gw_config::ForkConfig;
-use gw_db::schema::{COLUMN_BLOCK_GLOBAL_STATE, COLUMN_INDEX};
-use gw_store::traits::chain_store::ChainStore;
+use gw_db::schema::{COLUMN_BLOCK, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_INDEX};
 use gw_store::traits::kv_store::KVStoreWrite;
 use gw_types::core::Timepoint;
 use gw_types::packed::{BlockMerkleState, L2Block, RawL2Block};
@@ -102,15 +101,13 @@ async fn test_calc_finalizing_range() {
         .unwrap();
         db.insert_raw(COLUMN_INDEX, raw.number().as_slice(), &block.hash())
             .unwrap();
-
-        let finalizing_range =
-            calc_finalizing_range(&rollup_config, &fork_config, db, block).unwrap();
-        db.set_block_finalizing_range(&block.hash().into(), &finalizing_range.as_reader())
+        db.insert_raw(COLUMN_BLOCK, &block.hash(), block.as_slice())
             .unwrap();
         db.commit().unwrap();
     }
 
     // ## Assert
+    let mut last_range_end = None;
     let fork_height = fork_config.upgrade_global_state_version_to_v2.unwrap();
     let finality_as_blocks = rollup_config.finality_blocks().unpack();
     let finality_time_in_mss = rollup_config.finality_time_in_ms();
@@ -118,18 +115,13 @@ async fn test_calc_finalizing_range() {
         let block = &blocks[i];
         let block_number = block.raw().number().unpack();
         let block_timestamp = block.raw().timestamp().unpack();
-        let range = chain
-            .store()
-            .get_block_finalizing_range(&block.hash().into())
-            .unwrap();
-        let from_block_number = range.from_block_number().unpack();
-        let to_block_number = range.to_block_number().unpack();
+        let range =
+            calc_finalizing_range(&rollup_config, &fork_config, chain.store(), block).unwrap();
 
-        if block_number <= finality_as_blocks {
-            assert_eq!(0, from_block_number);
-            assert_eq!(from_block_number, to_block_number);
+        if block_number < finality_as_blocks {
+            assert!(range.is_empty());
         } else {
-            for nb in range.range() {
+            for nb in range.clone() {
                 if nb < fork_height {
                     assert_eq!(nb, block_number.saturating_sub(finality_as_blocks));
                 } else {
@@ -137,6 +129,30 @@ async fn test_calc_finalizing_range() {
                     assert!(ts + finality_time_in_mss <= block_timestamp);
                 }
             }
+        }
+
+        if !range.is_empty() {
+            assert!(range.start < range.end);
+            if last_range_end.is_none() {
+                assert_eq!(
+                    range,
+                    (1..2),
+                    "block_number: {}, range: {:?}, last_range_end: {:?}",
+                    block_number,
+                    range,
+                    last_range_end
+                );
+            } else {
+                assert_eq!(
+                    last_range_end.unwrap(),
+                    range.start,
+                    "block_number: {}, range: {:?}, last_range_end: {:?}",
+                    block_number,
+                    range,
+                    last_range_end
+                );
+            }
+            last_range_end = Some(range.end);
         }
     }
 }

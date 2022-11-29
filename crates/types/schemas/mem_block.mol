@@ -32,16 +32,6 @@ table FinalizedCustodianCapacity {
     sudt: SudtCustodianVec,
 }
 
-// Ensure that from_block_number <= to_block_number
-//
-// This represents a block number range `(from_block_number, to_block_number]`:
-//   - when from_block_number < to_block_number, blocks {from_block_number+1, from_block_number+2, ..., to_block_number} are finalizing;
-//   - when from_block_number = to_block_number, no any blocks are finalizing
-struct FinalizingRange {
-    from_block_number: Uint64,
-    to_block_number: Uint64,
-}
-
 vector AccountMerkleStateVec <AccountMerkleState>;
 
 table CompactMemBlock {

@@ -6,7 +6,7 @@ use gw_common::H256;
 use gw_db::error::Error;
 use gw_db::schema::{
     COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
-    COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_FINALIZING_RANGE, COLUMN_BLOCK_GLOBAL_STATE,
+    COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_GLOBAL_STATE,
     COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY, COLUMN_BLOCK_SUBMIT_TX,
     COLUMN_BLOCK_SUBMIT_TX_HASH, COLUMN_INDEX, COLUMN_MEM_POOL_TRANSACTION,
     COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
@@ -151,11 +151,6 @@ pub trait ChainStore: KVStoreRead {
             packed::FinalizedCustodianCapacityReader,
             data
         ))
-    }
-
-    fn get_block_finalizing_range(&self, block_hash: &H256) -> Option<packed::FinalizingRange> {
-        let data = self.get(COLUMN_BLOCK_FINALIZING_RANGE, block_hash.as_slice())?;
-        Some(from_box_should_be_ok!(packed::FinalizingRangeReader, data))
     }
 
     /// Get tip block hash. It may be a bad block.
