@@ -14,8 +14,5 @@ pub mod error;
 pub mod finality;
 pub mod fork;
 pub mod signature;
-mod timepoint;
 pub mod type_id;
 pub mod withdrawal;
-
-pub use timepoint::Timepoint;

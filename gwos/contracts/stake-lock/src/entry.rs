@@ -21,9 +21,9 @@ use gw_utils::cells::{
 };
 use gw_utils::finality::is_finalized;
 use gw_utils::gw_types;
-use gw_utils::Timepoint;
 
 use gw_types::{
+    core::Timepoint,
     packed::{StakeLockArgs, StakeLockArgsReader},
     prelude::*,
 };

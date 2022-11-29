@@ -2,6 +2,7 @@
 use core::result::Result;
 
 use gw_types::{
+    core::Timepoint,
     packed::{UnlockWithdrawalWitness, UnlockWithdrawalWitnessReader},
     prelude::*,
 };
@@ -20,7 +21,6 @@ use gw_utils::gw_types::packed::{
 use gw_utils::{
     cells::rollup::MAX_ROLLUP_WITNESS_SIZE,
     gw_types::{self, core::ScriptHashType},
-    Timepoint,
 };
 use gw_utils::{cells::utils::search_lock_hash, ckb_std::high_level::load_cell_lock};
 

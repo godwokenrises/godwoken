@@ -9,8 +9,8 @@
 //!   - Otherwise, we know it is switching versions, so the corresponding entity
 //!     is surely not finalized.
 
-use crate::Timepoint;
 use ckb_std::debug;
+use gw_types::core::Timepoint;
 use gw_types::packed::{GlobalState, RollupConfig};
 use gw_types::prelude::Unpack;
 
