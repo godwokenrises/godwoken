@@ -1069,7 +1069,13 @@ impl Chain {
         db.attach_block(l2block.clone())?;
         db.set_block_finalizing_range(
             &l2block.hash().into(),
-            &calc_finalizing_range(&self.rollup_config, db, &l2block)?.as_reader(),
+            &calc_finalizing_range(
+                &self.rollup_config,
+                self.generator.fork_config(),
+                db,
+                &l2block,
+            )?
+            .as_reader(),
         )?;
 
         self.local_state.tip = l2block;

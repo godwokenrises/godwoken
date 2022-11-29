@@ -320,11 +320,14 @@ impl MockBlockParam {
                 .build()
         };
 
-        let last_finalized_timepoint = if self.rollup_context.global_state_version(self.number) < 2
+        let last_finalized_timepoint = if self
+            .rollup_context
+            .fork_config
+            .use_timestamp_as_timepoint(self.number)
         {
-            Timepoint::from_block_number(self.number.saturating_sub(self.finality_blocks))
-        } else {
             unimplemented!()
+        } else {
+            Timepoint::from_block_number(self.number.saturating_sub(self.finality_blocks))
         };
         let global_state = GlobalState::new_builder()
             .account(post_account)
