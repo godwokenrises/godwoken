@@ -163,13 +163,13 @@ pub fn produce_block(
         .fork_config
         .use_timestamp_as_timepoint(number)
     {
-        let finality_as_duration = rollup_context.rollup_config.finality_as_duration();
+        let finality_time_in_ms = rollup_context.rollup_config.finality_time_in_ms();
         Timepoint::from_timestamp(
             block
                 .raw()
                 .timestamp()
                 .unpack()
-                .saturating_sub(finality_as_duration),
+                .saturating_sub(finality_time_in_ms),
         )
     } else {
         let finality_as_blocks = rollup_context.rollup_config.finality_blocks().unpack();

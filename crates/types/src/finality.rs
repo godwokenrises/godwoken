@@ -12,7 +12,7 @@ const BLOCK_INTERVAL_IN_MILLISECONDS: u64 = 36000;
 impl RollupConfig {
     /// Convert RollupConfig.finality_blocks, currently represented as a block
     /// count, to a duration representation.
-    pub fn finality_as_duration(&self) -> u64 {
+    pub fn finality_time_in_ms(&self) -> u64 {
         self.finality_blocks()
             .unpack()
             .saturating_mul(BLOCK_INTERVAL_IN_MILLISECONDS)
