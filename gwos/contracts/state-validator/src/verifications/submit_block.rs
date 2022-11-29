@@ -15,7 +15,7 @@ use gw_utils::gw_types::packed::{L2BlockReader, WithdrawalRequestReader};
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
 use crate::ckb_std::{ckb_constants::Source, debug};
 use gw_state::kv_state::KVState;
-use gw_utils::finality::{finality_as_duration, is_finalized};
+use gw_utils::finality::{finality_time_in_ms, is_finalized};
 use gw_utils::gw_common::{self, ckb_decimal::CKBCapacity};
 use gw_utils::gw_types::{self, U256};
 
@@ -733,11 +733,11 @@ fn check_block_withdrawals(block: &L2BlockReader) -> Result<(), Error> {
 // Assert l2block.timestamp <= l1tx.since
 // Assert l2block.timestamp <=
 //      post_global_state.last_finalized_timepoint
-//      + rollup_config.finality_as_duration()
+//      + rollup_config.finality_time_in_ms()
 //      + 4h
 // Assert l2block.timestamp >=
 //      post_global_state.last_finalized_timepoint
-//      + rollup_config.finality_as_duration()
+//      + rollup_config.finality_time_in_ms()
 //      - 4h
 fn check_block_timestamp(
     rollup_config: &RollupConfig,
@@ -772,7 +772,7 @@ fn check_block_timestamp(
         // 4 hours, 4 * 60 * 60 * 1000 = 14400000ms
         const BACKBONE_BIAS: u64 = 14400000;
         let backbone = post_global_state.last_finalized_block_number().unpack()
-            + finality_as_duration(rollup_config);
+            + finality_time_in_ms(rollup_config);
         if !(backbone.saturating_sub(BACKBONE_BIAS) <= block_timestamp
             && block_timestamp <= backbone.saturating_add(BACKBONE_BIAS))
         {
@@ -853,7 +853,7 @@ fn check_global_state_last_finalized_timepoint(
             return Err(Error::InvalidPostGlobalState);
         }
         Timepoint::Timestamp(last_finalized_timestamp) => {
-            if !(last_finalized_timestamp + finality_as_duration(rollup_config)
+            if !(last_finalized_timestamp + finality_time_in_ms(rollup_config)
                 < rollup_input_timestamp)
             {
                 return Err(Error::InvalidPostGlobalState);

@@ -116,7 +116,7 @@ impl<'a> Revert<'a> {
                 first_reverted_block
                     .timestamp()
                     .unpack()
-                    .saturating_sub(self.rollup_context.rollup_config.finality_as_duration()),
+                    .saturating_sub(self.rollup_context.rollup_config.finality_time_in_ms()),
             )
         };
         let running_status: u8 = Status::Running.into();

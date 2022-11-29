@@ -8,7 +8,7 @@ use gw_types::{
     packed::{BlockMerkleState, Byte32, GlobalState, RawL2Block, RollupConfig},
     prelude::*,
 };
-use gw_utils::finality::finality_as_duration;
+use gw_utils::finality::finality_time_in_ms;
 use gw_utils::gw_types;
 use gw_utils::{
     cells::{
@@ -266,7 +266,7 @@ fn check_reverted_blocks(
             _ => return Err(Error::InvalidSince),
         };
         let l1_timestamp = rollup_input_timestamp;
-        let finalized_timestamp = l1_timestamp.saturating_sub(finality_as_duration(&config));
+        let finalized_timestamp = l1_timestamp.saturating_sub(finality_time_in_ms(&config));
         Timepoint::from_timestamp(finalized_timestamp)
     };
 
