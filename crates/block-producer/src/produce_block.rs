@@ -159,10 +159,10 @@ pub fn produce_block(
             .build()
     };
 
-    let last_finalized_timepoint = if rollup_context.global_state_version(number) < 2 {
-        let finality_as_blocks = rollup_context.rollup_config.finality_blocks().unpack();
-        Timepoint::from_block_number(number.saturating_sub(finality_as_blocks))
-    } else {
+    let last_finalized_timepoint = if rollup_context
+        .fork_config
+        .use_timestamp_as_timepoint(number)
+    {
         let finality_as_duration = rollup_context.rollup_config.finality_as_duration();
         Timepoint::from_timestamp(
             block
@@ -171,6 +171,9 @@ pub fn produce_block(
                 .unpack()
                 .saturating_sub(finality_as_duration),
         )
+    } else {
+        let finality_as_blocks = rollup_context.rollup_config.finality_blocks().unpack();
+        Timepoint::from_block_number(number.saturating_sub(finality_as_blocks))
     };
     let global_state = GlobalState::new_builder()
         .account(post_merkle_state)

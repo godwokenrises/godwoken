@@ -103,7 +103,8 @@ async fn test_calc_finalizing_range() {
         db.insert_raw(COLUMN_INDEX, raw.number().as_slice(), &block.hash())
             .unwrap();
 
-        let finalizing_range = calc_finalizing_range(&rollup_config, db, block).unwrap();
+        let finalizing_range =
+            calc_finalizing_range(&rollup_config, &fork_config, db, block).unwrap();
         db.set_block_finalizing_range(&block.hash().into(), &finalizing_range.as_reader())
             .unwrap();
         db.commit().unwrap();

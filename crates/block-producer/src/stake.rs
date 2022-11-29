@@ -41,11 +41,14 @@ pub async fn generate(
     let owner_lock_hash = lock_script.hash();
     let stake_block_timepoint = {
         let block_number: u64 = block.raw().number().unpack();
-        if rollup_context.global_state_version(block_number) < 2 {
-            Timepoint::from_block_number(block_number)
-        } else {
+        if rollup_context
+            .fork_config
+            .use_timestamp_as_timepoint(block_number)
+        {
             let block_timestamp: u64 = block.raw().timestamp().unpack();
             Timepoint::from_timestamp(block_timestamp)
+        } else {
+            Timepoint::from_block_number(block_number)
         }
     };
     let lock_args: Bytes = {
