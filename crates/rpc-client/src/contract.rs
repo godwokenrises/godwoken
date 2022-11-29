@@ -55,7 +55,7 @@ impl ContractsCellDepManager {
         log::info!("[contracts dep] refresh");
 
         // rollup_config_cell is identify by data_hash but not type_hash
-        let rollup_config_cell_dep = { self.load().rollup_config.clone() };
+        let rollup_config_cell_dep = self.load().rollup_config.clone();
 
         let now = Instant::now();
         let deps = query_cell_deps(&self.rpc_client, &self.scripts, rollup_config_cell_dep).await?;

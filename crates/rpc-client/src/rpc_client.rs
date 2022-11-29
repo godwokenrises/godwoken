@@ -881,7 +881,7 @@ impl RPCClient {
         Ok(verifier_cell)
     }
 
-    #[instrument(skip_all)]
+    #[instrument(skip_all, err(Debug), fields(timepoint = ?compatible_finalized_timepoint))]
     pub async fn query_finalized_owner_lock_withdrawal_cells(
         &self,
         compatible_finalized_timepoint: &CompatibleFinalizedTimepoint,
@@ -1066,7 +1066,7 @@ impl RPCClient {
         Ok(epoch_number)
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip_all, err(Debug), fields(timepoint = ?compatible_finalized_timepoint))]
     pub async fn query_random_sudt_type_script(
         &self,
         compatible_finalized_timepoint: &CompatibleFinalizedTimepoint,
@@ -1160,6 +1160,7 @@ impl RPCClient {
         Ok(sudt_type_script_set)
     }
 
+    #[instrument(skip_all, err(Debug), fields(timepoint = ?compatible_finalized_timepoint, max_cells = max_cells))]
     pub async fn query_mergeable_sudt_custodians_cells_by_sudt_type_script(
         &self,
         sudt_type_script: &Script,
