@@ -463,9 +463,7 @@ impl TransactionDependencyProvider for DefaultTransactionDependencyProvider {
         }
         let tx = match tx_with_status.transaction.unwrap().inner {
             Either::Left(t) => Transaction::from(t.inner).into_view(),
-            Either::Right(bytes) => TransactionReader::from_slice(bytes.as_bytes())
-                .map(|reader| reader.to_entity().into_view())
-                .map_err(|err| anyhow!("invalid molecule encoded TransactionView: {}", err))?,
+            Either::Right(bytes) => unreachable!(),
         };
         inner.tx_cache.put(tx_hash.clone(), tx.clone());
         Ok(tx)

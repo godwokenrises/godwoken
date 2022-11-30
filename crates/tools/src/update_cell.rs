@@ -51,7 +51,7 @@ pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_, P>) -> Result<
         .inner
     {
         Either::Left(v) => v,
-        Either::Right(v) => serde_json::from_slice(v.as_bytes())?,
+        Either::Right(v) => unreachable!(),
     };
     let tx = tv.inner;
     let existed_cell = tx
