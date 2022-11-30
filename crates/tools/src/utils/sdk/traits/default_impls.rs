@@ -14,7 +14,7 @@ use ckb_jsonrpc_types::{self as json_types, Either};
 use ckb_types::{
     bytes::Bytes,
     core::{BlockView, DepType, HeaderView, TransactionView},
-    packed::{Byte32, CellDep, CellOutput, OutPoint, Script, Transaction, TransactionReader},
+    packed::{Byte32, CellDep, CellOutput, OutPoint, Script, Transaction},
     prelude::*,
     H160,
 };
@@ -463,7 +463,7 @@ impl TransactionDependencyProvider for DefaultTransactionDependencyProvider {
         }
         let tx = match tx_with_status.transaction.unwrap().inner {
             Either::Left(t) => Transaction::from(t.inner).into_view(),
-            Either::Right(bytes) => unreachable!(),
+            Either::Right(_bytes) => unreachable!(),
         };
         inner.tx_cache.put(tx_hash.clone(), tx.clone());
         Ok(tx)

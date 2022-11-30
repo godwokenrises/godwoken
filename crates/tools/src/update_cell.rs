@@ -51,7 +51,7 @@ pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_, P>) -> Result<
         .inner
     {
         Either::Left(v) => v,
-        Either::Right(v) => unreachable!(),
+        Either::Right(_v) => unreachable!(),
     };
     let tx = tv.inner;
     let existed_cell = tx
