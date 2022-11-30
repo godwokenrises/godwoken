@@ -105,7 +105,7 @@ impl CKBClient {
             .map(|tv| {
                 let tv: ckb_jsonrpc_types::TransactionView = match tv.inner {
                     Either::Left(v) => v,
-                    Either::Right(v) => serde_json::from_slice(v.as_bytes())?,
+                    Either::Right(v) => unreachable!(),
                 };
                 let tx: ckb_types::packed::Transaction = tv.inner.into();
                 Ok(Transaction::new_unchecked(tx.as_bytes()))
@@ -201,7 +201,7 @@ impl CKBClient {
                 ..
             }) => match tv.inner {
                 Either::Left(v) => v,
-                Either::Right(v) => serde_json::from_slice(v.as_bytes())?,
+                Either::Right(v) => unreachable!(),
             },
             _ => bail!("{} {} tx not found", contract, tx_hash),
         };
