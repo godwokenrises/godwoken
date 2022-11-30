@@ -52,5 +52,4 @@ dashmap = "5.4"
 [dev-dependencies]
 ckb-chain-spec = "0.105.1"
 ckb-script = "0.105.1"
-httpmock = "0.6"
 ckb-mock-tx-types = "0.105.1"
