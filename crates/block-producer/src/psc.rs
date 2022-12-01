@@ -230,13 +230,9 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
         if !submitting && state.local_count > 0 && state.submitted_count < config.submitted_limit {
             submitting = true;
             let context = state.context.clone();
-            // The first submission should not have any unknown cell error. If
-            // it does, it means that previous block is probably not confirmed
-            // anymore, and we should sync with L1 again.
-            let is_first = state.submitted_count == 0;
             submit_handle.replace_with(tokio::spawn(async move {
                 loop {
-                    match submit_next_block(&context, is_first).await {
+                    match submit_next_block(&context).await {
                         Ok(nh) => return Ok(nh),
                         Err(err) => {
                             if err.is::<ShouldResyncError>() || err.is::<ShouldRevertError>() {
@@ -460,7 +456,7 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
     Ok(())
 }
 
-async fn submit_next_block(ctx: &PSCContext, is_first: bool) -> Result<NumberHash> {
+async fn submit_next_block(ctx: &PSCContext) -> Result<NumberHash> {
     let snap = ctx.store.get_snapshot();
     // L2 block number to submit.
     let block_number = snap
@@ -469,6 +465,15 @@ async fn submit_next_block(ctx: &PSCContext, is_first: bool) -> Result<NumberHas
         .number()
         .unpack()
         + 1;
+    let last_confirmed = snap
+        .get_last_confirmed_block_number_hash()
+        .expect("get last confirmed block number and hash")
+        .number()
+        .unpack();
+    // The first submission should not have any unknown cell error. If
+    // it does, it means that previous block is probably not confirmed
+    // anymore, and we should sync with L1 again.
+    let is_first = block_number == last_confirmed + 1;
     submit_block(ctx, snap, is_first, block_number).await
 }
 
