@@ -103,8 +103,6 @@ struct TraceInfo {
     span_id: HexId,
 }
 
-impl TraceInfo {}
-
 fn lookup_trace_id<S>(span_ref: &SpanRef<S>) -> Option<TraceId>
 where
     S: Subscriber + for<'lookup> LookupSpan<'lookup>,
