@@ -772,8 +772,14 @@ fn check_block_timestamp(
     if Fork::enforce_block_timestamp_in_l1_backbone_range(post_version) {
         // 4 hours, 4 * 60 * 60 * 1000 = 14400000ms
         const BACKBONE_BIAS: u64 = 14400000;
-        let backbone = post_global_state.last_finalized_block_number().unpack()
-            + finality_time_in_ms(rollup_config);
+        let backbone = {
+            match Timepoint::from_full_value(
+                post_global_state.last_finalized_block_number().unpack(),
+            ) {
+                Timepoint::BlockNumber(_) => unreachable!(),
+                Timepoint::Timestamp(ts) => ts + finality_time_in_ms(rollup_config),
+            }
+        };
         if !(backbone.saturating_sub(BACKBONE_BIAS) <= block_timestamp
             && block_timestamp <= backbone.saturating_add(BACKBONE_BIAS))
         {
