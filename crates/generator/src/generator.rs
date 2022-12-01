@@ -725,8 +725,9 @@ impl Generator {
             exit_code = field::Empty,
             execution_cycles = field::Empty,
             virtual_cycles = field::Empty,
-            read_kv_count = field::Empty,
-            write_kv_count = field::Empty,
+            touched_keys_count = field::Empty,
+            read_data_count = field::Empty,
+            write_data_count = field::Empty,
         )
     )]
     pub fn execute_transaction<S: State + CodeStore + JournalDB, C: ChainView>(
@@ -876,10 +877,13 @@ impl Generator {
             if r.exit_code != 0 {
                 tracing::error!(error = "non zero exit code")
             }
+
+            let touched_keys_count = { state_tracker.touched_keys().lock().unwrap().len() };
             span.record("execution_cycles", r.cycles.execution);
             span.record("virtual_cycles", r.cycles.r#virtual);
-            span.record("read_kv_count", r.read_data_hashes.len());
-            span.record("write_kv_count", r.write_data_hashes.len());
+            span.record("touched_keys_count", touched_keys_count);
+            span.record("read_data_count", r.read_data_hashes.len());
+            span.record("write_data_count", r.write_data_hashes.len());
         }
 
         Ok(r)
