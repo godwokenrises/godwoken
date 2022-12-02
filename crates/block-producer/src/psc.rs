@@ -12,6 +12,7 @@ use gw_rpc_client::{
     rpc_client::RPCClient,
 };
 use gw_store::{snapshot::StoreSnapshot, traits::chain_store::ChainStore, Store};
+use gw_telemetry::traits::{OpenTelemetrySpanExt, TraceContextExt};
 use gw_types::{
     offchain::{CellStatus, DepositInfo, TxStatus},
     packed::{
@@ -24,14 +25,12 @@ use gw_utils::{
     abort_on_drop::spawn_abort_on_drop, liveness::Liveness, local_cells::LocalCellsManager,
     since::Since,
 };
-use opentelemetry::trace::TraceContextExt;
 use tokio::{
     signal::unix::{signal, SignalKind},
     sync::Mutex,
     time::Instant,
 };
 use tracing::instrument;
-use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::{
     block_producer::{check_block_size, BlockProducer, ComposeSubmitTxArgs, TransactionSizeError},
@@ -45,6 +44,29 @@ pub struct ProduceSubmitConfirm {
     context: Arc<PSCContext>,
     local_count: u64,
     submitted_count: u64,
+}
+
+impl ProduceSubmitConfirm {
+    fn new(context: Arc<PSCContext>) -> Self {
+        Self {
+            context,
+            local_count: 0,
+            submitted_count: 0,
+        }
+    }
+
+    fn set_local_count(&mut self, count: u64) {
+        self.local_count = count;
+
+        gw_metrics::block_producer().local_blocks.set(count);
+        gw_metrics::custodian().finalized_custodians(&self.context.store);
+    }
+
+    fn set_submitted_count(&mut self, count: u64) {
+        self.submitted_count = count;
+
+        gw_metrics::block_producer().submitted_blocks.set(count);
+    }
 }
 
 pub struct PSCContext {
@@ -129,13 +151,12 @@ impl ProduceSubmitConfirm {
             last_submitted,
             last_confirmed
         );
-        let local_count = last_valid - last_submitted;
-        let submitted_count = last_submitted - last_confirmed;
-        Ok(Self {
-            context,
-            local_count,
-            submitted_count,
-        })
+
+        let mut psc = Self::new(context);
+        psc.set_local_count(last_valid - last_submitted);
+        psc.set_submitted_count(last_submitted - last_confirmed);
+
+        Ok(psc)
     }
 
     /// Run the producing, submitting and confirming loop.
@@ -203,8 +224,8 @@ impl ProduceSubmitConfirm {
                                 .notify_new_tip(new_tip, &local_cells_manager)
                                 .await?;
                         }
-                        self.local_count = last_valid - last_submitted;
-                        self.submitted_count = last_submitted - last_confirmed;
+                        self.set_local_count(last_valid - last_submitted);
+                        self.set_submitted_count(last_submitted - last_confirmed);
                     } else {
                         bail!(e);
                     }
@@ -214,12 +235,13 @@ impl ProduceSubmitConfirm {
     }
 }
 
-async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
+async fn run(state: &mut ProduceSubmitConfirm) -> Result<()> {
     let mut submitting = false;
     let mut submit_handle = spawn_abort_on_drop(async { anyhow::Ok(NumberHash::default()) });
     let mut confirming = false;
     let mut confirm_handle = spawn_abort_on_drop(async { anyhow::Ok(NumberHash::default()) });
-    let config = &state.context.psc_config;
+    let ctx = state.context.clone();
+    let config = &ctx.psc_config;
     let mut interval = tokio::time::interval(Duration::from_secs(config.block_interval_secs));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
@@ -306,7 +328,7 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                             let mut sync_server = sync_server.lock().unwrap();
                             publish_confirmed(&mut sync_server, &state.context.store.get_snapshot(), nh.number().unpack())?;
                         }
-                        state.submitted_count -= 1;
+                        state.set_submitted_count(state.submitted_count - 1);
                     }
                     _ => {}
                 }
@@ -325,8 +347,8 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                             let mut sync_server = sync_server.lock().unwrap();
                             publish_submitted(&mut sync_server, &state.context.store.get_snapshot(), nh.number().unpack())?;
                         }
-                        state.submitted_count += 1;
-                        state.local_count -= 1;
+                        state.set_local_count(state.local_count - 1);
+                        state.set_submitted_count(state.submitted_count + 1);
                     }
                     _ => {}
                 }
@@ -338,7 +360,7 @@ async fn run(mut state: &mut ProduceSubmitConfirm) -> Result<()> {
                 if let Err(e) = produce_local_block(&state.context).await {
                     log::warn!("failed to produce local block: {:#}", e);
                 } else {
-                    state.local_count += 1;
+                    state.set_local_count(state.local_count + 1);
                 }
             }
         }
@@ -545,6 +567,13 @@ async fn submit_block(
         store_tx.set_block_submit_tx(block_number, &tx.as_reader())?;
         store_tx.commit()?;
 
+        gw_metrics::block_producer()
+            .tx_size
+            .inc_by(tx.total_size() as u64);
+        gw_metrics::block_producer()
+            .witness_size
+            .inc_by(tx.witnesses().total_size() as u64);
+
         log::info!("generated submission transaction");
 
         tx
@@ -634,6 +663,7 @@ async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<(
             log::info!("resend transaction 0x{}", hex::encode(tx.hash()));
             send_transaction_or_check_inputs(rpc_client, tx).await?;
             last_sent = Instant::now();
+            gw_metrics::block_producer().resend.inc();
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }

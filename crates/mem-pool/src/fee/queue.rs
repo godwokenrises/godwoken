@@ -1,7 +1,10 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use gw_common::state::State;
+use gw_telemetry::traits::{
+    TelemetryContext, TelemetryContextNewSpan, TelemetrySpanExt, TraceContextExt,
+};
 use std::collections::{BTreeMap, HashMap};
-use tracing::instrument;
+use tracing::{field, instrument};
 
 /// Max queue size
 const MAX_QUEUE_SIZE: usize = 100_000;
@@ -11,12 +14,12 @@ const DROP_SIZE: usize = 100;
 use super::types::{FeeEntry, FeeItemSender};
 
 /// Txs & withdrawals queue sorted by fee rate
-pub struct FeeQueue<T> {
+pub struct FeeQueue<T: TelemetryContext> {
     // priority queue to store tx and withdrawal
     queue: BTreeMap<FeeEntry, T>,
 }
 
-impl<T> FeeQueue<T> {
+impl<T: TelemetryContext> FeeQueue<T> {
     #[inline]
     pub fn new() -> Self {
         Self {
@@ -47,8 +50,18 @@ impl<T> FeeQueue<T> {
 
         // drop items if full
         if self.is_full() {
+            #[allow(clippy::mutable_key_type)]
             if let Some(first_to_keep) = self.queue.keys().nth(DROP_SIZE + 1).cloned() {
-                self.queue = self.queue.split_off(&first_to_keep);
+                let keep = self.queue.split_off(&first_to_keep);
+                let drop = std::mem::replace(&mut self.queue, keep);
+
+                for (_, handle) in drop.iter() {
+                    if let Some(cx) = handle.telemetry_context() {
+                        let span = cx.span();
+                        span.record_error(anyhow!("queue is full").as_ref());
+                        span.set_status(gw_telemetry::trace::Status::error("queue is full"));
+                    }
+                }
             }
             log::debug!(
                 "QueueLen: {} | Fee queue is full, drop {} items",
@@ -72,7 +85,7 @@ impl<T> FeeQueue<T> {
     }
 
     /// Fetch items by fee sort
-    #[instrument(skip_all, fields(count = count))]
+    #[instrument(skip_all, err(Debug), fields(count = count, remain = field::Empty))]
     pub fn fetch(&mut self, state: &impl State, count: usize) -> Result<Vec<(FeeEntry, T)>> {
         // sorted fee items
         let mut fetched_items = Vec::with_capacity(count as usize);
@@ -82,6 +95,9 @@ impl<T> FeeQueue<T> {
 
         // Fetch item from PQ
         while let Some((entry, t)) = self.pop_last() {
+            let fetch_span: Option<_> = t.new_span(|_| tracing::info_span!("fee_queue.fetch"));
+            let _enter = fetch_span.enter();
+
             let nonce = match fetched_senders.get(&entry.sender) {
                 Some(&nonce) => nonce,
                 None => match entry.sender {
@@ -101,6 +117,13 @@ impl<T> FeeQueue<T> {
                     future_queue.push((entry, t));
                 }
                 _ => {
+                    if let Some(cx) = t.telemetry_context() {
+                        let err = anyhow!("nonce {} expect {}", entry.item.nonce(), nonce);
+                        let span = cx.span();
+                        span.record_error(err.as_ref());
+                        span.set_status(gw_telemetry::trace::Status::error("drop future nonce"));
+                    }
+
                     log::debug!(
                         "QueueLen: {} | delete entry: {:?} {} entry_nonce {} nonce {}",
                         self.len(),
@@ -123,6 +146,13 @@ impl<T> FeeQueue<T> {
             if fetched_senders.contains_key(&entry.sender) {
                 self.add(entry, t);
             } else {
+                if let Some(cx) = t.telemetry_context() {
+                    let err = anyhow!("future nonce {}", entry.item.nonce());
+                    let span = cx.span();
+                    span.record_error(err.as_ref());
+                    span.set_status(gw_telemetry::trace::Status::error("drop future nonce"));
+                }
+
                 log::debug!(
                     "QueueLen: {} | drop future entry: {:?} {} entry_nonce {}",
                     self.len(),
@@ -131,6 +161,11 @@ impl<T> FeeQueue<T> {
                     entry.item.nonce(),
                 );
             }
+        }
+
+        {
+            let span = tracing::Span::current();
+            span.record("remain", self.len());
         }
 
         log::debug!(
@@ -144,7 +179,7 @@ impl<T> FeeQueue<T> {
     }
 }
 
-impl<T> Default for FeeQueue<T> {
+impl<T: TelemetryContext> Default for FeeQueue<T> {
     #[inline]
     fn default() -> Self {
         Self::new()

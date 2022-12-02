@@ -3,7 +3,6 @@ use std::{collections::HashMap, sync::Weak};
 
 use gw_common::H256;
 use gw_types::packed::{L2Transaction, WithdrawalRequestExtra};
-use tracing::instrument;
 
 use crate::registry::Request;
 
@@ -16,12 +15,13 @@ pub struct InQueueRequestMap {
 }
 
 impl InQueueRequestMap {
-    #[instrument(skip_all, fields(hash = %faster_hex::hex_string(k.as_slice()).expect("hex_string")))]
     pub(crate) fn insert(self: &Arc<Self>, k: H256, v: Request) -> Option<InQueueRequestHandle> {
+        gw_metrics::rpc().in_queue_requests((&v).into()).inc();
+
         let mut map = self.map.write().unwrap();
         let inserted = map.insert(k, v).is_none();
+
         if inserted {
-            tracing::info!(map.len = map.len(), "inserted");
             Some(InQueueRequestHandle {
                 map: Arc::downgrade(self),
                 hash: k,
@@ -31,11 +31,11 @@ impl InQueueRequestMap {
         }
     }
 
-    #[instrument(skip_all, fields(hash = %faster_hex::hex_string(k.as_slice()).expect("hex_string")))]
     fn remove(&self, k: &H256) {
         let mut map = self.map.write().unwrap();
-        map.remove(k);
-        tracing::info!(map.len = map.len(), "removed");
+        if let Some(v) = map.remove(k) {
+            gw_metrics::rpc().in_queue_requests((&v).into()).dec();
+        }
     }
 
     pub(crate) fn get_transaction(&self, k: &H256) -> Option<L2Transaction> {
@@ -67,6 +67,15 @@ impl Drop for InQueueRequestHandle {
     fn drop(&mut self) {
         if let Some(map) = self.map.upgrade() {
             map.remove(&self.hash);
+        }
+    }
+}
+
+impl From<&Request> for gw_metrics::rpc::RequestKind {
+    fn from(req: &Request) -> gw_metrics::rpc::RequestKind {
+        match req {
+            Request::Tx(_) => gw_metrics::rpc::RequestKind::Tx,
+            Request::Withdrawal(_) => gw_metrics::rpc::RequestKind::Withdrawal,
         }
     }
 }

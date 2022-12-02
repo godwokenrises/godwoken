@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use gw_config::Config;
 use gw_db::migrate::{init_migration_factory, open_or_create_db};
+use gw_telemetry::trace;
 
 #[cfg(feature = "smt-trie")]
 mod smt_trie;
@@ -21,7 +22,7 @@ pub struct MigrateCommand {
 
 impl MigrateCommand {
     pub fn run(self) -> Result<()> {
-        let _guard = gw_block_producer::trace::init(None)?;
+        let _guard = trace::init()?;
 
         let content = std::fs::read(&self.config)
             .with_context(|| format!("read config file from {}", self.config.to_string_lossy()))?;

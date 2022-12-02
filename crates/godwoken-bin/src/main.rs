@@ -12,8 +12,9 @@ use godwoken_bin::subcommand::peer_id::{PeerIdCommand, COMMAND_PEER_ID};
 use godwoken_bin::subcommand::rewind_to_last_valid_block::{
     RewindToLastValidBlockCommand, COMMAND_REWIND_TO_LAST_VALID_BLOCK,
 };
-use gw_block_producer::{runner, trace};
+use gw_block_producer::runner;
 use gw_config::{BackendForkConfig, Config};
+use gw_telemetry::trace;
 use gw_version::Version;
 use std::{env, fs, path::Path};
 
@@ -216,18 +217,19 @@ async fn run_cli() -> Result<()> {
         Some((COMMAND_RUN, m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
-            let _guard = trace::init(config.trace)?;
+            let _guard = trace::init()?;
+            gw_metrics::init(&config);
             runner::run(config, m.is_present(ARG_SKIP_CONFIG_CHECK)).await?;
         }
         Some((COMMAND_EXAMPLE_CONFIG, m)) => {
             let path = m.value_of(ARG_OUTPUT_PATH).unwrap();
-            let _guard = trace::init(None)?;
+            let _guard = trace::init()?;
             generate_example_config(path)?;
         }
         Some((COMMAND_VERIFY_DB_BLOCK, m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
-            let _guard = trace::init(None)?;
+            let _guard = trace::init()?;
             let from_block: Option<u64> = m.value_of(ARG_FROM_BLOCK).map(str::parse).transpose()?;
             let to_block: Option<u64> = m.value_of(ARG_TO_BLOCK).map(str::parse).transpose()?;
             db_block_validator::verify(config, from_block, to_block).await?;
@@ -235,7 +237,7 @@ async fn run_cli() -> Result<()> {
         Some((COMMAND_EXPORT_BLOCK, m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
-            let _guard = trace::init(None)?;
+            let _guard = trace::init()?;
             let output = m.value_of(ARG_OUTPUT_PATH).unwrap().into();
             let from_block: Option<u64> = m.value_of(ARG_FROM_BLOCK).map(str::parse).transpose()?;
             let to_block: Option<u64> = m.value_of(ARG_TO_BLOCK).map(str::parse).transpose()?;
@@ -253,7 +255,7 @@ async fn run_cli() -> Result<()> {
         Some((COMMAND_IMPORT_BLOCK, m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
-            let _guard = trace::init(None)?;
+            let _guard = trace::init()?;
             let source = m.value_of(ARG_SOURCE_PATH).unwrap().into();
             let read_batch: Option<usize> =
                 m.value_of(ARG_READ_BATCH).map(str::parse).transpose()?;
@@ -284,7 +286,8 @@ async fn run_cli() -> Result<()> {
             // default command: start a Godwoken node
             let config_path = "./config.toml";
             let config = read_config(&config_path)?;
-            let _guard = trace::init(config.trace)?;
+            let _guard = trace::init()?;
+            gw_metrics::init(&config);
             runner::run(config, false).await?;
         }
     };

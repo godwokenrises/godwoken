@@ -51,7 +51,7 @@ use ckb_vm::{DefaultMachineBuilder, SupportMachine};
 #[cfg(not(has_asm))]
 use ckb_vm::TraceMachine;
 use gw_utils::script_log::{generate_polyjuice_system_log, GW_LOG_POLYJUICE_SYSTEM};
-use tracing::instrument;
+use tracing::{field, instrument};
 
 pub struct ApplyBlockArgs {
     pub l2block: L2Block,
@@ -190,7 +190,7 @@ impl Generator {
         &self.account_lock_manage
     }
 
-    #[instrument(skip_all, fields(backend = ?args.backend.backend_type))]
+    #[instrument(skip_all, fields(backend = ?args.backend.backend_type), err(Debug))]
     fn machine_run<S: State + CodeStore + JournalDB, C: ChainView>(
         &self,
         args: MachineRunArgs<'_, C, S>,
@@ -308,7 +308,7 @@ impl Generator {
     }
 
     /// Check withdrawal request signature
-    #[instrument(skip_all)]
+    #[instrument(skip_all, err(Debug))]
     pub fn check_withdrawal_signature<S: State + CodeStore>(
         &self,
         state: &S,
@@ -340,7 +340,7 @@ impl Generator {
     }
 
     // Check transaction signature
-    #[instrument(skip_all)]
+    #[instrument(skip_all, err(Debug))]
     pub fn check_transaction_signature<S: State + CodeStore>(
         &self,
         state: &S,
@@ -714,7 +714,22 @@ impl Generator {
     }
 
     /// execute a layer2 tx
-    #[instrument(skip_all, fields(block = block_info.number().unpack(), tx_hash = %raw_tx.hash().pack()))]
+    #[instrument(
+        skip_all,
+        err(Debug),
+        fields(
+            block_number = field::Empty,
+            tx_hash = field::Empty,
+            sender_id = field::Empty,
+            account_id = field::Empty,
+            exit_code = field::Empty,
+            execution_cycles = field::Empty,
+            virtual_cycles = field::Empty,
+            touched_keys_count = field::Empty,
+            read_data_count = field::Empty,
+            write_data_count = field::Empty,
+        )
+    )]
     pub fn execute_transaction<S: State + CodeStore + JournalDB, C: ChainView>(
         &self,
         chain: &C,
@@ -735,6 +750,18 @@ impl Generator {
         let sender_id: u32 = raw_tx.from_id().unpack();
         let nonce_before = state.get_nonce(sender_id)?;
         state.set_state_tracker(Default::default());
+
+        {
+            let span = tracing::Span::current();
+
+            let mut buf = [0u8; 32 * 2];
+            hex::encode_to_slice(raw_tx.hash(), &mut buf)?;
+
+            span.record("block_number", block_number);
+            span.record("tx_hash", std::str::from_utf8(&buf)?);
+            span.record("sender_id", sender_id);
+            span.record("account_id", account_id);
+        }
 
         let max_cycles = override_max_cycles.unwrap_or_else(|| {
             self.rollup_context
@@ -842,6 +869,23 @@ impl Generator {
                 .collect(),
             debug_log_buf: run_context.debug_log_buf,
         };
+
+        // Record run result
+        {
+            let span = tracing::Span::current();
+            span.record("exit_code", r.exit_code);
+            if r.exit_code != 0 {
+                tracing::error!(error = "non zero exit code")
+            }
+
+            let touched_keys_count = { state_tracker.touched_keys().lock().unwrap().len() };
+            span.record("execution_cycles", r.cycles.execution);
+            span.record("virtual_cycles", r.cycles.r#virtual);
+            span.record("touched_keys_count", touched_keys_count);
+            span.record("read_data_count", r.read_data_hashes.len());
+            span.record("write_data_count", r.write_data_hashes.len());
+        }
+
         Ok(r)
     }
 
@@ -863,6 +907,7 @@ impl Generator {
     }
 
     // Handle failed transaction
+    #[instrument(skip_all, err(Debug))]
     fn handle_failed_transaction<S: State + CodeStore + JournalDB>(
         &self,
         state: &mut S,

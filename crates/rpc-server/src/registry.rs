@@ -41,6 +41,7 @@ use gw_store::{
     chain_view::ChainView, mem_pool_state::MemPoolState, traits::chain_store::ChainStore,
     CfMemStat, Store,
 };
+use gw_telemetry::traits::{TelemetryContext, TelemetryContextNewSpan, TelemetrySpanExt};
 use gw_traits::CodeStore;
 use gw_types::packed::RawL2Transaction;
 use gw_types::{
@@ -127,6 +128,24 @@ pub trait TestModeRPC {
     async fn produce_block(&self, payload: TestModePayload) -> Result<()>;
 }
 
+pub struct RequestContext {
+    _in_queue_handle: InQueueRequestHandle,
+    trace: gw_telemetry::Context,
+    in_queue_span: tracing::Span,
+}
+
+impl TelemetryContext for RequestContext {
+    fn telemetry_context(&self) -> Option<&gw_telemetry::Context> {
+        Some(&self.trace)
+    }
+}
+
+impl Drop for RequestContext {
+    fn drop(&mut self) {
+        let _drop = self.trace.new_span(tracing::info_span!("drop")).entered();
+    }
+}
+
 pub struct ExecutionTransactionContext {
     mem_pool: MemPool,
     generator: Arc<Generator>,
@@ -139,7 +158,7 @@ pub struct ExecutionTransactionContext {
 pub struct SubmitTransactionContext {
     in_queue_request_map: Option<Arc<InQueueRequestMap>>,
     generator: Arc<Generator>,
-    submit_tx: mpsc::Sender<(InQueueRequestHandle, Request)>,
+    submit_tx: mpsc::Sender<(Request, RequestContext)>,
     mem_pool_state: Arc<MemPoolState>,
     rate_limiter: Option<SendTransactionRateLimiter>,
     rate_limit_config: Option<RPCRateLimit>,
@@ -173,7 +192,7 @@ pub struct Registry {
     mem_pool_config: MemPoolConfig,
     backend_info: Vec<BackendInfo>,
     node_mode: NodeMode,
-    submit_tx: mpsc::Sender<(InQueueRequestHandle, Request)>,
+    submit_tx: mpsc::Sender<(Request, RequestContext)>,
     rpc_client: RPCClient,
     send_tx_rate_limit: Option<RPCRateLimit>,
     server_config: RPCServerConfig,
@@ -426,8 +445,8 @@ impl Request {
 
 struct RequestSubmitter {
     mem_pool: Arc<Mutex<gw_mem_pool::pool::MemPool>>,
-    submit_rx: mpsc::Receiver<(InQueueRequestHandle, Request)>,
-    queue: FeeQueue<InQueueRequestHandle>,
+    submit_rx: mpsc::Receiver<(Request, RequestContext)>,
+    queue: FeeQueue<RequestContext>,
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     generator: Arc<Generator>,
     mem_pool_state: Arc<MemPoolState>,
@@ -541,14 +560,20 @@ impl RequestSubmitter {
             // wait next tx if queue is empty
             if queue.is_empty() {
                 // blocking current task until we receive a tx
-                let (handle, req) = match self.submit_rx.recv().await {
+                let (req, mut ctx) = match self.submit_rx.recv().await {
                     Some(req) => req,
                     None => {
                         log::error!("rpc submit tx is closed");
                         return;
                     }
                 };
+
+                gw_telemetry::with_span_ref(&ctx.in_queue_span, |span| span.end());
+                ctx.in_queue_span = ctx.trace.new_span(tracing::info_span!("fee_queue.add"));
+                let _entered = ctx.in_queue_span.clone().entered();
+
                 let state = self.mem_pool_state.load_state_db();
+
                 let kind = req.kind();
                 let hash = req.hash();
                 let dynamic_config_manager = self.dynamic_config_manager.load();
@@ -562,7 +587,7 @@ impl RequestSubmitter {
                                 hash,
                             );
                         } else {
-                            queue.add(entry, handle);
+                            queue.add(entry, ctx);
                         }
                     }
                     Err(err) => {
@@ -578,7 +603,11 @@ impl RequestSubmitter {
 
             // push txs to fee priority queue
             let state = self.mem_pool_state.load_state_db();
-            while let Ok((handle, req)) = self.submit_rx.try_recv() {
+            while let Ok((req, mut ctx)) = self.submit_rx.try_recv() {
+                gw_telemetry::with_span_ref(&ctx.in_queue_span, |span| span.end());
+                ctx.in_queue_span = ctx.trace.new_span(tracing::info_span!("fee_queue.add"));
+                let _entered = ctx.in_queue_span.clone().entered();
+
                 let kind = req.kind();
                 let hash = req.hash();
                 let dynamic_config_manager = self.dynamic_config_manager.load();
@@ -592,7 +621,7 @@ impl RequestSubmitter {
                                 hash,
                             );
                         } else {
-                            queue.add(entry, handle);
+                            queue.add(entry, ctx);
                         }
                     }
                     Err(err) => {
@@ -665,7 +694,11 @@ impl RequestSubmitter {
                 let state = self.mem_pool_state.load_state_db();
                 let mut block_cycles_limit_reached = false;
 
-                for (entry, handle) in items {
+                for (entry, ctx) in items {
+                    gw_telemetry::with_span_ref(&ctx.in_queue_span, |span| span.end());
+                    let push_span = ctx.new_span(|_| tracing::info_span!("mem_pool.push"));
+                    let _entered = push_span.enter();
+
                     if let FeeItemKind::Tx = entry.item.kind() {
                         if !block_cycles_limit_reached
                             && entry.cycles_limit > mem_pool.cycles_pool().available_cycles()
@@ -677,7 +710,7 @@ impl RequestSubmitter {
                         }
 
                         if block_cycles_limit_reached {
-                            queue.add(entry, handle);
+                            queue.add(entry, ctx);
                             continue;
                         }
                     }
@@ -722,7 +755,7 @@ impl RequestSubmitter {
                             log::info!("mem block cycles limit reached for tx {}", hash);
 
                             block_cycles_limit_reached = true;
-                            queue.add(entry, handle);
+                            queue.add(entry, ctx);
 
                             continue;
                         }
@@ -770,6 +803,7 @@ impl TryFrom<u8> for GetTxVerbose {
     }
 }
 
+#[instrument(skip_all)]
 async fn get_transaction(
     Params(param): Params<GetTxParams>,
     store: Data<Store>,
@@ -820,6 +854,7 @@ async fn get_transaction(
     }))
 }
 
+#[instrument(skip_all)]
 async fn get_pending_tx_hashes(store: Data<Store>) -> Result<Vec<JsonH256>, RpcError> {
     let snap = store.get_snapshot();
     let tx_hashes = snap
@@ -829,6 +864,7 @@ async fn get_pending_tx_hashes(store: Data<Store>) -> Result<Vec<JsonH256>, RpcE
     Ok(tx_hashes)
 }
 
+#[instrument(skip_all)]
 async fn is_request_in_queue(
     Params((hash,)): Params<(JsonH256,)>,
     in_queue_request_map: Data<Option<Arc<InQueueRequestMap>>>,
@@ -840,6 +876,7 @@ async fn is_request_in_queue(
         .map_or(false, |m| m.contains(&hash)))
 }
 
+#[instrument(skip_all)]
 async fn get_block_committed_info(
     Params((block_hash,)): Params<(JsonH256,)>,
     rpc_client: Data<RPCClient>,
@@ -874,6 +911,7 @@ async fn get_block_committed_info(
     }
 }
 
+#[instrument(skip_all)]
 async fn get_block(
     Params((block_hash,)): Params<(JsonH256,)>,
     store: Data<Store>,
@@ -925,7 +963,7 @@ async fn get_block(
 //
 // Instead if we always read from `MemPoolState`, it is much less likely that we
 // get an error response when getting scripts for accounts in the new block.
-
+#[instrument(skip_all)]
 async fn get_block_by_number(
     Params((block_number,)): Params<(gw_jsonrpc_types::ckb_jsonrpc_types::Uint64,)>,
     mem_pool_state: Data<Arc<MemPoolState>>,
@@ -943,6 +981,7 @@ async fn get_block_by_number(
     Ok(block_opt)
 }
 
+#[instrument(skip_all)]
 async fn get_block_hash(
     Params((block_number,)): Params<(gw_jsonrpc_types::ckb_jsonrpc_types::Uint64,)>,
     mem_pool_state: Data<Arc<MemPoolState>>,
@@ -955,12 +994,14 @@ async fn get_block_hash(
     Ok(hash_opt)
 }
 
+#[instrument(skip_all)]
 async fn get_tip_block_hash(mem_pool_state: Data<Arc<MemPoolState>>) -> Result<JsonH256> {
     let mem_store = mem_pool_state.load_mem_store();
     let tip_block_hash = mem_store.get_last_valid_tip_block_hash()?;
     Ok(to_jsonh256(tip_block_hash))
 }
 
+#[instrument(skip_all)]
 async fn get_transaction_receipt(
     Params((tx_hash,)): Params<(JsonH256,)>,
     store: Data<Store>,
@@ -980,6 +1021,7 @@ async fn get_transaction_receipt(
         .map(Into::into))
 }
 
+#[instrument(skip_all, err(Debug))]
 fn verify_sender_balance<S: State + CodeStore>(
     ctx: &RollupContext,
     state: &S,
@@ -1051,7 +1093,10 @@ async fn execute_l2transaction(
         }
     }
 
+    let execution_span = tracing::info_span!("execution");
     let mut run_result = tokio::task::spawn_blocking(move || {
+        let _entered = execution_span.entered();
+
         let db = ctx.store.get_snapshot();
         let tip_block_hash = db.get_last_valid_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
@@ -1099,6 +1144,9 @@ async fn execute_l2transaction(
         message: err.to_string(),
         data: None,
     })?;
+    gw_metrics::rpc()
+        .execute_transactions(run_result.exit_code)
+        .inc();
 
     if run_result.exit_code != 0 {
         let receipt = gw_types::offchain::ErrorTxReceipt {
@@ -1212,7 +1260,10 @@ async fn execute_raw_l2transaction(
     }
 
     // execute tx in task
+    let execution_span = tracing::info_span!("execution");
     let mut run_result = tokio::task::spawn_blocking(move || {
+        let _entered = execution_span.entered();
+
         let eth_recover = &ctx.polyjuice_sender_recover.eth;
         let rollup_context = ctx.generator.rollup_context();
         let db = &db_txn;
@@ -1269,6 +1320,9 @@ async fn execute_raw_l2transaction(
         Result::<_, anyhow::Error>::Ok(run_result)
     })
     .await??;
+    gw_metrics::rpc()
+        .execute_transactions(run_result.exit_code)
+        .inc();
 
     if run_result.exit_code != 0 {
         let receipt = gw_types::offchain::ErrorTxReceipt {
@@ -1421,7 +1475,14 @@ async fn submit_l2transaction(
         .insert(tx_hash_in_queue, request.clone())
     {
         // Send if the request wasn't already in the map.
-        permit.send((handle, request));
+        let in_queue_span = tracing::info_span!("submit_queue.send");
+        let _entered = in_queue_span.clone().entered();
+        let ctx = RequestContext {
+            _in_queue_handle: handle,
+            trace: gw_telemetry::current_context(),
+            in_queue_span,
+        };
+        permit.send((request, ctx));
     }
 
     Ok(tx_hash_json)
@@ -1436,7 +1497,7 @@ async fn submit_withdrawal_request(
     generator: Data<Generator>,
     store: Data<Store>,
     in_queue_request_map: Data<Option<Arc<InQueueRequestMap>>>,
-    submit_tx: Data<mpsc::Sender<(InQueueRequestHandle, Request)>>,
+    submit_tx: Data<mpsc::Sender<(Request, RequestContext)>>,
 ) -> Result<JsonH256, RpcError> {
     let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = packed::WithdrawalRequestExtra::from_slice(&withdrawal_bytes)?;
@@ -1490,7 +1551,14 @@ async fn submit_withdrawal_request(
         .insert(withdrawal_hash.into(), request.clone())
     {
         // Send if the request wasn't already in the map.
-        permit.send((handle, request));
+        let in_queue_span = tracing::info_span!("submit_queue.send");
+        let _entered = in_queue_span.clone().entered();
+        let ctx = RequestContext {
+            _in_queue_handle: handle,
+            trace: gw_telemetry::current_context(),
+            in_queue_span,
+        };
+        permit.send((request, ctx));
     }
 
     Ok(withdrawal_hash.into())
@@ -1522,6 +1590,7 @@ impl TryFrom<u8> for GetWithdrawalVerbose {
     }
 }
 
+#[instrument(skip_all)]
 async fn get_withdrawal(
     Params(param): Params<GetWithdrawalParams>,
     store: Data<Store>,
@@ -1602,6 +1671,7 @@ enum GetBalanceParams {
     Number((JsonBytes, AccountID, Option<GwUint64>)),
 }
 
+#[instrument(skip_all)]
 async fn get_balance(
     Params(params): Params<GetBalanceParams>,
     store: Data<Store>,
@@ -1637,6 +1707,7 @@ enum GetStorageAtParams {
     Number((AccountID, JsonH256, Option<GwUint64>)),
 }
 
+#[instrument(skip_all)]
 async fn get_storage_at(
     Params(params): Params<GetStorageAtParams>,
     store: Data<Store>,
@@ -1665,6 +1736,7 @@ async fn get_storage_at(
     Ok(json_value)
 }
 
+#[instrument(skip_all)]
 async fn get_account_id_by_script_hash(
     Params((script_hash,)): Params<(JsonH256,)>,
     mem_pool_state: Data<Arc<MemPoolState>>,
@@ -1688,6 +1760,7 @@ enum GetNonceParams {
     Number((AccountID, Option<GwUint64>)),
 }
 
+#[instrument(skip_all)]
 async fn get_nonce(
     Params(params): Params<GetNonceParams>,
     store: Data<Store>,
@@ -1713,6 +1786,7 @@ async fn get_nonce(
     Ok(nonce.into())
 }
 
+#[instrument(skip_all)]
 async fn get_script(
     Params((script_hash,)): Params<(JsonH256,)>,
     mem_pool_state: Data<Arc<MemPoolState>>,
@@ -1725,6 +1799,7 @@ async fn get_script(
     Ok(script_opt)
 }
 
+#[instrument(skip_all)]
 async fn get_script_hash(
     Params((account_id,)): Params<(AccountID,)>,
     mem_pool_state: Data<Arc<MemPoolState>>,
@@ -1734,6 +1809,7 @@ async fn get_script_hash(
     Ok(to_jsonh256(script_hash))
 }
 
+#[instrument(skip_all)]
 async fn get_script_hash_by_registry_address(
     Params((serialized_address,)): Params<(JsonBytes,)>,
     mem_pool_state: Data<Arc<MemPoolState>>,
@@ -1746,6 +1822,7 @@ async fn get_script_hash_by_registry_address(
     Ok(script_hash_opt.map(to_jsonh256))
 }
 
+#[instrument(skip_all)]
 async fn get_registry_address_by_script_hash(
     Params((script_hash, registry_id)): Params<(JsonH256, Uint32)>,
     mem_pool_state: Data<Arc<MemPoolState>>,
@@ -1764,6 +1841,7 @@ enum GetDataParams {
     Number((JsonH256, Option<GwUint64>)),
 }
 
+#[instrument(skip_all)]
 async fn get_data(
     Params(params): Params<GetDataParams>,
     mem_pool_state: Data<Arc<MemPoolState>>,
@@ -1781,6 +1859,7 @@ async fn get_data(
     Ok(data_opt)
 }
 
+#[instrument(skip_all)]
 async fn compute_l2_sudt_script_hash(
     Params((l1_sudt_script_hash,)): Params<(JsonH256,)>,
     generator: Data<Generator>,
@@ -1993,6 +2072,7 @@ pub fn to_rpc_node_mode(node_mode: &NodeMode) -> RpcNodeMode {
     }
 }
 
+#[instrument(skip_all)]
 async fn get_node_info(
     node_mode: Data<NodeMode>,
     backend_info: Data<Vec<BackendInfo>>,
@@ -2016,6 +2096,7 @@ async fn get_node_info(
     })
 }
 
+#[instrument(skip_all)]
 async fn get_last_submitted_info(store: Data<Store>) -> Result<LastL2BlockCommittedInfo> {
     let last_submitted = store
         .get_last_submitted_block_number_hash()
@@ -2030,6 +2111,7 @@ async fn get_last_submitted_info(store: Data<Store>) -> Result<LastL2BlockCommit
     })
 }
 
+#[instrument(skip_all)]
 async fn get_fee_config(
     config: Data<Arc<ArcSwap<DynamicConfigManager>>>,
 ) -> Result<gw_jsonrpc_types::godwoken::FeeConfig> {
@@ -2043,6 +2125,7 @@ async fn get_fee_config(
     Ok(fee_config)
 }
 
+#[instrument(skip_all)]
 async fn get_mem_pool_state_root(
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<JsonH256, RpcError> {
@@ -2051,6 +2134,7 @@ async fn get_mem_pool_state_root(
     Ok(to_jsonh256(root))
 }
 
+#[instrument(skip_all)]
 async fn get_mem_pool_state_ready(
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<bool, RpcError> {

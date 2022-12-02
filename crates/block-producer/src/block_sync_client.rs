@@ -12,6 +12,10 @@ use gw_mem_pool::pool::MemPool;
 use gw_p2p_network::{FnSpawn, P2P_SYNC_PROTOCOL, P2P_SYNC_PROTOCOL_NAME};
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{traits::chain_store::ChainStore, Store};
+use gw_telemetry::{
+    trace::{SpanContext, SpanId, TraceFlags, TraceId, TraceState},
+    traits::{TelemetryContextNewSpan, TraceContextExt},
+};
 use gw_types::{
     packed::{
         BlockSync, BlockSyncReader, BlockSyncUnion, NumberHash, P2PSyncRequest,
@@ -20,7 +24,7 @@ use gw_types::{
     prelude::Unpack,
 };
 use gw_utils::{compression::StreamDecoder, liveness::Liveness};
-use opentelemetry::trace::{SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState};
+
 use tentacle::{
     builder::MetaBuilder,
     service::{ProtocolMeta, ServiceAsyncControl},
@@ -28,7 +32,6 @@ use tentacle::{
 };
 use tokio::{sync::Mutex, task::block_in_place};
 use tracing::{info_span, Instrument};
-use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::{
     chain_updater::ChainUpdater,
@@ -168,12 +171,14 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
                         if buffer.len() % 128 == 0 {
                             log::info!("receive buffer: {}", buffer.len());
                         }
+                        gw_metrics::block_producer().sync_buffer_len.set(buffer.len() as u64);
                     } else {
                         stream_ended = true;
                     }
                 }
                 reserve_result = tx.reserve(), if !buffer.is_empty() => {
                     reserve_result?.send(buffer.pop_front().unwrap());
+                    gw_metrics::block_producer().sync_buffer_len.set(buffer.len() as u64);
                 }
                 // No more messages - buffer is empty and stream is ended.
                 else => break,
@@ -192,6 +197,9 @@ async fn run_with_p2p_stream(client: &mut BlockSyncClient, stream: &mut P2PStrea
                     _ => true,
                 });
                 log::info!("receive buffer: {}", buffer.len());
+                gw_metrics::block_producer()
+                    .sync_buffer_len
+                    .set(buffer.len() as u64);
             }
         }
         anyhow::Ok(())
@@ -231,8 +239,9 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
                 true,
                 TraceState::default(),
             );
-            let span = info_span!("handle_local_block");
-            span.set_parent(opentelemetry::Context::current().with_remote_span_context(span_cx));
+            let span = gw_telemetry::current_context()
+                .with_remote_span_context(span_cx)
+                .new_span(info_span!("handle_local_block"));
             handle_local_block(client, l).instrument(span).await?;
             client.liveness.tick();
         }
@@ -292,8 +301,9 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
                 true,
                 TraceState::default(),
             );
-            let span = info_span!("handle_push_transaction");
-            span.set_parent(opentelemetry::Context::current().with_remote_span_context(span_cx));
+            let span = gw_telemetry::current_context()
+                .with_remote_span_context(span_cx)
+                .new_span(info_span!("handle_push_transaction"));
 
             let tx = push_tx.transaction();
             log::info!("received L2Transaction 0x{}", hex::encode(tx.hash()));

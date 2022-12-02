@@ -37,7 +37,7 @@ impl<'a, S: State + CodeStore> TransactionVerifier<'a, S> {
     }
     /// verify transaction
     /// Notice this function do not perform signature check
-    #[instrument(skip_all)]
+    #[instrument(skip_all, err(Debug))]
     pub fn verify(
         &self,
         tx: &L2Transaction,

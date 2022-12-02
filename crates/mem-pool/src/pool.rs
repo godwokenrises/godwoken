@@ -312,7 +312,7 @@ impl MemPool {
     }
 
     /// Push a layer2 tx into pool
-    #[instrument(skip_all, fields(tx_hash = %tx.hash().pack()))]
+    #[instrument(skip_all, err(Debug))]
     fn push_transaction_with_db(
         &mut self,
         db: &StoreTransaction,
@@ -374,7 +374,7 @@ impl MemPool {
     }
 
     /// Push a withdrawal request into pool
-    #[instrument(skip_all, fields(withdrawal = %withdrawal.hash().pack()))]
+    #[instrument(skip_all, err(Debug), fields(withdrawal = %withdrawal.hash().pack()))]
     pub async fn push_withdrawal_request(
         &mut self,
         withdrawal: WithdrawalRequestExtra,

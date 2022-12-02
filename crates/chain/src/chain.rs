@@ -1060,6 +1060,9 @@ impl Chain {
         };
 
         // update chain
+        let deposit_info_vec_len = deposit_info_vec.len() as u64;
+        let withdrawals_len = withdrawals.len() as u64;
+        let tx_receipts_len = tx_receipts.len() as u64;
         db.insert_block(
             l2block.clone(),
             global_state.clone(),
@@ -1071,6 +1074,12 @@ impl Chain {
         )?;
         db.insert_asset_scripts(deposit_asset_scripts)?;
         db.attach_block(l2block.clone())?;
+
+        // Update metrics.
+        gw_metrics::chain().block_height.set(block_number);
+        gw_metrics::chain().deposits.inc_by(deposit_info_vec_len);
+        gw_metrics::chain().withdrawals.inc_by(withdrawals_len);
+        gw_metrics::chain().transactions.inc_by(tx_receipts_len);
 
         self.local_state.tip = l2block;
         self.local_state.last_global_state = global_state;
