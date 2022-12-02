@@ -1,4 +1,5 @@
 use ckb_fixed_hash::{H160, H256};
+pub use gw_jsonrpc_types::godwoken::GaslessTxSupportConfig;
 use gw_jsonrpc_types::{
     blockchain::{CellDep, Script},
     ckb_jsonrpc_types::JsonBytes,
@@ -278,12 +279,6 @@ impl Default for DebugConfig {
             enable_debug_rpc: false,
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub struct GaslessTxSupportConfig {
-    /// Gasless tx entrypoint address.
-    pub entrypoint_address: H160,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
