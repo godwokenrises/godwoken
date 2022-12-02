@@ -199,6 +199,7 @@ pub struct Registry {
     server_config: RPCServerConfig,
     chain_config: ChainConfig,
     consensus_config: ConsensusConfig,
+    gasless_tx_support_config: Option<GaslessTxSupportConfig>,
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     mem_pool_state: Arc<MemPoolState>,
     in_queue_request_map: Option<Arc<InQueueRequestMap>>,
@@ -260,7 +261,7 @@ impl Registry {
                 store: store.clone(),
                 polyjuice_sender_recover: Arc::clone(&polyjuice_sender_recover),
                 mem_pool_config: mem_pool_config.clone(),
-                gasless_tx_support_config,
+                gasless_tx_support_config: gasless_tx_support_config.clone(),
             };
             tokio::spawn(submitter.in_background());
         }
@@ -281,6 +282,7 @@ impl Registry {
             server_config,
             chain_config,
             consensus_config,
+            gasless_tx_support_config,
             dynamic_config_manager,
             mem_pool_state,
             in_queue_request_map,
@@ -329,6 +331,7 @@ impl Registry {
             .with_data(Data::new(self.node_mode))
             .with_data(Data::new(self.in_queue_request_map))
             .with_data(Data::new(self.submit_tx))
+            .with_data(Data::new(self.gasless_tx_support_config))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -2097,11 +2100,12 @@ pub fn to_rpc_node_mode(node_mode: &NodeMode) -> RpcNodeMode {
     }
 }
 
+// I know the types are getting quite ugly. Will Refactor later.
 #[instrument(skip_all)]
 async fn get_node_info(
     node_mode: Data<NodeMode>,
     backend_info: Data<Vec<BackendInfo>>,
-    rollup_config: Data<RollupConfig>,
+    (rollup_config, gasless_tx_support): (Data<RollupConfig>, Data<Option<GaslessTxSupportConfig>>),
     (consensus_config, chain_config): (Data<ConsensusConfig>, Data<ChainConfig>),
 ) -> Result<NodeInfo> {
     let mode = to_rpc_node_mode(&node_mode);
@@ -2118,6 +2122,7 @@ async fn get_node_info(
         rollup_cell,
         gw_scripts,
         eoa_scripts,
+        gasless_tx_support: gasless_tx_support.clone(),
     })
 }
 

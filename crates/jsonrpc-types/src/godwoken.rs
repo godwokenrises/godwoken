@@ -1,6 +1,6 @@
 use crate::blockchain::Script;
 use anyhow::{anyhow, Error as JsonError};
-use ckb_fixed_hash::H256;
+use ckb_fixed_hash::{H160, H256};
 use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32, Uint64};
 use gw_types::{bytes::Bytes, offchain, packed, prelude::*};
 use serde::{Deserialize, Serialize};
@@ -1172,6 +1172,7 @@ pub struct NodeInfo {
     pub gw_scripts: Vec<GwScript>,
     pub rollup_cell: RollupCell,
     pub rollup_config: NodeRollupConfig,
+    pub gasless_tx_support: Option<GaslessTxSupportConfig>,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
@@ -1279,6 +1280,13 @@ impl Default for EoaScriptType {
         EoaScriptType::Unknown
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, Hash)]
+pub struct GaslessTxSupportConfig {
+    /// Gasless tx entrypoint address.
+    pub entrypoint_address: H160,
+}
+
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ErrorTxReceipt {
