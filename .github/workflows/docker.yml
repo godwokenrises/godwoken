@@ -132,7 +132,7 @@ jobs:
           path: |
             target/release/godwoken
             target/release/gw-tools
-          key: component.godwoken-${{ steps.prepare.outputs.godwoken-sha1 }}
+          key: component.godwoken-crates-${{ hashFiles('crates/**') }}
       - name: Cache Godwoken target directory
         if: steps.godwoken-cache.outputs.cache-hit != 'true'
         uses: actions/cache@v3
