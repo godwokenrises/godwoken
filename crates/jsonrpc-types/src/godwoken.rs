@@ -1172,6 +1172,9 @@ pub struct NodeInfo {
     pub gw_scripts: Vec<GwScript>,
     pub rollup_cell: RollupCell,
     pub rollup_config: NodeRollupConfig,
+    // Web3 as of 1.9.0 cannot handle null values in node info. So we omit this
+    // field instead of saying it's null.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub gasless_tx_support: Option<GaslessTxSupportConfig>,
 }
 
