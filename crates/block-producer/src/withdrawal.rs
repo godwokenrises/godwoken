@@ -434,7 +434,7 @@ mod test {
         // Output should only change lock to owner lock
         let last_finalized_timepoint = Timepoint::from_block_number(100);
         let global_state = GlobalState::new_builder()
-            .last_finalized_block_number(last_finalized_timepoint.full_value().pack())
+            .last_finalized_timepoint(last_finalized_timepoint.full_value().pack())
             .build();
 
         let rollup_type = Script::new_builder()

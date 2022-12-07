@@ -70,7 +70,7 @@ async fn test_export_import_block() {
 
     let last_finalized_timepoint = Timepoint::from_block_number(100);
     let global_state = GlobalState::new_builder()
-        .last_finalized_block_number(last_finalized_timepoint.full_value().pack())
+        .last_finalized_timepoint(last_finalized_timepoint.full_value().pack())
         .rollup_config_hash(rollup_config.hash().pack())
         .build();
 
