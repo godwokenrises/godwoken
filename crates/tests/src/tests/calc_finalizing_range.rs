@@ -84,7 +84,7 @@ async fn test_calc_finalizing_range() {
                         .build(),
                 )
                 .tip_block_timestamp(timestamp.pack())
-                .last_finalized_block_number(last_finalized_timepoint.full_value().pack())
+                .last_finalized_timepoint(last_finalized_timepoint.full_value().pack())
                 .build()
         })
         .collect::<Vec<_>>();

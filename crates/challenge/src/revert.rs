@@ -128,7 +128,7 @@ impl<'a> Revert<'a> {
             .block(block_merkle_state)
             .tip_block_hash(first_reverted_block.parent_block_hash())
             .tip_block_timestamp(self.revert_witness.new_tip_block.timestamp())
-            .last_finalized_block_number(last_finalized_timepoint.full_value().pack())
+            .last_finalized_timepoint(last_finalized_timepoint.full_value().pack())
             .reverted_block_root(self.post_reverted_block_root.pack())
             .status(running_status.into())
             .build();

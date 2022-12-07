@@ -45,7 +45,7 @@ fn test_unlock_withdrawal_via_finalize_by_input_owner_cell() {
     let rollup_cell = {
         let global_state = GlobalState::new_builder()
             .rollup_config_hash(verify_ctx.rollup_config().hash().pack())
-            .last_finalized_block_number(last_finalized_timepoint.full_value().pack())
+            .last_finalized_timepoint(last_finalized_timepoint.full_value().pack())
             .block(block_merkle_state)
             .build();
 
@@ -193,7 +193,7 @@ fn test_unlock_withdrawal_via_finalize_by_switch_indexed_output_to_owner_lock() 
     let rollup_cell = {
         let global_state = GlobalState::new_builder()
             .rollup_config_hash(verify_ctx.rollup_config().hash().pack())
-            .last_finalized_block_number(last_finalized_timepoint.full_value().pack())
+            .last_finalized_timepoint(last_finalized_timepoint.full_value().pack())
             .block(block_merkle_state)
             .build();
 
@@ -371,7 +371,7 @@ fn test_unlock_withdrawal_via_finalize_fallback_to_input_owner_cell() {
     let rollup_cell = {
         let global_state = GlobalState::new_builder()
             .rollup_config_hash(verify_ctx.rollup_config().hash().pack())
-            .last_finalized_block_number(last_finalized_timepoint.full_value().pack())
+            .last_finalized_timepoint(last_finalized_timepoint.full_value().pack())
             .block(block_merkle_state)
             .build();
 

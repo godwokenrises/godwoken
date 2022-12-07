@@ -329,7 +329,7 @@ impl MockBlockParam {
             .account(post_account)
             .block(post_block)
             .tip_block_hash(raw_block.hash().pack())
-            .last_finalized_block_number(last_finalized_timepoint.full_value().pack())
+            .last_finalized_timepoint(last_finalized_timepoint.full_value().pack())
             .reverted_block_root(self.reverted_block_root.clone())
             .rollup_config_hash(self.rollup_config_hash.clone())
             .status((Status::Halting as u8).into())

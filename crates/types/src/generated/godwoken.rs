@@ -632,8 +632,8 @@ impl ::core::fmt::Display for GlobalStateV0 {
         write!(
             f,
             ", {}: {}",
-            "last_finalized_block_number",
-            self.last_finalized_block_number()
+            "last_finalized_timepoint",
+            self.last_finalized_timepoint()
         )?;
         write!(f, ", {}: {}", "status", self.status())?;
         write!(f, " }}")
@@ -672,7 +672,7 @@ impl GlobalStateV0 {
     pub fn tip_block_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(140..172))
     }
-    pub fn last_finalized_block_number(&self) -> Uint64 {
+    pub fn last_finalized_timepoint(&self) -> Uint64 {
         Uint64::new_unchecked(self.0.slice(172..180))
     }
     pub fn status(&self) -> Byte {
@@ -710,7 +710,7 @@ impl molecule::prelude::Entity for GlobalStateV0 {
             .block(self.block())
             .reverted_block_root(self.reverted_block_root())
             .tip_block_hash(self.tip_block_hash())
-            .last_finalized_block_number(self.last_finalized_block_number())
+            .last_finalized_timepoint(self.last_finalized_timepoint())
             .status(self.status())
     }
 }
@@ -746,8 +746,8 @@ impl<'r> ::core::fmt::Display for GlobalStateV0Reader<'r> {
         write!(
             f,
             ", {}: {}",
-            "last_finalized_block_number",
-            self.last_finalized_block_number()
+            "last_finalized_timepoint",
+            self.last_finalized_timepoint()
         )?;
         write!(f, ", {}: {}", "status", self.status())?;
         write!(f, " }}")
@@ -772,7 +772,7 @@ impl<'r> GlobalStateV0Reader<'r> {
     pub fn tip_block_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[140..172])
     }
-    pub fn last_finalized_block_number(&self) -> Uint64Reader<'r> {
+    pub fn last_finalized_timepoint(&self) -> Uint64Reader<'r> {
         Uint64Reader::new_unchecked(&self.as_slice()[172..180])
     }
     pub fn status(&self) -> ByteReader<'r> {
@@ -807,7 +807,7 @@ pub struct GlobalStateV0Builder {
     pub(crate) block: BlockMerkleState,
     pub(crate) reverted_block_root: Byte32,
     pub(crate) tip_block_hash: Byte32,
-    pub(crate) last_finalized_block_number: Uint64,
+    pub(crate) last_finalized_timepoint: Uint64,
     pub(crate) status: Byte,
 }
 impl GlobalStateV0Builder {
@@ -834,8 +834,8 @@ impl GlobalStateV0Builder {
         self.tip_block_hash = v;
         self
     }
-    pub fn last_finalized_block_number(mut self, v: Uint64) -> Self {
-        self.last_finalized_block_number = v;
+    pub fn last_finalized_timepoint(mut self, v: Uint64) -> Self {
+        self.last_finalized_timepoint = v;
         self
     }
     pub fn status(mut self, v: Byte) -> Self {
@@ -855,7 +855,7 @@ impl molecule::prelude::Builder for GlobalStateV0Builder {
         writer.write_all(self.block.as_slice())?;
         writer.write_all(self.reverted_block_root.as_slice())?;
         writer.write_all(self.tip_block_hash.as_slice())?;
-        writer.write_all(self.last_finalized_block_number.as_slice())?;
+        writer.write_all(self.last_finalized_timepoint.as_slice())?;
         writer.write_all(self.status.as_slice())?;
         Ok(())
     }
@@ -904,8 +904,8 @@ impl ::core::fmt::Display for GlobalState {
         write!(
             f,
             ", {}: {}",
-            "last_finalized_block_number",
-            self.last_finalized_block_number()
+            "last_finalized_timepoint",
+            self.last_finalized_timepoint()
         )?;
         write!(f, ", {}: {}", "status", self.status())?;
         write!(f, ", {}: {}", "version", self.version())?;
@@ -948,7 +948,7 @@ impl GlobalState {
     pub fn tip_block_timestamp(&self) -> Uint64 {
         Uint64::new_unchecked(self.0.slice(172..180))
     }
-    pub fn last_finalized_block_number(&self) -> Uint64 {
+    pub fn last_finalized_timepoint(&self) -> Uint64 {
         Uint64::new_unchecked(self.0.slice(180..188))
     }
     pub fn status(&self) -> Byte {
@@ -990,7 +990,7 @@ impl molecule::prelude::Entity for GlobalState {
             .reverted_block_root(self.reverted_block_root())
             .tip_block_hash(self.tip_block_hash())
             .tip_block_timestamp(self.tip_block_timestamp())
-            .last_finalized_block_number(self.last_finalized_block_number())
+            .last_finalized_timepoint(self.last_finalized_timepoint())
             .status(self.status())
             .version(self.version())
     }
@@ -1033,8 +1033,8 @@ impl<'r> ::core::fmt::Display for GlobalStateReader<'r> {
         write!(
             f,
             ", {}: {}",
-            "last_finalized_block_number",
-            self.last_finalized_block_number()
+            "last_finalized_timepoint",
+            self.last_finalized_timepoint()
         )?;
         write!(f, ", {}: {}", "status", self.status())?;
         write!(f, ", {}: {}", "version", self.version())?;
@@ -1063,7 +1063,7 @@ impl<'r> GlobalStateReader<'r> {
     pub fn tip_block_timestamp(&self) -> Uint64Reader<'r> {
         Uint64Reader::new_unchecked(&self.as_slice()[172..180])
     }
-    pub fn last_finalized_block_number(&self) -> Uint64Reader<'r> {
+    pub fn last_finalized_timepoint(&self) -> Uint64Reader<'r> {
         Uint64Reader::new_unchecked(&self.as_slice()[180..188])
     }
     pub fn status(&self) -> ByteReader<'r> {
@@ -1102,7 +1102,7 @@ pub struct GlobalStateBuilder {
     pub(crate) reverted_block_root: Byte32,
     pub(crate) tip_block_hash: Byte32,
     pub(crate) tip_block_timestamp: Uint64,
-    pub(crate) last_finalized_block_number: Uint64,
+    pub(crate) last_finalized_timepoint: Uint64,
     pub(crate) status: Byte,
     pub(crate) version: Byte,
 }
@@ -1134,8 +1134,8 @@ impl GlobalStateBuilder {
         self.tip_block_timestamp = v;
         self
     }
-    pub fn last_finalized_block_number(mut self, v: Uint64) -> Self {
-        self.last_finalized_block_number = v;
+    pub fn last_finalized_timepoint(mut self, v: Uint64) -> Self {
+        self.last_finalized_timepoint = v;
         self
     }
     pub fn status(mut self, v: Byte) -> Self {
@@ -1160,7 +1160,7 @@ impl molecule::prelude::Builder for GlobalStateBuilder {
         writer.write_all(self.reverted_block_root.as_slice())?;
         writer.write_all(self.tip_block_hash.as_slice())?;
         writer.write_all(self.tip_block_timestamp.as_slice())?;
-        writer.write_all(self.last_finalized_block_number.as_slice())?;
+        writer.write_all(self.last_finalized_timepoint.as_slice())?;
         writer.write_all(self.status.as_slice())?;
         writer.write_all(self.version.as_slice())?;
         Ok(())

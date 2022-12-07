@@ -26,7 +26,7 @@ use gw_common::{
 use gw_store::state::history::history_state::RWConfig;
 use gw_store::state::BlockStateDB;
 use gw_store::traits::chain_store::ChainStore;
-use gw_types::core::{AllowedContractType, AllowedEoaType};
+use gw_types::core::{AllowedContractType, AllowedEoaType, Timepoint};
 use gw_types::packed::{AllowedTypeHash, Fee};
 use gw_types::U256;
 use gw_types::{
@@ -334,7 +334,7 @@ async fn test_revert() {
             .unwrap();
         *reverted_block_tree.root()
     };
-    let last_finalized_block_number = {
+    let last_finalized_timepoint = {
         let number: u64 = challenged_block.raw().number().unpack();
         let finalize_blocks = chain
             .generator()
@@ -342,13 +342,13 @@ async fn test_revert() {
             .rollup_config
             .finality_blocks()
             .unpack();
-        (number - 1).saturating_sub(finalize_blocks)
+        Timepoint::from_block_number((number - 1).saturating_sub(finalize_blocks))
     };
     let rollup_cell_data = global_state
         .as_builder()
         .status(Status::Running.into())
         .reverted_block_root(Pack::pack(&post_reverted_block_root))
-        .last_finalized_block_number(Pack::pack(&last_finalized_block_number))
+        .last_finalized_timepoint(Pack::pack(&last_finalized_timepoint.full_value()))
         .account(challenged_block.raw().prev_account())
         .block(prev_block_merkle)
         .tip_block_hash(challenged_block.raw().parent_block_hash())

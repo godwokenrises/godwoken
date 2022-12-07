@@ -188,7 +188,7 @@ impl From<GlobalStateV0> for GlobalState {
             .block(global_state_v0.block())
             .reverted_block_root(global_state_v0.reverted_block_root())
             .tip_block_hash(global_state_v0.tip_block_hash())
-            .last_finalized_block_number(global_state_v0.last_finalized_block_number())
+            .last_finalized_timepoint(global_state_v0.last_finalized_timepoint())
             .status(global_state_v0.status())
             .tip_block_timestamp(0u64.pack())
             .version(0.into())
