@@ -591,6 +591,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         rollup_type_script.clone(),
     );
 
+    let local_cells_manager = Arc::new(Mutex::new(LocalCellsManager::default()));
     let (block_producer, challenger, test_mode_control, withdrawal_unlocker, cleaner) = match config
         .node_mode
     {
@@ -631,6 +632,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
             let withdrawal_unlocker = FinalizedWithdrawalUnlocker::new(
                 rpc_client.clone(),
+                local_cells_manager.clone(),
                 ckb_genesis_info.clone(),
                 contracts_dep_manager.clone(),
                 unlocker_wallet,
@@ -798,7 +800,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
             rpc_client: rpc_client.clone(),
             chain: chain.clone(),
             mem_pool,
-            local_cells_manager: Mutex::new(LocalCellsManager::default()),
+            local_cells_manager,
             chain_updater: chain_updater.clone(),
             rollup_type_script: rollup_type_script.clone(),
             psc_config: config.block_producer.as_ref().unwrap().psc_config.clone(),

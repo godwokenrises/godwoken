@@ -16,8 +16,11 @@ use gw_types::packed::{OutPoint, RollupConfig, Transaction};
 use gw_types::prelude::*;
 use gw_utils::fee::fill_tx_fee;
 use gw_utils::genesis_info::CKBGenesisInfo;
+use gw_utils::local_cells::LocalCellsManager;
+use gw_utils::query_rollup_cell;
 use gw_utils::transaction_skeleton::TransactionSkeleton;
 use gw_utils::wallet::Wallet;
+use tokio::sync::Mutex;
 use tracing::instrument;
 
 use crate::types::ChainEvent;
@@ -37,6 +40,7 @@ pub struct FinalizedWithdrawalUnlocker {
 impl FinalizedWithdrawalUnlocker {
     pub fn new(
         rpc_client: RPCClient,
+        local_cells_manager: Arc<Mutex<LocalCellsManager>>,
         ckb_genesis_info: CKBGenesisInfo,
         contracts_dep_manager: ContractsCellDepManager,
         wallet: Wallet,
@@ -45,6 +49,7 @@ impl FinalizedWithdrawalUnlocker {
     ) -> Self {
         let unlocker = DefaultUnlocker::new(
             rpc_client,
+            local_cells_manager,
             ckb_genesis_info,
             contracts_dep_manager,
             wallet,
@@ -219,6 +224,7 @@ pub trait BuildUnlockWithdrawalToOwner {
 
 struct DefaultUnlocker {
     rpc_client: RPCClient,
+    local_cells_manager: Arc<Mutex<LocalCellsManager>>,
     ckb_genesis_info: CKBGenesisInfo,
     contracts_dep_manager: ContractsCellDepManager,
     wallet: Wallet,
@@ -230,6 +236,7 @@ impl DefaultUnlocker {
 
     pub fn new(
         rpc_client: RPCClient,
+        local_cells_manager: Arc<Mutex<LocalCellsManager>>,
         ckb_genesis_info: CKBGenesisInfo,
         contracts_dep_manager: ContractsCellDepManager,
         wallet: Wallet,
@@ -237,6 +244,7 @@ impl DefaultUnlocker {
     ) -> Self {
         DefaultUnlocker {
             rpc_client,
+            local_cells_manager,
             ckb_genesis_info,
             contracts_dep_manager,
             wallet,
@@ -256,7 +264,8 @@ impl BuildUnlockWithdrawalToOwner for DefaultUnlocker {
     }
 
     async fn query_rollup_cell(&self) -> Result<Option<CellInfo>> {
-        self.rpc_client.query_rollup_cell().await
+        let local_cells_manager = self.local_cells_manager.lock().await;
+        query_rollup_cell(&local_cells_manager, &self.rpc_client).await
     }
 
     async fn query_unlockable_withdrawals(
