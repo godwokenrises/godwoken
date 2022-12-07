@@ -62,14 +62,18 @@ impl ReplayBlock {
                 &withdrawal.request(),
             )?;
 
-            let expected_checkpoint = state.calculate_state_checkpoint()?;
-
-            let block_checkpoint: H256 = match state_checkpoint_list.get(wth_idx) {
-                Some(checkpoint) => *checkpoint,
-                None => bail!("withdrawal {} checkpoint not found", wth_idx),
-            };
-            if block_checkpoint != expected_checkpoint {
-                bail!("withdrawal {} checkpoint not match", wth_idx);
+            if generator
+                .fork_config()
+                .enforce_correctness_of_state_checkpoint_list(block_number)
+            {
+                let expected_checkpoint = state.calculate_state_checkpoint()?;
+                let block_checkpoint: H256 = match state_checkpoint_list.get(wth_idx) {
+                    Some(checkpoint) => *checkpoint,
+                    None => bail!("withdrawal {} checkpoint not found", wth_idx),
+                };
+                if block_checkpoint != expected_checkpoint {
+                    bail!("withdrawal {} checkpoint not match", wth_idx);
+                }
             }
         }
 
@@ -77,13 +81,18 @@ impl ReplayBlock {
         for req in deposits {
             state.apply_deposit_request(generator.rollup_context(), req)?;
         }
-        let expected_prev_txs_state_checkpoint = state.calculate_state_checkpoint()?;
-        let block_prev_txs_state_checkpoint: H256 = raw_block
-            .submit_transactions()
-            .prev_state_checkpoint()
-            .unpack();
-        if block_prev_txs_state_checkpoint != expected_prev_txs_state_checkpoint {
-            bail!("prev txs state checkpoint not match");
+        if generator
+            .fork_config()
+            .enforce_correctness_of_state_checkpoint_list(block_number)
+        {
+            let expected_prev_txs_state_checkpoint = state.calculate_state_checkpoint()?;
+            let block_prev_txs_state_checkpoint: H256 = raw_block
+                .submit_transactions()
+                .prev_state_checkpoint()
+                .unpack();
+            if block_prev_txs_state_checkpoint != expected_prev_txs_state_checkpoint {
+                bail!("prev txs state checkpoint not match");
+            }
         }
 
         // handle transactions
@@ -117,15 +126,20 @@ impl ReplayBlock {
             )?;
 
             state.finalise()?;
-            let expected_checkpoint = state.calculate_state_checkpoint()?;
-            let checkpoint_index = withdrawals.len() + tx_index;
-            let block_checkpoint: H256 = match state_checkpoint_list.get(checkpoint_index) {
-                Some(checkpoint) => *checkpoint,
-                None => bail!("tx {} checkpoint not found", tx_index),
-            };
 
-            if block_checkpoint != expected_checkpoint {
-                bail!("tx {} checkpoint not match", tx_index);
+            if generator
+                .fork_config()
+                .enforce_correctness_of_state_checkpoint_list(block_number)
+            {
+                let expected_checkpoint = state.calculate_state_checkpoint()?;
+                let checkpoint_index = withdrawals.len() + tx_index;
+                let block_checkpoint: H256 = match state_checkpoint_list.get(checkpoint_index) {
+                    Some(checkpoint) => *checkpoint,
+                    None => bail!("tx {} checkpoint not found", tx_index),
+                };
+                if block_checkpoint != expected_checkpoint {
+                    bail!("tx {} checkpoint not match", tx_index);
+                }
             }
         }
 

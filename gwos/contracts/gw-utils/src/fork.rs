@@ -9,6 +9,11 @@ impl Fork {
         global_state_version == 1
     }
 
+    // Fork feature: enforce the correctness of `RawL2Block.state_checkpoint_list`.
+    pub const fn enforce_correctness_of_state_checkpoint_list(global_state_version: u8) -> bool {
+        global_state_version <= 1
+    }
+
     // Fork feature: block.timestamp in the backbone range
     pub const fn enforce_block_timestamp_in_l1_backbone_range(global_state_version: u8) -> bool {
         global_state_version >= 2

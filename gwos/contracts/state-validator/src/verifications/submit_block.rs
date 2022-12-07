@@ -635,7 +635,11 @@ fn check_state_checkpoints(block: &L2BlockReader) -> Result<(), Error> {
     Ok(())
 }
 
-fn check_block_transactions(block: &L2BlockReader, kv_state: &KVState) -> Result<(), Error> {
+fn check_block_transactions(
+    block: &L2BlockReader,
+    kv_state: &KVState,
+    post_version: u8,
+) -> Result<(), Error> {
     // check tx_witness_root
     let raw_block = block.raw();
 
@@ -671,27 +675,39 @@ fn check_block_transactions(block: &L2BlockReader, kv_state: &KVState) -> Result
         return Err(Error::InvalidStateCheckpoint);
     }
 
-    // check post account tree state
-    let last_checkpoint_root = if block.transactions().is_empty() {
-        prev_state_checkpoint
-    } else {
-        raw_block
-            .state_checkpoint_list()
-            .iter()
-            .last()
-            .map(|checkpoint| checkpoint.unpack())
-            .ok_or(Error::InvalidStateCheckpoint)?
-    };
     let block_post_state_root = {
         let account = raw_block.post_account();
         calculate_state_checkpoint(&account.merkle_root().unpack(), account.count().unpack())
     };
-    if last_checkpoint_root != block_post_state_root {
+    let is_transactions_empty = block.transactions().is_empty();
+
+    // When `block.transactions` is empty, the `block.post_account` and
+    // `post_global_state.account` should be equivalent to `prev_state_checkpoint`
+    if is_transactions_empty && prev_state_checkpoint != block_post_state_root {
         debug!(
-            "Invalid post state, last_checkpoint_root: {:?}, block_post_state_root: {:?}",
-            last_checkpoint_root, block_post_state_root
+            "Invalid block_post_state_root, block.transactions is empty, prev_state_checkpoint != block_post_state_root, {:x} != {:x}",
+            prev_state_checkpoint.pack(), block_post_state_root.pack()
         );
         return Err(Error::InvalidStateCheckpoint);
+    }
+
+    // When `block.transactions` is not empty, the `block.post_account` and
+    // `post_global_state.account` should be equivalent to the last `block.state_checkpoint_list`
+    if !is_transactions_empty && Fork::enforce_correctness_of_state_checkpoint_list(post_version) {
+        let last_state_checkpoint = &raw_block
+            .state_checkpoint_list()
+            .iter()
+            .last()
+            .as_ref()
+            .map(Unpack::<H256>::unpack)
+            .ok_or(Error::InvalidStateCheckpoint)?;
+        if last_state_checkpoint != &block_post_state_root {
+            debug!(
+                "Invalid block_post_state_root, last_state_checkpoint != block_post_state_root, {:x} != {:x}",
+                last_state_checkpoint.pack(), block_post_state_root.pack()
+            );
+            return Err(Error::InvalidStateCheckpoint);
+        }
     }
 
     Ok(())
@@ -927,7 +943,7 @@ pub fn verify(
     // Mint token: deposit requests -> layer2 SUDT
     check_layer2_deposit(&rollup_type_hash, config, &mut kv_state, &deposit_cells)?;
     // Check transactions
-    check_block_transactions(block, &kv_state)?;
+    check_block_transactions(block, &kv_state, context.post_version)?;
 
     check_global_state_tip_block_timestamp(prev_global_state, post_global_state)?;
     check_global_state_last_finalized_timepoint(
