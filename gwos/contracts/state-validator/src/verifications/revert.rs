@@ -250,7 +250,7 @@ fn check_reverted_blocks(
     let account_merkle_state = reverted_blocks[0].prev_account();
     let tip_block_hash = reverted_blocks[0].parent_block_hash();
     let post_version: u8 = post_global_state.version().into();
-    let last_finalized = if Fork::use_timestamp_as_timepoint(post_version) {
+    let last_finalized_timepoint = if Fork::use_timestamp_as_timepoint(post_version) {
         let rollup_input_since = Since::new(load_input_since(0, Source::GroupInput)?);
         let rollup_input_timestamp = match (
             rollup_input_since.is_absolute(),
@@ -286,7 +286,7 @@ fn check_reverted_blocks(
             .block(block_merkle_state)
             .tip_block_hash(tip_block_hash.to_entity())
             .tip_block_timestamp(tip_block_timestamp.to_entity())
-            .last_finalized_block_number(last_finalized.full_value().pack())
+            .last_finalized_timepoint(last_finalized_timepoint.full_value().pack())
             .reverted_block_root(reverted_block_root)
             .status(status.into())
             .build()

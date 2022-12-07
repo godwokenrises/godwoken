@@ -773,9 +773,8 @@ fn check_block_timestamp(
         // 4 hours, 4 * 60 * 60 * 1000 = 14400000ms
         const BACKBONE_BIAS: u64 = 14400000;
         let backbone = {
-            match Timepoint::from_full_value(
-                post_global_state.last_finalized_block_number().unpack(),
-            ) {
+            match Timepoint::from_full_value(post_global_state.last_finalized_timepoint().unpack())
+            {
                 Timepoint::BlockNumber(_) => unreachable!(),
                 Timepoint::Timestamp(ts) => ts + finality_time_in_ms(rollup_config),
             }
@@ -822,27 +821,27 @@ fn check_global_state_last_finalized_timepoint(
     // skip
     // if context.post_version == 0 { }
 
-    if prev_global_state.last_finalized_block_number().unpack()
-        > post_global_state.last_finalized_block_number().unpack()
+    if prev_global_state.last_finalized_timepoint().unpack()
+        > post_global_state.last_finalized_timepoint().unpack()
     {
         debug!(
-            "check_global_state_last_finalized_timepoint prev last_finalized_block_number > post last_finalized_block_number, {} > {}",
-            prev_global_state.last_finalized_block_number().unpack(),
-            post_global_state.last_finalized_block_number().unpack()
+            "check_global_state_last_finalized_timepoint prev last_finalized_timepoint > post last_finalized_timepoint, {} > {}",
+            prev_global_state.last_finalized_timepoint().unpack(),
+            post_global_state.last_finalized_timepoint().unpack()
         );
         return Err(Error::InvalidPostGlobalState);
     }
 
     let last_finalized_timepoint =
-        Timepoint::from_full_value(post_global_state.last_finalized_block_number().unpack());
+        Timepoint::from_full_value(post_global_state.last_finalized_timepoint().unpack());
 
     match (
         Fork::use_timestamp_as_timepoint(context.post_version),
         last_finalized_timepoint,
     ) {
-        (false, Timepoint::BlockNumber(last_finalized_block_number)) => {
+        (false, Timepoint::BlockNumber(bn)) => {
             let finality_as_blocks = rollup_config.finality_blocks().unpack();
-            if last_finalized_block_number != context.number.saturating_sub(finality_as_blocks) {
+            if bn != context.number.saturating_sub(finality_as_blocks) {
                 return Err(Error::InvalidPostGlobalState);
             }
         }
@@ -953,8 +952,8 @@ pub fn verify(
         let block_merkle_state = post_global_state.block();
 
         // check_global_state_tip_block_timestamp() has checked post_global_state.tip_block_timestamp
-        // check_global_state_last_finalized_timepoint() has checked post_global_state.last_finalized_block_number
-        let last_finalized_block_number = post_global_state.last_finalized_block_number();
+        // check_global_state_last_finalized_timepoint() has checked post_global_state.last_finalized_timepoint
+        let last_finalized_timepoint = post_global_state.last_finalized_timepoint();
         let tip_block_timestamp = if context.post_version == 0 {
             0
         } else {
@@ -968,7 +967,7 @@ pub fn verify(
             .block(block_merkle_state)
             .tip_block_hash(context.block_hash.pack())
             .tip_block_timestamp(tip_block_timestamp.pack())
-            .last_finalized_block_number(last_finalized_block_number)
+            .last_finalized_timepoint(last_finalized_timepoint)
             .version(context.post_version.into())
             .build()
     };

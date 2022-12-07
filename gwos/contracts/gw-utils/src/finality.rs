@@ -4,7 +4,7 @@
 //! `prev_global_state.block.count - 1 + FINALITY_REQUIREMENT`.
 //!
 //! To determine a timestamp-based timepoint is finalized,
-//!   - If prev_global_state.last_finalized_block_number is also timestamp-based,
+//!   - If prev_global_state.last_finalized_timepoint is also timestamp-based,
 //!     compare them directly;
 //!   - Otherwise, we know it is switching versions, so the corresponding entity
 //!     is surely not finalized.
@@ -31,9 +31,9 @@ pub fn is_finalized(
 }
 
 fn is_timestamp_finalized(prev_global_state: &GlobalState, timestamp: u64) -> bool {
-    match Timepoint::from_full_value(prev_global_state.last_finalized_block_number().unpack()) {
+    match Timepoint::from_full_value(prev_global_state.last_finalized_timepoint().unpack()) {
         Timepoint::BlockNumber(_) => {
-            debug!("[is_timestamp_finalized] switching version, prev_global_state.last_finalized_block_number is number-based");
+            debug!("[is_timestamp_finalized] switching version, prev_global_state.last_finalized_timepoint is number-based");
             false
         }
         Timepoint::Timestamp(finalized) => {
