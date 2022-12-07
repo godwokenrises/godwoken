@@ -9,5 +9,5 @@ edition = "2018"
 gw-utils = { path = "../gw-utils" }
 gw-state = { path = "../gw-state" }
 sha3 = { version = "0.10", default-features = false }
-ethabi = { version = "16", default-features = false }
+ethabi = { version = "18", default-features = false }
 rlp = { version = "0.5.0", default-features = false }

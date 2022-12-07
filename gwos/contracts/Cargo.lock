@@ -213,47 +213,24 @@ dependencies = [
 
 [[package]]
 name = "ethabi"
-version = "16.0.0"
+version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4c98847055d934070b90e806e12d3936b787d0a115068981c1d8dfd5dfef5a5"
+checksum = "7413c5f74cc903ea37386a8965a936cbeb334bd270862fdece542c1b2dcbc898"
 dependencies = [
  "ethereum-types",
  "hex",
- "sha3 0.9.1",
-]
-
-[[package]]
-name = "ethbloom"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfb684ac8fa8f6c5759f788862bb22ec6fe3cb392f6bfd08e3c64b603661e3f8"
-dependencies = [
- "crunchy",
- "fixed-hash 0.7.0",
- "tiny-keccak",
+ "sha3 0.10.0",
 ]
 
 [[package]]
 name = "ethereum-types"
-version = "0.12.1"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05136f7057fe789f06e6d41d07b34e6f70d8c86e5693b60f97aaa6553553bdaf"
+checksum = "02d215cbf040552efcbe99a38372fe80ab9d00268e20012b79fcd0f073edd8ee"
 dependencies = [
- "ethbloom",
- "fixed-hash 0.7.0",
- "primitive-types 0.10.1",
+ "fixed-hash",
+ "primitive-types",
  "uint",
-]
-
-[[package]]
-name = "fixed-hash"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfcf0ed7fe52a17a03854ec54a9f76d6d84508d1c0e66bc1793301c73fc8493c"
-dependencies = [
- "byteorder",
- "rustc-hex",
- "static_assertions",
 ]
 
 [[package]]
@@ -262,6 +239,8 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "835c052cb0c08c1acf6ffd71c022172e18723949c8282f2b9f27efbc51e64534"
 dependencies = [
+ "byteorder",
+ "rustc-hex",
  "static_assertions",
 ]
 
@@ -278,7 +257,7 @@ dependencies = [
 [[package]]
 name = "gw-common"
 version = "1.7.3"
-source = "git+https://github.com/nervosnetwork/godwoken.git?rev=c3f0675ba5f4f78a21562d9e7a2d015949820b2d#c3f0675ba5f4f78a21562d9e7a2d015949820b2d"
+source = "git+https://github.com/nervosnetwork/godwoken.git?rev=a5a1a94e962855f8e27641472240cd7810b66a57#a5a1a94e962855f8e27641472240cd7810b66a57"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
@@ -290,7 +269,7 @@ dependencies = [
 [[package]]
 name = "gw-hash"
 version = "1.7.3"
-source = "git+https://github.com/nervosnetwork/godwoken.git?rev=c3f0675ba5f4f78a21562d9e7a2d015949820b2d#c3f0675ba5f4f78a21562d9e7a2d015949820b2d"
+source = "git+https://github.com/nervosnetwork/godwoken.git?rev=a5a1a94e962855f8e27641472240cd7810b66a57#a5a1a94e962855f8e27641472240cd7810b66a57"
 dependencies = [
  "blake2b-ref",
 ]
@@ -306,12 +285,12 @@ dependencies = [
 [[package]]
 name = "gw-types"
 version = "1.7.3"
-source = "git+https://github.com/nervosnetwork/godwoken.git?rev=c3f0675ba5f4f78a21562d9e7a2d015949820b2d#c3f0675ba5f4f78a21562d9e7a2d015949820b2d"
+source = "git+https://github.com/nervosnetwork/godwoken.git?rev=a5a1a94e962855f8e27641472240cd7810b66a57#a5a1a94e962855f8e27641472240cd7810b66a57"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
  "molecule",
- "primitive-types 0.12.1",
+ "primitive-types",
  "sparse-merkle-tree",
 ]
 
@@ -386,21 +365,11 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "primitive-types"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05e4722c697a58a99d5d06a08c30821d7c082a4632198de1eaa5a6c22ef42373"
-dependencies = [
- "fixed-hash 0.7.0",
- "uint",
-]
-
-[[package]]
-name = "primitive-types"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f3486ccba82358b11a77516035647c34ba167dfa53312630de83b12bd4f3d66"
 dependencies = [
- "fixed-hash 0.8.0",
+ "fixed-hash",
  "impl-rlp",
  "impl-serde",
  "uint",
@@ -488,15 +457,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "tiny-keccak"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c9d3793400a45f954c52e73d068316d76b6f4e36977e3fcebb13a2721e80237"
-dependencies = [
- "crunchy",
-]
 
 [[package]]
 name = "tron-account-lock"
