@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::Parser;
 use gw_config::Config;
-use gw_db::migrate::{init_migration_factory, open_or_create_db};
+use gw_store::migrate::{init_migration_factory, open_or_create_db};
 use gw_telemetry::trace;
 
 #[cfg(feature = "smt-trie")]

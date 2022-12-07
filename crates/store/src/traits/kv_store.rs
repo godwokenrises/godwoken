@@ -1,5 +1,6 @@
 use anyhow::Result;
-use gw_db::schema::Col;
+
+use crate::schema::Col;
 
 pub trait KVStoreRead {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>>;

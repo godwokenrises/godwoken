@@ -19,7 +19,6 @@ gw-mem-pool = { path = "../mem-pool" }
 gw-generator = { path = "../generator" }
 gw-types = { path = "../types" }
 gw-traits = { path = "../traits" }
-gw-db = { path = "../db" }
 gw-config = { path = "../config" }
 gw-utils = { path = "../utils" }
 

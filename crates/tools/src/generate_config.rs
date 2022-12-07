@@ -192,8 +192,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
     };
 
     let store = StoreConfig {
-        path: "".into(),
-        options: HashMap::new(),
+        path: "./gw-db".into(),
         options_file: None,
         cache_size: None,
     };

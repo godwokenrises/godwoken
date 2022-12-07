@@ -232,7 +232,7 @@ fn insert_block(
     exported: ExportedBlock,
     last_submitted_block: &mut Option<u64>,
 ) -> Result<()> {
-    let tx_db = chain.store().begin_transaction();
+    let tx_db = chain.store().begin_transaction_skip_concurrency_control();
     let block_number = exported.block_number();
 
     if let Some(_challenge_target) = chain.process_block(

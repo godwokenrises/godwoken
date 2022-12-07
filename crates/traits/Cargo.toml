@@ -9,5 +9,4 @@ edition = "2018"
 [dependencies]
 gw-types = { path = "../types" }
 gw-common = { path = "../common" }
-gw-db = { path = "../db" }
 anyhow = "1.0.66"

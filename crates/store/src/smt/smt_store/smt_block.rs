@@ -2,7 +2,6 @@
 
 use std::convert::TryInto;
 
-use crate::traits::{chain_store::ChainStore, kv_store::KVStore};
 use gw_common::{
     smt::SMT,
     sparse_merkle_tree::{
@@ -12,9 +11,12 @@ use gw_common::{
     },
     H256,
 };
-use gw_db::schema::{COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF};
 
-use crate::smt::serde::{branch_key_to_vec, branch_node_to_vec, slice_to_branch_node};
+use crate::{
+    schema::{COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF},
+    smt::serde::{branch_key_to_vec, branch_node_to_vec, slice_to_branch_node},
+    traits::{chain_store::ChainStore, kv_store::KVStore},
+};
 
 pub struct SMTBlockStore<DB: KVStore>(DB);
 

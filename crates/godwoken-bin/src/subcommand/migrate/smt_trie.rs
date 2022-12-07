@@ -1,11 +1,11 @@
 use anyhow::{ensure, Context, Result};
-use gw_db::{
+use gw_store::{
+    autorocks::{Direction, TransactionDb},
     migrate::{Migration, SMTTrieMigrationPlaceHolder},
     schema::{
         COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_BLOCK_SMT_BRANCH,
         COLUMN_BLOCK_SMT_LEAF, COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF,
     },
-    DBIterator, IteratorMode, RocksDB,
 };
 use gw_store::{
     traits::{chain_store::ChainStore, kv_store::KVStoreWrite},
@@ -15,7 +15,7 @@ use gw_store::{
 pub struct SMTTrieMigration;
 
 impl Migration for SMTTrieMigration {
-    fn migrate(&self, db: RocksDB) -> Result<RocksDB> {
+    fn migrate(&self, db: TransactionDb) -> Result<TransactionDb> {
         log::info!("SMTTrieMigration running");
         let store = Store::new(db);
 
@@ -41,18 +41,17 @@ impl Migration for SMTTrieMigration {
             wb.delete_range(COLUMN_REVERTED_BLOCK_SMT_BRANCH, &[], &[255; 64])
                 .context("delete reverted block smt branches")?;
 
-            store.as_inner().write(&wb)?;
+            store.write_skip_concurrency_control(&mut wb)?;
         }
 
         log::info!("migrating state smt");
         {
-            let tx = store.begin_transaction();
+            let tx = store.begin_transaction_skip_concurrency_control();
             let mut state_smt = tx.state_smt().context("state_smt")?;
             // XXX: memory usage of long running transaction.
             for (k, v) in store
                 .as_inner()
-                .iter(COLUMN_ACCOUNT_SMT_LEAF, IteratorMode::Start)
-                .context("iter state smt leaves")?
+                .iter(COLUMN_ACCOUNT_SMT_LEAF, Direction::Forward)
             {
                 state_smt
                     .update(
@@ -67,12 +66,11 @@ impl Migration for SMTTrieMigration {
 
         log::info!("migrating block smt");
         {
-            let tx = &store.begin_transaction();
+            let tx = &store.begin_transaction_skip_concurrency_control();
             let mut block_smt = tx.block_smt().context("block_smt")?;
             for (k, v) in store
                 .as_inner()
-                .iter(COLUMN_BLOCK_SMT_LEAF, IteratorMode::Start)
-                .context("iter block smt leaves")?
+                .iter(COLUMN_BLOCK_SMT_LEAF, Direction::Forward)
             {
                 block_smt
                     .update(
@@ -87,12 +85,11 @@ impl Migration for SMTTrieMigration {
 
         log::info!("migrating reverted block smt");
         {
-            let tx = &store.begin_transaction();
+            let tx = &store.begin_transaction_skip_concurrency_control();
             let mut reverted_block_smt = tx.reverted_block_smt().context("reverted_block_smt")?;
             for (k, v) in store
                 .as_inner()
-                .iter(COLUMN_REVERTED_BLOCK_SMT_LEAF, IteratorMode::Start)
-                .context("iter reverted_block_smt leaves")?
+                .iter(COLUMN_REVERTED_BLOCK_SMT_LEAF, Direction::Forward)
             {
                 reverted_block_smt
                     .update(

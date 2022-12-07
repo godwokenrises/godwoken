@@ -10,7 +10,6 @@ use gw_common::{
     H256,
 };
 use gw_config::{BackendConfig, BackendForkConfig, GenesisConfig, StoreConfig};
-use gw_db::{schema::COLUMNS, RocksDB};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::BackendManage,
@@ -20,6 +19,7 @@ use gw_generator::{
 };
 use gw_store::{
     mem_pool_state::MemPoolState,
+    schema::COLUMNS,
     state::{
         history::history_state::{HistoryState, RWConfig},
         state_db::StateDB,
@@ -76,7 +76,7 @@ pub fn bench_ckb_transfer(c: &mut Criterion) {
         cache_size: Some(1073741824),
         ..Default::default()
     };
-    let store = Store::new(RocksDB::open(&config, COLUMNS));
+    let store = Store::open(&config, COLUMNS).unwrap();
     let ee = BenchExecutionEnvironment::new_with_accounts(store, 7000);
 
     let mut group = c.benchmark_group("ckb_transfer");

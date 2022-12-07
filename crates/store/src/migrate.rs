@@ -5,21 +5,29 @@
 use std::{cmp::Ordering, collections::BTreeMap};
 
 use anyhow::{bail, Result};
+use autorocks::{
+    autorocks_sys::rocksdb::{PinnableSlice, Status_SubCode},
+    moveit::moveit,
+    DbOptions, Direction, ReadOnlyDb, TransactionDb,
+};
 use gw_config::StoreConfig;
 
 use crate::{
-    read_only_db::{self, ReadOnlyDB},
     schema::{
         COLUMNS, COLUMN_BAD_BLOCK, COLUMN_BLOCK, COLUMN_META, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
         META_TIP_BLOCK_HASH_KEY, MIGRATION_VERSION_KEY, REMOVED_COLUMN_BLOCK_DEPOSIT_REQUESTS,
         REMOVED_COLUMN_L2BLOCK_COMMITTED_INFO,
     },
-    DBIterator, RocksDB,
+    Store,
 };
 
-pub fn open_or_create_db(config: &StoreConfig, factory: MigrationFactory) -> Result<RocksDB> {
-    let read_only_db =
-        read_only_db::ReadOnlyDB::open_cf(&config.path, vec![COLUMN_META.to_string()])?;
+pub fn open_or_create_db(config: &StoreConfig, factory: MigrationFactory) -> Result<TransactionDb> {
+    let read_only_db = match DbOptions::new(&config.path, 1).open_read_only() {
+        Ok(db) => Some(db),
+        Err(e) if e.sub_code == Status_SubCode::kPathNotFound => None,
+        Err(e) => bail!(e),
+    };
+
     if let Some(db) = read_only_db {
         match check_readonly_db_version(&db, factory.last_db_version())? {
             Ordering::Greater => {
@@ -30,33 +38,38 @@ pub fn open_or_create_db(config: &StoreConfig, factory: MigrationFactory) -> Res
                 );
                 bail!("The database is created by a higher version executable binary");
             }
-            Ordering::Equal => Ok(RocksDB::open(config, COLUMNS)),
+            Ordering::Equal => Ok(Store::open(config, COLUMNS)?.into_inner()),
             Ordering::Less => {
                 log::info!("process fast migrations ...");
-                let db = RocksDB::open(config, COLUMNS);
+
+                let db = Store::open(config, COLUMNS)?.into_inner();
+
                 let _ = factory.migrate(db)?;
 
-                Ok(RocksDB::open(config, COLUMNS))
+                Ok(Store::open(config, COLUMNS)?.into_inner())
             }
         }
     } else {
-        let db = RocksDB::open(config, COLUMNS);
+        let db = Store::open(config, COLUMNS)?.into_inner();
         init_db_version(&db, factory.last_db_version())?;
         Ok(db)
     }
 }
 
 //TODO: Replace with migration db version when we have our first migration impl.
-pub(crate) fn init_db_version(db: &RocksDB, db_ver: Option<&str>) -> Result<()> {
+pub(crate) fn init_db_version(db: &TransactionDb, db_ver: Option<&str>) -> Result<()> {
     if let Some(db_ver) = db_ver {
         log::info!("Init db version: {}", db_ver);
-        db.put_default(MIGRATION_VERSION_KEY, db_ver)?
+        db.put(db.default_col(), MIGRATION_VERSION_KEY, db_ver.as_bytes())?;
     }
     Ok(())
 }
 
-fn check_readonly_db_version(db: &ReadOnlyDB, db_ver: Option<&str>) -> Result<Ordering> {
-    let version = match db.get_pinned_default(MIGRATION_VERSION_KEY)? {
+fn check_readonly_db_version(db: &ReadOnlyDb, db_ver: Option<&str>) -> Result<Ordering> {
+    moveit! {
+        let mut buf = PinnableSlice::new();
+    }
+    let version = match db.get(db.default_col(), MIGRATION_VERSION_KEY, buf.as_mut())? {
         Some(version_bytes) => {
             String::from_utf8(version_bytes.to_vec()).expect("version bytes to utf8")
         }
@@ -73,8 +86,11 @@ fn check_readonly_db_version(db: &ReadOnlyDB, db_ver: Option<&str>) -> Result<Or
     Ok(version.as_str().cmp(db_ver.expect("Db version is absent!")))
 }
 
-fn is_non_empty_rdb(db: &ReadOnlyDB) -> bool {
-    if let Ok(v) = db.get_pinned(COLUMN_META, META_TIP_BLOCK_HASH_KEY) {
+fn is_non_empty_rdb(db: &ReadOnlyDb) -> bool {
+    moveit! {
+        let mut buf = PinnableSlice::new();
+    }
+    if let Ok(v) = db.get(COLUMN_META, META_TIP_BLOCK_HASH_KEY, buf.as_mut()) {
         if v.is_some() {
             return true;
         }
@@ -83,14 +99,14 @@ fn is_non_empty_rdb(db: &ReadOnlyDB) -> bool {
 }
 
 pub trait Migration {
-    fn migrate(&self, db: RocksDB) -> Result<RocksDB>;
+    fn migrate(&self, db: TransactionDb) -> Result<TransactionDb>;
     // Version can be genereated with: date '+%Y%m%d%H%M%S'
     fn version(&self) -> &str;
 }
 
 struct DefaultMigration;
 impl Migration for DefaultMigration {
-    fn migrate(&self, db: RocksDB) -> Result<RocksDB> {
+    fn migrate(&self, db: TransactionDb) -> Result<TransactionDb> {
         Ok(db)
     }
     #[allow(clippy::needless_return)]
@@ -102,12 +118,8 @@ impl Migration for DefaultMigration {
 struct DecoupleBlockProducingSubmissionAndConfirmationMigration;
 
 impl Migration for DecoupleBlockProducingSubmissionAndConfirmationMigration {
-    fn migrate(&self, mut db: RocksDB) -> Result<RocksDB> {
-        if db
-            .iter(COLUMN_BLOCK, rocksdb::IteratorMode::Start)?
-            .next()
-            .is_some()
-        {
+    fn migrate(&self, mut db: TransactionDb) -> Result<TransactionDb> {
+        if db.iter(COLUMN_BLOCK, Direction::Forward).next().is_some() {
             bail!("Cannot migrate a database with existing data to version 20220517. You have to deploy a new node");
         }
 
@@ -123,14 +135,18 @@ impl Migration for DecoupleBlockProducingSubmissionAndConfirmationMigration {
 struct BadBlockColumnMigration;
 
 impl Migration for BadBlockColumnMigration {
-    fn migrate(&self, mut db: RocksDB) -> Result<RocksDB> {
+    fn migrate(&self, mut db: TransactionDb) -> Result<TransactionDb> {
         // Check that there are no bad blocks.
-        if db
-            .get_pinned(COLUMN_META, META_TIP_BLOCK_HASH_KEY)?
-            .as_deref()
-            != db
-                .get_pinned(COLUMN_META, META_LAST_VALID_TIP_BLOCK_HASH_KEY)?
-                .as_deref()
+        moveit! {
+            let mut buf1 = PinnableSlice::new();
+            let mut buf2 = PinnableSlice::new();
+        }
+        if db.get(COLUMN_META, META_TIP_BLOCK_HASH_KEY, buf1.as_mut())?
+            != db.get(
+                COLUMN_META,
+                META_LAST_VALID_TIP_BLOCK_HASH_KEY,
+                buf2.as_mut(),
+            )?
         {
             bail!("Cannot migrate to version 20221024 when there are bad blocks. You have to rewind or revert first");
         }
@@ -149,7 +165,7 @@ pub struct SMTTrieMigrationPlaceHolder;
 
 #[cfg(feature = "smt-trie")]
 impl Migration for SMTTrieMigrationPlaceHolder {
-    fn migrate(&self, db: RocksDB) -> Result<RocksDB> {
+    fn migrate(&self, db: TransactionDb) -> Result<TransactionDb> {
         use crate::schema::{
             COLUMN_ACCOUNT_SMT_LEAF, COLUMN_BLOCK_SMT_LEAF, COLUMN_REVERTED_BLOCK_SMT_LEAF,
         };
@@ -161,10 +177,7 @@ impl Migration for SMTTrieMigrationPlaceHolder {
             COLUMN_REVERTED_BLOCK_SMT_LEAF,
         ]
         .iter()
-        .all(|col| {
-            db.iter(*col, rocksdb::IteratorMode::Start)
-                .map_or(false, |mut i| i.next().is_none())
-        });
+        .all(|col| db.iter(*col, Direction::Forward).next().is_none());
         if smts_all_empty {
             return Ok(db);
         }
@@ -211,9 +224,12 @@ impl MigrationFactory {
             .is_some()
     }
 
-    fn migrate(&self, db: RocksDB) -> Result<RocksDB> {
+    fn migrate(&self, db: TransactionDb) -> Result<TransactionDb> {
+        moveit! {
+            let mut buf = PinnableSlice::new();
+        }
         let db_version = db
-            .get_pinned_default(MIGRATION_VERSION_KEY)?
+            .get(db.default_col(), MIGRATION_VERSION_KEY, buf.as_mut())?
             .map(|v| String::from_utf8(v.to_vec()).expect("version bytes to utf8"))
             .unwrap_or_else(|| "".to_string());
         let mut db = db;
@@ -227,7 +243,7 @@ impl MigrationFactory {
             }
         }
         if let Some(v) = last_version {
-            db.put_default(MIGRATION_VERSION_KEY, v)?;
+            db.put(db.default_col(), MIGRATION_VERSION_KEY, v.as_bytes())?;
             log::info!("Current db version is: {}", v);
         }
         Ok(db)
@@ -240,28 +256,18 @@ impl MigrationFactory {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use super::*;
 
-    use anyhow::Result;
-    use gw_config::StoreConfig;
-
-    use crate::{
-        schema::{COLUMNS, MIGRATION_VERSION_KEY},
-        RocksDB,
-    };
-
-    use super::{init_migration_factory, open_or_create_db};
     #[test]
     fn test_migration() -> Result<()> {
         let dir = tempfile::tempdir().expect("create temp dir");
 
         let config = StoreConfig {
             path: dir.path().to_owned(),
-            options: HashMap::new(),
             options_file: None,
             cache_size: None,
         };
-        let old_db = RocksDB::open(&config, COLUMNS);
+        let old_db = Store::open(&config, COLUMNS)?.into_inner();
         let factory = init_migration_factory();
         assert!(factory.last_db_version().is_some());
 
@@ -269,8 +275,11 @@ mod tests {
 
         assert!(db.is_ok());
         let db = db.unwrap();
+        moveit! {
+            let mut buf = PinnableSlice::new();
+        }
         let v = db
-            .get_pinned_default(MIGRATION_VERSION_KEY)?
+            .get(db.default_col(), MIGRATION_VERSION_KEY, buf.as_mut())?
             .map(|v| String::from_utf8(v.to_vec()));
 
         assert_eq!(v, Some(Ok(factory.last_db_version().unwrap().to_string())));
@@ -283,17 +292,19 @@ mod tests {
 
         let config = StoreConfig {
             path: dir.path().to_owned(),
-            options: HashMap::new(),
             options_file: None,
             cache_size: None,
         };
         let db = open_or_create_db(&config, init_migration_factory())?;
-        let v = db.get_pinned_default(MIGRATION_VERSION_KEY)?;
+        moveit! {
+            let mut buf = PinnableSlice::new();
+        }
+        let v = db.get(db.default_col(), MIGRATION_VERSION_KEY, buf.as_mut())?;
         assert!(v.is_some());
         let factory = init_migration_factory();
 
         let v = db
-            .get_pinned_default(MIGRATION_VERSION_KEY)?
+            .get(db.default_col(), MIGRATION_VERSION_KEY, buf.as_mut())?
             .map(|v| String::from_utf8(v.to_vec()));
 
         assert_eq!(v, Some(Ok(factory.last_db_version().unwrap().to_string())));

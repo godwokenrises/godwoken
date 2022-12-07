@@ -1,13 +1,13 @@
 //! Mem State DB
 //!
 
+use crate::schema::{COLUMN_DATA, COLUMN_SCRIPT};
 use crate::smt::smt_store::SMTStateStore;
 use crate::snapshot::StoreSnapshot;
 use crate::traits::kv_store::KVStoreRead;
 use crate::traits::kv_store::KVStoreWrite;
 use anyhow::Result;
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
-use gw_db::schema::{COLUMN_DATA, COLUMN_SCRIPT};
 use gw_traits::CodeStore;
 use gw_types::from_box_should_be_ok;
 use gw_types::{

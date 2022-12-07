@@ -510,8 +510,8 @@ impl RequestSubmitter {
     async fn in_background(mut self) {
         // First mem pool reinject txs
         {
-            let db = &self.store.begin_transaction();
             let mut mem_pool = self.mem_pool.lock().await;
+            let db = &self.store.begin_transaction();
 
             log::info!(
                 "reinject mem block txs {}",

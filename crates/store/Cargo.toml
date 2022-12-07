@@ -7,7 +7,6 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-gw-db = { path = "../db" }
 gw-types = { path = "../types" }
 gw-config = { path = "../config" }
 gw-common = { path = "../common" }
@@ -16,6 +15,9 @@ anyhow = "1.0"
 arc-swap = "1.5.0"
 log = "0.4"
 im = "15.1.0"
+autorocks = { path = "../../../autorocks" }
+tempfile = "3.3.0"
+serde = "1.0.149"
 
 [features]
 smt-trie = ["gw-common/smt-trie"]

@@ -7,7 +7,6 @@ members = [
   "crates/mem-pool",
   "crates/generator",
   "crates/traits",
-  "crates/db",
   "crates/store",
   "crates/types",
   "crates/block-producer",

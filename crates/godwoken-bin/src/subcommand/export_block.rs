@@ -2,11 +2,10 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use gw_config::Config;
-use gw_db::read_only_db::ReadOnlyDB;
-use gw_db::schema::COLUMNS;
 use gw_store::readonly::StoreReadonly;
+use gw_store::schema::COLUMNS;
 use gw_store::traits::chain_store::ChainStore;
 use gw_types::packed;
 use gw_types::prelude::{Entity, Unpack};
@@ -50,12 +49,8 @@ impl ExportBlock {
     }
 
     pub fn create(args: ExportArgs) -> Result<Self> {
-        let snap = {
-            let cf_names = (0..COLUMNS).map(|c| c.to_string());
-            let db = ReadOnlyDB::open_cf(&args.config.store.path, cf_names)?
-                .ok_or_else(|| anyhow!("no database"))?;
-            StoreReadonly::new(db)
-        };
+        let snap =
+            StoreReadonly::open(&args.config.store.path, COLUMNS).context("open database")?;
 
         let db_last_valid_tip_block_number =
             snap.get_last_valid_tip_block()?.raw().number().unpack();

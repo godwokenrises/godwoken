@@ -1,25 +1,13 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::smt::smt_store::{SMTBlockStore, SMTRevertedBlockStore, SMTStateStore};
-use crate::traits::chain_store::ChainStore;
-use crate::traits::kv_store::KVStoreRead;
-use crate::traits::kv_store::{KVStore, KVStoreWrite};
+use std::collections::HashSet;
+
 use anyhow::{bail, Context, Result};
+use autorocks::autorocks_sys::rocksdb::PinnableSlice;
+use autorocks::moveit::moveit;
+use autorocks::{DbIterator, Direction};
 use gw_common::h256_ext::H256Ext;
 use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, H256};
-use gw_db::schema::{
-    Col, COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
-    COLUMN_BLOCK_DEPOSIT_INFO_VEC, COLUMN_BLOCK_GLOBAL_STATE,
-    COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY, COLUMN_BLOCK_SUBMIT_TX,
-    COLUMN_BLOCK_SUBMIT_TX_HASH, COLUMN_INDEX, COLUMN_MEM_POOL_TRANSACTION,
-    COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
-    COLUMN_REVERTED_BLOCK_SMT_LEAF, COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION,
-    COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT, COLUMN_WITHDRAWAL, COLUMN_WITHDRAWAL_INFO,
-    META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY, META_LAST_CONFIRMED_BLOCK_NUMBER_HASH_KEY,
-    META_LAST_SUBMITTED_BLOCK_NUMBER_HASH_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY,
-    META_REVERTED_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
-};
-use gw_db::{iter::DBIter, DBIterator, IteratorMode, RocksDBTransaction};
 use gw_types::packed::NumberHash;
 use gw_types::{
     from_box_should_be_ok,
@@ -28,28 +16,39 @@ use gw_types::{
     },
     prelude::*,
 };
-use std::collections::HashSet;
+
+use crate::schema::*;
+use crate::smt::smt_store::{SMTBlockStore, SMTRevertedBlockStore, SMTStateStore};
+use crate::traits::chain_store::ChainStore;
+use crate::traits::kv_store::KVStoreRead;
+use crate::traits::kv_store::{KVStore, KVStoreWrite};
 
 pub struct StoreTransaction {
-    pub(crate) inner: RocksDBTransaction,
+    pub(crate) inner: autorocks::Transaction,
 }
+
+/// Temporary hack.
+unsafe impl Sync for StoreTransaction {}
 
 impl KVStoreRead for &StoreTransaction {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
+        moveit! {
+            let mut buf = PinnableSlice::new();
+        }
         self.inner
-            .get(col, key)
+            .get(col, key, buf.as_mut())
             .expect("db operation should be ok")
-            .map(|v| Box::<[u8]>::from(v.as_ref()))
+            .map(Into::into)
     }
 }
 
 impl KVStoreWrite for &StoreTransaction {
     fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<()> {
-        self.inner.put(col, key, value)
+        Ok(self.inner.put(col, key, value)?)
     }
 
     fn delete(&self, col: Col, key: &[u8]) -> Result<()> {
-        self.inner.delete(col, key)
+        Ok(self.inner.delete(col, key)?)
     }
 }
 impl KVStore for &StoreTransaction {}
@@ -57,17 +56,21 @@ impl ChainStore for &StoreTransaction {}
 
 impl StoreTransaction {
     pub fn commit(&self) -> Result<()> {
-        self.inner.commit()
+        self.inner.commit()?;
+        Ok(())
     }
 
     pub fn rollback(&self) -> Result<()> {
-        self.inner.rollback()
+        self.inner.rollback()?;
+        Ok(())
     }
 
-    pub(crate) fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter {
-        self.inner
-            .iter(col, mode)
-            .expect("db operation should be ok")
+    pub(crate) fn get_iter(
+        &self,
+        col: Col,
+        dir: Direction,
+    ) -> DbIterator<&'_ autorocks::Transaction> {
+        self.inner.iter(col, dir)
     }
 
     pub fn setup_chain_id(&self, chain_id: H256) -> Result<()> {
@@ -216,7 +219,7 @@ impl StoreTransaction {
 
     // TODO: prune db state
     pub fn get_reverted_block_hashes(&self) -> Result<HashSet<H256>> {
-        let iter = self.get_iter(COLUMN_REVERTED_BLOCK_SMT_LEAF, IteratorMode::End);
+        let iter = self.get_iter(COLUMN_REVERTED_BLOCK_SMT_LEAF, Direction::Backward);
         let to_h256 = iter.map(|(key, _value)| {
             packed::Byte32Reader::from_slice_should_be_ok(key.as_ref()).unpack()
         });
@@ -609,7 +612,7 @@ impl StoreTransaction {
     pub fn get_mem_pool_withdrawal_iter(
         &self,
     ) -> impl Iterator<Item = (H256, packed::WithdrawalRequestExtra)> + '_ {
-        self.get_iter(COLUMN_MEM_POOL_WITHDRAWAL, IteratorMode::End)
+        self.get_iter(COLUMN_MEM_POOL_WITHDRAWAL, Direction::Backward)
             .map(|(key, val)| {
                 (
                     packed::Byte32Reader::from_slice_should_be_ok(key.as_ref()).unpack(),
@@ -621,7 +624,7 @@ impl StoreTransaction {
     pub fn get_mem_pool_transaction_iter(
         &self,
     ) -> impl Iterator<Item = (H256, packed::L2Transaction)> + '_ {
-        self.get_iter(COLUMN_MEM_POOL_TRANSACTION, IteratorMode::End)
+        self.get_iter(COLUMN_MEM_POOL_TRANSACTION, Direction::Backward)
             .map(|(key, val)| {
                 (
                     packed::Byte32Reader::from_slice_should_be_ok(key.as_ref()).unpack(),

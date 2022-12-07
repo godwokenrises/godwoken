@@ -856,13 +856,13 @@ impl Chain {
 
     /// Sync chain from layer1
     pub async fn sync(&mut self, param: SyncParam) -> Result<()> {
-        let db = &self.store.begin_transaction();
+        let mut db = self.store.begin_transaction();
         let is_l1_revert_happend = !param.reverts.is_empty();
         // revert layer1 actions
         if !param.reverts.is_empty() {
             // revert
             for reverted_action in param.reverts {
-                self.revert_l1action(db, reverted_action)?;
+                self.revert_l1action(&db, reverted_action)?;
             }
         }
         let has_bad_block_before_update = self.challenge_target.is_some();
@@ -873,15 +873,19 @@ impl Chain {
         log::debug!(target: "sync-block", "sync {} actions", updates.len());
         for (i, action) in updates.into_iter().enumerate() {
             let t = Instant::now();
-            self.update_l1action(db, action)?;
+            self.update_l1action(&db, action)?;
             log::debug!(target: "sync-block", "process {}th action cost {}ms", i, t.elapsed().as_millis());
             match self.last_sync_event() {
                 SyncEvent::Success => (),
-                _ => db.commit()?,
+                _ => {
+                    db.commit()?;
+                    db = self.store.begin_transaction();
+                }
             }
         }
 
         db.commit()?;
+        db = self.store.begin_transaction();
 
         // Should reset mem pool after bad block is reverted. Deposit cell may pass cancel timeout
         // and get reclaimed. Finalized custodians may be merged in bad block submit tx and this
@@ -907,7 +911,7 @@ impl Chain {
 
         // check consistency of account SMT
         let expected_account = match self.challenge_target {
-            Some(_) => db.get_last_valid_tip_block()?.raw().post_account(),
+            Some(_) => (&db).get_last_valid_tip_block()?.raw().post_account(),
             None => self.local_state.tip.raw().post_account(),
         };
 
@@ -917,7 +921,7 @@ impl Chain {
             "account root consistent in DB"
         );
 
-        let tree = BlockStateDB::from_store(db, RWConfig::readonly())?;
+        let tree = BlockStateDB::from_store(&db, RWConfig::readonly())?;
         let current_account = tree.calculate_merkle_state()?;
 
         assert_eq!(

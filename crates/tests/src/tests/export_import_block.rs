@@ -18,11 +18,10 @@ use gw_block_producer::produce_block::ProduceBlockResult;
 use gw_chain::chain::{Chain, ChallengeCell, L1Action, L1ActionContext, SyncEvent, SyncParam};
 use gw_common::H256;
 use gw_config::StoreConfig;
-use gw_db::{read_only_db::ReadOnlyDB, schema::COLUMNS, RocksDB};
 use gw_generator::account_lock_manage::always_success::AlwaysSuccess;
 use gw_generator::account_lock_manage::secp256k1::Secp256k1Eth;
 use gw_generator::account_lock_manage::AccountLockManage;
-use gw_store::{readonly::StoreReadonly, traits::chain_store::ChainStore, Store};
+use gw_store::{readonly::StoreReadonly, schema::COLUMNS, traits::chain_store::ChainStore, Store};
 use gw_types::core::{Status, Timepoint};
 use gw_types::packed::DepositInfoVec;
 use gw_types::{
@@ -98,8 +97,7 @@ async fn test_export_import_block() {
             path: store_dir.path().to_path_buf(),
             ..Default::default()
         };
-        let db = RocksDB::open(&config, COLUMNS);
-        Store::new(db)
+        Store::open(&config, COLUMNS).unwrap()
     };
     let mut chain = {
         let mut account_lock_manage = AccountLockManage::default();
@@ -184,11 +182,7 @@ async fn test_export_import_block() {
         path_buf.set_file_name(format!("export_block_{}", now.as_secs()));
         path_buf
     };
-    let store_readonly = {
-        let cf_names = (0..COLUMNS).map(|c| c.to_string());
-        let db = ReadOnlyDB::open_cf(&store_dir, cf_names).unwrap().unwrap();
-        StoreReadonly::new(db)
-    };
+    let store_readonly = StoreReadonly::open(store_dir.path(), COLUMNS).unwrap();
     let tip_block = store_readonly.get_tip_block().unwrap();
     let tip_block_number = tip_block.raw().number().unpack();
     let export_block =
@@ -203,8 +197,7 @@ async fn test_export_import_block() {
             path: import_store_dir.path().to_path_buf(),
             ..Default::default()
         };
-        let db = RocksDB::open(&config, COLUMNS);
-        Store::new(db)
+        Store::open(&config, COLUMNS).unwrap()
     };
     let import_chain = {
         let mut account_lock_manage = AccountLockManage::default();
@@ -269,11 +262,7 @@ async fn test_export_import_block() {
         path_buf
     };
     // Open db again to see changes
-    let store_readonly = {
-        let cf_names = (0..COLUMNS).map(|c| c.to_string());
-        let db = ReadOnlyDB::open_cf(&store_dir, cf_names).unwrap().unwrap();
-        StoreReadonly::new(db)
-    };
+    let store_readonly = StoreReadonly::open(store_dir.path(), COLUMNS).unwrap();
     let tip_block = store_readonly.get_tip_block().unwrap();
     let tip_block_number = tip_block.raw().number().unpack();
     let export_block =
@@ -288,8 +277,7 @@ async fn test_export_import_block() {
             path: import_store_dir.path().to_path_buf(),
             ..Default::default()
         };
-        let db = RocksDB::open(&config, COLUMNS);
-        Store::new(db)
+        Store::open(&config, COLUMNS).unwrap()
     };
     let import_chain = {
         let mut account_lock_manage = AccountLockManage::default();

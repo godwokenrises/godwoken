@@ -1,9 +1,11 @@
 use gw_common::H256;
-use gw_db::schema::{COLUMN_DATA, COLUMN_SCRIPT};
 use gw_traits::CodeStore;
 use gw_types::{bytes::Bytes, from_box_should_be_ok, packed, prelude::*};
 
-use crate::traits::kv_store::{KVStoreRead, KVStoreWrite};
+use crate::{
+    schema::{COLUMN_DATA, COLUMN_SCRIPT},
+    traits::kv_store::{KVStoreRead, KVStoreWrite},
+};
 
 use super::StoreTransaction;
 

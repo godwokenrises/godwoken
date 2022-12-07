@@ -15,7 +15,6 @@ use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainMockContextBuildArgs};
 use gw_common::{blake2b::new_blake2b, registry_address::RegistryAddress, H256};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
-use gw_db::migrate::{init_migration_factory, open_or_create_db};
 use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
@@ -39,6 +38,7 @@ use gw_rpc_server::{
     registry::{Registry, RegistryArgs},
     server::start_jsonrpc_server,
 };
+use gw_store::migrate::{init_migration_factory, open_or_create_db};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
@@ -325,12 +325,7 @@ impl BaseInitComponents {
 
         // Open store
         let timer = Instant::now();
-        let store = if config.store.path.as_os_str().is_empty() {
-            log::warn!("config.store.path is blank, using temporary store");
-            Store::open_tmp().with_context(|| "init store")?
-        } else {
-            Store::new(open_or_create_db(&config.store, init_migration_factory())?)
-        };
+        let store = Store::new(open_or_create_db(&config.store, init_migration_factory())?);
         let elapsed_ms = timer.elapsed().as_millis();
         log::debug!("Open rocksdb costs: {}ms.", elapsed_ms);
 

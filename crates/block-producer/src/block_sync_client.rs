@@ -11,7 +11,7 @@ use gw_generator::generator::CyclesPool;
 use gw_mem_pool::pool::MemPool;
 use gw_p2p_network::{FnSpawn, P2P_SYNC_PROTOCOL, P2P_SYNC_PROTOCOL_NAME};
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_store::{traits::chain_store::ChainStore, Store};
+use gw_store::{autorocks::RocksDBStatusError, traits::chain_store::ChainStore, Store};
 use gw_telemetry::{
     trace::{SpanContext, SpanId, TraceFlags, TraceId, TraceState},
     traits::{TelemetryContextNewSpan, TraceContextExt},
@@ -77,7 +77,7 @@ impl BlockSyncClient {
         loop {
             if let Some(ref mut s) = p2p_stream {
                 if let Err(err) = run_with_p2p_stream(&mut self, s).await {
-                    if err.is::<gw_db::transaction::CommitError>() {
+                    if err.is::<RocksDBStatusError>() {
                         // Cannot recover from db commit error.
                         log::error!("db error, exiting: {:#}", err);
                         return;
@@ -96,7 +96,7 @@ impl BlockSyncClient {
                     continue;
                 }
                 if let Err(err) = run_once_without_p2p_stream(&mut self).await {
-                    if err.is::<gw_db::transaction::CommitError>() {
+                    if err.is::<RocksDBStatusError>() {
                         // Cannot recover from db error.
                         log::error!("db error, exiting: {:#}", err);
                         return;

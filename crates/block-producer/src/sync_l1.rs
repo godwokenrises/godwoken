@@ -7,7 +7,10 @@ use gw_rpc_client::{
     indexer_types::{Order, SearchKey, SearchKeyFilter},
     rpc_client::RPCClient,
 };
-use gw_store::{traits::chain_store::ChainStore, transaction::StoreTransaction, Store};
+use gw_store::{
+    autorocks::RocksDBStatusError, traits::chain_store::ChainStore, transaction::StoreTransaction,
+    Store,
+};
 use gw_types::{
     offchain::TxStatus,
     packed::{NumberHash, Script},
@@ -35,7 +38,7 @@ pub async fn sync_l1(ctx: &(dyn SyncL1Context + Sync + Send)) -> Result<()> {
     let mut backoff = ExponentialBackoff::new(Duration::from_secs(1));
     loop {
         if let Err(err) = sync_l1_impl(ctx).await {
-            if err.is::<gw_db::transaction::CommitError>() {
+            if err.is::<RocksDBStatusError>() {
                 // We cannot recover from db commit error because Chain
                 // local_state would be wrong. Chain always assumes that commit
                 // will success.

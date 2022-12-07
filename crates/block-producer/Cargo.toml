@@ -10,7 +10,6 @@ gw-common = { path = "../common" }
 gw-config = { path = "../config" }
 gw-chain = { path = "../chain" }
 gw-types = { path = "../types" }
-gw-db = { path = "../db" }
 gw-store = { path = "../store" }
 gw-generator = { path = "../generator" }
 gw-mem-pool = { path = "../mem-pool" }

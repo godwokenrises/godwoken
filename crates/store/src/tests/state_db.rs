@@ -1,16 +1,17 @@
-use crate::{
-    state::{history::history_state::RWConfig, traits::JournalDB, BlockStateDB},
-    traits::{chain_store::ChainStore, kv_store::KVStoreWrite},
-    transaction::StoreTransaction,
-    Store,
-};
 use gw_common::{h256_ext::H256Ext, merkle_utils::calculate_state_checkpoint, state::State, H256};
-use gw_db::schema::COLUMN_BLOCK;
 use gw_types::{
     packed::{
         AccountMerkleState, L2Block, NumberHash, RawL2Block, SubmitTransactions, Transaction,
     },
     prelude::{Builder, Entity, Pack, Unpack},
+};
+
+use crate::{
+    schema::COLUMN_BLOCK,
+    state::{history::history_state::RWConfig, traits::JournalDB, BlockStateDB},
+    traits::{chain_store::ChainStore, kv_store::KVStoreWrite},
+    transaction::StoreTransaction,
+    Store,
 };
 
 fn build_block<S: State + JournalDB>(

@@ -1,23 +1,29 @@
+use std::path::Path;
+
+use anyhow::Result;
+use autorocks::{autorocks_sys::rocksdb::PinnableSlice, moveit::moveit, DbOptions, ReadOnlyDb};
 use gw_common::H256;
-use gw_db::{
-    read_only_db::ReadOnlyDB,
-    schema::{Col, COLUMN_REVERTED_BLOCK_SMT_ROOT},
-};
 use gw_types::{
     from_box_should_be_ok, packed,
     prelude::{Entity, FromSliceShouldBeOk, Unpack},
 };
 
+use crate::schema::{Col, COLUMN_REVERTED_BLOCK_SMT_ROOT};
 use crate::traits::{chain_store::ChainStore, kv_store::KVStoreRead};
 
 #[derive(Clone)]
 pub struct StoreReadonly {
-    inner: ReadOnlyDB,
+    inner: ReadOnlyDb,
 }
 
 impl StoreReadonly {
-    pub fn new(inner: ReadOnlyDB) -> Self {
+    pub fn new(inner: ReadOnlyDb) -> Self {
         StoreReadonly { inner }
+    }
+
+    pub fn open(path: &Path, columns: usize) -> Result<Self> {
+        let db = DbOptions::new(path, columns).open_read_only()?;
+        Ok(Self::new(db))
     }
 
     pub fn iter_reverted_block_smt_root(
@@ -35,10 +41,13 @@ impl ChainStore for StoreReadonly {}
 
 impl KVStoreRead for StoreReadonly {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
+        moveit! {
+            let mut buf = PinnableSlice::new();
+        }
         self.inner
-            .get_pinned(col, key)
+            .get(col, key, buf.as_mut())
             .expect("db operation should be ok")
-            .map(|v| Box::<[u8]>::from(v.as_ref()))
+            .map(Into::into)
     }
 }
 
