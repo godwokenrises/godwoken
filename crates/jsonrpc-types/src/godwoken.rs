@@ -2,6 +2,7 @@ use crate::blockchain::Script;
 use anyhow::{anyhow, Error as JsonError};
 use ckb_fixed_hash::{H160, H256};
 use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32, Uint64};
+use gw_types::core::Timepoint;
 use gw_types::{bytes::Bytes, offchain, packed, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
@@ -1334,36 +1335,67 @@ pub struct FeeConfig {
 pub struct WithdrawalLockArgs {
     pub account_script_hash: H256,
     pub withdrawal_block_hash: H256,
-    pub withdrawal_block_number: Uint64,
+
+    // Being `Some(_)` when global state version is less then v2; otherwise being `None`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub withdrawal_block_number: Option<Uint64>,
+
+    // Being `Some(_)` when global state version is greater then or equal to v2; otherwise being `None`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub withdrawal_block_timestamp: Option<Uint64>,
+
     // layer1 lock to withdraw after challenge period
     pub owner_lock_hash: H256,
 }
 
-impl From<WithdrawalLockArgs> for packed::WithdrawalLockArgs {
-    fn from(json: WithdrawalLockArgs) -> packed::WithdrawalLockArgs {
+impl TryFrom<WithdrawalLockArgs> for packed::WithdrawalLockArgs {
+    type Error = JsonError;
+
+    fn try_from(json: WithdrawalLockArgs) -> Result<packed::WithdrawalLockArgs, Self::Error> {
         let WithdrawalLockArgs {
             account_script_hash,
             withdrawal_block_hash,
             withdrawal_block_number,
+            withdrawal_block_timestamp,
             owner_lock_hash,
         } = json;
-        packed::WithdrawalLockArgs::new_builder()
+        let withdrawal_block_timepoint = match (withdrawal_block_number, withdrawal_block_timestamp)
+        {
+            (Some(block_number), None) => Timepoint::from_block_number(block_number.value()),
+            (None, Some(timestamp)) => Timepoint::from_timestamp(timestamp.value()),
+            (bn, bt) => {
+                return Err(anyhow!(
+                    "conflict withdrawal_block_number {:?} and withdrawal_block_timestamp {:?}",
+                    bn,
+                    bt
+                ));
+            }
+        };
+
+        Ok(packed::WithdrawalLockArgs::new_builder()
             .account_script_hash(account_script_hash.pack())
             .withdrawal_block_hash(withdrawal_block_hash.pack())
-            .withdrawal_block_timepoint(withdrawal_block_number.value().pack())
+            .withdrawal_block_timepoint(withdrawal_block_timepoint.full_value().pack())
             .owner_lock_hash(owner_lock_hash.pack())
-            .build()
+            .build())
     }
 }
 
 impl From<packed::WithdrawalLockArgs> for WithdrawalLockArgs {
     fn from(data: packed::WithdrawalLockArgs) -> WithdrawalLockArgs {
-        let withdrawal_block_number: u64 = data.withdrawal_block_timepoint().unpack();
+        let withdrawal_block_timepoint =
+            Timepoint::from_full_value(data.withdrawal_block_timepoint().unpack());
+        let (withdrawal_block_number, withdrawal_block_timestamp) = match withdrawal_block_timepoint
+        {
+            Timepoint::BlockNumber(block_number) => (Some(block_number), None),
+            Timepoint::Timestamp(timestamp) => (None, Some(timestamp)),
+        };
         Self {
             account_script_hash: data.account_script_hash().unpack(),
             owner_lock_hash: data.owner_lock_hash().unpack(),
             withdrawal_block_hash: data.withdrawal_block_hash().unpack(),
-            withdrawal_block_number: withdrawal_block_number.into(),
+            withdrawal_block_number: withdrawal_block_number.map(Into::into),
+            withdrawal_block_timestamp: withdrawal_block_timestamp.map(Into::into),
         }
     }
 }
