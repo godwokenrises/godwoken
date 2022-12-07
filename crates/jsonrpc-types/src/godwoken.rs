@@ -705,39 +705,72 @@ pub struct GlobalState {
     pub account: AccountMerkleState,
     pub block: BlockMerkleState,
     pub reverted_block_root: H256,
-    pub last_finalized_block_number: Uint64,
+
+    // As Godwoken switches from v1 to v2 by bumping GlobalState.version from 1 to 2, the last
+    // finalized timepoint representation by the finalized block number will be replaced by the
+    // finalized timestamp.
+
+    // Before switching to v2, `last_finalized_block_number` should be `Some(block_number)` and
+    // `last_finalized_timestamp` should be `None`; afterwards, `last_finalized_block_number` will
+    // become `None` and `last_finalized_timestamp` will become `Some(timestamp)`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_finalized_block_number: Option<Uint64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_finalized_timestamp: Option<Uint64>,
+
     pub status: Uint32,
 }
 
-impl From<GlobalState> for packed::GlobalState {
-    fn from(json: GlobalState) -> packed::GlobalState {
+impl TryFrom<GlobalState> for packed::GlobalState {
+    type Error = JsonError;
+
+    fn try_from(json: GlobalState) -> Result<packed::GlobalState, Self::Error> {
         let GlobalState {
             account,
             block,
             reverted_block_root,
             last_finalized_block_number,
+            last_finalized_timestamp,
             status,
         } = json;
-        let last_finalized_block_number: u64 = last_finalized_block_number.into();
+        let last_finalized_timepoint = match (last_finalized_block_number, last_finalized_timestamp)
+        {
+            (Some(block_number), None) => Timepoint::from_block_number(block_number.value()),
+            (None, Some(timestamp)) => Timepoint::from_timestamp(timestamp.value()),
+            (bn, ts) => {
+                return Err(anyhow!(
+                    "conflict last_finalized_block_number {:?} and last_finalized_timestamp {:?}",
+                    bn,
+                    ts
+                ));
+            }
+        };
         let status: u32 = status.into();
-        packed::GlobalState::new_builder()
+        Ok(packed::GlobalState::new_builder()
             .account(account.into())
             .block(block.into())
             .reverted_block_root(reverted_block_root.pack())
-            .last_finalized_timepoint(last_finalized_block_number.pack())
+            .last_finalized_timepoint(last_finalized_timepoint.full_value().pack())
             .status((status as u8).into())
-            .build()
+            .build())
     }
 }
 impl From<packed::GlobalState> for GlobalState {
     fn from(global_state: packed::GlobalState) -> GlobalState {
-        let last_finalized_block_number: u64 = global_state.last_finalized_timepoint().unpack();
+        let last_finalized_timepoint =
+            Timepoint::from_full_value(global_state.last_finalized_timepoint().unpack());
+        let (last_finalized_block_number, last_finalized_timestamp) = match last_finalized_timepoint
+        {
+            Timepoint::BlockNumber(block_number) => (Some(block_number), None),
+            Timepoint::Timestamp(timestamp) => (None, Some(timestamp)),
+        };
         let status: u8 = global_state.status().into();
         Self {
             account: global_state.account().into(),
             block: global_state.block().into(),
             reverted_block_root: global_state.reverted_block_root().unpack(),
-            last_finalized_block_number: last_finalized_block_number.into(),
+            last_finalized_block_number: last_finalized_block_number.map(Into::into),
+            last_finalized_timestamp: last_finalized_timestamp.map(Into::into),
             status: (status as u32).into(),
         }
     }
