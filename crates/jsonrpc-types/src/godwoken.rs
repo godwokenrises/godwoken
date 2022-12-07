@@ -724,14 +724,14 @@ impl From<GlobalState> for packed::GlobalState {
             .account(account.into())
             .block(block.into())
             .reverted_block_root(reverted_block_root.pack())
-            .last_finalized_block_number(last_finalized_block_number.pack())
+            .last_finalized_timepoint(last_finalized_block_number.pack())
             .status((status as u8).into())
             .build()
     }
 }
 impl From<packed::GlobalState> for GlobalState {
     fn from(global_state: packed::GlobalState) -> GlobalState {
-        let last_finalized_block_number: u64 = global_state.last_finalized_block_number().unpack();
+        let last_finalized_block_number: u64 = global_state.last_finalized_timepoint().unpack();
         let status: u8 = global_state.status().into();
         Self {
             account: global_state.account().into(),
@@ -1343,7 +1343,6 @@ pub struct WithdrawalLockArgs {
     // Before switching to v2, `withdrawal_block_number` should be `Some(block_number)` and
     // `withdrawal_block_timestamp` should be `None`; afterwards, `withdrawal_block_number` will
     // become `None` and `withdrawal_block_timestamp` will become `Some(block_timestamp)`.
-
     #[serde(skip_serializing_if = "Option::is_none")]
     pub withdrawal_block_number: Option<Uint64>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -14,7 +14,7 @@ pub struct CompatibleFinalizedTimepoint {
 
 impl CompatibleFinalizedTimepoint {
     pub fn from_global_state(global_state: &GlobalState, rollup_config_finality: u64) -> Self {
-        match Timepoint::from_full_value(global_state.last_finalized_block_number().unpack()) {
+        match Timepoint::from_full_value(global_state.last_finalized_timepoint().unpack()) {
             Timepoint::BlockNumber(finalized_block_number) => Self {
                 finalized_block_number,
                 finalized_timestamp: None,
