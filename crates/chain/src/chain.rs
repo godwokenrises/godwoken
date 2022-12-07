@@ -1035,7 +1035,7 @@ impl Chain {
         // process transactions
         // TODO: run offchain validator before send challenge, to make sure the block is bad
         let generator = &self.generator;
-        let (withdrawal_receipts, prev_txs_state, tx_receipts) = match generator
+        let (_withdrawal_receipts, prev_txs_state, tx_receipts) = match generator
             .verify_and_apply_block(db, &chain_view, args, &self.skipped_invalid_block_list)
         {
             ApplyBlockResult::Success {
@@ -1066,7 +1066,6 @@ impl Chain {
         db.insert_block(
             l2block.clone(),
             global_state.clone(),
-            withdrawal_receipts,
             prev_txs_state,
             tx_receipts,
             deposit_info_vec,

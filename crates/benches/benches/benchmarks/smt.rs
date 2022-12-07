@@ -419,7 +419,6 @@ impl BenchExecutionEnvironment {
         db.insert_block(
             genesis.clone(),
             global_state,
-            Vec::new(),
             prev_txs_state,
             Vec::new(),
             Default::default(),

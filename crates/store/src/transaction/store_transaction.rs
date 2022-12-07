@@ -25,7 +25,6 @@ use gw_types::{
     from_box_should_be_ok,
     packed::{
         self, AccountMerkleState, Byte32, ChallengeTarget, Script, TransactionKey, WithdrawalKey,
-        WithdrawalReceipt,
     },
     prelude::*,
 };
@@ -127,7 +126,6 @@ impl StoreTransaction {
         &self,
         block: packed::L2Block,
         global_state: packed::GlobalState,
-        withdrawal_receipts: Vec<WithdrawalReceipt>,
         prev_txs_state: AccountMerkleState,
         tx_receipts: Vec<packed::TxReceipt>,
         deposit_info_vec: packed::DepositInfoVec,
@@ -195,17 +193,6 @@ impl StoreTransaction {
         for (index, withdrawal) in withdrawals.into_iter().enumerate() {
             let key = WithdrawalKey::build_withdrawal_key(block_hash.pack(), index as u32);
             self.insert_raw(COLUMN_WITHDRAWAL, key.as_slice(), withdrawal.as_slice())?;
-        }
-
-        let post_states: Vec<AccountMerkleState> = {
-            let withdrawal_post_states = withdrawal_receipts.into_iter().map(|w| w.post_state());
-            let tx_post_states = tx_receipts.iter().map(|t| t.post_state());
-            withdrawal_post_states.chain(tx_post_states).collect()
-        };
-
-        let state_checkpoint_list = block.raw().state_checkpoint_list().into_iter();
-        if post_states.len() != state_checkpoint_list.len() {
-            bail!("unexpected block post state length".to_owned());
         }
 
         Ok(())
