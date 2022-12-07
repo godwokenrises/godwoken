@@ -50,10 +50,16 @@ pub struct MemBlock {
     deposit_touched_keys_vec: Vec<Vec<H256>>,
     /// New addresses
     new_addresses: HashSet<RegistryAddress>,
+    /// Is the fork feature "enforce_correctness_of_state_checkpoint_list" enabled for this block
+    enforce_correctness_of_state_checkpoint_list: bool,
 }
 
 impl MemBlock {
-    pub(crate) fn new(block_info: BlockInfo, prev_merkle_state: AccountMerkleState) -> Self {
+    pub(crate) fn new(
+        block_info: BlockInfo,
+        prev_merkle_state: AccountMerkleState,
+        enforce_correctness_of_state_checkpoint_list: bool,
+    ) -> Self {
         let block_producer: Bytes = block_info.block_producer().unpack();
         let block_producer =
             RegistryAddress::from_slice(&block_producer).expect("invalid block producer registry");
@@ -61,6 +67,7 @@ impl MemBlock {
             block_producer,
             block_info,
             prev_merkle_state,
+            enforce_correctness_of_state_checkpoint_list,
             ..Default::default()
         }
     }
@@ -177,12 +184,14 @@ impl MemBlock {
         assert_eq!(deposit_cells.len(), post_states.len());
         assert_eq!(deposit_cells.len(), touched_keys_vec.len());
 
-        if let Some(txs_prev_state) = post_states.last().as_ref() {
-            let checkpoint = calculate_state_checkpoint(
-                &txs_prev_state.merkle_root().unpack(),
-                txs_prev_state.count().unpack(),
-            );
-            assert_eq!(checkpoint, txs_prev_state_checkpoint);
+        if self.enforce_correctness_of_state_checkpoint_list {
+            if let Some(txs_prev_state) = post_states.last().as_ref() {
+                let checkpoint = calculate_state_checkpoint(
+                    &txs_prev_state.merkle_root().unpack(),
+                    txs_prev_state.count().unpack(),
+                );
+                assert_eq!(checkpoint, txs_prev_state_checkpoint);
+            }
         }
 
         self.deposits = deposit_cells;
@@ -560,7 +569,7 @@ mod test {
         };
         let prev_merkle_state = AccountMerkleState::new_builder().count(3u32.pack()).build();
 
-        let mut mem_block = MemBlock::new(block_info, prev_merkle_state);
+        let mut mem_block = MemBlock::new(block_info, prev_merkle_state, true);
         mem_block.push_deposits(
             vec![Default::default()],
             vec![random_state()],

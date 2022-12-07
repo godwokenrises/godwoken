@@ -116,11 +116,16 @@ pub fn produce_block(
             .build()
     };
     assert_eq!(parent_block.raw().post_account(), prev_merkle_state);
-    assert_eq!(
-        state_checkpoint_list.len(),
-        withdrawals.len() + txs.len(),
-        "state checkpoint len"
-    );
+    if rollup_context
+        .fork_config
+        .enforce_correctness_of_state_checkpoint_list(number)
+    {
+        assert_eq!(
+            state_checkpoint_list.len(),
+            withdrawals.len() + txs.len(),
+            "state checkpoint len"
+        );
+    }
     let raw_block = RawL2Block::new_builder()
         .number(number.pack())
         .block_producer(block_producer.pack())

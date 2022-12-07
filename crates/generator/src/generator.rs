@@ -465,23 +465,29 @@ impl Generator {
                 Ok(receipt) => receipt,
                 Err(err) => return ApplyBlockResult::Error(err.into()),
             };
-            let expected_checkpoint = state
-                .calculate_state_checkpoint()
-                .expect("calculate_state_checkpoint");
-            let block_checkpoint: H256 = match state_checkpoint_list.get(wth_idx) {
-                Some(checkpoint) => *checkpoint,
-                None => {
-                    return ApplyBlockResult::Error(
-                        BlockError::CheckpointNotFound { index: wth_idx }.into(),
-                    );
-                }
-            };
-            // since the state-validator script will verify withdrawals, we should always pass this check
-            assert_eq!(
-                block_checkpoint, expected_checkpoint,
-                "check withdrawal checkpoint"
-            );
-            withdrawal_receipts.push(withdrawal_receipt)
+            withdrawal_receipts.push(withdrawal_receipt);
+
+            if self
+                .fork_config()
+                .enforce_correctness_of_state_checkpoint_list(block_number)
+            {
+                let expected_checkpoint = state
+                    .calculate_state_checkpoint()
+                    .expect("calculate_state_checkpoint");
+                let block_checkpoint: H256 = match state_checkpoint_list.get(wth_idx) {
+                    Some(checkpoint) => *checkpoint,
+                    None => {
+                        return ApplyBlockResult::Error(
+                            BlockError::CheckpointNotFound { index: wth_idx }.into(),
+                        );
+                    }
+                };
+                // since the state-validator script will verify withdrawals, we should always pass this check
+                assert_eq!(
+                    block_checkpoint, expected_checkpoint,
+                    "check withdrawal checkpoint"
+                );
+            }
         }
 
         for req in args.deposit_info_vec.into_iter().map(|i| i.request()) {
@@ -606,36 +612,43 @@ impl Generator {
                     return ApplyBlockResult::Error(err.into());
                 }
                 apply_state_total_ms += now.elapsed().as_millis();
-                let expected_checkpoint = state
-                    .calculate_state_checkpoint()
-                    .expect("calculate_state_checkpoint");
-                let checkpoint_index = withdrawal_receipts.len() + tx_index;
-                let block_checkpoint: H256 = match state_checkpoint_list.get(checkpoint_index) {
-                    Some(checkpoint) => *checkpoint,
-                    None => {
-                        return ApplyBlockResult::Error(
-                            BlockError::CheckpointNotFound {
-                                index: checkpoint_index,
-                            }
-                            .into(),
-                        );
-                    }
-                };
 
-                if !skip_checkpoint_check && block_checkpoint != expected_checkpoint {
-                    let target = build_challenge_target(
-                        block_hash.into(),
-                        ChallengeTargetType::TxExecution,
-                        tx_index as u32,
-                    );
-                    return ApplyBlockResult::Challenge {
-                        target,
-                        error: Error::Block(BlockError::InvalidCheckpoint {
-                            expected_checkpoint,
-                            block_checkpoint,
-                            index: checkpoint_index,
-                        }),
+                if !skip_checkpoint_check
+                    && self
+                        .fork_config()
+                        .enforce_correctness_of_state_checkpoint_list(block_number)
+                {
+                    let expected_checkpoint = state
+                        .calculate_state_checkpoint()
+                        .expect("calculate_state_checkpoint");
+                    let checkpoint_index = withdrawal_receipts.len() + tx_index;
+                    let block_checkpoint: H256 = match state_checkpoint_list.get(checkpoint_index) {
+                        Some(checkpoint) => *checkpoint,
+                        None => {
+                            return ApplyBlockResult::Error(
+                                BlockError::CheckpointNotFound {
+                                    index: checkpoint_index,
+                                }
+                                .into(),
+                            );
+                        }
                     };
+
+                    if !skip_checkpoint_check && block_checkpoint != expected_checkpoint {
+                        let target = build_challenge_target(
+                            block_hash.into(),
+                            ChallengeTargetType::TxExecution,
+                            tx_index as u32,
+                        );
+                        return ApplyBlockResult::Challenge {
+                            target,
+                            error: Error::Block(BlockError::InvalidCheckpoint {
+                                expected_checkpoint,
+                                block_checkpoint,
+                                index: checkpoint_index,
+                            }),
+                        };
+                    }
                 }
 
                 let used_cycles = run_result.cycles.execution;

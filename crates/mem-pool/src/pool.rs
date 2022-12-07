@@ -1358,7 +1358,15 @@ impl MemPool {
 
             // update mem block
             let post_merkle_state = tip_block.raw().post_account();
-            let mem_block = MemBlock::new(block_info, post_merkle_state);
+            let enforce_correctness_of_state_checkpoint_list = self
+                .generator
+                .fork_config()
+                .enforce_correctness_of_state_checkpoint_list(next_block_number);
+            let mem_block = MemBlock::new(
+                block_info,
+                post_merkle_state,
+                enforce_correctness_of_state_checkpoint_list,
+            );
             self.mem_block = mem_block;
 
             let mut state = StateDB::from_store(snapshot)?;
@@ -1475,7 +1483,7 @@ mod test {
 
         // Fill mem block
         let mem_block = {
-            let mut mem_block = MemBlock::new(block_info.clone(), prev_merkle_state.clone());
+            let mut mem_block = MemBlock::new(block_info.clone(), prev_merkle_state.clone(), true);
             for ((hash, touched_keys), state) in { withdrawals.clone().into_iter() }
                 .zip(withdrawals_touch_keys.clone())
                 .zip(withdrawals_state.clone())
@@ -1514,7 +1522,7 @@ mod test {
         );
 
         let repackage = |withdrawals_count, deposits_count, txs_count| -> _ {
-            let mut expected = MemBlock::new(block_info.clone(), prev_merkle_state.clone());
+            let mut expected = MemBlock::new(block_info.clone(), prev_merkle_state.clone(), true);
             let mut post_states = vec![prev_merkle_state.clone()];
             for ((hash, touched_keys), state) in { withdrawals.clone().into_iter() }
                 .zip(withdrawals_touch_keys.clone())
