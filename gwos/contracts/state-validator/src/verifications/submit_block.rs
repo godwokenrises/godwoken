@@ -68,9 +68,20 @@ fn build_assets_map_from_cells<'a, I: Iterator<Item = &'a CellValue>>(
 
 fn check_withdrawal_cells<'a>(
     context: &BlockContext,
+    rollup_config: &RollupConfig,
     mut withdrawal_requests: Vec<WithdrawalRequestReader<'a>>,
     withdrawal_cells: &[WithdrawalCell],
 ) -> Result<(), Error> {
+    let expected_withdrawal_block_timepoint = {
+        let block_timepoint = context.block_timepoint().full_value();
+        if Fork::use_timestamp_as_timepoint(context.post_version) {
+            // Use finalized timestamp from the future
+            block_timepoint.saturating_add(finality_time_in_ms(rollup_config))
+        } else {
+            block_timepoint
+        }
+    };
+
     // iter outputs withdrawal cells, check each cell has a corresponded withdrawal request
     for cell in withdrawal_cells {
         // check withdrawal cell block info
@@ -80,12 +91,11 @@ fn check_withdrawal_cells<'a>(
             return Err(Error::InvalidWithdrawalCell);
         }
 
-        if cell.args.withdrawal_block_timepoint().unpack() != context.block_timepoint().full_value()
-        {
+        if cell.args.withdrawal_block_timepoint().unpack() != expected_withdrawal_block_timepoint {
             debug!(
-                "withdrawal_cell.args.withdrawal_block_timepoint != context.block_timepoint, {} != {}",
+                "withdrawal_cell.args.withdrawal_block_timepoint != expected block timepoint, {} != {}",
                 cell.args.withdrawal_block_timepoint().unpack(),
-                context.block_timepoint().full_value()
+                expected_withdrawal_block_timepoint
             );
             return Err(Error::InvalidWithdrawalCell);
         }
@@ -927,7 +937,7 @@ pub fn verify(
     // Check new cells and reverted cells: deposit / withdrawal / custodian
     let withdrawal_requests_vec = block.withdrawals();
     let withdrawal_requests = withdrawal_requests_vec.iter().collect();
-    check_withdrawal_cells(&context, withdrawal_requests, &withdrawal_cells)?;
+    check_withdrawal_cells(&context, config, withdrawal_requests, &withdrawal_cells)?;
     let input_finalized_assets =
         check_input_custodian_cells(config, prev_global_state, &context, withdrawal_cells)?;
     check_output_custodian_cells(

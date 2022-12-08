@@ -6,12 +6,10 @@ use gw_types::{
     packed::{UnlockWithdrawalWitness, UnlockWithdrawalWitnessReader},
     prelude::*,
 };
-use gw_utils::cells::rollup::{
-    load_rollup_config, parse_rollup_action, search_rollup_cell, search_rollup_state,
-};
 use gw_utils::ckb_std::{
     debug,
     high_level::{load_cell_lock_hash, QueryIter},
+    since::{LockValue, Since},
 };
 use gw_utils::finality::is_finalized;
 use gw_utils::gw_types::packed::{
@@ -21,6 +19,12 @@ use gw_utils::gw_types::packed::{
 use gw_utils::{
     cells::rollup::MAX_ROLLUP_WITNESS_SIZE,
     gw_types::{self, core::ScriptHashType},
+};
+use gw_utils::{
+    cells::rollup::{
+        load_rollup_config, parse_rollup_action, search_rollup_cell, search_rollup_state,
+    },
+    ckb_std::high_level::load_input_since,
 };
 use gw_utils::{cells::utils::search_lock_hash, ckb_std::high_level::load_cell_lock};
 
@@ -155,25 +159,16 @@ pub fn main() -> Result<(), Error> {
             Ok(())
         }
         UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(_unlock_args) => {
-            // try search rollup state from deps
-            let global_state = match search_rollup_state(&rollup_type_hash, Source::CellDep)? {
-                Some(state) => state,
-                None => {
-                    // then try search rollup state from inputs
-                    search_rollup_state(&rollup_type_hash, Source::Input)?
-                        .ok_or(Error::RollupCellNotFound)?
-                }
-            };
-            let config = load_rollup_config(&global_state.rollup_config_hash().unpack())?;
+            let withdrawal_block_timepoint =
+                Timepoint::from_full_value(lock_args.withdrawal_block_timepoint().unpack());
 
-            // check finality
-            let is_finalized = is_finalized(
-                &config,
-                &global_state,
-                &Timepoint::from_full_value(lock_args.withdrawal_block_timepoint().unpack()),
-            );
-            if !is_finalized {
-                return Err(Error::NotFinalized);
+            match &withdrawal_block_timepoint {
+                Timepoint::Timestamp(finalized_timestamp) => {
+                    check_finalized_timestamp_less_than_since(*finalized_timestamp)?
+                }
+                Timepoint::BlockNumber(_) => {
+                    check_finalized_block_number(&rollup_type_hash, &withdrawal_block_timepoint)?
+                }
             }
 
             // withdrawal lock is finalized, unlock for owner
@@ -239,4 +234,44 @@ fn check_output_cell_has_same_content(
         return Err(Error::InvalidOutput);
     }
     Ok(())
+}
+
+fn check_finalized_timestamp_less_than_since(finalized_timestamp: u64) -> Result<(), Error> {
+    let withdrawal_input_since = Since::new(load_input_since(0, Source::GroupInput)?);
+    let withdrawal_input_timestamp = match (
+        withdrawal_input_since.is_absolute(),
+        withdrawal_input_since.extract_lock_value(),
+    ) {
+        (true, Some(LockValue::Timestamp(time_ms))) => time_ms,
+        _ => return Err(Error::InvalidSince),
+    };
+
+    if finalized_timestamp < withdrawal_input_timestamp {
+        Ok(())
+    } else {
+        Err(Error::NotFinalized)
+    }
+}
+
+fn check_finalized_block_number(
+    rollup_type_hash: &[u8; 32],
+    withdrawal_block_timepoint: &Timepoint,
+) -> Result<(), Error> {
+    // try search rollup state from deps
+    let global_state = match search_rollup_state(&rollup_type_hash, Source::CellDep)? {
+        Some(state) => state,
+        None => {
+            // then try search rollup state from inputs
+            search_rollup_state(&rollup_type_hash, Source::Input)?
+                .ok_or(Error::RollupCellNotFound)?
+        }
+    };
+    let config = load_rollup_config(&global_state.rollup_config_hash().unpack())?;
+
+    // check finality
+    if is_finalized(&config, &global_state, withdrawal_block_timepoint) {
+        Ok(())
+    } else {
+        Err(Error::NotFinalized)
+    }
 }

@@ -30,6 +30,21 @@ impl CompatibleFinalizedTimepoint {
         }
     }
 
+    /// Create CompatibleFinalizedTimepoint using tip block timestamp as finalized timestamp
+    pub fn from_global_state_tip_block_timestamp(
+        global_state: &GlobalState,
+        rollup_config_finality: u64,
+    ) -> Self {
+        let mut timepoint = Self::from_global_state(global_state, rollup_config_finality);
+
+        if timepoint.finalized_timestamp.is_some() {
+            // Override with tip block timestamp
+            timepoint.finalized_timestamp = Some(global_state.tip_block_timestamp().unpack());
+        }
+
+        timepoint
+    }
+
     /// Returns true if `timepoint` is finalized.
     pub fn is_finalized(&self, timepoint: &Timepoint) -> bool {
         match timepoint {

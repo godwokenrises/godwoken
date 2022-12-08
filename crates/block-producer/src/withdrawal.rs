@@ -17,6 +17,7 @@ use gw_types::{
     },
     prelude::*,
 };
+use gw_utils::since::Since;
 use gw_utils::RollupContext;
 use std::{
     collections::HashMap,
@@ -223,11 +224,17 @@ pub fn unlock_to_owner(
             .build()
     };
 
+    fn greater_since(timestamp_millis: u64) -> Since {
+        Since::new_timestamp_seconds(timestamp_millis / 1000 + 1)
+    }
+
     let global_state = global_state_from_slice(&rollup_cell.data)?;
-    let compatible_finalized_timepoint = CompatibleFinalizedTimepoint::from_global_state(
-        &global_state,
-        rollup_config.finality_blocks().unpack(),
-    );
+    let since = greater_since(global_state.tip_block_timestamp().unpack());
+    let compatible_finalized_timepoint =
+        CompatibleFinalizedTimepoint::from_global_state_tip_block_timestamp(
+            &global_state,
+            rollup_config.finality_blocks().unpack(),
+        );
     let l1_sudt_script_hash = rollup_config.l1_sudt_script_type_hash();
     for withdrawal_cell in withdrawal_cells {
         // Double check
@@ -254,6 +261,7 @@ pub fn unlock_to_owner(
         let withdrawal_input = {
             let input = CellInput::new_builder()
                 .previous_output(withdrawal_cell.out_point.clone())
+                .since(since.as_u64().pack())
                 .build();
 
             InputCellInfo {

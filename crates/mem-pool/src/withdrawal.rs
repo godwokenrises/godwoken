@@ -125,7 +125,8 @@ impl<'a> Generator<'a> {
                 .use_timestamp_as_timepoint(block_number)
             {
                 let block_timestamp = block.raw().timestamp().unpack();
-                Timepoint::from_timestamp(block_timestamp)
+                let finality_time_in_ms = self.rollup_context.rollup_config.finality_time_in_ms();
+                Timepoint::from_timestamp(block_timestamp.saturating_add(finality_time_in_ms))
             } else {
                 Timepoint::from_block_number(block_number)
             }

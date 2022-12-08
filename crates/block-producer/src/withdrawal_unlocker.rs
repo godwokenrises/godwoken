@@ -185,10 +185,11 @@ pub trait BuildUnlockWithdrawalToOwner {
         };
 
         let global_state = global_state_from_slice(&rollup_cell.data)?;
-        let compatible_finalized_timepoint = CompatibleFinalizedTimepoint::from_global_state(
-            &global_state,
-            self.rollup_config().finality_blocks().unpack(),
-        );
+        let compatible_finalized_timepoint =
+            CompatibleFinalizedTimepoint::from_global_state_tip_block_timestamp(
+                &global_state,
+                self.rollup_config().finality_blocks().unpack(),
+            );
         let unlockable_withdrawals = self
             .query_unlockable_withdrawals(&compatible_finalized_timepoint, unlocked)
             .await?;
