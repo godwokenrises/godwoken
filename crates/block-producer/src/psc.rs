@@ -75,8 +75,6 @@ pub struct PSCContext {
     pub chain: Arc<Mutex<Chain>>,
     pub mem_pool: Arc<Mutex<MemPool>>,
     pub block_producer: BlockProducer,
-    // Use mutex to make rust happy. Actually we won't refresh or access this at
-    // the same time.
     pub local_cells_manager: Arc<Mutex<LocalCellsManager>>,
     pub chain_updater: ChainUpdater,
     pub rollup_type_script: Script,
