@@ -23,7 +23,7 @@ use gw_common::h256_ext::H256Ext;
 use gw_common::smt::SMT;
 use gw_common::sparse_merkle_tree::default_store::DefaultStore;
 use gw_common::H256;
-use gw_config::ContractsCellDep;
+use gw_config::{ContractsCellDep, ForkConfig};
 use gw_types::bytes::Bytes;
 use gw_types::core::{AllowedEoaType, DepType, ScriptHashType, Timepoint};
 use gw_types::offchain::{
@@ -172,6 +172,7 @@ async fn test_build_unlock_to_owner_tx() {
             .build(),
         output: CellOutput::new_builder()
             .type_(Some(rollup_type_script.clone()).pack())
+            .lock(random_always_success_script(None))
             .build(),
     };
     let mut chain =
@@ -263,7 +264,7 @@ async fn test_build_unlock_to_owner_tx() {
             .build(),
         output: CellOutput::new_builder()
             .type_(Some(rollup_type_script.clone()).pack())
-            .lock(random_always_success_script(None))
+            .lock(rollup_cell.output.lock())
             .build(),
     };
 
@@ -320,7 +321,7 @@ async fn test_build_unlock_to_owner_tx() {
         assert_eq!(mem_pool.mem_block().withdrawals().len(), accounts.len());
     }
 
-    const BLOCK_TIMESTAMP: u64 = 10000u64;
+    const BLOCK_TIMESTAMP: u64 = 100000u64;
     let withdrawal_block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
@@ -451,7 +452,7 @@ async fn test_build_unlock_to_owner_tx() {
         into_input_cell(always_cell.clone()),
         into_input_cell(stake_lock_cell.clone()),
         into_input_cell(state_validator_cell.clone()),
-        into_input_cell(custodian_lock_cell),
+        into_input_cell(custodian_lock_cell.clone()),
         into_input_cell(rollup_config_cell.clone()),
     ];
     let cell_deps = {
@@ -471,9 +472,9 @@ async fn test_build_unlock_to_owner_tx() {
         SINCE_BLOCK_TIMESTAMP_FLAG | input_timestamp
     };
     let inputs = vec![
-        into_input_cell_since(input_rollup_cell, block_since),
+        into_input_cell_since(input_rollup_cell.clone(), block_since),
         into_input_cell(input_stake_cell.clone()),
-        into_input_cell(input_custodian_cell),
+        into_input_cell(input_custodian_cell.clone()),
     ];
     let mut outputs = vec![output_rollup_cell, output_stake];
     outputs.extend(generated_withdrawals.outputs.clone());
@@ -492,9 +493,153 @@ async fn test_build_unlock_to_owner_tx() {
     };
     verify_tx(tx_with_context, 700_000_000_u64).expect("pass");
 
-    // Check unlock to owner tx
+    // Check generated finalized timestamp withdrawal cells pass state validator contract
+    let rollup_context_using_timestamp = {
+        let mut rollup_context = rollup_context.clone();
+        rollup_context.fork_config = ForkConfig {
+            upgrade_global_state_version_to_v2: Some(
+                withdrawal_block_result.block.raw().number().unpack(),
+            ),
+            ..Default::default()
+        };
+        rollup_context
+    };
+
+    let generated_withdrawals_using_timestamp = {
+        let withdrawal_extras = {
+            let withdrawals = withdrawal_block_result
+                .withdrawal_extras
+                .clone()
+                .into_iter();
+            withdrawals.map(|w| (w.hash().into(), w))
+        };
+
+        gw_block_producer::withdrawal::generate(
+            &rollup_context_using_timestamp,
+            CollectedCustodianCells {
+                cells_info: vec![Default::default()],
+                capacity: finalized_custodians.capacity,
+                sudt: finalized_custodians.sudt.clone(),
+            },
+            &withdrawal_block_result.block,
+            &contracts_dep,
+            &withdrawal_extras.collect(),
+        )
+        .expect("generate")
+        .expect("some withdrawals cell")
+    };
+
+    {
+        let withdrawal_block_timestamp = withdrawal_block_result.block.raw().timestamp().unpack();
+        let output_stake = {
+            let stake_block_timepoint = Timepoint::from_timestamp(withdrawal_block_timestamp);
+            let stake_lock_args = StakeLockArgs::new_builder()
+                .stake_block_timepoint(stake_block_timepoint.full_value().pack())
+                .build();
+
+            let mut lock_args = rollup_script_hash.as_slice().to_vec();
+            lock_args.extend_from_slice(stake_lock_args.as_slice());
+
+            let stake_lock = Script::new_builder()
+                .code_hash(stake_lock_type.hash().pack())
+                .hash_type(ScriptHashType::Type.into())
+                .args(lock_args.pack())
+                .build();
+
+            let output = CellOutput::new_builder()
+                .capacity(STAKE_CAPACITY.pack())
+                .lock(stake_lock)
+                .build();
+            (output, Bytes::default())
+        };
+
+        let last_finalized_timepoint = {
+            let ts = withdrawal_block_timestamp.saturating_sub(
+                rollup_context_using_timestamp
+                    .rollup_config
+                    .finality_time_in_ms()
+                    + 1,
+            );
+            Timepoint::from_timestamp(ts)
+        };
+        let global_state = { withdrawal_block_result.global_state.clone().as_builder() }
+            .tip_block_timestamp(withdrawal_block_timestamp.pack())
+            .last_finalized_timepoint(last_finalized_timepoint.full_value().pack())
+            .version(2u8.into())
+            .build();
+
+        let output_rollup_cell = (rollup_cell.output.clone(), global_state.as_bytes());
+        let witness = {
+            let rollup_action = RollupAction::new_builder()
+                .set(RollupActionUnion::RollupSubmitBlock(
+                    RollupSubmitBlock::new_builder()
+                        .block(withdrawal_block_result.block.clone())
+                        .build(),
+                ))
+                .build();
+            WitnessArgs::new_builder()
+                .output_type(Some(rollup_action.as_bytes()).pack())
+                .build()
+        };
+
+        let input_cell_deps = vec![
+            into_input_cell(always_cell.clone()),
+            into_input_cell(stake_lock_cell.clone()),
+            into_input_cell(state_validator_cell.clone()),
+            into_input_cell(custodian_lock_cell),
+            into_input_cell(rollup_config_cell.clone()),
+        ];
+        let cell_deps = {
+            let deps = input_cell_deps.iter();
+            deps.map(|i| {
+                CellDep::new_builder()
+                    .out_point(i.cell.out_point.to_owned())
+                    .dep_type(DepType::Code.into())
+                    .build()
+            })
+            .collect::<Vec<_>>()
+        };
+
+        const SINCE_BLOCK_TIMESTAMP_FLAG: u64 = 0x4000_0000_0000_0000;
+        let block_since = {
+            let input_timestamp = Duration::from_millis(BLOCK_TIMESTAMP).as_secs() + 1;
+            SINCE_BLOCK_TIMESTAMP_FLAG | input_timestamp
+        };
+        let inputs = vec![
+            into_input_cell_since(input_rollup_cell, block_since),
+            into_input_cell(input_stake_cell.clone()),
+            into_input_cell(input_custodian_cell),
+        ];
+        let mut outputs = vec![output_rollup_cell, output_stake];
+        outputs.extend(generated_withdrawals_using_timestamp.outputs.clone());
+
+        let mut tx_skeleton = TransactionSkeleton::default();
+        tx_skeleton.cell_deps_mut().extend(cell_deps);
+        tx_skeleton.inputs_mut().extend(inputs.clone());
+        tx_skeleton.witnesses_mut().push(witness);
+        tx_skeleton.outputs_mut().extend(outputs);
+        let tx = tx_skeleton.seal(&[], vec![]).unwrap().transaction;
+
+        let tx_with_context = TxWithContext {
+            tx,
+            cell_deps: input_cell_deps,
+            inputs,
+        };
+        verify_tx(tx_with_context, 700_000_000_u64).expect("pass");
+    }
+
+    // Check unlock to owner tx (block_number and timestamp mixed)
     let random_withdrawal_cells = {
-        let outputs = generated_withdrawals.outputs.into_iter();
+        let outputs = generated_withdrawals
+            .outputs
+            .into_iter()
+            .take(accounts.len() / 2)
+            .chain(
+                generated_withdrawals_using_timestamp
+                    .outputs
+                    .into_iter()
+                    .skip(accounts.len() / 2),
+            );
         outputs
             .map(|(output, data)| CellInfo {
                 output,
@@ -506,15 +651,44 @@ async fn test_build_unlock_to_owner_tx() {
             .collect::<Vec<_>>()
     };
 
+    let rollup_cell_using_timestamp = {
+        let withdrawal_block_timestamp = withdrawal_block_result.block.raw().timestamp().unpack();
+        let finality_time_in_ms = rollup_context_using_timestamp
+            .rollup_config
+            .finality_time_in_ms();
+        let last_finalized_timepoint = {
+            let ts = withdrawal_block_timestamp.saturating_sub(finality_time_in_ms + 1);
+            Timepoint::from_timestamp(ts)
+        };
+        let block = BlockMerkleState::new_builder()
+            .count((last_finalized_block_number + rollup_config.finality_blocks().unpack()).pack())
+            .build();
+        let global_state = { withdrawal_block_result.global_state.clone().as_builder() }
+            .tip_block_timestamp(
+                (withdrawal_block_timestamp.saturating_add(finality_time_in_ms + 1)).pack(),
+            )
+            .last_finalized_timepoint(last_finalized_timepoint.full_value().pack())
+            .block(block)
+            .version(2u8.into())
+            .build();
+        CellInfo {
+            data: global_state.as_bytes(),
+            out_point: OutPoint::new_builder()
+                .tx_hash(rand::random::<[u8; 32]>().pack())
+                .build(),
+            output: rollup_cell.output.clone(),
+        }
+    };
+
     let mut unlocker = DummyUnlocker {
-        rollup_cell: rollup_cell.clone(),
-        rollup_context: rollup_context.clone(),
+        rollup_cell: rollup_cell_using_timestamp.clone(),
+        rollup_context: rollup_context_using_timestamp.clone(),
         contracts_dep: Arc::new(contracts_dep.clone()),
         withdrawals: random_withdrawal_cells.clone(),
     };
     let cell_deps = vec![
         into_input_cell(rollup_config_cell.clone()),
-        into_input_cell(rollup_cell.clone()),
+        into_input_cell(rollup_cell_using_timestamp.clone()),
         into_input_cell(always_cell.clone()),
         into_input_cell(withdrawal_lock_cell.clone()),
     ];
@@ -541,10 +715,11 @@ async fn test_build_unlock_to_owner_tx() {
 
     // Simulate rpc client filter no owner lock withdrawal cells
     let finality_as_blocks = rollup_config.finality_blocks().unpack();
-    let compatible_finalized_timepoint = CompatibleFinalizedTimepoint::from_block_number(
-        withdrawal_block_result.block.raw().number().unpack() + finality_as_blocks,
-        finality_as_blocks,
-    );
+    let compatible_finalized_timepoint =
+        CompatibleFinalizedTimepoint::from_global_state_tip_block_timestamp(
+            &GlobalState::from_slice(&rollup_cell_using_timestamp.data).unwrap(),
+            finality_as_blocks,
+        );
     let unlockable_random_withdrawals: Vec<_> = random_withdrawal_cells
         .into_iter()
         .filter(|cell| {
@@ -645,7 +820,7 @@ async fn test_build_unlock_to_owner_tx() {
                 .build(),
             output: CellOutput::new_builder()
                 .type_(Some(rollup_type_script).pack())
-                .lock(random_always_success_script(None))
+                .lock(rollup_cell.output.lock())
                 .build(),
         }
     };
@@ -711,7 +886,7 @@ async fn test_build_unlock_to_owner_tx() {
         SINCE_BLOCK_TIMESTAMP_FLAG | input_timestamp
     };
     let mut inputs = vec![
-        into_input_cell_since(input_rollup_cell, block_since),
+        into_input_cell_since(input_rollup_cell.clone(), block_since),
         into_input_cell(input_stake_cell),
     ];
     inputs.extend(reverted_withdrawals.inputs);

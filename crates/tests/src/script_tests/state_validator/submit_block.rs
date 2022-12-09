@@ -23,7 +23,7 @@ use ckb_types::{
 };
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
 use gw_store::traits::chain_store::ChainStore;
-use gw_types::core::AllowedEoaType;
+use gw_types::core::{AllowedEoaType, Timepoint};
 use gw_types::packed::{
     AllowedTypeHash, DepositRequest, RawWithdrawalRequest, WithdrawalRequest,
     WithdrawalRequestExtra,
@@ -41,6 +41,7 @@ use gw_types::{
 const INVALID_OUTPUT_ERROR: i8 = 7;
 const INVALID_BLOCK_ERROR: i8 = 20;
 const INVALID_POST_GLOBAL_STATE: i8 = 23;
+const INVALID_WITHDRAWAL_CELL: i8 = 27;
 
 fn timestamp_now() -> u64 {
     SystemTime::now()
@@ -1126,7 +1127,7 @@ async fn test_check_reverted_cells_in_submit_block() {
         let owner_lock = Script::default();
         let lock_args = WithdrawalLockArgs::new_builder()
             .withdrawal_block_hash(Pack::pack(&revert_block_hash))
-            .withdrawal_block_timepoint(Pack::pack(&revert_block_number))
+            .finalized_timepoint(Pack::pack(&revert_block_number))
             .owner_lock_hash(Pack::pack(&owner_lock.hash()))
             .build();
         let mut args = Vec::new();
@@ -1519,7 +1520,7 @@ async fn test_withdrawal_cell_lock_args_with_owner_lock_in_submit_block() {
     // build withdrawal output
     let output_withdrawal_cell = {
         let lock_args = WithdrawalLockArgs::new_builder()
-            .withdrawal_block_timepoint(block_result.block.raw().number())
+            .finalized_timepoint(block_result.block.raw().number())
             .withdrawal_block_hash(Pack::pack(&block_result.block.raw().hash()))
             .account_script_hash(Pack::pack(&account_script.hash()))
             .owner_lock_hash(Pack::pack(&account_script.hash()))
@@ -1585,4 +1586,476 @@ async fn test_withdrawal_cell_lock_args_with_owner_lock_in_submit_block() {
     .witness(CKBPack::pack(&witness.as_bytes()))
     .build();
     ctx.verify_tx(tx).expect("return success");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_withdrawal_cell_lock_args_block_timepoint_is_finalized_timestamp() {
+    let _ = env_logger::builder().is_test(true).try_init();
+
+    let capacity = 1000_00000000u64;
+    let input_out_point = random_out_point();
+    let type_id = calculate_type_id(input_out_point.clone());
+    let rollup_type_script = {
+        Script::new_builder()
+            .code_hash(Pack::pack(&*STATE_VALIDATOR_CODE_HASH))
+            .hash_type(ScriptHashType::Data.into())
+            .args(Pack::pack(&Bytes::from(type_id.to_vec())))
+            .build()
+    };
+
+    // rollup lock & config
+    let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
+    let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack().into();
+    let custodian_lock_type = named_always_success_script(b"custodian_lock_type_id");
+    let custodian_script_type_hash: [u8; 32] =
+        custodian_lock_type.calc_script_hash().unpack().into();
+    let withdrawal_lock_type = named_always_success_script(b"withdrawal_lock_type_id");
+    let withdrawal_script_type_hash: [u8; 32] =
+        withdrawal_lock_type.calc_script_hash().unpack().into();
+    let rollup_config = RollupConfig::new_builder()
+        .stake_script_type_hash(Pack::pack(&stake_script_type_hash))
+        .custodian_script_type_hash(Pack::pack(&custodian_script_type_hash))
+        .withdrawal_script_type_hash(Pack::pack(&withdrawal_script_type_hash))
+        .allowed_eoa_type_hashes(PackVec::pack(vec![AllowedTypeHash::new(
+            AllowedEoaType::Eth,
+            *ALWAYS_SUCCESS_CODE_HASH,
+        )]))
+        .finality_blocks(Pack::pack(&1u64))
+        .build();
+
+    // setup chain
+    let mut chain =
+        setup_chain_with_config(rollup_type_script.clone(), rollup_config.clone()).await;
+
+    // create a rollup cell
+    let rollup_cell = build_always_success_cell(
+        capacity,
+        Some(ckb_types::packed::Script::new_unchecked(
+            rollup_type_script.as_bytes(),
+        )),
+    );
+    let eth_registry_id = gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
+
+    // Deposit account
+    let deposit_capacity: u64 = 1000000 * 10u64.pow(8);
+    let withdrawal_capacity: u64 = 999000 * 10u64.pow(8);
+    let deposit_lock_args = {
+        let mut args = rollup_type_script.hash().to_vec();
+        args.extend_from_slice(&[1u8; 20]);
+        Pack::pack(&Bytes::from(args))
+    };
+    let account_script = Script::new_builder()
+        .code_hash(Pack::pack(&ALWAYS_SUCCESS_CODE_HASH.clone()))
+        .hash_type(ScriptHashType::Type.into())
+        .args(deposit_lock_args)
+        .build();
+    let deposit = into_deposit_info_cell(
+        chain.generator().rollup_context(),
+        DepositRequest::new_builder()
+            .capacity(Pack::pack(&deposit_capacity))
+            .script(account_script.to_owned())
+            .registry_id(Pack::pack(&eth_registry_id))
+            .build(),
+    );
+
+    let block_result = {
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block_with_timestamp(
+            &chain,
+            &mut mem_pool,
+            vec![deposit.clone()].pack(),
+            timestamp_now(),
+            true,
+        )
+        .await
+        .unwrap()
+    };
+    let apply_deposits = L1Action {
+        context: L1ActionContext::SubmitBlock {
+            l2block: block_result.block.clone(),
+            deposit_info_vec: vec![deposit].pack(),
+            deposit_asset_scripts: Default::default(),
+            withdrawals: Default::default(),
+        },
+        transaction: build_sync_tx(
+            gw_types::packed::CellOutput::new_unchecked(rollup_cell.as_bytes()),
+            block_result,
+        ),
+    };
+    let param = SyncParam {
+        updates: vec![apply_deposits],
+        reverts: Default::default(),
+    };
+    chain.sync(param).await.unwrap();
+    assert!(chain.last_sync_event().is_success());
+    let db = chain.store().to_owned();
+    chain
+        .mem_pool()
+        .as_ref()
+        .unwrap()
+        .lock()
+        .await
+        .notify_new_tip(
+            db.get_last_valid_tip_block_hash().unwrap(),
+            &Default::default(),
+        )
+        .await
+        .unwrap();
+
+    // finalize deposit
+    let block_result = {
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block_with_timestamp(
+            &chain,
+            &mut mem_pool,
+            Default::default(),
+            timestamp_now(),
+            false,
+        )
+        .await
+        .unwrap()
+    };
+    let apply_deposits = L1Action {
+        context: L1ActionContext::SubmitBlock {
+            l2block: block_result.block.clone(),
+            deposit_info_vec: Default::default(),
+            deposit_asset_scripts: Default::default(),
+            withdrawals: Default::default(),
+        },
+        transaction: build_sync_tx(
+            gw_types::packed::CellOutput::new_unchecked(rollup_cell.as_bytes()),
+            block_result,
+        ),
+    };
+    let param = SyncParam {
+        updates: vec![apply_deposits],
+        reverts: Default::default(),
+    };
+    chain.sync(param).await.unwrap();
+    assert!(chain.last_sync_event().is_success());
+    chain
+        .mem_pool()
+        .as_ref()
+        .unwrap()
+        .lock()
+        .await
+        .notify_new_tip(
+            db.get_last_valid_tip_block_hash().unwrap(),
+            &Default::default(),
+        )
+        .await
+        .unwrap();
+
+    // Withdraw
+    let withdrawal = {
+        let raw = RawWithdrawalRequest::new_builder()
+            .capacity(Pack::pack(&withdrawal_capacity))
+            .account_script_hash(Pack::pack(&account_script.hash()))
+            .owner_lock_hash(Pack::pack(&account_script.hash()))
+            .registry_id(Pack::pack(&eth_registry_id))
+            .build();
+        let request = WithdrawalRequest::new_builder().raw(raw).build();
+        WithdrawalRequestExtra::new_builder()
+            .request(request)
+            .owner_lock(account_script.clone())
+            .build()
+    };
+
+    // submit a new block
+    let block_result = {
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock().await;
+        mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
+        mem_pool.reset_mem_block(&Default::default()).await.unwrap();
+        construct_block_with_timestamp(
+            &chain,
+            &mut mem_pool,
+            Default::default(),
+            timestamp_now(),
+            true,
+        )
+        .await
+        .unwrap()
+    };
+    assert_eq!(block_result.block.withdrawals().len(), 1);
+
+    // deploy scripts
+    let param = CellContextParam {
+        stake_lock_type,
+        custodian_lock_type,
+        withdrawal_lock_type,
+        ..Default::default()
+    };
+    let mut ctx = CellContext::new(&rollup_config, param);
+
+    // build stake input and output
+    let stake_capacity = 10000_00000000u64;
+    let input_stake_cell = {
+        let cell = build_rollup_locked_cell(
+            &rollup_type_script.hash(),
+            &stake_script_type_hash,
+            stake_capacity,
+            StakeLockArgs::default().as_bytes(),
+        );
+        let out_point = ctx.insert_cell(cell, Bytes::default());
+        CellInput::new_builder().previous_output(out_point).build()
+    };
+    let output_stake_cell = {
+        let block_timestamp = block_result.block.raw().timestamp().unpack();
+        let lock_args = StakeLockArgs::new_builder()
+            .stake_block_timepoint(Pack::pack(
+                &Timepoint::from_timestamp(block_timestamp).full_value(),
+            ))
+            .build();
+        build_rollup_locked_cell(
+            &rollup_type_script.hash(),
+            &stake_script_type_hash,
+            stake_capacity,
+            lock_args.as_bytes(),
+        )
+    };
+
+    let global_state = chain.local_state().last_global_state();
+    let initial_rollup_cell_data = global_state
+        .clone()
+        .as_builder()
+        .version(1u8.into())
+        .build()
+        .as_bytes();
+
+    // build custodian input
+    let custodian_cell = build_rollup_locked_cell(
+        &rollup_type_script.hash(),
+        &custodian_script_type_hash,
+        deposit_capacity,
+        CustodianLockArgs::default().as_bytes(),
+    );
+    let input_custodian_cell = {
+        let out_point = ctx.insert_cell(custodian_cell.clone(), Bytes::default());
+        CellInput::new_builder().previous_output(out_point).build()
+    };
+
+    // build custodian output
+    let output_custodian_cell = custodian_cell
+        .as_builder()
+        .capacity(ckb_types::prelude::Pack::pack(
+            &(deposit_capacity - withdrawal_capacity),
+        ))
+        .build();
+
+    // build withdrawal output
+    let output_withdrawal_cell = {
+        let block_timestamp = block_result.block.raw().timestamp().unpack();
+        let finalized_timestamp = {
+            let finality_time_in_ms = chain
+                .generator()
+                .rollup_context()
+                .rollup_config
+                .finality_time_in_ms();
+            println!("finality_time_in_ms {}", finality_time_in_ms);
+            block_timestamp.saturating_add(finality_time_in_ms)
+        };
+        assert!(block_timestamp < finalized_timestamp);
+
+        let lock_args = WithdrawalLockArgs::new_builder()
+            .finalized_timepoint(Pack::pack(
+                &Timepoint::from_timestamp(finalized_timestamp).full_value(),
+            ))
+            .withdrawal_block_hash(Pack::pack(&block_result.block.raw().hash()))
+            .account_script_hash(Pack::pack(&account_script.hash()))
+            .owner_lock_hash(Pack::pack(&account_script.hash()))
+            .build();
+
+        let mut args = lock_args.as_slice().to_vec();
+        args.extend_from_slice(&(account_script.as_bytes().len() as u32).to_be_bytes());
+        args.extend_from_slice(&account_script.as_bytes());
+
+        build_rollup_locked_cell(
+            &rollup_type_script.hash(),
+            &withdrawal_script_type_hash,
+            withdrawal_capacity,
+            Bytes::from(args),
+        )
+    };
+
+    // verify submit block
+    let tip_block_timestamp = block_result.block.raw().timestamp();
+    let last_finalized_timepoint = {
+        let ts = tip_block_timestamp.unpack().saturating_sub(
+            chain
+                .generator()
+                .rollup_context()
+                .rollup_config
+                .finality_time_in_ms()
+                + 1,
+        );
+        Timepoint::from_timestamp(ts)
+    };
+    let rollup_cell_data = { block_result.global_state.clone().as_builder() }
+        .tip_block_timestamp(tip_block_timestamp.clone())
+        .last_finalized_timepoint(Pack::pack(&last_finalized_timepoint.full_value()))
+        .version(2u8.into())
+        .build()
+        .as_bytes();
+    let witness = {
+        let rollup_action = RollupAction::new_builder()
+            .set(RollupActionUnion::RollupSubmitBlock(
+                RollupSubmitBlock::new_builder()
+                    .block(block_result.block.clone())
+                    .build(),
+            ))
+            .build();
+        ckb_types::packed::WitnessArgs::new_builder()
+            .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
+            .build()
+    };
+    let tx = build_simple_tx_with_out_point_and_since(
+        &mut ctx.inner,
+        (rollup_cell.clone(), initial_rollup_cell_data.clone()),
+        (
+            input_out_point.clone(),
+            since_timestamp(GWUnpack::unpack(&tip_block_timestamp)),
+        ),
+        (rollup_cell.clone(), rollup_cell_data.clone()),
+    )
+    .as_advanced_builder()
+    .input(input_stake_cell.clone())
+    .output(output_stake_cell.clone())
+    .output_data(CKBPack::pack(&Bytes::default()))
+    .input(input_custodian_cell.clone())
+    .output(output_withdrawal_cell.clone())
+    .output_data(CKBPack::pack(&Bytes::default()))
+    .output(output_custodian_cell.clone())
+    .output_data(CKBPack::pack(&Bytes::default()))
+    .cell_dep(ctx.stake_lock_dep.clone())
+    .cell_dep(ctx.custodian_lock_dep.clone())
+    .cell_dep(ctx.withdrawal_lock_dep.clone())
+    .cell_dep(ctx.always_success_dep.clone())
+    .cell_dep(ctx.state_validator_dep.clone())
+    .cell_dep(ctx.rollup_config_dep.clone())
+    .witness(CKBPack::pack(&witness.as_bytes()))
+    .build();
+    ctx.verify_tx(tx).expect("return success");
+
+    // ERROR: Global state isn't upgraded to use timestamp
+    let bn_output_stake_cell = {
+        let lock_args = StakeLockArgs::new_builder()
+            .stake_block_timepoint(block_result.block.raw().number())
+            .build();
+        build_rollup_locked_cell(
+            &rollup_type_script.hash(),
+            &stake_script_type_hash,
+            stake_capacity,
+            lock_args.as_bytes(),
+        )
+    };
+    let tip_block_timestamp = block_result.block.raw().timestamp();
+    let err_rollup_cell_data = { block_result.global_state.clone().as_builder() }
+        .tip_block_timestamp(tip_block_timestamp.clone())
+        .version(1u8.into())
+        .build()
+        .as_bytes();
+    let tx = build_simple_tx_with_out_point_and_since(
+        &mut ctx.inner,
+        (rollup_cell.clone(), initial_rollup_cell_data.clone()),
+        (
+            input_out_point.clone(),
+            since_timestamp(GWUnpack::unpack(&tip_block_timestamp)),
+        ),
+        (rollup_cell.clone(), err_rollup_cell_data),
+    )
+    .as_advanced_builder()
+    .input(input_stake_cell.clone())
+    .output(bn_output_stake_cell)
+    .output_data(CKBPack::pack(&Bytes::default()))
+    .input(input_custodian_cell.clone())
+    .output(output_withdrawal_cell.clone())
+    .output_data(CKBPack::pack(&Bytes::default()))
+    .output(output_custodian_cell.clone())
+    .output_data(CKBPack::pack(&Bytes::default()))
+    .cell_dep(ctx.stake_lock_dep.clone())
+    .cell_dep(ctx.custodian_lock_dep.clone())
+    .cell_dep(ctx.withdrawal_lock_dep.clone())
+    .cell_dep(ctx.always_success_dep.clone())
+    .cell_dep(ctx.state_validator_dep.clone())
+    .cell_dep(ctx.rollup_config_dep.clone())
+    .witness(CKBPack::pack(&witness.as_bytes()))
+    .build();
+
+    let err = ctx.verify_tx(tx).unwrap_err();
+    let expected_err = ScriptError::ValidationFailure(
+        format!(
+            "by-data-hash/{}",
+            ckb_types::H256(*STATE_VALIDATOR_CODE_HASH)
+        ),
+        INVALID_WITHDRAWAL_CELL,
+    )
+    .input_type_script(0);
+    assert_error_eq!(err, expected_err);
+
+    // ERROR: Withdrawal block timepoint isn't tip block timestamp + finality in time ms
+    let err_output_withdrawal_cell = {
+        let block_timestamp = block_result.block.raw().timestamp().unpack();
+        let err_finalized_timestamp = block_timestamp;
+
+        let lock_args = WithdrawalLockArgs::new_builder()
+            .finalized_timepoint(Pack::pack(
+                &Timepoint::from_timestamp(err_finalized_timestamp).full_value(),
+            ))
+            .withdrawal_block_hash(Pack::pack(&block_result.block.raw().hash()))
+            .account_script_hash(Pack::pack(&account_script.hash()))
+            .owner_lock_hash(Pack::pack(&account_script.hash()))
+            .build();
+
+        let mut args = lock_args.as_slice().to_vec();
+        args.extend_from_slice(&(account_script.as_bytes().len() as u32).to_be_bytes());
+        args.extend_from_slice(&account_script.as_bytes());
+
+        build_rollup_locked_cell(
+            &rollup_type_script.hash(),
+            &withdrawal_script_type_hash,
+            withdrawal_capacity,
+            Bytes::from(args),
+        )
+    };
+
+    let tx = build_simple_tx_with_out_point_and_since(
+        &mut ctx.inner,
+        (rollup_cell.clone(), initial_rollup_cell_data),
+        (
+            input_out_point.clone(),
+            since_timestamp(GWUnpack::unpack(&tip_block_timestamp)),
+        ),
+        (rollup_cell, rollup_cell_data),
+    )
+    .as_advanced_builder()
+    .input(input_stake_cell)
+    .output(output_stake_cell)
+    .output_data(CKBPack::pack(&Bytes::default()))
+    .input(input_custodian_cell)
+    .output(err_output_withdrawal_cell)
+    .output_data(CKBPack::pack(&Bytes::default()))
+    .output(output_custodian_cell)
+    .output_data(CKBPack::pack(&Bytes::default()))
+    .cell_dep(ctx.stake_lock_dep.clone())
+    .cell_dep(ctx.custodian_lock_dep.clone())
+    .cell_dep(ctx.withdrawal_lock_dep.clone())
+    .cell_dep(ctx.always_success_dep.clone())
+    .cell_dep(ctx.state_validator_dep.clone())
+    .cell_dep(ctx.rollup_config_dep.clone())
+    .witness(CKBPack::pack(&witness.as_bytes()))
+    .build();
+
+    let err = ctx.verify_tx(tx).unwrap_err();
+    let expected_err = ScriptError::ValidationFailure(
+        format!(
+            "by-data-hash/{}",
+            ckb_types::H256(*STATE_VALIDATOR_CODE_HASH)
+        ),
+        INVALID_WITHDRAWAL_CELL,
+    )
+    .input_type_script(0);
+    assert_error_eq!(err, expected_err);
 }

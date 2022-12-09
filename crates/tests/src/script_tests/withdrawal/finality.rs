@@ -1,6 +1,6 @@
 use crate::script_tests::programs::WITHDRAWAL_LOCK_PROGRAM;
 use crate::script_tests::utils::init_env_log;
-use crate::script_tests::utils::layer1::build_simple_tx_with_out_point;
+use crate::script_tests::utils::layer1::build_simple_tx_with_out_point_and_since;
 use crate::script_tests::utils::layer1::random_out_point;
 use crate::script_tests::utils::rollup::{random_always_success_script, CellContext};
 use crate::script_tests::utils::rollup_config::default_rollup_config;
@@ -14,6 +14,7 @@ use gw_types::packed::{
     WithdrawalLockArgs,
 };
 use gw_types::prelude::{Pack, Unpack};
+use gw_utils::since::Since;
 use rand::random;
 
 use super::witness_unlock_withdrawal_via_finalize;
@@ -30,8 +31,8 @@ struct CaseParam {
     finalized_block_number: u64,
     // GlobalState.last_finalized_timepoint
     finalized_block_timestamp: u64,
-    // WithdrawalLockArgs.withdrawal_block_timepoint
-    withdrawal_block_timepoint: Timepoint,
+    // WithdrawalLockArgs.finalized_timepoint
+    finalized_timepoint: Timepoint,
 
     // Even if the withdrawal cell is finalized, it needs one of the below condition matched:
     // - the same-index output with withdrawal cell has the same content
@@ -54,7 +55,7 @@ fn test_finality_of_withdrawal_lock() {
     let unfinalized_timepoint_by_block_number =
         Timepoint::from_block_number(finalized_block_number + 1);
     let unfinalized_timepoint_by_block_timestamp =
-        Timepoint::from_timestamp(finalized_block_timestamp + 1);
+        Timepoint::from_timestamp(finalized_block_timestamp + 1000); // Input since use second
 
     let cases = vec![
         CaseParam {
@@ -62,7 +63,7 @@ fn test_finality_of_withdrawal_lock() {
             id: 0,
             finalized_block_number,
             finalized_block_timestamp,
-            withdrawal_block_timepoint: finalized_timepoint_by_block_number.clone(),
+            finalized_timepoint: finalized_timepoint_by_block_number.clone(),
             unlock_path_include_one_owner_input: true,
             unlock_path_same_index_same_content_output: false,
             expected_result: Ok(()),
@@ -72,7 +73,7 @@ fn test_finality_of_withdrawal_lock() {
             id: 1,
             finalized_block_number,
             finalized_block_timestamp,
-            withdrawal_block_timepoint: unfinalized_timepoint_by_block_number,
+            finalized_timepoint: unfinalized_timepoint_by_block_number,
             unlock_path_include_one_owner_input: true,
             unlock_path_same_index_same_content_output: false,
             expected_result: Err(NOT_FINALIZED_EXIT_CODE),
@@ -82,7 +83,7 @@ fn test_finality_of_withdrawal_lock() {
             id: 2,
             finalized_block_number,
             finalized_block_timestamp,
-            withdrawal_block_timepoint: finalized_timepoint_by_block_timestamp,
+            finalized_timepoint: finalized_timepoint_by_block_timestamp,
             unlock_path_include_one_owner_input: true,
             unlock_path_same_index_same_content_output: false,
             expected_result: Ok(()),
@@ -92,7 +93,7 @@ fn test_finality_of_withdrawal_lock() {
             id: 3,
             finalized_block_number,
             finalized_block_timestamp,
-            withdrawal_block_timepoint: unfinalized_timepoint_by_block_timestamp,
+            finalized_timepoint: unfinalized_timepoint_by_block_timestamp,
             unlock_path_include_one_owner_input: true,
             unlock_path_same_index_same_content_output: false,
             expected_result: Err(NOT_FINALIZED_EXIT_CODE),
@@ -102,7 +103,7 @@ fn test_finality_of_withdrawal_lock() {
             id: 4,
             finalized_block_number,
             finalized_block_timestamp,
-            withdrawal_block_timepoint: finalized_timepoint_by_block_number.clone(),
+            finalized_timepoint: finalized_timepoint_by_block_number.clone(),
             unlock_path_include_one_owner_input: false,
             unlock_path_same_index_same_content_output: false,
             expected_result: Err(OWNER_CELL_NOT_FOUND_EXIT_CODE),
@@ -112,7 +113,7 @@ fn test_finality_of_withdrawal_lock() {
             id: 5,
             finalized_block_number,
             finalized_block_timestamp,
-            withdrawal_block_timepoint: finalized_timepoint_by_block_number,
+            finalized_timepoint: finalized_timepoint_by_block_number,
             unlock_path_include_one_owner_input: false,
             unlock_path_same_index_same_content_output: true,
             expected_result: Ok(()),
@@ -127,7 +128,7 @@ fn run_case(case: CaseParam) {
         id: _id,
         finalized_block_number,
         finalized_block_timestamp,
-        withdrawal_block_timepoint,
+        finalized_timepoint,
         expected_result,
         unlock_path_same_index_same_content_output,
         unlock_path_include_one_owner_input,
@@ -194,7 +195,7 @@ fn run_case(case: CaseParam) {
                         .owner_lock_hash(Byte32::new_unchecked(
                             withdrawal_owner_lock_hash.as_bytes(),
                         ))
-                        .withdrawal_block_timepoint(withdrawal_block_timepoint.full_value().pack())
+                        .finalized_timepoint(finalized_timepoint.full_value().pack())
                         .build();
                     let mut args = Vec::new();
                     args.extend_from_slice(rollup_state_type_hash.as_slice());
@@ -213,10 +214,11 @@ fn run_case(case: CaseParam) {
     let witness_args = witness_unlock_withdrawal_via_finalize();
 
     // Build transaction
-    let mut tx = build_simple_tx_with_out_point(
+    let since = Since::new_timestamp_seconds((finalized_block_timestamp / 1000) + 1);
+    let mut tx = build_simple_tx_with_out_point_and_since(
         &mut ctx.inner,
         (withdrawal_state_cell.to_ckb(), Default::default()),
-        withdrawal_state_out_point,
+        (withdrawal_state_out_point, since.as_u64().pack().to_ckb()),
         (
             CellOutput::new_builder().build().to_ckb(),
             Default::default(),

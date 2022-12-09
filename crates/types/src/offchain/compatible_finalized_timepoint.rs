@@ -69,4 +69,12 @@ impl CompatibleFinalizedTimepoint {
             finalized_block_number: block_number.saturating_sub(finality_as_blocks),
         }
     }
+
+    // Test case use only!
+    pub fn from_timestamp(timestamp: u64) -> Self {
+        Self {
+            finalized_timestamp: Some(timestamp),
+            finalized_block_number: 0,
+        }
+    }
 }

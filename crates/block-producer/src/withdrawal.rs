@@ -8,7 +8,7 @@ use gw_types::offchain::CompatibleFinalizedTimepoint;
 use gw_types::packed::RollupConfig;
 use gw_types::{
     bytes::Bytes,
-    core::{DepType, ScriptHashType},
+    core::{DepType, ScriptHashType, Timepoint},
     offchain::{global_state_from_slice, CellInfo, CollectedCustodianCells, InputCellInfo},
     packed::{
         CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, L2Block, Script,
@@ -224,10 +224,6 @@ pub fn unlock_to_owner(
             .build()
     };
 
-    fn greater_since(timestamp_millis: u64) -> Since {
-        Since::new_timestamp_seconds(timestamp_millis / 1000 + 1)
-    }
-
     let global_state = global_state_from_slice(&rollup_cell.data)?;
     let since = greater_since(global_state.tip_block_timestamp().unpack());
     let compatible_finalized_timepoint =
@@ -247,10 +243,10 @@ pub fn unlock_to_owner(
             continue;
         }
 
-        let owner_lock = {
+        let (lock_args, owner_lock) = {
             let args: Bytes = withdrawal_cell.output.lock().args().unpack();
             match gw_utils::withdrawal::parse_lock_args(&args) {
-                Ok(parsed) => parsed.owner_lock,
+                Ok(parsed) => (parsed.lock_args, parsed.owner_lock),
                 Err(_) => {
                     log::error!("[unlock withdrawal] impossible, already pass verify_unlockable_to_owner above");
                     continue;
@@ -314,21 +310,25 @@ pub fn unlock_to_owner(
     }))
 }
 
+fn greater_since(timestamp_millis: u64) -> Since {
+    Since::new_timestamp_seconds(timestamp_millis / 1000 + 1)
+}
+
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
-    use crate::withdrawal::generate;
+    use crate::withdrawal::{generate, greater_since};
     use gw_common::{h256_ext::H256Ext, H256};
-    use gw_config::ContractsCellDep;
+    use gw_config::{ContractsCellDep, ForkConfig};
     use gw_types::core::{DepType, ScriptHashType, Timepoint};
     use gw_types::offchain::{
         CellInfo, CollectedCustodianCells, CompatibleFinalizedTimepoint, InputCellInfo,
     };
     use gw_types::packed::{
-        CellDep, CellInput, CellOutput, GlobalState, L2Block, OutPoint, RawL2Block,
-        RawWithdrawalRequest, RollupConfig, Script, UnlockWithdrawalViaFinalize,
+        BlockMerkleState, CellDep, CellInput, CellOutput, GlobalState, L2Block, OutPoint,
+        RawL2Block, RawWithdrawalRequest, RollupConfig, Script, UnlockWithdrawalViaFinalize,
         UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion, WithdrawalLockArgs,
         WithdrawalRequest, WithdrawalRequestExtra, WitnessArgs,
     };
@@ -393,14 +393,14 @@ mod test {
         // ## With owner lock
         let withdrawal_extra = WithdrawalRequestExtra::new_builder()
             .request(withdrawal.clone())
-            .owner_lock(owner_lock)
+            .owner_lock(owner_lock.clone())
             .build();
         let withdrawal_extras =
             HashMap::from_iter([(withdrawal.hash().into(), withdrawal_extra.clone())]);
 
         let generated = generate(
             &rollup_context,
-            finalized_custodians,
+            finalized_custodians.clone(),
             &block,
             &contracts_dep,
             &withdrawal_extras,
@@ -438,14 +438,88 @@ mod test {
             &sudt_script.code_hash(),
         )
         .expect("pass verification");
+
+        // ## Finalized timestamp
+        let rollup_context = RollupContext {
+            rollup_script_hash: H256::from_u32(1),
+            rollup_config: RollupConfig::new_builder()
+                .withdrawal_script_type_hash(H256::from_u32(100).pack())
+                .finality_blocks(1u64.pack())
+                .build(),
+            fork_config: ForkConfig {
+                upgrade_global_state_version_to_v2: Some(block.raw().number().unpack()),
+                ..Default::default()
+            },
+        };
+
+        let withdrawal_extra = WithdrawalRequestExtra::new_builder()
+            .request(withdrawal.clone())
+            .owner_lock(owner_lock)
+            .build();
+        let withdrawal_extras =
+            HashMap::from_iter([(withdrawal.hash().into(), withdrawal_extra.clone())]);
+
+        let generated = generate(
+            &rollup_context,
+            finalized_custodians,
+            &block,
+            &contracts_dep,
+            &withdrawal_extras,
+        )
+        .unwrap();
+        let (output, data) = generated.unwrap().outputs.first().unwrap().to_owned();
+
+        let expected_finalized_timestamp = { block.raw().timestamp().unpack() }
+            .saturating_add(rollup_context.rollup_config.finality_time_in_ms());
+        let block_timepoint = Timepoint::from_timestamp(expected_finalized_timestamp);
+        let (expected_output, expected_data) = gw_generator::utils::build_withdrawal_cell_output(
+            &rollup_context,
+            &withdrawal_extra,
+            &block.hash().into(),
+            &block_timepoint,
+            Some(sudt_script.clone()),
+        )
+        .unwrap();
+
+        assert_eq!(expected_output.to_string(), output.to_string());
+        assert_eq!(expected_data, data);
+
+        // Check our generate withdrawal can be queried and unlocked to owner
+        let info = CellInfo {
+            output,
+            data,
+            ..Default::default()
+        };
+        // Make sure the withdrawal is finalized for `global_state`
+        let compatible_finalized_timepoint =
+            CompatibleFinalizedTimepoint::from_timestamp(expected_finalized_timestamp);
+        gw_rpc_client::withdrawal::verify_unlockable_to_owner(
+            &info,
+            &compatible_finalized_timepoint,
+            &sudt_script.code_hash(),
+        )
+        .expect("pass verification");
     }
 
     #[test]
     fn test_unlock_to_owner() {
         // Output should only change lock to owner lock
-        let last_finalized_timepoint = Timepoint::from_block_number(100);
+        let tip_block_timestamp = 100000;
+        let finality_blocks = 1;
+
+        let last_finalized_timestamp_timepoint =
+            Timepoint::from_timestamp(tip_block_timestamp - 2000);
+        let last_finalized_block_number_timepoint = Timepoint::from_block_number(100);
+
         let global_state = GlobalState::new_builder()
-            .last_finalized_timepoint(last_finalized_timepoint.full_value().pack())
+            .tip_block_timestamp(tip_block_timestamp.pack())
+            .last_finalized_timepoint(last_finalized_timestamp_timepoint.full_value().pack())
+            .block(
+                BlockMerkleState::new_builder()
+                    .count((1 + 100 + finality_blocks).pack())
+                    .build(),
+            )
+            .version(2u8.into())
             .build();
 
         let rollup_type = Script::new_builder()
@@ -473,8 +547,12 @@ mod test {
             rollup_config: RollupConfig::new_builder()
                 .withdrawal_script_type_hash(H256::from_u32(5).pack())
                 .l1_sudt_script_type_hash(sudt_script.code_hash())
-                .finality_blocks(1u64.pack())
+                .finality_blocks(finality_blocks.pack())
                 .build(),
+            fork_config: ForkConfig {
+                upgrade_global_state_version_to_v2: Some(0),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -573,25 +651,34 @@ mod test {
             vec![
                 withdrawal_without_owner_lock,
                 withdrawal_with_owner_lock.clone(),
+                withdrawal_use_finalized_timestamp.clone(),
             ],
         )
         .expect("unlock")
         .expect("some unlocked");
 
-        assert_eq!(unlocked.inputs.len(), 1, "skip one without owner lock");
-        assert_eq!(unlocked.outputs.len(), 1);
-        assert_eq!(unlocked.witness_args.len(), 1);
+        assert_eq!(unlocked.inputs.len(), 2, "skip one without owner lock");
+        assert_eq!(unlocked.outputs.len(), 2);
+        assert_eq!(unlocked.witness_args.len(), 2);
 
-        let expected_output = {
+        let expected_first_output = {
             let output = withdrawal_with_owner_lock.output.clone().as_builder();
-            output.lock(owner_lock).build()
+            output.lock(owner_lock.clone()).build()
         };
 
         let (output, data) = unlocked.outputs.first().unwrap().to_owned();
-        assert_eq!(expected_output.as_slice(), output.as_slice());
+        assert_eq!(expected_first_output.as_slice(), output.as_slice());
         assert_eq!(withdrawal_with_owner_lock.data, data);
 
-        let expected_input = {
+        let expected_last_output = {
+            let output = { withdrawal_use_finalized_timestamp.output.clone() }.as_builder();
+            output.lock(owner_lock).build()
+        };
+        let (output, data) = unlocked.outputs.last().unwrap().to_owned();
+        assert_eq!(expected_last_output.as_slice(), output.as_slice());
+        assert_eq!(withdrawal_use_finalized_timestamp.data, data);
+
+        let expected_first_input = {
             let input = CellInput::new_builder()
                 .previous_output(withdrawal_with_owner_lock.out_point.clone())
                 .build();
@@ -602,16 +689,43 @@ mod test {
             }
         };
         let input = unlocked.inputs.first().unwrap().to_owned();
-        assert_eq!(expected_input.input.as_slice(), input.input.as_slice());
         assert_eq!(
-            expected_input.cell.output.as_slice(),
+            expected_first_input.input.as_slice(),
+            input.input.as_slice()
+        );
+        assert_eq!(
+            expected_first_input.cell.output.as_slice(),
             input.cell.output.as_slice()
         );
         assert_eq!(
-            expected_input.cell.out_point.as_slice(),
+            expected_first_input.cell.out_point.as_slice(),
             input.cell.out_point.as_slice()
         );
-        assert_eq!(expected_input.cell.data, input.cell.data);
+        assert_eq!(expected_first_input.cell.data, input.cell.data);
+
+        let expected_last_input = {
+            let since = greater_since(global_state.tip_block_timestamp().unpack());
+            let input = CellInput::new_builder()
+                .previous_output(withdrawal_use_finalized_timestamp.out_point.clone())
+                .since(since.as_u64().pack())
+                .build();
+
+            InputCellInfo {
+                input,
+                cell: withdrawal_use_finalized_timestamp,
+            }
+        };
+        let input = unlocked.inputs.last().unwrap().to_owned();
+        assert_eq!(expected_last_input.input.as_slice(), input.input.as_slice());
+        assert_eq!(
+            expected_last_input.cell.output.as_slice(),
+            input.cell.output.as_slice()
+        );
+        assert_eq!(
+            expected_last_input.cell.out_point.as_slice(),
+            input.cell.out_point.as_slice()
+        );
+        assert_eq!(expected_last_input.cell.data, input.cell.data);
 
         let expected_witness = {
             let unlock_args = UnlockWithdrawalViaFinalize::new_builder().build();
@@ -626,6 +740,8 @@ mod test {
         };
         let witness = unlocked.witness_args.first().unwrap().to_owned();
         assert_eq!(expected_witness.as_slice(), witness.as_slice());
+        let last_witness = unlocked.witness_args.last().unwrap().to_owned();
+        assert_eq!(expected_witness.as_slice(), last_witness.as_slice());
 
         assert_eq!(unlocked.deps.len(), 4);
         let rollup_dep = CellDep::new_builder()
