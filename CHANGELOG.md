@@ -5,6 +5,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.8.0-rc1] - 2022-12-09
+
+In this version, an upgrading of on-chain scripts is included:
+
+- feat: optimize Godwoken finality mechanism [#836](https://github.com/godwokenrises/godwoken/pull/836)
+- feat: deprecate verifications for state_checkpoint_list and prev_state_checkpoint [#883](https://github.com/godwokenrises/godwoken/pull/883)
+
+We also introduce a change to activate the new behavior.
+
+- feat: determine global state version according to fork height[#858](https://github.com/godwokenrises/godwoken/pull/858)
+
+Other changes:
+
+- perf: optional SMT trie feature and migrate command [#859](https://github.com/godwokenrises/godwoken/pull/882)
+- feat: optimized trace and metrics [#865](https://github.com/godwokenrises/godwoken/pull/865)
+- fix(withdrawal): finalized withdrawal take longer time to unlock [#892](https://github.com/godwokenrises/godwoken/pull/892)
+- chore(CI): add docker-prebuilds into monorepo [#885](https://github.com/godwokenrises/godwoken/pull/885)
+- feat: support non-x86 build [#882](https://github.com/godwokenrises/godwoken/pull/882)
+
 ## [v1.7.3] - 2022-11-27
 
 - config: deny unknown fields in the config toml file [#862](https://github.com/godwokenrises/godwoken/pull/862)
