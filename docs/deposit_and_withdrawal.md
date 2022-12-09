@@ -89,14 +89,14 @@ Withdrawal lock guarantees the cell can only be unlocked after `finality blocks`
 ```
 struct WithdrawalLockArgs {
     withdrawal_block_hash: Byte32,
-    withdrawal_block_timepoint: Uint64,
+    finalized_timepoint: Uint64,
     account_script_hash: Byte32,
     // layer1 lock to withdraw after challenge period
     owner_lock_hash: Byte32,
 }
 ```
 
-`withdrawal_block_hash` and `withdrawal_block_timepoint` record which layer2 block included the withdrawal. `account_script_hash` represent the layer2 account. `owner_lock_hash` represent the layer1 lock that user used to unlock the cell.
+`withdrawal_block_hash` and `finalized_timepoint` record which layer2 block included the withdrawal. `account_script_hash` represent the layer2 account. `owner_lock_hash` represent the layer1 lock that user used to unlock the cell.
 
 CKB requires `capacity` to cover the cost of the cell, so the minimal withdrawal CKB that Godwoken allows is as follows:
 

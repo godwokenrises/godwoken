@@ -7943,8 +7943,8 @@ impl ::core::fmt::Display for WithdrawalLockArgs {
         write!(
             f,
             ", {}: {}",
-            "withdrawal_block_timepoint",
-            self.withdrawal_block_timepoint()
+            "finalized_timepoint",
+            self.finalized_timepoint()
         )?;
         write!(
             f,
@@ -7974,7 +7974,7 @@ impl WithdrawalLockArgs {
     pub fn withdrawal_block_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
-    pub fn withdrawal_block_timepoint(&self) -> Uint64 {
+    pub fn finalized_timepoint(&self) -> Uint64 {
         Uint64::new_unchecked(self.0.slice(32..40))
     }
     pub fn account_script_hash(&self) -> Byte32 {
@@ -8011,7 +8011,7 @@ impl molecule::prelude::Entity for WithdrawalLockArgs {
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
             .withdrawal_block_hash(self.withdrawal_block_hash())
-            .withdrawal_block_timepoint(self.withdrawal_block_timepoint())
+            .finalized_timepoint(self.finalized_timepoint())
             .account_script_hash(self.account_script_hash())
             .owner_lock_hash(self.owner_lock_hash())
     }
@@ -8044,8 +8044,8 @@ impl<'r> ::core::fmt::Display for WithdrawalLockArgsReader<'r> {
         write!(
             f,
             ", {}: {}",
-            "withdrawal_block_timepoint",
-            self.withdrawal_block_timepoint()
+            "finalized_timepoint",
+            self.finalized_timepoint()
         )?;
         write!(
             f,
@@ -8064,7 +8064,7 @@ impl<'r> WithdrawalLockArgsReader<'r> {
     pub fn withdrawal_block_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
-    pub fn withdrawal_block_timepoint(&self) -> Uint64Reader<'r> {
+    pub fn finalized_timepoint(&self) -> Uint64Reader<'r> {
         Uint64Reader::new_unchecked(&self.as_slice()[32..40])
     }
     pub fn account_script_hash(&self) -> Byte32Reader<'r> {
@@ -8098,7 +8098,7 @@ impl<'r> molecule::prelude::Reader<'r> for WithdrawalLockArgsReader<'r> {
 #[derive(Debug, Default)]
 pub struct WithdrawalLockArgsBuilder {
     pub(crate) withdrawal_block_hash: Byte32,
-    pub(crate) withdrawal_block_timepoint: Uint64,
+    pub(crate) finalized_timepoint: Uint64,
     pub(crate) account_script_hash: Byte32,
     pub(crate) owner_lock_hash: Byte32,
 }
@@ -8110,8 +8110,8 @@ impl WithdrawalLockArgsBuilder {
         self.withdrawal_block_hash = v;
         self
     }
-    pub fn withdrawal_block_timepoint(mut self, v: Uint64) -> Self {
-        self.withdrawal_block_timepoint = v;
+    pub fn finalized_timepoint(mut self, v: Uint64) -> Self {
+        self.finalized_timepoint = v;
         self
     }
     pub fn account_script_hash(mut self, v: Byte32) -> Self {
@@ -8131,7 +8131,7 @@ impl molecule::prelude::Builder for WithdrawalLockArgsBuilder {
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         writer.write_all(self.withdrawal_block_hash.as_slice())?;
-        writer.write_all(self.withdrawal_block_timepoint.as_slice())?;
+        writer.write_all(self.finalized_timepoint.as_slice())?;
         writer.write_all(self.account_script_hash.as_slice())?;
         writer.write_all(self.owner_lock_hash.as_slice())?;
         Ok(())

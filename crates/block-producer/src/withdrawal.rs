@@ -259,10 +259,13 @@ pub fn unlock_to_owner(
         };
 
         let withdrawal_input = {
-            let input = CellInput::new_builder()
-                .previous_output(withdrawal_cell.out_point.clone())
-                .since(since.as_u64().pack())
-                .build();
+            let input_builder =
+                CellInput::new_builder().previous_output(withdrawal_cell.out_point.clone());
+
+            let input = match Timepoint::from_full_value(lock_args.finalized_timepoint().unpack()) {
+                Timepoint::Timestamp(_) => input_builder.since(since.as_u64().pack()).build(),
+                Timepoint::BlockNumber(_) => input_builder.build(),
+            };
 
             InputCellInfo {
                 input,
@@ -505,7 +508,7 @@ mod test {
         let withdrawal_without_owner_lock = {
             let lock_args = WithdrawalLockArgs::new_builder()
                 .owner_lock_hash(owner_lock.hash().pack())
-                .withdrawal_block_timepoint(last_finalized_timepoint.full_value().pack())
+                .finalized_timepoint(last_finalized_block_number_timepoint.full_value().pack())
                 .build();
 
             let mut args = rollup_type.hash().to_vec();
@@ -521,7 +524,30 @@ mod test {
         let withdrawal_with_owner_lock = {
             let lock_args = WithdrawalLockArgs::new_builder()
                 .owner_lock_hash(owner_lock.hash().pack())
-                .withdrawal_block_timepoint(last_finalized_timepoint.full_value().pack())
+                .finalized_timepoint(last_finalized_block_number_timepoint.full_value().pack())
+                .build();
+
+            let mut args = rollup_type.hash().to_vec();
+            args.extend_from_slice(&lock_args.as_bytes());
+            args.extend_from_slice(&(owner_lock.as_bytes().len() as u32).to_be_bytes());
+            args.extend_from_slice(&owner_lock.as_bytes());
+
+            let lock = Script::new_builder().args(args.pack()).build();
+            CellInfo {
+                output: CellOutput::new_builder()
+                    .type_(Some(sudt_script.clone()).pack())
+                    .lock(lock)
+                    .build(),
+                data: 100u128.pack().as_bytes(),
+                ..Default::default()
+            }
+        };
+
+        let withdrawal_use_finalized_timestamp = {
+            let finalized_timepoint = Timepoint::from_timestamp(tip_block_timestamp - 1);
+            let lock_args = WithdrawalLockArgs::new_builder()
+                .owner_lock_hash(owner_lock.hash().pack())
+                .finalized_timepoint(finalized_timepoint.full_value().pack())
                 .build();
 
             let mut args = rollup_type.hash().to_vec();

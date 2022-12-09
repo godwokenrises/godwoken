@@ -222,7 +222,7 @@ fn minimal_withdrawal_capacity(is_sudt: bool) -> Result<u64> {
     let dummy_withdrawal_lock_args = WithdrawalLockArgs::new_builder()
         .account_script_hash(dummy_hash.pack())
         .withdrawal_block_hash(dummy_hash.pack())
-        .withdrawal_block_timepoint(dummy_timepoint.full_value().pack())
+        .finalized_timepoint(dummy_timepoint.full_value().pack())
         .owner_lock_hash(dummy_hash.pack())
         .build();
 

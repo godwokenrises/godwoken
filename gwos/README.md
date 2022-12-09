@@ -102,7 +102,7 @@ Withdrawal cells are generated in the `RollupSubmitBlock` action according to th
 
 The withdrawal lock has two unlock paths:
 
-1. Unlock by withdrawer after the `WithdrawalLockArgs#withdrawal_block_timepoint` is finalized.
+1. Unlock by withdrawer after the `WithdrawalLockArgs#finalized_timepoint` is passed.
 2. Unlock as a reverted cell in the `RollupSubmitBlock` action, a corresponded custodian cell will be generated.
 
 ### Challenge lock

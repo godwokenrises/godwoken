@@ -1374,12 +1374,12 @@ pub struct WithdrawalLockArgs {
     // block timestamp.
 
     // Before switching to v2, `withdrawal_block_number` should be `Some(block_number)` and
-    // `withdrawal_block_timestamp` should be `None`; afterwards, `withdrawal_block_number` will
-    // become `None` and `withdrawal_block_timestamp` will become `Some(block_timestamp)`.
+    // `withdrawal_finalized_timestamp` should be `None`; afterwards, `withdrawal_block_number` will
+    // become `None` and `withdrawal_finalized_timestamp` will become `Some(block_timestamp)`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub withdrawal_block_number: Option<Uint64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub withdrawal_block_timestamp: Option<Uint64>,
+    pub withdrawal_finalized_timestamp: Option<Uint64>,
 
     // layer1 lock to withdraw after challenge period
     pub owner_lock_hash: H256,
@@ -1393,16 +1393,15 @@ impl TryFrom<WithdrawalLockArgs> for packed::WithdrawalLockArgs {
             account_script_hash,
             withdrawal_block_hash,
             withdrawal_block_number,
-            withdrawal_block_timestamp,
+            withdrawal_finalized_timestamp,
             owner_lock_hash,
         } = json;
-        let withdrawal_block_timepoint = match (withdrawal_block_number, withdrawal_block_timestamp)
-        {
+        let finalized_timepoint = match (withdrawal_block_number, withdrawal_finalized_timestamp) {
             (Some(block_number), None) => Timepoint::from_block_number(block_number.value()),
             (None, Some(timestamp)) => Timepoint::from_timestamp(timestamp.value()),
             (bn, bt) => {
                 return Err(anyhow!(
-                    "conflict withdrawal_block_number {:?} and withdrawal_block_timestamp {:?}",
+                    "conflict withdrawal_block_number {:?} and withdrawal_finalized_timestamp {:?}",
                     bn,
                     bt
                 ));
@@ -1412,7 +1411,7 @@ impl TryFrom<WithdrawalLockArgs> for packed::WithdrawalLockArgs {
         Ok(packed::WithdrawalLockArgs::new_builder()
             .account_script_hash(account_script_hash.pack())
             .withdrawal_block_hash(withdrawal_block_hash.pack())
-            .withdrawal_block_timepoint(withdrawal_block_timepoint.full_value().pack())
+            .finalized_timepoint(finalized_timepoint.full_value().pack())
             .owner_lock_hash(owner_lock_hash.pack())
             .build())
     }
@@ -1420,10 +1419,8 @@ impl TryFrom<WithdrawalLockArgs> for packed::WithdrawalLockArgs {
 
 impl From<packed::WithdrawalLockArgs> for WithdrawalLockArgs {
     fn from(data: packed::WithdrawalLockArgs) -> WithdrawalLockArgs {
-        let withdrawal_block_timepoint =
-            Timepoint::from_full_value(data.withdrawal_block_timepoint().unpack());
-        let (withdrawal_block_number, withdrawal_block_timestamp) = match withdrawal_block_timepoint
-        {
+        let finalized_timepoint = Timepoint::from_full_value(data.finalized_timepoint().unpack());
+        let (withdrawal_block_number, withdrawal_finalized_timestamp) = match finalized_timepoint {
             Timepoint::BlockNumber(block_number) => (Some(block_number), None),
             Timepoint::Timestamp(timestamp) => (None, Some(timestamp)),
         };
@@ -1432,7 +1429,7 @@ impl From<packed::WithdrawalLockArgs> for WithdrawalLockArgs {
             owner_lock_hash: data.owner_lock_hash().unpack(),
             withdrawal_block_hash: data.withdrawal_block_hash().unpack(),
             withdrawal_block_number: withdrawal_block_number.map(Into::into),
-            withdrawal_block_timestamp: withdrawal_block_timestamp.map(Into::into),
+            withdrawal_finalized_timestamp: withdrawal_finalized_timestamp.map(Into::into),
         }
     }
 }

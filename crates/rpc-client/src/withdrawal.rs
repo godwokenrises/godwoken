@@ -51,7 +51,7 @@ fn verify_finalized_owner_lock(
     };
 
     if !compatible_finalized_timepoint.is_finalized(&Timepoint::from_full_value(
-        lock_args.withdrawal_block_timepoint().unpack(),
+        lock_args.finalized_timepoint().unpack(),
     )) {
         bail!("unfinalized withdrawal");
     }
@@ -102,7 +102,7 @@ mod test {
             CompatibleFinalizedTimepoint::from_block_number(finalized_block_number, 0);
         let lock_args = WithdrawalLockArgs::new_builder()
             .owner_lock_hash(owner_lock.hash().pack())
-            .withdrawal_block_timepoint(last_finalized_timepoint.full_value().pack())
+            .finalized_timepoint(last_finalized_timepoint.full_value().pack())
             .build();
 
         let mut args = rollup_type_hash.to_vec();
@@ -138,7 +138,7 @@ mod test {
         let err_lock_args = lock_args
             .clone()
             .as_builder()
-            .withdrawal_block_timepoint((last_finalized_timepoint.full_value() + 1).pack())
+            .finalized_timepoint((last_finalized_timepoint.full_value() + 1).pack())
             .build();
 
         let mut args = rollup_type_hash.to_vec();
@@ -220,7 +220,7 @@ mod test {
         let last_finalized_timepoint = Timepoint::from_block_number(100);
         let lock_args = WithdrawalLockArgs::new_builder()
             .owner_lock_hash(owner_lock.hash().pack())
-            .withdrawal_block_timepoint(last_finalized_timepoint.full_value().pack())
+            .finalized_timepoint(last_finalized_timepoint.full_value().pack())
             .build();
 
         let mut args = rollup_type_hash.to_vec();

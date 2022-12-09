@@ -206,7 +206,7 @@ struct UnlockCustodianViaRevertWitness {
 struct WithdrawalLockArgs {
     withdrawal_block_hash: Byte32,
     // Timepoint format
-    withdrawal_block_timepoint: Uint64,
+    finalized_timepoint: Uint64,
     account_script_hash: Byte32,
     // layer1 lock to withdraw after challenge period
     owner_lock_hash: Byte32,

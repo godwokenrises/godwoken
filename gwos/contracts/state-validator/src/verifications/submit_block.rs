@@ -72,7 +72,7 @@ fn check_withdrawal_cells<'a>(
     mut withdrawal_requests: Vec<WithdrawalRequestReader<'a>>,
     withdrawal_cells: &[WithdrawalCell],
 ) -> Result<(), Error> {
-    let expected_withdrawal_block_timepoint = {
+    let expected_finalized_timepoint = {
         let block_timepoint = context.block_timepoint().full_value();
         if Fork::use_timestamp_as_timepoint(context.post_version) {
             // Use finalized timestamp from the future
@@ -91,11 +91,11 @@ fn check_withdrawal_cells<'a>(
             return Err(Error::InvalidWithdrawalCell);
         }
 
-        if cell.args.withdrawal_block_timepoint().unpack() != expected_withdrawal_block_timepoint {
+        if cell.args.finalized_timepoint().unpack() != expected_finalized_timepoint {
             debug!(
-                "withdrawal_cell.args.withdrawal_block_timepoint != expected block timepoint, {} != {}",
-                cell.args.withdrawal_block_timepoint().unpack(),
-                expected_withdrawal_block_timepoint
+                "withdrawal_cell.args.finalized_timepoint != expected block timepoint, {} != {}",
+                cell.args.finalized_timepoint().unpack(),
+                expected_finalized_timepoint
             );
             return Err(Error::InvalidWithdrawalCell);
         }

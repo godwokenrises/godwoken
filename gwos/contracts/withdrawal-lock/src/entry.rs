@@ -159,15 +159,15 @@ pub fn main() -> Result<(), Error> {
             Ok(())
         }
         UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(_unlock_args) => {
-            let withdrawal_block_timepoint =
-                Timepoint::from_full_value(lock_args.withdrawal_block_timepoint().unpack());
+            let finalized_timepoint =
+                Timepoint::from_full_value(lock_args.finalized_timepoint().unpack());
 
-            match &withdrawal_block_timepoint {
+            match &finalized_timepoint {
                 Timepoint::Timestamp(finalized_timestamp) => {
                     check_finalized_timestamp_less_than_since(*finalized_timestamp)?
                 }
                 Timepoint::BlockNumber(_) => {
-                    check_finalized_block_number(&rollup_type_hash, &withdrawal_block_timepoint)?
+                    check_finalized_block_number(&rollup_type_hash, &finalized_timepoint)?
                 }
             }
 
@@ -255,7 +255,7 @@ fn check_finalized_timestamp_less_than_since(finalized_timestamp: u64) -> Result
 
 fn check_finalized_block_number(
     rollup_type_hash: &[u8; 32],
-    withdrawal_block_timepoint: &Timepoint,
+    finalized_timepoint: &Timepoint,
 ) -> Result<(), Error> {
     // try search rollup state from deps
     let global_state = match search_rollup_state(&rollup_type_hash, Source::CellDep)? {
@@ -269,7 +269,7 @@ fn check_finalized_block_number(
     let config = load_rollup_config(&global_state.rollup_config_hash().unpack())?;
 
     // check finality
-    if is_finalized(&config, &global_state, withdrawal_block_timepoint) {
+    if is_finalized(&config, &global_state, finalized_timepoint) {
         Ok(())
     } else {
         Err(Error::NotFinalized)
