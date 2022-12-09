@@ -106,7 +106,7 @@ fn run_case(case: CaseParam) {
                 .count(global_state_block_count.pack())
                 .build(),
         )
-        .last_finalized_block_number(global_state_last_finalized_timepoint.full_value().pack())
+        .last_finalized_timepoint(global_state_last_finalized_timepoint.full_value().pack())
         .build();
     let (mut ctx, rollup_state_out_point, stake_code_out_point, stake_owner_out_point) =
         deploy_context(&prev_global_state);
