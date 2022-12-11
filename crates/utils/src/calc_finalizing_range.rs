@@ -1,8 +1,8 @@
+use crate::block_timepoint;
 use anyhow::{Context, Result};
 use gw_config::ForkConfig;
 use gw_store::traits::chain_store::ChainStore;
 use gw_types::{
-    core::Timepoint,
     offchain::CompatibleFinalizedTimepoint,
     packed::{L2Block, RollupConfig},
     prelude::*,
@@ -11,6 +11,7 @@ use std::ops::Range;
 
 // Returns true is the block of `older_block_number` is finalized for `compatible_finalized_timepoint`
 fn is_older_block_finalized(
+    rollup_config: &RollupConfig,
     fork_config: &ForkConfig,
     db: &impl ChainStore,
     compatible_finalized_timepoint: &CompatibleFinalizedTimepoint,
@@ -22,12 +23,13 @@ fn is_older_block_finalized(
     let older_block = db
         .get_block(&older_block_hash)?
         .context("get older block")?;
-    let older_timepoint = if fork_config.use_timestamp_as_timepoint(older_block_number) {
-        Timepoint::from_timestamp(older_block.raw().timestamp().unpack())
-    } else {
-        Timepoint::from_block_number(older_block_number)
-    };
-    Ok(compatible_finalized_timepoint.is_finalized(&older_timepoint))
+    let older_block_timepoint = block_timepoint(
+        rollup_config,
+        fork_config,
+        older_block_number,
+        older_block.raw().timestamp().unpack(),
+    );
+    Ok(compatible_finalized_timepoint.is_finalized(&older_block_timepoint))
 }
 
 // Returns the highest block that is finalized for `block`.
@@ -68,7 +70,13 @@ fn find_finalized_upper_bound(
     let mut r = block.raw().number().unpack().saturating_sub(1);
     while l < r {
         let mid = l + (r - l + 1) / 2;
-        if is_older_block_finalized(fork_config, db, &compatible_finalized_timepoint, mid)? {
+        if is_older_block_finalized(
+            rollup_config,
+            fork_config,
+            db,
+            &compatible_finalized_timepoint,
+            mid,
+        )? {
             l = mid;
         } else {
             r = mid.saturating_sub(1);

@@ -20,7 +20,7 @@ use gw_types::{
 use gw_utils::local_cells::{
     collect_local_and_indexer_cells, CollectLocalAndIndexerCursor, LocalCellsManager,
 };
-use gw_utils::RollupContext;
+use gw_utils::{block_timepoint, RollupContext};
 
 pub struct GeneratedStake {
     pub deps: Vec<CellDep>,
@@ -39,18 +39,12 @@ pub async fn generate(
     local_cells_manager: &LocalCellsManager,
 ) -> Result<GeneratedStake> {
     let owner_lock_hash = lock_script.hash();
-    let stake_block_timepoint = {
-        let block_number: u64 = block.raw().number().unpack();
-        if rollup_context
-            .fork_config
-            .use_timestamp_as_timepoint(block_number)
-        {
-            let block_timestamp: u64 = block.raw().timestamp().unpack();
-            Timepoint::from_timestamp(block_timestamp)
-        } else {
-            Timepoint::from_block_number(block_number)
-        }
-    };
+    let stake_block_timepoint = block_timepoint(
+        &rollup_context.rollup_config,
+        &rollup_context.fork_config,
+        block.raw().number().unpack(),
+        block.raw().timestamp().unpack(),
+    );
     let lock_args: Bytes = {
         let stake_lock_args = StakeLockArgs::new_builder()
             .owner_lock_hash(owner_lock_hash.pack())

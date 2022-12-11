@@ -23,7 +23,7 @@ async fn test_calc_finalizing_range() {
     //
     // block[0].ts = 0
     // block[i].ts = block[i-1].ts + random(1, rollup_config.finality_time_in_ms())
-    // global_state[i].last_finalized_timepoint = block[i].ts - rollup_config.finality_time_in_ms()
+    // global_state[i].last_finalized_timepoint = block[i].ts
     //
     // Assertions:
     // - No overlapped finalizing ranges
@@ -73,8 +73,7 @@ async fn test_calc_finalizing_range() {
                 let finality_as_blocks = rollup_config.finality_blocks().unpack();
                 Timepoint::from_block_number(number.saturating_sub(finality_as_blocks))
             } else {
-                let finality_time_in_mss = rollup_config.finality_time_in_ms();
-                Timepoint::from_timestamp(timestamp.saturating_sub(finality_time_in_mss))
+                Timepoint::from_timestamp(timestamp)
             };
             GlobalState::new_builder()
                 .version(version.into())
