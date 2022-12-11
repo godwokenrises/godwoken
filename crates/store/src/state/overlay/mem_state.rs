@@ -45,6 +45,10 @@ impl MemStateTree {
     fn db(&self) -> &SMTStateStore<MemStore<StoreSnapshot>> {
         self.tree.store()
     }
+
+    fn db_mut(&mut self) -> &mut SMTStateStore<MemStore<StoreSnapshot>> {
+        self.tree.store_mut()
+    }
 }
 
 impl Clone for MemStateTree {
@@ -84,8 +88,8 @@ impl State for MemStateTree {
 
 impl CodeStore for MemStateTree {
     fn insert_script(&mut self, script_hash: H256, script: packed::Script) {
-        self.db()
-            .inner_store()
+        self.db_mut()
+            .inner_store_mut()
             .insert_raw(COLUMN_SCRIPT, script_hash.as_slice(), script.as_slice())
             .expect("insert script");
     }
@@ -98,8 +102,8 @@ impl CodeStore for MemStateTree {
     }
 
     fn insert_data(&mut self, data_hash: H256, code: Bytes) {
-        self.db()
-            .inner_store()
+        self.db_mut()
+            .inner_store_mut()
             .insert_raw(COLUMN_DATA, data_hash.as_slice(), &code)
             .expect("insert data");
     }

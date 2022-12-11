@@ -142,7 +142,7 @@ async fn test_restore_mem_pool_pending_withdrawal() {
         })
         .collect();
     {
-        let db = chain.store().begin_transaction();
+        let mut db = chain.store().begin_transaction();
         for withdrawal in invalid_withdrawals {
             db.insert_mem_pool_withdrawal(&withdrawal.hash().into(), withdrawal)
                 .unwrap();

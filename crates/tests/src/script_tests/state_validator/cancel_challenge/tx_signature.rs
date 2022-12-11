@@ -27,7 +27,6 @@ use gw_generator::account_lock_manage::eip712;
 use gw_generator::account_lock_manage::eip712::traits::EIP712Encode;
 use gw_generator::account_lock_manage::eip712::types::EIP712Domain;
 use gw_generator::account_lock_manage::AccountLockManage;
-use gw_store::smt::smt_store::SMTStateStore;
 use gw_store::state::history::history_state::RWConfig;
 use gw_store::state::traits::JournalDB;
 use gw_store::state::BlockStateDB;
@@ -180,8 +179,8 @@ async fn test_cancel_tx_signature() {
         )
         .await
         .unwrap();
-        let db = chain.store().begin_transaction();
-        let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
+        let mut db = chain.store().begin_transaction();
+        let tree = BlockStateDB::from_store(&mut db, RWConfig::readonly()).unwrap();
         let sender_id = tree
             .get_account_id_by_script_hash(&sender_script.hash().into())
             .unwrap()
@@ -303,11 +302,12 @@ async fn test_cancel_tx_signature() {
                 gw_types::prelude::Unpack::unpack(&challenged_block.raw().number());
 
             // Detach block to get right state snapshot
-            let db = chain.store().begin_transaction();
+            let mut db = chain.store().begin_transaction();
             {
                 db.detach_block(&challenged_block).unwrap();
                 {
-                    let mut tree = BlockStateDB::from_store(&db, RWConfig::detach_block()).unwrap();
+                    let mut tree =
+                        BlockStateDB::from_store(&mut db, RWConfig::detach_block()).unwrap();
                     tree.detach_block_state(challenged_block_number).unwrap();
                 }
             }
@@ -351,7 +351,7 @@ async fn test_cancel_tx_signature() {
                 .collect::<Vec<(H256, H256)>>();
 
             let kv_state_proof: Bytes = {
-                let smt = SMTStateStore::new(&db).to_smt().unwrap();
+                let smt = db.state_smt().unwrap();
                 smt.merkle_proof(touched_keys.clone())
                     .unwrap()
                     .compile(touched_keys)

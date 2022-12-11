@@ -75,7 +75,7 @@ async fn test_repackage_mem_block() {
 
     // produce block
     let reverted_block_root: H256 = {
-        let db = chain.store().begin_transaction();
+        let mut db = chain.store().begin_transaction();
         let smt = db.reverted_block_smt().unwrap();
         smt.root().to_owned()
     };
@@ -88,10 +88,10 @@ async fn test_repackage_mem_block() {
         block_param,
     };
     let store = chain.store();
-    let db = store.begin_transaction();
+    let mut db = store.begin_transaction();
 
     let withdrawals = param.block_param.withdrawals.clone();
-    let block_result = produce_block(&db, chain.generator(), param).unwrap();
+    let block_result = produce_block(&mut db, chain.generator(), param).unwrap();
 
     let deposit_requests: Vec<_> = deposit_cells.iter().map(|i| i.request.clone()).collect();
     ReplayBlock::replay(

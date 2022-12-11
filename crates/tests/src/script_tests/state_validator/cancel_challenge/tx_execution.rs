@@ -21,7 +21,6 @@ use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::merkle_utils::ckb_merkle_leaf_hash;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::{state::State, H256};
-use gw_store::smt::smt_store::SMTStateStore;
 use gw_store::state::history::history_state::RWConfig;
 use gw_store::state::traits::JournalDB;
 use gw_store::state::{BlockStateDB, MemStateDB};
@@ -155,8 +154,8 @@ async fn test_cancel_tx_execute() {
         )
         .await
         .unwrap();
-        let db = chain.store().begin_transaction();
-        let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
+        let mut db = chain.store().begin_transaction();
+        let tree = BlockStateDB::from_store(&mut db, RWConfig::readonly()).unwrap();
         let sender_id = tree
             .get_account_id_by_script_hash(&sender_script.hash().into())
             .unwrap()
@@ -276,11 +275,12 @@ async fn test_cancel_tx_execute() {
                 gw_types::prelude::Unpack::unpack(&challenged_block.raw().number());
 
             // Detach block to get right state snapshot
-            let db = chain.store().begin_transaction();
+            let mut db = chain.store().begin_transaction();
             {
                 db.detach_block(&challenged_block).unwrap();
                 {
-                    let mut tree = BlockStateDB::from_store(&db, RWConfig::detach_block()).unwrap();
+                    let mut tree =
+                        BlockStateDB::from_store(&mut db, RWConfig::detach_block()).unwrap();
                     tree.detach_block_state(challenged_block_number).unwrap();
                 }
             }
@@ -322,8 +322,9 @@ async fn test_cancel_tx_execute() {
                 .collect::<Vec<(H256, H256)>>();
 
             let kv_state_proof: Bytes = {
-                let smt = SMTStateStore::new(&db).to_smt().unwrap();
-                smt.merkle_proof(touched_keys.clone())
+                db.state_smt()
+                    .unwrap()
+                    .merkle_proof(touched_keys.clone())
                     .unwrap()
                     .compile(touched_keys)
                     .unwrap()

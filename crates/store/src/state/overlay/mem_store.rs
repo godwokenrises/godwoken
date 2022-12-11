@@ -85,7 +85,7 @@ impl<S: KVStoreRead> KVStoreRead for MemStore<S> {
 }
 
 impl<S> KVStoreWrite for MemStore<S> {
-    fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<()> {
+    fn insert_raw(&mut self, col: Col, key: &[u8], value: &[u8]) -> Result<()> {
         self.mem
             .write()
             .unwrap()
@@ -93,7 +93,7 @@ impl<S> KVStoreWrite for MemStore<S> {
         Ok(())
     }
 
-    fn delete(&self, col: Col, key: &[u8]) -> Result<()> {
+    fn delete(&mut self, col: Col, key: &[u8]) -> Result<()> {
         self.mem
             .write()
             .unwrap()
@@ -119,7 +119,7 @@ impl<S: HistoryStateStore> HistoryStateStore for MemStore<S> {
         list
     }
 
-    fn remove_block_state_record(&self, block_number: u64) -> Result<()> {
+    fn remove_block_state_record(&mut self, block_number: u64) -> Result<()> {
         self.history_mem.write().unwrap().remove(&block_number);
         Ok(())
     }
@@ -138,7 +138,12 @@ impl<S: HistoryStateStore> HistoryStateStore for MemStore<S> {
         }
     }
 
-    fn record_block_state(&self, block_number: u64, state_key: H256, value: H256) -> Result<()> {
+    fn record_block_state(
+        &mut self,
+        block_number: u64,
+        state_key: H256,
+        value: H256,
+    ) -> Result<()> {
         self.history_mem
             .write()
             .unwrap()

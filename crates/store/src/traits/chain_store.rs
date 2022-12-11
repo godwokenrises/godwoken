@@ -1,5 +1,7 @@
 #![allow(clippy::mutable_key_type)]
 
+use std::cell::RefCell;
+
 use anyhow::Result;
 use gw_common::H256;
 use gw_types::{
@@ -350,3 +352,7 @@ pub trait ChainStore: KVStoreRead {
         Ok(maybe_withdrawal)
     }
 }
+
+impl<T: ChainStore> ChainStore for &T {}
+impl<T: ChainStore> ChainStore for &mut T {}
+impl<T: ChainStore> ChainStore for &RefCell<T> {}

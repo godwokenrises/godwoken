@@ -13,7 +13,7 @@ use crate::{
 
 use super::StoreTransaction;
 
-impl HistoryStateStore for &StoreTransaction {
+impl HistoryStateStore for StoreTransaction {
     type BlockStateRecordKeyIter = Vec<BlockStateRecordKey>;
 
     fn iter_block_state_record(&self, block_number: u64) -> Self::BlockStateRecordKeyIter {
@@ -25,7 +25,7 @@ impl HistoryStateStore for &StoreTransaction {
             .collect()
     }
 
-    fn remove_block_state_record(&self, block_number: u64) -> Result<(), Error> {
+    fn remove_block_state_record(&mut self, block_number: u64) -> Result<(), Error> {
         let iter = self.iter_block_state_record(block_number);
         for record_key in iter {
             // delete record key
@@ -75,7 +75,7 @@ impl HistoryStateStore for &StoreTransaction {
     }
 
     fn record_block_state(
-        &self,
+        &mut self,
         block_number: u64,
         state_key: H256,
         value: H256,

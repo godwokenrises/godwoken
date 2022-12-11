@@ -50,7 +50,7 @@ pub(crate) async fn replay_transaction(
 
     // run target tx
     let run_result: DebugRunResult = tokio::task::spawn_blocking(move || {
-        let db = &ctx.store.begin_transaction();
+        let db = ctx.store.begin_transaction();
 
         // find tx info
         let info = db
@@ -61,6 +61,9 @@ pub(crate) async fn replay_transaction(
         let block = db
             .get_block(&info.key().block_hash())?
             .ok_or_else(|| anyhow!("can't find block"))?;
+        let tip_block_hash = db.get_last_valid_tip_block_hash()?;
+        let snap = db.snapshot();
+        let chain_view = ChainView::new(&snap, tip_block_hash);
 
         // build history state
         let mem_db = MemStore::new(db);
@@ -72,8 +75,6 @@ pub(crate) async fn replay_transaction(
                 write: WriteOpt::Block(parent_block_number),
             },
         )?;
-        let tip_block_hash = db.get_last_valid_tip_block_hash()?;
-        let chain_view = ChainView::new(&db, tip_block_hash);
         let block_info = {
             let raw = block.raw();
             BlockInfo::new_builder()

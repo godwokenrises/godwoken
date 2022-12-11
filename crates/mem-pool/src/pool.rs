@@ -300,10 +300,10 @@ impl MemPool {
     #[instrument(skip_all)]
     pub fn push_transaction(&mut self, tx: L2Transaction) -> Result<()> {
         tokio::task::block_in_place(|| {
-            let db = self.store.begin_transaction();
+            let mut db = self.store.begin_transaction();
 
             let mut state = self.mem_pool_state.load_state_db();
-            self.push_transaction_with_db(&db, &mut state, tx)?;
+            self.push_transaction_with_db(&mut db, &mut state, tx)?;
             db.commit()?;
             self.mem_pool_state.store_state_db(state);
 
@@ -315,7 +315,7 @@ impl MemPool {
     #[instrument(skip_all, err(Debug))]
     fn push_transaction_with_db(
         &mut self,
-        db: &StoreTransaction,
+        db: &mut StoreTransaction,
         state: &mut StateDB,
         tx: L2Transaction,
     ) -> Result<()> {
@@ -400,7 +400,7 @@ impl MemPool {
         let entry_list = self.pending.entry(account_id).or_default();
         entry_list.withdrawals.push(withdrawal.clone());
         // Add to pool
-        let db = self.store.begin_transaction();
+        let mut db = self.store.begin_transaction();
         db.insert_mem_pool_withdrawal(&withdrawal_hash, withdrawal)?;
         db.commit()?;
         Ok(())
@@ -698,13 +698,13 @@ impl MemPool {
             }
         }
 
-        let db = &self.store.begin_transaction();
+        let mut db = self.store.begin_transaction();
 
         let is_mem_pool_recovery = old_tip.is_none();
 
         // refresh pending deposits
         if !is_mem_pool_recovery {
-            self.refresh_deposit_cells(db, new_tip, local_cells_manager)
+            self.refresh_deposit_cells(&db, new_tip, local_cells_manager)
                 .await?;
         }
 
@@ -765,7 +765,7 @@ impl MemPool {
             let mem_block = self.mem_block.block_info().to_owned();
 
             // remove from pending
-            self.remove_unexecutables(&mut state_db, db)?;
+            self.remove_unexecutables(&mut state_db, &mut db)?;
 
             log::info!("[mem-pool] reset reinject txs: {} mem-block txs: {} reinject withdrawals: {} mem-block withdrawals: {}", reinject_txs.len(), mem_block_txs.len(), reinject_withdrawals.len(), mem_block_withdrawals.len());
             // re-inject txs
@@ -785,7 +785,7 @@ impl MemPool {
             self.cycles_pool = CyclesPool::new(u64::MAX, SyscallCyclesConfig::default());
 
             self.prepare_next_mem_block(
-                db,
+                &mut db,
                 &mut state_db,
                 withdrawals,
                 self.pending_deposits.clone(),
@@ -799,7 +799,8 @@ impl MemPool {
                 {
                     Ok(Some((tx, next_batch))) => {
                         self.mem_block.append_new_addresses(next_batch);
-                        if let Err(err) = self.push_transaction_with_db(db, &mut state_db, tx) {
+                        if let Err(err) = self.push_transaction_with_db(&mut db, &mut state_db, tx)
+                        {
                             tracing::error!("account creator err {}", err);
                         }
                     }
@@ -864,7 +865,11 @@ impl MemPool {
 
     /// Discard unexecutables from pending.
     #[instrument(skip_all)]
-    fn remove_unexecutables(&mut self, state: &mut StateDB, db: &StoreTransaction) -> Result<()> {
+    fn remove_unexecutables(
+        &mut self,
+        state: &mut StateDB,
+        db: &mut StoreTransaction,
+    ) -> Result<()> {
         let mut remove_list = Vec::default();
         // iter pending accounts and demote any non-executable objects
         for (&account_id, list) in &mut self.pending {
@@ -910,7 +915,7 @@ impl MemPool {
     #[instrument(skip_all, fields(withdrawals_count = withdrawals.len(), txs_count = txs.len()))]
     fn prepare_next_mem_block(
         &mut self,
-        db: &StoreTransaction,
+        db: &mut StoreTransaction,
         state: &mut StateDB,
         withdrawals: Vec<WithdrawalRequestExtra>,
         deposit_cells: Vec<DepositInfo>,
@@ -1056,7 +1061,7 @@ impl MemPool {
     fn finalize_withdrawals(
         &mut self,
         state: &mut StateDB,
-        db: &StoreTransaction,
+        db: &mut StoreTransaction,
         withdrawals: Vec<WithdrawalRequestExtra>,
     ) -> Result<()> {
         // check mem block state
@@ -1268,6 +1273,7 @@ impl MemPool {
 
     async fn restore_pending_withdrawals(&mut self) -> Result<()> {
         let db = self.store.begin_transaction();
+        let mut db1 = self.store.begin_transaction();
         let withdrawals_iter = db.get_mem_pool_withdrawal_iter();
 
         for (withdrawal_hash, withdrawal) in withdrawals_iter {
@@ -1282,11 +1288,11 @@ impl MemPool {
                     withdrawal_hash.pack(),
                     err
                 );
-                db.remove_mem_pool_withdrawal(&withdrawal_hash)?;
+                db1.remove_mem_pool_withdrawal(&withdrawal_hash)?;
             }
         }
 
-        db.commit()?;
+        db1.commit()?;
         Ok(())
     }
 
@@ -1295,6 +1301,7 @@ impl MemPool {
     // new deposits during mem block reset, make these txs' from id invalid and re-injected failed.
     fn remove_reinjected_failed_txs(&mut self) -> Result<()> {
         let db = self.store.begin_transaction();
+        let mut db1 = self.store.begin_transaction();
         let txs_iter = db.get_mem_pool_transaction_iter();
 
         for (tx_hash, _) in txs_iter {
@@ -1308,10 +1315,10 @@ impl MemPool {
                 "[mem-pool] remove re-injected failed tx {:x}",
                 tx_hash.pack()
             );
-            db.remove_mem_pool_transaction(&tx_hash)?;
+            db1.remove_mem_pool_transaction(&tx_hash)?;
         }
 
-        db.commit()?;
+        db1.commit()?;
         Ok(())
     }
 
@@ -1373,15 +1380,15 @@ impl MemPool {
             let mem_block = self.mem_block.block_info().to_owned();
 
             // remove from pending
-            let db = self.store.begin_transaction();
-            self.remove_unexecutables(&mut state, &db)?;
+            let mut db = self.store.begin_transaction();
+            self.remove_unexecutables(&mut state, &mut db)?;
 
             // reset cycles pool available cycles.
             self.cycles_pool = CyclesPool::new(u64::MAX, SyscallCyclesConfig::default());
 
             // prepare next mem block
             self.try_package_more_withdrawals(&state, &mut withdrawals);
-            self.prepare_next_mem_block(&db, &mut state, withdrawals, deposits, mem_block_txs)?;
+            self.prepare_next_mem_block(&mut db, &mut state, withdrawals, deposits, mem_block_txs)?;
 
             // update mem state
             let shared = Shared {

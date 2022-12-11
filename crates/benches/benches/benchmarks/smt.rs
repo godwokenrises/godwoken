@@ -323,9 +323,10 @@ impl BenchExecutionEnvironment {
             }
         }
 
-        let db = store.begin_transaction();
+        let mut db = store.begin_transaction();
         db.setup_chain_id(ROLLUP_TYPE_HASH.into()).unwrap();
-        let (db, genesis_state) = build_genesis_from_store(db, config, Default::default()).unwrap();
+        let (mut db, genesis_state) =
+            build_genesis_from_store(db, config, Default::default()).unwrap();
 
         let smt = db
             .state_smt_with_merkle_state(genesis_state.genesis.raw().post_account())

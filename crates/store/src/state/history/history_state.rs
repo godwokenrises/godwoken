@@ -1,5 +1,7 @@
 //! State DB
 
+use std::cell::RefCell;
+
 use anyhow::Result;
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
 use gw_traits::CodeStore;
@@ -67,14 +69,63 @@ impl RWConfig {
 pub trait HistoryStateStore {
     type BlockStateRecordKeyIter: IntoIterator<Item = BlockStateRecordKey>;
     fn iter_block_state_record(&self, block_number: u64) -> Self::BlockStateRecordKeyIter;
-    fn remove_block_state_record(&self, block_number: u64) -> Result<(), anyhow::Error>;
+    fn remove_block_state_record(&mut self, block_number: u64) -> Result<(), anyhow::Error>;
     fn get_history_state(&self, block_number: u64, state_key: &H256) -> Option<H256>;
     fn record_block_state(
-        &self,
+        &mut self,
         block_number: u64,
         state_key: H256,
         value: H256,
     ) -> Result<(), anyhow::Error>;
+}
+
+impl<T: HistoryStateStore> HistoryStateStore for &mut T {
+    type BlockStateRecordKeyIter = <T as HistoryStateStore>::BlockStateRecordKeyIter;
+
+    fn iter_block_state_record(&self, block_number: u64) -> Self::BlockStateRecordKeyIter {
+        <T as HistoryStateStore>::iter_block_state_record(self, block_number)
+    }
+    fn remove_block_state_record(&mut self, block_number: u64) -> Result<(), anyhow::Error> {
+        <T as HistoryStateStore>::remove_block_state_record(self, block_number)
+    }
+    fn get_history_state(&self, block_number: u64, state_key: &H256) -> Option<H256> {
+        <T as HistoryStateStore>::get_history_state(self, block_number, state_key)
+    }
+    fn record_block_state(
+        &mut self,
+        block_number: u64,
+        state_key: H256,
+        value: H256,
+    ) -> Result<(), anyhow::Error> {
+        <T as HistoryStateStore>::record_block_state(self, block_number, state_key, value)
+    }
+}
+
+impl<T: HistoryStateStore> HistoryStateStore for &RefCell<T> {
+    type BlockStateRecordKeyIter = <T as HistoryStateStore>::BlockStateRecordKeyIter;
+
+    fn iter_block_state_record(&self, block_number: u64) -> Self::BlockStateRecordKeyIter {
+        <T as HistoryStateStore>::iter_block_state_record(&self.borrow(), block_number)
+    }
+    fn remove_block_state_record(&mut self, block_number: u64) -> Result<(), anyhow::Error> {
+        <T as HistoryStateStore>::remove_block_state_record(&mut self.borrow_mut(), block_number)
+    }
+    fn get_history_state(&self, block_number: u64, state_key: &H256) -> Option<H256> {
+        <T as HistoryStateStore>::get_history_state(&self.borrow(), block_number, state_key)
+    }
+    fn record_block_state(
+        &mut self,
+        block_number: u64,
+        state_key: H256,
+        value: H256,
+    ) -> Result<(), anyhow::Error> {
+        <T as HistoryStateStore>::record_block_state(
+            &mut self.borrow_mut(),
+            block_number,
+            state_key,
+            value,
+        )
+    }
 }
 
 pub struct HistoryState<TreeStore> {
@@ -131,7 +182,7 @@ impl<Store: HistoryStateStore + CodeStore + KVStore> HistoryState<Store> {
         }
 
         // remove block's state record
-        self.db().remove_block_state_record(block_number)?;
+        self.db_mut().remove_block_state_record(block_number)?;
 
         Ok(())
     }
@@ -172,7 +223,7 @@ impl<Store: KVStore + HistoryStateStore + CodeStore> State for HistoryState<Stor
         // record block's kv state
         match self.rw_config.write {
             WriteOpt::Block(block_number) => {
-                self.db()
+                self.db_mut()
                     .record_block_state(block_number, key, value)
                     .expect("record block state");
             }

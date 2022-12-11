@@ -33,10 +33,10 @@ fn test_init_genesis() {
     assert_eq!(genesis_block_hash, GENESIS_BLOCK_HASH);
     let store: Store = Store::open_tmp().unwrap();
     init_genesis(&store, &config, &[0u8; 32], Bytes::default()).unwrap();
-    let db = &store.begin_transaction();
+    let mut db = store.begin_transaction();
     // check init values
     assert_ne!(db.get_block_smt_root().unwrap(), H256::zero());
-    let tree = BlockStateDB::from_store(db, RWConfig::readonly()).unwrap();
+    let tree = BlockStateDB::from_store(&mut db, RWConfig::readonly()).unwrap();
     assert!(tree.get_account_count().unwrap() > 0);
 
     // check prev txs state

@@ -7,10 +7,7 @@ use gw_store::{
         COLUMN_BLOCK_SMT_LEAF, COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF,
     },
 };
-use gw_store::{
-    traits::{chain_store::ChainStore, kv_store::KVStoreWrite},
-    Store,
-};
+use gw_store::{traits::chain_store::ChainStore, Store};
 
 pub struct SMTTrieMigration;
 
@@ -21,7 +18,7 @@ impl Migration for SMTTrieMigration {
 
         // Get state smt root before migration.
         let old_state_smt_root = {
-            let tx = &store.begin_transaction();
+            let mut tx = store.begin_transaction();
             let state_smt = tx.state_smt().context("state_smt")?;
             *state_smt.root()
         };
@@ -46,7 +43,7 @@ impl Migration for SMTTrieMigration {
 
         log::info!("migrating state smt");
         {
-            let tx = store.begin_transaction_skip_concurrency_control();
+            let mut tx = store.begin_transaction_skip_concurrency_control();
             let mut state_smt = tx.state_smt().context("state_smt")?;
             // XXX: memory usage of long running transaction.
             for (k, v) in store
@@ -66,7 +63,7 @@ impl Migration for SMTTrieMigration {
 
         log::info!("migrating block smt");
         {
-            let tx = &store.begin_transaction_skip_concurrency_control();
+            let mut tx = store.begin_transaction_skip_concurrency_control();
             let mut block_smt = tx.block_smt().context("block_smt")?;
             for (k, v) in store
                 .as_inner()
@@ -79,13 +76,14 @@ impl Migration for SMTTrieMigration {
                     )
                     .context("update block_smt")?;
             }
-            ensure!(tx.get_block_smt_root().unwrap() == *block_smt.root());
+            let root = *block_smt.root();
+            ensure!(tx.get_block_smt_root().unwrap() == root);
             tx.commit().context("commit block smt")?;
         }
 
         log::info!("migrating reverted block smt");
         {
-            let tx = &store.begin_transaction_skip_concurrency_control();
+            let mut tx = store.begin_transaction_skip_concurrency_control();
             let mut reverted_block_smt = tx.reverted_block_smt().context("reverted_block_smt")?;
             for (k, v) in store
                 .as_inner()
@@ -98,15 +96,14 @@ impl Migration for SMTTrieMigration {
                     )
                     .context("update reverted_block_smt")?;
             }
-            ensure!(tx.get_reverted_block_smt_root().unwrap() == *reverted_block_smt.root());
+            let root = *reverted_block_smt.root();
+            ensure!(tx.get_reverted_block_smt_root().unwrap() == root);
             tx.commit().context("commit reverted_block_smt")?;
         }
 
-        {
-            let tx = &store.begin_transaction();
-            tx.delete(COLUMN_ACCOUNT_SMT_BRANCH, b"migrating")?;
-            tx.commit()?;
-        }
+        store
+            .as_inner()
+            .delete(COLUMN_ACCOUNT_SMT_BRANCH, b"migrating")?;
 
         log::info!("SMTTrieMigration completed");
         Ok(store.into_inner())

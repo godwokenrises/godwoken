@@ -244,11 +244,14 @@ impl Chain {
         offchain_mock_context: &OffChainMockContext,
         target: ChallengeTarget,
     ) -> Result<ReprMockTransaction> {
-        let db = &self.store().begin_transaction();
+        let mut db = self.store().begin_transaction();
 
-        let verify_context =
-            gw_challenge::context::build_verify_context(Arc::clone(&self.generator), db, &target)
-                .with_context(|| "dump cancel challenge tx from chain")?;
+        let verify_context = gw_challenge::context::build_verify_context(
+            Arc::clone(&self.generator),
+            &mut db,
+            &target,
+        )
+        .with_context(|| "dump cancel challenge tx from chain")?;
 
         let global_state = {
             let get_state = db.get_block_post_global_state(&target.block_hash().unpack())?;
@@ -274,7 +277,7 @@ impl Chain {
     }
 
     /// update a layer1 action
-    fn update_l1action(&mut self, db: &StoreTransaction, action: L1Action) -> Result<()> {
+    fn update_l1action(&mut self, db: &mut StoreTransaction, action: L1Action) -> Result<()> {
         let L1Action {
             transaction,
             context,
@@ -580,7 +583,7 @@ impl Chain {
     /// Update with finalizing deposit requests and block's withdrawals.
     pub fn calculate_and_store_finalized_custodians(
         &self,
-        db: &StoreTransaction,
+        db: &mut StoreTransaction,
         block_number: u64,
     ) -> Result<(), anyhow::Error> {
         if block_number == 0 {
@@ -658,7 +661,7 @@ impl Chain {
     /// revert a layer1 action
     pub fn revert_l1action(
         &mut self,
-        db: &StoreTransaction,
+        mut db: &mut StoreTransaction,
         action: RevertedL1Action,
     ) -> Result<()> {
         let RevertedL1Action {
@@ -701,7 +704,7 @@ impl Chain {
                     db.detach_block(&l2block)?;
                     // detach block state from state tree
                     {
-                        let mut tree = BlockStateDB::from_store(db, RWConfig::detach_block())?;
+                        let mut tree = BlockStateDB::from_store(&mut db, RWConfig::detach_block())?;
                         tree.detach_block_state(l2block.raw().number().unpack())?;
                     }
 
@@ -750,7 +753,7 @@ impl Chain {
 
                     // Check current state
                     let expected_state = l2block.raw().prev_account();
-                    let tree = BlockStateDB::from_store(db, RWConfig::readonly())?;
+                    let tree = BlockStateDB::from_store(&mut db, RWConfig::readonly())?;
                     let expected_root: H256 = expected_state.merkle_root().unpack();
                     let expected_count: u32 = expected_state.count().unpack();
                     assert_eq!(tree.calculate_root()?, expected_root);
@@ -862,7 +865,7 @@ impl Chain {
         if !param.reverts.is_empty() {
             // revert
             for reverted_action in param.reverts {
-                self.revert_l1action(&db, reverted_action)?;
+                self.revert_l1action(&mut db, reverted_action)?;
             }
         }
         let has_bad_block_before_update = self.challenge_target.is_some();
@@ -873,7 +876,7 @@ impl Chain {
         log::debug!(target: "sync-block", "sync {} actions", updates.len());
         for (i, action) in updates.into_iter().enumerate() {
             let t = Instant::now();
-            self.update_l1action(&db, action)?;
+            self.update_l1action(&mut db, action)?;
             log::debug!(target: "sync-block", "process {}th action cost {}ms", i, t.elapsed().as_millis());
             match self.last_sync_event() {
                 SyncEvent::Success => (),
@@ -921,7 +924,7 @@ impl Chain {
             "account root consistent in DB"
         );
 
-        let tree = BlockStateDB::from_store(&db, RWConfig::readonly())?;
+        let tree = BlockStateDB::from_store(&mut db, RWConfig::readonly())?;
         let current_account = tree.calculate_merkle_state()?;
 
         assert_eq!(
@@ -953,7 +956,7 @@ impl Chain {
     #[instrument(skip_all)]
     pub fn update_local(
         &mut self,
-        store_tx: &StoreTransaction,
+        store_tx: &mut StoreTransaction,
         l2_block: L2Block,
         deposit_info_vec: DepositInfoVec,
         deposit_asset_scripts: HashSet<Script>,
@@ -994,7 +997,7 @@ impl Chain {
     #[allow(clippy::too_many_arguments)]
     pub fn process_block(
         &mut self,
-        db: &StoreTransaction,
+        mut db: &mut StoreTransaction,
         l2block: L2Block,
         global_state: GlobalState,
         deposit_info_vec: DepositInfoVec,
@@ -1023,10 +1026,12 @@ impl Chain {
             withdrawals: withdrawals.clone(),
         };
         let tip_block_hash = self.local_state.tip().hash().into();
-        let chain_view = ChainView::new(&db, tip_block_hash);
+
+        let snap = db.snapshot();
+        let chain_view = ChainView::new(&snap, tip_block_hash);
 
         {
-            let tree = BlockStateDB::from_store(db, RWConfig::readonly())?;
+            let tree = BlockStateDB::from_store(&mut db, RWConfig::readonly())?;
 
             let prev_merkle_state = l2block.raw().prev_account();
             assert_eq!(

@@ -47,7 +47,7 @@ pub struct GenesisWithGlobalState {
 /// build genesis from store
 /// This function initialize db to genesis state
 pub fn build_genesis_from_store(
-    db: StoreTransaction,
+    mut db: StoreTransaction,
     config: &GenesisConfig,
     secp_data: Bytes,
 ) -> Result<(StoreTransaction, GenesisWithGlobalState)> {
@@ -67,7 +67,7 @@ pub fn build_genesis_from_store(
 
     // build genesis state tree
     let mut tree = {
-        let smt = SMT::new(H256::zero(), SMTStateStore::new(&db));
+        let smt = SMT::new(H256::zero(), SMTStateStore::new(&mut db));
         let inner = HistoryState::new(smt, 0, RWConfig::attach_block(0));
         StateDB::new(inner)
     };
@@ -222,10 +222,10 @@ pub fn init_genesis(
             );
         }
     }
-    let db = store.begin_transaction();
+    let mut db = store.begin_transaction();
     db.setup_chain_id(rollup_script_hash)?;
     let (
-        db,
+        mut db,
         GenesisWithGlobalState {
             genesis,
             global_state,

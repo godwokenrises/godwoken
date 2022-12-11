@@ -15,19 +15,22 @@ use gw_common::{
 use crate::{
     schema::{COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF},
     smt::serde::{branch_key_to_vec, branch_node_to_vec, slice_to_branch_node},
-    traits::{chain_store::ChainStore, kv_store::KVStore},
+    traits::{
+        chain_store::ChainStore,
+        kv_store::{KVStoreRead, KVStoreWrite},
+    },
 };
 
-pub struct SMTBlockStore<DB: KVStore>(DB);
+pub struct SMTBlockStore<DB>(DB);
 
-impl<DB: KVStore + ChainStore> SMTBlockStore<DB> {
+impl<DB: KVStoreRead + ChainStore> SMTBlockStore<DB> {
     pub fn to_smt(self) -> anyhow::Result<SMT<Self>> {
         let root = self.inner_store().get_block_smt_root()?;
         Ok(SMT::new(root, self))
     }
 }
 
-impl<DB: KVStore> SMTBlockStore<DB> {
+impl<DB> SMTBlockStore<DB> {
     pub fn new(store: DB) -> Self {
         SMTBlockStore(store)
     }
@@ -37,7 +40,7 @@ impl<DB: KVStore> SMTBlockStore<DB> {
     }
 }
 
-impl<DB: KVStore> StoreReadOps<H256> for SMTBlockStore<DB> {
+impl<DB: KVStoreRead> StoreReadOps<H256> for SMTBlockStore<DB> {
     fn get_branch(&self, branch_key: &BranchKey) -> Result<Option<BranchNode>, SMTError> {
         match self
             .0
@@ -60,7 +63,7 @@ impl<DB: KVStore> StoreReadOps<H256> for SMTBlockStore<DB> {
     }
 }
 
-impl<DB: KVStore> StoreWriteOps<H256> for SMTBlockStore<DB> {
+impl<DB: KVStoreWrite> StoreWriteOps<H256> for SMTBlockStore<DB> {
     fn insert_branch(&mut self, branch_key: BranchKey, branch: BranchNode) -> Result<(), SMTError> {
         self.0
             .insert_raw(

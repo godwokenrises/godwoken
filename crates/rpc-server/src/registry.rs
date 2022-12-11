@@ -946,7 +946,7 @@ async fn get_block(
     rollup_config: Data<RollupConfig>,
 ) -> Result<Option<L2BlockWithStatus>> {
     let block_hash = to_h256(block_hash);
-    let db = &store.begin_transaction();
+    let mut db = store.begin_transaction();
     let block = match db.get_block(&block_hash)? {
         Some(block) => block,
         None => return Ok(None),
@@ -1226,7 +1226,7 @@ async fn execute_raw_l2transaction(
     let raw_l2tx_bytes = raw_l2tx.into_bytes();
     let raw_l2tx = packed::RawL2Transaction::from_slice(&raw_l2tx_bytes)?;
 
-    let db_txn = ctx.store.begin_transaction();
+    let mut db_txn = ctx.store.begin_transaction();
 
     let block_info = match block_number_opt {
         Some(block_number) => {
@@ -1269,8 +1269,8 @@ async fn execute_raw_l2transaction(
     if 0 != from_id {
         let check_balance_result = match block_number_opt {
             Some(block_number) => {
-                let db = &db_txn;
-                let state = BlockStateDB::from_store(db, RWConfig::history_block(block_number))?;
+                let state =
+                    BlockStateDB::from_store(&mut db_txn, RWConfig::history_block(block_number))?;
                 verify_sender_balance(ctx.generator.rollup_context(), &state, &raw_l2tx)
             }
             None => {
@@ -1294,16 +1294,16 @@ async fn execute_raw_l2transaction(
 
         let eth_recover = &ctx.polyjuice_sender_recover.eth;
         let rollup_context = ctx.generator.rollup_context();
-        let db = &db_txn;
+        let snap = db_txn.snapshot();
         let chain_view = {
-            let tip_block_hash = db.get_last_valid_tip_block_hash()?;
-            ChainView::new(&db, tip_block_hash)
+            let tip_block_hash = snap.get_last_valid_tip_block_hash()?;
+            ChainView::new(&snap, tip_block_hash)
         };
         // execute tx
         let run_result = match block_number_opt {
             Some(block_number) => {
                 let mut state =
-                    BlockStateDB::from_store(db, RWConfig::history_block(block_number))?;
+                    BlockStateDB::from_store(&mut db_txn, RWConfig::history_block(block_number))?;
                 let raw_l2tx = eth_recover.mock_sender_if_not_exists_from_raw_registry(
                     raw_l2tx,
                     registry_address_opt,
@@ -1715,8 +1715,9 @@ async fn get_balance(
             .ok_or_else(|| invalid_param_err("Invalid registry address"))?;
     let balance = match block_number {
         Some(block_number) => {
-            let db = store.begin_transaction();
-            let tree = BlockStateDB::from_store(&db, RWConfig::history_block(block_number.into()))?;
+            let mut db = store.begin_transaction();
+            let tree =
+                BlockStateDB::from_store(&mut db, RWConfig::history_block(block_number.into()))?;
             tree.get_sudt_balance(sudt_id.into(), &address)?
         }
         None => {
@@ -1748,8 +1749,9 @@ async fn get_storage_at(
 
     let value = match block_number {
         Some(block_number) => {
-            let db = store.begin_transaction();
-            let tree = BlockStateDB::from_store(&db, RWConfig::history_block(block_number.into()))?;
+            let mut db = store.begin_transaction();
+            let tree =
+                BlockStateDB::from_store(&mut db, RWConfig::history_block(block_number.into()))?;
             let key: H256 = to_h256(key);
             tree.get_value(account_id.into(), key.as_slice())?
         }
@@ -1801,8 +1803,9 @@ async fn get_nonce(
 
     let nonce = match block_number {
         Some(block_number) => {
-            let db = store.begin_transaction();
-            let tree = BlockStateDB::from_store(&db, RWConfig::history_block(block_number.into()))?;
+            let mut db = store.begin_transaction();
+            let tree =
+                BlockStateDB::from_store(&mut db, RWConfig::history_block(block_number.into()))?;
             tree.get_nonce(account_id.into())?
         }
         None => {

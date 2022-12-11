@@ -30,7 +30,6 @@ use gw_generator::account_lock_manage::{
     },
     {always_success::AlwaysSuccess, AccountLockManage},
 };
-use gw_store::smt::smt_store::SMTStateStore;
 use gw_store::state::traits::JournalDB;
 use gw_store::state::MemStateDB;
 use gw_types::core::AllowedEoaType;
@@ -297,8 +296,8 @@ async fn test_cancel_withdrawal() {
         })
         .collect::<Vec<(H256, H256)>>();
     let kv_state_proof: Bytes = {
-        let db = chain.store().begin_transaction();
-        let smt = SMTStateStore::new(&db).to_smt().unwrap();
+        let mut db = chain.store().begin_transaction();
+        let smt = db.state_smt().unwrap();
         smt.merkle_proof(touched_keys.clone())
             .unwrap()
             .compile(touched_keys)

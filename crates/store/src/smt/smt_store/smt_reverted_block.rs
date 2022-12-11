@@ -35,6 +35,10 @@ impl<DB: KVStore> SMTRevertedBlockStore<DB> {
     pub fn inner_store(&self) -> &DB {
         &self.0
     }
+
+    pub fn inner_store_mut(&mut self) -> &mut DB {
+        &mut self.0
+    }
 }
 
 impl<DB: KVStore> StoreReadOps<H256> for SMTRevertedBlockStore<DB> {

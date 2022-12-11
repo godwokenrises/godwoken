@@ -53,7 +53,7 @@ pub struct ProduceBlockParam {
 /// withdrawals, then deposits, finally the txs. Thus, the state-validator can verify this correctly
 #[instrument(skip_all)]
 pub fn produce_block(
-    db: &StoreTransaction,
+    db: &mut StoreTransaction,
     generator: &Generator,
     param: ProduceBlockParam,
 ) -> Result<ProduceBlockResult> {
@@ -207,7 +207,7 @@ pub fn generate_produce_block_param(
     mem_block: MemBlock,
     post_merkle_state: AccountMerkleState,
 ) -> Result<BlockParam> {
-    let db = &store.begin_transaction();
+    let mut db = store.begin_transaction();
     let tip_block_number = mem_block.block_info().number().unpack().saturating_sub(1);
     let tip_block_hash = {
         let opt = db.get_block_hash_by_number(tip_block_number)?;
@@ -215,7 +215,7 @@ pub fn generate_produce_block_param(
     };
 
     // generate kv state & merkle proof from tip state
-    let chain_state = BlockStateDB::from_store(db, RWConfig::readonly())?;
+    let chain_state = BlockStateDB::from_store(&mut db, RWConfig::readonly())?;
 
     let kv_state: Vec<(H256, H256)> = mem_block
         .touched_keys()

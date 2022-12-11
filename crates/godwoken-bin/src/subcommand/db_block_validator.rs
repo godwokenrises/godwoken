@@ -244,9 +244,9 @@ impl DBBlockCancelChallengeValidator {
         global_state: GlobalState,
         challenge_target: ChallengeTarget,
     ) -> Result<()> {
-        let db = self.store.begin_transaction();
+        let mut db = self.store.begin_transaction();
         let verify_context =
-            build_verify_context(Arc::clone(&self.generator), &db, &challenge_target)?;
+            build_verify_context(Arc::clone(&self.generator), &mut db, &challenge_target)?;
 
         let verify_with_strategy = |load_data_strategy: LoadDataStrategy| -> Result<()> {
             let mock_output = mock_cancel_challenge_tx(

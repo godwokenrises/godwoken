@@ -9,7 +9,7 @@ use crate::{
 
 use super::StoreTransaction;
 
-impl CodeStore for &StoreTransaction {
+impl CodeStore for StoreTransaction {
     fn insert_script(&mut self, script_hash: H256, script: packed::Script) {
         self.insert_raw(COLUMN_SCRIPT, script_hash.as_slice(), script.as_slice())
             .expect("insert script");

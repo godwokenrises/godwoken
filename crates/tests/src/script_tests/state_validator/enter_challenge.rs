@@ -134,8 +134,8 @@ async fn test_enter_challenge() {
         )
         .await
         .unwrap();
-        let db = chain.store().begin_transaction();
-        let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
+        let mut db = chain.store().begin_transaction();
+        let tree = BlockStateDB::from_store(&mut db, RWConfig::readonly()).unwrap();
         let sender_id = tree
             .get_account_id_by_script_hash(&sender_script.hash().into())
             .unwrap()
@@ -223,7 +223,7 @@ async fn test_enter_challenge() {
     // verify enter challenge
     let witness = {
         let block_proof: Bytes = {
-            let db = chain.store().begin_transaction();
+            let mut db = chain.store().begin_transaction();
             let proof = db
                 .block_smt()
                 .unwrap()
@@ -371,8 +371,8 @@ async fn test_enter_challenge_finalized_block() {
         )
         .await
         .unwrap();
-        let db = chain.store().begin_transaction();
-        let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
+        let mut db = chain.store().begin_transaction();
+        let tree = BlockStateDB::from_store(&mut db, RWConfig::readonly()).unwrap();
         let sender_id = tree
             .get_account_id_by_script_hash(&sender_script.hash().into())
             .unwrap()
@@ -432,7 +432,7 @@ async fn test_enter_challenge_finalized_block() {
     // verify enter challenge
     let witness = {
         let block_proof: Bytes = {
-            let db = chain.store().begin_transaction();
+            let mut db = chain.store().begin_transaction();
             let proof = db
                 .block_smt()
                 .unwrap()

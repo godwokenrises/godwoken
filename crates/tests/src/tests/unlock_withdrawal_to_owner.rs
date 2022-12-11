@@ -590,7 +590,7 @@ async fn test_build_unlock_to_owner_tx() {
 
         let tip_block_number = chain.local_state().tip().raw().number().unpack();
         {
-            let store_tx = chain.store().begin_transaction();
+            let mut store_tx = chain.store().begin_transaction();
             store_tx
                 .set_block_post_finalized_custodian_capacity(
                     tip_block_number,

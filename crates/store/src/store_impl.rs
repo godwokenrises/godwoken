@@ -133,7 +133,7 @@ impl<'a> Store {
         // check state tree
         {
             let db = self.begin_transaction();
-            let tree = BlockStateDB::from_store(&db, RWConfig::readonly())?;
+            let tree = BlockStateDB::from_store(db, RWConfig::readonly())?;
             tree.check_state()?;
         }
 

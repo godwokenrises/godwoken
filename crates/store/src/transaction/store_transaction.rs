@@ -23,6 +23,8 @@ use crate::traits::chain_store::ChainStore;
 use crate::traits::kv_store::KVStoreRead;
 use crate::traits::kv_store::{KVStore, KVStoreWrite};
 
+use super::TransactionSnapshot;
+
 pub struct StoreTransaction {
     pub(crate) inner: autorocks::Transaction,
 }
@@ -30,7 +32,7 @@ pub struct StoreTransaction {
 /// Temporary hack.
 unsafe impl Sync for StoreTransaction {}
 
-impl KVStoreRead for &StoreTransaction {
+impl KVStoreRead for StoreTransaction {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
         moveit! {
             let mut buf = PinnableSlice::new();
@@ -42,27 +44,33 @@ impl KVStoreRead for &StoreTransaction {
     }
 }
 
-impl KVStoreWrite for &StoreTransaction {
-    fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<()> {
+impl KVStoreWrite for StoreTransaction {
+    fn insert_raw(&mut self, col: Col, key: &[u8], value: &[u8]) -> Result<()> {
         Ok(self.inner.put(col, key, value)?)
     }
 
-    fn delete(&self, col: Col, key: &[u8]) -> Result<()> {
+    fn delete(&mut self, col: Col, key: &[u8]) -> Result<()> {
         Ok(self.inner.delete(col, key)?)
     }
 }
-impl KVStore for &StoreTransaction {}
-impl ChainStore for &StoreTransaction {}
+impl KVStore for StoreTransaction {}
+impl ChainStore for StoreTransaction {}
 
 impl StoreTransaction {
-    pub fn commit(&self) -> Result<()> {
+    pub fn commit(&mut self) -> Result<()> {
         self.inner.commit()?;
         Ok(())
     }
 
-    pub fn rollback(&self) -> Result<()> {
+    pub fn rollback(&mut self) -> Result<()> {
         self.inner.rollback()?;
         Ok(())
+    }
+
+    pub fn snapshot(&self) -> TransactionSnapshot {
+        TransactionSnapshot {
+            inner: self.inner.timestamped_snapshot(),
+        }
     }
 
     pub(crate) fn get_iter(
@@ -73,23 +81,23 @@ impl StoreTransaction {
         self.inner.iter(col, dir)
     }
 
-    pub fn setup_chain_id(&self, chain_id: H256) -> Result<()> {
+    pub fn setup_chain_id(&mut self, chain_id: H256) -> Result<()> {
         self.insert_raw(COLUMN_META, META_CHAIN_ID_KEY, chain_id.as_slice())?;
         Ok(())
     }
 
-    pub fn set_block_smt_root(&self, root: H256) -> Result<()> {
+    pub fn set_block_smt_root(&mut self, root: H256) -> Result<()> {
         self.insert_raw(COLUMN_META, META_BLOCK_SMT_ROOT_KEY, root.as_slice())?;
         Ok(())
     }
 
-    pub fn set_tip_block_hash(&self, block_hash: H256) -> Result<()> {
+    pub fn set_tip_block_hash(&mut self, block_hash: H256) -> Result<()> {
         let block_hash: [u8; 32] = block_hash.into();
         self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &block_hash)
     }
 
     pub fn set_bad_block_challenge_target(
-        &self,
+        &mut self,
         block_hash: &H256,
         target: &ChallengeTarget,
     ) -> Result<()> {
@@ -100,12 +108,12 @@ impl StoreTransaction {
         )
     }
 
-    pub fn delete_bad_block_challenge_target(&self, block_hash: &H256) -> Result<()> {
+    pub fn delete_bad_block_challenge_target(&mut self, block_hash: &H256) -> Result<()> {
         self.delete(COLUMN_BAD_BLOCK_CHALLENGE_TARGET, block_hash.as_slice())
     }
 
     pub fn set_reverted_block_hashes(
-        &self,
+        &mut self,
         reverted_block_smt_root: &H256,
         prev_reverted_block_smt_root: H256,
         mut block_hashes: Vec<H256>,
@@ -126,7 +134,7 @@ impl StoreTransaction {
 
     #[allow(clippy::too_many_arguments)]
     pub fn insert_block(
-        &self,
+        &mut self,
         block: packed::L2Block,
         global_state: packed::GlobalState,
         prev_txs_state: AccountMerkleState,
@@ -201,7 +209,7 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn insert_asset_scripts(&self, scripts: HashSet<Script>) -> Result<()> {
+    pub fn insert_asset_scripts(&mut self, scripts: HashSet<Script>) -> Result<()> {
         for script in scripts.into_iter() {
             self.insert_raw(COLUMN_ASSET_SCRIPT, &script.hash(), script.as_slice())?;
         }
@@ -209,11 +217,11 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn block_smt(&self) -> Result<SMT<SMTBlockStore<&Self>>> {
+    pub fn block_smt(&mut self) -> Result<SMT<SMTBlockStore<&mut Self>>> {
         SMTBlockStore::new(self).to_smt()
     }
 
-    pub fn reverted_block_smt(&self) -> Result<SMT<SMTRevertedBlockStore<&Self>>> {
+    pub fn reverted_block_smt(&mut self) -> Result<SMT<SMTRevertedBlockStore<&mut Self>>> {
         SMTRevertedBlockStore::new(self).to_smt()
     }
 
@@ -227,7 +235,7 @@ impl StoreTransaction {
         Ok(to_h256.collect())
     }
 
-    pub fn rewind_reverted_block_smt(&self, block_hashes: Vec<H256>) -> Result<()> {
+    pub fn rewind_reverted_block_smt(&mut self, block_hashes: Vec<H256>) -> Result<()> {
         let mut reverted_block_smt = self.reverted_block_smt()?;
 
         for block_hash in block_hashes.into_iter() {
@@ -236,19 +244,21 @@ impl StoreTransaction {
                 .context("reset reverted block smt")?;
         }
 
-        self.set_reverted_block_smt_root(*reverted_block_smt.root())
+        let root = *reverted_block_smt.root();
+        self.set_reverted_block_smt_root(root)
     }
 
-    pub fn rewind_block_smt(&self, block: &packed::L2Block) -> Result<()> {
+    pub fn rewind_block_smt(&mut self, block: &packed::L2Block) -> Result<()> {
         let mut block_smt = self.block_smt()?;
         block_smt
             .update(block.smt_key().into(), H256::zero())
             .context("reset block smt")?;
 
-        self.set_block_smt_root(*block_smt.root())
+        let root = *block_smt.root();
+        self.set_block_smt_root(root)
     }
 
-    fn set_last_valid_tip_block_hash(&self, block_hash: &H256) -> Result<()> {
+    fn set_last_valid_tip_block_hash(&mut self, block_hash: &H256) -> Result<()> {
         self.insert_raw(
             COLUMN_META,
             META_LAST_VALID_TIP_BLOCK_HASH_KEY,
@@ -257,7 +267,7 @@ impl StoreTransaction {
     }
 
     pub fn set_last_confirmed_block_number_hash(
-        &self,
+        &mut self,
         number_hash: &packed::NumberHashReader,
     ) -> Result<()> {
         self.insert_raw(
@@ -268,7 +278,7 @@ impl StoreTransaction {
     }
 
     pub fn set_last_submitted_block_number_hash(
-        &self,
+        &mut self,
         number_hash: &packed::NumberHashReader,
     ) -> Result<()> {
         self.insert_raw(
@@ -279,7 +289,7 @@ impl StoreTransaction {
     }
 
     pub fn set_block_submit_tx(
-        &self,
+        &mut self,
         block_number: u64,
         tx: &packed::TransactionReader,
     ) -> Result<()> {
@@ -289,20 +299,20 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn set_block_submit_tx_hash(&self, block_number: u64, hash: &[u8; 32]) -> Result<()> {
+    pub fn set_block_submit_tx_hash(&mut self, block_number: u64, hash: &[u8; 32]) -> Result<()> {
         let k = block_number.to_be_bytes();
         self.insert_raw(COLUMN_BLOCK_SUBMIT_TX_HASH, &k, hash)?;
         Ok(())
     }
 
-    pub fn delete_submit_tx(&self, block_number: u64) -> Result<()> {
+    pub fn delete_submit_tx(&mut self, block_number: u64) -> Result<()> {
         let k = block_number.to_be_bytes();
         self.delete(COLUMN_BLOCK_SUBMIT_TX, &k)?;
         self.delete(COLUMN_BLOCK_SUBMIT_TX_HASH, &k)
     }
 
     pub fn set_block_deposit_info_vec(
-        &self,
+        &mut self,
         block_number: u64,
         deposit_info_vec: &packed::DepositInfoVecReader,
     ) -> Result<()> {
@@ -314,12 +324,12 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn delete_block_deposit_info_vec(&self, block_number: u64) -> Result<()> {
+    pub fn delete_block_deposit_info_vec(&mut self, block_number: u64) -> Result<()> {
         self.delete(COLUMN_BLOCK_DEPOSIT_INFO_VEC, &block_number.to_be_bytes())
     }
 
     pub fn set_block_post_finalized_custodian_capacity(
-        &self,
+        &mut self,
         block_number: u64,
         finalized_custodian_capacity: &packed::FinalizedCustodianCapacityReader,
     ) -> Result<()> {
@@ -331,14 +341,17 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn delete_block_post_finalized_custodian_capacity(&self, block_number: u64) -> Result<()> {
+    pub fn delete_block_post_finalized_custodian_capacity(
+        &mut self,
+        block_number: u64,
+    ) -> Result<()> {
         self.delete(
             COLUMN_BLOCK_POST_FINALIZED_CUSTODIAN_CAPACITY,
             &block_number.to_be_bytes(),
         )
     }
 
-    pub fn set_reverted_block_smt_root(&self, root: H256) -> Result<()> {
+    pub fn set_reverted_block_smt_root(&mut self, root: H256) -> Result<()> {
         self.insert_raw(
             COLUMN_META,
             META_REVERTED_BLOCK_SMT_ROOT_KEY,
@@ -348,7 +361,7 @@ impl StoreTransaction {
     }
 
     pub fn insert_bad_block(
-        &self,
+        &mut self,
         block: &packed::L2Block,
         global_state: &packed::GlobalState,
     ) -> Result<()> {
@@ -365,7 +378,8 @@ impl StoreTransaction {
         block_smt
             .update(block.smt_key().into(), block_hash.into())
             .context("update block smt")?;
-        self.set_block_smt_root(*block_smt.root())?;
+        let root = *block_smt.root();
+        self.set_block_smt_root(root)?;
 
         // Update tip block
         self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &block_hash)?;
@@ -374,36 +388,37 @@ impl StoreTransaction {
     }
 
     /// Delete bad block and block global state.
-    pub fn delete_bad_block(&self, block_hash: &H256) -> Result<()> {
+    pub fn delete_bad_block(&mut self, block_hash: &H256) -> Result<()> {
         self.delete(COLUMN_BAD_BLOCK, block_hash.as_slice())?;
         self.delete(COLUMN_BLOCK_GLOBAL_STATE, block_hash.as_slice())?;
         Ok(())
     }
 
-    pub fn revert_bad_blocks(&self, bad_blocks: &[packed::L2Block]) -> Result<()> {
+    pub fn revert_bad_blocks(&mut self, bad_blocks: &[packed::L2Block]) -> Result<()> {
         if bad_blocks.is_empty() {
             return Ok(());
         }
 
         let mut block_smt = self.block_smt()?;
-        let mut reverted_block_smt = self.reverted_block_smt()?;
-
         for block in bad_blocks {
-            let block_hash = block.hash();
-
             // Remove block from smt
             block_smt
                 .update(block.smt_key().into(), H256::zero())
                 .context("update block smt")?;
+        }
+        let root = *block_smt.root();
+        self.set_block_smt_root(root)?;
 
+        let mut reverted_block_smt = self.reverted_block_smt()?;
+        for block in bad_blocks {
+            let block_hash = block.hash();
             // Add block to reverted smt
             reverted_block_smt
                 .update(block_hash.into(), H256::one())
                 .context("update reverted block smt")?;
         }
-
-        self.set_block_smt_root(*block_smt.root())?;
-        self.set_reverted_block_smt_root(*reverted_block_smt.root())?;
+        let root = *reverted_block_smt.root();
+        self.set_reverted_block_smt_root(root)?;
 
         // Revert tip block to parent block
         let parent_block_hash: [u8; 32] = {
@@ -414,7 +429,7 @@ impl StoreTransaction {
     }
 
     /// Attach block to the rollup main chain
-    pub fn attach_block(&self, block: packed::L2Block) -> Result<()> {
+    pub fn attach_block(&mut self, block: packed::L2Block) -> Result<()> {
         let raw = block.raw();
         let raw_number = raw.number();
         let block_hash = raw.hash();
@@ -450,8 +465,8 @@ impl StoreTransaction {
         block_smt
             .update(raw.smt_key().into(), raw.hash().into())
             .context("update block smt")?;
-        let root = block_smt.root();
-        self.set_block_smt_root(*root)?;
+        let root = *block_smt.root();
+        self.set_block_smt_root(root)?;
 
         // update tip
         self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &block_hash)?;
@@ -468,7 +483,7 @@ impl StoreTransaction {
     /// # Panics
     ///
     /// If the block is not the “last valid tip block”.
-    pub fn detach_block(&self, block: &packed::L2Block) -> Result<()> {
+    pub fn detach_block(&mut self, block: &packed::L2Block) -> Result<()> {
         // check
         {
             let tip = self.get_last_valid_tip_block_hash()?;
@@ -502,8 +517,8 @@ impl StoreTransaction {
         block_smt
             .update(block.smt_key().into(), H256::zero())
             .context("update block smt")?;
-        let root = block_smt.root();
-        self.set_block_smt_root(*root)?;
+        let root = *block_smt.root();
+        self.set_block_smt_root(root)?;
 
         // update tip
         let block_number: u64 = block_number.unpack();
@@ -550,20 +565,20 @@ impl StoreTransaction {
     // We should separate the StateDB into ReadOnly & WriteOnly,
     // The ReadOnly is for fetching history state, and the write only is for writing new state.
     // This function should only be added on the ReadOnly state.
-    pub fn state_smt(&self) -> Result<SMT<SMTStateStore<&Self>>> {
+    pub fn state_smt(&mut self) -> Result<SMT<SMTStateStore<&mut Self>>> {
         SMTStateStore::new(self).to_smt()
     }
 
     pub fn state_smt_with_merkle_state(
-        &self,
+        &mut self,
         merkle_state: AccountMerkleState,
-    ) -> Result<SMT<SMTStateStore<&Self>>> {
+    ) -> Result<SMT<SMTStateStore<&mut Self>>> {
         let store = SMTStateStore::new(self);
         Ok(SMT::new(merkle_state.merkle_root().unpack(), store))
     }
 
     pub fn insert_mem_pool_transaction(
-        &self,
+        &mut self,
         tx_hash: &H256,
         tx: packed::L2Transaction,
     ) -> Result<()> {
@@ -574,14 +589,14 @@ impl StoreTransaction {
         )
     }
 
-    pub fn remove_mem_pool_transaction(&self, tx_hash: &H256) -> Result<()> {
+    pub fn remove_mem_pool_transaction(&mut self, tx_hash: &H256) -> Result<()> {
         self.delete(COLUMN_MEM_POOL_TRANSACTION, tx_hash.as_slice())?;
         self.delete(COLUMN_MEM_POOL_TRANSACTION_RECEIPT, tx_hash.as_slice())?;
         Ok(())
     }
 
     pub fn insert_mem_pool_transaction_receipt(
-        &self,
+        &mut self,
         tx_hash: &H256,
         tx_receipt: packed::TxReceipt,
     ) -> Result<()> {
@@ -593,7 +608,7 @@ impl StoreTransaction {
     }
 
     pub fn insert_mem_pool_withdrawal(
-        &self,
+        &mut self,
         withdrawal_hash: &H256,
         withdrawal: packed::WithdrawalRequestExtra,
     ) -> Result<()> {
@@ -604,7 +619,7 @@ impl StoreTransaction {
         )
     }
 
-    pub fn remove_mem_pool_withdrawal(&self, withdrawal_hash: &H256) -> Result<()> {
+    pub fn remove_mem_pool_withdrawal(&mut self, withdrawal_hash: &H256) -> Result<()> {
         self.delete(COLUMN_MEM_POOL_WITHDRAWAL, withdrawal_hash.as_slice())?;
         Ok(())
     }

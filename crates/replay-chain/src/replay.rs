@@ -65,10 +65,10 @@ pub fn replay_chain(ctx: ChainContext) -> Result<()> {
 
         let txs_len = block.transactions().item_count();
         let deposits_len = deposit_requests.len();
-        let db = local_store.begin_transaction();
+        let mut db = local_store.begin_transaction();
         let now = Instant::now();
         if let Some(challenge) = chain.process_block(
-            &db,
+            &mut db,
             block,
             global_state,
             deposit_requests,
@@ -124,7 +124,7 @@ pub fn detach_chain(ctx: ChainContext) -> Result<()> {
 
     // query next block
     while number > 0 {
-        let db = &local_store.begin_transaction();
+        let mut db = local_store.begin_transaction();
         let detach_block = {
             let block_hash = db.get_block_hash_by_number(number)?.unwrap();
             db.get_block(&block_hash)?.unwrap()
@@ -134,7 +134,7 @@ pub fn detach_chain(ctx: ChainContext) -> Result<()> {
         println!("Detach block: #{} {}", number, hash);
         db.detach_block(&detach_block)?;
         {
-            let mut state = BlockStateDB::from_store(db, RWConfig::detach_block())?;
+            let mut state = BlockStateDB::from_store(&mut db, RWConfig::detach_block())?;
             state.detach_block_state(number)?;
         }
         db.commit()?;

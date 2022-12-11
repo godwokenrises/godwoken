@@ -395,7 +395,7 @@ impl Generator {
     #[instrument(skip_all, fields(block = args.l2block.raw().number().unpack(), deposits_count = args.deposit_info_vec.len()))]
     pub fn verify_and_apply_block<C: ChainView>(
         &self,
-        db: &StoreTransaction,
+        db: &mut StoreTransaction,
         chain: &C,
         args: ApplyBlockArgs,
         skipped_invalid_block_list: &HashSet<H256>,

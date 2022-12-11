@@ -7,7 +7,7 @@ use std::collections::HashMap;
 #[test]
 fn insert_and_get() {
     let store = Store::open_tmp().unwrap();
-    let store_txn = &store.begin_transaction();
+    let mut store_txn = store.begin_transaction();
 
     store_txn.insert_raw(0, &[0, 0], &[0, 0, 0]).unwrap();
     store_txn.insert_raw(1, &[1, 1], &[1, 1, 1]).unwrap();
@@ -45,7 +45,7 @@ fn insert_and_get() {
 #[test]
 fn delete() {
     let store = Store::open_tmp().unwrap();
-    let store_txn = &store.begin_transaction();
+    let mut store_txn = store.begin_transaction();
 
     store_txn.insert_raw(1, &[2], &[1, 1, 1]).unwrap();
     store_txn.delete(1, &[2]).unwrap();
@@ -56,7 +56,7 @@ fn delete() {
     assert!(store_txn.get(1, &[2]).is_none());
 
     // delete a nonexistent
-    let store_txn = &store.begin_transaction();
+    let mut store_txn = store.begin_transaction();
     assert!(store_txn.delete(1, &[3]).is_ok());
     assert!(store_txn.commit().is_ok());
 }
@@ -64,7 +64,7 @@ fn delete() {
 #[test]
 fn insert_without_commit() {
     let store = Store::open_tmp().unwrap();
-    let store_txn = &store.begin_transaction();
+    let mut store_txn = store.begin_transaction();
 
     // insert without commit
     store_txn.insert_raw(0, &[0, 0], &[0, 0, 0]).unwrap();
@@ -80,7 +80,7 @@ fn insert_without_commit() {
 #[test]
 fn seek_for_prev() {
     let store = Store::open_tmp().unwrap();
-    let store_txn = &store.begin_transaction();
+    let mut store_txn = store.begin_transaction();
 
     store_txn.insert_raw(1, &[0], &[0, 0, 0]).unwrap();
     store_txn.insert_raw(1, &[1], &[1, 1, 1]).unwrap();
@@ -138,7 +138,7 @@ fn seek_for_prev() {
 #[test]
 fn seek_for_prev_with_suffix() {
     let store = Store::open_tmp().unwrap();
-    let store_txn = &store.begin_transaction();
+    let mut store_txn = store.begin_transaction();
 
     let (block_num_1, tx_idx_5) = (1u64, 5u32);
     let (block_num_2, tx_idx_7) = (2u64, 7u32);
@@ -247,7 +247,7 @@ fn seek_for_prev_with_suffix() {
 fn delete_range() {
     let store = Store::open_tmp().unwrap();
 
-    let store_txn = &store.begin_transaction();
+    let mut store_txn = store.begin_transaction();
     store_txn.insert_raw(1, &[0], &[0, 0]).unwrap();
     store_txn.insert_raw(1, &[1], &[1, 1]).unwrap();
     store_txn.insert_raw(1, &[2], &[2, 2]).unwrap();
@@ -268,7 +268,7 @@ fn delete_range() {
 fn range_search_and_delete() {
     let store = Store::open_tmp().unwrap();
 
-    let store_txn = &store.begin_transaction();
+    let mut store_txn = store.begin_transaction();
     store_txn.insert_raw(1, &[0, 0], &[1, 0, 0]).unwrap();
     store_txn.insert_raw(1, &[0, 1], &[1, 0, 1]).unwrap();
     store_txn.insert_raw(1, &[0, 2], &[3, 0, 2]).unwrap();

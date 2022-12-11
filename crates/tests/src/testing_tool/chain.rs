@@ -571,10 +571,10 @@ pub async fn apply_block_result(
 ) -> anyhow::Result<()> {
     let number = block_result.block.raw().number().unpack();
     let hash = block_result.block.hash();
-    let store_tx = chain.store().begin_transaction();
+    let mut store_tx = chain.store().begin_transaction();
     chain
         .update_local(
-            &store_tx,
+            &mut store_tx,
             block_result.block,
             deposit_info_vec,
             deposit_asset_scripts,
@@ -620,7 +620,7 @@ pub async fn construct_block_with_timestamp(
         )
     }
     let stake_cell_owner_lock_hash = H256::zero();
-    let db = &chain.store().begin_transaction();
+    let mut db = chain.store().begin_transaction();
     let generator = chain.generator();
     let rollup_config_hash = chain.rollup_config_hash().into();
 
@@ -649,7 +649,7 @@ pub async fn construct_block_with_timestamp(
         reverted_block_root,
         block_param,
     };
-    produce_block(db, generator, param).map(|mut r| {
+    produce_block(&mut db, generator, param).map(|mut r| {
         r.remaining_capacity = remaining_capacity;
         r
     })

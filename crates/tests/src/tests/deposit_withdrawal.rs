@@ -236,8 +236,8 @@ async fn test_deposit_and_withdrawal() {
         (capacity - withdraw_capacity).into()
     );
 
-    let db = chain.store().begin_transaction();
-    let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
+    let mut db = chain.store().begin_transaction();
+    let tree = BlockStateDB::from_store(&mut db, RWConfig::readonly()).unwrap();
     let ckb_balance2 = tree
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_addr)
         .unwrap();
@@ -604,10 +604,10 @@ async fn test_produce_block_after_re_inject_withdrawal() {
         .unwrap()
         .unwrap();
     {
-        let db = chain.store().begin_transaction();
+        let mut db = chain.store().begin_transaction();
         chain
             .revert_l1action(
-                &db,
+                &mut db,
                 RevertedL1Action {
                     prev_global_state,
                     context: RevertL1ActionContext::SubmitValidBlock { l2block },
@@ -652,8 +652,8 @@ async fn test_produce_block_after_re_inject_withdrawal() {
 
     // check status
 
-    let db = &chain.store().begin_transaction();
-    let tree = BlockStateDB::from_store(db, RWConfig::readonly()).unwrap();
+    let mut db = chain.store().begin_transaction();
+    let tree = BlockStateDB::from_store(&mut db, RWConfig::readonly()).unwrap();
     let ckb_balance2 = tree
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_addr)
         .unwrap();

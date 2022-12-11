@@ -238,7 +238,7 @@ impl OffChainCancelChallengeValidator {
 
     pub fn verify_withdrawal_request(
         &mut self,
-        db: &StoreTransaction,
+        db: &mut StoreTransaction,
         mem_tree: &mut MemTree,
         req: WithdrawalRequestExtra,
     ) -> Result<Option<u64>> {

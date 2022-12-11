@@ -32,7 +32,7 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 pub fn build_challenge_context(
-    db: &StoreTransaction,
+    db: &mut StoreTransaction,
     target: ChallengeTarget,
 ) -> Result<ChallengeContext> {
     let block_hash: H256 = target.block_hash().unpack();
@@ -56,7 +56,7 @@ pub fn build_challenge_context(
 
 pub fn build_verify_context(
     generator: Arc<Generator>,
-    db: &StoreTransaction,
+    db: &mut StoreTransaction,
     target: &ChallengeTarget,
 ) -> Result<VerifyContext> {
     let challenge_type = target.target_type().try_into();
@@ -78,7 +78,7 @@ pub fn build_verify_context(
 
 /// NOTE: Caller should rollback db, only update reverted_block_smt in L1ActionContext::Revert
 pub fn build_revert_context(
-    db: &StoreTransaction,
+    db: &mut StoreTransaction,
     reverted_blocks: &[L2Block],
 ) -> Result<RevertContext> {
     // Build main chain block proof
@@ -130,7 +130,7 @@ pub fn build_revert_context(
 }
 
 fn build_verify_withdrawal_witness(
-    db: &StoreTransaction,
+    db: &mut StoreTransaction,
     block_hash: H256,
     withdrawal_index: u32,
 ) -> Result<VerifyContext> {
@@ -507,7 +507,7 @@ fn build_tx_kv_witness(
 }
 
 fn build_block_proof(
-    db: &StoreTransaction,
+    db: &mut StoreTransaction,
     raw_blocks: &[RawL2Block],
 ) -> Result<(BlockHashEntryVec, CompiledMerkleProof)> {
     let block_entries = {

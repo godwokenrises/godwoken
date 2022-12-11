@@ -166,7 +166,7 @@ impl MockBlockParam {
 
     pub fn challenge_last_withdrawal(
         &self,
-        db: &StoreTransaction,
+        db: &mut StoreTransaction,
         mem_tree: &mut MemTree,
     ) -> Result<MockChallengeOutput> {
         let target_index = self.withdrawals.inner.len().saturating_sub(1);
@@ -205,7 +205,7 @@ impl MockBlockParam {
 
     pub fn challenge_last_tx_signature(
         &self,
-        db: &StoreTransaction,
+        db: &mut StoreTransaction,
         mem_tree: &mut MemTree,
     ) -> Result<MockChallengeOutput> {
         let target_index = self.transactions.inner.len().saturating_sub(1);
@@ -295,7 +295,7 @@ impl MockBlockParam {
 
     fn build_global_state(
         &self,
-        db: &StoreTransaction,
+        db: &mut StoreTransaction,
         post_account: AccountMerkleState,
         raw_block: &RawL2Block,
     ) -> Result<GlobalState> {

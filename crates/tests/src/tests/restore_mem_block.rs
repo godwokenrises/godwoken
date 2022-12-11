@@ -119,8 +119,8 @@ async fn test_restore_mem_block() {
 
     let random_txs: Vec<_> = {
         let tx_accounts = accounts.iter().skip(withdrawal_count as usize);
-        let db = chain.store().begin_transaction();
-        let state = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
+        let mut db = chain.store().begin_transaction();
+        let state = BlockStateDB::from_store(&mut db, RWConfig::readonly()).unwrap();
         tx_accounts
             .map(|account_script| {
                 let from_id = state
