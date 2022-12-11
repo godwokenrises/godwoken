@@ -4,6 +4,7 @@ use anyhow::{anyhow, Result};
 use gw_common::H256;
 use gw_config::ContractsCellDep;
 use gw_mem_pool::{custodian::sum_withdrawals, withdrawal::Generator};
+use gw_types::core::Timepoint;
 use gw_types::offchain::CompatibleFinalizedTimepoint;
 use gw_types::packed::RollupConfig;
 use gw_types::{
@@ -17,6 +18,7 @@ use gw_types::{
     },
     prelude::*,
 };
+use gw_utils::withdrawal::parse_lock_args;
 use gw_utils::RollupContext;
 use std::{
     collections::HashMap,
@@ -202,6 +204,7 @@ pub fn unlock_to_owner(
     rollup_config: &RollupConfig,
     contracts_dep: &ContractsCellDep,
     withdrawal_cells: Vec<CellInfo>,
+    global_state_since: u64,
 ) -> Result<Option<UnlockedWithdrawals>> {
     if withdrawal_cells.is_empty() {
         return Ok(None);
@@ -229,6 +232,7 @@ pub fn unlock_to_owner(
         rollup_config.finality_blocks().unpack(),
     );
     let l1_sudt_script_hash = rollup_config.l1_sudt_script_type_hash();
+    let mut if_exist_v1_withdrawal_cells = false;
     for withdrawal_cell in withdrawal_cells {
         // Double check
         if let Err(err) = gw_rpc_client::withdrawal::verify_unlockable_to_owner(
@@ -238,6 +242,10 @@ pub fn unlock_to_owner(
         ) {
             log::error!("[unlock withdrawal] unexpected verify failed {}", err);
             continue;
+        }
+
+        if !if_exist_v1_withdrawal_cells {
+            if_exist_v1_withdrawal_cells = is_v1_withdrawal_cell(&withdrawal_cell);
         }
 
         let owner_lock = {
@@ -254,6 +262,7 @@ pub fn unlock_to_owner(
         let withdrawal_input = {
             let input = CellInput::new_builder()
                 .previous_output(withdrawal_cell.out_point.clone())
+                .since(global_state_since.pack())
                 .build();
 
             InputCellInfo {
@@ -282,12 +291,21 @@ pub fn unlock_to_owner(
     let withdrawal_lock_dep = contracts_dep.withdrawal_cell_lock.clone();
     let sudt_type_dep = contracts_dep.l1_sudt_type.clone();
 
-    let mut cell_deps = vec![
-        // rollup_dep and rollup_config_dep will be used by withdrawal_lock_script
-        rollup_dep,
-        rollup_config_dep.into(),
-        withdrawal_lock_dep.into(),
-    ];
+    let mut cell_deps = if if_exist_v1_withdrawal_cells {
+        // Some withdrawal cells were born at v1, withdrawal_lock_script checks finality of withdrawal
+        // cells by comparing with GlobalState.last_finalized_timepoint, so rollup_dep and
+        // rollup_config_dep are required
+        vec![
+            rollup_dep,
+            rollup_config_dep.into(),
+            withdrawal_lock_dep.into(),
+        ]
+    } else {
+        // All withdrawal cells were born at v2, withdrawal_lock_script checks finality of withdrawal
+        // cells by comparing with `since`.
+        vec![withdrawal_lock_dep.into()]
+    };
+
     if unlocked_to_owner_outputs
         .iter()
         .any(|output| output.0.type_().to_opt().is_some())
@@ -301,6 +319,20 @@ pub fn unlock_to_owner(
         witness_args: withdrawal_witness,
         outputs: unlocked_to_owner_outputs,
     }))
+}
+
+fn is_v1_withdrawal_cell(withdrawal_cell: &CellInfo) -> bool {
+    let withdrawal_lock_args = parse_lock_args(&withdrawal_cell.output.lock().args().raw_data())
+        .expect("parse withdrawal lock args");
+    match Timepoint::from_full_value(
+        withdrawal_lock_args
+            .lock_args
+            .withdrawal_block_timepoint()
+            .unpack(),
+    ) {
+        Timepoint::BlockNumber(_) => true,
+        Timepoint::Timestamp(_) => false,
+    }
 }
 
 #[cfg(test)]
@@ -430,7 +462,7 @@ mod test {
     }
 
     #[test]
-    fn test_unlock_to_owner() {
+    fn test_unlock_to_owner_v1() {
         // Output should only change lock to owner lock
         let last_finalized_timepoint = Timepoint::from_block_number(100);
         let global_state = GlobalState::new_builder()
@@ -532,6 +564,7 @@ mod test {
             }
         };
 
+        let withdrawal_input_since = 0;
         let unlocked = unlock_to_owner(
             rollup_cell.clone(),
             &rollup_context.rollup_config,
@@ -540,6 +573,7 @@ mod test {
                 withdrawal_without_owner_lock,
                 withdrawal_with_owner_lock.clone(),
             ],
+            withdrawal_input_since,
         )
         .expect("unlock")
         .expect("some unlocked");

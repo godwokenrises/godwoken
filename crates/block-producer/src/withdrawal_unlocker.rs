@@ -26,6 +26,7 @@ use tracing::instrument;
 use crate::types::ChainEvent;
 use crate::utils;
 
+use crate::utils::global_state_last_finalized_timepoint_to_since;
 pub use gw_rpc_client::contract::Guard;
 
 const TRANSACTION_FAILED_TO_RESOLVE_ERROR: &str = "TransactionFailedToResolve";
@@ -197,11 +198,13 @@ pub trait BuildUnlockWithdrawalToOwner {
             unlockable_withdrawals.len()
         );
 
+        let global_state_since = global_state_last_finalized_timepoint_to_since(&global_state);
         let to_unlock = match crate::withdrawal::unlock_to_owner(
             rollup_cell,
             self.rollup_config(),
             &self.contracts_dep(),
             unlockable_withdrawals,
+            global_state_since,
         )? {
             Some(to_unlock) => to_unlock,
             None => return Ok(None),
