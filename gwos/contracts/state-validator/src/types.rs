@@ -47,10 +47,10 @@ pub struct BlockContext {
 impl BlockContext {
     pub const fn block_timepoint(&self) -> Timepoint {
         if Fork::use_timestamp_as_timepoint(self.post_version) {
-            // future finalized timestamp
+            // the future finalized timestamp of block
             Timepoint::from_timestamp(self.timestamp + self.finality_time_in_ms)
         } else {
-            // current block number
+            // the current block number
             Timepoint::from_block_number(self.number)
         }
     }
