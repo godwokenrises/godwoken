@@ -520,6 +520,7 @@ fn load_block_context_and_state<'a>(
         block_hash,
         prev_account_root,
         post_version,
+        finality_time_in_ms: finality_time_in_ms(&rollup_config),
     };
 
     debug!(
@@ -529,14 +530,16 @@ fn load_block_context_and_state<'a>(
             timestamp: {},
             block_hash: {:#x},
             post_version: {},
-            prev_account_root: {:#x}
+            prev_account_root: {:#x},
+            finality_time_in_ms: {}
         }}",
         context.rollup_type_hash.pack(),
         context.number,
         context.timestamp,
         context.block_hash.pack(),
         context.post_version,
-        context.prev_account_root.pack()
+        context.prev_account_root.pack(),
+        context.finality_time_in_ms
     );
 
     Ok((context, kv_state))
