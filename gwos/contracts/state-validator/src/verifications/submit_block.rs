@@ -427,7 +427,7 @@ fn load_block_context_and_state<'a>(
     }
 
     let timestamp: u64 = raw_block.timestamp().unpack();
-    check_block_timestamp(rollup_config, post_global_state, timestamp)?;
+    check_block_timestamp(post_global_state, timestamp)?;
 
     // verify parent block hash
     if raw_block.parent_block_hash().as_slice() != prev_global_state.tip_block_hash().as_slice() {
@@ -753,14 +753,11 @@ fn check_block_withdrawals(block: &L2BlockReader) -> Result<(), Error> {
 // Assert l2block.timestamp <= l1tx.since
 // Assert l2block.timestamp <=
 //      post_global_state.last_finalized_timepoint
-//      + rollup_config.finality_time_in_ms()
 //      + 4h
 // Assert l2block.timestamp >=
 //      post_global_state.last_finalized_timepoint
-//      + rollup_config.finality_time_in_ms()
 //      - 4h
 fn check_block_timestamp(
-    rollup_config: &RollupConfig,
     post_global_state: &GlobalState,
     block_timestamp: u64,
 ) -> Result<(), Error> {
@@ -796,7 +793,7 @@ fn check_block_timestamp(
                 post_global_state.last_finalized_block_number().unpack(),
             ) {
                 Timepoint::BlockNumber(_) => unreachable!(),
-                Timepoint::Timestamp(ts) => ts + finality_time_in_ms(rollup_config),
+                Timepoint::Timestamp(current_timestamp) => current_timestamp,
             }
         };
         if !(backbone.saturating_sub(BACKBONE_BIAS) <= block_timestamp
@@ -865,7 +862,7 @@ fn check_global_state_last_finalized_timepoint(
                 return Err(Error::InvalidPostGlobalState);
             }
         }
-        (true, Timepoint::Timestamp(last_finalized_timestamp)) => {
+        (true, Timepoint::Timestamp(current_timestamp)) => {
             let rollup_input_since = Since::new(load_input_since(0, Source::GroupInput)?);
             let rollup_input_timestamp = match (
                 rollup_input_since.is_absolute(),
@@ -874,9 +871,7 @@ fn check_global_state_last_finalized_timepoint(
                 (true, Some(LockValue::Timestamp(time_ms))) => time_ms,
                 _ => return Err(Error::InvalidSince),
             };
-            if !(last_finalized_timestamp + finality_time_in_ms(rollup_config)
-                < rollup_input_timestamp)
-            {
+            if !(current_timestamp < rollup_input_timestamp) {
                 return Err(Error::InvalidPostGlobalState);
             }
         }
