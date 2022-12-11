@@ -11,7 +11,8 @@ use gw_utils::cells::rollup::{
 };
 use gw_utils::ckb_std::{
     debug,
-    high_level::{load_cell_lock_hash, QueryIter},
+    high_level::{load_cell_lock_hash, load_input_since, QueryIter},
+    since::{LockValue, Since},
 };
 use gw_utils::finality::is_finalized;
 use gw_utils::gw_types::packed::{
@@ -155,25 +156,27 @@ pub fn main() -> Result<(), Error> {
             Ok(())
         }
         UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(_unlock_args) => {
-            // try search rollup state from deps
-            let global_state = match search_rollup_state(&rollup_type_hash, Source::CellDep)? {
-                Some(state) => state,
-                None => {
-                    // then try search rollup state from inputs
-                    search_rollup_state(&rollup_type_hash, Source::Input)?
-                        .ok_or(Error::RollupCellNotFound)?
+            let withdrawal_block_timepoint =
+                Timepoint::from_full_value(lock_args.withdrawal_block_timepoint().unpack());
+            match &withdrawal_block_timepoint {
+                Timepoint::BlockNumber(_) => {
+                    let global_state =
+                        match search_rollup_state(&rollup_type_hash, Source::CellDep)? {
+                            Some(state) => state,
+                            None => {
+                                // then try search rollup state from inputs
+                                search_rollup_state(&rollup_type_hash, Source::Input)?
+                                    .ok_or(Error::RollupCellNotFound)?
+                            }
+                        };
+                    let config = load_rollup_config(&global_state.rollup_config_hash().unpack())?;
+                    if !is_finalized(&config, &global_state, &withdrawal_block_timepoint) {
+                        return Err(Error::NotFinalized);
+                    }
                 }
-            };
-            let config = load_rollup_config(&global_state.rollup_config_hash().unpack())?;
-
-            // check finality
-            let is_finalized = is_finalized(
-                &config,
-                &global_state,
-                &Timepoint::from_full_value(lock_args.withdrawal_block_timepoint().unpack()),
-            );
-            if !is_finalized {
-                return Err(Error::NotFinalized);
+                Timepoint::Timestamp(finalized_timestamp) => {
+                    assert_timestamp_le_since(*finalized_timestamp)?
+                }
             }
 
             // withdrawal lock is finalized, unlock for owner
@@ -239,4 +242,25 @@ fn check_output_cell_has_same_content(
         return Err(Error::InvalidOutput);
     }
     Ok(())
+}
+
+// NOTE: "Since" should only be used to prove that the input meets the time
+// condition. I designed it as an assertion function to prevent developers from
+// misusing it.
+fn assert_timestamp_le_since(timestamp: u64) -> Result<(), Error> {
+    let since = Since::new(load_input_since(0, Source::GroupInput)?);
+    let since_absolute_timestamp = match (since.is_absolute(), since.extract_lock_value()) {
+        (true, Some(LockValue::Timestamp(time_ms))) => time_ms,
+        _ => return Err(Error::InvalidSince),
+    };
+    let is_le = timestamp <= since_absolute_timestamp;
+    debug!(
+        "[assert_timestamp_le_since] is_le: {}, timestamp: {}, since_absolute_timestamp: {}",
+        is_le, timestamp, since_absolute_timestamp
+    );
+    if is_le {
+        Ok(())
+    } else {
+        Err(Error::NotFinalized)
+    }
 }

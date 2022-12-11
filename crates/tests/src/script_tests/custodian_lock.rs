@@ -185,7 +185,7 @@ fn run_case(case: CaseParam) {
 // Build common-used cells for testing custodian-lock:
 //   - rollup_config_cell, finality_blocks = ROLLUP_CONFIG_FINALITY_BLOCKS
 //   - rollup_code_cell, is ALWAYS_SUCCESS_PROGRAM, we won't use it
-//   - rollup_state_cell, last_finalized_block_number = ROLLUP_STATE_LAST_FINALIZED_BLOCK_NUMBER
+//   - rollup_state_cell, last_finalized_timepoint = ROLLUP_STATE_LAST_FINALIZED_BLOCK_NUMBER
 //   - custodian_code_cell, is CUSTODIAN_LOCK_PROGRAM
 //
 // Return (ctx, rollup_state_out_point, custodian_code_out_point);
