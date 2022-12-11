@@ -122,7 +122,7 @@ fn test_finality_of_withdrawal_lock() {
             // withdrawal_state_cell is finalized by block number, unlock via check_output_cell_has_same_content
             id: 5,
             tip_block_number,
-            global_state_last_finalized_timepoint: global_state_last_finalized_timepoint.clone(),
+            global_state_last_finalized_timepoint,
             withdrawal_block_timepoint: Timepoint::from_block_number(
                 tip_block_number - DEFAULT_FINALITY_BLOCKS,
             ),
