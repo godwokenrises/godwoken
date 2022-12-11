@@ -22,7 +22,6 @@ use gw_mem_pool::{
 };
 use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
 use gw_store::Store;
-use gw_types::core::Timepoint;
 use gw_types::offchain::{global_state_from_slice, CompatibleFinalizedTimepoint};
 use gw_types::{
     bytes::Bytes,
@@ -34,9 +33,9 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::{
-    fee::fill_tx_fee_with_local, genesis_info::CKBGenesisInfo, local_cells::LocalCellsManager,
-    query_rollup_cell, since::Since, transaction_skeleton::TransactionSkeleton, wallet::Wallet,
-    RollupContext,
+    block_timepoint, fee::fill_tx_fee_with_local, genesis_info::CKBGenesisInfo,
+    local_cells::LocalCellsManager, query_rollup_cell, since::Since,
+    transaction_skeleton::TransactionSkeleton, wallet::Wallet, RollupContext,
 };
 use std::{collections::HashSet, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
@@ -61,18 +60,12 @@ fn generate_custodian_cells(
     deposit_cells: &[DepositInfo],
 ) -> Vec<(CellOutput, Bytes)> {
     let block_hash: H256 = block.hash().into();
-    let block_timepoint = {
-        let block_number = block.raw().number().unpack();
-        if rollup_context
-            .fork_config
-            .use_timestamp_as_timepoint(block_number)
-        {
-            let block_timestamp = block.raw().timestamp().unpack();
-            Timepoint::from_timestamp(block_timestamp)
-        } else {
-            Timepoint::from_block_number(block_number)
-        }
-    };
+    let block_timepoint = block_timepoint(
+        &rollup_context.rollup_config,
+        &rollup_context.fork_config,
+        block.raw().number().unpack(),
+        block.raw().timestamp().unpack(),
+    );
     let to_custodian = |deposit| -> _ {
         to_custodian_cell(rollup_context, &block_hash, &block_timepoint, deposit)
             .expect("sanitized deposit")

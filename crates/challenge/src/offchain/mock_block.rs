@@ -17,7 +17,7 @@ use gw_store::state::traits::JournalDB;
 use gw_store::state::MemStateDB;
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
-use gw_types::core::{ChallengeTargetType, Status, Timepoint};
+use gw_types::core::{ChallengeTargetType, Status};
 use gw_types::offchain::RunResult;
 use gw_types::packed::{
     AccountMerkleState, BlockMerkleState, Byte32, CCTransactionSignatureWitness,
@@ -25,13 +25,12 @@ use gw_types::packed::{
     RawL2Block, Script, SubmitTransactions, SubmitWithdrawals, Uint64, WithdrawalRequestExtra,
 };
 use gw_types::prelude::*;
-use gw_utils::RollupContext;
+use gw_utils::{global_state_finalized_timepoint, RollupContext};
 
 type MemTree = MemStateDB;
 
 pub struct MockBlockParam {
     rollup_context: RollupContext,
-    finality_blocks: u64,
     number: u64,
     rollup_config_hash: Byte32,
     block_producer: RegistryAddress,
@@ -61,7 +60,6 @@ impl MockBlockParam {
         reverted_block_root: H256,
     ) -> Self {
         MockBlockParam {
-            finality_blocks: rollup_context.rollup_config.finality_blocks().unpack(),
             rollup_config_hash: rollup_context.rollup_config.hash().pack(),
             rollup_context,
             block_producer,
@@ -316,15 +314,12 @@ impl MockBlockParam {
                 .build()
         };
 
-        let last_finalized_timepoint = if self
-            .rollup_context
-            .fork_config
-            .use_timestamp_as_timepoint(self.number)
-        {
-            unimplemented!()
-        } else {
-            Timepoint::from_block_number(self.number.saturating_sub(self.finality_blocks))
-        };
+        let last_finalized_timepoint = global_state_finalized_timepoint(
+            &self.rollup_context.rollup_config,
+            &self.rollup_context.fork_config,
+            self.number,
+            self.timestamp.unpack(),
+        );
         let global_state = GlobalState::new_builder()
             .account(post_account)
             .block(post_block)

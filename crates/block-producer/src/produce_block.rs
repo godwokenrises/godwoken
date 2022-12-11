@@ -19,7 +19,6 @@ use gw_store::{
     transaction::StoreTransaction,
     Store,
 };
-use gw_types::core::Timepoint;
 use gw_types::{
     core::Status,
     offchain::{BlockParam, DepositInfo, FinalizedCustodianCapacity},
@@ -29,6 +28,7 @@ use gw_types::{
     },
     prelude::*,
 };
+use gw_utils::global_state_finalized_timepoint;
 use tracing::instrument;
 
 #[derive(Clone)]
@@ -164,22 +164,12 @@ pub fn produce_block(
             .build()
     };
 
-    let last_finalized_timepoint = if rollup_context
-        .fork_config
-        .use_timestamp_as_timepoint(number)
-    {
-        let finality_time_in_ms = rollup_context.rollup_config.finality_time_in_ms();
-        Timepoint::from_timestamp(
-            block
-                .raw()
-                .timestamp()
-                .unpack()
-                .saturating_sub(finality_time_in_ms),
-        )
-    } else {
-        let finality_as_blocks = rollup_context.rollup_config.finality_blocks().unpack();
-        Timepoint::from_block_number(number.saturating_sub(finality_as_blocks))
-    };
+    let last_finalized_timepoint = global_state_finalized_timepoint(
+        &rollup_context.rollup_config,
+        &rollup_context.fork_config,
+        block.raw().number().unpack(),
+        block.raw().timestamp().unpack(),
+    );
     let global_state = GlobalState::new_builder()
         .account(post_merkle_state)
         .block(post_block)
