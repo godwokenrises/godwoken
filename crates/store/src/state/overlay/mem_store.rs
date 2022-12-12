@@ -2,7 +2,7 @@ use std::{
     borrow::Borrow,
     collections::HashSet,
     hash::{Hash, Hasher},
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
 
 use anyhow::Result;
@@ -36,8 +36,8 @@ type KeyValueMapByBlock = HashMap<u64, HashMap<H256, H256>>;
 pub struct MemStore<S> {
     inner: Arc<S>,
     // (column, key) -> value.
-    mem: RwLock<ColumnsKeyValueMap>,
-    history_mem: RwLock<KeyValueMapByBlock>,
+    mem: ColumnsKeyValueMap,
+    history_mem: KeyValueMapByBlock,
 }
 
 impl<S> MemStore<S> {
@@ -76,7 +76,7 @@ impl<S: KVStoreRead> CodeStore for MemStore<S> {
 
 impl<S: KVStoreRead> KVStoreRead for MemStore<S> {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
-        match self.mem.read().unwrap().get(&(col, key) as &dyn Key) {
+        match self.mem.get(&(col, key) as &dyn Key) {
             Some(Value::Exist(v)) => Some(v.clone().into_boxed_slice()),
             Some(Value::Deleted) => None,
             None => self.inner.get(col, key),
@@ -87,17 +87,12 @@ impl<S: KVStoreRead> KVStoreRead for MemStore<S> {
 impl<S> KVStoreWrite for MemStore<S> {
     fn insert_raw(&mut self, col: Col, key: &[u8], value: &[u8]) -> Result<()> {
         self.mem
-            .write()
-            .unwrap()
             .insert((col, key.into()), Value::Exist(value.to_vec()));
         Ok(())
     }
 
     fn delete(&mut self, col: Col, key: &[u8]) -> Result<()> {
-        self.mem
-            .write()
-            .unwrap()
-            .insert((col, key.into()), Value::Deleted);
+        self.mem.insert((col, key.into()), Value::Deleted);
         Ok(())
     }
 }
@@ -108,7 +103,7 @@ impl<S: HistoryStateStore> HistoryStateStore for MemStore<S> {
     type BlockStateRecordKeyIter = HashSet<BlockStateRecordKey>;
 
     fn iter_block_state_record(&self, block_number: u64) -> Self::BlockStateRecordKeyIter {
-        let mut list = match self.history_mem.read().unwrap().get(&block_number) {
+        let mut list = match self.history_mem.get(&block_number) {
             Some(map) => map
                 .keys()
                 .map(|k| BlockStateRecordKey::new(block_number, k))
@@ -120,15 +115,13 @@ impl<S: HistoryStateStore> HistoryStateStore for MemStore<S> {
     }
 
     fn remove_block_state_record(&mut self, block_number: u64) -> Result<()> {
-        self.history_mem.write().unwrap().remove(&block_number);
+        self.history_mem.remove(&block_number);
         Ok(())
     }
 
     fn get_history_state(&self, block_number: u64, state_key: &H256) -> Option<H256> {
         match self
             .history_mem
-            .read()
-            .unwrap()
             .get(&block_number)
             .and_then(|m| m.get(state_key))
             .cloned()
@@ -145,8 +138,6 @@ impl<S: HistoryStateStore> HistoryStateStore for MemStore<S> {
         value: H256,
     ) -> Result<()> {
         self.history_mem
-            .write()
-            .unwrap()
             .entry(block_number)
             .or_default()
             .insert(state_key, value);
@@ -161,8 +152,8 @@ impl<S> Clone for MemStore<S> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            mem: RwLock::new(self.mem.read().unwrap().clone()),
-            history_mem: RwLock::new(self.history_mem.read().unwrap().clone()),
+            mem: self.mem.clone(),
+            history_mem: self.history_mem.clone(),
         }
     }
 }
