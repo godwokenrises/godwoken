@@ -273,6 +273,7 @@ dependencies = [
 [[package]]
 name = "autorocks"
 version = "0.1.0"
+source = "git+https://github.com/sopium/autorocks.git#b5a22051f9268e04683a645c7143fd64c70496ed"
 dependencies = [
  "autocxx",
  "autorocks-sys",
@@ -282,6 +283,7 @@ dependencies = [
 [[package]]
 name = "autorocks-sys"
 version = "0.1.0"
+source = "git+https://github.com/sopium/autorocks.git#b5a22051f9268e04683a645c7143fd64c70496ed"
 dependencies = [
  "autocxx",
  "autocxx-build",

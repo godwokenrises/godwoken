@@ -15,7 +15,7 @@ anyhow = "1.0"
 arc-swap = "1.5.0"
 log = "0.4"
 im = "15.1.0"
-autorocks = { path = "../../../autorocks" }
+autorocks = { git = "https://github.com/sopium/autorocks.git" }
 tempfile = "3.3.0"
 serde = "1.0.149"
 
