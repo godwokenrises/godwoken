@@ -85,6 +85,7 @@ impl<'a> Store {
             let mut transaction_options = TransactionOptions::new();
         }
         transaction_options.as_mut().skip_concurrency_control = true;
+        transaction_options.as_mut().set_snapshot = true;
         StoreTransaction {
             inner: self
                 .db
