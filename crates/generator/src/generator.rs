@@ -416,8 +416,26 @@ impl Generator {
             }
         };
 
-        // apply withdrawal to state
         let block_hash = raw_block.hash();
+        let skip_checkpoint_check = skipped_invalid_block_list.contains(&block_hash.into());
+
+        // check prev state
+        if !skip_checkpoint_check {
+            let prev_merkle_root: H256 = raw_block.prev_account().merkle_root().unpack();
+            let prev_merkle_count: u32 = raw_block.prev_account().count().unpack();
+            assert_eq!(
+                state.calculate_root().expect("check prev root"),
+                prev_merkle_root,
+                "wrong block prev root"
+            );
+            assert_eq!(
+                state.get_account_count().expect("check prev count"),
+                prev_merkle_count,
+                "wrong block prev account count"
+            );
+        }
+
+        // apply withdrawal to state
         let block_producer_address = {
             let block_producer: Bytes = block_info.block_producer().unpack();
             match RegistryAddress::from_slice(&block_producer) {
@@ -510,7 +528,6 @@ impl Generator {
         // handle transactions
         let mut offchain_used_cycles: u64 = 0;
         let mut tx_receipts = Vec::with_capacity(args.l2block.transactions().len());
-        let skip_checkpoint_check = skipped_invalid_block_list.contains(&block_hash.into());
         if skip_checkpoint_check {
             log::warn!(
                 "skip the checkpoint check of block: #{} {}",
@@ -671,12 +688,12 @@ impl Generator {
             assert_eq!(
                 state.calculate_root().expect("check post root"),
                 post_merkle_root,
-                "post account merkle root must be consistent"
+                "wrong block post root"
             );
             assert_eq!(
                 state.get_account_count().expect("check post count"),
                 post_merkle_count,
-                "post account merkle count must be consistent"
+                "wrong block post account count"
             );
         }
 
