@@ -18,7 +18,7 @@ We also introduce a change to activate the new behavior.
 
 Other changes:
 
-- perf: optional SMT trie feature and migrate command [#859](https://github.com/godwokenrises/godwoken/pull/882)
+- perf: optional SMT trie feature and migrate command [#859](https://github.com/godwokenrises/godwoken/pull/859)
 - feat: optimized trace and metrics [#865](https://github.com/godwokenrises/godwoken/pull/865)
 - fix(withdrawal): finalized withdrawal take longer time to unlock [#892](https://github.com/godwokenrises/godwoken/pull/892)
 - chore(CI): add docker-prebuilds into monorepo [#885](https://github.com/godwokenrises/godwoken/pull/885)
