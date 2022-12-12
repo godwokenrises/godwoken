@@ -29,7 +29,11 @@ members = [
 ]
 
 exclude = [
- "gwos-evm/polyjuice-tests"
+  "gwos-evm/polyjuice-tests",
+  # Autorocks is in its own workspace because it's relatively independent of
+  # other godwoken crates. This also makes rust-analyzer and cargo faster when
+  # working on godwoken.
+  "crates/autorocks",
 ]
 
 [profile.release]
