@@ -165,9 +165,9 @@ jobs:
           labels: |
             maintainer=Godwoken Core Dev
             org.opencontainers.image.authors=Godwoken Core Dev
-            source.component.godwoken=https://github.com/godwokenrises/godwoken/tree/${{steps.prepare.outputs.GODWOKEN_REF }}
-            source.component.gwos=https://github.com/godwokenrises/godwoken/tree/${{steps.prepare.outputs.GODWOKEN_REF }}/gwos
-            source.component.gwos-evm=https://github.com/godwokenrises/godwoken/tree/${{steps.prepare.outputs.GODWOKEN_REF }}/gwos-evm
+            source.component.godwoken=https://github.com/godwokenrises/godwoken/tree/${{steps.prepare.outputs.godwoken-sha1 }}
+            source.component.gwos=https://github.com/godwokenrises/godwoken/tree/${{steps.prepare.outputs.godwoken-sha1 }}/gwos
+            source.component.gwos-evm=https://github.com/godwokenrises/godwoken/tree/${{steps.prepare.outputs.godwoken-sha1 }}/gwos-evm
             source.component.ckb-production-scripts=https://github.com/nervosnetwork/ckb-production-scripts/tree/${{steps.prepare.outputs.OMNI_LOCK_REF }}
             ref.component.godwoken=${{ steps.prepare.outputs.GODWOKEN_REF }}
             ref.component.godwoken-sha1=${{ steps.prepare.outputs.godwoken-sha1 }}
