@@ -12,7 +12,6 @@ env:
   # github.repository as <account>/<repo>
   IMAGE_NAME: godwoken
 
-
 jobs:
   docker-build-push:
     runs-on: ubuntu-20.04
@@ -144,11 +143,10 @@ jobs:
             ${{ runner.os }}-focal-cargo-
       - name: Build godwoken
         if: steps.godwoken-cache.outputs.cache-hit != 'true'
-        # PORTABLE=1 USE_SSE=1 tell rocksdb to target AVX2, that means "mostly portable".
-        # see also: https://github.com/nervosnetwork/rust-rocksdb/blob/2de3ae5e5e23a315a477bd24e700eb4f5ef7a378/librocksdb-sys/build_detect_platform#L696-L699
+        # Use SSE4.2, POPCNT, etc. These are available on almost all x86 CPUs in use today, including rosetta 2.
         run: |
           rustup component add rustfmt
-          PORTABLE=1 USE_SSE=1 RUSTFLAGS="-C target-cpu=skylake" CARGO_PROFILE_RELEASE_LTO=true cargo build --release
+          RUSTFLAGS="-C target-cpu=x86-64-v2" CARGO_PROFILE_RELEASE_LTO=true cargo build --release
 
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
