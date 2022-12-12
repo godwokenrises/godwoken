@@ -164,6 +164,10 @@ impl<'a> Store {
         &self.db
     }
 
+    pub fn as_inner_mut(&mut self) -> &mut TransactionDb {
+        &mut self.db
+    }
+
     pub fn into_inner(self) -> TransactionDb {
         self.db
     }

@@ -14,7 +14,7 @@ pub struct SMTTrieMigration;
 impl Migration for SMTTrieMigration {
     fn migrate(&self, db: TransactionDb) -> Result<TransactionDb> {
         log::info!("SMTTrieMigration running");
-        let store = Store::new(db);
+        let mut store = Store::new(db);
 
         // Get state smt root before migration.
         let old_state_smt_root = {
@@ -24,22 +24,18 @@ impl Migration for SMTTrieMigration {
         };
 
         log::info!("deleting old SMT branches");
-        {
-            let mut wb = store.as_inner().new_write_batch();
-
-            wb.delete_range(COLUMN_ACCOUNT_SMT_BRANCH, &[], &[255; 64])
-                .context("delete account smt branches")?;
-            // So that if we exit in the middle of this migration, the smt branches
-            // columns are not empty and SMTTrieMigrationPlaceholder won't just succeed.
-            wb.put(COLUMN_ACCOUNT_SMT_BRANCH, b"migrating", b"migrating")
-                .context("put migrating")?;
-            wb.delete_range(COLUMN_BLOCK_SMT_BRANCH, &[], &[255; 64])
-                .context("delete block smt branches")?;
-            wb.delete_range(COLUMN_REVERTED_BLOCK_SMT_BRANCH, &[], &[255; 64])
-                .context("delete reverted block smt branches")?;
-
-            store.write_skip_concurrency_control(&mut wb)?;
-        }
+        let db = store.as_inner_mut();
+        db.clear_cf(COLUMN_ACCOUNT_SMT_BRANCH)
+            .context("clear COLUMN_ACCOUNT_SMT_BRANCH")?;
+        // So that if we exit in the middle of this migration, the smt branches
+        // columns are not empty and SMTTrieMigrationPlaceholder won't just
+        // succeed.
+        db.put(COLUMN_ACCOUNT_SMT_BRANCH, b"migrating", b"migrating")
+            .context("put migrating")?;
+        db.clear_cf(COLUMN_BLOCK_SMT_BRANCH)
+            .context("clear COLUMN_BLOCK_SMT_BRANCH")?;
+        db.clear_cf(COLUMN_REVERTED_BLOCK_SMT_BRANCH)
+            .context("clear COLUMN_REVERTED_BLOCK_SMT_BRANCH")?;
 
         log::info!("migrating state smt");
         {
