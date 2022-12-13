@@ -63,6 +63,9 @@ jobs:
     - name: Build Rust contracts
       working-directory: gwos
       run: capsule build
+    - name: Install nightly rust format
+      working-directory: gwos
+      run: rustup component add rustfmt
     - name: Backup capsule cache
       if: steps.fetch-capsule-cache.outputs.cache-hit != 'true'
       working-directory: gwos
