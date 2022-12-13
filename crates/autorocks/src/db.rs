@@ -30,9 +30,15 @@ impl DbOptions {
     }
 
     /// Note that this resets all options and column families.
-    pub fn load_options_from_file(&mut self, options_file: &Path) -> Result<()> {
+    ///
+    /// If cache_capacity > 0, will use a shared cache.
+    pub fn load_options_from_file(
+        &mut self,
+        options_file: &Path,
+        cache_capacity: usize,
+    ) -> Result<()> {
         moveit! {
-            let status = self.inner.as_mut().load(options_file.as_os_str().as_bytes().into());
+            let status = self.inner.as_mut().load(options_file.as_os_str().as_bytes().into(), cache_capacity);
         }
         into_result(&status)
     }

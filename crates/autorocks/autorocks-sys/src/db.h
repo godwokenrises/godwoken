@@ -82,10 +82,17 @@ struct DbOptionsWrapper
         }
     }
 
-    Status load(Slice options_file)
+    Status load(Slice options_file, size_t cache_size)
     {
         auto columns = cf_descriptors.size();
-        auto status = LoadOptionsFromFile(options_file.ToString(), Env::Default(), &db_options, &cf_descriptors);
+        auto cache = cache_size > 0 ? NewLRUCache(cache_size) : shared_ptr<Cache>();
+        auto status = LoadOptionsFromFile(
+            options_file.ToString(),
+            Env::Default(),
+            &db_options,
+            &cf_descriptors,
+            false,
+            cache_size > 0 ? &cache : nullptr);
         if (!status.ok())
         {
             return status;

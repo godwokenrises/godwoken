@@ -31,7 +31,7 @@ impl<'a> Store {
     pub fn open(config: &StoreConfig, columns: usize) -> Result<Self> {
         let mut opts = DbOptions::new(&config.path, columns);
         if let Some(ref opts_file) = config.options_file {
-            opts.load_options_from_file(opts_file)?;
+            opts.load_options_from_file(opts_file, config.cache_size.unwrap_or(0))?;
         }
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);

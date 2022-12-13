@@ -74,7 +74,6 @@ pub fn bench_ckb_transfer(c: &mut Criterion) {
         path: "./smt_data/db".parse().unwrap(),
         options_file: Some("./smt_data/db.toml".parse().unwrap()),
         cache_size: Some(1073741824),
-        ..Default::default()
     };
     let store = Store::open(&config, COLUMNS).unwrap();
     let ee = BenchExecutionEnvironment::new_with_accounts(store, 7000);
