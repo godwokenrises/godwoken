@@ -96,10 +96,10 @@ table L2Block {
    Besides, Optimistic Rollup's challenge mechanism takes the responsibility to enforce the correctness of `l2block.raw.state_checkpoint_list`.
 
 - `l2block.raw.submit_withdrawals`
-  ❓
+  `l2block.raw.submit_withdrawals` contains merkle commitment of withdrawals submitted by this block.
 
 - `l2block.raw.submit_transactions`
-  ❓
+  `l2block.raw.submit_transactions` contains merkle commitment of transactions submitted by this block.
 
 ## Enforce _post_global_state_
 It's able to deduce _post_global_state_ from _prev_global_state_ and the verified _l2block_.
