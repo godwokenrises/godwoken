@@ -1,9 +1,10 @@
 use ckb_vm::{
-    machine::asm::{AsmCoreMachine, AsmMachine},
+    machine::asm::AsmCoreMachine,
     memory::Memory,
     registers::{A0, A7},
     DefaultMachineBuilder, Error as VMError, Register, SupportMachine, Syscalls,
 };
+use ckb_vm_aot::AotMachine;
 
 const BINARY: &[u8] = include_bytes!("../../../build/test_rlp");
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
@@ -85,7 +86,7 @@ fn test_rlp() {
     let core_machine = AsmCoreMachine::new(params.vm_isa, params.vm_version, 7000_0000);
 
     let machine_builder = DefaultMachineBuilder::new(core_machine).syscall(Box::new(L2Syscalls));
-    let mut machine = AsmMachine::new(machine_builder.build(), None);
+    let mut machine = AotMachine::new(machine_builder.build(), None);
     machine.load_program(&binary, &[]).unwrap();
     let code = machine.run().unwrap();
     assert_eq!(code, 0);

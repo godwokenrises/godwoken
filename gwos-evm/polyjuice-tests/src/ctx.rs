@@ -58,7 +58,7 @@ pub const SECP_DATA_PATH: &str = "build/secp256k1_data";
 // pub const SECP_DATA: &[u8] = include_bytes!("../../build/secp256k1_data");
 
 // polyjuice
-pub const POLYJUICE_GENERATOR_NAME: &str = "build/generator_log.aot";
+pub const POLYJUICE_GENERATOR_NAME: &str = "build/generator_log";
 pub const POLYJUICE_VALIDATOR_NAME: &str = "build/validator";
 // ETH Address Registry
 pub const ETH_ADDRESS_REGISTRY_GENERATOR_NAME: &str =
