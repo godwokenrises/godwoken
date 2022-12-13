@@ -20,6 +20,10 @@ pub async fn dump_transaction<P: AsRef<Path>>(dir: P, rpc_client: &RPCClient, tx
 pub fn global_state_last_finalized_timepoint_to_since(global_state: &GlobalState) -> u64 {
     match Timepoint::from_full_value(global_state.last_finalized_timepoint().unpack()) {
         Timepoint::BlockNumber(_) => 0,
-        Timepoint::Timestamp(time_ms) => Since::new_timestamp_seconds(time_ms / 1000).as_u64(),
+        Timepoint::Timestamp(time_ms) => {
+            // the since is used to prove finality, so since value can be 1 second later
+            // we adjust the value as `time_ms / 1000 + 1` to prevent the `since` in seconds is less than `time_ms`,
+            Since::new_timestamp_seconds(time_ms / 1000 + 1).as_u64()
+        }
     }
 }
