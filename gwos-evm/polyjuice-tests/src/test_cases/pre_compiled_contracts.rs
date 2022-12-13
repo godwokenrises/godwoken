@@ -3,7 +3,7 @@ use crate::helper::{
     CREATOR_ACCOUNT_ID, L2TX_MAX_CYCLES, SECP_DATA, SECP_DATA_HASH,
 };
 use ckb_vm::{
-    machine::asm::{AsmCoreMachine, AsmMachine},
+    machine::asm::AsmCoreMachine,
     memory::Memory,
     registers::{A0, A1, A3, A7},
     DefaultMachineBuilder, Error as VMError, Register, SupportMachine, Syscalls,
@@ -156,7 +156,8 @@ fn test_contracts() {
 
     let machine_builder =
         DefaultMachineBuilder::new(core_machine).syscall(Box::new(L2Syscalls { data, tree }));
-    let mut machine = AsmMachine::new(machine_builder.build(), None);
+
+    let mut machine = ckb_vm_aot::AotMachine::new(machine_builder.build(), None);
     machine.load_program(&binary, &[]).unwrap();
     let code = machine.run().unwrap();
     assert_eq!(code, 0);
