@@ -1,4 +1,0 @@
-[submodule "autorocks-sys/snappy"]
-	path = autorocks-sys/snappy
-	url = https://github.com/google/snappy.git
-	shadow = true
