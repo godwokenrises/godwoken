@@ -2,8 +2,8 @@ version = "0.7.0"
 deployment = "deployment.toml"
 [rust]
 workspace_dir = "contracts"
-toolchain = "nightly-2021-08-16"
-docker_image = "thewawar/ckb-capsule:2021-08-16"
+toolchain = "nightly-2022-08-01"
+docker_image = "thewawar/ckb-capsule:2022-08-01"
 
 [[contracts]]
 name = "state-validator"
@@ -35,8 +35,4 @@ template_type = "Rust"
 
 [[contracts]]
 name = "eth-account-lock"
-template_type = "Rust"
-
-[[contracts]]
-name = "tron-account-lock"
 template_type = "Rust"

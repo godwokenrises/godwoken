@@ -1,4 +1,4 @@
-use crate::block_timepoint;
+use crate::finalized_timepoint;
 use anyhow::{Context, Result};
 use gw_config::ForkConfig;
 use gw_store::traits::chain_store::ChainStore;
@@ -23,7 +23,7 @@ fn is_older_block_finalized(
     let older_block = db
         .get_block(&older_block_hash)?
         .context("get older block")?;
-    let older_block_timepoint = block_timepoint(
+    let older_block_timepoint = finalized_timepoint(
         rollup_config,
         fork_config,
         older_block_number,

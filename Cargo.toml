@@ -1,15 +1,15 @@
 [workspace]
 members = [
+  "gwos/crates/types",
+  "gwos/crates/common",
   "crates/challenge",
   "crates/chain",
   "crates/config",
-  "crates/common",
   "crates/mem-pool",
   "crates/generator",
   "crates/traits",
   "crates/db",
   "crates/store",
-  "crates/types",
   "crates/block-producer",
   "crates/jsonrpc-types",
   "crates/rpc-server",
@@ -30,7 +30,9 @@ members = [
 ]
 
 exclude = [
- "gwos-evm/polyjuice-tests"
+ "gwos-evm/polyjuice-tests",
+ "gwos/c-uint256-tests",
+ "gwos/contracts",
 ]
 
 [profile.release]

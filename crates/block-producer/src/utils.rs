@@ -20,9 +20,6 @@ pub async fn dump_transaction<P: AsRef<Path>>(dir: P, rpc_client: &RPCClient, tx
 pub fn global_state_last_finalized_timepoint_to_since(global_state: &GlobalState) -> u64 {
     match Timepoint::from_full_value(global_state.last_finalized_timepoint().unpack()) {
         Timepoint::BlockNumber(_) => 0,
-        Timepoint::Timestamp(time_ms) => {
-            // ATTENTION: I am not sure if I am do right. Please review intensively.
-            Since::new_timestamp_seconds(time_ms.saturating_div(1000).saturating_sub(1)).as_u64()
-        }
+        Timepoint::Timestamp(time_ms) => Since::new_timestamp_seconds(time_ms / 1000).as_u64(),
     }
 }

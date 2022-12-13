@@ -7,6 +7,6 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ckb-std = "0.9.0"
-gw-types  = { git = "https://github.com/nervosnetwork/godwoken.git", rev = "64f0576b527720226501fe8f0df305ce766aea0e", default-features = false }
-gw-common = { git = "https://github.com/nervosnetwork/godwoken.git", rev = "64f0576b527720226501fe8f0df305ce766aea0e", default-features = false }
+ckb-std = "0.10.0"
+gw-types  = { path = "../../crates/types", default-features = false }
+gw-common  = { path = "../../crates/common", default-features = false }

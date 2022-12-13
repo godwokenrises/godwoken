@@ -7,5 +7,4 @@ edition = "2018"
 
 [dependencies]
 gw-utils = { path = "../gw-utils" }
-secp256k1-utils = { path = "../secp256k1-utils" }
-sha3 = { version = "0.9", default-features = false }
+sha3 = { version = "0.10", default-features = false }

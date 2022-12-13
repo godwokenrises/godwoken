@@ -33,7 +33,7 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::{
-    block_timepoint, fee::fill_tx_fee_with_local, genesis_info::CKBGenesisInfo,
+    fee::fill_tx_fee_with_local, finalized_timepoint, genesis_info::CKBGenesisInfo,
     local_cells::LocalCellsManager, query_rollup_cell, since::Since,
     transaction_skeleton::TransactionSkeleton, wallet::Wallet, RollupContext,
 };
@@ -60,14 +60,14 @@ fn generate_custodian_cells(
     deposit_cells: &[DepositInfo],
 ) -> Vec<(CellOutput, Bytes)> {
     let block_hash: H256 = block.hash().into();
-    let block_timepoint = block_timepoint(
+    let finalized_timepoint = finalized_timepoint(
         &rollup_context.rollup_config,
         &rollup_context.fork_config,
         block.raw().number().unpack(),
         block.raw().timestamp().unpack(),
     );
     let to_custodian = |deposit| -> _ {
-        to_custodian_cell(rollup_context, &block_hash, &block_timepoint, deposit)
+        to_custodian_cell(rollup_context, &block_hash, &finalized_timepoint, deposit)
             .expect("sanitized deposit")
     };
 

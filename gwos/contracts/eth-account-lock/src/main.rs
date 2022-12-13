@@ -9,14 +9,14 @@
 #![feature(lang_items)]
 #![feature(alloc_error_handler)]
 #![feature(panic_info_message)]
-#![feature(asm)]
+#![feature(asm_sym)]
 
 // define modules
 mod entry;
-mod eth_signature;
 
 pub use gw_utils::ckb_std;
 
+use core::arch::asm;
 use ckb_std::default_alloc;
 
 ckb_std::entry!(program_entry);

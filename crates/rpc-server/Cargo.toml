@@ -8,11 +8,11 @@ edition = "2018"
 
 [dependencies]
 gw-challenge = { path = "../challenge" }
-gw-common = { path = "../common" }
+gw-common = { path = "../../gwos/crates/common" }
 gw-config = { path = "../config" }
 gw-chain = { path = "../chain" }
 gw-db = { path = "../db" }
-gw-types = { path = "../types" }
+gw-types = { path = "../../gwos/crates/types" }
 gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
 gw-generator = { path = "../generator" }

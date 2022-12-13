@@ -8,8 +8,6 @@ members = [
   "state-validator",
   "always-success",
   "eth-account-lock",
-  "tron-account-lock",
-  "secp256k1-utils",
   "ckb-smt",
   "gw-utils",
 ]

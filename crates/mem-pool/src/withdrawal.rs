@@ -7,7 +7,7 @@ use gw_types::{
     packed::{CellOutput, L2Block, Script, WithdrawalRequest, WithdrawalRequestExtra},
     prelude::*,
 };
-use gw_utils::{block_timepoint, RollupContext};
+use gw_utils::{finalized_timepoint, RollupContext};
 use std::collections::HashMap;
 
 use crate::custodian::{
@@ -116,7 +116,7 @@ impl<'a> Generator<'a> {
             sudt_custodian.map(|sudt| sudt.script.to_owned())
         };
         let block_hash: H256 = block.hash().into();
-        let block_timepoint = block_timepoint(
+        let finalized_timepoint = finalized_timepoint(
             &self.rollup_context.rollup_config,
             &self.rollup_context.fork_config,
             block.raw().number().unpack(),
@@ -126,7 +126,7 @@ impl<'a> Generator<'a> {
             self.rollup_context,
             req_extra,
             &block_hash,
-            &block_timepoint,
+            &finalized_timepoint,
             sudt_script,
         ) {
             Ok(output) => output,

@@ -6,9 +6,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-gw-types = { path = "../types" }
+gw-types = { path = "../../gwos/crates/types" }
 gw-config = { path = "../config" }
-gw-common = { path = "../common" }
+gw-common = { path = "../../gwos/crates/common" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-store = { path = "../store" }

@@ -3,7 +3,7 @@ use gw_types::core::Timepoint;
 use gw_types::packed::RollupConfig;
 use gw_types::prelude::*;
 
-pub fn block_timepoint(
+pub fn finalized_timepoint(
     rollup_config: &RollupConfig,
     fork_config: &ForkConfig,
     block_number: u64,

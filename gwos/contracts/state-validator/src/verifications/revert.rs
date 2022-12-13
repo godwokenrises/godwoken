@@ -284,7 +284,7 @@ fn check_reverted_blocks(
             .block(block_merkle_state)
             .tip_block_hash(tip_block_hash.to_entity())
             .tip_block_timestamp(tip_block_timestamp.to_entity())
-            .last_finalized_block_number(last_finalized.full_value().pack())
+            .last_finalized_timepoint(last_finalized.full_value().pack())
             .reverted_block_root(reverted_block_root)
             .status(status.into())
             .build()

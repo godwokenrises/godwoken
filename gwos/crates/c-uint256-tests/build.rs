@@ -3,7 +3,7 @@ fn main() {
 
     // building
     build
-        .file("../c/rust-binding/uint256_wrapper.c")
+        .file("../../c/rust-binding/uint256_wrapper.c")
         .static_flag(true)
         .flag("-O3")
         .flag("-Wl,-static")

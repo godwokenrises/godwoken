@@ -22,6 +22,8 @@ fn main() {
         .flag("-fdata-sections")
         .flag("-ffunction-sections")
         .flag("-Wl,--gc-sections")
+        // blake2b
+        .include("c")
         // sparse-merkle-tree
         .include("c/deps/sparse-merkle-tree/c")
         // ckb-c-stdlib

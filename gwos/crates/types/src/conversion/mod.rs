@@ -1,3 +1,4 @@
+#[cfg_attr(not(feature = "std"), allow(unused_macros))]
 #[macro_use]
 mod utilities;
 mod blockchain;
