@@ -8,7 +8,7 @@ fn main() {
         .flag("-O3")
         .flag("-Wl,-static")
         .flag("-Wl,--gc-sections")
-        .include("../c/")
+        .include("../../c/")
         .flag("-Wall")
         .flag("-Werror")
         .flag("-Wno-unused-parameter")

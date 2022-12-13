@@ -74,7 +74,6 @@ jobs:
     - name: Copy contracts from prebuild docker images
       run: devtools/fetch-binaries.sh
     - name: Test C Uint256
-      working-directory: gwos
-      run: cargo test
+      run: cargo test -p c-uint256-tests
     - name: Script tests
       run: cargo test --features scripts script_tests

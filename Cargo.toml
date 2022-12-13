@@ -2,6 +2,7 @@
 members = [
   "gwos/crates/types",
   "gwos/crates/common",
+  "gwos/crates/c-uint256-tests",
   "crates/challenge",
   "crates/chain",
   "crates/config",
@@ -31,7 +32,6 @@ members = [
 
 exclude = [
  "gwos-evm/polyjuice-tests",
- "gwos/c-uint256-tests",
  "gwos/contracts",
 ]
 
