@@ -1,6 +1,7 @@
-use std::{marker::PhantomData, pin::Pin};
+use std::{hint::unreachable_unchecked, marker::PhantomData, pin::Pin};
 
-use autorocks_sys::{rocksdb::PinnableSlice, ReadOptionsWrapper, SharedSnapshotWrapper};
+use autocxx::cxx::SharedPtr;
+use autorocks_sys::{rocksdb::PinnableSlice, ReadOptionsWrapper};
 use moveit::moveit;
 
 use crate::{DbIterator, Direction, Result, Transaction, TransactionDb};
@@ -54,12 +55,24 @@ impl Drop for Snapshot {
     }
 }
 
+#[derive(Clone)]
 pub struct SharedSnapshot {
-    pub(crate) inner: SharedSnapshotWrapper,
+    /// Safety: inner must not be null.
+    pub(crate) inner: SharedPtr<autorocks_sys::rocksdb::Snapshot>,
     pub(crate) db: TransactionDb,
 }
 
+unsafe impl Send for SharedSnapshot {}
+unsafe impl Sync for SharedSnapshot {}
+
 impl SharedSnapshot {
+    fn as_inner(&self) -> &autorocks_sys::rocksdb::Snapshot {
+        match self.inner.as_ref() {
+            Some(snap) => snap,
+            None => unsafe { unreachable_unchecked() },
+        }
+    }
+
     pub fn get<'b>(
         &self,
         col: usize,
@@ -70,7 +83,7 @@ impl SharedSnapshot {
             let mut options = ReadOptionsWrapper::new();
         }
         unsafe {
-            options.as_mut().set_snapshot(self.inner.get());
+            options.as_mut().set_snapshot(self.as_inner());
         }
         self.db.get_with_options((*options).as_ref(), col, key, buf)
     }
@@ -80,7 +93,7 @@ impl SharedSnapshot {
             let mut options = ReadOptionsWrapper::new();
         }
         unsafe {
-            options.as_mut().set_snapshot(self.inner.get());
+            options.as_mut().set_snapshot(self.as_inner());
         }
         let iter = self.db.iter_with_options((*options).as_ref(), col, dir);
         DbIterator {

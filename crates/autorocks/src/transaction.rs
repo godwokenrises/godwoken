@@ -1,10 +1,10 @@
-use std::{mem::MaybeUninit, pin::Pin};
+use std::pin::Pin;
 
 use autorocks_sys::{
     rocksdb::{PinnableSlice, ReadOptions},
-    SharedSnapshotWrapper, TransactionWrapper,
+    TransactionWrapper,
 };
-use moveit::{moveit, New};
+use moveit::moveit;
 
 use crate::{
     into_result, slice::as_rust_slice, DbIterator, Direction, Result, SharedSnapshot, SnapshotRef,
@@ -85,14 +85,8 @@ impl Transaction {
     ///
     /// If there are no snapshot set for this transaction.
     pub fn timestamped_snapshot(&self) -> SharedSnapshot {
-        let mut snap: MaybeUninit<SharedSnapshotWrapper> = MaybeUninit::uninit();
-        unsafe {
-            self.as_inner()
-                .timestamped_snapshot()
-                .new(Pin::new(&mut snap));
-        }
-        let snap = unsafe { snap.assume_init() };
-        assert!(!snap.get().is_null());
+        let snap = self.as_inner().timestamped_snapshot();
+        assert!(!snap.is_null());
         SharedSnapshot {
             inner: snap,
             db: self.db.clone(),

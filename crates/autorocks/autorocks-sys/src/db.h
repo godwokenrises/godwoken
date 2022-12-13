@@ -362,18 +362,6 @@ struct ReadOnlyDbWrapper
     }
 };
 
-// Need this because autocxx cannot handle `shared_ptr<const Foo>`.
-// Note: make sure it's Unpin.
-struct SharedSnapshotWrapper
-{
-    const Snapshot *get() const
-    {
-        return inner.get();
-    }
-
-    shared_ptr<const Snapshot> inner;
-};
-
 // Note: make sure TransactionWrapper is Unpin.
 struct TransactionWrapper
 {
@@ -399,9 +387,10 @@ struct TransactionWrapper
         return tx->GetSnapshot();
     }
 
-    SharedSnapshotWrapper timestamped_snapshot() const
+    shared_ptr<Snapshot> timestamped_snapshot() const
     {
-        return SharedSnapshotWrapper{tx->GetTimestampedSnapshot()};
+        // Because autocxx cannot handle shared_ptr<const Foo>.
+        return const_pointer_cast<Snapshot>(tx->GetTimestampedSnapshot());
     }
 
     Status rollback()
