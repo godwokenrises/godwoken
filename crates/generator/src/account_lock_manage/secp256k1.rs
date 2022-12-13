@@ -17,7 +17,7 @@ use gw_types::{
 use gw_utils::polyjuice_parser::PolyjuiceParser;
 use gw_utils::RollupContext;
 use lazy_static::lazy_static;
-use secp256k1::recovery::{RecoverableSignature, RecoveryId};
+use secp256k1::ecdsa::{RecoverableSignature, RecoveryId};
 use sha3::{Digest, Keccak256};
 
 lazy_static! {
@@ -133,7 +133,7 @@ impl LockAlgorithm for Secp256k1Eth {
         let msg = secp256k1::Message::from_slice(message.as_slice())
             .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
         let pubkey = SECP256K1
-            .recover(&msg, &signature)
+            .recover_ecdsa(&msg, &signature)
             .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
 
         let mut hasher = Keccak256::new();
