@@ -32,7 +32,7 @@ impl CKBClient {
         Ok(Self::new(client))
     }
 
-    fn client(&self) -> &HttpClient {
+    pub fn client(&self) -> &HttpClient {
         &self.ckb_client
     }
 
