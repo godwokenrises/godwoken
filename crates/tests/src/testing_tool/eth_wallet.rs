@@ -31,7 +31,7 @@ impl EthWallet {
     pub fn random(rollup_script_hash: H256) -> Self {
         let privkey = {
             let sk = SecretKey::from_slice(&OsRng.gen::<[u8; 32]>()).expect("generating SecretKey");
-            Privkey::from_slice(&sk.serialize_secret())
+            Privkey::from_slice(&sk.secret_bytes())
         };
 
         let account_script = privkey_to_eth_account_script(
