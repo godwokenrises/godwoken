@@ -7,6 +7,7 @@ use gw_db::{
     },
     DBIterator, IteratorMode, RocksDB,
 };
+use gw_smt::smt_h256_ext::SMTH256Ext;
 use gw_store::{
     traits::{chain_store::ChainStore, kv_store::KVStoreWrite},
     Store,
@@ -81,7 +82,7 @@ impl Migration for SMTTrieMigration {
                     )
                     .context("update block_smt")?;
             }
-            ensure!(tx.get_block_smt_root().unwrap() == *block_smt.root());
+            ensure!(tx.get_block_smt_root().unwrap() == block_smt.root().to_h256());
             tx.commit().context("commit block smt")?;
         }
 
@@ -101,7 +102,9 @@ impl Migration for SMTTrieMigration {
                     )
                     .context("update reverted_block_smt")?;
             }
-            ensure!(tx.get_reverted_block_smt_root().unwrap() == *reverted_block_smt.root());
+            ensure!(
+                tx.get_reverted_block_smt_root().unwrap() == reverted_block_smt.root().to_h256()
+            );
             tx.commit().context("commit reverted_block_smt")?;
         }
 

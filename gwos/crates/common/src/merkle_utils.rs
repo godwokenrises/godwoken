@@ -1,11 +1,7 @@
 use merkle_cbt::{merkle_tree::Merge, MerkleProof as ExMerkleProof, CBMT as ExCBMT};
 
 use crate::vec::Vec;
-use crate::{
-    blake2b::new_blake2b,
-    h256_ext::H256Ext,
-    smt::{default_store::DefaultStore, Error, H256, SMT},
-};
+use crate::{blake2b::new_blake2b, H256};
 
 // Calculate compacted account root
 pub fn calculate_state_checkpoint(root: &H256, count: u32) -> H256 {
@@ -15,18 +11,6 @@ pub fn calculate_state_checkpoint(root: &H256, count: u32) -> H256 {
     hasher.update(&count.to_le_bytes());
     hasher.finalize(&mut hash);
     hash.into()
-}
-
-/// Compute merkle root from vectors
-pub fn calculate_merkle_root(leaves: Vec<H256>) -> Result<H256, Error> {
-    if leaves.is_empty() {
-        return Ok(H256::zero());
-    }
-    let mut tree = SMT::<DefaultStore<H256>>::default();
-    for (i, leaf) in leaves.into_iter().enumerate() {
-        tree.update(H256::from_u32(i as u32), leaf)?;
-    }
-    Ok(*tree.root())
 }
 
 pub struct MergeH256;
@@ -47,9 +31,9 @@ impl Merge for MergeH256 {
 pub type CBMT = ExCBMT<H256, MergeH256>;
 pub type CBMTMerkleProof = ExMerkleProof<H256, MergeH256>;
 
-pub fn calculate_ckb_merkle_root(leaves: Vec<H256>) -> Result<H256, Error> {
+pub fn calculate_ckb_merkle_root(leaves: Vec<H256>) -> H256 {
     let tree = CBMT::build_merkle_tree(&leaves);
-    Ok(tree.root())
+    tree.root()
 }
 
 /// blake2b(index(u32) | item_hash)
@@ -66,7 +50,7 @@ mod tests {
 
     #[test]
     fn merkle_proof_test() {
-        let leaves: Vec<crate::smt::H256> = vec![
+        let leaves: Vec<crate::H256> = vec![
             [0u8; 32].into(),
             [1u8; 32].into(),
             [2u8; 32].into(),
@@ -92,7 +76,7 @@ mod tests {
             proof.lemmas().to_vec(),
         );
 
-        let proof_leaves: Vec<crate::smt::H256> = vec![[0u8; 32].into(), [4u8; 32].into()];
+        let proof_leaves: Vec<crate::H256> = vec![[0u8; 32].into(), [4u8; 32].into()];
         let proof_leaves = indices
             .into_iter()
             .zip(proof_leaves)

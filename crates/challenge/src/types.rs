@@ -1,4 +1,5 @@
-use gw_common::{sparse_merkle_tree::CompiledMerkleProof, H256};
+use gw_common::H256;
+use gw_smt::{smt::SMTH256, sparse_merkle_tree::CompiledMerkleProof};
 use gw_types::offchain::RecoverAccount;
 use gw_types::packed::{
     Bytes, CCTransactionSignatureWitness, CCTransactionWitness, CCWithdrawalWitness, RawL2Block,

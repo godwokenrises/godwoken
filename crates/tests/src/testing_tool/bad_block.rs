@@ -1,9 +1,11 @@
 use gw_chain::chain::Chain;
 use gw_common::{
-    h256_ext::H256Ext,
     merkle_utils::{calculate_ckb_merkle_root, ckb_merkle_leaf_hash},
-    smt::Blake2bHasher,
     H256,
+};
+use gw_smt::{
+    smt::{Blake2bHasher, SMTH256},
+    smt_h256_ext::SMTH256Ext,
 };
 use gw_types::{
     packed::{BlockMerkleState, GlobalState, L2Block, SubmitWithdrawals, WithdrawalRequest},
@@ -32,7 +34,7 @@ pub fn generate_bad_block_using_first_withdrawal(
                 .iter()
                 .enumerate()
                 .map(|(idx, t)| ckb_merkle_leaf_hash(idx as u32, &t.witness_hash().into()));
-            calculate_ckb_merkle_root(witnesses.collect()).unwrap()
+            calculate_ckb_merkle_root(witnesses.collect())
         };
 
         let submit_withdrawals = SubmitWithdrawals::new_builder()
@@ -60,9 +62,9 @@ pub fn generate_bad_block_using_first_withdrawal(
         let bad_block_proof = db
             .block_smt()
             .unwrap()
-            .merkle_proof(vec![H256::from_u64(block_number)])
+            .merkle_proof(vec![SMTH256::from_u64(block_number)])
             .unwrap()
-            .compile(vec![H256::from_u64(block_number)])
+            .compile(vec![SMTH256::from_u64(block_number)])
             .unwrap();
 
         // Generate new block smt for global state

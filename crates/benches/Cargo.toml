@@ -15,6 +15,7 @@ criterion = { version = "0.3", features = ["html_reports"] }
 pprof = { version = "0.6", features = ["flamegraph", "criterion"] }
 gw-store = { path = "../store" }
 gw-common = { path = "../../gwos/crates/common" }
+gw-smt = { path = "../smt" }
 gw-mem-pool = { path = "../mem-pool" }
 gw-generator = { path = "../generator" }
 gw-types = { path = "../../gwos/crates/types" }

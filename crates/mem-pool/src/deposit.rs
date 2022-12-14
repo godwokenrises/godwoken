@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use gw_common::{h256_ext::H256Ext, registry::context::RegistryContext, state::State, H256};
+use gw_common::{registry::context::RegistryContext, state::State, H256};
 use gw_config::DepositTimeoutConfig;
 use gw_store::state::MemStateDB;
 use gw_types::core::Timepoint;

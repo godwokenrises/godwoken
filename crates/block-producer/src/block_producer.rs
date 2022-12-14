@@ -21,6 +21,10 @@ use gw_mem_pool::{
     pool::{MemPool, OutputParam},
 };
 use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
+use gw_smt::{
+    smt::SMTH256,
+    smt_h256_ext::{H256Ext, SMTH256Ext},
+};
 use gw_store::Store;
 use gw_types::offchain::{global_state_from_slice, CompatibleFinalizedTimepoint};
 use gw_types::{
@@ -172,7 +176,7 @@ impl BlockProducer {
         let reverted_block_root: H256 = {
             let db = self.store.begin_transaction();
             let smt = db.reverted_block_smt()?;
-            smt.root().to_owned()
+            smt.root().to_h256()
         };
 
         let param = ProduceBlockParam {
@@ -258,17 +262,20 @@ impl BlockProducer {
                 let db = self.store.begin_transaction();
                 let block_smt = db.reverted_block_smt()?;
 
-                let local_root: &H256 = block_smt.root();
+                let local_root: H256 = block_smt.root().to_h256();
                 let global_revert_block_root: H256 = global_state.reverted_block_root().unpack();
-                assert_eq!(local_root, &global_revert_block_root);
+                assert_eq!(local_root, global_revert_block_root);
 
                 let keys: Vec<H256> = collected_block_hashes.into_iter().collect();
                 for key in keys.iter() {
                     log::info!("submit revert block {:?}", hex::encode(key.as_slice()));
                 }
-                let proof = block_smt
-                    .merkle_proof(keys.clone())?
-                    .compile(keys.clone())?;
+                let proof = {
+                    let smt_keys: Vec<_> = keys.iter().map(|k| k.to_smt_h256()).collect();
+                    block_smt
+                        .merkle_proof(smt_keys.clone())?
+                        .compile(smt_keys)?
+                };
 
                 RollupSubmitBlock::new_builder()
                     .reverted_block_hashes(keys.pack())

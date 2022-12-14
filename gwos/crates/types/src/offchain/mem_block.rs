@@ -1,5 +1,4 @@
-use sparse_merkle_tree::H256;
-
+use crate::h256::H256;
 use crate::packed::Script;
 
 pub struct SudtCustodian {

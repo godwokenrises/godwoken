@@ -1,8 +1,7 @@
 use anyhow::anyhow;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{
-    builtins::CKB_SUDT_ACCOUNT_ID, h256_ext::H256Ext, registry_address::RegistryAddress,
-    state::State, H256,
+    builtins::CKB_SUDT_ACCOUNT_ID, registry_address::RegistryAddress, state::State, H256,
 };
 use gw_polyjuice_sender_recover::recover::error::PolyjuiceTxSenderRecoverError;
 use gw_store::state::traits::JournalDB;

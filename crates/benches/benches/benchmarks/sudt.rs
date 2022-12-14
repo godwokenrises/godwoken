@@ -1,14 +1,14 @@
 use anyhow::{bail, Result};
 use criterion::*;
 use gw_common::{
-    builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, smt::SMT, state::State,
-    H256,
+    builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, state::State, H256,
 };
 use gw_config::{BackendConfig, BackendForkConfig};
 use gw_generator::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage, error::TransactionError,
     traits::StateExt, Generator,
 };
+use gw_smt::smt::{SMT, SMTH256};
 use gw_store::{
     smt::smt_store::SMTStateStore,
     snapshot::StoreSnapshot,
@@ -75,7 +75,7 @@ impl ChainView for DummyChainStore {
 }
 
 fn new_state(store: StoreSnapshot) -> MemStateDB {
-    let smt = SMT::new(H256::zero(), SMTStateStore::new(MemStore::new(store)));
+    let smt = SMT::new(SMTH256::zero(), SMTStateStore::new(MemStore::new(store)));
     let inner = MemStateTree::new(smt, 0);
     MemStateDB::new(inner)
 }

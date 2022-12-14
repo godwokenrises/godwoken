@@ -3,23 +3,16 @@
 pub mod builtins;
 pub mod ckb_decimal;
 pub mod error;
-pub mod h256_ext;
 pub mod merkle_utils;
 pub mod registry;
-pub mod smt;
 pub mod state;
 #[cfg(test)]
 pub mod test_traits;
-
-pub mod registry_address {
-    pub use gw_types::registry_address::RegistryAddress;
-}
+pub use gw_types::registry_address;
 
 // re-exports
-
 pub use gw_hash::blake2b;
-pub use h256_ext::H256;
-pub use sparse_merkle_tree;
+pub use gw_types::core::H256;
 
 /// constants
 pub const CKB_SUDT_SCRIPT_ARGS: [u8; 32] = [0; 32];

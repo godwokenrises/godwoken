@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 gw-challenge = { path = "../challenge" }
 gw-common = { path = "../../gwos/crates/common" }
+gw-smt = { path = "../smt" }
 gw-config = { path = "../config" }
 gw-chain = { path = "../chain" }
 gw-db = { path = "../db" }

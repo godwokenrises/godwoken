@@ -3,11 +3,11 @@ use anyhow::{Context, Result};
 use gw_common::{
     blake2b::new_blake2b,
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
-    smt::{H256, SMT},
     state::State,
-    CKB_SUDT_SCRIPT_ARGS,
+    CKB_SUDT_SCRIPT_ARGS, H256,
 };
 use gw_config::GenesisConfig;
+use gw_smt::smt::{SMT, SMTH256};
 use gw_store::{
     smt::smt_store::SMTStateStore,
     state::{
@@ -67,7 +67,7 @@ pub fn build_genesis_from_store(
 
     // build genesis state tree
     let mut tree = {
-        let smt = SMT::new(H256::zero(), SMTStateStore::new(&db));
+        let smt = SMT::new(SMTH256::zero(), SMTStateStore::new(&db));
         let inner = HistoryState::new(smt, 0, RWConfig::attach_block(0));
         StateDB::new(inner)
     };

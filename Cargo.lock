@@ -1586,6 +1586,7 @@ dependencies = [
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-metrics",
+ "gw-smt",
  "gw-store",
  "gw-telemetry",
  "gw-types",
@@ -1613,6 +1614,7 @@ dependencies = [
  "gw-db",
  "gw-generator",
  "gw-mem-pool",
+ "gw-smt",
  "gw-store",
  "gw-traits",
  "gw-types",
@@ -1648,6 +1650,7 @@ dependencies = [
  "gw-polyjuice-sender-recover",
  "gw-rpc-client",
  "gw-rpc-server",
+ "gw-smt",
  "gw-store",
  "gw-telemetry",
  "gw-types",
@@ -1679,6 +1682,7 @@ dependencies = [
  "gw-jsonrpc-types",
  "gw-mem-pool",
  "gw-metrics",
+ "gw-smt",
  "gw-store",
  "gw-telemetry",
  "gw-traits",
@@ -1710,6 +1714,7 @@ dependencies = [
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-rpc-client",
+ "gw-smt",
  "gw-store",
  "gw-traits",
  "gw-types",
@@ -1731,7 +1736,6 @@ dependencies = [
  "gw-hash",
  "gw-types",
  "merkle-cbt",
- "sparse-merkle-tree",
  "thiserror",
 ]
 
@@ -1786,6 +1790,7 @@ dependencies = [
  "ethabi",
  "gw-common",
  "gw-config",
+ "gw-smt",
  "gw-store",
  "gw-traits",
  "gw-types",
@@ -1993,6 +1998,7 @@ dependencies = [
  "gw-metrics",
  "gw-polyjuice-sender-recover",
  "gw-rpc-client",
+ "gw-smt",
  "gw-store",
  "gw-telemetry",
  "gw-traits",
@@ -2015,6 +2021,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gw-smt"
+version = "1.8.0-rc1"
+dependencies = [
+ "cfg-if 0.1.10",
+ "gw-hash",
+ "gw-types",
+ "sparse-merkle-tree",
+]
+
+[[package]]
 name = "gw-store"
 version = "1.8.0-rc1"
 dependencies = [
@@ -2023,6 +2039,7 @@ dependencies = [
  "gw-common",
  "gw-config",
  "gw-db",
+ "gw-smt",
  "gw-traits",
  "gw-types",
  "im",
@@ -2080,6 +2097,7 @@ dependencies = [
  "gw-polyjuice-sender-recover",
  "gw-rpc-client",
  "gw-rpc-server",
+ "gw-smt",
  "gw-store",
  "gw-traits",
  "gw-types",
@@ -2163,6 +2181,7 @@ version = "1.8.0-rc1"
 dependencies = [
  "gw-common",
  "gw-config",
+ "gw-smt",
  "gw-traits",
  "gw-types",
  "hex",
@@ -2180,7 +2199,6 @@ dependencies = [
  "gw-hash",
  "molecule",
  "primitive-types",
- "sparse-merkle-tree",
 ]
 
 [[package]]
@@ -2196,6 +2214,7 @@ dependencies = [
  "gw-config",
  "gw-jsonrpc-types",
  "gw-rpc-client",
+ "gw-smt",
  "gw-store",
  "gw-types",
  "hex-literal",

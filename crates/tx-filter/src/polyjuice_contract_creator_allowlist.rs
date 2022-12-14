@@ -130,10 +130,11 @@ mod tests {
     use std::iter::FromIterator;
 
     use gw_common::error::Error;
-    use gw_common::smt::SMT;
-    use gw_common::sparse_merkle_tree::default_store::DefaultStore;
     use gw_common::state::State;
     use gw_common::H256;
+    use gw_smt::smt::{SMT, SMTH256};
+    use gw_smt::smt_h256_ext::{H256Ext, SMTH256Ext};
+    use gw_smt::sparse_merkle_tree::default_store::DefaultStore;
     use gw_traits::CodeStore;
     use gw_types::bytes::Bytes;
     use gw_types::core::ScriptHashType;
@@ -147,7 +148,7 @@ mod tests {
 
     #[derive(Default)]
     pub struct DummyState {
-        tree: SMT<DefaultStore<H256>>,
+        tree: SMT<DefaultStore<SMTH256>>,
         account_count: u32,
         scripts: HashMap<H256, Script>,
         codes: HashMap<H256, Bytes>,
@@ -155,15 +156,21 @@ mod tests {
 
     impl State for DummyState {
         fn get_raw(&self, key: &H256) -> Result<H256, Error> {
-            let v = self.tree.get(key)?;
+            let v = self
+                .tree
+                .get(&key.to_smt_h256())
+                .map_err(|err| Error::SMT(err.to_string()))?
+                .to_h256();
             Ok(v)
         }
         fn update_raw(&mut self, key: H256, value: H256) -> Result<(), Error> {
-            self.tree.update(key, value)?;
+            self.tree
+                .update(key.to_smt_h256(), value.to_smt_h256())
+                .map_err(|err| Error::SMT(err.to_string()))?;
             Ok(())
         }
         fn calculate_root(&self) -> Result<H256, Error> {
-            let root = *self.tree.root();
+            let root = self.tree.root().to_h256();
             Ok(root)
         }
         fn get_account_count(&self) -> Result<u32, Error> {

@@ -27,6 +27,7 @@ use gw_generator::account_lock_manage::eip712;
 use gw_generator::account_lock_manage::eip712::traits::EIP712Encode;
 use gw_generator::account_lock_manage::eip712::types::EIP712Domain;
 use gw_generator::account_lock_manage::AccountLockManage;
+use gw_smt::smt_h256_ext::H256Ext;
 use gw_store::smt::smt_store::SMTStateStore;
 use gw_store::state::history::history_state::RWConfig;
 use gw_store::state::traits::JournalDB;
@@ -352,9 +353,11 @@ async fn test_cancel_tx_signature() {
 
             let kv_state_proof: Bytes = {
                 let smt = SMTStateStore::new(&db).to_smt().unwrap();
-                smt.merkle_proof(touched_keys.clone())
+                let smt_touched_keys: Vec<_> =
+                    touched_keys.iter().map(|k| k.to_smt_h256()).collect();
+                smt.merkle_proof(smt_touched_keys.clone())
                     .unwrap()
-                    .compile(touched_keys)
+                    .compile(smt_touched_keys)
                     .unwrap()
                     .0
                     .into()

@@ -1,5 +1,4 @@
-use sparse_merkle_tree::H256;
-
+use crate::h256::H256;
 use crate::offchain::{CellInfo, DepositInfo, FinalizedCustodianCapacity, SudtCustodian};
 use crate::registry_address::RegistryAddress;
 use crate::{packed, prelude::*, vec::Vec};

@@ -1,6 +1,6 @@
 //! Cell types
 
-use crate::gw_common::{sparse_merkle_tree::H256, CKB_SUDT_SCRIPT_ARGS};
+use crate::gw_common::{H256, CKB_SUDT_SCRIPT_ARGS};
 use crate::gw_types::packed::{
     ChallengeLockArgs, CustodianLockArgs, DepositLockArgs, Script, StakeLockArgs,
     WithdrawalLockArgs,

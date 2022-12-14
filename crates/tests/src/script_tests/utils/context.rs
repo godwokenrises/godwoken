@@ -7,11 +7,12 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
     registry_address::RegistryAddress,
-    smt::SMT,
     state::State,
     CKB_SUDT_SCRIPT_ARGS, H256,
 };
 use gw_generator::traits::StateExt;
+use gw_smt::smt::SMT;
+use gw_smt::smt::SMTH256;
 use gw_store::{
     smt::smt_store::SMTStateStore,
     snapshot::StoreSnapshot,
@@ -31,7 +32,7 @@ use gw_types::{
 use gw_utils::RollupContext;
 
 fn new_state(store: StoreSnapshot) -> MemStateDB {
-    let smt = SMT::new(H256::zero(), SMTStateStore::new(MemStore::new(store)));
+    let smt = SMT::new(SMTH256::zero(), SMTStateStore::new(MemStore::new(store)));
     let inner = MemStateTree::new(smt, 0);
     MemStateDB::new(inner)
 }

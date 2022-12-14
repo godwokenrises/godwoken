@@ -3,14 +3,14 @@
 use crate::types::{RevertContext, RevertWitness, VerifyContext, VerifyWitness};
 
 use anyhow::{anyhow, Result};
-use gw_common::h256_ext::H256Ext;
 use gw_common::merkle_utils::{calculate_state_checkpoint, ckb_merkle_leaf_hash, CBMT};
-use gw_common::smt::Blake2bHasher;
-use gw_common::sparse_merkle_tree::CompiledMerkleProof;
 use gw_common::state::State;
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_generator::traits::StateExt;
 use gw_generator::{types::vm::ChallengeContext, Generator};
+use gw_smt::smt::{Blake2bHasher, SMTH256};
+use gw_smt::smt_h256_ext::SMTH256Ext;
+use gw_smt::sparse_merkle_tree::CompiledMerkleProof;
 use gw_store::chain_view::ChainView;
 use gw_store::state::history::history_state::{RWConfig, ReadOpt, WriteOpt};
 use gw_store::state::{BlockStateDB, MemStateDB};
@@ -90,17 +90,17 @@ pub fn build_revert_context(
     // Build reverted block proof
     let (post_reverted_block_root, reverted_block_proof) = {
         let mut smt = db.reverted_block_smt()?;
-        let to_key = |b: &RawL2Block| H256::from(b.hash());
+        let to_key = |b: &RawL2Block| SMTH256::from(b.hash());
 
-        let keys: Vec<H256> = reverted_raw_blocks.iter().map(to_key).collect();
+        let keys: Vec<SMTH256> = reverted_raw_blocks.iter().map(to_key).collect();
         for key in keys.iter() {
-            smt.update(key.to_owned(), H256::one())?;
+            smt.update(key.to_owned(), SMTH256::one())?;
         }
 
         let root = smt.root().to_owned();
         let proof = smt.merkle_proof(keys.clone())?.compile(keys.clone())?;
 
-        (root, proof)
+        (root.to_h256(), proof)
     };
     log::debug!("build reverted block proof");
 
@@ -527,7 +527,7 @@ fn build_block_proof(
     let block_proof = {
         let smt = db.block_smt()?;
 
-        let smt_keys: Vec<H256> = raw_blocks.iter().map(|rb| rb.smt_key().into()).collect();
+        let smt_keys: Vec<SMTH256> = raw_blocks.iter().map(|rb| rb.smt_key().into()).collect();
         smt.merkle_proof(smt_keys.clone())?.compile(smt_keys)?
     };
 
@@ -598,10 +598,9 @@ mod tests {
                     .map(|(id, l)| ckb_merkle_leaf_hash(id as u32, &l.witness_hash().into()))
                     .collect(),
             );
-            assert!(root.is_ok());
 
             // verify
-            assert!(proof.verify(&root.unwrap(), &proof_leaves));
+            assert!(proof.verify(&root, &proof_leaves));
         }
     }
 }

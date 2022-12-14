@@ -19,11 +19,11 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_block_producer::produce_block::ProduceBlockResult;
 use gw_block_producer::withdrawal_unlocker::{BuildUnlockWithdrawalToOwner, Guard};
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
-use gw_common::h256_ext::H256Ext;
-use gw_common::smt::SMT;
-use gw_common::sparse_merkle_tree::default_store::DefaultStore;
 use gw_common::H256;
 use gw_config::ContractsCellDep;
+use gw_smt::smt::{SMT, SMTH256};
+use gw_smt::smt_h256_ext::SMTH256Ext;
+use gw_smt::sparse_merkle_tree::default_store::DefaultStore;
 use gw_types::bytes::Bytes;
 use gw_types::core::{AllowedEoaType, DepType, ScriptHashType, Timepoint};
 use gw_types::offchain::{
@@ -617,10 +617,10 @@ async fn test_build_unlock_to_owner_tx() {
     assert_eq!(block_result.block.withdrawals().len(), 0);
 
     let smt_store = DefaultStore::default();
-    let mut reverted_block_smt = SMT::new(H256::zero(), smt_store);
+    let mut reverted_block_smt = SMT::new(SMTH256::zero(), smt_store);
     // Revert previous withdrawal block result
     reverted_block_smt
-        .update(withdrawal_block_result.block.hash().into(), H256::one())
+        .update(withdrawal_block_result.block.hash().into(), SMTH256::one())
         .unwrap();
 
     // Update reverted block smt root
@@ -628,7 +628,7 @@ async fn test_build_unlock_to_owner_tx() {
         global_state: block_result
             .global_state
             .as_builder()
-            .reverted_block_root(reverted_block_smt.root().pack())
+            .reverted_block_root(reverted_block_smt.root().to_h256().pack())
             .build(),
         ..block_result
     };
@@ -636,7 +636,7 @@ async fn test_build_unlock_to_owner_tx() {
     let input_rollup_cell = {
         let global_state = {
             let builder = deposit_finalized_global_state.as_builder();
-            builder.reverted_block_root(reverted_block_smt.root().pack())
+            builder.reverted_block_root(reverted_block_smt.root().to_h256().pack())
         };
         CellInfo {
             data: global_state.build().as_bytes(),
@@ -721,7 +721,7 @@ async fn test_build_unlock_to_owner_tx() {
 
     let reverted_block_hash = withdrawal_block_result.block.hash();
     let reverted_block_proof = {
-        let keys: Vec<H256> = vec![reverted_block_hash.into()];
+        let keys: Vec<SMTH256> = vec![reverted_block_hash.into()];
         let merkle_proof = reverted_block_smt.merkle_proof(keys.clone()).unwrap();
         merkle_proof.compile(keys).unwrap()
     };

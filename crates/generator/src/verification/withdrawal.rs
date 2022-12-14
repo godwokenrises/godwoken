@@ -1,6 +1,4 @@
-use gw_common::{
-    builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, h256_ext::H256Ext, state::State, H256,
-};
+use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, state::State, H256};
 use gw_config::ForkConfig;
 use gw_traits::CodeStore;
 use gw_types::{

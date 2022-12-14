@@ -9,7 +9,6 @@ use ckb_vm::{
 };
 use gw_common::{
     blake2b::new_blake2b,
-    h256_ext::H256Ext,
     registry_address::RegistryAddress,
     state::{
         build_account_field_key, build_data_hash_key, build_script_hash_to_account_id_key, State,

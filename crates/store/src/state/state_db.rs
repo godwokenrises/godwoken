@@ -21,7 +21,11 @@ use gw_types::{
     prelude::{Pack, Unpack},
 };
 
-use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
+use gw_common::{error::Error as StateError, state::State, H256};
+use gw_smt::{
+    smt::{SMT, SMTH256},
+    smt_h256_ext::SMTH256Ext,
+};
 
 use crate::{
     smt::smt_store::SMTStateStore,
@@ -168,7 +172,7 @@ impl MemStateDB {
         let block = store.get_last_valid_tip_block()?;
         let tip_state = block.raw().post_account();
         let smt = SMT::new(
-            tip_state.merkle_root().unpack(),
+            SMTH256::from_h256(tip_state.merkle_root().unpack()),
             SMTStateStore::new(MemStore::new(store)),
         );
         let inner = MemStateTree::new(smt, tip_state.count().unpack());
@@ -186,7 +190,10 @@ impl<Store: ChainStore + HistoryStateStore + CodeStore + KVStore> BlockStateDB<S
         // build from last valid block
         let block = store.get_last_valid_tip_block()?;
         let tip_state = block.raw().post_account();
-        let smt = SMT::new(tip_state.merkle_root().unpack(), SMTStateStore::new(store));
+        let smt = SMT::new(
+            SMTH256::from_h256(tip_state.merkle_root().unpack()),
+            SMTStateStore::new(store),
+        );
         let inner = HistoryState::new(smt, tip_state.count().unpack(), rw_config);
         Ok(Self::new(inner))
     }
@@ -529,7 +536,8 @@ impl<S: CodeStore> CodeStore for StateDB<S> {
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use gw_common::{h256_ext::H256Ext, smt::SMT, state::State, H256};
+    use gw_common::{state::State, H256};
+    use gw_smt::smt::{SMT, SMTH256};
     use gw_traits::CodeStore;
 
     use crate::{
@@ -546,13 +554,13 @@ mod tests {
     };
 
     fn new_state(store: StoreSnapshot) -> MemStateDB {
-        let smt = SMT::new(H256::zero(), SMTStateStore::new(MemStore::new(store)));
+        let smt = SMT::new(SMTH256::zero(), SMTStateStore::new(MemStore::new(store)));
         let inner = MemStateTree::new(smt, 0);
         MemStateDB::new(inner)
     }
 
     fn new_block_state(store: &StoreTransaction) -> BlockStateDB<&'_ StoreTransaction> {
-        let smt = SMT::new(H256::zero(), SMTStateStore::new(store));
+        let smt = SMT::new(SMTH256::zero(), SMTStateStore::new(store));
         let inner = HistoryState::new(
             smt,
             0,

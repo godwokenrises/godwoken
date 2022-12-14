@@ -1,15 +1,15 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
-use gw_common::h256_ext::H256Ext;
 use gw_common::merkle_utils::{calculate_ckb_merkle_root, ckb_merkle_leaf_hash};
-use gw_common::smt::Blake2bHasher;
 use gw_common::H256;
 use gw_generator::types::vm::ChallengeContext;
 use gw_jsonrpc_types::test_mode::ChallengeType;
 use gw_jsonrpc_types::{godwoken::GlobalState as JsonGlobalState, test_mode::TestModePayload};
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_rpc_server::registry::TestModeRPC;
+use gw_smt::smt::{Blake2bHasher, SMTH256};
+use gw_smt::smt_h256_ext::SMTH256Ext;
 use gw_store::traits::chain_store::ChainStore;
 use gw_store::Store;
 use gw_types::core::{ChallengeTargetType, Status};
@@ -102,7 +102,7 @@ impl TestModeControl {
                         let witnesses = txs.iter().enumerate().map(|(id, tx)| {
                             ckb_merkle_leaf_hash(id as u32, &tx.witness_hash().into())
                         });
-                        calculate_ckb_merkle_root(witnesses.collect())?
+                        calculate_ckb_merkle_root(witnesses.collect())
                     };
 
                     let submit_txs = {
@@ -138,7 +138,7 @@ impl TestModeControl {
                         let witnesses = txs.iter().enumerate().map(|(id, tx)| {
                             ckb_merkle_leaf_hash(id as u32, &tx.witness_hash().into())
                         });
-                        calculate_ckb_merkle_root(witnesses.collect())?
+                        calculate_ckb_merkle_root(witnesses.collect())
                     };
 
                     let submit_txs = {
@@ -178,7 +178,7 @@ impl TestModeControl {
                         let witnesses = withdrawals.iter().enumerate().map(|(idx, t)| {
                             ckb_merkle_leaf_hash(idx as u32, &t.witness_hash().into())
                         });
-                        calculate_ckb_merkle_root(witnesses.collect())?
+                        calculate_ckb_merkle_root(witnesses.collect())
                     };
 
                     let submit_withdrawals = SubmitWithdrawals::new_builder()
@@ -206,8 +206,8 @@ impl TestModeControl {
 
             let bad_block_proof = db
                 .block_smt()?
-                .merkle_proof(vec![H256::from_u64(block_number)])?
-                .compile(vec![H256::from_u64(block_number)])?;
+                .merkle_proof(vec![SMTH256::from_u64(block_number)])?
+                .compile(vec![SMTH256::from_u64(block_number)])?;
 
             // Generate new block smt for global state
             let bad_block_smt = {

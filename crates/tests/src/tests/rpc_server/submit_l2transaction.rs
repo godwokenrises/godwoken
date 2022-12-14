@@ -2,12 +2,11 @@ use std::time::Duration;
 
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{
-    blake2b::new_blake2b,
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
-    h256_ext::H256Ext,
     state::State,
     H256,
 };
+use gw_smt::blake2b::new_blake2b;
 use gw_store::state::traits::JournalDB;
 use gw_types::{
     bytes::Bytes,

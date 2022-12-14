@@ -1,12 +1,10 @@
-use crate::smt::Error as SMTError;
-
 cfg_if::cfg_if! {
     if #[cfg(feature = "std")] {
         use thiserror::Error;
         #[derive(Error, Debug, Eq, PartialEq, Clone)]
         pub enum Error {
             #[error("{_0}")]
-            SMT(SMTError),
+            SMT(String),
             #[error("Amount overflow")]
             AmountOverflow,
             #[error("Merkle proof error")]
@@ -27,7 +25,7 @@ cfg_if::cfg_if! {
     } else {
         #[derive(Debug, Eq, PartialEq, Clone)]
         pub enum Error {
-            SMT(SMTError),
+            SMT(alloc::string::String),
             AmountOverflow,
             MerkleProof,
             MissingKey,
@@ -37,11 +35,5 @@ cfg_if::cfg_if! {
             InvalidArgs,
             UnknownEoaCodeHash,
         }
-    }
-}
-
-impl From<SMTError> for Error {
-    fn from(err: SMTError) -> Self {
-        Error::SMT(err)
     }
 }

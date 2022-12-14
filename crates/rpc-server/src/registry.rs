@@ -35,6 +35,7 @@ use gw_mem_pool::fee::{
 };
 use gw_polyjuice_sender_recover::recover::PolyjuiceSenderRecover;
 use gw_rpc_client::rpc_client::RPCClient;
+use gw_smt::smt_h256_ext::{H256Ext, SMTH256Ext};
 use gw_store::state::history::history_state::RWConfig;
 use gw_store::state::{BlockStateDB, MemStateDB};
 use gw_store::{
@@ -954,12 +955,16 @@ async fn get_block(
 
     // check block status
     let mut status = L2BlockStatus::Unfinalized;
-    if !db.reverted_block_smt()?.get(&block_hash)?.is_zero() {
+    if !db
+        .reverted_block_smt()?
+        .get(&block_hash.to_smt_h256())?
+        .is_zero()
+    {
         // block is reverted
         status = L2BlockStatus::Reverted;
     } else {
         // return None if block is not on the main chain
-        if db.block_smt()?.get(&block.smt_key().into())? != block_hash {
+        if db.block_smt()?.get(&block.smt_key().into())?.to_h256() != block_hash {
             return Ok(None);
         }
 

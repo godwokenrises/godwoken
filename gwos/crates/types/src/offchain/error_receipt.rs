@@ -1,7 +1,6 @@
 use crate::bytes::Bytes;
+use crate::h256::H256;
 use crate::packed::LogItem;
-
-use sparse_merkle_tree::H256;
 
 #[derive(Debug, Clone)]
 pub struct ErrorTxReceipt {

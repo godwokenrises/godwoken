@@ -317,7 +317,6 @@ mod test {
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
-    use gw_common::h256_ext::H256Ext;
     use gw_common::H256;
     use gw_types::core::Timepoint;
     use gw_types::offchain::FinalizedCustodianCapacity;

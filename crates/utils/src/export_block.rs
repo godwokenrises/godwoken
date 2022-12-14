@@ -1,12 +1,13 @@
 use std::io::{ErrorKind, Read, Seek, SeekFrom};
 
 use anyhow::{anyhow, bail, Context, Result};
-use gw_common::{h256_ext::H256Ext, H256};
+use gw_smt::smt_h256_ext::{H256Ext, SMTH256Ext};
 use gw_store::{
     readonly::StoreReadonly, traits::chain_store::ChainStore, transaction::StoreTransaction,
 };
 use gw_types::{
     bytes::Bytes,
+    core::H256,
     offchain::ExportedBlock,
     packed::{self, GlobalState},
     prelude::{Builder, Entity, Pack, Reader, Unpack},
@@ -180,15 +181,15 @@ pub fn insert_bad_block_hashes(
     for bad_block_hashes in bad_block_hashes_vec {
         let prev_smt_root = *reverted_block_smt.root();
         for block_hash in bad_block_hashes.iter() {
-            reverted_block_smt.update(*block_hash, H256::one())?;
+            reverted_block_smt.update(block_hash.to_smt_h256(), SMTH256Ext::one())?;
         }
         tx_db.set_reverted_block_hashes(
-            reverted_block_smt.root(),
-            prev_smt_root,
+            &reverted_block_smt.root().to_h256(),
+            prev_smt_root.to_h256(),
             bad_block_hashes,
         )?;
     }
-    tx_db.set_reverted_block_smt_root(*reverted_block_smt.root())?;
+    tx_db.set_reverted_block_smt_root(reverted_block_smt.root().to_h256())?;
 
     Ok(())
 }

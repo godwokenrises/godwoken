@@ -21,7 +21,6 @@ use arc_swap::ArcSwapOption;
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     error::Error as StateError,
-    h256_ext::H256Ext,
     registry_address::RegistryAddress,
     state::{build_account_key, State, SUDT_TOTAL_SUPPLY_KEY},
     H256,

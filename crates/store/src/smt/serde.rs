@@ -1,6 +1,6 @@
 use std::convert::TryInto;
 
-use gw_common::sparse_merkle_tree::{merge::MergeValue, BranchKey, BranchNode};
+use gw_smt::sparse_merkle_tree::{merge::MergeValue, BranchKey, BranchNode};
 
 pub fn branch_key_to_vec(key: &BranchKey) -> Vec<u8> {
     let mut ret = Vec::with_capacity(33);

@@ -1,5 +1,5 @@
 use criterion::{criterion_group, Bencher, Criterion};
-use gw_common::{h256_ext::H256Ext, state::State, H256};
+use gw_common::{state::State, H256};
 use gw_config::GenesisConfig;
 use gw_generator::genesis::init_genesis;
 use gw_mem_pool::fee::{

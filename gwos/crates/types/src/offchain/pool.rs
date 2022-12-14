@@ -1,7 +1,7 @@
 use std::collections::{hash_map::Entry, HashMap};
 
+use crate::h256::H256;
 use ckb_types::bytes::Bytes;
-use sparse_merkle_tree::H256;
 
 use crate::packed::{AccountMerkleState, L2Block, L2Transaction, Script, WithdrawalRequestExtra};
 

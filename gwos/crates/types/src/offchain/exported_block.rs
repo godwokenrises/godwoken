@@ -1,6 +1,5 @@
-use sparse_merkle_tree::H256;
-
 use crate::{
+    h256::H256,
     packed::{DepositInfoVec, GlobalState, L2Block, Script, WithdrawalRequestExtra},
     prelude::{Entity, Unpack},
 };

@@ -37,7 +37,6 @@ use gw_utils::{
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     error::Error as StateError,
-    h256_ext::H256Ext,
     merkle_utils::{calculate_ckb_merkle_root, calculate_state_checkpoint, ckb_merkle_leaf_hash},
     state::State,
     CKB_SUDT_SCRIPT_ARGS, H256,
@@ -665,7 +664,7 @@ fn check_block_transactions(
         .enumerate()
         .map(|(idx, tx)| ckb_merkle_leaf_hash(idx as u32, &tx.witness_hash().into()))
         .collect();
-    let merkle_root: H256 = calculate_ckb_merkle_root(leaves)?;
+    let merkle_root: H256 = calculate_ckb_merkle_root(leaves);
     if tx_witness_root != merkle_root {
         debug!("failed to check block tx_witness_root");
         return Err(Error::MerkleProof);
@@ -740,7 +739,7 @@ fn check_block_withdrawals(block: &L2BlockReader) -> Result<(), Error> {
             ckb_merkle_leaf_hash(idx as u32, &withdrawal.witness_hash().into())
         })
         .collect();
-    let merkle_root = calculate_ckb_merkle_root(leaves)?;
+    let merkle_root = calculate_ckb_merkle_root(leaves);
     if withdrawal_witness_root != merkle_root {
         debug!("failed to check block withdrawal_witness_root");
         return Err(Error::MerkleProof);

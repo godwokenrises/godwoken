@@ -77,7 +77,6 @@ fn verify_finalized_owner_lock(
 
 #[cfg(test)]
 mod test {
-    use gw_common::h256_ext::H256Ext;
     use gw_common::H256;
     use gw_types::core::{ScriptHashType, Timepoint};
     use gw_types::offchain::{CellInfo, CompatibleFinalizedTimepoint};

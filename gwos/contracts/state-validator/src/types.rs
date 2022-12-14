@@ -1,10 +1,8 @@
 //! state context
 //! supports read / write to global state
 
-use gw_common::sparse_merkle_tree::H256;
 use gw_utils::fork::Fork;
-use gw_utils::gw_common;
-use gw_utils::gw_types::core::Timepoint;
+use gw_utils::gw_types::core::{Timepoint, H256};
 
 #[derive(Clone)]
 pub struct DepositRequest {

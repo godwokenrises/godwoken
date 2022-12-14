@@ -1,18 +1,18 @@
 use crate::types::{VerifyContext, VerifyWitness};
 
 use anyhow::{anyhow, bail, Context, Result};
-use gw_common::h256_ext::H256Ext;
 use gw_common::merkle_utils::{
     calculate_ckb_merkle_root, calculate_state_checkpoint, ckb_merkle_leaf_hash, CBMT,
 };
 use gw_common::registry_address::RegistryAddress;
-use gw_common::smt::{Blake2bHasher, SMT};
-use gw_common::sparse_merkle_tree::default_store::DefaultStore;
 use gw_common::state::{
     build_account_field_key, State, GW_ACCOUNT_NONCE_TYPE, GW_ACCOUNT_SCRIPT_HASH_TYPE,
 };
 use gw_common::H256;
 use gw_generator::traits::StateExt;
+use gw_smt::smt::{Blake2bHasher, SMT, SMTH256};
+use gw_smt::smt_h256_ext::{H256Ext, SMTH256Ext};
+use gw_smt::sparse_merkle_tree::default_store::DefaultStore;
 use gw_store::state::traits::JournalDB;
 use gw_store::state::MemStateDB;
 use gw_store::transaction::StoreTransaction;
@@ -299,14 +299,16 @@ impl MockBlockParam {
     ) -> Result<GlobalState> {
         let block_smt = db.block_smt()?;
         let block_proof = block_smt
-            .merkle_proof(vec![H256::from_u64(self.number)])
+            .merkle_proof(vec![SMTH256::from_u64(self.number)])
             .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
-            .compile(vec![H256::from_u64(self.number)])?;
+            .compile(vec![SMTH256::from_u64(self.number)])?;
         let post_block = {
-            let post_block_root = block_proof.compute_root::<Blake2bHasher>(vec![(
-                raw_block.smt_key().into(),
-                raw_block.hash().into(),
-            )])?;
+            let post_block_root = block_proof
+                .compute_root::<Blake2bHasher>(vec![(
+                    raw_block.smt_key().into(),
+                    raw_block.hash().into(),
+                )])?
+                .to_h256();
             let block_count = self.number + 1;
             BlockMerkleState::new_builder()
                 .merkle_root(post_block_root.pack())
@@ -339,9 +341,9 @@ impl MockBlockParam {
         sender_script: Script,
         owner_lock: Script,
     ) -> Result<VerifyContext> {
-        let mut tree: SMT<DefaultStore<H256>> = Default::default();
+        let mut tree: SMT<DefaultStore<SMTH256>> = Default::default();
         for (index, witness_hash) in self.withdrawals.witness_hashes.iter().enumerate() {
-            tree.update(H256::from_u32(index as u32), witness_hash.to_owned())?;
+            tree.update(SMTH256::from_u32(index as u32), witness_hash.to_smt_h256())?;
         }
 
         let withdrawal_index = self.withdrawals.witness_hashes.len().saturating_sub(1) as u32;
@@ -402,7 +404,8 @@ impl MockBlockParam {
             Unpack::<u32>::unpack(&tx.raw().nonce())
         );
 
-        let touched_keys: Vec<H256> = kv_state.iter().map(|(key, _)| key.to_owned()).collect();
+        let touched_keys: Vec<SMTH256> =
+            kv_state.iter().map(|(key, _)| key.to_smt_h256()).collect();
         let kv_state_proof = {
             let smt = mem_tree.inner_smt_tree();
             smt.merkle_proof(touched_keys.clone())?
@@ -594,8 +597,7 @@ impl RawBlockWithdrawalRequests {
     }
 
     fn submit_withdrawals(&self) -> Result<SubmitWithdrawals> {
-        let root = calculate_ckb_merkle_root(self.merkle_leaf_hashes.clone())
-            .map_err(|err| anyhow!("mock submit withdrawal error: {}", err))?;
+        let root = calculate_ckb_merkle_root(self.merkle_leaf_hashes.clone());
         let count = self.inner.len() as u32;
 
         Ok(SubmitWithdrawals::new_builder()
@@ -651,8 +653,7 @@ impl RawBlockTransactions {
     }
 
     fn submit_transactions(&self) -> Result<SubmitTransactions> {
-        let root = calculate_ckb_merkle_root(self.merkle_leaf_hashes.clone())
-            .map_err(|err| anyhow!("mock submit transaction error: {}", err))?;
+        let root = calculate_ckb_merkle_root(self.merkle_leaf_hashes.clone());
         let count = self.inner.len() as u32;
 
         Ok(SubmitTransactions::new_builder()

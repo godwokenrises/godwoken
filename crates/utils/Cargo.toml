@@ -9,6 +9,7 @@ edition = "2018"
 gw-types = { path = "../../gwos/crates/types" }
 gw-config = { path = "../config" }
 gw-common = { path = "../../gwos/crates/common" }
+gw-smt = { path = "../smt" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-store = { path = "../store" }

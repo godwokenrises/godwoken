@@ -2,7 +2,7 @@
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use gw_challenge::offchain::{verify_tx::TxWithContext, OffChainMockContext};
-use gw_common::{sparse_merkle_tree, state::State, CKB_SUDT_SCRIPT_ARGS, H256};
+use gw_common::{state::State, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_config::ChainConfig;
 use gw_generator::{
     generator::{ApplyBlockArgs, ApplyBlockResult},
@@ -12,6 +12,7 @@ use gw_generator::{
 };
 use gw_jsonrpc_types::debugger::ReprMockTransaction;
 use gw_mem_pool::pool::MemPool;
+use gw_smt::smt_h256_ext::SMTH256Ext;
 use gw_store::{
     chain_view::ChainView,
     state::{history::history_state::RWConfig, BlockStateDB},
@@ -119,7 +120,8 @@ impl SyncEvent {
 }
 
 /// concrete type aliases
-pub type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_merkle_tree::H256>;
+pub type StateStore =
+    gw_smt::sparse_merkle_tree::default_store::DefaultStore<gw_smt::sparse_merkle_tree::H256>;
 
 pub struct LocalState {
     tip: L2Block,
@@ -912,8 +914,8 @@ impl Chain {
         };
 
         assert_eq!(
-            db.state_smt().unwrap().root(),
-            &expected_account.merkle_root().unpack(),
+            db.state_smt().unwrap().root().to_h256(),
+            expected_account.merkle_root().unpack(),
             "account root consistent in DB"
         );
 

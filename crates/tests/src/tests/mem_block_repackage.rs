@@ -12,6 +12,8 @@ use gw_block_producer::{
 use gw_common::H256;
 use gw_generator::traits::StateExt;
 use gw_mem_pool::pool::OutputParam;
+use gw_smt::smt::SMTH256;
+use gw_smt::smt_h256_ext::SMTH256Ext;
 use gw_store::{state::MemStateDB, traits::chain_store::ChainStore};
 use gw_types::{
     core::ScriptHashType,
@@ -20,7 +22,6 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::RollupContext;
-
 use std::time::Duration;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -77,7 +78,7 @@ async fn test_repackage_mem_block() {
     let reverted_block_root: H256 = {
         let db = chain.store().begin_transaction();
         let smt = db.reverted_block_smt().unwrap();
-        smt.root().to_owned()
+        smt.root().to_h256()
     };
     let param = ProduceBlockParam {
         stake_cell_owner_lock_hash: random_always_success_script(&rollup_script_hash)

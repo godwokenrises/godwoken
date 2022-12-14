@@ -141,7 +141,6 @@ pub fn get_polyjuice_creator_id<S: State + CodeStore>(
 
 #[cfg(test)]
 mod test {
-    use gw_common::h256_ext::H256Ext;
     use gw_common::H256;
     use gw_types::bytes::Bytes;
     use gw_types::core::{ScriptHashType, Timepoint};

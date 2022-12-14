@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 gw-common = { path = "../../gwos/crates/common" }
+gw-smt = { path = "../smt" }
 gw-config = { path = "../config" }
 gw-traits = { path = "../traits" }
 gw-types = { path = "../../gwos/crates/types" }

@@ -4,7 +4,7 @@ use crate::{
     transaction::StoreTransaction,
     Store,
 };
-use gw_common::{h256_ext::H256Ext, merkle_utils::calculate_state_checkpoint, state::State, H256};
+use gw_common::{merkle_utils::calculate_state_checkpoint, state::State, H256};
 use gw_db::schema::COLUMN_BLOCK;
 use gw_types::{
     packed::{

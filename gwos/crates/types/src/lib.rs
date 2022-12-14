@@ -8,6 +8,7 @@ pub mod core;
 mod extension;
 mod finality;
 mod generated;
+mod h256;
 pub mod prelude;
 pub mod registry_address;
 mod std_traits;

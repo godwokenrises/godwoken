@@ -1,5 +1,6 @@
 use std::convert::TryInto;
 
+use crate::H256;
 use crate::{
     error::Error,
     registry_address::RegistryAddress,
@@ -7,7 +8,6 @@ use crate::{
         build_registry_address_to_script_hash_key, build_script_hash_to_registry_address_key, State,
     },
 };
-use sparse_merkle_tree::H256;
 
 pub trait StateTest: State {
     fn mapping_address(

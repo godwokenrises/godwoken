@@ -1,5 +1,5 @@
 use crate::genesis::{build_genesis, init_genesis};
-use gw_common::{sparse_merkle_tree::H256, state::State};
+use gw_common::{state::State, H256};
 use gw_config::GenesisConfig;
 use gw_store::{
     state::{history::history_state::RWConfig, BlockStateDB},

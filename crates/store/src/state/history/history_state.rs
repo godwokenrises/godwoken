@@ -1,7 +1,11 @@
 //! State DB
 
 use anyhow::Result;
-use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
+use gw_common::{error::Error as StateError, state::State, H256};
+use gw_smt::{
+    smt::SMT,
+    smt_h256_ext::{H256Ext, SMTH256Ext},
+};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
@@ -104,7 +108,7 @@ impl<Store: HistoryStateStore + CodeStore + KVStore> HistoryState<Store> {
 
     pub fn get_merkle_state(&self) -> AccountMerkleState {
         AccountMerkleState::new_builder()
-            .merkle_root(self.tree.root().pack())
+            .merkle_root(self.tree.root().to_h256().pack())
             .count(self.account_count.pack())
             .build()
     }
@@ -152,7 +156,11 @@ impl<Store: KVStore + HistoryStateStore + CodeStore> State for HistoryState<Stor
                 .db()
                 .get_history_state(block_number, key)
                 .unwrap_or_default(),
-            _ => self.tree.get(key)?,
+            _ => self
+                .tree
+                .get(&key.to_smt_h256())
+                .map_err(|err| StateError::SMT(err.to_string()))?
+                .to_h256(),
         };
         if log_enabled!(log::Level::Trace) {
             let k: Byte32 = key.pack();
@@ -168,7 +176,9 @@ impl<Store: KVStore + HistoryStateStore + CodeStore> State for HistoryState<Stor
     }
 
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), StateError> {
-        self.tree.update(key, value)?;
+        self.tree
+            .update(key.to_smt_h256(), value.to_smt_h256())
+            .map_err(|err| StateError::SMT(err.to_string()))?;
         // record block's kv state
         match self.rw_config.write {
             WriteOpt::Block(block_number) => {
@@ -222,8 +232,8 @@ impl<Store: KVStore + HistoryStateStore + CodeStore> State for HistoryState<Stor
     }
 
     fn calculate_root(&self) -> Result<H256, StateError> {
-        let root = self.tree.root();
-        Ok(*root)
+        let root = self.tree.root().to_h256();
+        Ok(root)
     }
 }
 

@@ -16,11 +16,10 @@
 //
 // Thus, the first 5 bytes keeps uniqueness for different type of keys.
 
-use gw_types::U256;
+use gw_types::{core::H256, U256};
 
 use crate::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use crate::error::Error;
-use crate::h256_ext::{H256Ext, H256};
 use crate::registry_address::RegistryAddress;
 use crate::vec::Vec;
 use crate::{blake2b::new_blake2b, merkle_utils::calculate_state_checkpoint};

@@ -7,10 +7,8 @@ use super::{
     ACCOUNT_OP_PROGRAM_PATH, GW_LOG_SUDT_TRANSFER, RECOVER_PROGRAM_CODE_HASH, RECOVER_PROGRAM_PATH,
     SUDT_TOTAL_SUPPLY_PROGRAM_CODE_HASH, SUM_PROGRAM_CODE_HASH, SUM_PROGRAM_PATH,
 };
-use gw_common::smt::SMT;
 use gw_common::{
-    builtins::ETH_REGISTRY_ACCOUNT_ID, h256_ext::H256Ext, registry_address::RegistryAddress,
-    state::State, H256,
+    builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, state::State, H256,
 };
 use gw_config::{BackendConfig, BackendForkConfig, BackendType};
 use gw_generator::backend_manage::BackendManage;
@@ -23,6 +21,7 @@ use gw_generator::{
     traits::StateExt,
     Generator,
 };
+use gw_smt::smt::{SMT, SMTH256};
 use gw_store::smt::smt_store::SMTStateStore;
 use gw_store::snapshot::StoreSnapshot;
 use gw_store::state::overlay::mem_state::MemStateTree;
@@ -42,7 +41,7 @@ use gw_types::{
 use gw_utils::RollupContext;
 
 fn new_state(store: StoreSnapshot) -> MemStateDB {
-    let smt = SMT::new(H256::zero(), SMTStateStore::new(MemStore::new(store)));
+    let smt = SMT::new(SMTH256::zero(), SMTStateStore::new(MemStore::new(store)));
     let inner = MemStateTree::new(smt, 0);
     MemStateDB::new(inner)
 }

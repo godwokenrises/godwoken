@@ -1,7 +1,7 @@
 use crate::bytes::Bytes;
+use crate::h256::H256;
 use crate::packed::{CellOutput, LogItem, Script};
 use crate::prelude::*;
-use sparse_merkle_tree::H256;
 use std::collections::HashSet;
 
 use super::CycleMeter;

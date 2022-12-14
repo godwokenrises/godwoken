@@ -343,7 +343,7 @@ mod test {
 
     use crate::utils::global_state_last_finalized_timepoint_to_since;
     use crate::withdrawal::generate;
-    use gw_common::{h256_ext::H256Ext, H256};
+    use gw_common::H256;
     use gw_config::{ContractsCellDep, ForkConfig};
     use gw_types::core::{DepType, ScriptHashType, Timepoint};
     use gw_types::offchain::{

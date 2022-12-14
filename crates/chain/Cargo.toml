@@ -11,6 +11,7 @@ gw-challenge = { path = "../challenge" }
 gw-types = { path = "../../gwos/crates/types" }
 gw-config = { path = "../config" }
 gw-common = { path = "../../gwos/crates/common" }
+gw-smt = { path = "../smt" }
 gw-generator = { path = "../generator" }
 gw-mem-pool = { path = "../mem-pool" }
 gw-store = { path = "../store" }

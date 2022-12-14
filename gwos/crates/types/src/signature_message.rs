@@ -1,8 +1,7 @@
-use gw_hash::blake2b::new_blake2b;
-use sparse_merkle_tree::H256;
-
+use crate::h256::H256;
 use crate::packed::{RawL2Transaction, RawWithdrawalRequest};
 use crate::prelude::*;
+use gw_hash::blake2b::new_blake2b;
 
 impl RawL2Transaction {
     pub fn calc_message(

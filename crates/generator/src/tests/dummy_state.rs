@@ -1,8 +1,6 @@
 use ckb_vm::Bytes;
-use gw_common::{
-    blake2b::new_blake2b, h256_ext::H256Ext, registry_address::RegistryAddress, smt::SMT,
-    state::State, H256,
-};
+use gw_common::{blake2b::new_blake2b, registry_address::RegistryAddress, state::State, H256};
+use gw_smt::smt::{SMT, SMTH256};
 use gw_store::{
     smt::smt_store::SMTStateStore,
     snapshot::StoreSnapshot,
@@ -22,7 +20,7 @@ use gw_types::{
 use crate::{traits::StateExt, Error};
 
 fn new_state(store: StoreSnapshot) -> MemStateDB {
-    let smt = SMT::new(H256::zero(), SMTStateStore::new(MemStore::new(store)));
+    let smt = SMT::new(SMTH256::zero(), SMTStateStore::new(MemStore::new(store)));
     let inner = MemStateTree::new(smt, 0);
     MemStateDB::new(inner)
 }

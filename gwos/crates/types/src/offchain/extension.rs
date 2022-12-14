@@ -1,5 +1,6 @@
 use core::convert::TryInto;
 
+use crate::h256::H256;
 use crate::packed::{
     AccountMerkleState, Byte32, CompactMemBlock, DeprecatedCompactMemBlock, GlobalState,
     GlobalStateV0, MemBlock, RawWithdrawalRequest, TransactionKey, TxReceipt, WithdrawalKey,
@@ -7,7 +8,6 @@ use crate::packed::{
 };
 use crate::prelude::*;
 use ckb_types::error::VerificationError;
-use sparse_merkle_tree::H256;
 
 use super::RunResult;
 
