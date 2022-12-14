@@ -38,6 +38,12 @@ fn main() {
         builder.flag("-Wno-invalid-offsetof");
     }
 
+    if cfg!(feature = "snappy") {
+        // Also define SNAPPY for our c++ wrapper. This affects default column
+        // family options.
+        builder.define("SNAPPY", Some("1"));
+    }
+
     #[cfg(feature = "io-uring")]
     if target.contains("linux") {
         pkg_config::probe_library("liburing")

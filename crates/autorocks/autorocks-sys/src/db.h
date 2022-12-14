@@ -98,6 +98,7 @@ struct DbOptionsWrapper
         {
             return status;
         }
+        db_options.row_cache = cache;
         sort_and_complete_missing(columns);
         return status;
     }
