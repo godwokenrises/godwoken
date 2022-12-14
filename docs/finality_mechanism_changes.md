@@ -7,7 +7,7 @@ https://github.com/godwokenrises/godwoken/pull/836 changes the way to determine 
 ### `Timepoint`
 
 To understand specific changes, we must understand `Timepoint`, a new underlying type introduced in https://github.com/godwokenrises/godwoken/pull/836.
-A `Timepoint` is a type, underlying `u64`, that is interpretated according to its highest bit.
+A `Timepoint` is a type, underlying `u64`, that is interpreted according to its highest bit.
 
   - When the highest bit is `0`, the rest bits are represented by block number
   - When the highest bit is `1`, the rest bits are represented by timestamp
