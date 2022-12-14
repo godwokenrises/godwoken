@@ -129,7 +129,7 @@ Withdrawal lock guarantees the cell can only be unlocked after `finality blocks`
 struct WithdrawalLockArgsV0 {
     account_script_hash: Byte32,
     withdrawal_block_hash: Byte32,
-    withdrawal_block_timepoint: Uint64,
+    withdrawal_block_number: Uint64,
     // buyer can pay sell_amount token to unlock
     sudt_script_hash: Byte32,
     sell_amount: Uint128,
