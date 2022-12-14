@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use autorocks::*;
 use autorocks_sys::rocksdb::{CompressionType, PinnableSlice, Status_Code};
 use moveit::moveit;
@@ -47,6 +49,20 @@ fn test_db_set_options() {
     let (db, _dir) = open_temp(1);
     db.set_db_options([("max_subcompactions", "2")]).unwrap();
     db.set_options(0, [("ttl", "36000")]).unwrap();
+}
+
+#[test]
+fn test_load_options() {
+    let dir = tempdir().unwrap();
+    let mut opts = DbOptions::new(dir.path(), 21);
+    let mut options_file = PathBuf::from(file!());
+    options_file.set_file_name("db.toml");
+    opts.load_options_from_file(&options_file, 1024 * 1024)
+        .unwrap();
+    opts.create_if_missing(true);
+    opts.create_missing_column_families(true);
+    let db = opts.open().unwrap();
+    assert_eq!(db.default_col(), 21);
 }
 
 #[test]

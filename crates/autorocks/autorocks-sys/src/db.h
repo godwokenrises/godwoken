@@ -84,7 +84,8 @@ struct DbOptionsWrapper
 
     Status load(Slice options_file, size_t cache_size)
     {
-        auto columns = cf_descriptors.size();
+        // Number of columns excluding the default.
+        auto columns = cf_descriptors.size() - 1;
         auto cache = cache_size > 0 ? NewLRUCache(cache_size) : shared_ptr<Cache>();
         auto status = LoadOptionsFromFile(
             options_file.ToString(),
