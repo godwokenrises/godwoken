@@ -22,7 +22,7 @@ use gw_types::packed::{
     WithdrawalLockArgs, WitnessArgs,
 };
 use gw_types::prelude::{Pack, Unpack};
-use secp256k1::rand::rngs::OsRng;
+use secp256k1::rand::rngs::ThreadRng;
 use secp256k1::{Message, Secp256k1, SecretKey};
 
 pub use conversion::{ToCKBType, ToGWType};
@@ -68,12 +68,12 @@ fn test_unlock_withdrawal_via_finalize_by_input_owner_cell() {
 
     let (sk, pk) = {
         let secp = Secp256k1::new();
-        let mut rng = OsRng::new().unwrap();
+        let mut rng = ThreadRng::default();
         secp.generate_keypair(&mut rng)
     };
     let (err_sk, _err_pk) = {
         let secp = Secp256k1::new();
-        let mut rng = OsRng::new().unwrap();
+        let mut rng = ThreadRng::default();
         secp.generate_keypair(&mut rng)
     };
     let owner_lock = {
@@ -394,7 +394,7 @@ fn test_unlock_withdrawal_via_finalize_fallback_to_input_owner_cell() {
 
     let (sk, pk) = {
         let secp = Secp256k1::new();
-        let mut rng = OsRng::new().unwrap();
+        let mut rng = ThreadRng::default();
         secp.generate_keypair(&mut rng)
     };
     let owner_lock = {
