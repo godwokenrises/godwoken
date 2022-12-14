@@ -58,8 +58,12 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
     };
     let secp_data: Bytes = {
         let rpc_client = {
-            let indexer_client = CKBIndexerClient::with_url(&config.rpc_client.indexer_url)?;
             let ckb_client = CKBClient::with_url(&config.rpc_client.ckb_url)?;
+            let indexer_client = if let Some(ref indexer_url) = config.rpc_client.indexer_url {
+                CKBIndexerClient::with_url(indexer_url)?
+            } else {
+                CKBIndexerClient::new(ckb_client.client().clone(), false)
+            };
             let rollup_type_script =
                 ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
             RPCClient::new(

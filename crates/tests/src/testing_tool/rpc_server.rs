@@ -48,9 +48,8 @@ impl RPCServer {
         let rollup_config = generator.rollup_context().rollup_config.to_owned();
         let rollup_context = generator.rollup_context().to_owned();
         let rpc_client = {
-            let indexer_client =
-                CKBIndexerClient::with_url(&RPCClientConfig::default().indexer_url).unwrap();
             let ckb_client = CKBClient::with_url(&RPCClientConfig::default().ckb_url).unwrap();
+            let indexer_client = CKBIndexerClient::new(ckb_client.client().clone(), false);
             let rollup_type_script =
                 ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
             RPCClient::new(
