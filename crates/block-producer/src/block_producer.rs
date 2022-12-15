@@ -20,6 +20,7 @@ use gw_mem_pool::{
     pool::{MemPool, OutputParam},
 };
 use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
+use gw_smt::smt::SMTH256;
 use gw_store::Store;
 use gw_types::offchain::{global_state_from_slice, CompatibleFinalizedTimepoint};
 use gw_types::{
@@ -266,15 +267,16 @@ impl BlockProducer {
                 for key in keys.iter() {
                     log::info!("submit revert block {:?}", hex::encode(key.as_slice()));
                 }
+                let reverted_block_hashes = keys.pack();
                 let proof = {
-                    let smt_keys: Vec<_> = keys.iter().map(|k| (*k).into()).collect();
+                    let smt_keys: Vec<SMTH256> = keys.into_iter().map(Into::into).collect();
                     block_smt
                         .merkle_proof(smt_keys.clone())?
                         .compile(smt_keys)?
                 };
 
                 RollupSubmitBlock::new_builder()
-                    .reverted_block_hashes(keys.pack())
+                    .reverted_block_hashes(reverted_block_hashes)
                     .reverted_block_proof(proof.0.pack())
             } else {
                 RollupSubmitBlock::new_builder()
