@@ -25,8 +25,7 @@ pub struct SMTBlockStore<DB>(DB);
 
 impl<DB: KVStoreRead + ChainStore> SMTBlockStore<DB> {
     pub fn to_smt(self) -> anyhow::Result<SMT<Self>> {
-        let root = self.inner_store().get_block_smt_root()?;
-        Ok(SMT::new(root.into(), self))
+        Ok(SMT::new_with_store(self)?)
     }
 }
 
@@ -37,6 +36,10 @@ impl<DB> SMTBlockStore<DB> {
 
     pub fn inner_store(&self) -> &DB {
         &self.0
+    }
+
+    pub fn inner_store_mut(&mut self) -> &mut DB {
+        &mut self.0
     }
 }
 

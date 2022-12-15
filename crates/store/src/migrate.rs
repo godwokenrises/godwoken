@@ -39,7 +39,7 @@ pub fn open_or_create_db(config: &StoreConfig, factory: MigrationFactory) -> Res
             }
             Ordering::Equal => Ok(Store::open(config, COLUMNS)?.into_inner()),
             Ordering::Less => {
-                log::info!("process fast migrations ...");
+                log::info!("process migrations ...");
 
                 let db = Store::open(config, COLUMNS)?.into_inner();
 
