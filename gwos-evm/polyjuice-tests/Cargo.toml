@@ -9,8 +9,9 @@ name = "lib"
 path = "src/lib.rs"
 
 [dependencies]
-gw-types     = { path = "../../crates/types/" }
-gw-common    = { path = "../../crates/common/" }
+gw-common    = { path = "../../gwos/crates/common/" }
+gw-types     = { path = "../../gwos/crates/types/" }
+gw-smt     = { path = "../../crates/smt/" }
 gw-db        = { path = "../../crates/db/" }
 gw-store     = { path = "../../crates/store/" }
 gw-utils     = { path = "../../crates/utils/" }

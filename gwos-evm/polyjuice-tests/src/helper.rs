@@ -1,10 +1,10 @@
 use gw_common::registry_address::RegistryAddress;
 pub use gw_common::{
     blake2b::new_blake2b,
-    h256_ext::H256Ext,
     state::{build_data_hash_key, State},
-    CKB_SUDT_SCRIPT_ARGS, H256,
+    CKB_SUDT_SCRIPT_ARGS,
 };
+use gw_types::h256::*;
 
 use gw_config::{BackendConfig, BackendForkConfig, BackendType, ForkConfig};
 use gw_db::schema::{COLUMN_INDEX, COLUMN_META, META_TIP_BLOCK_HASH_KEY};
@@ -234,7 +234,7 @@ pub fn parse_log(item: &LogItem) -> Log {
                 let mut topic = [0u8; 32];
                 topic.copy_from_slice(&data[offset..offset + 32]);
                 offset += 32;
-                topics.push(topic.into());
+                topics.push(topic);
             }
             if offset != data.len() {
                 panic!(
@@ -435,7 +435,7 @@ pub fn setup() -> (Store, DummyState, Generator) {
 
     state.insert_data(*SECP_DATA_HASH, Bytes::from(SECP_DATA));
     state
-        .update_raw(build_data_hash_key(SECP_DATA_HASH.as_slice()), H256::one())
+        .update_raw(build_data_hash_key(&*SECP_DATA_HASH), H256::one())
         .expect("update secp data key");
 
     // ==== Build generator
@@ -630,7 +630,7 @@ impl MockContractInfo {
         Self {
             eth_addr: contract_eth_addr,
             eth_abi_addr: contract_eth_abi_addr,
-            script_hash: contract_script.hash().into(),
+            script_hash: contract_script.hash(),
             reg_addr,
         }
     }

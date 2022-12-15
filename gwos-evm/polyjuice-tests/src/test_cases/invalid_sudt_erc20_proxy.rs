@@ -150,11 +150,7 @@ fn test_invalid_sudt_erc20_proxy() {
         if *success {
             let run_result = result.expect("execute");
             // used cycles: 844202 < 870K
-            helper::check_cycles(
-                "ERC20.{balanceOf|transfer}",
-                run_result.cycles,
-                1_011_000,
-            );
+            helper::check_cycles("ERC20.{balanceOf|transfer}", run_result.cycles, 1_011_000);
             state.finalise().expect("update state");
             assert_eq!(
                 run_result.return_data,
