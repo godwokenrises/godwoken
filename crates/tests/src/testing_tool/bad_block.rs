@@ -1,8 +1,5 @@
 use gw_chain::chain::Chain;
-use gw_common::{
-    merkle_utils::{calculate_ckb_merkle_root, ckb_merkle_leaf_hash},
-    H256,
-};
+use gw_common::merkle_utils::{calculate_ckb_merkle_root, ckb_merkle_leaf_hash};
 use gw_smt::{
     smt::{Blake2bHasher, SMTH256},
     smt_h256_ext::SMTH256Ext,

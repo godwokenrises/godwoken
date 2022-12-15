@@ -21,10 +21,7 @@ use gw_mem_pool::{
     pool::{MemPool, OutputParam},
 };
 use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
-use gw_smt::{
-    smt::SMTH256,
-    smt_h256_ext::{H256Ext, SMTH256Ext},
-};
+use gw_smt::smt_h256_ext::{H256Ext, SMTH256Ext};
 use gw_store::Store;
 use gw_types::offchain::{global_state_from_slice, CompatibleFinalizedTimepoint};
 use gw_types::{

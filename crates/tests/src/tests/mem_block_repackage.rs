@@ -12,7 +12,6 @@ use gw_block_producer::{
 use gw_common::H256;
 use gw_generator::traits::StateExt;
 use gw_mem_pool::pool::OutputParam;
-use gw_smt::smt::SMTH256;
 use gw_smt::smt_h256_ext::SMTH256Ext;
 use gw_store::{state::MemStateDB, traits::chain_store::ChainStore};
 use gw_types::{

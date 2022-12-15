@@ -19,7 +19,7 @@ use ckb_types::{
     prelude::{Pack as CKBPack, Unpack as CKBUnpack},
 };
 use gw_common::registry_address::RegistryAddress;
-use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
+use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State};
 use gw_smt::smt::SMTH256;
 use gw_smt::smt_h256_ext::SMTH256Ext;
 use gw_smt::sparse_merkle_tree::default_store::DefaultStore;

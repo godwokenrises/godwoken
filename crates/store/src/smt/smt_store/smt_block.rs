@@ -3,7 +3,6 @@
 use std::convert::TryInto;
 
 use crate::traits::{chain_store::ChainStore, kv_store::KVStore};
-use gw_common::H256;
 use gw_db::schema::{COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF};
 use gw_smt::{
     smt::{SMT, SMTH256},

@@ -25,7 +25,6 @@ impl RegistryContext {
     }
 
     /// Extract EOA registry address from deposit request
-    // TODO support extract ETH address from tron EOA
     pub fn extract_registry_address_from_deposit(
         &self,
         registry_id: u32,

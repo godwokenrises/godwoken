@@ -3,7 +3,6 @@ use crate::types::{RevertContext, RevertWitness};
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::Reader;
 use ckb_types::prelude::{Builder, Entity};
-use gw_common::H256;
 use gw_smt::smt::{Blake2bHasher, SMTH256};
 use gw_smt::smt_h256_ext::SMTH256Ext;
 use gw_types::core::Status;

@@ -13,9 +13,9 @@
 
 // define modules
 mod entry;
+mod eth_signature;
 
 pub use gw_utils::ckb_std;
-
 use core::arch::asm;
 use ckb_std::default_alloc;
 

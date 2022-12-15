@@ -2,7 +2,6 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::merkle_utils::{calculate_ckb_merkle_root, ckb_merkle_leaf_hash};
-use gw_common::H256;
 use gw_generator::types::vm::ChallengeContext;
 use gw_jsonrpc_types::test_mode::ChallengeType;
 use gw_jsonrpc_types::{godwoken::GlobalState as JsonGlobalState, test_mode::TestModePayload};
