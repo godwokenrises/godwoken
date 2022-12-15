@@ -22,8 +22,7 @@ pub struct SMTRevertedBlockStore<DB>(DB);
 
 impl<DB: KVStore + ChainStore> SMTRevertedBlockStore<DB> {
     pub fn to_smt(self) -> anyhow::Result<SMT<Self>> {
-        let root = self.inner_store().get_reverted_block_smt_root()?;
-        Ok(SMT::new(root.into(), self))
+        Ok(SMT::new_with_store(self)?)
     }
 }
 
