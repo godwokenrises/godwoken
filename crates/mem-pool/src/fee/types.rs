@@ -1,9 +1,9 @@
 use std::cmp::Ordering;
 
 use anyhow::{anyhow, ensure, Context, Result};
-use gw_common::H256;
 use gw_config::{BackendType, FeeConfig, GaslessTxSupportConfig};
 use gw_types::{
+    h256::*,
     packed::{
         ETHAddrRegArgs, ETHAddrRegArgsUnion, L2Transaction, MetaContractArgs,
         MetaContractArgsUnion, SUDTArgs, SUDTArgsUnion, WithdrawalRequestExtra,
@@ -50,10 +50,10 @@ impl FeeItem {
         match self {
             Self::Tx(tx) if self.kind() == FeeItemKind::PendingCreateSenderTx => {
                 let sig: gw_types::bytes::Bytes = tx.signature().unpack();
-                gw_common::blake2b::hash(&sig).into()
+                gw_common::blake2b::hash(&sig)
             }
-            Self::Tx(tx) => tx.hash().into(),
-            Self::Withdrawal(withdrawal) => withdrawal.hash().into(),
+            Self::Tx(tx) => tx.hash(),
+            Self::Withdrawal(withdrawal) => withdrawal.hash(),
         }
     }
 

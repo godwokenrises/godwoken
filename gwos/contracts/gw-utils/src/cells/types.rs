@@ -1,10 +1,11 @@
 //! Cell types
 
-use crate::gw_common::{H256, CKB_SUDT_SCRIPT_ARGS};
+use crate::gw_common::{CKB_SUDT_SCRIPT_ARGS};
 use crate::gw_types::packed::{
     ChallengeLockArgs, CustodianLockArgs, DepositLockArgs, Script, StakeLockArgs,
     WithdrawalLockArgs,
 };
+use crate::gw_types::h256::H256;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct CellValue {
@@ -15,7 +16,7 @@ pub struct CellValue {
 
 impl CellValue {
     pub fn is_ckb_only(&self) -> bool {
-        self.sudt_script_hash == CKB_SUDT_SCRIPT_ARGS.into() && self.amount == 0
+        self.sudt_script_hash == CKB_SUDT_SCRIPT_ARGS && self.amount == 0
     }
 }
 

@@ -9,13 +9,13 @@ use gw_challenge::{
         OffChainMockContext,
     },
 };
-use gw_common::H256;
 use gw_config::{Config, DBBlockValidatorConfig, DebugConfig};
 use gw_generator::Generator;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType as JsonChallengeTargetType;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
     core::{ChallengeTargetType, Status},
+    h256::*,
     packed::{ChallengeTarget, GlobalState, L2Block},
     prelude::{Builder, Entity, Pack, Unpack},
 };
@@ -141,7 +141,7 @@ impl DBBlockCancelChallengeValidator {
     }
 
     fn verify_withdrawals(&self, global_state: GlobalState, block: &L2Block) -> Result<()> {
-        let block_hash: H256 = block.hash().into();
+        let block_hash: H256 = block.hash();
         let block_number: u64 = block.raw().number().unpack();
 
         let verify_withdrawal = |idx| -> Result<()> {
@@ -169,7 +169,7 @@ impl DBBlockCancelChallengeValidator {
                 block_number,
                 target_type: ChallengeTargetType::Withdrawal,
                 target_index: idx,
-                target_hash: withdrawal.hash().into(),
+                target_hash: withdrawal.hash(),
             };
 
             let target = build_challenge_target(block_hash, idx, ChallengeTargetType::Withdrawal);
@@ -186,7 +186,7 @@ impl DBBlockCancelChallengeValidator {
     }
 
     fn verify_txs(&self, global_state: GlobalState, block: &L2Block) -> Result<()> {
-        let block_hash: H256 = block.hash().into();
+        let block_hash: H256 = block.hash();
         let block_number: u64 = block.raw().number().unpack();
 
         let verify_tx =
@@ -227,7 +227,7 @@ impl DBBlockCancelChallengeValidator {
                 }
 
                 let tx = block.transactions().get(idx as usize).unwrap();
-                let tx_hash = tx.hash().into();
+                let tx_hash = tx.hash();
 
                 verify_tx(idx, tx_hash, ChallengeTargetType::TxSignature)?;
                 verify_tx(idx, tx_hash, ChallengeTargetType::TxExecution)?;
@@ -350,7 +350,7 @@ impl DumpContext {
             ChallengeTargetType::TxExecution => "tx-execution",
             ChallengeTargetType::Withdrawal => "withdrawal",
         };
-        let hash = ckb_types::H256(self.target_hash.into());
+        let hash = ckb_types::H256(self.target_hash);
         let strategy = match load_data_strategy {
             LoadDataStrategy::Witness => "with-witness-load-data",
             LoadDataStrategy::CellDep => "with-celldep-load-data",

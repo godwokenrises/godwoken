@@ -32,6 +32,7 @@ use gw_types::U256;
 use gw_types::{
     bytes::Bytes,
     core::{ChallengeTargetType, ScriptHashType, Status},
+    h256::*,
     packed::{
         ChallengeLockArgs, ChallengeTarget, DepositRequest, L2Transaction, RawL2Transaction,
         RollupAction, RollupActionUnion, RollupConfig, RollupRevert, SUDTArgs, SUDTArgsUnion,
@@ -154,7 +155,7 @@ async fn test_revert() {
         let db = chain.store().begin_transaction();
         let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
         let sender_id = tree
-            .get_account_id_by_script_hash(&sender_script.hash().into())
+            .get_account_id_by_script_hash(&sender_script.hash())
             .unwrap()
             .unwrap();
         let receiver_address = RegistryAddress::new(1, receiver_script.hash()[0..20].to_vec());
@@ -328,11 +329,11 @@ async fn test_revert() {
             .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
             .build()
     };
-    let post_reverted_block_root = {
+    let post_reverted_block_root: H256 = {
         reverted_block_tree
             .update(challenged_block.hash().into(), SMTH256::one())
             .unwrap();
-        reverted_block_tree.root().to_h256()
+        (*reverted_block_tree.root()).into()
     };
     let last_finalized_timepoint = {
         let number: u64 = challenged_block.raw().number().unpack();

@@ -73,131 +73,133 @@ impl TestModeControl {
             (target_index, target_type)
         };
 
-        let bad_block =
-            match target_type {
-                ChallengeType::TxExecution => {
-                    let tx_count: u32 = block.raw().submit_transactions().tx_count().unpack();
-                    if target_index >= tx_count {
-                        return Err(anyhow!("target index out of bound, total {}", tx_count));
-                    }
+        let bad_block = match target_type {
+            ChallengeType::TxExecution => {
+                let tx_count: u32 = block.raw().submit_transactions().tx_count().unpack();
+                if target_index >= tx_count {
+                    return Err(anyhow!("target index out of bound, total {}", tx_count));
+                }
 
-                    let tx = block.transactions().get_unchecked(target_index as usize);
-                    let bad_tx = {
-                        let raw_tx = tx
-                            .raw()
-                            .as_builder()
-                            .nonce(99999999u32.pack())
-                            .to_id(99999999u32.pack())
-                            .args(Bytes::copy_from_slice("break tx execution".as_bytes()).pack())
-                            .build();
-
-                        tx.as_builder().raw(raw_tx).build()
-                    };
-
-                    let mut txs: Vec<L2Transaction> = block.transactions().into_iter().collect();
-                    *txs.get_mut(target_index as usize).expect("exists") = bad_tx;
-
-                    let tx_witness_root = {
-                        let witnesses = txs.iter().enumerate().map(|(id, tx)| {
-                            ckb_merkle_leaf_hash(id as u32, &tx.witness_hash().into())
-                        });
-                        calculate_ckb_merkle_root(witnesses.collect())
-                    };
-
-                    let submit_txs = {
-                        let builder = block.raw().submit_transactions().as_builder();
-                        builder.tx_witness_root(tx_witness_root.pack()).build()
-                    };
-
-                    let raw_block = block
+                let tx = block.transactions().get_unchecked(target_index as usize);
+                let bad_tx = {
+                    let raw_tx = tx
                         .raw()
                         .as_builder()
-                        .submit_transactions(submit_txs)
+                        .nonce(99999999u32.pack())
+                        .to_id(99999999u32.pack())
+                        .args(Bytes::copy_from_slice("break tx execution".as_bytes()).pack())
                         .build();
 
-                    block
-                        .as_builder()
-                        .raw(raw_block)
-                        .transactions(txs.pack())
-                        .build()
+                    tx.as_builder().raw(raw_tx).build()
+                };
+
+                let mut txs: Vec<L2Transaction> = block.transactions().into_iter().collect();
+                *txs.get_mut(target_index as usize).expect("exists") = bad_tx;
+
+                let tx_witness_root = {
+                    let witnesses = txs
+                        .iter()
+                        .enumerate()
+                        .map(|(id, tx)| ckb_merkle_leaf_hash(id as u32, &tx.witness_hash()));
+                    calculate_ckb_merkle_root(witnesses.collect())
+                };
+
+                let submit_txs = {
+                    let builder = block.raw().submit_transactions().as_builder();
+                    builder.tx_witness_root(tx_witness_root.pack()).build()
+                };
+
+                let raw_block = block
+                    .raw()
+                    .as_builder()
+                    .submit_transactions(submit_txs)
+                    .build();
+
+                block
+                    .as_builder()
+                    .raw(raw_block)
+                    .transactions(txs.pack())
+                    .build()
+            }
+            ChallengeType::TxSignature => {
+                let tx_count: u32 = block.raw().submit_transactions().tx_count().unpack();
+                if target_index >= tx_count {
+                    return Err(anyhow!("target index out of bound, total {}", tx_count));
                 }
-                ChallengeType::TxSignature => {
-                    let tx_count: u32 = block.raw().submit_transactions().tx_count().unpack();
-                    if target_index >= tx_count {
-                        return Err(anyhow!("target index out of bound, total {}", tx_count));
-                    }
 
-                    let tx = block.transactions().get_unchecked(target_index as usize);
-                    let bad_tx = tx.as_builder().signature(Bytes::default().pack()).build();
+                let tx = block.transactions().get_unchecked(target_index as usize);
+                let bad_tx = tx.as_builder().signature(Bytes::default().pack()).build();
 
-                    let mut txs: Vec<L2Transaction> = block.transactions().into_iter().collect();
-                    *txs.get_mut(target_index as usize).expect("exists") = bad_tx;
+                let mut txs: Vec<L2Transaction> = block.transactions().into_iter().collect();
+                *txs.get_mut(target_index as usize).expect("exists") = bad_tx;
 
-                    let tx_witness_root = {
-                        let witnesses = txs.iter().enumerate().map(|(id, tx)| {
-                            ckb_merkle_leaf_hash(id as u32, &tx.witness_hash().into())
-                        });
-                        calculate_ckb_merkle_root(witnesses.collect())
-                    };
+                let tx_witness_root = {
+                    let witnesses = txs
+                        .iter()
+                        .enumerate()
+                        .map(|(id, tx)| ckb_merkle_leaf_hash(id as u32, &tx.witness_hash()));
+                    calculate_ckb_merkle_root(witnesses.collect())
+                };
 
-                    let submit_txs = {
-                        let builder = block.raw().submit_transactions().as_builder();
-                        builder.tx_witness_root(tx_witness_root.pack()).build()
-                    };
+                let submit_txs = {
+                    let builder = block.raw().submit_transactions().as_builder();
+                    builder.tx_witness_root(tx_witness_root.pack()).build()
+                };
 
-                    let raw_block = block
-                        .raw()
-                        .as_builder()
-                        .submit_transactions(submit_txs)
-                        .build();
+                let raw_block = block
+                    .raw()
+                    .as_builder()
+                    .submit_transactions(submit_txs)
+                    .build();
 
-                    block
-                        .as_builder()
-                        .raw(raw_block)
-                        .transactions(txs.pack())
-                        .build()
+                block
+                    .as_builder()
+                    .raw(raw_block)
+                    .transactions(txs.pack())
+                    .build()
+            }
+            ChallengeType::WithdrawalSignature => {
+                let count: u32 = block.raw().submit_withdrawals().withdrawal_count().unpack();
+                if target_index >= count {
+                    return Err(anyhow!("target index out of bound, total {}", count));
                 }
-                ChallengeType::WithdrawalSignature => {
-                    let count: u32 = block.raw().submit_withdrawals().withdrawal_count().unpack();
-                    if target_index >= count {
-                        return Err(anyhow!("target index out of bound, total {}", count));
-                    }
 
-                    let withdrawal = block.withdrawals().get_unchecked(target_index as usize);
-                    let bad_withdrawal = withdrawal
-                        .as_builder()
-                        .signature(Bytes::default().pack())
-                        .build();
+                let withdrawal = block.withdrawals().get_unchecked(target_index as usize);
+                let bad_withdrawal = withdrawal
+                    .as_builder()
+                    .signature(Bytes::default().pack())
+                    .build();
 
-                    let mut withdrawals: Vec<WithdrawalRequest> =
-                        block.withdrawals().into_iter().collect();
-                    *withdrawals.get_mut(target_index as usize).expect("exists") = bad_withdrawal;
+                let mut withdrawals: Vec<WithdrawalRequest> =
+                    block.withdrawals().into_iter().collect();
+                *withdrawals.get_mut(target_index as usize).expect("exists") = bad_withdrawal;
 
-                    let withdrawal_witness_root = {
-                        let witnesses = withdrawals.iter().enumerate().map(|(idx, t)| {
-                            ckb_merkle_leaf_hash(idx as u32, &t.witness_hash().into())
-                        });
-                        calculate_ckb_merkle_root(witnesses.collect())
-                    };
+                let withdrawal_witness_root = {
+                    let witnesses = withdrawals
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, t)| ckb_merkle_leaf_hash(idx as u32, &t.witness_hash()));
+                    calculate_ckb_merkle_root(witnesses.collect())
+                };
 
-                    let submit_withdrawals = SubmitWithdrawals::new_builder()
-                        .withdrawal_witness_root(withdrawal_witness_root.pack())
-                        .withdrawal_count((withdrawals.len() as u32).pack())
-                        .build();
+                let submit_withdrawals = SubmitWithdrawals::new_builder()
+                    .withdrawal_witness_root(withdrawal_witness_root.pack())
+                    .withdrawal_count((withdrawals.len() as u32).pack())
+                    .build();
 
-                    let raw_block = block
-                        .raw()
-                        .as_builder()
-                        .submit_withdrawals(submit_withdrawals)
-                        .build();
+                let raw_block = block
+                    .raw()
+                    .as_builder()
+                    .submit_withdrawals(submit_withdrawals)
+                    .build();
 
-                    block
-                        .as_builder()
-                        .raw(raw_block)
-                        .withdrawals(withdrawals.pack())
-                        .build()
-                }
-            };
+                block
+                    .as_builder()
+                    .raw(raw_block)
+                    .withdrawals(withdrawals.pack())
+                    .build()
+            }
+        };
 
         let block_number = bad_block.raw().number().unpack();
         let bad_global_state = {

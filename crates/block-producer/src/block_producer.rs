@@ -12,7 +12,6 @@ use crate::{
 use anyhow::{bail, ensure, Context, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
 use gw_chain::chain::Chain;
-use gw_common::H256;
 use gw_config::BlockProducerConfig;
 use gw_generator::Generator;
 use gw_jsonrpc_types::test_mode::TestModePayload;
@@ -21,11 +20,11 @@ use gw_mem_pool::{
     pool::{MemPool, OutputParam},
 };
 use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
-use gw_smt::smt_h256_ext::{H256Ext, SMTH256Ext};
 use gw_store::Store;
 use gw_types::offchain::{global_state_from_slice, CompatibleFinalizedTimepoint};
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     offchain::{DepositInfo, InputCellInfo},
     packed::{
         CellDep, CellInput, CellOutput, GlobalState, L2Block, RollupAction, RollupActionUnion,
@@ -60,7 +59,7 @@ fn generate_custodian_cells(
     block: &L2Block,
     deposit_cells: &[DepositInfo],
 ) -> Vec<(CellOutput, Bytes)> {
-    let block_hash: H256 = block.hash().into();
+    let block_hash: H256 = block.hash();
     let finalized_timepoint = finalized_timepoint(
         &rollup_context.rollup_config,
         &rollup_context.fork_config,
@@ -173,11 +172,11 @@ impl BlockProducer {
         let reverted_block_root: H256 = {
             let db = self.store.begin_transaction();
             let smt = db.reverted_block_smt()?;
-            smt.root().to_h256()
+            (*smt.root()).into()
         };
 
         let param = ProduceBlockParam {
-            stake_cell_owner_lock_hash: self.wallet.lock_script().hash().into(),
+            stake_cell_owner_lock_hash: self.wallet.lock_script().hash(),
             reverted_block_root,
             rollup_config_hash: self.rollup_config_hash,
             block_param,
@@ -259,7 +258,7 @@ impl BlockProducer {
                 let db = self.store.begin_transaction();
                 let block_smt = db.reverted_block_smt()?;
 
-                let local_root: H256 = block_smt.root().to_h256();
+                let local_root: H256 = (*block_smt.root()).into();
                 let global_revert_block_root: H256 = global_state.reverted_block_root().unpack();
                 assert_eq!(local_root, global_revert_block_root);
 
@@ -268,7 +267,7 @@ impl BlockProducer {
                     log::info!("submit revert block {:?}", hex::encode(key.as_slice()));
                 }
                 let proof = {
-                    let smt_keys: Vec<_> = keys.iter().map(|k| k.to_smt_h256()).collect();
+                    let smt_keys: Vec<_> = keys.iter().map(|k| (*k).into()).collect();
                     block_smt
                         .merkle_proof(smt_keys.clone())?
                         .compile(smt_keys)?
@@ -377,7 +376,7 @@ impl BlockProducer {
         }
 
         // withdrawal cells
-        let map_withdrawal_extras = withdrawal_extras.into_iter().map(|w| (w.hash().into(), w));
+        let map_withdrawal_extras = withdrawal_extras.into_iter().map(|w| (w.hash(), w));
         if let Some(generated_withdrawal_cells) = crate::withdrawal::generate(
             rollup_context,
             finalized_custodians,

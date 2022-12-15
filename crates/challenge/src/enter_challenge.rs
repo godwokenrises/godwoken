@@ -1,7 +1,7 @@
 use ckb_types::prelude::{Builder, Entity};
-use gw_common::H256;
 use gw_generator::types::vm::ChallengeContext;
 use gw_types::core::{ScriptHashType, Status};
+use gw_types::h256::*;
 use gw_types::packed::{
     Byte32, CellOutput, ChallengeLockArgs, ChallengeTarget, ChallengeWitness, GlobalState,
     RollupAction, RollupActionUnion, RollupEnterChallenge, Script, WitnessArgs,

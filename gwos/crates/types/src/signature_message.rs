@@ -17,7 +17,7 @@ impl RawL2Transaction {
         hasher.update(self.as_slice());
         let mut message = [0u8; 32];
         hasher.finalize(&mut message);
-        message.into()
+        message
     }
 }
 
@@ -28,6 +28,6 @@ impl RawWithdrawalRequest {
         hasher.update(self.as_slice());
         let mut message = [0u8; 32];
         hasher.finalize(&mut message);
-        message.into()
+        message
     }
 }

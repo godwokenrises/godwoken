@@ -3,7 +3,7 @@ use crate::{
     smt::{default_store::DefaultStore, Error, SMT, SMTH256},
     smt_h256_ext::SMTH256Ext,
 };
-use gw_types::core::H256;
+use gw_types::h256::{H256Ext, H256};
 
 // Calculate compacted account root
 pub fn calculate_state_checkpoint(root: &H256, count: u32) -> H256 {
@@ -12,7 +12,7 @@ pub fn calculate_state_checkpoint(root: &H256, count: u32) -> H256 {
     hasher.update(root.as_slice());
     hasher.update(&count.to_le_bytes());
     hasher.finalize(&mut hash);
-    hash.into()
+    hash
 }
 
 /// Compute merkle root from vectors
@@ -22,7 +22,7 @@ pub fn calculate_merkle_root(leaves: Vec<H256>) -> Result<H256, Error> {
     }
     let mut tree = SMT::<DefaultStore<SMTH256>>::default();
     for (i, leaf) in leaves.into_iter().enumerate() {
-        tree.update(SMTH256::from_u32(i as u32), SMTH256::from_h256(leaf))?;
+        tree.update(SMTH256::from_u32(i as u32), leaf.into())?;
     }
-    Ok((*tree.root()).to_h256())
+    Ok((*tree.root()).into())
 }

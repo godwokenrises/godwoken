@@ -214,6 +214,8 @@ fn parse_capacity(capacity: &str) -> Result<u64> {
 }
 
 fn minimal_withdrawal_capacity(is_sudt: bool) -> Result<u64> {
+    use gw_types::h256::H256Ext;
+
     // fixed size, the specific value is not important.
     let dummy_hash = gw_types::core::H256::zero();
     let dummy_timepoint = Timepoint::from_block_number(0);

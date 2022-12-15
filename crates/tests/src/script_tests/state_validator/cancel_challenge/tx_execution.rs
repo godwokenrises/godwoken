@@ -20,8 +20,7 @@ use ckb_types::{
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::merkle_utils::ckb_merkle_leaf_hash;
 use gw_common::registry_address::RegistryAddress;
-use gw_common::{state::State, H256};
-use gw_smt::smt_h256_ext::H256Ext;
+use gw_common::state::State;
 use gw_store::smt::smt_store::SMTStateStore;
 use gw_store::state::history::history_state::RWConfig;
 use gw_store::state::traits::JournalDB;
@@ -29,6 +28,7 @@ use gw_store::state::{BlockStateDB, MemStateDB};
 use gw_traits::CodeStore;
 use gw_types::core::AllowedContractType;
 use gw_types::core::AllowedEoaType;
+use gw_types::h256::*;
 use gw_types::packed::AllowedTypeHash;
 use gw_types::packed::CCTransactionWitness;
 use gw_types::packed::Fee;
@@ -159,7 +159,7 @@ async fn test_cancel_tx_execute() {
         let db = chain.store().begin_transaction();
         let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
         let sender_id = tree
-            .get_account_id_by_script_hash(&sender_script.hash().into())
+            .get_account_id_by_script_hash(&sender_script.hash())
             .unwrap()
             .unwrap();
         let sudt_script_hash = tree.get_script_hash(sudt_id).unwrap();
@@ -270,7 +270,7 @@ async fn test_cancel_tx_execute() {
                 .transactions()
                 .into_iter()
                 .enumerate()
-                .map(|(idx, tx)| ckb_merkle_leaf_hash(idx as u32, &tx.witness_hash().into()))
+                .map(|(idx, tx)| ckb_merkle_leaf_hash(idx as u32, &tx.witness_hash()))
                 .collect();
             let tx_proof = super::build_merkle_proof(&leaves, &[challenge_target_index]);
             let challenged_block_number =
@@ -290,13 +290,13 @@ async fn test_cancel_tx_execute() {
             let mut tree = MemStateDB::from_store(chain.store().get_snapshot()).unwrap();
             tree.set_state_tracker(Default::default());
             let sender_id = tree
-                .get_account_id_by_script_hash(&sender_script.hash().into())
+                .get_account_id_by_script_hash(&sender_script.hash())
                 .unwrap()
                 .unwrap();
             tree.get_script_hash(sender_id).unwrap();
             tree.get_nonce(sender_id).unwrap();
             let receiver_id = tree
-                .get_account_id_by_script_hash(&receiver_script.hash().into())
+                .get_account_id_by_script_hash(&receiver_script.hash())
                 .unwrap()
                 .unwrap();
             tree.get_script_hash(receiver_id).unwrap();
@@ -304,7 +304,7 @@ async fn test_cancel_tx_execute() {
             tree.get_script_hash(sudt_id).unwrap();
             tree.get_registry_address_by_script_hash(
                 ETH_REGISTRY_ACCOUNT_ID,
-                &sender_script.hash().into(),
+                &sender_script.hash(),
             )
             .unwrap()
             .expect("get sender address");
@@ -324,8 +324,7 @@ async fn test_cancel_tx_execute() {
 
             let kv_state_proof: Bytes = {
                 let smt = SMTStateStore::new(&db).to_smt().unwrap();
-                let smt_touched_keys: Vec<_> =
-                    touched_keys.iter().map(|k| k.to_smt_h256()).collect();
+                let smt_touched_keys: Vec<_> = touched_keys.iter().map(|k| (*k).into()).collect();
                 smt.merkle_proof(smt_touched_keys.clone())
                     .unwrap()
                     .compile(smt_touched_keys)

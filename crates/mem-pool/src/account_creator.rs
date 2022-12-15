@@ -5,11 +5,11 @@ use gw_common::{
     ckb_decimal::CKBCapacity,
     registry_address::RegistryAddress,
     state::State,
-    H256,
 };
 use gw_generator::account_lock_manage::secp256k1::Secp256k1Eth;
 use gw_types::{
     core::{AllowedEoaType, ScriptHashType},
+    h256::*,
     packed::{
         BatchCreateEthAccounts, Fee, L2Transaction, LogItemReader, MetaContractArgs,
         RawL2Transaction, Script, ScriptVec,
@@ -103,7 +103,7 @@ impl AccountCreator {
 
         let creator_script_hash = {
             let s = creator_wallet.eth_lock_script(&rollup_script_hash, &eth_lock_code_hash)?;
-            s.hash().into()
+            s.hash()
         };
 
         let creator = Self {
@@ -191,7 +191,7 @@ impl AccountCreator {
             creator_registry_address,
             meta_contract_script_hash,
         )?;
-        let sign = self.creator_wallet.sign_message(signing_message.into())?;
+        let sign = self.creator_wallet.sign_message(signing_message)?;
 
         let tx = L2Transaction::new_builder()
             .raw(raw_l2tx)

@@ -1,11 +1,12 @@
 use core::result::Result;
 use gw_common::{
     builtins::ETH_REGISTRY_ACCOUNT_ID, merkle_utils::calculate_state_checkpoint,
-    registry_address::RegistryAddress, state::State, H256,
+    registry_address::RegistryAddress, state::State,
 };
 use gw_state::kv_state::KVState;
 use gw_types::{
     core::ScriptHashType,
+    h256::H256,
     packed::{ChallengeTarget, L2Transaction, RawL2Block, RollupConfig, ScriptVec},
     prelude::*,
 };

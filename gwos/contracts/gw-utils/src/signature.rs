@@ -2,8 +2,7 @@ use core::convert::TryFrom;
 
 use crate::{cells::utils::search_lock_hashes, error::Error};
 use ckb_std::{ckb_constants::Source, debug, syscalls::load_cell_data};
-use gw_common::H256;
-use gw_types::core::SigningType;
+use gw_types::{core::SigningType, h256::H256};
 
 /// Check l2 account signature cell
 pub fn check_l2_account_signature_cell(

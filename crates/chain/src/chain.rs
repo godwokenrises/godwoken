@@ -2,7 +2,7 @@
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use gw_challenge::offchain::{verify_tx::TxWithContext, OffChainMockContext};
-use gw_common::{state::State, CKB_SUDT_SCRIPT_ARGS, H256};
+use gw_common::{state::State, CKB_SUDT_SCRIPT_ARGS};
 use gw_config::ChainConfig;
 use gw_generator::{
     generator::{ApplyBlockArgs, ApplyBlockResult},
@@ -12,7 +12,6 @@ use gw_generator::{
 };
 use gw_jsonrpc_types::debugger::ReprMockTransaction;
 use gw_mem_pool::pool::MemPool;
-use gw_smt::smt_h256_ext::SMTH256Ext;
 use gw_store::{
     chain_view::ChainView,
     state::{history::history_state::RWConfig, BlockStateDB},
@@ -23,6 +22,7 @@ use gw_store::{
 use gw_types::{
     bytes::Bytes,
     core::Status,
+    h256::*,
     offchain::global_state_from_slice,
     packed::{
         BlockMerkleState, Byte32, CellInput, CellOutput, ChallengeTarget, ChallengeWitness,
@@ -171,14 +171,14 @@ impl Chain {
             "check generator rollup config"
         );
         let rollup_type_script_hash = rollup_type_script.hash();
-        let chain_id: [u8; 32] = store.get_chain_id()?.into();
+        let chain_id: [u8; 32] = store.get_chain_id()?;
         assert_eq!(
             chain_id, rollup_type_script_hash,
             "Database chain_id must equals to rollup_script_hash"
         );
         let tip = store.get_tip_block()?;
         let last_global_state = store
-            .get_block_post_global_state(&tip.hash().into())?
+            .get_block_post_global_state(&tip.hash())?
             .ok_or_else(|| anyhow!("can't find last global state"))?;
         let local_state = LocalState {
             tip,
@@ -188,10 +188,7 @@ impl Chain {
             .skipped_invalid_block_list
             .iter()
             .cloned()
-            .map(|ckb_h256| {
-                let h: [u8; 32] = ckb_h256.into();
-                h.into()
-            })
+            .map(H256::from)
             .collect();
         Ok(Chain {
             store,
@@ -311,8 +308,7 @@ impl Chain {
                     assert_eq!(local_reverted_block_root, global_reverted_block_root);
 
                     // Check bad block challenge target
-                    let challenge_target =
-                        db.get_bad_block_challenge_target(&l2block.hash().into())?;
+                    let challenge_target = db.get_bad_block_challenge_target(&l2block.hash())?;
                     if self.challenge_target.is_none() && challenge_target.is_some() {
                         self.challenge_target = challenge_target;
                     }
@@ -357,10 +353,7 @@ impl Chain {
                         assert_eq!(local_block_root, global_block_root, "block root fork");
 
                         assert!(self.challenge_target.is_none());
-                        db.set_bad_block_challenge_target(
-                            &l2block.hash().into(),
-                            &challenge_target,
-                        )?;
+                        db.set_bad_block_challenge_target(&l2block.hash(), &challenge_target)?;
                         self.challenge_target = Some(challenge_target.clone());
                         self.local_state.tip = l2block;
 
@@ -483,7 +476,7 @@ impl Chain {
 
                     // Both bad blocks and reverted_blocks should be ascended and matched
                     let local_reverted_blocks =
-                        package_bad_blocks(db, &first_reverted_block.hash().into())?;
+                        package_bad_blocks(db, &first_reverted_block.hash())?;
                     let local_slice: Vec<[u8; 32]> =
                         local_reverted_blocks.iter().map(|b| b.hash()).collect();
                     let submit_slice: Vec<[u8; 32]> =
@@ -495,8 +488,7 @@ impl Chain {
                     db.revert_bad_blocks(&local_reverted_blocks)?;
                     log::debug!("bad blocks reverted");
 
-                    let reverted_block_hashes =
-                        local_reverted_blocks.iter().map(|b| b.hash().into());
+                    let reverted_block_hashes = local_reverted_blocks.iter().map(|b| b.hash());
                     db.set_reverted_block_hashes(
                         &db.get_reverted_block_smt_root()?,
                         prev_reverted_block_root,
@@ -512,7 +504,7 @@ impl Chain {
                     // Check block smt
                     let global_block_smt = global_state.block();
                     let local_block_smt = {
-                        let root: [u8; 32] = db.get_block_smt_root()?.into();
+                        let root: [u8; 32] = db.get_block_smt_root()?;
                         BlockMerkleState::new_builder()
                             .merkle_root(root.pack())
                             .count(first_reverted_block.number())
@@ -536,7 +528,7 @@ impl Chain {
                     log::info!("revert to block {}", local_tip_block_number);
 
                     // Check whether our bad block is reverted
-                    if Some(H256::from(first_reverted_block.hash())) == self.bad_block_hash() {
+                    if Some(first_reverted_block.hash()) == self.bad_block_hash() {
                         self.challenge_target = None;
                         log::info!("clear local bad block");
                     }
@@ -677,9 +669,9 @@ impl Chain {
                         "rewind to last valid tip first"
                     );
 
-                    let local_state_tip_hash: H256 = self.local_state.tip.hash().into();
+                    let local_state_tip_hash: H256 = self.local_state.tip.hash();
                     let last_valid_tip_hash = db.get_last_valid_tip_block_hash()?;
-                    let block_hash: H256 = l2block.hash().into();
+                    let block_hash: H256 = l2block.hash();
                     assert_eq!(
                         local_state_tip_hash, last_valid_tip_hash,
                         "rewind to last valid tip first"
@@ -713,7 +705,7 @@ impl Chain {
                     assert_eq!(local_tip.hash(), local_valid_tip.hash());
 
                     let parent_block_hash: H256 = l2block.raw().parent_block_hash().unpack();
-                    assert_eq!(parent_block_hash, local_tip.hash().into());
+                    assert_eq!(parent_block_hash, local_tip.hash());
 
                     let l2block_number: u64 = l2block.raw().number().unpack();
                     let local_tip_number: u64 = local_tip.raw().number().unpack();
@@ -765,7 +757,7 @@ impl Chain {
                     Ok(())
                 }
                 RevertL1ActionContext::RewindToLastValidTip => {
-                    let local_state_tip_hash: H256 = self.local_state.tip.hash().into();
+                    let local_state_tip_hash: H256 = self.local_state.tip.hash();
                     let last_valid_tip_block_hash = db.get_last_valid_tip_block_hash()?;
 
                     let local_state_global_state = &self.local_state.last_global_state;
@@ -889,7 +881,7 @@ impl Chain {
         // and get reclaimed. Finalized custodians may be merged in bad block submit tx and this
         // will not be reverted.
         let is_bad_block_reverted = has_bad_block_before_update && self.challenge_target.is_none();
-        let tip_block_hash: H256 = self.local_state.tip.hash().into();
+        let tip_block_hash: H256 = self.local_state.tip.hash();
         if let Some(mem_pool) = &self.mem_pool {
             if matches!(self.last_sync_event, SyncEvent::Success)
                 && (is_l1_revert_happend || is_bad_block_reverted)
@@ -914,8 +906,8 @@ impl Chain {
         };
 
         assert_eq!(
-            db.state_smt().unwrap().root().to_h256(),
-            expected_account.merkle_root().unpack(),
+            H256::from(*db.state_smt().unwrap().root()).pack(),
+            expected_account.merkle_root(),
             "account root consistent in DB"
         );
 
@@ -1020,7 +1012,7 @@ impl Chain {
             deposit_info_vec: deposit_info_vec.clone(),
             withdrawals: withdrawals.clone(),
         };
-        let tip_block_hash = self.local_state.tip().hash().into();
+        let tip_block_hash = self.local_state.tip().hash();
         let chain_view = ChainView::new(&db, tip_block_hash);
 
         {
@@ -1143,7 +1135,7 @@ fn package_bad_blocks(db: &StoreTransaction, start_block_hash: &H256) -> Result<
         .collect();
     blocks.reverse();
     ensure!(
-        blocks.first().map(|b| b.hash().into()) == Some(*start_block_hash),
+        blocks.first().map(|b| b.hash()) == Some(*start_block_hash),
         "package_bad_blocks: start block hash does not match"
     );
     Ok(blocks)

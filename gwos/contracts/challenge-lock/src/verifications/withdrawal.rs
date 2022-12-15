@@ -1,13 +1,14 @@
 use crate::verifications::eip712::traits::EIP712Encode;
 use core::result::Result;
 use gw_common::{
-    builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, state::State, H256,
+    builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, state::State,
 };
 use gw_state::kv_state::KVState;
 use gw_state::{ckb_smt::smt::Pair, constants::GW_MAX_KV_PAIRS};
 use gw_types::packed::ChallengeLockArgs;
 use gw_utils::gw_types::{
     self,
+    h256::H256,
     packed::{RollupConfig, Script, WithdrawalRequest},
     prelude::*,
 };

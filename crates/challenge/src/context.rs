@@ -3,9 +3,9 @@
 use crate::types::{RevertContext, RevertWitness, VerifyContext, VerifyWitness};
 
 use anyhow::{anyhow, Result};
+use gw_common::blake2b::new_blake2b;
 use gw_common::merkle_utils::{calculate_state_checkpoint, ckb_merkle_leaf_hash, CBMT};
 use gw_common::state::State;
-use gw_common::{blake2b::new_blake2b, H256};
 use gw_generator::traits::StateExt;
 use gw_generator::{types::vm::ChallengeContext, Generator};
 use gw_smt::smt::{Blake2bHasher, SMTH256};
@@ -18,6 +18,7 @@ use gw_store::traits::chain_store::ChainStore;
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
 use gw_types::core::ChallengeTargetType;
+use gw_types::h256::*;
 use gw_types::offchain::RecoverAccount;
 use gw_types::packed::{
     BlockHashEntry, BlockHashEntryVec, BlockInfo, Byte32, Bytes, CCTransactionSignatureWitness,
@@ -97,10 +98,10 @@ pub fn build_revert_context(
             smt.update(key.to_owned(), SMTH256::one())?;
         }
 
-        let root = smt.root().to_owned();
+        let root: H256 = (*smt.root()).into();
         let proof = smt.merkle_proof(keys.clone())?.compile(keys.clone())?;
 
-        (root.to_h256(), proof)
+        (root, proof)
     };
     log::debug!("build reverted block proof");
 
@@ -536,11 +537,11 @@ fn build_block_proof(
 
 #[cfg(test)]
 mod tests {
-    use gw_common::{
-        merkle_utils::{calculate_ckb_merkle_root, ckb_merkle_leaf_hash, CBMTMerkleProof},
-        H256,
+    use gw_common::merkle_utils::{
+        calculate_ckb_merkle_root, ckb_merkle_leaf_hash, CBMTMerkleProof,
     };
     use gw_types::{
+        h256::*,
         packed::{L2Block, L2Transaction, RawL2Transaction},
         prelude::*,
     };

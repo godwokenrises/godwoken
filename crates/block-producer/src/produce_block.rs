@@ -6,13 +6,12 @@ use anyhow::{anyhow, Result};
 use gw_common::{
     merkle_utils::{calculate_ckb_merkle_root, calculate_state_checkpoint, ckb_merkle_leaf_hash},
     state::State,
-    H256,
 };
 use gw_generator::Generator;
 use gw_mem_pool::mem_block::MemBlock;
 use gw_smt::{
     smt::{Blake2bHasher, SMTH256},
-    smt_h256_ext::{H256Ext, SMTH256Ext},
+    smt_h256_ext::SMTH256Ext,
     sparse_merkle_tree::CompiledMerkleProof,
 };
 use gw_store::{
@@ -23,6 +22,7 @@ use gw_store::{
 };
 use gw_types::{
     core::Status,
+    h256::*,
     offchain::{BlockParam, DepositInfo, FinalizedCustodianCapacity},
     packed::{
         AccountMerkleState, BlockMerkleState, GlobalState, L2Block, RawL2Block, SubmitTransactions,
@@ -82,14 +82,14 @@ pub fn produce_block(
     } = param;
 
     let rollup_context = generator.rollup_context();
-    let parent_block_hash: H256 = parent_block.hash().into();
+    let parent_block_hash: H256 = parent_block.hash();
 
     // assemble block
     let submit_txs = {
         let tx_witness_root = calculate_ckb_merkle_root(
             txs.iter()
                 .enumerate()
-                .map(|(id, tx)| ckb_merkle_leaf_hash(id as u32, &tx.witness_hash().into()))
+                .map(|(id, tx)| ckb_merkle_leaf_hash(id as u32, &tx.witness_hash()))
                 .collect(),
         );
         let tx_count = txs.len() as u32;
@@ -104,9 +104,7 @@ pub fn produce_block(
             withdrawals
                 .iter()
                 .enumerate()
-                .map(|(id, request)| {
-                    ckb_merkle_leaf_hash(id as u32, &request.witness_hash().into())
-                })
+                .map(|(id, request)| ckb_merkle_leaf_hash(id as u32, &request.witness_hash()))
                 .collect(),
         );
         let withdrawal_count = withdrawals.len() as u32;
@@ -223,7 +221,7 @@ pub fn generate_produce_block_param(
     } else {
         let state_smt = db.state_smt()?;
 
-        let keys: Vec<SMTH256> = kv_state.iter().map(|(k, _v)| k.to_smt_h256()).collect();
+        let keys: Vec<SMTH256> = kv_state.iter().map(|(k, _v)| (*k).into()).collect();
         state_smt
             .merkle_proof(keys.clone())
             .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
@@ -279,7 +277,7 @@ pub fn generate_produce_block_param(
         let expected_kv_state_root: H256 = prev_merkle_state.merkle_root().unpack();
         let smt = db.state_smt()?;
         assert_eq!(
-            smt.root().to_h256(),
+            H256::from(*smt.root()),
             expected_kv_state_root,
             "check smt root consistent"
         );
@@ -287,14 +285,14 @@ pub fn generate_produce_block_param(
         if !kv_state_proof.is_empty() {
             log::debug!("[output mem-block] check merkle proof");
             // check state merkle proof before output
-            let prev_kv_state_root = CompiledMerkleProof(kv_state_proof.clone())
+            let prev_kv_state_root: H256 = CompiledMerkleProof(kv_state_proof.clone())
                 .compute_root::<Blake2bHasher>(
                     kv_state
                         .iter()
-                        .map(|(k, v)| (k.to_smt_h256(), v.to_smt_h256()))
+                        .map(|(k, v)| ((*k).into(), (*v).into()))
                         .collect(),
                 )?
-                .to_h256();
+                .into();
             let expected_kv_state_root: H256 = prev_merkle_state.merkle_root().unpack();
             assert_eq!(
                 expected_kv_state_root, prev_kv_state_root,

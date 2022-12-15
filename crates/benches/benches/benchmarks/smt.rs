@@ -7,7 +7,6 @@ use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     registry_address::RegistryAddress,
     state::State,
-    H256,
 };
 use gw_config::{BackendConfig, BackendForkConfig, GenesisConfig, StoreConfig};
 use gw_db::{schema::COLUMNS, RocksDB};
@@ -33,6 +32,7 @@ use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::{AllowedEoaType, ScriptHashType, Status},
+    h256::*,
     packed::{
         AccountMerkleState, AllowedTypeHash, BlockInfo, BlockMerkleState, Fee, GlobalState,
         L2Block, RawL2Block, RawL2Transaction, RollupConfig, SUDTArgs, SUDTTransfer, Script,
@@ -147,7 +147,7 @@ impl BenchExecutionEnvironment {
 
         let rollup_context = RollupContext {
             rollup_config: genesis_config.rollup_config.clone().into(),
-            rollup_script_hash: ROLLUP_TYPE_HASH.into(),
+            rollup_script_hash: ROLLUP_TYPE_HASH,
             ..Default::default()
         };
 
@@ -175,8 +175,7 @@ impl BenchExecutionEnvironment {
 
         let account_lock_manage = {
             let mut manage = AccountLockManage::default();
-            manage
-                .register_lock_algorithm(ALWAYS_SUCCESS_LOCK_HASH.into(), Arc::new(AlwaysSuccess));
+            manage.register_lock_algorithm(ALWAYS_SUCCESS_LOCK_HASH, Arc::new(AlwaysSuccess));
             manage
         };
 
@@ -220,7 +219,7 @@ impl BenchExecutionEnvironment {
             .collect();
 
         let address_offset = state
-            .get_account_id_by_script_hash(&block_producer_script.hash().into())
+            .get_account_id_by_script_hash(&block_producer_script.hash())
             .unwrap()
             .unwrap(); // start from block producer
         let start_account_id = address_offset + 1;
@@ -297,7 +296,7 @@ impl BenchExecutionEnvironment {
     ) -> Vec<Account> {
         let build_account = |idx: u32| -> Account {
             let (account_script, addr) = Account::build_script(idx);
-            let account_script_hash: H256 = account_script.hash().into();
+            let account_script_hash: H256 = account_script.hash();
             let account_id = state.create_account(account_script_hash).unwrap();
             state.insert_script(account_script_hash, account_script);
             state
@@ -316,7 +315,7 @@ impl BenchExecutionEnvironment {
     fn init_genesis(store: &Store, config: &GenesisConfig, accounts: u32) {
         if store.has_genesis().unwrap() {
             let chain_id = store.get_chain_id().unwrap();
-            if chain_id == ROLLUP_TYPE_HASH.into() {
+            if chain_id == ROLLUP_TYPE_HASH {
                 return;
             } else {
                 panic!("store genesis already initialized");
@@ -324,7 +323,7 @@ impl BenchExecutionEnvironment {
         }
 
         let db = store.begin_transaction();
-        db.setup_chain_id(ROLLUP_TYPE_HASH.into()).unwrap();
+        db.setup_chain_id(ROLLUP_TYPE_HASH).unwrap();
         let (db, genesis_state) = build_genesis_from_store(db, config, Default::default()).unwrap();
 
         let smt = db
@@ -340,8 +339,7 @@ impl BenchExecutionEnvironment {
         state.finalise().unwrap();
 
         let (genesis, global_state) = {
-            let prev_state_checkpoint: [u8; 32] =
-                state.calculate_state_checkpoint().unwrap().into();
+            let prev_state_checkpoint: [u8; 32] = state.calculate_state_checkpoint().unwrap();
             let submit_txs = SubmitTransactions::new_builder()
                 .prev_state_checkpoint(prev_state_checkpoint.pack())
                 .build();

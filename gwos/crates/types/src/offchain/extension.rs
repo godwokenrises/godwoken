@@ -21,8 +21,7 @@ impl TransactionKey {
     }
 
     pub fn block_hash(&self) -> H256 {
-        let h: [u8; 32] = self.as_slice()[..32].try_into().unwrap();
-        h.into()
+        self.as_slice()[..32].try_into().unwrap()
     }
 
     pub fn index(&self) -> u32 {

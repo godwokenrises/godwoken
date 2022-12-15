@@ -1,12 +1,10 @@
 // type aliases
 
-use gw_types::{core::H256, U256};
+use gw_types::U256;
 pub use sparse_merkle_tree::H256 as SMTH256;
 
 pub trait SMTH256Ext {
     fn one() -> Self;
-    fn to_h256(self) -> H256;
-    fn from_h256(h: H256) -> Self;
     fn from_u32(n: u32) -> Self;
     fn to_u32(&self) -> u32;
     fn from_u64(n: u64) -> Self;
@@ -20,16 +18,6 @@ pub trait SMTH256Ext {
 impl SMTH256Ext for SMTH256 {
     fn one() -> Self {
         Self::from_u32(1)
-    }
-
-    fn to_h256(self) -> H256 {
-        let b: [u8; 32] = self.into();
-        b.into()
-    }
-
-    fn from_h256(h: H256) -> Self {
-        let b: [u8; 32] = h.into();
-        b.into()
     }
 
     fn from_u32(n: u32) -> Self {
@@ -78,22 +66,5 @@ impl SMTH256Ext for SMTH256 {
         let mut n_bytes = [0u8; 32];
         n_bytes.copy_from_slice(&self.as_slice()[..32]);
         U256::from_little_endian(&n_bytes)
-    }
-}
-
-pub trait H256Ext {
-    fn to_smt_h256(self) -> SMTH256;
-    fn from_smt_h256(h: SMTH256) -> Self;
-}
-
-impl H256Ext for H256 {
-    fn to_smt_h256(self) -> SMTH256 {
-        let b: [u8; 32] = self.into();
-        b.into()
-    }
-
-    fn from_smt_h256(h: SMTH256) -> Self {
-        let b: [u8; 32] = h.into();
-        b.into()
     }
 }

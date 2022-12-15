@@ -19,13 +19,13 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_block_producer::produce_block::ProduceBlockResult;
 use gw_block_producer::withdrawal_unlocker::{BuildUnlockWithdrawalToOwner, Guard};
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
-use gw_common::H256;
 use gw_config::ContractsCellDep;
 use gw_smt::smt::{SMT, SMTH256};
 use gw_smt::smt_h256_ext::SMTH256Ext;
 use gw_smt::sparse_merkle_tree::default_store::DefaultStore;
 use gw_types::bytes::Bytes;
 use gw_types::core::{AllowedEoaType, DepType, ScriptHashType, Timepoint};
+use gw_types::h256::H256;
 use gw_types::offchain::{
     CellInfo, CollectedCustodianCells, CompatibleFinalizedTimepoint, FinalizedCustodianCapacity,
     InputCellInfo,
@@ -164,7 +164,7 @@ async fn test_build_unlock_to_owner_tx() {
         .hash_type(ScriptHashType::Type.into())
         .args(vec![1u8; 32].pack())
         .build();
-    let rollup_script_hash: H256 = rollup_type_script.hash().into();
+    let rollup_script_hash: H256 = rollup_type_script.hash();
     let rollup_cell = CellInfo {
         data: global_state.as_bytes(),
         out_point: OutPoint::new_builder()
@@ -345,7 +345,7 @@ async fn test_build_unlock_to_owner_tx() {
             .withdrawal_extras
             .clone()
             .into_iter();
-        withdrawals.map(|w| (w.hash().into(), w))
+        withdrawals.map(|w| (w.hash(), w))
     };
     let generated_withdrawals = gw_block_producer::withdrawal::generate(
         &rollup_context,
@@ -628,7 +628,7 @@ async fn test_build_unlock_to_owner_tx() {
         global_state: block_result
             .global_state
             .as_builder()
-            .reverted_block_root(reverted_block_smt.root().to_h256().pack())
+            .reverted_block_root(H256::from(*reverted_block_smt.root()).pack())
             .build(),
         ..block_result
     };
@@ -636,7 +636,7 @@ async fn test_build_unlock_to_owner_tx() {
     let input_rollup_cell = {
         let global_state = {
             let builder = deposit_finalized_global_state.as_builder();
-            builder.reverted_block_root(reverted_block_smt.root().to_h256().pack())
+            builder.reverted_block_root(H256::from(*reverted_block_smt.root()).pack())
         };
         CellInfo {
             data: global_state.build().as_bytes(),

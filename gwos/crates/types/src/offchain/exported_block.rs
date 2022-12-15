@@ -21,7 +21,7 @@ impl ExportedBlock {
     }
 
     pub fn block_hash(&self) -> H256 {
-        self.block.hash().into()
+        self.block.hash()
     }
 
     pub fn parent_block_hash(&self) -> H256 {

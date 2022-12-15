@@ -1,8 +1,8 @@
-use gw_common::H256;
 use gw_db::{
     read_only_db::ReadOnlyDB,
     schema::{Col, COLUMN_REVERTED_BLOCK_SMT_ROOT},
 };
+use gw_types::h256::*;
 use gw_types::{
     from_box_should_be_ok, packed,
     prelude::{Entity, FromSliceShouldBeOk, Unpack},

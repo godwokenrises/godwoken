@@ -1,7 +1,7 @@
 use ckb_smt::smt::{Pair, Tree};
-use gw_common::{H256};
 use gw_types::{
     core::{Status, Timepoint},
+    h256::{H256, H256Ext},
     packed::{BlockMerkleState, Byte32, GlobalState, RawL2Block, RollupConfig},
     prelude::*,
 };
@@ -24,7 +24,6 @@ use gw_utils::{
 };
 use gw_utils::{
     fork::Fork,
-    gw_common,
     gw_types::packed::{RawL2BlockReader, RollupRevertReader},
 };
 

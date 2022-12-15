@@ -30,7 +30,7 @@ pub fn generate_bad_block_using_first_withdrawal(
             let witnesses = withdrawals
                 .iter()
                 .enumerate()
-                .map(|(idx, t)| ckb_merkle_leaf_hash(idx as u32, &t.witness_hash().into()));
+                .map(|(idx, t)| ckb_merkle_leaf_hash(idx as u32, &t.witness_hash()));
             calculate_ckb_merkle_root(witnesses.collect())
         };
 

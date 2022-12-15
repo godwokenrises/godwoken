@@ -8,7 +8,7 @@ use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
     registry_address::RegistryAddress,
     state::State,
-    CKB_SUDT_SCRIPT_ARGS, H256,
+    CKB_SUDT_SCRIPT_ARGS,
 };
 use gw_generator::traits::StateExt;
 use gw_smt::smt::SMT;
@@ -26,6 +26,7 @@ use gw_types::core::AllowedContractType;
 use gw_types::packed::AllowedTypeHash;
 use gw_types::{
     core::ScriptHashType,
+    h256::*,
     packed::{RollupConfig, Script},
     prelude::*,
 };
@@ -76,7 +77,7 @@ impl TestingContext {
     pub fn setup_with_config(rollup_config: RollupConfig) -> Self {
         let rollup_context = RollupContext {
             rollup_config: rollup_config.clone(),
-            rollup_script_hash: [42u8; 32].into(),
+            rollup_script_hash: [42u8; 32],
             ..Default::default()
         };
 
@@ -98,7 +99,7 @@ impl TestingContext {
 
         // setup CKB simple UDT contract
         let ckb_sudt_script =
-            gw_generator::sudt::build_l2_sudt_script(&rollup_context, &CKB_SUDT_SCRIPT_ARGS.into());
+            gw_generator::sudt::build_l2_sudt_script(&rollup_context, &CKB_SUDT_SCRIPT_ARGS);
         let ckb_sudt_id = state.create_account_from_script(ckb_sudt_script).unwrap();
         assert_eq!(
             ckb_sudt_id, CKB_SUDT_ACCOUNT_ID,

@@ -1,10 +1,10 @@
 #![allow(clippy::mutable_key_type)]
 
 use anyhow::{anyhow, Result};
-use gw_common::H256;
 use gw_config::ContractsCellDep;
 use gw_mem_pool::{custodian::sum_withdrawals, withdrawal::Generator};
 use gw_types::core::Timepoint;
+use gw_types::h256::*;
 use gw_types::offchain::CompatibleFinalizedTimepoint;
 use gw_types::packed::RollupConfig;
 use gw_types::{
@@ -50,7 +50,7 @@ pub fn generate(
     let total_withdrawal_amount = sum_withdrawals(block.withdrawals().into_iter());
     let mut generator = Generator::new(rollup_context, finalized_custodians.into());
     for req in block.withdrawals().into_iter() {
-        let req_extra = match withdrawal_extras.get(&req.hash().into()) {
+        let req_extra = match withdrawal_extras.get(&req.hash()) {
             Some(req_extra) => req_extra.to_owned(),
             None => WithdrawalRequestExtra::new_builder().request(req).build(),
         };
@@ -343,9 +343,9 @@ mod test {
 
     use crate::utils::global_state_last_finalized_timepoint_to_since;
     use crate::withdrawal::generate;
-    use gw_common::H256;
     use gw_config::{ContractsCellDep, ForkConfig};
     use gw_types::core::{DepType, ScriptHashType, Timepoint};
+    use gw_types::h256::*;
     use gw_types::offchain::{
         CellInfo, CollectedCustodianCells, CompatibleFinalizedTimepoint, InputCellInfo,
     };
@@ -418,8 +418,7 @@ mod test {
             .request(withdrawal.clone())
             .owner_lock(owner_lock)
             .build();
-        let withdrawal_extras =
-            HashMap::from_iter([(withdrawal.hash().into(), withdrawal_extra.clone())]);
+        let withdrawal_extras = HashMap::from_iter([(withdrawal.hash(), withdrawal_extra.clone())]);
 
         let generated = generate(
             &rollup_context,
@@ -435,7 +434,7 @@ mod test {
         let (expected_output, expected_data) = gw_generator::utils::build_withdrawal_cell_output(
             &rollup_context,
             &withdrawal_extra,
-            &block.hash().into(),
+            &block.hash(),
             &block_timepoint,
             Some(sudt_script.clone()),
         )
@@ -492,7 +491,7 @@ mod test {
             .build();
 
         let rollup_context = RollupContext {
-            rollup_script_hash: rollup_type.hash().into(),
+            rollup_script_hash: rollup_type.hash(),
             rollup_config: RollupConfig::new_builder()
                 .withdrawal_script_type_hash(H256::from_u32(5).pack())
                 .l1_sudt_script_type_hash(sudt_script.code_hash())
@@ -800,7 +799,7 @@ mod test {
                     .build(),
             };
             let rollup_context = RollupContext {
-                rollup_script_hash: rollup_state_script.hash().into(),
+                rollup_script_hash: rollup_state_script.hash(),
                 rollup_config: rollup_config.clone(),
                 fork_config,
             };

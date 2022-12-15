@@ -179,7 +179,7 @@ impl L2Transaction {
     pub fn from_raw(
         data: gw_utils::gw_types::packed::RawL2Transaction,
         sender_address: gw_utils::gw_common::registry_address::RegistryAddress,
-        to_script_hash: gw_utils::gw_common::H256,
+        to_script_hash: gw_utils::gw_types::h256::H256,
     ) -> Result<Self, Error> {
         let sender_address = RegistryAddress::from_address(sender_address)?;
         let tx = L2Transaction {

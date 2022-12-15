@@ -1,14 +1,12 @@
 //! State DB
 
 use anyhow::Result;
-use gw_common::{error::Error as StateError, state::State, H256};
-use gw_smt::{
-    smt::SMT,
-    smt_h256_ext::{H256Ext, SMTH256Ext},
-};
+use gw_common::{error::Error as StateError, state::State};
+use gw_smt::smt::SMT;
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     packed::{self, AccountMerkleState, Byte32},
     prelude::*,
 };
@@ -107,8 +105,9 @@ impl<Store: HistoryStateStore + CodeStore + KVStore> HistoryState<Store> {
     }
 
     pub fn get_merkle_state(&self) -> AccountMerkleState {
+        let root: H256 = (*self.tree.root()).into();
         AccountMerkleState::new_builder()
-            .merkle_root(self.tree.root().to_h256().pack())
+            .merkle_root(root.pack())
             .count(self.account_count.pack())
             .build()
     }
@@ -158,9 +157,9 @@ impl<Store: KVStore + HistoryStateStore + CodeStore> State for HistoryState<Stor
                 .unwrap_or_default(),
             _ => self
                 .tree
-                .get(&key.to_smt_h256())
+                .get(&(*key).into())
                 .map_err(|err| StateError::SMT(err.to_string()))?
-                .to_h256(),
+                .into(),
         };
         if log_enabled!(log::Level::Trace) {
             let k: Byte32 = key.pack();
@@ -177,7 +176,7 @@ impl<Store: KVStore + HistoryStateStore + CodeStore> State for HistoryState<Stor
 
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), StateError> {
         self.tree
-            .update(key.to_smt_h256(), value.to_smt_h256())
+            .update(key.into(), value.into())
             .map_err(|err| StateError::SMT(err.to_string()))?;
         // record block's kv state
         match self.rw_config.write {
@@ -232,7 +231,7 @@ impl<Store: KVStore + HistoryStateStore + CodeStore> State for HistoryState<Stor
     }
 
     fn calculate_root(&self) -> Result<H256, StateError> {
-        let root = self.tree.root().to_h256();
+        let root = (*self.tree.root()).into();
         Ok(root)
     }
 }

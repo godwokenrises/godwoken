@@ -1,8 +1,8 @@
 use anyhow::{anyhow, bail, Result};
-use gw_common::H256;
 use gw_generator::generator::WithdrawalCellError;
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     offchain::FinalizedCustodianCapacity,
     packed::{CellOutput, L2Block, Script, WithdrawalRequest, WithdrawalRequestExtra},
     prelude::*,
@@ -115,7 +115,7 @@ impl<'a> Generator<'a> {
             let sudt_custodian = self.sudt_custodians.get(&sudt_type_hash);
             sudt_custodian.map(|sudt| sudt.script.to_owned())
         };
-        let block_hash: H256 = block.hash().into();
+        let block_hash: H256 = block.hash();
         let finalized_timepoint = finalized_timepoint(
             &self.rollup_context.rollup_config,
             &self.rollup_context.fork_config,
@@ -317,8 +317,8 @@ mod test {
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
-    use gw_common::H256;
     use gw_types::core::Timepoint;
+    use gw_types::h256::*;
     use gw_types::offchain::FinalizedCustodianCapacity;
     use gw_types::packed::{
         L2Block, RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest,
@@ -388,7 +388,7 @@ mod test {
         let (expected_output, expected_data) = gw_generator::utils::build_withdrawal_cell_output(
             &rollup_context,
             &req_extra,
-            &block.hash().into(),
+            &block.hash(),
             &block_timepoint,
             Some(sudt_script),
         )

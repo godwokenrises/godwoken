@@ -12,7 +12,6 @@ pub use gw_types::registry_address;
 
 // re-exports
 pub use gw_hash::blake2b;
-pub use gw_types::core::H256;
 
 /// constants
 pub const CKB_SUDT_SCRIPT_ARGS: [u8; 32] = [0; 32];

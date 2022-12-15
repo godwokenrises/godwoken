@@ -53,7 +53,7 @@ fn find_finalized_upper_bound(
     }
 
     let global_state = db
-        .get_block_post_global_state(&block.hash().into())?
+        .get_block_post_global_state(&block.hash())?
         .context("get current block global state")?;
     let compatible_finalized_timepoint =
         CompatibleFinalizedTimepoint::from_global_state(&global_state, finality_blocks);

@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 use std::{collections::HashMap, sync::Weak};
 
-use gw_common::H256;
+use gw_types::h256::*;
 use gw_types::packed::{L2Transaction, WithdrawalRequestExtra};
 
 use crate::registry::Request;

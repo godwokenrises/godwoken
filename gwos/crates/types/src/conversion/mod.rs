@@ -10,6 +10,5 @@ mod godwoken;
 #[cfg(feature = "std")]
 mod mem_block;
 mod primitive;
-mod smt_h256;
 #[cfg(feature = "std")]
 mod store;

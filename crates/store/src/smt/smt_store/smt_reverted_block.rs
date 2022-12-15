@@ -6,7 +6,6 @@ use crate::traits::{chain_store::ChainStore, kv_store::KVStore};
 use gw_db::schema::{COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF};
 use gw_smt::{
     smt::{SMT, SMTH256},
-    smt_h256_ext::SMTH256Ext,
     sparse_merkle_tree::{
         error::Error as SMTError,
         traits::{StoreReadOps, StoreWriteOps},
@@ -21,7 +20,7 @@ pub struct SMTRevertedBlockStore<DB>(DB);
 impl<DB: KVStore + ChainStore> SMTRevertedBlockStore<DB> {
     pub fn to_smt(self) -> anyhow::Result<SMT<Self>> {
         let root = self.inner_store().get_reverted_block_smt_root()?;
-        Ok(SMT::new(SMTH256::from_h256(root), self))
+        Ok(SMT::new(root.into(), self))
     }
 }
 

@@ -4,12 +4,12 @@ use gw_common::{
     ckb_decimal::CKBCapacity,
     registry_address::RegistryAddress,
     state::State,
-    H256,
 };
 use gw_generator::account_lock_manage::secp256k1::Secp256k1Eth;
 use gw_mem_pool::account_creator::{AccountCreator, MIN_BALANCE};
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     packed::{
         CreateAccount, DepositInfoVec, DepositRequest, Fee, L2Transaction, MetaContractArgs,
         RawL2Transaction, Script,
@@ -88,7 +88,7 @@ async fn test_create_account_for_ckb_transfer_new_address_recipient() {
         meta_contract_script_hash,
     )
     .unwrap();
-    let sign = test_wallet.sign_message(signing_message.into()).unwrap();
+    let sign = test_wallet.sign_message(signing_message).unwrap();
 
     let deploy_tx = L2Transaction::new_builder()
         .raw(raw_l2tx)
@@ -103,7 +103,7 @@ async fn test_create_account_for_ckb_transfer_new_address_recipient() {
 
     // Depoly erc20 contract
     let polyjuice_account_id = state
-        .get_account_id_by_script_hash(&polyjuice_account.hash().into())
+        .get_account_id_by_script_hash(&polyjuice_account.hash())
         .unwrap()
         .unwrap();
     let deploy_args = SudtErc20ArgsBuilder::deploy(CKB_SUDT_ACCOUNT_ID, 18).finish();
@@ -116,7 +116,7 @@ async fn test_create_account_for_ckb_transfer_new_address_recipient() {
         .build();
 
     let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
-    let deploy_tx_hash: H256 = deploy_tx.hash().into();
+    let deploy_tx_hash: H256 = deploy_tx.hash();
 
     {
         let mut mem_pool = chain.mem_pool().await;

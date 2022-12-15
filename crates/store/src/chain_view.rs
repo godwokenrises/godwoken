@@ -1,8 +1,8 @@
 //! ChainView implement ChainStore
 
 use anyhow::{bail, Result};
-use gw_common::H256;
 use gw_traits::ChainView as ChainViewTrait;
+use gw_types::h256::*;
 
 use crate::traits::chain_store::ChainStore;
 

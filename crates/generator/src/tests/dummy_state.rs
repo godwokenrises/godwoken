@@ -1,5 +1,5 @@
 use ckb_vm::Bytes;
-use gw_common::{blake2b::new_blake2b, registry_address::RegistryAddress, state::State, H256};
+use gw_common::{blake2b::new_blake2b, registry_address::RegistryAddress, state::State};
 use gw_smt::smt::{SMT, SMTH256};
 use gw_store::{
     smt::smt_store::SMTStateStore,
@@ -12,6 +12,7 @@ use gw_store::{
 };
 use gw_traits::CodeStore;
 use gw_types::{
+    h256::*,
     packed::Script,
     prelude::{Builder, Entity, Pack},
     U256,
@@ -44,7 +45,7 @@ fn test_account_with_duplicate_script() {
     );
 
     // create duplicate account
-    let err2 = tree.create_account(script.hash().into()).unwrap_err();
+    let err2 = tree.create_account(script.hash()).unwrap_err();
     assert_eq!(err2, gw_common::error::Error::DuplicatedScriptHash);
 }
 
@@ -67,13 +68,13 @@ fn test_query_account() {
         assert_eq!(id, expected_id as u32);
         assert_eq!(tree.get_account_count().unwrap(), (expected_id + 1) as u32);
         assert_eq!(
-            tree.get_account_id_by_script_hash(&script.hash().into())
+            tree.get_account_id_by_script_hash(&script.hash())
                 .unwrap()
                 .unwrap(),
             id
         );
-        assert_eq!(tree.get_script_hash(id).unwrap(), script.hash().into());
-        assert_eq!(&tree.get_script(&script.hash().into()).unwrap(), script);
+        assert_eq!(tree.get_script_hash(id).unwrap(), script.hash());
+        assert_eq!(&tree.get_script(&script.hash()).unwrap(), script);
     }
 }
 
@@ -183,7 +184,7 @@ fn test_data_hash() {
         let mut buf = [0u8; 32];
         hasher.update(&data);
         hasher.finalize(&mut buf);
-        buf.into()
+        buf
     };
     tree.insert_data(data_hash, data.to_vec().into());
     // query data

@@ -16,7 +16,10 @@
 //
 // Thus, the first 5 bytes keeps uniqueness for different type of keys.
 
-use gw_types::{core::H256, U256};
+use gw_types::{
+    h256::{H256Ext, H256},
+    U256,
+};
 
 use crate::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use crate::error::Error;
@@ -55,7 +58,7 @@ pub fn build_account_key(id: u32, key: &[u8]) -> H256 {
     hasher.update(&[GW_ACCOUNT_KV_TYPE]);
     hasher.update(key);
     hasher.finalize(&mut raw_key);
-    raw_key.into()
+    raw_key
 }
 
 pub fn build_sudt_key(key_flag: u32, address: &RegistryAddress) -> Vec<u8> {
@@ -88,10 +91,10 @@ pub fn build_registry_address_to_script_hash_key(address: &RegistryAddress) -> V
 }
 
 pub fn build_account_field_key(id: u32, type_: u8) -> H256 {
-    let mut key: [u8; 32] = H256::zero().into();
+    let mut key: [u8; 32] = H256::zero();
     key[..size_of::<u32>()].copy_from_slice(&id.to_le_bytes());
     key[size_of::<u32>()] = type_;
-    key.into()
+    key
 }
 
 /// build_script_hash_to_account_id_key
@@ -99,23 +102,23 @@ pub fn build_account_field_key(id: u32, type_: u8) -> H256 {
 /// id(4 bytes) | exists flag(1 byte) | zeros bytes
 /// if script_hash is exists the exists flag turn into 1, otherwise it is 0.
 pub fn build_script_hash_to_account_id_key(script_hash: &[u8]) -> H256 {
-    let mut key: [u8; 32] = H256::zero().into();
+    let mut key: [u8; 32] = H256::zero();
     let mut hasher = new_blake2b();
     hasher.update(&GW_NON_ACCOUNT_PLACEHOLDER);
     hasher.update(&[GW_SCRIPT_HASH_TO_ID_TYPE]);
     hasher.update(script_hash);
     hasher.finalize(&mut key);
-    key.into()
+    key
 }
 
 pub fn build_data_hash_key(data_hash: &[u8]) -> H256 {
-    let mut key: [u8; 32] = H256::zero().into();
+    let mut key: [u8; 32] = H256::zero();
     let mut hasher = new_blake2b();
     hasher.update(&GW_NON_ACCOUNT_PLACEHOLDER);
     hasher.update(&[GW_DATA_HASH_TYPE]);
     hasher.update(data_hash);
     hasher.finalize(&mut key);
-    key.into()
+    key
 }
 
 pub struct PrepareWithdrawalRecord {
@@ -160,10 +163,10 @@ pub trait State {
         )?;
         // script hash to id
         let script_hash_to_id_value: H256 = {
-            let mut buf: [u8; 32] = H256::from_u32(id).into();
+            let mut buf: [u8; 32] = H256::from_u32(id);
             // the first 4 bytes is id, set exists flag(fifth byte) to 1
             buf[4] = 1;
-            buf.into()
+            buf
         };
         self.update_raw(
             build_script_hash_to_account_id_key(script_hash.as_slice()),
@@ -339,7 +342,7 @@ pub trait State {
             let mut addr_buf = [0u8; 32];
             addr.write_to_slice(&mut addr_buf)
                 .expect("write addr to buf");
-            self.update_value(addr.registry_id, &key, addr_buf.into())?;
+            self.update_value(addr.registry_id, &key, addr_buf)?;
         }
         // registry address -> script hash
         {

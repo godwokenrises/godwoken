@@ -14,7 +14,6 @@ use gw_common::{
         build_account_field_key, build_data_hash_key, build_script_hash_to_account_id_key, State,
         GW_ACCOUNT_NONCE_TYPE, GW_ACCOUNT_SCRIPT_HASH_TYPE,
     },
-    H256,
 };
 use gw_config::SyscallCyclesConfig;
 use gw_store::state::traits::JournalDB;
@@ -22,6 +21,7 @@ use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
+    h256::*,
     offchain::CycleMeter,
     packed::{BlockInfo, LogItem, RawL2Transaction, Script},
     prelude::*,
@@ -115,7 +115,7 @@ fn load_data_h256<Mac: SupportMachine>(machine: &mut Mac, addr: u64) -> Result<H
             .load8(&Mac::REG::from_u64(addr).overflowing_add(&Mac::REG::from_u64(i as u64)))?
             .to_u8();
     }
-    Ok(H256::from(data))
+    Ok(data)
 }
 
 #[allow(clippy::needless_range_loop)]
@@ -238,10 +238,7 @@ impl<'a, 'b, S: State + CodeStore + JournalDB, C: ChainView, Mac: SupportMachine
                 let script_hash = script.hash();
 
                 // Return error if script_hash is exists
-                if self
-                    .get_account_id_by_script_hash(&script_hash.into())?
-                    .is_some()
-                {
+                if self.get_account_id_by_script_hash(&script_hash)?.is_some() {
                     machine.set_register(A0, Mac::REG::from_i8(GW_ERROR_DUPLICATED_SCRIPT_HASH));
                     return Ok(true);
                 }
@@ -317,17 +314,17 @@ impl<'a, 'b, S: State + CodeStore + JournalDB, C: ChainView, Mac: SupportMachine
                 self.state
                     .update_raw(
                         build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH_TYPE),
-                        script_hash.into(),
+                        script_hash,
                     )
                     .map_err(|err| {
                         VMError::Unexpected(format!("store script hash error: {}", err))
                     })?;
                 // script hash to id
                 let script_hash_to_id_value: H256 = {
-                    let mut buf: [u8; 32] = H256::from_u32(id).into();
+                    let mut buf: [u8; 32] = H256::from_u32(id);
                     // the first 4 bytes is id, set exists flag(fifth byte) to 1
                     buf[4] = 1;
-                    buf.into()
+                    buf
                 };
                 self.state
                     .update_raw(
@@ -338,7 +335,7 @@ impl<'a, 'b, S: State + CodeStore + JournalDB, C: ChainView, Mac: SupportMachine
                         VMError::Unexpected(format!("store script hash to id error: {}", err))
                     })?;
                 // insert script
-                self.state.insert_script(script_hash.into(), script);
+                self.state.insert_script(script_hash, script);
                 self.state
                     .set_account_count(id + 1)
                     .map_err(|err| VMError::Unexpected(format!("set acccount: {}", err)))?;
@@ -401,7 +398,7 @@ impl<'a, 'b, S: State + CodeStore + JournalDB, C: ChainView, Mac: SupportMachine
                     .update_raw(data_hash_key, H256::one())
                     .map_err(|err| VMError::Unexpected(format!("store data: {}", err)))?;
                 // write data
-                self.state.insert_data(data_hash.into(), data.into());
+                self.state.insert_data(data_hash, data.into());
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }

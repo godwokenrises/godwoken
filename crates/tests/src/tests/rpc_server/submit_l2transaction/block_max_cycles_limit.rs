@@ -4,11 +4,11 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
     state::State,
-    H256,
 };
 use gw_config::{MemBlockConfig, MemPoolConfig, SyscallCyclesConfig};
 use gw_generator::{account_lock_manage::secp256k1::Secp256k1Eth, error::TransactionError};
 use gw_types::{
+    h256::*,
     packed::{
         CreateAccount, DepositInfoVec, DepositRequest, Fee, L2Transaction, MetaContractArgs,
         RawL2Transaction, Script,
@@ -111,7 +111,7 @@ async fn test_block_max_cycles_limit() -> anyhow::Result<()> {
         meta_contract_script_hash,
     )
     .unwrap();
-    let sign = alice_wallet.sign_message(signing_message.into()).unwrap();
+    let sign = alice_wallet.sign_message(signing_message).unwrap();
 
     let deploy_tx = L2Transaction::new_builder()
         .raw(raw_tx)
@@ -134,7 +134,7 @@ async fn test_block_max_cycles_limit() -> anyhow::Result<()> {
     // We will submit two txs, expect bob's tx to be packaged in next block due to
     // block max cycles limit.
     let polyjuice_account_id = state
-        .get_account_id_by_script_hash(&polyjuice_account.hash().into())
+        .get_account_id_by_script_hash(&polyjuice_account.hash())
         .unwrap()
         .unwrap();
 

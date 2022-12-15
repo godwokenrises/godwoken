@@ -1,9 +1,9 @@
 use anyhow::Error;
-use gw_common::H256;
 use gw_db::{
     schema::{COLUMN_BLOCK_STATE_RECORD, COLUMN_BLOCK_STATE_REVERSE_RECORD},
     DBRawIterator, Direction, IteratorMode,
 };
+use gw_types::h256::*;
 
 use crate::{
     state::history::{
@@ -70,7 +70,7 @@ impl HistoryStateStore for &StoreTransaction {
                     .map(|raw| {
                         let mut buf = [0u8; 32];
                         buf.copy_from_slice(&raw);
-                        buf.into()
+                        buf
                     })
             }
             _ => None,

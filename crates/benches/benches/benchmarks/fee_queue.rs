@@ -1,5 +1,5 @@
 use criterion::{criterion_group, Bencher, Criterion};
-use gw_common::{state::State, H256};
+use gw_common::state::State;
 use gw_config::GenesisConfig;
 use gw_generator::genesis::init_genesis;
 use gw_mem_pool::fee::{
@@ -13,6 +13,7 @@ use gw_store::{
 };
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     packed::{AllowedTypeHash, L2Transaction, RawL2Transaction, RollupConfig},
     prelude::{Builder, Entity, Pack, PackVec, Unpack},
 };
@@ -165,10 +166,7 @@ fn setup_genesis(store: &Store) {
         meta_contract_validator_type_hash: [0u8; 32].into(),
         eth_registry_validator_type_hash: [1u8; 32].into(),
         rollup_config: rollup_config.into(),
-        rollup_type_hash: {
-            let h: [u8; 32] = rollup_type_hash.into();
-            h.into()
-        },
+        rollup_type_hash: rollup_type_hash.into(),
         secp_data_dep: Default::default(),
     };
     init_genesis(store, &genesis_config, &[0u8; 32], Bytes::default()).unwrap();

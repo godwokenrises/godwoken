@@ -39,11 +39,12 @@ use gw_common::{
     error::Error as StateError,
     merkle_utils::{calculate_ckb_merkle_root, calculate_state_checkpoint, ckb_merkle_leaf_hash},
     state::State,
-    CKB_SUDT_SCRIPT_ARGS, H256,
+    CKB_SUDT_SCRIPT_ARGS,
 };
 use gw_types::{
     bytes::Bytes,
     core::{ScriptHashType, Status, Timepoint},
+    h256::{H256Ext, H256},
     packed::{Byte32, GlobalState, RawL2Block, RollupConfig},
     prelude::*,
 };
@@ -79,7 +80,8 @@ fn check_withdrawal_cells<'a>(
             return Err(Error::InvalidWithdrawalCell);
         }
 
-        if cell.args.withdrawal_block_timepoint().unpack() != context.finalized_timepoint().full_value()
+        if cell.args.withdrawal_block_timepoint().unpack()
+            != context.finalized_timepoint().full_value()
         {
             debug!(
                 "withdrawal_cell.args.withdrawal_block_timepoint != context.block_timepoint, {} != {}",
@@ -788,9 +790,8 @@ fn check_block_timestamp(
         // 4 hours, 4 * 60 * 60 * 1000 = 14400000ms
         const BACKBONE_BIAS: u64 = 14400000;
         let backbone = {
-            match Timepoint::from_full_value(
-                post_global_state.last_finalized_timepoint().unpack(),
-            ) {
+            match Timepoint::from_full_value(post_global_state.last_finalized_timepoint().unpack())
+            {
                 Timepoint::BlockNumber(_) => unreachable!(),
                 Timepoint::Timestamp(current_timestamp) => current_timestamp,
             }

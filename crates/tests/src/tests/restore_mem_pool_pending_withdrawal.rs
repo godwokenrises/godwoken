@@ -10,7 +10,7 @@ use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
-use gw_common::H256;
+use gw_types::h256::*;
 use gw_types::packed::{
     CellOutput, DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest,
     WithdrawalRequestExtra,
@@ -28,7 +28,7 @@ async fn test_restore_mem_pool_pending_withdrawal() {
     let _ = env_logger::builder().is_test(true).try_init();
 
     let rollup_type_script = Script::default();
-    let rollup_script_hash: H256 = rollup_type_script.hash().into();
+    let rollup_script_hash: H256 = rollup_type_script.hash();
     let rollup_cell = CellOutput::new_builder()
         .type_(Some(rollup_type_script.clone()).pack())
         .build();
@@ -144,7 +144,7 @@ async fn test_restore_mem_pool_pending_withdrawal() {
     {
         let db = chain.store().begin_transaction();
         for withdrawal in invalid_withdrawals {
-            db.insert_mem_pool_withdrawal(&withdrawal.hash().into(), withdrawal)
+            db.insert_mem_pool_withdrawal(&withdrawal.hash(), withdrawal)
                 .unwrap();
         }
         db.commit().unwrap();

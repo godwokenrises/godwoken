@@ -1,6 +1,6 @@
 use ckb_types::prelude::{Builder, Entity};
-use gw_common::H256;
 use gw_types::core::ScriptHashType;
+use gw_types::h256::*;
 use gw_types::packed::Script;
 use gw_types::prelude::Pack;
 

@@ -2,7 +2,6 @@ use std::{convert::TryInto, time::Instant};
 
 use crate::setup::Context as ChainContext;
 use anyhow::{anyhow, Result};
-use gw_common::H256;
 use gw_store::{
     state::{history::history_state::RWConfig, BlockStateDB},
     traits::chain_store::ChainStore,
@@ -22,7 +21,7 @@ pub fn replay_chain(ctx: ChainContext) -> Result<()> {
     let tip = local_store.get_tip_block()?;
     let number = {
         let block_hash = from_store.get_block_hash_by_number(tip.raw().number().unpack())?;
-        assert_eq!(H256::from(tip.hash()), block_hash.unwrap());
+        assert_eq!(tip.hash(), block_hash.unwrap());
         tip.raw().number().unpack()
     };
 
@@ -56,7 +55,7 @@ pub fn replay_chain(ctx: ChainContext) -> Result<()> {
             .into_iter()
             .map(|withdrawal| {
                 from_store
-                    .get_withdrawal(&withdrawal.hash().into())
+                    .get_withdrawal(&withdrawal.hash())
                     .expect("query")
                     .expect("block deposit requests")
             })

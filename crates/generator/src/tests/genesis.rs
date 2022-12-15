@@ -1,5 +1,5 @@
 use crate::genesis::{build_genesis, init_genesis};
-use gw_common::{state::State, H256};
+use gw_common::state::State;
 use gw_config::GenesisConfig;
 use gw_store::{
     state::{history::history_state::RWConfig, BlockStateDB},
@@ -7,7 +7,7 @@ use gw_store::{
     Store,
 };
 use gw_traits::CodeStore;
-use gw_types::{bytes::Bytes, core::ScriptHashType, packed::RollupConfig, prelude::*};
+use gw_types::{bytes::Bytes, core::ScriptHashType, h256::*, packed::RollupConfig, prelude::*};
 use std::convert::TryInto;
 
 const GENESIS_BLOCK_HASH: [u8; 32] = [
@@ -40,7 +40,7 @@ fn test_init_genesis() {
     assert!(tree.get_account_count().unwrap() > 0);
 
     // check prev txs state
-    let prev_txs_state: [u8; 32] = tree.calculate_state_checkpoint().unwrap().into();
+    let prev_txs_state: [u8; 32] = tree.calculate_state_checkpoint().unwrap();
     let genesis_prev_state_checkpoint: [u8; 32] = {
         let txs = genesis.genesis.as_reader().raw().submit_transactions();
         txs.prev_state_checkpoint().unpack()

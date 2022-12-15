@@ -7,11 +7,11 @@ use std::{
 
 use bytes::Bytes;
 use futures::{StreamExt, TryStreamExt};
-use gw_common::H256;
 use gw_config::SyncServerConfig;
 use gw_p2p_network::{FnSpawn, P2P_SYNC_PROTOCOL, P2P_SYNC_PROTOCOL_NAME};
 use gw_telemetry::traits::{OpenTelemetrySpanExt, TraceContextExt};
 use gw_types::{
+    h256::*,
     packed::{
         self, BlockSync, BlockSyncUnion, Confirmed, Found, L2Transaction, LocalBlock, NextMemBlock,
         P2PSyncRequest, P2PSyncRequestReader, P2PSyncResponse, PushTransaction, Revert, Submitted,
@@ -56,7 +56,7 @@ impl BlockSyncServerState {
         self.buffer.insert(
             number,
             BlockMessages {
-                hash: hash.into(),
+                hash,
                 messages: vec![msg.clone()],
             },
         );
@@ -127,7 +127,7 @@ impl BlockSyncServerState {
         self.buffer.insert(
             number,
             BlockMessages {
-                hash: [0; 32].into(),
+                hash: [0; 32],
                 messages: vec![msg.clone()],
             },
         );

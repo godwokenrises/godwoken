@@ -8,16 +8,16 @@ use gw_common::registry_address::RegistryAddress;
 use gw_common::state::{
     build_account_field_key, State, GW_ACCOUNT_NONCE_TYPE, GW_ACCOUNT_SCRIPT_HASH_TYPE,
 };
-use gw_common::H256;
 use gw_generator::traits::StateExt;
 use gw_smt::smt::{Blake2bHasher, SMT, SMTH256};
-use gw_smt::smt_h256_ext::{H256Ext, SMTH256Ext};
+use gw_smt::smt_h256_ext::SMTH256Ext;
 use gw_smt::sparse_merkle_tree::default_store::DefaultStore;
 use gw_store::state::traits::JournalDB;
 use gw_store::state::MemStateDB;
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
 use gw_types::core::{ChallengeTargetType, Status};
+use gw_types::h256::*;
 use gw_types::offchain::RunResult;
 use gw_types::packed::{
     AccountMerkleState, BlockMerkleState, Byte32, CCTransactionSignatureWitness,
@@ -303,12 +303,12 @@ impl MockBlockParam {
             .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
             .compile(vec![SMTH256::from_u64(self.number)])?;
         let post_block = {
-            let post_block_root = block_proof
+            let post_block_root: H256 = block_proof
                 .compute_root::<Blake2bHasher>(vec![(
                     raw_block.smt_key().into(),
                     raw_block.hash().into(),
                 )])?
-                .to_h256();
+                .into();
             let block_count = self.number + 1;
             BlockMerkleState::new_builder()
                 .merkle_root(post_block_root.pack())
@@ -343,7 +343,7 @@ impl MockBlockParam {
     ) -> Result<VerifyContext> {
         let mut tree: SMT<DefaultStore<SMTH256>> = Default::default();
         for (index, witness_hash) in self.withdrawals.witness_hashes.iter().enumerate() {
-            tree.update(SMTH256::from_u32(index as u32), witness_hash.to_smt_h256())?;
+            tree.update(SMTH256::from_u32(index as u32), (*witness_hash).into())?;
         }
 
         let withdrawal_index = self.withdrawals.witness_hashes.len().saturating_sub(1) as u32;
@@ -388,11 +388,11 @@ impl MockBlockParam {
         let kv_state: Vec<(H256, H256)> = vec![
             (
                 build_account_field_key(sender_id, GW_ACCOUNT_SCRIPT_HASH_TYPE),
-                sender_script.hash().into(),
+                sender_script.hash(),
             ),
             (
                 build_account_field_key(receiver_id, GW_ACCOUNT_SCRIPT_HASH_TYPE),
-                receiver_script.hash().into(),
+                receiver_script.hash(),
             ),
             (
                 build_account_field_key(sender_id, GW_ACCOUNT_NONCE_TYPE),
@@ -404,8 +404,7 @@ impl MockBlockParam {
             Unpack::<u32>::unpack(&tx.raw().nonce())
         );
 
-        let touched_keys: Vec<SMTH256> =
-            kv_state.iter().map(|(key, _)| key.to_smt_h256()).collect();
+        let touched_keys: Vec<SMTH256> = kv_state.iter().map(|(key, _)| (*key).into()).collect();
         let kv_state_proof = {
             let smt = mem_tree.inner_smt_tree();
             smt.merkle_proof(touched_keys.clone())?
@@ -582,12 +581,12 @@ impl RawBlockWithdrawalRequests {
     }
 
     fn contains(&self, req: &WithdrawalRequestExtra) -> bool {
-        self.witness_hashes.contains(&req.witness_hash().into())
+        self.witness_hashes.contains(&req.witness_hash())
     }
 
     fn push(&mut self, req: WithdrawalRequestExtra, post_account: AccountMerkleState) {
         let wth_index = self.witness_hashes.len() as u32;
-        let witness_hash: H256 = req.witness_hash().into();
+        let witness_hash: H256 = req.witness_hash();
         let merkle_leaf_hash = ckb_merkle_leaf_hash(wth_index, &witness_hash);
 
         self.witness_hashes.push(witness_hash);
@@ -638,12 +637,12 @@ impl RawBlockTransactions {
     }
 
     fn contains(&self, tx: &L2Transaction) -> bool {
-        self.witness_hashes.contains(&tx.witness_hash().into())
+        self.witness_hashes.contains(&tx.witness_hash())
     }
 
     fn push(&mut self, tx: L2Transaction, post_account: AccountMerkleState) {
         let tx_index = self.merkle_leaf_hashes.len() as u32;
-        let witness_hash: H256 = tx.witness_hash().into();
+        let witness_hash: H256 = tx.witness_hash();
         let merkle_leaf_hash = ckb_merkle_leaf_hash(tx_index, &witness_hash);
 
         self.witness_hashes.push(witness_hash);
