@@ -83,10 +83,10 @@ clean-via-docker:
 dist: clean-via-docker all-via-docker
 
 install/ckb-binary-patcher:
-	echo "install ckb-binary-patcher from https://github.com/nervosnetwork/ckb-binary-patcher/commits/master"
-	cargo install --git https://github.com/nervosnetwork/ckb-binary-patcher.git \
-				  --rev b9489de4b3b9d59bc29bce945279bc6f28413113
-	ckb-binary-patcher --version
+	(which ckb-binary-patcher) \
+	|| (echo "install ckb-binary-patcher from https://github.com/nervosnetwork/ckb-binary-patcher/commits/master" \
+	&& cargo install --git https://github.com/nervosnetwork/ckb-binary-patcher.git \
+					 --rev b9489de4b3b9d59bc29bce945279bc6f28413113)
 patch-generator: install/ckb-binary-patcher
 	ckb-binary-patcher --remove-a -i build/generator -o build/generator.aot
 	mv build/generator build/generator.asm
