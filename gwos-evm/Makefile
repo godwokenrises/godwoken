@@ -39,8 +39,6 @@ VALIDATOR_FLAGS := -DGW_VALIDATOR
 
 MOLC := moleculec
 MOLC_VERSION := $(shell cat $(GW_SCRIPTS)/Makefile | egrep "MOLC_VERSION :=" | awk '{print $$3}')
-PROTOCOL_VERSION := bf76c19c43e4e59cfaba871e722681bf7d3d6948
-PROTOCOL_SCHEMA_URL := https://raw.githubusercontent.com/nervosnetwork/godwoken/${PROTOCOL_VERSION}/crates/types/schemas
 
 ALL_OBJS := build/execution_state.o build/baseline.o build/analysis.o build/instruction_metrics.o build/instruction_names.o build/execution.o build/instructions.o build/instructions_calls.o build/evmone.o \
   build/keccak.o build/keccakf800.o \
@@ -210,11 +208,11 @@ check-moleculec-version:
 
 build/blockchain.mol:
 	mkdir -p build
-	curl -L -o $@ ${PROTOCOL_SCHEMA_URL}/blockchain.mol
+	cp ../gwos/crates/types/schemas/blockchain.mol $@
 
 build/godwoken.mol:
 	mkdir -p build
-	curl -L -o $@ ${PROTOCOL_SCHEMA_URL}/godwoken.mol
+	cp ../gwos/crates/types/schemas/godwoken.mol $@
 
 build/blockchain.h: build/blockchain.mol
 	${MOLC} --language c --schema-file $< > $@
