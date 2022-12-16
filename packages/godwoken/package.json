@@ -1,0 +1,19 @@
+{
+  "name": "@godwoken-web3/godwoken",
+  "version": "1.9.1",
+  "private": true,
+  "main": "lib/index.js",
+  "scripts": {
+    "regenerate-schemas": "cd scripts && ./regenerate-schemas.sh && cd -;",
+    "fmt": "prettier --write \"src/**/*.ts\" package.json",
+    "lint": "eslint -c ../../.eslintrc.js \"src/**/*.ts\"",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@ckb-lumos/base": "0.18.0-rc6",
+    "@ckb-lumos/toolkit": "0.18.0-rc6",
+    "cross-fetch": "^3.1.5",
+    "jsbi": "^4.2.0",
+    "winston": "^3.7.2"
+  }
+}

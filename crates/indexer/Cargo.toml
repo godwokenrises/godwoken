@@ -1,0 +1,39 @@
+[package]
+name = "gw-web3-indexer"
+version = "0.1.0"
+authors = ["Nervos Network"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+gw-types = { git = "https://github.com/nervosnetwork/godwoken.git", rev = "6a24f9accd8f4463f122ebe1286412d1f8476247" }
+gw-common = { git = "https://github.com/nervosnetwork/godwoken.git", rev = "6a24f9accd8f4463f122ebe1286412d1f8476247" }
+gw-jsonrpc-types = { git = "https://github.com/nervosnetwork/godwoken.git", rev = "6a24f9accd8f4463f122ebe1286412d1f8476247" }
+ckb-hash = "0.100.0"
+ckb-types = "0.100.0"
+anyhow = { version = "1.0", features = ["backtrace"] }
+smol = "1.2.5"
+thiserror = "1.0"
+sqlx = { version = "0.6.0", features = [ "runtime-async-std-native-tls", "postgres", "chrono", "decimal", "bigdecimal" ] }
+rust_decimal = "1.10.3"
+num-bigint = "0.4"
+faster-hex = "0.5.0"
+log = "0.4"
+rlp = "0.5"
+sha3 = "0.9.1"
+ethabi = "15.0.0"
+toml = "0.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+env_logger = "0.8.3"
+jsonrpc-core = "18.0"
+gw-web3-rpc-client = { path = "../rpc-client" }
+lazy_static = "1.4"
+sentry = "0.23.0"
+sentry-log = "0.23.0"
+dotenv = "0.15.0"
+rayon = "1.5.3"
+futures = "0.3.21"
+itertools = "0.10.3"
+num_cpus = "1.0"

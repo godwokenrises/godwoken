@@ -1,0 +1,35 @@
+{
+  "name": "godwoken-web3",
+  "main": "index.js",
+  "license": "MIT",
+  "private": true,
+  "workspaces": [
+    "packages/godwoken",
+    "packages/api-server",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:godwoken": "yarn workspace @godwoken-web3/godwoken run build",
+    "build:api-server": "yarn workspace @godwoken-web3/api-server run build",
+    "build": "yarn workspaces run build",
+    "fmt": "yarn workspaces run fmt",
+    "lint": "yarn workspaces run lint",
+    "knex": "yarn workspace @godwoken-web3/api-server run knex",
+    "migrate:make": "yarn workspace @godwoken-web3/api-server run migrate:make",
+    "migrate:latest": "yarn workspace @godwoken-web3/api-server run migrate:latest",
+    "migrate-accounts": "yarn workspace @godwoken-web3/api-server run migrate-accounts",
+    "start": "yarn workspace @godwoken-web3/api-server run start",
+    "start:prod": "yarn workspace @godwoken-web3/api-server run start:prod",
+    "start:pm2": "yarn workspace @godwoken-web3/api-server run start:pm2",
+    "test": "yarn workspace @godwoken-web3/api-server run test",
+    "cli": "yarn workspace @godwoken-web3/api-server run cli"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.8.0",
+    "@typescript-eslint/parser": "^5.8.0",
+    "eslint": "^8.5.0",
+    "prettier": "^2.2.1"
+  },
+  "version": "1.9.1",
+  "author": "hupeng <bitrocks.hu@gmail.com>"
+}
