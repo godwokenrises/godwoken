@@ -91,7 +91,7 @@ async fn test_submit_block() {
     };
     let output_stake_cell = {
         let lock_args = StakeLockArgs::new_builder()
-            .stake_block_timepoint(Pack::pack(&1))
+            .stake_finalized_timepoint(Pack::pack(&1))
             .build();
         build_rollup_locked_cell(
             &rollup_type_script.hash(),
@@ -211,7 +211,7 @@ async fn test_replace_rollup_cell_lock() {
     };
     let output_stake_cell = {
         let lock_args = StakeLockArgs::new_builder()
-            .stake_block_timepoint(Pack::pack(&1))
+            .stake_finalized_timepoint(Pack::pack(&1))
             .build();
         build_rollup_locked_cell(
             &rollup_type_script.hash(),
@@ -346,7 +346,7 @@ async fn test_downgrade_rollup_cell() {
     };
     let output_stake_cell = {
         let lock_args = StakeLockArgs::new_builder()
-            .stake_block_timepoint(Pack::pack(&1))
+            .stake_finalized_timepoint(Pack::pack(&1))
             .build();
         build_rollup_locked_cell(
             &rollup_type_script.hash(),
@@ -480,7 +480,7 @@ async fn test_v1_block_timestamp_smaller_or_equal_than_previous_block_in_submit_
     };
     let output_stake_cell = {
         let lock_args = StakeLockArgs::new_builder()
-            .stake_block_timepoint(Pack::pack(&1))
+            .stake_finalized_timepoint(Pack::pack(&1))
             .build();
         build_rollup_locked_cell(
             &rollup_type_script.hash(),
@@ -690,7 +690,7 @@ async fn test_v1_block_timestamp_bigger_than_rollup_input_since_in_submit_block(
     };
     let output_stake_cell = {
         let lock_args = StakeLockArgs::new_builder()
-            .stake_block_timepoint(Pack::pack(&1))
+            .stake_finalized_timepoint(Pack::pack(&1))
             .build();
         build_rollup_locked_cell(
             &rollup_type_script.hash(),
@@ -831,7 +831,7 @@ async fn test_v0_v1_wrong_global_state_tip_block_timestamp_in_submit_block() {
     };
     let output_stake_cell = {
         let lock_args = StakeLockArgs::new_builder()
-            .stake_block_timepoint(Pack::pack(&1))
+            .stake_finalized_timepoint(Pack::pack(&1))
             .build();
         build_rollup_locked_cell(
             &rollup_type_script.hash(),
@@ -1058,7 +1058,7 @@ async fn test_check_reverted_cells_in_submit_block() {
     };
     let output_stake_cell = {
         let lock_args = StakeLockArgs::new_builder()
-            .stake_block_timepoint(Pack::pack(&1))
+            .stake_finalized_timepoint(Pack::pack(&1))
             .build();
         build_rollup_locked_cell(
             &rollup_type_script.hash(),
@@ -1101,7 +1101,7 @@ async fn test_check_reverted_cells_in_submit_block() {
         let args = CustodianLockArgs::new_builder()
             .deposit_lock_args(deposit_args.clone())
             .deposit_block_hash(Pack::pack(&revert_block_hash))
-            .deposit_block_timepoint(Pack::pack(&revert_block_number))
+            .deposit_finalized_timepoint(Pack::pack(&revert_block_number))
             .build();
         let cell = build_rollup_locked_cell(
             &rollup_type_script.hash(),
@@ -1126,7 +1126,7 @@ async fn test_check_reverted_cells_in_submit_block() {
         let owner_lock = Script::default();
         let lock_args = WithdrawalLockArgs::new_builder()
             .withdrawal_block_hash(Pack::pack(&revert_block_hash))
-            .withdrawal_block_timepoint(Pack::pack(&revert_block_number))
+            .withdrawal_finalized_timepoint(Pack::pack(&revert_block_number))
             .owner_lock_hash(Pack::pack(&owner_lock.hash()))
             .build();
         let mut args = Vec::new();
@@ -1145,7 +1145,7 @@ async fn test_check_reverted_cells_in_submit_block() {
     let output_reverted_custodian_cell = {
         let args = CustodianLockArgs::new_builder()
             .deposit_block_hash(Pack::pack(&[0u8; 32]))
-            .deposit_block_timepoint(Pack::pack(&0))
+            .deposit_finalized_timepoint(Pack::pack(&0))
             .build();
         build_rollup_locked_cell(
             &rollup_type_script.hash(),
@@ -1163,7 +1163,7 @@ async fn test_check_reverted_cells_in_submit_block() {
             .map(|_| {
                 let args = CustodianLockArgs::new_builder()
                     .deposit_block_hash(Pack::pack(&[0u8; 32]))
-                    .deposit_block_timepoint(Pack::pack(&0))
+                    .deposit_finalized_timepoint(Pack::pack(&0))
                     .build();
                 let cell = build_rollup_locked_cell(
                     &rollup_type_script.hash(),
@@ -1183,7 +1183,7 @@ async fn test_check_reverted_cells_in_submit_block() {
             .map(|_| {
                 let args = CustodianLockArgs::new_builder()
                     .deposit_block_hash(Pack::pack(&[0u8; 32]))
-                    .deposit_block_timepoint(Pack::pack(&0))
+                    .deposit_finalized_timepoint(Pack::pack(&0))
                     .build();
                 build_rollup_locked_cell(
                     &rollup_type_script.hash(),
@@ -1478,7 +1478,7 @@ async fn test_withdrawal_cell_lock_args_with_owner_lock_in_submit_block() {
     let output_stake_cell = {
         let block_number = block_result.block.raw().number();
         let lock_args = StakeLockArgs::new_builder()
-            .stake_block_timepoint(block_number)
+            .stake_finalized_timepoint(block_number)
             .build();
         build_rollup_locked_cell(
             &rollup_type_script.hash(),
@@ -1519,7 +1519,7 @@ async fn test_withdrawal_cell_lock_args_with_owner_lock_in_submit_block() {
     // build withdrawal output
     let output_withdrawal_cell = {
         let lock_args = WithdrawalLockArgs::new_builder()
-            .withdrawal_block_timepoint(block_result.block.raw().number())
+            .withdrawal_finalized_timepoint(block_result.block.raw().number())
             .withdrawal_block_hash(Pack::pack(&block_result.block.raw().hash()))
             .account_script_hash(Pack::pack(&account_script.hash()))
             .owner_lock_hash(Pack::pack(&account_script.hash()))

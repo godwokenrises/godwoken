@@ -39,12 +39,12 @@ fn test_unlock_withdrawal_via_finalize_by_input_owner_cell() {
     let rollup_type_hash = rollup_type_script.hash();
     let (mut verify_ctx, script_ctx) = build_verify_context();
 
-    let withdrawal_block_timepoint =
+    let withdrawal_finalized_timepoint =
         Timepoint::from_block_number(rand::random::<u32>() as u64 + 100);
     let (block_merkle_state, last_finalized_timepoint) =
         mock_global_state_timepoint_by_finalized_timepoint(
             &verify_ctx.rollup_config(),
-            &withdrawal_block_timepoint,
+            &withdrawal_finalized_timepoint,
         );
     let rollup_cell = {
         let global_state = GlobalState::new_builder()
@@ -96,7 +96,7 @@ fn test_unlock_withdrawal_via_finalize_by_input_owner_cell() {
         let lock_args = WithdrawalLockArgs::new_builder()
             .account_script_hash(random_always_success_script().to_gw().hash().pack())
             .withdrawal_block_hash(random_always_success_script().to_gw().hash().pack())
-            .withdrawal_block_timepoint(withdrawal_block_timepoint.full_value().pack())
+            .withdrawal_finalized_timepoint(withdrawal_finalized_timepoint.full_value().pack())
             .owner_lock_hash(owner_lock.hash().pack())
             .build();
         let mut args = Vec::new();
@@ -187,12 +187,12 @@ fn test_unlock_withdrawal_via_finalize_by_switch_indexed_output_to_owner_lock() 
     let rollup_type_hash = rollup_type_script.hash();
     let (mut verify_ctx, script_ctx) = build_verify_context();
 
-    let withdrawal_block_timepoint =
+    let withdrawal_finalized_timepoint =
         Timepoint::from_block_number(rand::random::<u32>() as u64 + 100);
     let (block_merkle_state, last_finalized_timepoint) =
         mock_global_state_timepoint_by_finalized_timepoint(
             &verify_ctx.rollup_config(),
-            &withdrawal_block_timepoint,
+            &withdrawal_finalized_timepoint,
         );
     let rollup_cell = {
         let global_state = GlobalState::new_builder()
@@ -219,7 +219,7 @@ fn test_unlock_withdrawal_via_finalize_by_switch_indexed_output_to_owner_lock() 
         let lock_args = WithdrawalLockArgs::new_builder()
             .account_script_hash(random_always_success_script().to_gw().hash().pack())
             .withdrawal_block_hash(random_always_success_script().to_gw().hash().pack())
-            .withdrawal_block_timepoint(withdrawal_block_timepoint.full_value().pack())
+            .withdrawal_finalized_timepoint(withdrawal_finalized_timepoint.full_value().pack())
             .owner_lock_hash(owner_lock.hash().pack())
             .build();
 
@@ -365,12 +365,12 @@ fn test_unlock_withdrawal_via_finalize_fallback_to_input_owner_cell() {
     let rollup_type_hash = rollup_type_script.hash();
     let (mut verify_ctx, script_ctx) = build_verify_context();
 
-    let withdrawal_block_timepoint =
+    let withdrawal_finalized_timepoint =
         Timepoint::from_block_number(rand::random::<u32>() as u64 + 100);
     let (block_merkle_state, last_finalized_timepoint) =
         mock_global_state_timepoint_by_finalized_timepoint(
             &verify_ctx.rollup_config(),
-            &withdrawal_block_timepoint,
+            &withdrawal_finalized_timepoint,
         );
     let rollup_cell = {
         let global_state = GlobalState::new_builder()
@@ -417,7 +417,7 @@ fn test_unlock_withdrawal_via_finalize_fallback_to_input_owner_cell() {
         let lock_args = WithdrawalLockArgs::new_builder()
             .account_script_hash(random_always_success_script().to_gw().hash().pack())
             .withdrawal_block_hash(random_always_success_script().to_gw().hash().pack())
-            .withdrawal_block_timepoint(withdrawal_block_timepoint.full_value().pack())
+            .withdrawal_finalized_timepoint(withdrawal_finalized_timepoint.full_value().pack())
             .owner_lock_hash(owner_lock.hash().pack())
             .build();
 

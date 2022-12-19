@@ -137,8 +137,8 @@ pub fn main() -> Result<(), Error> {
             };
             let custodian_deposit_block_hash: [u8; 32] =
                 custodian_lock_args.deposit_block_hash().unpack();
-            let custodian_deposit_block_timepoint: u64 =
-                custodian_lock_args.deposit_block_timepoint().unpack();
+            let custodian_deposit_finalized_timepoint: u64 =
+                custodian_lock_args.deposit_finalized_timepoint().unpack();
             let global_state = search_rollup_state(&rollup_type_hash, Source::Input)?
                 .ok_or(Error::RollupCellNotFound)?;
             let config = load_rollup_config(&global_state.rollup_config_hash().unpack())?;
@@ -146,7 +146,7 @@ pub fn main() -> Result<(), Error> {
                 != config.custodian_script_type_hash().as_slice()
                 || custodian_lock.hash_type() != ScriptHashType::Type.into()
                 || custodian_deposit_block_hash != FINALIZED_BLOCK_HASH
-                || custodian_deposit_block_timepoint != FINALIZED_BLOCK_TIMEPOINT
+                || custodian_deposit_finalized_timepoint != FINALIZED_BLOCK_TIMEPOINT
             {
                 return Err(Error::InvalidOutput);
             }
@@ -156,9 +156,9 @@ pub fn main() -> Result<(), Error> {
             Ok(())
         }
         UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(_unlock_args) => {
-            let withdrawal_block_timepoint =
-                Timepoint::from_full_value(lock_args.withdrawal_block_timepoint().unpack());
-            match &withdrawal_block_timepoint {
+            let withdrawal_finalized_timepoint =
+                Timepoint::from_full_value(lock_args.withdrawal_finalized_timepoint().unpack());
+            match &withdrawal_finalized_timepoint {
                 Timepoint::BlockNumber(_) => {
                     let global_state =
                         match search_rollup_state(&rollup_type_hash, Source::CellDep)? {
@@ -170,7 +170,7 @@ pub fn main() -> Result<(), Error> {
                             }
                         };
                     let config = load_rollup_config(&global_state.rollup_config_hash().unpack())?;
-                    if !is_finalized(&config, &global_state, &withdrawal_block_timepoint) {
+                    if !is_finalized(&config, &global_state, &withdrawal_finalized_timepoint) {
                         return Err(Error::NotFinalized);
                     }
                 }

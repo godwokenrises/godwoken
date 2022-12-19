@@ -142,7 +142,7 @@ Like deposit cells, custodian cells have pre-determined `code_hash` and `hash_ty
 ```
 table CustodianLockArgs {
     deposit_block_hash: Byte32,
-    deposit_block_timepoint: Uint64,
+    deposit_finalized_timepoint: Uint64,
     // used for revert this cell to deposit request cell
     // after finalize, this lock is meaningless
     deposit_lock_args: DepositLockArgs,
