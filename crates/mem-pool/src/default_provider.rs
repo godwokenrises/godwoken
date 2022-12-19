@@ -52,7 +52,7 @@ impl MemPoolProvider for DefaultMemPoolProvider {
         loop {
             l1_block_number = l1_block_number.saturating_sub(1);
             let parent_block_hash = match rpc_client.get_header_by_number(l1_block_number).await? {
-                Some(header) => header.inner.parent_hash.0.into(),
+                Some(header) => header.inner.parent_hash.0,
                 None => continue,
             };
             match rpc_client.get_block_median_time(parent_block_hash).await? {

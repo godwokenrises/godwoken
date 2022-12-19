@@ -8,12 +8,12 @@ use anyhow::{anyhow, Result};
 use async_jsonrpc_client::Params as ClientParams;
 use ckb_types::core::hardfork::HardForkSwitch;
 use ckb_types::prelude::Entity;
-use gw_common::H256;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, Consensus, Uint32};
 use gw_types::offchain::{CellStatus, CellWithStatus, CompatibleFinalizedTimepoint, DepositInfo};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
+    h256::H256,
     offchain::CellInfo,
     packed::{
         Block, CellOutput, CustodianLockArgs, CustodianLockArgsReader, DepositLockArgs,

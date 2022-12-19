@@ -58,7 +58,7 @@ fn get_allow_list(
         rpc_config
             .sudt_proxy_code_hashes
             .into_iter()
-            .map(|hash| hash.0.into())
+            .map(|hash| hash.0)
             .collect(),
     );
     (

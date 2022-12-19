@@ -12,8 +12,9 @@ detect-asm = ["ckb-vm/detect-asm", "ckb-vm-aot"]
 enable-always-success-lock = []
 
 [dependencies]
-gw-types = { path = "../types" }
-gw-common = { path = "../common" }
+gw-types = { path = "../../gwos/crates/types" }
+gw-common = { path = "../../gwos/crates/common" }
+gw-smt = { path = "../smt" }
 gw-config = { path = "../config" }
 gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }

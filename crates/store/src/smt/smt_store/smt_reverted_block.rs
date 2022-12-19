@@ -3,16 +3,15 @@
 use std::convert::TryInto;
 
 use crate::traits::{chain_store::ChainStore, kv_store::KVStore};
-use gw_common::{
-    smt::SMT,
+use gw_db::schema::{COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF};
+use gw_smt::{
+    smt::{SMT, SMTH256},
     sparse_merkle_tree::{
         error::Error as SMTError,
         traits::{StoreReadOps, StoreWriteOps},
         BranchKey, BranchNode,
     },
-    H256,
 };
-use gw_db::schema::{COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF};
 
 use crate::smt::serde::{branch_key_to_vec, branch_node_to_vec, slice_to_branch_node};
 
@@ -21,7 +20,7 @@ pub struct SMTRevertedBlockStore<DB>(DB);
 impl<DB: KVStore + ChainStore> SMTRevertedBlockStore<DB> {
     pub fn to_smt(self) -> anyhow::Result<SMT<Self>> {
         let root = self.inner_store().get_reverted_block_smt_root()?;
-        Ok(SMT::new(root, self))
+        Ok(SMT::new(root.into(), self))
     }
 }
 
@@ -35,7 +34,7 @@ impl<DB: KVStore> SMTRevertedBlockStore<DB> {
     }
 }
 
-impl<DB: KVStore> StoreReadOps<H256> for SMTRevertedBlockStore<DB> {
+impl<DB: KVStore> StoreReadOps<SMTH256> for SMTRevertedBlockStore<DB> {
     fn get_branch(&self, branch_key: &BranchKey) -> Result<Option<BranchNode>, SMTError> {
         match self.0.get(
             COLUMN_REVERTED_BLOCK_SMT_BRANCH,
@@ -46,14 +45,14 @@ impl<DB: KVStore> StoreReadOps<H256> for SMTRevertedBlockStore<DB> {
         }
     }
 
-    fn get_leaf(&self, leaf_key: &H256) -> Result<Option<H256>, SMTError> {
+    fn get_leaf(&self, leaf_key: &SMTH256) -> Result<Option<SMTH256>, SMTError> {
         match self
             .0
             .get(COLUMN_REVERTED_BLOCK_SMT_LEAF, leaf_key.as_slice())
         {
             Some(slice) if 32 == slice.len() => {
                 let leaf: [u8; 32] = slice.as_ref().try_into().unwrap();
-                Ok(Some(H256::from(leaf)))
+                Ok(Some(leaf.into()))
             }
             Some(_) => Err(SMTError::Store("get corrupted leaf".to_string())),
             None => Ok(None),
@@ -61,7 +60,7 @@ impl<DB: KVStore> StoreReadOps<H256> for SMTRevertedBlockStore<DB> {
     }
 }
 
-impl<DB: KVStore> StoreWriteOps<H256> for SMTRevertedBlockStore<DB> {
+impl<DB: KVStore> StoreWriteOps<SMTH256> for SMTRevertedBlockStore<DB> {
     fn insert_branch(&mut self, branch_key: BranchKey, branch: BranchNode) -> Result<(), SMTError> {
         self.0
             .insert_raw(
@@ -74,7 +73,7 @@ impl<DB: KVStore> StoreWriteOps<H256> for SMTRevertedBlockStore<DB> {
         Ok(())
     }
 
-    fn insert_leaf(&mut self, leaf_key: H256, leaf: H256) -> Result<(), SMTError> {
+    fn insert_leaf(&mut self, leaf_key: SMTH256, leaf: SMTH256) -> Result<(), SMTError> {
         self.0
             .insert_raw(
                 COLUMN_REVERTED_BLOCK_SMT_LEAF,
@@ -97,7 +96,7 @@ impl<DB: KVStore> StoreWriteOps<H256> for SMTRevertedBlockStore<DB> {
         Ok(())
     }
 
-    fn remove_leaf(&mut self, leaf_key: &H256) -> Result<(), SMTError> {
+    fn remove_leaf(&mut self, leaf_key: &SMTH256) -> Result<(), SMTError> {
         self.0
             .delete(COLUMN_REVERTED_BLOCK_SMT_LEAF, leaf_key.as_slice())
             .map_err(|err| SMTError::Store(format!("delete error {}", err)))?;

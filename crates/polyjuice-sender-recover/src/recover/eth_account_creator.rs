@@ -3,8 +3,8 @@
 use anyhow::{anyhow, bail, Result};
 use gw_common::builtins::{ETH_REGISTRY_ACCOUNT_ID, RESERVED_ACCOUNT_ID};
 use gw_common::state::State;
-use gw_common::H256;
 use gw_generator::account_lock_manage::secp256k1::Secp256k1Eth;
+use gw_types::h256::*;
 use gw_types::packed::{
     BatchCreateEthAccounts, Fee, L2Transaction, MetaContractArgs, RawL2Transaction, ScriptVec,
 };
@@ -30,7 +30,7 @@ impl EthAccountCreator {
         let creator_script_hash = {
             let script =
                 creator_wallet.eth_lock_script(&ctx.rollup_script_hash, &ctx.eth_lock_code_hash)?;
-            script.hash().into()
+            script.hash()
         };
 
         let creator = EthAccountCreator {
@@ -89,7 +89,7 @@ impl EthAccountCreator {
             creator_registry_address,
             meta_contract_script_hash,
         )?;
-        let sign = self.creator_wallet.sign_message(signing_message.into())?;
+        let sign = self.creator_wallet.sign_message(signing_message)?;
 
         let tx = L2Transaction::new_builder()
             .raw(raw_l2tx)

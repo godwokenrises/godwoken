@@ -11,7 +11,6 @@ use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     ckb_decimal::CKBCapacity,
     state::State,
-    H256,
 };
 use gw_generator::{
     error::{DepositError, WithdrawalError},
@@ -22,6 +21,7 @@ use gw_store::{
     state::{history::history_state::RWConfig, BlockStateDB},
     traits::chain_store::ChainStore,
 };
+use gw_types::h256::*;
 use gw_types::{
     core::ScriptHashType,
     packed::{
@@ -149,7 +149,7 @@ async fn test_deposit_and_withdrawal() {
             "3 builtin accounts plus 1 deposit"
         );
         let user_id = tree
-            .get_account_id_by_script_hash(&user_script_hash.into())
+            .get_account_id_by_script_hash(&user_script_hash)
             .unwrap()
             .expect("account exists");
         assert_ne!(user_id, 0);
@@ -293,7 +293,7 @@ async fn test_deposit_u128_overflow() {
             args.pack()
         })
         .build();
-    let sudt_script_hash: H256 = sudt_script.hash().into();
+    let sudt_script_hash: H256 = sudt_script.hash();
 
     let capacity = 600_00000000;
     let alice_script = Script::new_builder()
@@ -305,7 +305,7 @@ async fn test_deposit_u128_overflow() {
             args.pack()
         })
         .build();
-    let alice_script_hash: H256 = alice_script.hash().into();
+    let alice_script_hash: H256 = alice_script.hash();
 
     deposite_to_chain(
         &mut chain,
@@ -327,7 +327,7 @@ async fn test_deposit_u128_overflow() {
             args.pack()
         })
         .build();
-    let bob_script_hash: H256 = bob_script.hash().into();
+    let bob_script_hash: H256 = bob_script.hash();
 
     deposite_to_chain(
         &mut chain,
@@ -390,7 +390,7 @@ async fn test_deposit_u128_overflow() {
     let l2_sudt_script_hash =
         build_l2_sudt_script(chain.generator().rollup_context(), &sudt_script_hash).hash();
     let sudt_id = tree
-        .get_account_id_by_script_hash(&l2_sudt_script_hash.into())
+        .get_account_id_by_script_hash(&l2_sudt_script_hash)
         .unwrap()
         .expect("sudt exists");
 
@@ -464,7 +464,7 @@ async fn test_overdraft() {
     let withdraw_capacity = 600_00000000u64;
     let err = withdrawal_from_chain(
         &mut chain,
-        user_script_hash.into(),
+        user_script_hash,
         withdraw_capacity,
         H256::zero(),
         0,
@@ -482,7 +482,7 @@ async fn test_overdraft() {
         let state = mem_pool.mem_pool_state().load_state_db();
 
         let user_addr = state
-            .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &user_script_hash.into())
+            .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &user_script_hash)
             .unwrap()
             .unwrap();
 
@@ -562,7 +562,7 @@ async fn test_produce_block_after_re_inject_withdrawal() {
             "3 builtin accounts plus 1 deposit"
         );
         let user_id = tree
-            .get_account_id_by_script_hash(&user_script_hash.into())
+            .get_account_id_by_script_hash(&user_script_hash)
             .unwrap()
             .expect("account exists");
         assert_ne!(user_id, 0);

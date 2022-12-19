@@ -9,7 +9,7 @@ use crate::write_batch::StoreWriteBatch;
 use crate::{snapshot::StoreSnapshot, transaction::StoreTransaction};
 use anyhow::Result;
 use gw_common::error::Error;
-use gw_common::smt::Blake2bHasher;
+use gw_smt::smt::Blake2bHasher;
 
 use gw_db::{
     schema::{Col, COLUMNS},

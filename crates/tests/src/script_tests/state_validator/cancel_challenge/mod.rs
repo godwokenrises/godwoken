@@ -22,7 +22,6 @@ use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::merkle_utils::ckb_merkle_leaf_hash;
 use gw_common::merkle_utils::CBMT;
 use gw_common::state::State;
-use gw_common::H256;
 use gw_generator::account_lock_manage::always_success::AlwaysSuccess;
 use gw_generator::account_lock_manage::eip712::{
     traits::EIP712Encode,
@@ -34,6 +33,7 @@ use gw_store::state::traits::JournalDB;
 use gw_store::state::MemStateDB;
 use gw_types::core::AllowedEoaType;
 use gw_types::core::SigningType;
+use gw_types::h256::*;
 use gw_types::packed::AllowedTypeHash;
 use gw_types::packed::CCWithdrawalWitness;
 use gw_types::packed::WithdrawalRequestExtra;
@@ -100,7 +100,7 @@ async fn test_burn_challenge_capacity() {
         .build();
     // setup chain
     let mut account_lock_manage = AccountLockManage::default();
-    account_lock_manage.register_lock_algorithm(eoa_lock_type_hash.into(), Arc::new(AlwaysSuccess));
+    account_lock_manage.register_lock_algorithm(eoa_lock_type_hash, Arc::new(AlwaysSuccess));
     let mut chain = setup_chain_with_account_lock_manage(
         rollup_type_script.clone(),
         rollup_config.clone(),
@@ -308,11 +308,11 @@ async fn test_burn_challenge_capacity() {
 
     tree.set_state_tracker(Default::default());
     let withdrawal_address = tree
-        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &sender_script.hash().into())
+        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &sender_script.hash())
         .unwrap()
         .unwrap();
     let sender_id = tree
-        .get_account_id_by_script_hash(&sender_script.hash().into())
+        .get_account_id_by_script_hash(&sender_script.hash())
         .unwrap()
         .unwrap();
     tree.get_script_hash(sender_id).unwrap();
@@ -334,9 +334,10 @@ async fn test_burn_challenge_capacity() {
     let kv_state_proof: Bytes = {
         let db = chain.store().begin_transaction();
         let smt = SMTStateStore::new(&db).to_smt().unwrap();
-        smt.merkle_proof(touched_keys.clone())
+        let smt_touched_keys: Vec<_> = touched_keys.iter().map(|k| (*k).into()).collect();
+        smt.merkle_proof(smt_touched_keys.clone())
             .unwrap()
-            .compile(touched_keys)
+            .compile(smt_touched_keys)
             .unwrap()
             .0
             .into()
@@ -349,7 +350,7 @@ async fn test_burn_challenge_capacity() {
                 .into_iter()
                 .enumerate()
                 .map(|(idx, withdrawal)| {
-                    let hash: H256 = withdrawal.witness_hash().into();
+                    let hash: H256 = withdrawal.witness_hash();
                     ckb_merkle_leaf_hash(idx as u32, &hash)
                 })
                 .collect();

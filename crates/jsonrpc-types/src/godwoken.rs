@@ -953,7 +953,6 @@ pub struct L2BlockCommittedInfo {
 pub enum AllowedEoaType {
     Unknown,
     Eth,
-    Tron,
 }
 
 impl From<AllowedEoaType> for packed::Byte {
@@ -961,7 +960,6 @@ impl From<AllowedEoaType> for packed::Byte {
         match json {
             AllowedEoaType::Unknown => packed::Byte::new(0),
             AllowedEoaType::Eth => packed::Byte::new(1),
-            AllowedEoaType::Tron => packed::Byte::new(2),
         }
     }
 }
@@ -973,7 +971,6 @@ impl TryFrom<packed::Byte> for AllowedEoaType {
         match u8::from(v) {
             0 => Ok(AllowedEoaType::Unknown),
             1 => Ok(AllowedEoaType::Eth),
-            2 => Ok(AllowedEoaType::Tron),
             _ => Err(anyhow!("invalid allowed eoa type {}", v)),
         }
     }

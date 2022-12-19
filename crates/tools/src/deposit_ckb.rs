@@ -147,7 +147,7 @@ pub async fn deposit_ckb(
         log::info!("tx_hash: {:#x}", tx_hash);
 
         if let Err(e) = gw_rpc_client::ckb_client::CKBClient::with_url(ckb_rpc_url)?
-            .wait_tx_committed_with_timeout_and_logging(tx_hash.0.into(), 600)
+            .wait_tx_committed_with_timeout_and_logging(tx_hash.0, 600)
             .await
         {
             if e.to_string().contains("rejected") {
@@ -238,13 +238,15 @@ async fn get_balance_by_script_hash(
 
 // only for CKB
 fn minimal_deposit_capacity(deposit_lock_args: &DepositLockArgs) -> Result<u64> {
+    use gw_types::h256::H256Ext;
+
     // fixed size, the specific value is not important.
     let dummy_hash = gw_types::core::H256::zero();
     let dummy_timepoint = Timepoint::from_block_number(0);
     let dummy_rollup_type_hash = dummy_hash;
 
     let custodian_lock_args = CustodianLockArgs::new_builder()
-        .deposit_block_hash(dummy_hash.pack())
+        .deposit_block_hash(gw_types::prelude::Pack::pack(&dummy_hash))
         .deposit_block_timepoint(gw_types::prelude::Pack::pack(&dummy_timepoint.full_value()))
         .deposit_lock_args(deposit_lock_args.clone())
         .build();
@@ -257,7 +259,7 @@ fn minimal_deposit_capacity(deposit_lock_args: &DepositLockArgs) -> Result<u64> 
         .collect();
 
     let lock_script = Script::new_builder()
-        .code_hash(dummy_hash.pack())
+        .code_hash(gw_types::prelude::Pack::pack(&dummy_hash))
         .hash_type(ScriptHashType::Type.into())
         .args(gw_types::prelude::Pack::pack(&args))
         .build();

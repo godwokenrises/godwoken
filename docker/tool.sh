@@ -3,7 +3,7 @@
 check_scripts_files_exists(){
     local -a arr=( 
         "eth-account-lock"   "deposit-lock"     "custodian-lock"  "stake-lock"
-        "tron-account-lock"  "withdrawal-lock"  "challenge-lock"  "omni_lock"
+        "withdrawal-lock"  "challenge-lock"  "omni_lock"
 		
         "always-success"     "state-validator"
         

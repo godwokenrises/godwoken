@@ -39,8 +39,8 @@ async fn test_eth_account_creator() {
     let account_ctx = EthAccountContext::new(
         chain.chain_id(),
         chain.rollup_type_hash(),
-        (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
-        (*POLYJUICE_VALIDATOR_CODE_HASH).into(),
+        *ETH_ACCOUNT_LOCK_CODE_HASH,
+        *POLYJUICE_VALIDATOR_CODE_HASH,
     );
     let eth_account_creator =
         EthAccountCreator::create(&account_ctx, creator_wallet.inner).unwrap();

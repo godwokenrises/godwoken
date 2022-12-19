@@ -9,10 +9,10 @@ use gw_block_producer::{
     produce_block::{generate_produce_block_param, produce_block, ProduceBlockParam},
     replay_block::ReplayBlock,
 };
-use gw_common::H256;
 use gw_generator::traits::StateExt;
 use gw_mem_pool::pool::OutputParam;
 use gw_store::{state::MemStateDB, traits::chain_store::ChainStore};
+use gw_types::h256::*;
 use gw_types::{
     core::ScriptHashType,
     offchain::{CellInfo, DepositInfo},
@@ -20,7 +20,6 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::RollupContext;
-
 use std::time::Duration;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -29,7 +28,7 @@ async fn test_repackage_mem_block() {
     const DEPOSIT_AMOUNT: u128 = 0;
 
     let rollup_type_script = Script::default();
-    let rollup_script_hash = rollup_type_script.hash().into();
+    let rollup_script_hash = rollup_type_script.hash();
     let chain = setup_chain(rollup_type_script).await;
 
     let users = (0..10).map(|_| random_always_success_script(&rollup_script_hash));
@@ -77,14 +76,12 @@ async fn test_repackage_mem_block() {
     let reverted_block_root: H256 = {
         let db = chain.store().begin_transaction();
         let smt = db.reverted_block_smt().unwrap();
-        smt.root().to_owned()
+        (*smt.root()).into()
     };
     let param = ProduceBlockParam {
-        stake_cell_owner_lock_hash: random_always_success_script(&rollup_script_hash)
-            .hash()
-            .into(),
+        stake_cell_owner_lock_hash: random_always_success_script(&rollup_script_hash).hash(),
         reverted_block_root,
-        rollup_config_hash: rollup_context.rollup_config.hash().into(),
+        rollup_config_hash: rollup_context.rollup_config.hash(),
         block_param,
     };
     let store = chain.store();

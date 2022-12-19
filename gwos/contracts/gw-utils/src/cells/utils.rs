@@ -3,10 +3,11 @@ use ckb_std::{
     ckb_constants::Source,
     high_level::{load_cell_lock_hash, QueryIter},
 };
-use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
+use gw_common::{CKB_SUDT_SCRIPT_ARGS, };
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
+    h256::H256,
     packed::{RollupConfig, Script},
     prelude::*,
 };
@@ -33,7 +34,7 @@ pub fn build_l2_sudt_script(
     config: &RollupConfig,
     l1_sudt_script_hash: &H256,
 ) -> Option<Script> {
-    if l1_sudt_script_hash == &CKB_SUDT_SCRIPT_ARGS.into() {
+    if l1_sudt_script_hash == &CKB_SUDT_SCRIPT_ARGS {
         return None;
     }
     let args = {

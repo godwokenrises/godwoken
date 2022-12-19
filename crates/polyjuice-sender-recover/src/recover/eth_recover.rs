@@ -1,15 +1,14 @@
 use std::collections::HashMap;
 
 use anyhow::{anyhow, bail, Result};
-use gw_common::{
-    builtins::CKB_SUDT_ACCOUNT_ID, registry_address::RegistryAddress, state::State, H256,
-};
+use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, registry_address::RegistryAddress, state::State};
 use gw_generator::{error::TransactionError, typed_transaction::types::TypedRawTransaction};
 use gw_store::state::{traits::JournalDB, MemStateDB};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     core::{AllowedContractType, AllowedEoaType, ScriptHashType},
+    h256::*,
     packed::{L2Transaction, RawL2Transaction, Script},
     prelude::{Builder, Entity, Pack, Unpack},
 };
@@ -96,7 +95,7 @@ impl RecoveredSenders {
     pub fn get_account_id(&self, sig: &Bytes, state: &impl State) -> Result<u32> {
         let account_script_hash = match self.sig_senders.get(sig) {
             Some(PolyjuiceTxEthSender::Exist { account_id, .. }) => return Ok(*account_id),
-            Some(PolyjuiceTxEthSender::New { account_script, .. }) => account_script.hash().into(),
+            Some(PolyjuiceTxEthSender::New { account_script, .. }) => account_script.hash(),
             None => bail!("no sender recovered"),
         };
 

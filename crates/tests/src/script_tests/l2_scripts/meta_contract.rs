@@ -6,7 +6,6 @@ use crate::testing_tool::chain::ALWAYS_SUCCESS_CODE_HASH;
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
     state::State,
-    H256,
 };
 use gw_generator::{
     error::TransactionError, syscalls::error_codes::GW_ERROR_DUPLICATED_SCRIPT_HASH,
@@ -15,6 +14,7 @@ use gw_generator::{
 use gw_types::U256;
 use gw_types::{
     core::ScriptHashType,
+    h256::*,
     packed::{CreateAccount, Fee, MetaContractArgs, Script},
     prelude::*,
 };
@@ -33,7 +33,7 @@ fn test_meta_contract() {
         .state
         .create_account_from_script(a_script)
         .expect("create account");
-    let a_address = ctx.create_eth_address(a_script_hash.into(), [1u8; 20]);
+    let a_address = ctx.create_eth_address(a_script_hash, [1u8; 20]);
     ctx.state
         .mint_sudt(CKB_SUDT_ACCOUNT_ID, &a_address, U256::from(2000u64))
         .expect("mint CKB for account A to pay fee");
@@ -85,7 +85,7 @@ fn test_meta_contract() {
     assert_ne!(script_hash, H256::zero(), "script hash must exists");
     assert_eq!(
         script_hash,
-        contract_script.hash().into(),
+        contract_script.hash(),
         "script hash must according to create account"
     );
 }
@@ -105,7 +105,7 @@ fn test_duplicated_script_hash() {
         .state
         .create_account_from_script(a_script)
         .expect("create account");
-    let a_address = ctx.create_eth_address(a_script_hash.into(), [1u8; 20]);
+    let a_address = ctx.create_eth_address(a_script_hash, [1u8; 20]);
 
     ctx.state
         .mint_sudt(CKB_SUDT_ACCOUNT_ID, &a_address, U256::from(1000u64))
@@ -165,7 +165,7 @@ fn test_insufficient_balance_to_pay_fee() {
         .state
         .create_account_from_script(from_script)
         .expect("create account");
-    let from_address = ctx.create_eth_address(from_script_hash.into(), [1u8; 20]);
+    let from_address = ctx.create_eth_address(from_script_hash, [1u8; 20]);
 
     // create contract
     let contract_script = Script::new_builder()

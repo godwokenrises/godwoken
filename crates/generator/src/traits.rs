@@ -3,12 +3,13 @@ use crate::sudt::build_l2_sudt_script;
 use gw_common::ckb_decimal::{CKBCapacity, CKB_DECIMAL_POW_EXP};
 use gw_common::registry::context::RegistryContext;
 use gw_common::registry_address::RegistryAddress;
-use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, CKB_SUDT_SCRIPT_ARGS, H256};
+use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, CKB_SUDT_SCRIPT_ARGS};
 use gw_store::state::traits::JournalDB;
 use gw_traits::CodeStore;
 use gw_types::U256;
 use gw_types::{
     core::ScriptHashType,
+    h256::*,
     packed::{AccountMerkleState, DepositRequest, Script, WithdrawalReceipt, WithdrawalRequest},
     prelude::*,
 };
@@ -47,8 +48,8 @@ impl<S: State + CodeStore + JournalDB> StateExt for S {
             return Err(AccountError::UnknownScript.into());
         }
         let script_hash = script.hash();
-        self.insert_script(script_hash.into(), script);
-        let id = self.create_account(script_hash.into())?;
+        self.insert_script(script_hash, script);
+        let id = self.create_account(script_hash)?;
         Ok(id)
     }
 
@@ -89,7 +90,7 @@ impl<S: State + CodeStore + JournalDB> StateExt for S {
         request: &DepositRequest,
     ) -> Result<(), Error> {
         // find or create user account
-        let account_script_hash: H256 = request.script().hash().into();
+        let account_script_hash: H256 = request.script().hash();
         // mint CKB
         let capacity: u64 = request.capacity().unpack();
         log::debug!("[generator] deposit capacity {}", capacity);
@@ -140,15 +141,15 @@ impl<S: State + CodeStore + JournalDB> StateExt for S {
         );
         let sudt_script_hash = request.sudt_script_hash().unpack();
         let amount = request.amount().unpack();
-        if sudt_script_hash != CKB_SUDT_SCRIPT_ARGS.into() {
+        if sudt_script_hash != CKB_SUDT_SCRIPT_ARGS {
             // find or create Simple UDT account
             let l2_sudt_script = build_l2_sudt_script(ctx, &sudt_script_hash);
             let l2_sudt_script_hash: [u8; 32] = l2_sudt_script.hash();
-            let sudt_id = match self.get_account_id_by_script_hash(&l2_sudt_script_hash.into())? {
+            let sudt_id = match self.get_account_id_by_script_hash(&l2_sudt_script_hash)? {
                 Some(id) => id,
                 None => {
-                    self.insert_script(l2_sudt_script_hash.into(), l2_sudt_script);
-                    self.create_account(l2_sudt_script_hash.into())?
+                    self.insert_script(l2_sudt_script_hash, l2_sudt_script);
+                    self.create_account(l2_sudt_script_hash)?
                 }
             };
             // prevent fake CKB SUDT, the caller should filter these invalid deposits
@@ -207,7 +208,7 @@ impl<S: State + CodeStore + JournalDB> StateExt for S {
             CKBCapacity::from_layer1(capacity).to_layer2(),
         )?;
         let sudt_id = self
-            .get_account_id_by_script_hash(&l2_sudt_script_hash.into())?
+            .get_account_id_by_script_hash(&l2_sudt_script_hash)?
             .ok_or(AccountError::UnknownSUDT)?;
         if sudt_id != CKB_SUDT_ACCOUNT_ID {
             // burn sudt

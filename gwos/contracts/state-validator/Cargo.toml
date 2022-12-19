@@ -8,3 +8,4 @@ edition = "2018"
 [dependencies]
 gw-utils = { path = "../gw-utils" }
 gw-state = { path = "../gw-state" }
+ckb-smt = { path = "../ckb-smt" }

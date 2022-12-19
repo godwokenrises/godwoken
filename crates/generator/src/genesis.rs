@@ -3,11 +3,11 @@ use anyhow::{Context, Result};
 use gw_common::{
     blake2b::new_blake2b,
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
-    smt::{H256, SMT},
     state::State,
     CKB_SUDT_SCRIPT_ARGS,
 };
 use gw_config::GenesisConfig;
+use gw_smt::smt::{SMT, SMTH256};
 use gw_store::{
     smt::smt_store::SMTStateStore,
     state::{
@@ -23,6 +23,7 @@ use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     core::{ScriptHashType, Status},
+    h256::*,
     packed::{
         AccountMerkleState, BlockMerkleState, DepositInfoVec, FinalizedCustodianCapacity,
         GlobalState, L2Block, NumberHash, RawL2Block, Script, SubmitTransactions,
@@ -52,10 +53,7 @@ pub fn build_genesis_from_store(
     secp_data: Bytes,
 ) -> Result<(StoreTransaction, GenesisWithGlobalState)> {
     let rollup_context = RollupContext {
-        rollup_script_hash: {
-            let rollup_script_hash: [u8; 32] = config.rollup_type_hash.clone().into();
-            rollup_script_hash.into()
-        },
+        rollup_script_hash: config.rollup_type_hash.clone().into(),
         rollup_config: config.rollup_config.clone().into(),
         // it's safe to give a dummy `fork_config` for genesis, because
         // we won't use `fork_config` at this phase.
@@ -67,7 +65,7 @@ pub fn build_genesis_from_store(
 
     // build genesis state tree
     let mut tree = {
-        let smt = SMT::new(H256::zero(), SMTStateStore::new(&db));
+        let smt = SMT::new(SMTH256::zero(), SMTStateStore::new(&db));
         let inner = HistoryState::new(smt, 0, RWConfig::attach_block(0));
         StateDB::new(inner)
     };
@@ -88,8 +86,7 @@ pub fn build_genesis_from_store(
     );
 
     // setup CKB simple UDT contract
-    let ckb_sudt_script =
-        crate::sudt::build_l2_sudt_script(&rollup_context, &CKB_SUDT_SCRIPT_ARGS.into());
+    let ckb_sudt_script = crate::sudt::build_l2_sudt_script(&rollup_context, &CKB_SUDT_SCRIPT_ARGS);
     let ckb_sudt_id = tree.create_account_from_script(ckb_sudt_script)?;
     assert_eq!(
         ckb_sudt_id, CKB_SUDT_ACCOUNT_ID,
@@ -118,12 +115,12 @@ pub fn build_genesis_from_store(
         hasher.finalize(&mut hash);
         hash
     };
-    tree.insert_data(secp_data_hash.into(), secp_data);
+    tree.insert_data(secp_data_hash, secp_data);
     // insert data_hash into tree
-    tree.store_data_hash(secp_data_hash.into())?;
+    tree.store_data_hash(secp_data_hash)?;
 
     tree.finalise()?;
-    let prev_state_checkpoint: [u8; 32] = tree.calculate_state_checkpoint()?.into();
+    let prev_state_checkpoint: [u8; 32] = tree.calculate_state_checkpoint()?;
     let submit_txs = SubmitTransactions::new_builder()
         .prev_state_checkpoint(prev_state_checkpoint.pack())
         .build();
@@ -207,10 +204,7 @@ pub fn init_genesis(
     transaction_hash: &[u8; 32],
     secp_data: Bytes,
 ) -> Result<()> {
-    let rollup_script_hash: H256 = {
-        let rollup_script_hash: [u8; 32] = config.rollup_type_hash.clone().into();
-        rollup_script_hash.into()
-    };
+    let rollup_script_hash: H256 = config.rollup_type_hash.clone().into();
     if store.has_genesis()? {
         let chain_id = store.get_chain_id()?;
         if chain_id == rollup_script_hash {

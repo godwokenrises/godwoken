@@ -37,14 +37,14 @@ use gw_utils::{
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     error::Error as StateError,
-    h256_ext::H256Ext,
     merkle_utils::{calculate_ckb_merkle_root, calculate_state_checkpoint, ckb_merkle_leaf_hash},
     state::State,
-    CKB_SUDT_SCRIPT_ARGS, H256,
+    CKB_SUDT_SCRIPT_ARGS,
 };
 use gw_types::{
     bytes::Bytes,
     core::{ScriptHashType, Status, Timepoint},
+    h256::{H256Ext, H256},
     packed::{Byte32, GlobalState, RawL2Block, RollupConfig},
     prelude::*,
 };
@@ -80,12 +80,13 @@ fn check_withdrawal_cells<'a>(
             return Err(Error::InvalidWithdrawalCell);
         }
 
-        if cell.args.withdrawal_block_timepoint().unpack() != context.block_timepoint().full_value()
+        if cell.args.withdrawal_block_timepoint().unpack()
+            != context.finalized_timepoint().full_value()
         {
             debug!(
                 "withdrawal_cell.args.withdrawal_block_timepoint != context.block_timepoint, {} != {}",
                 cell.args.withdrawal_block_timepoint().unpack(),
-                context.block_timepoint().full_value()
+                context.finalized_timepoint().full_value()
             );
             return Err(Error::InvalidWithdrawalCell);
         }
@@ -200,7 +201,7 @@ fn check_output_custodian_cells(
                 custodian_cell.args.deposit_lock_args() == cell.args
                     && custodian_cell.args.deposit_block_hash() == context.block_hash.pack()
                     && custodian_cell.args.deposit_block_timepoint().unpack()
-                        == context.block_timepoint().full_value()
+                        == context.finalized_timepoint().full_value()
                     && custodian_cell.value == cell.value
             })
             .ok_or(Error::InvalidCustodianCell)?;
@@ -579,7 +580,7 @@ fn verify_block_producer(
         let expected_stake_lock_args = input_stake_cell
             .args
             .as_builder()
-            .stake_block_timepoint(context.block_timepoint().full_value().pack())
+            .stake_block_timepoint(context.finalized_timepoint().full_value().pack())
             .build();
         if expected_stake_lock_args != output_stake_cell.args
             || input_stake_cell.capacity > output_stake_cell.capacity
@@ -665,7 +666,7 @@ fn check_block_transactions(
         .enumerate()
         .map(|(idx, tx)| ckb_merkle_leaf_hash(idx as u32, &tx.witness_hash().into()))
         .collect();
-    let merkle_root: H256 = calculate_ckb_merkle_root(leaves)?;
+    let merkle_root: H256 = calculate_ckb_merkle_root(leaves);
     if tx_witness_root != merkle_root {
         debug!("failed to check block tx_witness_root");
         return Err(Error::MerkleProof);
@@ -740,7 +741,7 @@ fn check_block_withdrawals(block: &L2BlockReader) -> Result<(), Error> {
             ckb_merkle_leaf_hash(idx as u32, &withdrawal.witness_hash().into())
         })
         .collect();
-    let merkle_root = calculate_ckb_merkle_root(leaves)?;
+    let merkle_root = calculate_ckb_merkle_root(leaves);
     if withdrawal_witness_root != merkle_root {
         debug!("failed to check block withdrawal_witness_root");
         return Err(Error::MerkleProof);
@@ -789,9 +790,8 @@ fn check_block_timestamp(
         // 4 hours, 4 * 60 * 60 * 1000 = 14400000ms
         const BACKBONE_BIAS: u64 = 14400000;
         let backbone = {
-            match Timepoint::from_full_value(
-                post_global_state.last_finalized_block_number().unpack(),
-            ) {
+            match Timepoint::from_full_value(post_global_state.last_finalized_timepoint().unpack())
+            {
                 Timepoint::BlockNumber(_) => unreachable!(),
                 Timepoint::Timestamp(current_timestamp) => current_timestamp,
             }
@@ -838,19 +838,19 @@ fn check_global_state_last_finalized_timepoint(
     // skip
     // if context.post_version == 0 { }
 
-    if prev_global_state.last_finalized_block_number().unpack()
-        > post_global_state.last_finalized_block_number().unpack()
+    if prev_global_state.last_finalized_timepoint().unpack()
+        > post_global_state.last_finalized_timepoint().unpack()
     {
         debug!(
-            "check_global_state_last_finalized_timepoint prev last_finalized_block_number > post last_finalized_block_number, {} > {}",
-            prev_global_state.last_finalized_block_number().unpack(),
-            post_global_state.last_finalized_block_number().unpack()
+            "check_global_state_last_finalized_timepoint prev last_finalized_timepoint > post last_finalized_timepoint, {} > {}",
+            prev_global_state.last_finalized_timepoint().unpack(),
+            post_global_state.last_finalized_timepoint().unpack()
         );
         return Err(Error::InvalidPostGlobalState);
     }
 
     let last_finalized_timepoint =
-        Timepoint::from_full_value(post_global_state.last_finalized_block_number().unpack());
+        Timepoint::from_full_value(post_global_state.last_finalized_timepoint().unpack());
 
     match (
         Fork::use_timestamp_as_timepoint(context.post_version),
@@ -968,7 +968,7 @@ pub fn verify(
 
         // check_global_state_tip_block_timestamp() has checked post_global_state.tip_block_timestamp
         // check_global_state_last_finalized_timepoint() has checked post_global_state.last_finalized_block_number
-        let last_finalized_block_number = post_global_state.last_finalized_block_number();
+        let last_finalized_timepoint = post_global_state.last_finalized_timepoint();
         let tip_block_timestamp = if context.post_version == 0 {
             0
         } else {
@@ -982,7 +982,7 @@ pub fn verify(
             .block(block_merkle_state)
             .tip_block_hash(context.block_hash.pack())
             .tip_block_timestamp(tip_block_timestamp.pack())
-            .last_finalized_block_number(last_finalized_block_number)
+            .last_finalized_timepoint(last_finalized_timepoint)
             .version(context.post_version.into())
             .build()
     };

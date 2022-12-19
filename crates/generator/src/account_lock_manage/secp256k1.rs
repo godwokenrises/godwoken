@@ -7,11 +7,11 @@ use crate::account_lock_manage::eip712::types::Withdrawal;
 use crate::error::LockAlgorithmError;
 use anyhow::bail;
 use gw_common::registry_address::RegistryAddress;
-use gw_common::H256;
 use gw_types::packed::WithdrawalRequestExtra;
 use gw_types::prelude::*;
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     packed::{L2Transaction, RawL2Transaction, Script},
 };
 use gw_utils::polyjuice_parser::PolyjuiceParser;
@@ -55,7 +55,7 @@ impl Secp256k1Eth {
         hasher.update(&rlp_data);
         let signing_message: [u8; 32] = hasher.finalize().into();
 
-        Ok(signing_message.into())
+        Ok(signing_message)
     }
 
     pub fn eip712_signing_message(
@@ -71,7 +71,7 @@ impl Secp256k1Eth {
         )?;
         let message = typed_tx.eip712_message(Self::domain_with_chain_id(chain_id).hash_struct());
 
-        Ok(message.into())
+        Ok(message)
     }
 
     pub fn domain_with_chain_id(chain_id: u64) -> EIP712Domain {
@@ -164,7 +164,6 @@ impl LockAlgorithm for Secp256k1Eth {
             let mut hasher = Keccak256::new();
             hasher.update(&rlp_data);
             let signing_message: [u8; 32] = hasher.finalize().into();
-            let signing_message = H256::from(signing_message);
             self.verify_alone(
                 sender_script.args().unpack(),
                 tx.signature().unpack(),
@@ -182,7 +181,7 @@ impl LockAlgorithm for Secp256k1Eth {
         let raw_tx = tx.raw();
         let chain_id = raw_tx.chain_id().unpack();
 
-        let to_script_hash = receiver_script.hash().into();
+        let to_script_hash = receiver_script.hash();
 
         let typed_tx = crate::account_lock_manage::eip712::types::L2Transaction::from_raw(
             &raw_tx,
@@ -196,7 +195,7 @@ impl LockAlgorithm for Secp256k1Eth {
         self.verify_alone(
             sender_script.args().unpack(),
             tx.signature().unpack(),
-            message.into(),
+            message,
         )?;
         Ok(())
     }
@@ -229,7 +228,7 @@ impl LockAlgorithm for Secp256k1Eth {
         self.verify_alone(
             sender_script.args().unpack(),
             withdrawal.request().signature().unpack(),
-            message.into(),
+            message,
         )?;
         Ok(())
     }

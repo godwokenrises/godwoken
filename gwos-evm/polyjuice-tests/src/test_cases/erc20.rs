@@ -161,11 +161,7 @@ fn test_erc20() {
         print_gas_used(&format!("ERC20 {}: ", operation), &run_result.logs);
 
         // [ERC20 contract method_x] used cycles: 942107 < 960K
-        helper::check_cycles(
-            "ERC20 contract method_x",
-            run_result.cycles,
-            1_400_000,
-        );
+        helper::check_cycles("ERC20 contract method_x", run_result.cycles, 1_400_000);
         state.finalise().expect("update state");
         assert_eq!(
             run_result.return_data,

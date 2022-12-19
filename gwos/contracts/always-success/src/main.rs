@@ -6,13 +6,14 @@
 #![feature(lang_items)]
 #![feature(alloc_error_handler)]
 #![feature(panic_info_message)]
-#![feature(asm)]
+#![feature(asm_sym)]
 
 // define modules
 mod entry;
 mod error;
 
 use ckb_std::default_alloc;
+use core::arch::asm;
 
 ckb_std::entry!(program_entry);
 default_alloc!();

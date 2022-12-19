@@ -53,10 +53,7 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
     let rollup_config: RollupConfig = config.genesis.rollup_config.clone().into();
     let rollup_context = RollupContext {
         rollup_config: rollup_config.clone(),
-        rollup_script_hash: {
-            let rollup_script_hash: [u8; 32] = config.genesis.rollup_type_hash.clone().into();
-            rollup_script_hash.into()
-        },
+        rollup_script_hash: config.genesis.rollup_type_hash.clone().into(),
         fork_config: config.fork.clone(),
     };
     let secp_data: Bytes = {
@@ -75,7 +72,7 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
         let out_point = config.genesis.secp_data_dep.out_point.clone();
         rpc_client
             .ckb
-            .get_transaction(out_point.tx_hash.0.into())
+            .get_transaction(out_point.tx_hash.0)
             .await?
             .ok_or_else(|| anyhow!("can not found transaction: {:?}", out_point.tx_hash))?
             .raw()

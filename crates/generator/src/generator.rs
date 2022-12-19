@@ -21,10 +21,8 @@ use arc_swap::ArcSwapOption;
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     error::Error as StateError,
-    h256_ext::H256Ext,
     registry_address::RegistryAddress,
     state::{build_account_key, State, SUDT_TOTAL_SUPPLY_KEY},
-    H256,
 };
 
 use gw_config::{ContractLogConfig, ForkConfig, SyscallCyclesConfig};
@@ -36,6 +34,8 @@ use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::{ChallengeTargetType, ScriptHashType},
+    h256::H256Ext,
+    h256::*,
     offchain::{CycleMeter, RunResult},
     packed::{
         AccountMerkleState, BlockInfo, ChallengeTarget, DepositInfoVec, L2Block, L2Transaction,
@@ -319,19 +319,16 @@ impl Generator {
 
         // check signature
         let account_script = state
-            .get_script(&account_script_hash.into())
+            .get_script(&account_script_hash)
             .ok_or(StateError::MissingKey)?;
         let lock_code_hash: [u8; 32] = account_script.code_hash().unpack();
         let lock_algo = self
             .account_lock_manage
-            .get_lock_algorithm(&lock_code_hash.into())
+            .get_lock_algorithm(&lock_code_hash)
             .ok_or(LockAlgorithmError::UnknownAccountLock)?;
 
         let address = state
-            .get_registry_address_by_script_hash(
-                raw.registry_id().unpack(),
-                &account_script_hash.into(),
-            )?
+            .get_registry_address_by_script_hash(raw.registry_id().unpack(), &account_script_hash)?
             .ok_or(AccountError::RegistryAddressNotFound)?;
 
         lock_algo.verify_withdrawal(self.rollup_context(), account_script, withdrawal, address)?;
@@ -374,7 +371,7 @@ impl Generator {
 
         let lock_algo = self
             .account_lock_manage()
-            .get_lock_algorithm(&lock_code_hash.into())
+            .get_lock_algorithm(&lock_code_hash)
             .ok_or(LockAlgorithmError::UnknownAccountLock)?;
 
         let sender_address = state
@@ -417,7 +414,7 @@ impl Generator {
         };
 
         let block_hash = raw_block.hash();
-        let skip_checkpoint_check = skipped_invalid_block_list.contains(&block_hash.into());
+        let skip_checkpoint_check = skipped_invalid_block_list.contains(&block_hash);
 
         // check prev state
         if !skip_checkpoint_check {
@@ -466,7 +463,7 @@ impl Generator {
             let now = Instant::now();
             if let Err(error) = self.check_withdrawal_signature(&state, &request) {
                 let target = build_challenge_target(
-                    block_hash.into(),
+                    block_hash,
                     ChallengeTargetType::Withdrawal,
                     wth_idx as u32,
                 );
@@ -548,7 +545,7 @@ impl Generator {
             let now = Instant::now();
             if let Err(err) = self.check_transaction_signature(&state, &tx) {
                 let target = build_challenge_target(
-                    block_hash.into(),
+                    block_hash,
                     ChallengeTargetType::TxSignature,
                     tx_index as u32,
                 );
@@ -570,7 +567,7 @@ impl Generator {
             if actual_nonce != expected_nonce {
                 return ApplyBlockResult::Challenge {
                     target: build_challenge_target(
-                        block_hash.into(),
+                        block_hash,
                         ChallengeTargetType::TxExecution,
                         tx_index as u32,
                     ),
@@ -598,7 +595,7 @@ impl Generator {
                 Ok(run_result) => run_result,
                 Err(err) => {
                     let target = build_challenge_target(
-                        block_hash.into(),
+                        block_hash,
                         ChallengeTargetType::TxExecution,
                         tx_index as u32,
                     );
@@ -653,7 +650,7 @@ impl Generator {
 
                     if !skip_checkpoint_check && block_checkpoint != expected_checkpoint {
                         let target = build_challenge_target(
-                            block_hash.into(),
+                            block_hash,
                             ChallengeTargetType::TxExecution,
                             tx_index as u32,
                         );
@@ -674,7 +671,7 @@ impl Generator {
                     Err(err) => return ApplyBlockResult::Error(err.into()),
                 };
                 let tx_receipt =
-                    TxReceipt::build_receipt(tx.witness_hash().into(), run_result, post_state);
+                    TxReceipt::build_receipt(tx.witness_hash(), run_result, post_state);
 
                 tx_receipts.push(tx_receipt);
                 offchain_used_cycles = offchain_used_cycles.saturating_add(used_cycles);
@@ -730,8 +727,7 @@ impl Generator {
                 if script.hash_type() == ScriptHashType::Type.into() {
                     let code_hash: [u8; 32] = script.code_hash().unpack();
                     log::debug!("load_backend by code_hash: {}", hex::encode(code_hash));
-                    self.backend_manage
-                        .get_backend(block_number, &code_hash.into())
+                    self.backend_manage.get_backend(block_number, &code_hash)
                 } else {
                     log::error!(
                         "Found a invalid account script which hash_type is data: {:?}",

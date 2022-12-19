@@ -52,7 +52,6 @@ typedef unsigned __int128 uint128_t;
 
 #define GW_ALLOWED_EOA_UNKNOWN 0
 #define GW_ALLOWED_EOA_ETH 1
-#define GW_ALLOWED_EOA_TRON 2
 
 #define GW_ALLOWED_CONTRACT_UNKNOWN 0
 #define GW_ALLOWED_CONTRACT_META 1

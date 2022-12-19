@@ -1,14 +1,14 @@
 use anyhow::{bail, Result};
 use criterion::*;
 use gw_common::{
-    builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, smt::SMT, state::State,
-    H256,
+    builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, state::State,
 };
 use gw_config::{BackendConfig, BackendForkConfig};
 use gw_generator::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage, error::TransactionError,
     traits::StateExt, Generator,
 };
+use gw_smt::smt::{SMT, SMTH256};
 use gw_store::{
     smt::smt_store::SMTStateStore,
     snapshot::StoreSnapshot,
@@ -23,6 +23,7 @@ use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::{AllowedEoaType, ScriptHashType},
+    h256::*,
     offchain::RunResult,
     packed::{AllowedTypeHash, BlockInfo, Fee},
     packed::{RawL2Transaction, RollupConfig, SUDTArgs, SUDTTransfer, Script},
@@ -75,7 +76,7 @@ impl ChainView for DummyChainStore {
 }
 
 fn new_state(store: StoreSnapshot) -> MemStateDB {
-    let smt = SMT::new(H256::zero(), SMTStateStore::new(MemStore::new(store)));
+    let smt = SMT::new(SMTH256::zero(), SMTStateStore::new(MemStore::new(store)));
     let inner = MemStateTree::new(smt, 0);
     MemStateDB::new(inner)
 }
@@ -105,7 +106,7 @@ fn run_contract_get_result<S: State + CodeStore + JournalDB>(
     let account_lock_manage = AccountLockManage::default();
     let rollup_ctx = RollupContext {
         rollup_config: rollup_config.clone(),
-        rollup_script_hash: [42u8; 32].into(),
+        rollup_script_hash: [42u8; 32],
         ..Default::default()
     };
     let generator = Generator::new(
@@ -222,7 +223,7 @@ pub fn bench(c: &mut Criterion) {
                         .build()
                 };
                 let block_producer = RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, vec![3u8; 20]);
-                let block_producer_script_hash = block_producer_script.hash().into();
+                let block_producer_script_hash = block_producer_script.hash();
                 tree.mapping_registry_address_to_script_hash(
                     block_producer.clone(),
                     block_producer_script_hash,

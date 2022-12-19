@@ -1,8 +1,8 @@
 use gw_common::state::State;
-use gw_common::H256;
 use gw_config::RPCConfig;
 use gw_traits::CodeStore;
 use gw_types::bytes::Bytes;
+use gw_types::h256::*;
 use gw_types::packed::RawL2Transaction;
 use gw_types::prelude::Unpack;
 
@@ -37,7 +37,7 @@ impl PolyjuiceContractCreatorAllowList {
             &config.polyjuice_script_code_hash,
         ) {
             (Some(allowed_creator_address), Some(polyjuice_code_hash)) => Some(Self::new(
-                H256::from(polyjuice_code_hash.0),
+                polyjuice_code_hash.0,
                 allowed_creator_address
                     .iter()
                     .map(|address| address.0)
@@ -130,13 +130,13 @@ mod tests {
     use std::iter::FromIterator;
 
     use gw_common::error::Error;
-    use gw_common::smt::SMT;
-    use gw_common::sparse_merkle_tree::default_store::DefaultStore;
     use gw_common::state::State;
-    use gw_common::H256;
+    use gw_smt::smt::{SMT, SMTH256};
+    use gw_smt::sparse_merkle_tree::default_store::DefaultStore;
     use gw_traits::CodeStore;
     use gw_types::bytes::Bytes;
     use gw_types::core::ScriptHashType;
+    use gw_types::h256::*;
     use gw_types::packed::{RawL2Transaction, Script};
     use gw_types::prelude::{Builder, Entity, Pack};
 
@@ -147,7 +147,7 @@ mod tests {
 
     #[derive(Default)]
     pub struct DummyState {
-        tree: SMT<DefaultStore<H256>>,
+        tree: SMT<DefaultStore<SMTH256>>,
         account_count: u32,
         scripts: HashMap<H256, Script>,
         codes: HashMap<H256, Bytes>,
@@ -155,15 +155,21 @@ mod tests {
 
     impl State for DummyState {
         fn get_raw(&self, key: &H256) -> Result<H256, Error> {
-            let v = self.tree.get(key)?;
+            let v = self
+                .tree
+                .get(&(*key).into())
+                .map_err(|err| Error::SMT(err.to_string()))?
+                .into();
             Ok(v)
         }
         fn update_raw(&mut self, key: H256, value: H256) -> Result<(), Error> {
-            self.tree.update(key, value)?;
+            self.tree
+                .update(key.into(), value.into())
+                .map_err(|err| Error::SMT(err.to_string()))?;
             Ok(())
         }
         fn calculate_root(&self) -> Result<H256, Error> {
-            let root = *self.tree.root();
+            let root = (*self.tree.root()).into();
             Ok(root)
         }
         fn get_account_count(&self) -> Result<u32, Error> {
@@ -202,13 +208,13 @@ mod tests {
         while dummy_state.get_account_count().unwrap() < 2 {
             let mut script_hash = [0u8; 32];
             script_hash[0] = dummy_state.get_account_count().unwrap() as u8;
-            dummy_state.create_account(script_hash.into()).unwrap();
+            dummy_state.create_account(script_hash).unwrap();
         }
 
         let deployment_id = dummy_state
-            .create_account(deployment_script.hash().into())
+            .create_account(deployment_script.hash())
             .unwrap();
-        dummy_state.insert_script(deployment_script.hash().into(), deployment_script);
+        dummy_state.insert_script(deployment_script.hash(), deployment_script);
 
         let allowed_creator_id = {
             let eth_script = Script::new_builder()
@@ -216,14 +222,12 @@ mod tests {
                 .hash_type(ScriptHashType::Type.into())
                 .args([42u8; 52].pack())
                 .build();
-            dummy_state.insert_script(eth_script.hash().into(), eth_script.clone());
-            dummy_state
-                .create_account(eth_script.hash().into())
-                .unwrap()
+            dummy_state.insert_script(eth_script.hash(), eth_script.clone());
+            dummy_state.create_account(eth_script.hash()).unwrap()
         };
 
         let allowlist = PolyjuiceContractCreatorAllowList::new(
-            TEST_POLYJUICE_SCRIPT_CODE_HASH.into(),
+            TEST_POLYJUICE_SCRIPT_CODE_HASH,
             HashSet::from_iter(vec![[42u8; 20]]),
         );
 
@@ -244,10 +248,8 @@ mod tests {
                 .hash_type(ScriptHashType::Type.into())
                 .args([100u8; 52].pack())
                 .build();
-            dummy_state.insert_script(eth_script.hash().into(), eth_script.clone());
-            dummy_state
-                .create_account(eth_script.hash().into())
-                .unwrap()
+            dummy_state.insert_script(eth_script.hash(), eth_script.clone());
+            dummy_state.create_account(eth_script.hash()).unwrap()
         };
         let create_contract_tx = RawL2Transaction::new_builder()
             .from_id(non_allowed_creator_id.pack())
@@ -274,9 +276,9 @@ mod tests {
             .hash_type(ScriptHashType::Type.into())
             .build();
         let not_polyjuice_id = dummy_state
-            .create_account(not_polyjuice_script.hash().into())
+            .create_account(not_polyjuice_script.hash())
             .unwrap();
-        dummy_state.insert_script(not_polyjuice_script.hash().into(), not_polyjuice_script);
+        dummy_state.insert_script(not_polyjuice_script.hash(), not_polyjuice_script);
         let not_polyjuice_tx = RawL2Transaction::new_builder()
             .from_id(non_allowed_creator_id.pack())
             .to_id(not_polyjuice_id.pack())

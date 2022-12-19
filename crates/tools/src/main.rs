@@ -1493,8 +1493,8 @@ async fn main() -> Result<()> {
 
             let stat = stat::stat_custodian_cells(
                 &rpc_client,
-                &rollup_type_hash.into(),
-                &custodian_script_type_hash.into(),
+                &rollup_type_hash,
+                &custodian_script_type_hash,
                 Some(min_capacity),
                 &compatible_finalized_timepoint,
             )

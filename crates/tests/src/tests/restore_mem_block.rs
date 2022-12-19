@@ -12,10 +12,11 @@ use ckb_types::prelude::{Builder, Entity};
 use ckb_vm::Bytes;
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::registry_address::RegistryAddress;
-use gw_common::{state::State, H256};
+use gw_common::state::State;
 use gw_rpc_server::registry::Registry;
 use gw_store::state::history::history_state::RWConfig;
 use gw_store::state::BlockStateDB;
+use gw_types::h256::*;
 use gw_types::packed::{
     DepositInfoVec, DepositRequest, Fee, L2Transaction, RawL2Transaction, RawWithdrawalRequest,
     SUDTArgs, SUDTTransfer, Script, WithdrawalRequest, WithdrawalRequestExtra,
@@ -31,7 +32,7 @@ async fn test_restore_mem_block() {
     let _ = env_logger::builder().is_test(true).try_init();
 
     let rollup_type_script = Script::default();
-    let rollup_script_hash: H256 = rollup_type_script.hash().into();
+    let rollup_script_hash: H256 = rollup_type_script.hash();
     let mut chain = setup_chain(rollup_type_script.clone()).await;
     let rollup_context = chain.generator().rollup_context();
 
@@ -124,7 +125,7 @@ async fn test_restore_mem_block() {
         tx_accounts
             .map(|account_script| {
                 let from_id = state
-                    .get_account_id_by_script_hash(&account_script.hash().into())
+                    .get_account_id_by_script_hash(&account_script.hash())
                     .unwrap();
                 let to_script = random_always_success_script(&rollup_script_hash);
                 let to_addr =

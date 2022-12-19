@@ -16,7 +16,6 @@ use ckb_types::prelude::{Builder, Entity};
 use godwoken_bin::subcommand::{export_block::ExportBlock, import_block::ImportBlock};
 use gw_block_producer::produce_block::ProduceBlockResult;
 use gw_chain::chain::{Chain, ChallengeCell, L1Action, L1ActionContext, SyncEvent, SyncParam};
-use gw_common::H256;
 use gw_config::StoreConfig;
 use gw_db::{read_only_db::ReadOnlyDB, schema::COLUMNS, RocksDB};
 use gw_generator::account_lock_manage::always_success::AlwaysSuccess;
@@ -24,6 +23,7 @@ use gw_generator::account_lock_manage::secp256k1::Secp256k1Eth;
 use gw_generator::account_lock_manage::AccountLockManage;
 use gw_store::{readonly::StoreReadonly, traits::chain_store::ChainStore, Store};
 use gw_types::core::{Status, Timepoint};
+use gw_types::h256::*;
 use gw_types::packed::DepositInfoVec;
 use gw_types::{
     bytes::Bytes,
@@ -81,7 +81,7 @@ async fn test_export_import_block() {
         .args(vec![1u8; 32].pack())
         .build();
 
-    let rollup_script_hash: H256 = rollup_type_script.hash().into();
+    let rollup_script_hash: H256 = rollup_type_script.hash();
     let rollup_cell = CellInfo {
         data: global_state.as_bytes(),
         out_point: OutPoint::new_builder()
@@ -104,9 +104,9 @@ async fn test_export_import_block() {
     let mut chain = {
         let mut account_lock_manage = AccountLockManage::default();
         account_lock_manage
-            .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Arc::new(AlwaysSuccess));
+            .register_lock_algorithm(*ALWAYS_SUCCESS_CODE_HASH, Arc::new(AlwaysSuccess));
         account_lock_manage.register_lock_algorithm(
-            (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
+            *ETH_ACCOUNT_LOCK_CODE_HASH,
             Arc::new(Secp256k1Eth::default()),
         );
         setup_chain_with_account_lock_manage(
@@ -209,9 +209,9 @@ async fn test_export_import_block() {
     let import_chain = {
         let mut account_lock_manage = AccountLockManage::default();
         account_lock_manage
-            .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Arc::new(AlwaysSuccess));
+            .register_lock_algorithm(*ALWAYS_SUCCESS_CODE_HASH, Arc::new(AlwaysSuccess));
         account_lock_manage.register_lock_algorithm(
-            (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
+            *ETH_ACCOUNT_LOCK_CODE_HASH,
             Arc::new(Secp256k1Eth::default()),
         );
         setup_chain_with_account_lock_manage(
@@ -294,9 +294,9 @@ async fn test_export_import_block() {
     let import_chain = {
         let mut account_lock_manage = AccountLockManage::default();
         account_lock_manage
-            .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Arc::new(AlwaysSuccess));
+            .register_lock_algorithm(*ALWAYS_SUCCESS_CODE_HASH, Arc::new(AlwaysSuccess));
         account_lock_manage.register_lock_algorithm(
-            (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
+            *ETH_ACCOUNT_LOCK_CODE_HASH,
             Arc::new(Secp256k1Eth::default()),
         );
         setup_chain_with_account_lock_manage(
