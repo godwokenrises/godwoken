@@ -34,8 +34,8 @@ struct CaseParam {
     tip_block_number: u64,
     // GlobalState.last_finalized_timepoint
     global_state_last_finalized_timepoint: Timepoint,
-    // WithdrawalLockArgs.withdrawal_block_timepoint
-    withdrawal_block_timepoint: Timepoint,
+    // WithdrawalLockArgs.withdrawal_finalized_timepoint
+    withdrawal_finalized_timepoint: Timepoint,
     // Input since
     since: Uint64,
 
@@ -62,7 +62,7 @@ fn test_finality_of_withdrawal_lock() {
             id: 0,
             tip_block_number,
             global_state_last_finalized_timepoint: global_state_last_finalized_timepoint.clone(),
-            withdrawal_block_timepoint: Timepoint::from_block_number(
+            withdrawal_finalized_timepoint: Timepoint::from_block_number(
                 tip_block_number - DEFAULT_FINALITY_BLOCKS,
             ),
             since: Default::default(),
@@ -75,7 +75,7 @@ fn test_finality_of_withdrawal_lock() {
             id: 1,
             tip_block_number,
             global_state_last_finalized_timepoint: global_state_last_finalized_timepoint.clone(),
-            withdrawal_block_timepoint: Timepoint::from_block_number(
+            withdrawal_finalized_timepoint: Timepoint::from_block_number(
                 tip_block_number + 1 - DEFAULT_FINALITY_BLOCKS,
             ),
             since: Default::default(),
@@ -88,7 +88,7 @@ fn test_finality_of_withdrawal_lock() {
             id: 2,
             tip_block_number,
             global_state_last_finalized_timepoint: global_state_last_finalized_timepoint.clone(),
-            withdrawal_block_timepoint: global_state_last_finalized_timepoint.clone(),
+            withdrawal_finalized_timepoint: global_state_last_finalized_timepoint.clone(),
             since: since_timestamp(random_timestamp),
             unlock_path_include_one_owner_input: true,
             unlock_path_same_index_same_content_output: false,
@@ -99,7 +99,7 @@ fn test_finality_of_withdrawal_lock() {
             id: 3,
             tip_block_number,
             global_state_last_finalized_timepoint: global_state_last_finalized_timepoint.clone(),
-            withdrawal_block_timepoint: global_state_last_finalized_timepoint.clone(),
+            withdrawal_finalized_timepoint: global_state_last_finalized_timepoint.clone(),
             since: since_timestamp(random_timestamp - 1000),
             unlock_path_include_one_owner_input: true,
             unlock_path_same_index_same_content_output: false,
@@ -110,7 +110,7 @@ fn test_finality_of_withdrawal_lock() {
             id: 4,
             tip_block_number,
             global_state_last_finalized_timepoint: global_state_last_finalized_timepoint.clone(),
-            withdrawal_block_timepoint: Timepoint::from_block_number(
+            withdrawal_finalized_timepoint: Timepoint::from_block_number(
                 tip_block_number - DEFAULT_FINALITY_BLOCKS,
             ),
             since: Default::default(),
@@ -123,7 +123,7 @@ fn test_finality_of_withdrawal_lock() {
             id: 5,
             tip_block_number,
             global_state_last_finalized_timepoint,
-            withdrawal_block_timepoint: Timepoint::from_block_number(
+            withdrawal_finalized_timepoint: Timepoint::from_block_number(
                 tip_block_number - DEFAULT_FINALITY_BLOCKS,
             ),
             since: Default::default(),
@@ -141,7 +141,7 @@ fn run_case(case: CaseParam) {
         id: _id,
         tip_block_number,
         global_state_last_finalized_timepoint,
-        withdrawal_block_timepoint,
+        withdrawal_finalized_timepoint,
         since,
         expected_result,
         unlock_path_same_index_same_content_output,
@@ -205,7 +205,9 @@ fn run_case(case: CaseParam) {
                         .owner_lock_hash(Byte32::new_unchecked(
                             withdrawal_owner_lock_hash.as_bytes(),
                         ))
-                        .withdrawal_block_timepoint(withdrawal_block_timepoint.full_value().pack())
+                        .withdrawal_finalized_timepoint(
+                            withdrawal_finalized_timepoint.full_value().pack(),
+                        )
                         .build();
                     let mut args = Vec::new();
                     args.extend_from_slice(rollup_state_type_hash.as_slice());

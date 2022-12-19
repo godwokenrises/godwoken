@@ -189,7 +189,7 @@ table DepositLockArgs {
 table CustodianLockArgs {
     deposit_block_hash: Byte32,
     // Timepoint format
-    deposit_block_timepoint: Uint64,
+    deposit_finalized_timepoint: Uint64,
     // used for revert this cell to deposit request cell
     // after finalize, this lock is meaningless
     deposit_lock_args: DepositLockArgs,
@@ -206,7 +206,7 @@ struct UnlockCustodianViaRevertWitness {
 struct WithdrawalLockArgs {
     withdrawal_block_hash: Byte32,
     // Timepoint format
-    withdrawal_block_timepoint: Uint64,
+    withdrawal_finalized_timepoint: Uint64,
     account_script_hash: Byte32,
     // layer1 lock to withdraw after challenge period
     owner_lock_hash: Byte32,
@@ -228,7 +228,7 @@ struct UnlockWithdrawalViaRevert {
 struct StakeLockArgs {
     owner_lock_hash: Byte32,
     // Timepoint format
-    stake_block_timepoint: Uint64,
+    stake_finalized_timepoint: Uint64,
 }
 // --- end of stake lock ---
 

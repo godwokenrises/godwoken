@@ -32,7 +32,7 @@ use crate::constants::MAX_CUSTODIANS;
 pub fn to_custodian_cell(
     rollup_context: &RollupContext,
     block_hash: &H256,
-    block_timepoint: &Timepoint,
+    finalized_timepoint: &Timepoint,
     deposit_info: &DepositInfo,
 ) -> Result<(CellOutput, Bytes), u128> {
     let lock_args: Bytes = {
@@ -43,7 +43,7 @@ pub fn to_custodian_cell(
 
         let custodian_lock_args = CustodianLockArgs::new_builder()
             .deposit_block_hash(Into::<[u8; 32]>::into(*block_hash).pack())
-            .deposit_block_timepoint(block_timepoint.full_value().pack())
+            .deposit_finalized_timepoint(finalized_timepoint.full_value().pack())
             .deposit_lock_args(deposit_lock_args)
             .build();
 
@@ -298,7 +298,7 @@ async fn query_finalized_custodian_cells(
             };
 
             if !compatible_finalized_timepoint.is_finalized(&Timepoint::from_full_value(
-                custodian_lock_args.deposit_block_timepoint().unpack(),
+                custodian_lock_args.deposit_finalized_timepoint().unpack(),
             )) {
                 continue;
             }
@@ -464,7 +464,7 @@ mod tests {
     ) -> Vec<CellInfo> {
         let args = {
             let custodian_lock_args = CustodianLockArgs::new_builder()
-                .deposit_block_timepoint(last_finalized_timepoint.full_value().pack())
+                .deposit_finalized_timepoint(last_finalized_timepoint.full_value().pack())
                 .build();
 
             let mut args = rollup_context.rollup_script_hash.as_slice().to_vec();

@@ -50,7 +50,7 @@ pub fn build_withdrawal_cell_output(
     rollup_context: &RollupContext,
     req: &WithdrawalRequestExtra,
     block_hash: &H256,
-    block_timepoint: &Timepoint,
+    finalized_timepoint: &Timepoint,
     opt_asset_script: Option<Script>,
 ) -> Result<(CellOutput, Bytes), WithdrawalCellError> {
     let withdrawal_capacity: u64 = req.raw().capacity().unpack();
@@ -58,7 +58,7 @@ pub fn build_withdrawal_cell_output(
         let withdrawal_lock_args = WithdrawalLockArgs::new_builder()
             .account_script_hash(req.raw().account_script_hash())
             .withdrawal_block_hash(Into::<[u8; 32]>::into(*block_hash).pack())
-            .withdrawal_block_timepoint(block_timepoint.full_value().pack())
+            .withdrawal_finalized_timepoint(finalized_timepoint.full_value().pack())
             .owner_lock_hash(req.raw().owner_lock_hash())
             .build();
 
@@ -234,7 +234,7 @@ mod test {
         );
         assert_eq!(lock_args.withdrawal_block_hash(), block_hash.pack());
         assert_eq!(
-            lock_args.withdrawal_block_timepoint().unpack(),
+            lock_args.withdrawal_finalized_timepoint().unpack(),
             block_timepoint.full_value()
         );
         assert_eq!(lock_args.owner_lock_hash(), owner_lock.hash().pack());
