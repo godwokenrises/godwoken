@@ -116,9 +116,9 @@ dependencies = [
 
 [[package]]
 name = "ckb-std"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5761f11372e794d77b8e8a8059b22c5d6ccef907588dd5302a669f056ecce6b"
+checksum = "47a6ad40455c446ad6fbb303dae24827fc309f43558f59d1f1b863a9de3e9f81"
 dependencies = [
  "buddy-alloc",
  "cc",
@@ -203,33 +203,21 @@ dependencies = [
 
 [[package]]
 name = "ethabi"
-version = "16.0.0"
+version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4c98847055d934070b90e806e12d3936b787d0a115068981c1d8dfd5dfef5a5"
+checksum = "7413c5f74cc903ea37386a8965a936cbeb334bd270862fdece542c1b2dcbc898"
 dependencies = [
  "ethereum-types",
  "hex",
- "sha3 0.9.1",
-]
-
-[[package]]
-name = "ethbloom"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfb684ac8fa8f6c5759f788862bb22ec6fe3cb392f6bfd08e3c64b603661e3f8"
-dependencies = [
- "crunchy",
- "fixed-hash",
- "tiny-keccak",
+ "sha3 0.10.0",
 ]
 
 [[package]]
 name = "ethereum-types"
-version = "0.12.1"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05136f7057fe789f06e6d41d07b34e6f70d8c86e5693b60f97aaa6553553bdaf"
+checksum = "02d215cbf040552efcbe99a38372fe80ab9d00268e20012b79fcd0f073edd8ee"
 dependencies = [
- "ethbloom",
  "fixed-hash",
  "primitive-types",
  "uint",
@@ -237,9 +225,9 @@ dependencies = [
 
 [[package]]
 name = "fixed-hash"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfcf0ed7fe52a17a03854ec54a9f76d6d84508d1c0e66bc1793301c73fc8493c"
+checksum = "835c052cb0c08c1acf6ffd71c022172e18723949c8282f2b9f27efbc51e64534"
 dependencies = [
  "byteorder",
  "rustc-hex",
@@ -258,20 +246,17 @@ dependencies = [
 
 [[package]]
 name = "gw-common"
-version = "1.7.1"
-source = "git+https://github.com/nervosnetwork/godwoken.git?rev=64f0576b527720226501fe8f0df305ce766aea0e#64f0576b527720226501fe8f0df305ce766aea0e"
+version = "1.8.0-rc1"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
  "gw-types",
  "merkle-cbt",
- "sparse-merkle-tree",
 ]
 
 [[package]]
 name = "gw-hash"
-version = "1.7.1"
-source = "git+https://github.com/nervosnetwork/godwoken.git?rev=64f0576b527720226501fe8f0df305ce766aea0e#64f0576b527720226501fe8f0df305ce766aea0e"
+version = "1.8.0-rc1"
 dependencies = [
  "blake2b-ref",
 ]
@@ -286,14 +271,12 @@ dependencies = [
 
 [[package]]
 name = "gw-types"
-version = "1.7.1"
-source = "git+https://github.com/nervosnetwork/godwoken.git?rev=64f0576b527720226501fe8f0df305ce766aea0e#64f0576b527720226501fe8f0df305ce766aea0e"
+version = "1.8.0-rc1"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
  "molecule",
  "primitive-types",
- "sparse-merkle-tree",
 ]
 
 [[package]]
@@ -322,9 +305,9 @@ dependencies = [
 
 [[package]]
 name = "impl-serde"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4551f042f3438e64dbd6226b20527fc84a6e1fe65688b58746a2f53623f25f5c"
+checksum = "ebc88fc67028ae3db0c853baa36269d398d5f45b6982f95549ff5def78c935cd"
 dependencies = [
  "serde",
 ]
@@ -352,9 +335,9 @@ dependencies = [
 
 [[package]]
 name = "molecule"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be5f63176422224eadd975789462a96cedaf339cd1009ef92fbdfaad39d35f5f"
+checksum = "edc8276c02a006bddad7d1c28c1a88f30421e1b5f0ba0ca96ceb8077c7d20c01"
 dependencies = [
  "cfg-if 1.0.0",
 ]
@@ -367,9 +350,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "primitive-types"
-version = "0.10.1"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05e4722c697a58a99d5d06a08c30821d7c082a4632198de1eaa5a6c22ef42373"
+checksum = "9f3486ccba82358b11a77516035647c34ba167dfa53312630de83b12bd4f3d66"
 dependencies = [
  "fixed-hash",
  "impl-rlp",
@@ -429,15 +412,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sparse-merkle-tree"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f84214ec89cb9d304b5d54c7a266951c25bd396b2df5388420a9497a6896120a"
-dependencies = [
- "cfg-if 0.1.10",
-]
-
-[[package]]
 name = "stake-lock"
 version = "0.1.0"
 dependencies = [
@@ -448,6 +422,7 @@ dependencies = [
 name = "state-validator"
 version = "0.1.0"
 dependencies = [
+ "ckb-smt",
  "gw-state",
  "gw-utils",
 ]
@@ -457,24 +432,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "tiny-keccak"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c9d3793400a45f954c52e73d068316d76b6f4e36977e3fcebb13a2721e80237"
-dependencies = [
- "crunchy",
-]
-
-[[package]]
-name = "tron-account-lock"
-version = "0.1.0"
-dependencies = [
- "gw-utils",
- "secp256k1-utils",
- "sha3 0.9.1",
-]
 
 [[package]]
 name = "typenum"

@@ -1,10 +1,9 @@
 use std::{collections::HashSet, time::Duration};
 
-use gw_common::{
-    merkle_utils::calculate_state_checkpoint, registry_address::RegistryAddress, H256,
-};
+use gw_common::{merkle_utils::calculate_state_checkpoint, registry_address::RegistryAddress};
 use gw_types::{
     bytes::Bytes,
+    h256::H256,
     offchain::{DepositInfo, FinalizedCustodianCapacity},
     packed::{self, AccountMerkleState, BlockInfo, L2Block},
     prelude::*,
@@ -552,7 +551,7 @@ pub enum MemBlockCmp {
 mod test {
     use gw_common::merkle_utils::calculate_state_checkpoint;
     use gw_common::registry_address::RegistryAddress;
-    use gw_common::H256;
+    use gw_types::h256::*;
     use gw_types::packed::{AccountMerkleState, BlockInfo};
     use gw_types::prelude::{Builder, Entity, Pack, Unpack};
 
@@ -637,7 +636,7 @@ mod test {
     }
 
     fn random_hash() -> H256 {
-        rand::random::<[u8; 32]>().into()
+        rand::random()
     }
 
     fn random_state() -> AccountMerkleState {

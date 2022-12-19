@@ -8,7 +8,7 @@ pub mod helper;
 #[allow(clippy::too_many_arguments)]
 pub(crate) mod test_cases;
 
-use gw_common::{smt::SMT, H256};
+use gw_smt::smt::SMT;
 pub use gw_store;
 use gw_store::{
     smt::smt_store::SMTStateStore,
@@ -19,10 +19,14 @@ use gw_store::{
     },
 };
 pub use gw_types;
+use gw_types::h256::*;
 
 type DummyState = MemStateDB;
 pub fn new_dummy_state(store: StoreSnapshot) -> MemStateDB {
-    let smt = SMT::new(H256::zero(), SMTStateStore::new(MemStore::new(store)));
+    let smt = SMT::new(
+        H256::zero().into(),
+        SMTStateStore::new(MemStore::new(store)),
+    );
     let inner = MemStateTree::new(smt, 0);
     MemStateDB::new(inner)
 }

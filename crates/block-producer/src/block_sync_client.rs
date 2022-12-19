@@ -339,7 +339,7 @@ async fn handle_local_block(
     let mut store_tx = client.store.begin_transaction();
     let store_block_hash = store_tx.get_block_hash_by_number(block_number)?;
     if let Some(store_block_hash) = store_block_hash {
-        if store_block_hash != block_hash.into() {
+        if store_block_hash != block_hash {
             log::info!("revert to {}", block_number - 1);
             revert(client, &mut store_tx, block_number - 1).await?;
             store_tx.commit()?;

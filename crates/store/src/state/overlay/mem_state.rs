@@ -7,11 +7,13 @@ use crate::snapshot::StoreSnapshot;
 use crate::traits::kv_store::KVStoreRead;
 use crate::traits::kv_store::KVStoreWrite;
 use anyhow::Result;
-use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
+use gw_common::{error::Error as StateError, state::State};
+use gw_smt::smt::SMT;
 use gw_traits::CodeStore;
 use gw_types::from_box_should_be_ok;
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     packed::{self, AccountMerkleState},
     prelude::*,
 };
@@ -32,8 +34,9 @@ impl MemStateTree {
     }
 
     pub fn get_merkle_state(&self) -> AccountMerkleState {
+        let root: H256 = (*self.tree.root()).into();
         AccountMerkleState::new_builder()
-            .merkle_root(self.tree.root().pack())
+            .merkle_root(root.pack())
             .count(self.account_count.pack())
             .build()
     }
@@ -62,12 +65,18 @@ impl Clone for MemStateTree {
 
 impl State for MemStateTree {
     fn get_raw(&self, key: &H256) -> Result<H256, StateError> {
-        let v = self.tree.get(key)?;
+        let v = self
+            .tree
+            .get(&(*key).into())
+            .map(|v| v.into())
+            .map_err(|err| StateError::SMT(err.to_string()))?;
         Ok(v)
     }
 
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), StateError> {
-        self.tree.update(key, value)?;
+        self.tree
+            .update(key.into(), value.into())
+            .map_err(|err| StateError::SMT(err.to_string()))?;
         Ok(())
     }
 
@@ -81,8 +90,8 @@ impl State for MemStateTree {
     }
 
     fn calculate_root(&self) -> Result<H256, StateError> {
-        let root = self.tree.root();
-        Ok(*root)
+        let root = (*self.tree.root()).into();
+        Ok(root)
     }
 }
 

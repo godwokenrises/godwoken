@@ -20,8 +20,8 @@ use serde::Deserialize;
 use smol_str::SmolStr;
 use tracing::instrument;
 
-use gw_common::H256;
 use gw_telemetry::metric::{encoding, registry::Registry, Lazy};
+use gw_types::h256::*;
 
 // TODO: add to config.toml
 const ENV_METRIC_MONITOR_CUSTODIAN_ENABLE: &str = "METRIC_MONITOR_CUSTODIAN_ENABLE";
@@ -108,12 +108,12 @@ impl Config {
 
             let c = Custodian {
                 symbol: SmolStr::new_inline(&jc.symbol),
-                type_hash: H256::from(buf),
+                type_hash: buf,
                 decimal: jc.decimal,
             };
             tracing::info!("monitor add {}", c.symbol);
 
-            Ok((H256::from(buf), c))
+            Ok((buf, c))
         });
 
         Ok(to_custodian.collect::<Result<_, _>>()?)

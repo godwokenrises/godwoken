@@ -2,14 +2,14 @@
 
 use std::convert::TryInto;
 
-use gw_common::{
+use gw_smt::{
     smt::SMT,
+    smt_h256_ext::SMTH256,
     sparse_merkle_tree::{
         error::Error as SMTError,
         traits::{StoreReadOps, StoreWriteOps},
         BranchKey, BranchNode,
     },
-    H256,
 };
 
 use crate::{
@@ -47,7 +47,7 @@ impl<DB: KVStore> SMTStateStore<DB> {
     }
 }
 
-impl<DB: KVStore> StoreReadOps<H256> for SMTStateStore<DB> {
+impl<DB: KVStore> StoreReadOps<SMTH256> for SMTStateStore<DB> {
     fn get_branch(&self, branch_key: &BranchKey) -> Result<Option<BranchNode>, SMTError> {
         match self
             .0
@@ -58,18 +58,18 @@ impl<DB: KVStore> StoreReadOps<H256> for SMTStateStore<DB> {
         }
     }
 
-    fn get_leaf(&self, leaf_key: &H256) -> Result<Option<H256>, SMTError> {
+    fn get_leaf(&self, leaf_key: &SMTH256) -> Result<Option<SMTH256>, SMTError> {
         match self.0.get(COLUMN_ACCOUNT_SMT_LEAF, leaf_key.as_slice()) {
             Some(slice) if 32 == slice.len() => {
                 let leaf: [u8; 32] = slice.as_ref().try_into().unwrap();
-                Ok(Some(H256::from(leaf)))
+                Ok(Some(leaf.into()))
             }
             Some(_) => Err(SMTError::Store("get corrupted leaf".to_string())),
             None => Ok(None),
         }
     }
 }
-impl<DB: KVStore> StoreWriteOps<H256> for SMTStateStore<DB> {
+impl<DB: KVStore> StoreWriteOps<SMTH256> for SMTStateStore<DB> {
     fn insert_branch(&mut self, branch_key: BranchKey, branch: BranchNode) -> Result<(), SMTError> {
         self.0
             .insert_raw(
@@ -82,7 +82,7 @@ impl<DB: KVStore> StoreWriteOps<H256> for SMTStateStore<DB> {
         Ok(())
     }
 
-    fn insert_leaf(&mut self, leaf_key: H256, leaf: H256) -> Result<(), SMTError> {
+    fn insert_leaf(&mut self, leaf_key: SMTH256, leaf: SMTH256) -> Result<(), SMTError> {
         self.0
             .insert_raw(
                 COLUMN_ACCOUNT_SMT_LEAF,
@@ -102,7 +102,7 @@ impl<DB: KVStore> StoreWriteOps<H256> for SMTStateStore<DB> {
         Ok(())
     }
 
-    fn remove_leaf(&mut self, leaf_key: &H256) -> Result<(), SMTError> {
+    fn remove_leaf(&mut self, leaf_key: &SMTH256) -> Result<(), SMTError> {
         self.0
             .delete(COLUMN_ACCOUNT_SMT_LEAF, leaf_key.as_slice())
             .map_err(|err| SMTError::Store(format!("delete error {}", err)))?;

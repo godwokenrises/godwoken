@@ -1,13 +1,14 @@
 use std::convert::TryInto;
 
 use anyhow::{Context, Result};
-use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
+use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State};
 use gw_config::BackendType;
 use gw_traits::CodeStore;
 use gw_types::core::Timepoint;
 use gw_types::{
     bytes::Bytes,
     core::{AllowedContractType, ScriptHashType},
+    h256::*,
     packed::{CellOutput, RawL2Transaction, Script, WithdrawalLockArgs, WithdrawalRequestExtra},
     prelude::*,
 };
@@ -49,7 +50,7 @@ pub fn build_withdrawal_cell_output(
     rollup_context: &RollupContext,
     req: &WithdrawalRequestExtra,
     block_hash: &H256,
-    block_timepoint: &Timepoint,
+    finalized_timepoint: &Timepoint,
     opt_asset_script: Option<Script>,
 ) -> Result<(CellOutput, Bytes), WithdrawalCellError> {
     let withdrawal_capacity: u64 = req.raw().capacity().unpack();
@@ -57,7 +58,7 @@ pub fn build_withdrawal_cell_output(
         let withdrawal_lock_args = WithdrawalLockArgs::new_builder()
             .account_script_hash(req.raw().account_script_hash())
             .withdrawal_block_hash(Into::<[u8; 32]>::into(*block_hash).pack())
-            .withdrawal_block_timepoint(block_timepoint.full_value().pack())
+            .withdrawal_finalized_timepoint(finalized_timepoint.full_value().pack())
             .owner_lock_hash(req.raw().owner_lock_hash())
             .build();
 
@@ -67,7 +68,7 @@ pub fn build_withdrawal_cell_output(
         let owner_lock = req.owner_lock();
         let owner_lock_hash: [u8; 32] = req.raw().owner_lock_hash().unpack();
         if owner_lock_hash != owner_lock.hash() {
-            return Err(WithdrawalCellError::OwnerLock(owner_lock_hash.into()));
+            return Err(WithdrawalCellError::OwnerLock(owner_lock_hash));
         }
         args.extend_from_slice(&(owner_lock.as_slice().len() as u32).to_be_bytes());
         args.extend_from_slice(owner_lock.as_slice());
@@ -131,7 +132,7 @@ pub fn get_polyjuice_creator_id<S: State + CodeStore>(
             .hash_type(ScriptHashType::Type.into())
             .args(args.pack())
             .build();
-        let script_hash = script.hash().into();
+        let script_hash = script.hash();
         let polyjuice_creator_id = state.get_account_id_by_script_hash(&script_hash)?;
         Ok(polyjuice_creator_id)
     } else {
@@ -141,10 +142,9 @@ pub fn get_polyjuice_creator_id<S: State + CodeStore>(
 
 #[cfg(test)]
 mod test {
-    use gw_common::h256_ext::H256Ext;
-    use gw_common::H256;
     use gw_types::bytes::Bytes;
     use gw_types::core::{ScriptHashType, Timepoint};
+    use gw_types::h256::*;
     use gw_types::packed::{
         RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest, WithdrawalRequestExtra,
     };
@@ -234,7 +234,7 @@ mod test {
         );
         assert_eq!(lock_args.withdrawal_block_hash(), block_hash.pack());
         assert_eq!(
-            lock_args.withdrawal_block_timepoint().unpack(),
+            lock_args.withdrawal_finalized_timepoint().unpack(),
             block_timepoint.full_value()
         );
         assert_eq!(lock_args.owner_lock_hash(), owner_lock.hash().pack());

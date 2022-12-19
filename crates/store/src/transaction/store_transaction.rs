@@ -6,11 +6,13 @@ use anyhow::{bail, Context, Result};
 use autorocks::autorocks_sys::rocksdb::PinnableSlice;
 use autorocks::moveit::moveit;
 use autorocks::{DbIterator, Direction};
-use gw_common::h256_ext::H256Ext;
-use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, H256};
+use gw_common::merkle_utils::calculate_state_checkpoint;
+use gw_smt::smt_h256_ext::SMTH256Ext;
+use gw_smt::{smt::SMT, smt_h256_ext::SMTH256};
 use gw_types::packed::NumberHash;
 use gw_types::{
     from_box_should_be_ok,
+    h256::H256,
     packed::{
         self, AccountMerkleState, Byte32, ChallengeTarget, Script, TransactionKey, WithdrawalKey,
     },
@@ -92,7 +94,6 @@ impl StoreTransaction {
     }
 
     pub fn set_tip_block_hash(&mut self, block_hash: H256) -> Result<()> {
-        let block_hash: [u8; 32] = block_hash.into();
         self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &block_hash)
     }
 
@@ -240,22 +241,22 @@ impl StoreTransaction {
 
         for block_hash in block_hashes.into_iter() {
             reverted_block_smt
-                .update(block_hash, H256::zero())
+                .update(block_hash.into(), SMTH256::zero())
                 .context("reset reverted block smt")?;
         }
 
         let root = *reverted_block_smt.root();
-        self.set_reverted_block_smt_root(root)
+        self.set_reverted_block_smt_root(root.into())
     }
 
     pub fn rewind_block_smt(&mut self, block: &packed::L2Block) -> Result<()> {
         let mut block_smt = self.block_smt()?;
         block_smt
-            .update(block.smt_key().into(), H256::zero())
+            .update(block.smt_key().into(), SMTH256::zero())
             .context("reset block smt")?;
 
         let root = *block_smt.root();
-        self.set_block_smt_root(root)
+        self.set_block_smt_root(root.into())
     }
 
     fn set_last_valid_tip_block_hash(&mut self, block_hash: &H256) -> Result<()> {
@@ -379,7 +380,7 @@ impl StoreTransaction {
             .update(block.smt_key().into(), block_hash.into())
             .context("update block smt")?;
         let root = *block_smt.root();
-        self.set_block_smt_root(root)?;
+        self.set_block_smt_root(root.into())?;
 
         // Update tip block
         self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &block_hash)?;
@@ -403,22 +404,22 @@ impl StoreTransaction {
         for block in bad_blocks {
             // Remove block from smt
             block_smt
-                .update(block.smt_key().into(), H256::zero())
+                .update(block.smt_key().into(), SMTH256::zero())
                 .context("update block smt")?;
         }
         let root = *block_smt.root();
-        self.set_block_smt_root(root)?;
+        self.set_block_smt_root(root.into())?;
 
         let mut reverted_block_smt = self.reverted_block_smt()?;
         for block in bad_blocks {
             let block_hash = block.hash();
             // Add block to reverted smt
             reverted_block_smt
-                .update(block_hash.into(), H256::one())
+                .update(block_hash.into(), SMTH256::one())
                 .context("update reverted block smt")?;
         }
         let root = *reverted_block_smt.root();
-        self.set_reverted_block_smt_root(root)?;
+        self.set_reverted_block_smt_root(root.into())?;
 
         // Revert tip block to parent block
         let parent_block_hash: [u8; 32] = {
@@ -466,11 +467,11 @@ impl StoreTransaction {
             .update(raw.smt_key().into(), raw.hash().into())
             .context("update block smt")?;
         let root = *block_smt.root();
-        self.set_block_smt_root(root)?;
+        self.set_block_smt_root(root.into())?;
 
         // update tip
         self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &block_hash)?;
-        self.set_last_valid_tip_block_hash(&block_hash.into())?;
+        self.set_last_valid_tip_block_hash(&block_hash)?;
 
         Ok(())
     }
@@ -487,7 +488,7 @@ impl StoreTransaction {
         // check
         {
             let tip = self.get_last_valid_tip_block_hash()?;
-            assert_eq!(tip, H256::from(block.raw().hash()), "Must detach from tip");
+            assert_eq!(tip, block.raw().hash(), "Must detach from tip");
         }
         {
             let number: u64 = block.raw().number().unpack();
@@ -505,7 +506,7 @@ impl StoreTransaction {
             self.delete(COLUMN_WITHDRAWAL_INFO, &withdrawal_hash)?;
         }
 
-        let block_hash: H256 = block.hash().into();
+        let block_hash: H256 = block.hash();
 
         // remove index
         let block_number = block.raw().number();
@@ -515,10 +516,10 @@ impl StoreTransaction {
         // update block tree
         let mut block_smt = self.block_smt()?;
         block_smt
-            .update(block.smt_key().into(), H256::zero())
+            .update(block.smt_key().into(), SMTH256::zero())
             .context("update block smt")?;
         let root = *block_smt.root();
-        self.set_block_smt_root(root)?;
+        self.set_block_smt_root(root.into())?;
 
         // update tip
         let block_number: u64 = block_number.unpack();
@@ -574,7 +575,8 @@ impl StoreTransaction {
         merkle_state: AccountMerkleState,
     ) -> Result<SMT<SMTStateStore<&mut Self>>> {
         let store = SMTStateStore::new(self);
-        Ok(SMT::new(merkle_state.merkle_root().unpack(), store))
+        let root: H256 = merkle_state.merkle_root().unpack();
+        Ok(SMT::new(root.into(), store))
     }
 
     pub fn insert_mem_pool_transaction(

@@ -67,7 +67,7 @@ async fn test_backward_compatibility() {
         meta_contract_script_hash,
     )
     .unwrap();
-    let sign = register.sign_message(signing_message.into()).unwrap();
+    let sign = register.sign_message(signing_message).unwrap();
 
     let create_user_tx = L2Transaction::new_builder()
         .raw(raw_l2tx)

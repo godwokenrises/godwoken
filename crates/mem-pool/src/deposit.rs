@@ -1,10 +1,11 @@
 use anyhow::{anyhow, Result};
-use gw_common::{h256_ext::H256Ext, registry::context::RegistryContext, state::State, H256};
+use gw_common::{registry::context::RegistryContext, state::State};
 use gw_config::DepositTimeoutConfig;
 use gw_store::state::MemStateDB;
 use gw_types::core::Timepoint;
 use gw_types::{
-    bytes::Bytes, core::ScriptHashType, offchain::DepositInfo, packed::DepositLockArgs, prelude::*,
+    bytes::Bytes, core::ScriptHashType, h256::*, offchain::DepositInfo, packed::DepositLockArgs,
+    prelude::*,
 };
 use gw_utils::since::{LockValue, Since};
 use gw_utils::RollupContext;

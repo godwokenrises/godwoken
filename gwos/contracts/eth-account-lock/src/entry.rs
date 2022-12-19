@@ -14,8 +14,10 @@ use crate::{
     eth_signature::{extract_eth_lock_args, EthAddress, Secp256k1Eth},
 };
 use gw_utils::{
-    cells::utils::search_lock_hash, ckb_std::high_level::load_witness_args, error::Error,
-    gw_common::H256, gw_types::core::SigningType,
+    cells::utils::search_lock_hash,
+    ckb_std::high_level::load_witness_args,
+    error::Error,
+    gw_types::{core::SigningType, h256::H256},
 };
 
 /// Eth account lock

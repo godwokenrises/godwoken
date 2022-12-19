@@ -15,10 +15,11 @@ use ckb_std::{
         load_cell_type_hash, QueryIter,
     },
 };
-use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
+use gw_common::CKB_SUDT_SCRIPT_ARGS;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
+    h256::{H256Ext, H256},
     packed::{Byte32, Byte32Reader, DepositLockArgs, RollupConfig, StakeLockArgs},
     prelude::*,
 };

@@ -1,7 +1,8 @@
 use anyhow::{anyhow, Result};
-use gw_common::{blake2b::new_blake2b, H256};
+use gw_common::blake2b::new_blake2b;
 use gw_types::{
     core::DepType,
+    h256::*,
     packed::{Block, CellDep, Header, OutPoint},
     prelude::*,
 };
@@ -56,25 +57,23 @@ impl CKBGenesisInfo {
                             hasher.update(&data.raw_data());
                             let mut hash = [0u8; 32];
                             hasher.finalize(&mut hash);
-                            hash.into()
+                            hash
                         };
                         if tx_index == Self::SIGHASH_OUTPUT_LOC.0
                             && index == Self::SIGHASH_OUTPUT_LOC.1
                         {
-                            sighash_type_hash =
-                                output.type_().to_opt().map(|script| script.hash().into());
+                            sighash_type_hash = output.type_().to_opt().map(|script| script.hash());
                             sighash_data_hash = Some(data_hash);
                         }
                         if tx_index == Self::MULTISIG_OUTPUT_LOC.0
                             && index == Self::MULTISIG_OUTPUT_LOC.1
                         {
                             multisig_type_hash =
-                                output.type_().to_opt().map(|script| script.hash().into());
+                                output.type_().to_opt().map(|script| script.hash());
                             multisig_data_hash = Some(data_hash);
                         }
                         if tx_index == Self::DAO_OUTPUT_LOC.0 && index == Self::DAO_OUTPUT_LOC.1 {
-                            dao_type_hash =
-                                output.type_().to_opt().map(|script| script.hash().into());
+                            dao_type_hash = output.type_().to_opt().map(|script| script.hash());
                             dao_data_hash = Some(data_hash);
                         }
                         let tx_hash = {

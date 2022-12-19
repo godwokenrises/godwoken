@@ -1,8 +1,9 @@
 use std::borrow::Cow;
 
 use ckb_vm::Error as VMError;
-use gw_common::{error::Error as StateError, sparse_merkle_tree::error::Error as SMTError, H256};
-use gw_types::{offchain::CycleMeter, packed::Byte32};
+use gw_common::error::Error as StateError;
+use gw_smt::sparse_merkle_tree::error::Error as SMTError;
+use gw_types::{h256::H256, offchain::CycleMeter, packed::Byte32};
 use thiserror::Error;
 
 /// Error

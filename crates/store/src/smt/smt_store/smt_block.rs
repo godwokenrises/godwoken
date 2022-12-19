@@ -2,14 +2,14 @@
 
 use std::convert::TryInto;
 
-use gw_common::{
+use gw_smt::{
     smt::SMT,
+    smt_h256_ext::SMTH256,
     sparse_merkle_tree::{
         error::Error as SMTError,
         traits::{StoreReadOps, StoreWriteOps},
         BranchKey, BranchNode,
     },
-    H256,
 };
 
 use crate::{
@@ -26,7 +26,7 @@ pub struct SMTBlockStore<DB>(DB);
 impl<DB: KVStoreRead + ChainStore> SMTBlockStore<DB> {
     pub fn to_smt(self) -> anyhow::Result<SMT<Self>> {
         let root = self.inner_store().get_block_smt_root()?;
-        Ok(SMT::new(root, self))
+        Ok(SMT::new(root.into(), self))
     }
 }
 
@@ -40,7 +40,7 @@ impl<DB> SMTBlockStore<DB> {
     }
 }
 
-impl<DB: KVStoreRead> StoreReadOps<H256> for SMTBlockStore<DB> {
+impl<DB: KVStoreRead> StoreReadOps<SMTH256> for SMTBlockStore<DB> {
     fn get_branch(&self, branch_key: &BranchKey) -> Result<Option<BranchNode>, SMTError> {
         match self
             .0
@@ -51,11 +51,11 @@ impl<DB: KVStoreRead> StoreReadOps<H256> for SMTBlockStore<DB> {
         }
     }
 
-    fn get_leaf(&self, leaf_key: &H256) -> Result<Option<H256>, SMTError> {
+    fn get_leaf(&self, leaf_key: &SMTH256) -> Result<Option<SMTH256>, SMTError> {
         match self.0.get(COLUMN_BLOCK_SMT_LEAF, leaf_key.as_slice()) {
             Some(slice) if 32 == slice.len() => {
                 let leaf: [u8; 32] = slice.as_ref().try_into().unwrap();
-                Ok(Some(H256::from(leaf)))
+                Ok(Some(SMTH256::from(leaf)))
             }
             Some(_) => Err(SMTError::Store("get corrupted leaf".to_string())),
             None => Ok(None),
@@ -63,7 +63,7 @@ impl<DB: KVStoreRead> StoreReadOps<H256> for SMTBlockStore<DB> {
     }
 }
 
-impl<DB: KVStoreWrite> StoreWriteOps<H256> for SMTBlockStore<DB> {
+impl<DB: KVStoreWrite> StoreWriteOps<SMTH256> for SMTBlockStore<DB> {
     fn insert_branch(&mut self, branch_key: BranchKey, branch: BranchNode) -> Result<(), SMTError> {
         self.0
             .insert_raw(
@@ -76,7 +76,7 @@ impl<DB: KVStoreWrite> StoreWriteOps<H256> for SMTBlockStore<DB> {
         Ok(())
     }
 
-    fn insert_leaf(&mut self, leaf_key: H256, leaf: H256) -> Result<(), SMTError> {
+    fn insert_leaf(&mut self, leaf_key: SMTH256, leaf: SMTH256) -> Result<(), SMTError> {
         self.0
             .insert_raw(COLUMN_BLOCK_SMT_LEAF, leaf_key.as_slice(), leaf.as_slice())
             .map_err(|err| SMTError::Store(format!("insert error {}", err)))?;
@@ -92,7 +92,7 @@ impl<DB: KVStoreWrite> StoreWriteOps<H256> for SMTBlockStore<DB> {
         Ok(())
     }
 
-    fn remove_leaf(&mut self, leaf_key: &H256) -> Result<(), SMTError> {
+    fn remove_leaf(&mut self, leaf_key: &SMTH256) -> Result<(), SMTError> {
         self.0
             .delete(COLUMN_BLOCK_SMT_LEAF, leaf_key.as_slice())
             .map_err(|err| SMTError::Store(format!("delete error {}", err)))?;

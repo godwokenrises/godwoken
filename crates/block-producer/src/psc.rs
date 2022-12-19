@@ -4,7 +4,6 @@ use std::{collections::HashSet, fmt::Display, sync::Arc, time::Duration};
 
 use anyhow::{bail, ensure, Context, Result};
 use gw_chain::chain::Chain;
-use gw_common::H256;
 use gw_config::PscConfig;
 use gw_mem_pool::{block_sync_server::BlockSyncServerState, pool::MemPool};
 use gw_rpc_client::{
@@ -14,6 +13,7 @@ use gw_rpc_client::{
 use gw_store::{snapshot::StoreSnapshot, traits::chain_store::ChainStore, Store};
 use gw_telemetry::traits::{OpenTelemetrySpanExt, TraceContextExt};
 use gw_types::{
+    h256::*,
     offchain::{CellStatus, DepositInfo, TxStatus},
     packed::{
         self, Confirmed, GlobalState, LocalBlock, NumberHash, OutPoint, Revert, Script, ScriptVec,
@@ -399,7 +399,7 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
     };
 
     let number: u64 = block.raw().number().unpack();
-    let block_hash: H256 = block.hash().into();
+    let block_hash: H256 = block.hash();
 
     let block_txs = block.transactions().len();
     let block_withdrawals = block.withdrawals().len();
@@ -638,10 +638,7 @@ async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<(
     log::info!("waiting for tx 0x{}", hex::encode(tx.hash()));
     let mut last_sent = Instant::now();
     loop {
-        let status = rpc_client
-            .ckb
-            .get_transaction_status(tx.hash().into())
-            .await?;
+        let status = rpc_client.ckb.get_transaction_status(tx.hash()).await?;
         let should_resend = match status {
             Some(TxStatus::Committed) => break,
             Some(TxStatus::Rejected) => true,
@@ -668,7 +665,7 @@ async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<(
     // Wait for indexer syncing the L1 block.
     let block_number = rpc_client
         .ckb
-        .get_transaction_block_number(tx.hash().into())
+        .get_transaction_block_number(tx.hash())
         .await?
         .context("get tx block hash")?;
     loop {
@@ -771,7 +768,7 @@ async fn check_cell(rpc_client: &RPCClient, out_point: &OutPoint) -> Result<()> 
                     .any(|i| i.previous_output().eq(out_point))
                 {
                     bail!(DeadCellError {
-                        consumed_by_tx: Some(tx.hash().into()),
+                        consumed_by_tx: Some(tx.hash()),
                     });
                 }
             }
@@ -804,7 +801,7 @@ async fn send_transaction_or_check_inputs(
                 // This can happen if the tx is confirmed right before it is
                 // resent and its inputs is checked.
                 if let Some(dead) = e.downcast_ref::<DeadCellError>() {
-                    if dead.consumed_by_tx == Some(tx.hash().into()) {
+                    if dead.consumed_by_tx == Some(tx.hash()) {
                         return Ok(());
                     }
                 }
@@ -911,7 +908,7 @@ fn publish_local_block(
     let withdrawals = {
         let reqs = block.as_reader().withdrawals();
         let extra_reqs = reqs.iter().map(|w| {
-            let h = w.hash().into();
+            let h = w.hash();
             snap.get_withdrawal(&h)?
                 .with_context(|| format!("block {} withdrawal {} not found", b, h.pack()))
         });

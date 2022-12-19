@@ -19,10 +19,10 @@ use ckb_types::{
     prelude::{Pack as CKBPack, Unpack as CKBUnpack},
 };
 use gw_common::registry_address::RegistryAddress;
-use gw_common::{
-    builtins::CKB_SUDT_ACCOUNT_ID, h256_ext::H256Ext,
-    sparse_merkle_tree::default_store::DefaultStore, state::State, H256,
-};
+use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State};
+use gw_smt::smt::SMTH256;
+use gw_smt::smt_h256_ext::SMTH256Ext;
+use gw_smt::sparse_merkle_tree::default_store::DefaultStore;
 use gw_store::state::history::history_state::RWConfig;
 use gw_store::state::BlockStateDB;
 use gw_store::traits::chain_store::ChainStore;
@@ -32,6 +32,7 @@ use gw_types::U256;
 use gw_types::{
     bytes::Bytes,
     core::{ChallengeTargetType, ScriptHashType, Status},
+    h256::*,
     packed::{
         ChallengeLockArgs, ChallengeTarget, DepositRequest, L2Transaction, RawL2Transaction,
         RollupAction, RollupActionUnion, RollupConfig, RollupRevert, SUDTArgs, SUDTArgsUnion,
@@ -154,7 +155,7 @@ async fn test_revert() {
         let mut db = chain.store().begin_transaction();
         let tree = BlockStateDB::from_store(&mut db, RWConfig::readonly()).unwrap();
         let sender_id = tree
-            .get_account_id_by_script_hash(&sender_script.hash().into())
+            .get_account_id_by_script_hash(&sender_script.hash())
             .unwrap()
             .unwrap();
         let receiver_address = RegistryAddress::new(1, receiver_script.hash()[0..20].to_vec());
@@ -289,7 +290,7 @@ async fn test_revert() {
         maybe_block.unwrap().unwrap().raw()
     };
     let new_tip_block_timestamp = new_tip_block.timestamp();
-    let mut reverted_block_tree: gw_common::smt::SMT<DefaultStore<H256>> = Default::default();
+    let mut reverted_block_tree: gw_smt::smt::SMT<DefaultStore<SMTH256>> = Default::default();
     // verify enter challenge
     let witness = {
         let block_proof: Bytes = {
@@ -328,11 +329,11 @@ async fn test_revert() {
             .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
             .build()
     };
-    let post_reverted_block_root = {
+    let post_reverted_block_root: H256 = {
         reverted_block_tree
-            .update(challenged_block.hash().into(), H256::one())
+            .update(challenged_block.hash().into(), SMTH256::one())
             .unwrap();
-        *reverted_block_tree.root()
+        (*reverted_block_tree.root()).into()
     };
     let last_finalized_timepoint = {
         let number: u64 = challenged_block.raw().number().unpack();

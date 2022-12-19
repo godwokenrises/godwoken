@@ -1,6 +1,6 @@
 use anyhow::Error;
 use autorocks::Direction;
-use gw_common::H256;
+use gw_types::h256::*;
 
 use crate::{
     schema::{COLUMN_BLOCK_STATE_RECORD, COLUMN_BLOCK_STATE_REVERSE_RECORD},
@@ -67,7 +67,7 @@ impl HistoryStateStore for StoreTransaction {
                     .map(|raw| {
                         let mut buf = [0u8; 32];
                         buf.copy_from_slice(&raw);
-                        buf.into()
+                        buf
                     })
             }
             _ => None,

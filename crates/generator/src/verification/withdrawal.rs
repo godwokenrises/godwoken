@@ -1,10 +1,9 @@
-use gw_common::{
-    builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, h256_ext::H256Ext, state::State, H256,
-};
+use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, state::State};
 use gw_config::ForkConfig;
 use gw_traits::CodeStore;
 use gw_types::{
     core::Timepoint,
+    h256::*,
     packed::{Script, WithdrawalRequestExtra},
     prelude::*,
     U256,
@@ -111,7 +110,7 @@ impl<'a, S: State + CodeStore> WithdrawalVerifier<'a, S> {
             build_l2_sudt_script(self.rollup_context, &sudt_script_hash).hash();
         let sudt_id = self
             .state
-            .get_account_id_by_script_hash(&l2_sudt_script_hash.into())?
+            .get_account_id_by_script_hash(&l2_sudt_script_hash)?
             .ok_or(AccountError::UnknownSUDT)?;
         // The sUDT id must not be equals to the CKB sUDT id if amount isn't 0
         if sudt_id != CKB_SUDT_ACCOUNT_ID {

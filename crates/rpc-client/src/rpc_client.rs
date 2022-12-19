@@ -8,12 +8,12 @@ use anyhow::{anyhow, Result};
 use async_jsonrpc_client::Params as ClientParams;
 use ckb_types::core::hardfork::HardForkSwitch;
 use ckb_types::prelude::Entity;
-use gw_common::H256;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, Consensus, Uint32};
 use gw_types::offchain::{CellStatus, CellWithStatus, CompatibleFinalizedTimepoint, DepositInfo};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
+    h256::H256,
     offchain::CellInfo,
     packed::{
         Block, CellOutput, CustodianLockArgs, CustodianLockArgsReader, DepositLockArgs,
@@ -372,11 +372,8 @@ impl RPCClient {
         }))
     }
 
-    #[instrument(skip_all)]
     pub async fn get_tip(&self) -> Result<NumberHash> {
-        let number_hash: gw_jsonrpc_types::blockchain::NumberHash =
-            self.indexer.request("get_tip", None).await?;
-        Ok(number_hash.into())
+        self.indexer.get_tip().await
     }
 
     #[instrument(skip_all, fields(block_hash = %block_hash.pack()))]
@@ -1135,7 +1132,7 @@ impl RPCClient {
                     Err(_) => continue,
                 };
                 if !compatible_finalized_timepoint.is_finalized(&Timepoint::from_full_value(
-                    custodian_lock_args.deposit_block_timepoint().unpack(),
+                    custodian_lock_args.deposit_finalized_timepoint().unpack(),
                 )) {
                     continue;
                 }
@@ -1234,7 +1231,7 @@ impl RPCClient {
                 };
 
                 if !compatible_finalized_timepoint.is_finalized(&Timepoint::from_full_value(
-                    custodian_lock_args.deposit_block_timepoint().unpack(),
+                    custodian_lock_args.deposit_finalized_timepoint().unpack(),
                 )) {
                     continue;
                 }

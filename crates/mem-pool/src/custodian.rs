@@ -1,7 +1,7 @@
 use std::{collections::HashSet, time::Instant};
 
 use anyhow::{anyhow, bail, Result};
-use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
+use gw_common::CKB_SUDT_SCRIPT_ARGS;
 use gw_rpc_client::{
     indexer_client::CKBIndexerClient,
     indexer_types::{Order, SearchKey, SearchKeyFilter},
@@ -13,6 +13,7 @@ use gw_types::offchain::CompatibleFinalizedTimepoint;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
+    h256::*,
     offchain::{CellInfo, CollectedCustodianCells, DepositInfo, WithdrawalsAmount},
     packed::{
         CellOutput, CustodianLockArgs, CustodianLockArgsReader, DepositLockArgs, Script,
@@ -31,7 +32,7 @@ use crate::constants::MAX_CUSTODIANS;
 pub fn to_custodian_cell(
     rollup_context: &RollupContext,
     block_hash: &H256,
-    block_timepoint: &Timepoint,
+    finalized_timepoint: &Timepoint,
     deposit_info: &DepositInfo,
 ) -> Result<(CellOutput, Bytes), u128> {
     let lock_args: Bytes = {
@@ -42,7 +43,7 @@ pub fn to_custodian_cell(
 
         let custodian_lock_args = CustodianLockArgs::new_builder()
             .deposit_block_hash(Into::<[u8; 32]>::into(*block_hash).pack())
-            .deposit_block_timepoint(block_timepoint.full_value().pack())
+            .deposit_finalized_timepoint(finalized_timepoint.full_value().pack())
             .deposit_lock_args(deposit_lock_args)
             .build();
 
@@ -184,7 +185,7 @@ fn sum_change_capacity(
     withdrawals_amount: &WithdrawalsAmount,
 ) -> u128 {
     let to_change_capacity = |sudt_script_hash: &[u8; 32]| -> u128 {
-        match db.get_asset_script(&H256::from(*sudt_script_hash)) {
+        match db.get_asset_script(sudt_script_hash) {
             Ok(Some(script)) => {
                 let (change, _data) = generate_finalized_custodian(rollup_context, 1, script);
                 change.capacity().unpack() as u128
@@ -297,7 +298,7 @@ async fn query_finalized_custodian_cells(
             };
 
             if !compatible_finalized_timepoint.is_finalized(&Timepoint::from_full_value(
-                custodian_lock_args.deposit_block_timepoint().unpack(),
+                custodian_lock_args.deposit_finalized_timepoint().unpack(),
             )) {
                 continue;
             }
@@ -391,7 +392,7 @@ mod tests {
     #[tokio::test]
     async fn test_query_finalized_custodians() {
         let rollup_context = RollupContext {
-            rollup_script_hash: [1u8; 32].into(),
+            rollup_script_hash: [1u8; 32],
             rollup_config: RollupConfig::new_builder()
                 .custodian_script_type_hash([2u8; 32].pack())
                 .l1_sudt_script_type_hash([3u8; 32].pack())
@@ -463,7 +464,7 @@ mod tests {
     ) -> Vec<CellInfo> {
         let args = {
             let custodian_lock_args = CustodianLockArgs::new_builder()
-                .deposit_block_timepoint(last_finalized_timepoint.full_value().pack())
+                .deposit_finalized_timepoint(last_finalized_timepoint.full_value().pack())
                 .build();
 
             let mut args = rollup_context.rollup_script_hash.as_slice().to_vec();

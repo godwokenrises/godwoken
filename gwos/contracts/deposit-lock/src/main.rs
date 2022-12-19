@@ -9,12 +9,13 @@
 #![feature(lang_items)]
 #![feature(alloc_error_handler)]
 #![feature(panic_info_message)]
-#![feature(asm)]
+#![feature(asm_sym)]
 
 // define modules
 mod entry;
 
 use ckb_std::default_alloc;
+use core::arch::asm;
 pub use gw_utils::{ckb_std, error};
 
 ckb_std::entry!(program_entry);

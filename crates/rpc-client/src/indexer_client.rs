@@ -11,29 +11,60 @@ use ckb_types::prelude::Entity;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{JsonBytes, Uint32};
 use gw_types::core::Timepoint;
 use gw_types::offchain::{CompatibleFinalizedTimepoint, CustodianStat, SUDTStat};
-use gw_types::packed::CustodianLockArgs;
+use gw_types::packed::{CustodianLockArgs, NumberHash};
 use gw_types::{packed::Script, prelude::*};
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use tracing::instrument;
 
 #[derive(Clone)]
-pub struct CKBIndexerClient(HttpClient);
+pub struct CKBIndexerClient {
+    client: HttpClient,
+    // True when using standalone CKB indexer, false when using the new built in CKB indexer.
+    is_standalone: bool,
+}
 
 impl CKBIndexerClient {
-    pub fn new(ckb_indexer_client: HttpClient) -> Self {
-        Self(ckb_indexer_client)
+    pub fn new(ckb_indexer_client: HttpClient, is_standalone: bool) -> Self {
+        Self {
+            client: ckb_indexer_client,
+            is_standalone,
+        }
     }
 
+    /// Create a new CKBIndexerClient with ckb RPC url.
+    pub fn with_ckb_url(url: &str) -> Result<Self> {
+        let client = HttpClient::builder()
+            .timeout(DEFAULT_HTTP_TIMEOUT)
+            .build(url)?;
+        Ok(Self::new(client, false))
+    }
+
+    /// Create a new CKBIndexerClient with standalone indexer url.
     pub fn with_url(url: &str) -> Result<Self> {
         let client = HttpClient::builder()
             .timeout(DEFAULT_HTTP_TIMEOUT)
             .build(url)?;
-        Ok(Self::new(client))
+        Ok(Self::new(client, true))
     }
 
     fn client(&self) -> &HttpClient {
-        &self.0
+        &self.client
+    }
+
+    #[instrument(skip_all)]
+    pub async fn get_tip(&self) -> Result<NumberHash> {
+        let number_hash: gw_jsonrpc_types::blockchain::NumberHash = self
+            .request(
+                if self.is_standalone {
+                    "get_tip"
+                } else {
+                    "get_indexer_tip"
+                },
+                None,
+            )
+            .await?;
+        Ok(number_hash.into())
     }
 
     #[instrument(skip_all, fields(method = method))]
@@ -145,7 +176,7 @@ impl CKBIndexerClient {
                     let args = cell.output.lock.args.into_bytes();
                     let args = CustodianLockArgs::from_slice(&args[32..]).unwrap();
                     compatible_finalized_timepoint.is_finalized(&Timepoint::from_full_value(
-                        args.deposit_block_timepoint().unpack(),
+                        args.deposit_finalized_timepoint().unpack(),
                     ))
                 };
                 if is_finalized {

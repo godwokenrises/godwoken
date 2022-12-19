@@ -8,11 +8,11 @@ use std::{
 pub use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID, RESERVED_ACCOUNT_ID};
 use gw_common::{
     blake2b::new_blake2b,
-    h256_ext::H256Ext,
     registry_address::RegistryAddress,
     state::{build_account_key, build_data_hash_key, State},
-    CKB_SUDT_SCRIPT_ARGS, H256,
+    CKB_SUDT_SCRIPT_ARGS,
 };
+
 use gw_config::{BackendConfig, BackendForkConfig, BackendType};
 use gw_db::schema::{COLUMN_INDEX, COLUMN_META, META_TIP_BLOCK_HASH_KEY};
 use gw_generator::{
@@ -28,6 +28,7 @@ use gw_store::{
     Store,
 };
 use gw_traits::CodeStore;
+use gw_types::h256::*;
 use gw_types::{
     bytes::Bytes,
     core::{AllowedContractType, AllowedEoaType, ScriptHashType},
@@ -58,7 +59,7 @@ pub const SECP_DATA_PATH: &str = "build/secp256k1_data";
 // pub const SECP_DATA: &[u8] = include_bytes!("../../build/secp256k1_data");
 
 // polyjuice
-pub const POLYJUICE_GENERATOR_NAME: &str = "build/generator_log.aot";
+pub const POLYJUICE_GENERATOR_NAME: &str = "build/generator_log";
 pub const POLYJUICE_VALIDATOR_NAME: &str = "build/validator";
 // ETH Address Registry
 pub const ETH_ADDRESS_REGISTRY_GENERATOR_NAME: &str =

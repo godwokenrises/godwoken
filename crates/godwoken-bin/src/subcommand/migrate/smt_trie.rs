@@ -8,6 +8,7 @@ use gw_store::{
     },
 };
 use gw_store::{traits::chain_store::ChainStore, Store};
+use gw_types::h256::H256;
 
 pub struct SMTTrieMigration;
 
@@ -73,7 +74,7 @@ impl Migration for SMTTrieMigration {
                     .context("update block_smt")?;
             }
             let root = *block_smt.root();
-            ensure!(tx.get_block_smt_root().unwrap() == root);
+            ensure!(tx.get_block_smt_root().unwrap() == H256::from(root));
             tx.commit().context("commit block smt")?;
         }
 
@@ -93,7 +94,7 @@ impl Migration for SMTTrieMigration {
                     .context("update reverted_block_smt")?;
             }
             let root = *reverted_block_smt.root();
-            ensure!(tx.get_reverted_block_smt_root().unwrap() == root);
+            ensure!(tx.get_reverted_block_smt_root().unwrap() == H256::from(root));
             tx.commit().context("commit reverted_block_smt")?;
         }
 

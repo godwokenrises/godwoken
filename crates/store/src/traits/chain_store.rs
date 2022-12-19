@@ -3,9 +3,9 @@
 use std::cell::RefCell;
 
 use anyhow::Result;
-use gw_common::H256;
 use gw_types::{
     from_box_should_be_ok,
+    h256::H256,
     offchain::{global_state_from_slice, SMTRevertedBlockHashes},
     packed::{
         self, ChallengeTarget, DepositInfoVec, FinalizedCustodianCapacity, NumberHash,
@@ -35,7 +35,7 @@ pub trait ChainStore: KVStoreRead {
         debug_assert_eq!(slice.len(), 32);
         let mut chain_id = [0u8; 32];
         chain_id.copy_from_slice(&slice);
-        Ok(chain_id.into())
+        Ok(chain_id)
     }
 
     fn get_block_smt_root(&self) -> Result<H256> {
@@ -45,7 +45,7 @@ pub trait ChainStore: KVStoreRead {
         debug_assert_eq!(slice.len(), 32);
         let mut root = [0u8; 32];
         root.copy_from_slice(&slice);
-        Ok(root.into())
+        Ok(root)
     }
 
     fn get_reverted_block_smt_root(&self) -> Result<H256> {
@@ -55,7 +55,7 @@ pub trait ChainStore: KVStoreRead {
         debug_assert_eq!(slice.len(), 32);
         let mut root = [0u8; 32];
         root.copy_from_slice(&slice);
-        Ok(root.into())
+        Ok(root)
     }
 
     fn get_prev_reverted_block_smt_root(&self, root: &H256) -> Result<Option<H256>> {

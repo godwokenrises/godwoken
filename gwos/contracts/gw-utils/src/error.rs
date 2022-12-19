@@ -1,7 +1,7 @@
 //! godwoken validator errors
 
 use ckb_std::error::SysError;
-use gw_common::{error::Error as CommonError, smt::Error as SMTError};
+use gw_common::error::Error as CommonError;
 
 /// Error
 #[repr(i8)]
@@ -80,11 +80,5 @@ impl From<CommonError> for Error {
             UnknownEoaCodeHash => Self::UnknownEOAScript,
             DuplicatedRegistryAddress => Self::DuplicatedRegistryAddress,
         }
-    }
-}
-
-impl From<SMTError> for Error {
-    fn from(_err: SMTError) -> Self {
-        Self::SMTKeyMissing
     }
 }

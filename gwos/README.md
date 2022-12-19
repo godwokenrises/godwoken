@@ -24,7 +24,6 @@ root
 │  ├─ secp256k1-utils: Secp256k1
 │  ├─ stake-lock: The lock script of stake cell
 │  ├─ state-validator: The type script constaint the on-chain operation of Rollup cell
-│  ├─ tron-account-lock: The lock script used to check Tron signatures on-chain(deprecated)
 │  ├─ withdrawal-lock: The lock script protects withdrawal cells
 ├─ tests: scripting tests
 ├─ tools: tools used in CI
@@ -73,11 +72,11 @@ The `lock` fields of the Rollup cell have relatively standalone rules, in the or
 ### Stake lock
 
 A block producer is required to provide a stake cell to perform the `RollupSubmitBlock` action.
-The stake lock args is `StakeLockArgs`, after submitting a layer-2 block, the `args.stake_block_timepoint` is updated to the latest block's timepoint.
+The stake lock args is `StakeLockArgs`, after submitting a layer-2 block, the `args.stake_finalized_timepoint` is updated to the latest block's timepoint.
 
 Stake lock can be unlocked in two paths:
 
-1. Unlock by the submitter after `args.stake_block_timepoint`'s block is finalized.
+1. Unlock by the submitter after `args.stake_finalized_timepoint`'s block is finalized.
 2. Unlock by the challenger in the `RollupRevert` action.
 
 ### Deposit lock
@@ -88,9 +87,9 @@ The sender can unlock a deposit cell after `cancel_timeout` if the deposit is no
 
 ### Custodian lock
 
-Rollup uses the custodian lock to hold the deposited assets. Custodian lock's args is a structure `CustodianLockArgs`, the field `deposit_block_timepoint` represents the block that the deposit is processed.
+Rollup uses the custodian lock to hold the deposited assets. Custodian lock's args is a structure `CustodianLockArgs`, the field `deposit_finalized_timepoint` represents the block that the deposit is processed.
 
-The `deposit_block_timepoint` also denotes whether the custodian lock is finalized or unfinalized.
+The `deposit_finalized_timepoint` also denotes whether the custodian lock is finalized or unfinalized.
 For unfinalized custodian cells, once the deposit block is reverted, these cells must be also reverted to the deposit cells.
 For finalized custodian cells, since they are finalized, we can free merge or split these cells.
 
@@ -102,7 +101,7 @@ Withdrawal cells are generated in the `RollupSubmitBlock` action according to th
 
 The withdrawal lock has two unlock paths:
 
-1. Unlock by withdrawer after the `WithdrawalLockArgs#withdrawal_block_timepoint` is finalized.
+1. Unlock by withdrawer after the `WithdrawalLockArgs#withdrawal_finalized_timepoint` is finalized.
 2. Unlock as a reverted cell in the `RollupSubmitBlock` action, a corresponded custodian cell will be generated.
 
 ### Challenge lock

@@ -18,7 +18,6 @@ const META_CONTRACT_BIN_NAME: &str = "meta-contract-validator";
 const ETH_ADDR_REG_BIN_NAME: &str = "eth-addr-reg-generator";
 // account locks
 const ETH_LOCK_PATH: &str = "eth-account-lock";
-const TRON_LOCK_PATH: &str = "tron-account-lock";
 
 lazy_static! {
     pub static ref CHALLENGE_LOCK_PROGRAM: Bytes = {
@@ -99,22 +98,6 @@ lazy_static! {
         let mut buf = [0u8; 32];
         let mut hasher = new_blake2b();
         hasher.update(&ETH_ACCOUNT_LOCK_PROGRAM);
-        hasher.finalize(&mut buf);
-        buf
-    };
-    pub static ref TRON_ACCOUNT_LOCK_PROGRAM: Bytes = {
-        let mut buf = Vec::new();
-        let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&TRON_LOCK_PATH);
-        let mut f = fs::File::open(&path).expect("load program");
-        f.read_to_end(&mut buf).expect("read program");
-        Bytes::from(buf.to_vec())
-    };
-    pub static ref TRON_ACCOUNT_LOCK_CODE_HASH: [u8; 32] = {
-        let mut buf = [0u8; 32];
-        let mut hasher = new_blake2b();
-        hasher.update(&TRON_ACCOUNT_LOCK_PROGRAM);
         hasher.finalize(&mut buf);
         buf
     };

@@ -88,10 +88,10 @@ pub async fn deploy_program(
     log::info!("tx_hash: {:#x}", tx_hash);
 
     gw_ckb_client
-        .wait_tx_committed_with_timeout_and_logging(tx_hash.0.into(), 600)
+        .wait_tx_committed_with_timeout_and_logging(tx_hash.0, 600)
         .await?;
     let tx = gw_ckb_client
-        .get_transaction(tx_hash.0.into())
+        .get_transaction(tx_hash.0)
         .await?
         .ok_or_else(|| anyhow!("tx not found"))?;
     let first_output_type_script = tx

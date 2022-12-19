@@ -6,12 +6,11 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Context, Result};
 use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
-use gw_common::H256;
 use gw_jsonrpc_types::{
     blockchain::CellDep,
     ckb_jsonrpc_types::{self, Either},
 };
-use gw_types::{offchain::TxStatus, packed::Transaction, prelude::*};
+use gw_types::{h256::H256, offchain::TxStatus, packed::Transaction, prelude::*};
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use tracing::instrument;
@@ -33,7 +32,7 @@ impl CKBClient {
         Ok(Self::new(client))
     }
 
-    fn client(&self) -> &HttpClient {
+    pub fn client(&self) -> &HttpClient {
         &self.ckb_client
     }
 
@@ -63,7 +62,7 @@ impl CKBClient {
     pub async fn get_transaction_block_number(&self, tx_hash: H256) -> Result<Option<u64>> {
         match self.get_transaction_block_hash(tx_hash).await? {
             Some(block_hash) => {
-                let block = self.get_block(block_hash.into()).await?;
+                let block = self.get_block(block_hash).await?;
                 Ok(block.map(|b| b.header.inner.number.value()))
             }
             None => Ok(None),

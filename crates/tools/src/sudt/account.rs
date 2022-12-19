@@ -136,13 +136,12 @@ pub async fn create_sudt_account(
             .await?
             .expect("sender address")
     };
-    let receiver_script_hash: gw_common::H256 = {
+    let receiver_script_hash = {
         let hash = rpc_client
             .get_script_hash(0)
             .await
             .map_err(|err| anyhow!("{}", err))?;
-        let b: [u8; 32] = hash.into();
-        b.into()
+        hash.into()
     };
 
     let message = generate_eip712_message_to_sign(

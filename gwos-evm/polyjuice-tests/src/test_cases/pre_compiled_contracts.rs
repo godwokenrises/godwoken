@@ -3,21 +3,18 @@ use crate::helper::{
     CREATOR_ACCOUNT_ID, L2TX_MAX_CYCLES, SECP_DATA, SECP_DATA_HASH,
 };
 use ckb_vm::{
-    machine::asm::{AsmCoreMachine, AsmMachine},
+    machine::asm::AsmCoreMachine,
     memory::Memory,
     registers::{A0, A1, A3, A7},
     DefaultMachineBuilder, Error as VMError, Register, SupportMachine, Syscalls,
 };
-use gw_common::{
-    h256_ext::H256Ext,
-    state::{build_data_hash_key, State},
-    H256,
-};
+use gw_common::state::{build_data_hash_key, State};
 use gw_config::SyscallCyclesConfig;
 use gw_generator::syscalls::store_data;
 use gw_store::traits::chain_store::ChainStore;
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     packed::RawL2Transaction,
     prelude::{Builder, Entity, Pack},
 };
@@ -156,7 +153,8 @@ fn test_contracts() {
 
     let machine_builder =
         DefaultMachineBuilder::new(core_machine).syscall(Box::new(L2Syscalls { data, tree }));
-    let mut machine = AsmMachine::new(machine_builder.build(), None);
+
+    let mut machine = ckb_vm_aot::AotMachine::new(machine_builder.build(), None);
     machine.load_program(&binary, &[]).unwrap();
     let code = machine.run().unwrap();
     assert_eq!(code, 0);

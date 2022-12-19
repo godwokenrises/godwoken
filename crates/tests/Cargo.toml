@@ -10,8 +10,9 @@ edition = "2018"
 scripts = []
 
 [dependencies]
-gw-types = { path = "../types", features = ["std", "deprecated"] }
-gw-common = { path = "../common" }
+gw-types = { path = "../../gwos/crates/types", features = ["std", "deprecated"] }
+gw-common = { path = "../../gwos/crates/common" }
+gw-smt = { path = "../smt" }
 gw-config = { path = "../config" }
 gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
@@ -31,7 +32,7 @@ blake2b-rs = "0.2"
 ckb-vm = { version = "=0.22.0", default-features = false }
 thiserror = "1.0"
 lazy_static = "1.4"
-secp256k1 = { version = "0.21", features = ["recovery", "rand-std"] }
+secp256k1 = { version = "0.24", features = ["recovery", "rand-std"] }
 async-jsonrpc-client = { version = "0.3.0", default-features = false, features = ["http-tokio"] }
 sha3 = "0.10.6"
 hex = "0.4.2"

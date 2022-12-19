@@ -4,10 +4,10 @@ use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     ckb_decimal::CKBCapacity,
     state::State,
-    H256,
 };
 use gw_generator::account_lock_manage::eip712::{self, traits::EIP712Encode};
 use gw_types::{
+    h256::*,
     packed::{
         DepositInfoVec, DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest,
         WithdrawalRequestExtra,

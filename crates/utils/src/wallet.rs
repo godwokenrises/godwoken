@@ -1,11 +1,12 @@
 use anyhow::{anyhow, Context, Result};
 use ckb_crypto::secp::Privkey;
 use faster_hex::hex_decode;
-use gw_common::{blake2b::new_blake2b, H256};
+use gw_common::blake2b::new_blake2b;
 use gw_config::WalletConfig;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
+    h256::*,
     packed::{Script, Transaction},
     prelude::{Builder, Entity, Pack, Unpack},
 };

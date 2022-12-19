@@ -9,16 +9,22 @@ name = "lib"
 path = "src/lib.rs"
 
 [dependencies]
-gw-types     = { path = "../../crates/types/" }
-gw-common    = { path = "../../crates/common/" }
+gw-common    = { path = "../../gwos/crates/common/" }
+gw-types     = { path = "../../gwos/crates/types/" }
+gw-smt     = { path = "../../crates/smt/" }
 gw-db        = { path = "../../crates/db/" }
 gw-store     = { path = "../../crates/store/" }
 gw-utils     = { path = "../../crates/utils/" }
 gw-config    = { path = "../../crates/config/" }
 gw-traits    = { path = "../../crates/traits/" }
 gw-generator = { path = "../../crates/generator/" }
-ckb-vm = { version = "=0.21.3", features = ["detect-asm"] }
-ckb-vm-definitions = "=0.21.3"
+
+####
+#Sync patch version with godwoken core.
+tracing = { version = "0.1.36", features = ["attributes"] } 
+ckb-vm = { version = "=0.22.0", default-features = false }
+ckb-vm-aot = { version = "=0.22.0" }
+####
 
 lazy_static = "1.4"
 tiny-keccak = "1.4"
@@ -34,4 +40,5 @@ anyhow = "1.0"
 [dev-dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
+ethabi = "18.0.0"
 

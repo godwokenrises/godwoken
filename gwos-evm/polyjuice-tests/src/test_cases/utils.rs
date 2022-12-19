@@ -1,9 +1,10 @@
 use ckb_vm::{
-    machine::asm::{AsmCoreMachine, AsmMachine},
+    machine::asm::AsmCoreMachine,
     memory::Memory,
     registers::{A0, A7},
     DefaultMachineBuilder, Error as VMError, Register, SupportMachine, Syscalls,
 };
+use ckb_vm_aot::AotMachine;
 use gw_types::bytes::Bytes;
 
 const BINARY: &[u8] = include_bytes!("../../../build/test_calc_fee");
@@ -87,7 +88,7 @@ fn test_calc_fee() {
     let cycles = 7000_0000;
     let core_machine = AsmCoreMachine::new(params.vm_isa, params.vm_version, cycles);
     let machine_builder = DefaultMachineBuilder::new(core_machine).syscall(Box::new(L2Syscalls));
-    let mut machine = AsmMachine::new(machine_builder.build(), None);
+    let mut machine = AotMachine::new(machine_builder.build(), None);
 
     machine.load_program(&binary, &[]).unwrap();
     let code = machine.run().unwrap();

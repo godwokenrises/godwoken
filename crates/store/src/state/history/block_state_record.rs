@@ -1,4 +1,4 @@
-use gw_common::H256;
+use gw_types::h256::H256;
 // block_number(8 bytes) | key (32 bytes)
 #[derive(Hash, PartialEq, Eq)]
 pub struct BlockStateRecordKey([u8; 40]);
@@ -14,7 +14,7 @@ impl BlockStateRecordKey {
     pub fn state_key(&self) -> H256 {
         let mut inner = [0u8; 32];
         inner.copy_from_slice(&self.0[8..]);
-        inner.into()
+        inner
     }
 
     pub fn block_number(&self) -> u64 {
@@ -48,7 +48,7 @@ impl BlockStateRecordKeyReverse {
     pub fn state_key(&self) -> H256 {
         let mut inner = [0u8; 32];
         inner.copy_from_slice(&self.0[..32]);
-        inner.into()
+        inner
     }
 
     pub fn block_number(&self) -> u64 {

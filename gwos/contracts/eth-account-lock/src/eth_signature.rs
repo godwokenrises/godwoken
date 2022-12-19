@@ -1,6 +1,10 @@
 //! Secp256k1 Eth implementation
 
-use gw_utils::{ckb_std::debug, error::Error, gw_common::H256, gw_types::bytes::Bytes};
+use gw_utils::{
+    ckb_std::debug,
+    error::Error,
+    gw_types::{bytes::Bytes, h256::H256},
+};
 use secp256k1_utils::recover_uncompressed_key;
 use sha3::{Digest, Keccak256};
 

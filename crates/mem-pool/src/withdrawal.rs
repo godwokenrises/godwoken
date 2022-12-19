@@ -1,14 +1,13 @@
 use anyhow::{anyhow, bail, Result};
-use gw_common::H256;
 use gw_generator::generator::WithdrawalCellError;
-use gw_types::core::Timepoint;
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     offchain::FinalizedCustodianCapacity,
     packed::{CellOutput, L2Block, Script, WithdrawalRequest, WithdrawalRequestExtra},
     prelude::*,
 };
-use gw_utils::RollupContext;
+use gw_utils::{finalized_timepoint, RollupContext};
 use std::collections::HashMap;
 
 use crate::custodian::{
@@ -116,25 +115,18 @@ impl<'a> Generator<'a> {
             let sudt_custodian = self.sudt_custodians.get(&sudt_type_hash);
             sudt_custodian.map(|sudt| sudt.script.to_owned())
         };
-        let block_hash: H256 = block.hash().into();
-        let block_timepoint = {
-            let block_number = block.raw().number().unpack();
-            if self
-                .rollup_context
-                .fork_config
-                .use_timestamp_as_timepoint(block_number)
-            {
-                let block_timestamp = block.raw().timestamp().unpack();
-                Timepoint::from_timestamp(block_timestamp)
-            } else {
-                Timepoint::from_block_number(block_number)
-            }
-        };
+        let block_hash: H256 = block.hash();
+        let finalized_timepoint = finalized_timepoint(
+            &self.rollup_context.rollup_config,
+            &self.rollup_context.fork_config,
+            block.raw().number().unpack(),
+            block.raw().timestamp().unpack(),
+        );
         let output = match gw_generator::utils::build_withdrawal_cell_output(
             self.rollup_context,
             req_extra,
             &block_hash,
-            &block_timepoint,
+            &finalized_timepoint,
             sudt_script,
         ) {
             Ok(output) => output,
@@ -325,9 +317,8 @@ mod test {
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
-    use gw_common::h256_ext::H256Ext;
-    use gw_common::H256;
     use gw_types::core::Timepoint;
+    use gw_types::h256::*;
     use gw_types::offchain::FinalizedCustodianCapacity;
     use gw_types::packed::{
         L2Block, RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest,
@@ -397,7 +388,7 @@ mod test {
         let (expected_output, expected_data) = gw_generator::utils::build_withdrawal_cell_output(
             &rollup_context,
             &req_extra,
-            &block.hash().into(),
+            &block.hash(),
             &block_timepoint,
             Some(sudt_script),
         )

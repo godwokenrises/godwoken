@@ -2,9 +2,9 @@ use crate::types::{VerifyContext, VerifyWitness};
 
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::{Builder, Entity};
-use gw_common::H256;
 use gw_config::ContractsCellDep;
 use gw_types::core::{DepType, SigningType, Status};
+use gw_types::h256::*;
 use gw_types::offchain::{CellInfo, InputCellInfo, RecoverAccount};
 use gw_types::packed::{
     CCTransactionSignatureWitness, CCTransactionWitness, CCWithdrawalWitness, CellDep, CellInput,
@@ -67,7 +67,6 @@ pub struct CancelChallengeOutput {
 impl CancelChallengeOutput {
     pub fn verifier_input(&self, tx_hash: H256, tx_index: u32) -> InputCellInfo {
         let (output, data) = self.verifier_cell.clone();
-        let tx_hash: [u8; 32] = tx_hash.into();
 
         let out_point = OutPoint::new_builder()
             .tx_hash(tx_hash.pack())
@@ -173,7 +172,7 @@ pub fn build_output(
                 witness,
             );
 
-            let data = cancel.build_verifier_data(receiver_script.hash().into());
+            let data = cancel.build_verifier_data(receiver_script.hash());
             Ok(cancel.build_output(data, Some(verifier_witness), None, None))
         }
         VerifyWitness::TxExecution {
@@ -226,7 +225,7 @@ pub fn build_output(
             };
 
             let recover_accounts = {
-                let owner_lock_hash = owner_lock.hash().into();
+                let owner_lock_hash = owner_lock.hash();
                 let accounts = recover_accounts.into_iter();
                 let to_cell = accounts.map(|a| build_recover_account_cell(owner_lock_hash, a));
                 let (cells, witnesses) = to_cell.unzip();
@@ -421,13 +420,11 @@ impl<'a> CancelChallenge<'a, CCTransactionSignatureWitness> {
 
     fn calc_tx_message(&self, receiver_script_hash: &H256) -> [u8; 32] {
         let raw_tx = self.verify_witness.l2tx().raw();
-        raw_tx
-            .calc_message(
-                &self.rollup_type_hash,
-                &H256::from(self.verifier_lock.hash()),
-                receiver_script_hash,
-            )
-            .into()
+        raw_tx.calc_message(
+            &self.rollup_type_hash,
+            &self.verifier_lock.hash(),
+            receiver_script_hash,
+        )
     }
 }
 
@@ -446,7 +443,7 @@ impl<'a> CancelChallenge<'a, CCWithdrawalWitness> {
 
     fn calc_withdrawal_message(&self) -> [u8; 32] {
         let raw_withdrawal = self.verify_witness.withdrawal().raw();
-        raw_withdrawal.calc_message(&self.rollup_type_hash).into()
+        raw_withdrawal.calc_message(&self.rollup_type_hash)
     }
 }
 

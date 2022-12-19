@@ -10,8 +10,6 @@ VALIDATOR_FLAGS := -DGW_VALIDATOR
 LDFLAGS := -Wl,-static -fdata-sections -ffunction-sections -Wl,--gc-sections
 MOLC := moleculec
 MOLC_VERSION := 0.7.2
-PROTOCOL_VERSION := bf76c19c43e4e59cfaba871e722681bf7d3d6948
-PROTOCOL_SCHEMA_URL := https://raw.githubusercontent.com/nervosnetwork/godwoken/${PROTOCOL_VERSION}/crates/types/schemas
 
 # docker pull nervos/ckb-riscv-gnu-toolchain:gnu-bionic-20191012
 BUILDER_DOCKER := nervos/ckb-riscv-gnu-toolchain@sha256:aae8a3f79705f67d505d1f1d5ddc694a4fd537ed1c7e9622420a470d59ba2ec3
@@ -130,13 +128,10 @@ fmt:
 check-moleculec-version:
 	test "$$(${MOLC} --version | awk '{ print $$2 }' | tr -d ' ')" = ${MOLC_VERSION}
 
-%.mol:
-	curl -L -o $@ ${PROTOCOL_SCHEMA_URL}/$@
-
-build/blockchain.h: blockchain.mol
+build/blockchain.h: ../crates/types/schemas/blockchain.mol
 	${MOLC} --language c --schema-file $< > $@
 
-build/godwoken.h: godwoken.mol
+build/godwoken.h: ../crates/types/schemas/godwoken.mol
 	${MOLC} --language c --schema-file $< > $@
 
 install-tools:

@@ -3,11 +3,11 @@ use gw_common::blake2b::new_blake2b;
 use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::state::State;
-use gw_common::H256;
 use gw_generator::error::TransactionError;
 use gw_generator::{account_lock_manage::AccountLockManage, Generator};
 use gw_store::state::traits::JournalDB;
 use gw_traits::{ChainView, CodeStore};
+use gw_types::h256::*;
 use gw_types::U256;
 use gw_types::{
     bytes::Bytes,
@@ -245,7 +245,7 @@ pub fn run_contract_get_result<S: State + CodeStore + JournalDB>(
     let account_lock_manage = AccountLockManage::default();
     let rollup_ctx = RollupContext {
         rollup_config: rollup_config.clone(),
-        rollup_script_hash: [42u8; 32].into(),
+        rollup_script_hash: [42u8; 32],
         ..Default::default()
     };
     let generator = Generator::new(

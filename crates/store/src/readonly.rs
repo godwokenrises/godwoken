@@ -2,14 +2,17 @@ use std::path::Path;
 
 use anyhow::Result;
 use autorocks::{autorocks_sys::rocksdb::PinnableSlice, moveit::moveit, DbOptions, ReadOnlyDb};
-use gw_common::H256;
 use gw_types::{
-    from_box_should_be_ok, packed,
+    from_box_should_be_ok,
+    h256::H256,
+    packed,
     prelude::{Entity, FromSliceShouldBeOk, Unpack},
 };
 
-use crate::schema::{Col, COLUMN_REVERTED_BLOCK_SMT_ROOT};
-use crate::traits::{chain_store::ChainStore, kv_store::KVStoreRead};
+use crate::{
+    schema::{Col, COLUMN_REVERTED_BLOCK_SMT_ROOT},
+    traits::{chain_store::ChainStore, kv_store::KVStoreRead},
+};
 
 #[derive(Clone)]
 pub struct StoreReadonly {

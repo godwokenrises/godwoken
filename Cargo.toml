@@ -1,14 +1,15 @@
 [workspace]
 members = [
+  "gwos/crates/types",
+  "gwos/crates/common",
+  "gwos/crates/c-uint256-tests",
   "crates/challenge",
   "crates/chain",
   "crates/config",
-  "crates/common",
   "crates/mem-pool",
   "crates/generator",
   "crates/traits",
   "crates/store",
-  "crates/types",
   "crates/block-producer",
   "crates/jsonrpc-types",
   "crates/rpc-server",
@@ -29,11 +30,12 @@ members = [
 ]
 
 exclude = [
-  "gwos-evm/polyjuice-tests",
-  # Autorocks is in its own workspace because it's relatively independent of
-  # other godwoken crates. This also makes rust-analyzer and cargo faster when
-  # working on godwoken.
-  "crates/autorocks",
+ # Autorocks is in its own workspace because it's relatively independent of
+ # other godwoken crates. This also makes rust-analyzer and cargo faster when
+ # working on godwoken.
+ "crates/autorocks",
+ "gwos-evm/polyjuice-tests",
+ "gwos/contracts",
 ]
 
 [profile.release]

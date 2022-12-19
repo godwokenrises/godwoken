@@ -4,8 +4,8 @@ use anyhow::{bail, Result};
 use ckb_types::prelude::Entity;
 use gw_block_producer::test_mode_control::TestModeControl;
 use gw_chain::chain::Chain;
-use gw_common::H256;
 use gw_config::{NodeMode::FullNode, RPCClientConfig, RPCMethods};
+use gw_types::h256::*;
 
 use gw_jsonrpc_types::{
     ckb_jsonrpc_types::{Byte32, JsonBytes, Uint64},
@@ -48,9 +48,8 @@ impl RPCServer {
         let rollup_config = generator.rollup_context().rollup_config.to_owned();
         let rollup_context = generator.rollup_context().to_owned();
         let rpc_client = {
-            let indexer_client =
-                CKBIndexerClient::with_url(&RPCClientConfig::default().indexer_url).unwrap();
             let ckb_client = CKBClient::with_url(&RPCClientConfig::default().ckb_url).unwrap();
+            let indexer_client = CKBIndexerClient::new(ckb_client.client().clone(), false);
             let rollup_type_script =
                 ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
             RPCClient::new(
@@ -117,7 +116,7 @@ impl RPCServer {
             .finish();
 
         let tx_hash: Option<Byte32> = self.handle_single_request(req).await?;
-        Ok(tx_hash.map(|h| h.0.into()))
+        Ok(tx_hash.map(|h| h.0))
     }
 
     pub async fn execute_l2transaction(&self, tx: &L2Transaction) -> Result<RunResult> {
@@ -171,7 +170,7 @@ impl RPCServer {
     }
 
     pub async fn is_request_in_queue(&self, hash: H256) -> Result<bool> {
-        let fixed_hash = ckb_fixed_hash::H256(hash.into());
+        let fixed_hash = ckb_fixed_hash::H256(hash);
         let params = serde_json::to_value(&(fixed_hash,))?;
 
         let req = RequestBuilder::default()
@@ -197,7 +196,7 @@ impl RPCServer {
             .finish();
 
         let hash: Byte32 = self.handle_single_request(req).await?;
-        Ok(hash.0.into())
+        Ok(hash.0)
     }
 
     async fn handle_single_request<R: DeserializeOwned>(&self, req: RequestObject) -> Result<R> {

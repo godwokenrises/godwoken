@@ -1,7 +1,7 @@
 use anyhow::Result;
 use ckb_types::prelude::{Builder, Entity};
-use gw_common::H256;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
+use gw_types::h256::*;
 use gw_types::offchain::CompatibleFinalizedTimepoint;
 use gw_types::{core::ScriptHashType, offchain::CustodianStat, packed::Script, prelude::Pack};
 

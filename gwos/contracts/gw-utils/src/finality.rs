@@ -31,7 +31,7 @@ pub fn is_finalized(
 }
 
 fn is_timestamp_finalized(prev_global_state: &GlobalState, timestamp: u64) -> bool {
-    match Timepoint::from_full_value(prev_global_state.last_finalized_block_number().unpack()) {
+    match Timepoint::from_full_value(prev_global_state.last_finalized_timepoint().unpack()) {
         Timepoint::BlockNumber(_) => {
             debug!("[is_timestamp_finalized] switching version, prev_global_state.last_finalized_block_number is number-based");
             false

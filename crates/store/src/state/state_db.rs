@@ -21,7 +21,9 @@ use gw_types::{
     prelude::{Pack, Unpack},
 };
 
-use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
+use gw_common::{error::Error as StateError, state::State};
+use gw_smt::smt::SMT;
+use gw_types::h256::{H256Ext, H256};
 
 use crate::{
     smt::smt_store::SMTStateStore,
@@ -167,10 +169,8 @@ impl MemStateDB {
         // build from last valid block
         let block = store.get_last_valid_tip_block()?;
         let tip_state = block.raw().post_account();
-        let smt = SMT::new(
-            tip_state.merkle_root().unpack(),
-            SMTStateStore::new(MemStore::new(store)),
-        );
+        let root: H256 = tip_state.merkle_root().unpack();
+        let smt = SMT::new(root.into(), SMTStateStore::new(MemStore::new(store)));
         let inner = MemStateTree::new(smt, tip_state.count().unpack());
         Ok(Self::new(inner))
     }
@@ -186,7 +186,8 @@ impl<Store: ChainStore + HistoryStateStore + CodeStore + KVStore> BlockStateDB<S
         // build from last valid block
         let block = store.get_last_valid_tip_block()?;
         let tip_state = block.raw().post_account();
-        let smt = SMT::new(tip_state.merkle_root().unpack(), SMTStateStore::new(store));
+        let root: H256 = tip_state.merkle_root().unpack();
+        let smt = SMT::new(root.into(), SMTStateStore::new(store));
         let inner = HistoryState::new(smt, tip_state.count().unpack(), rw_config);
         Ok(Self::new(inner))
     }
@@ -531,8 +532,10 @@ mod tests {
     use std::cell::RefCell;
 
     use anyhow::Result;
-    use gw_common::{h256_ext::H256Ext, smt::SMT, state::State, H256};
+    use gw_common::state::State;
+    use gw_smt::smt::{SMT, SMTH256};
     use gw_traits::CodeStore;
+    use gw_types::h256::{H256Ext, H256};
 
     use crate::{
         smt::smt_store::SMTStateStore,
@@ -548,13 +551,13 @@ mod tests {
     };
 
     fn new_state(store: StoreSnapshot) -> MemStateDB {
-        let smt = SMT::new(H256::zero(), SMTStateStore::new(MemStore::new(store)));
+        let smt = SMT::new(SMTH256::zero(), SMTStateStore::new(MemStore::new(store)));
         let inner = MemStateTree::new(smt, 0);
         MemStateDB::new(inner)
     }
 
     fn new_block_state(store: &mut StoreTransaction) -> BlockStateDB<&mut StoreTransaction> {
-        let smt = SMT::new(H256::zero(), SMTStateStore::new(store));
+        let smt = SMT::new(SMTH256::zero(), SMTStateStore::new(store));
         let inner = HistoryState::new(
             smt,
             0,
@@ -569,7 +572,7 @@ mod tests {
     fn new_block_state_ref_cell<'a>(
         store: &'a RefCell<&'a mut StoreTransaction>,
     ) -> BlockStateDB<&'a RefCell<&'a mut StoreTransaction>> {
-        let smt = SMT::new(H256::zero(), SMTStateStore::new(store));
+        let smt = SMT::new(SMTH256::zero(), SMTStateStore::new(store));
         let inner = HistoryState::new(
             smt,
             0,
@@ -772,7 +775,7 @@ mod tests {
         assert!(s.calculate_root().is_err());
         // test finalise value
         s.finalise()?;
-        assert_eq!(s.calculate_root()?, EXPECTED_ROOT.into());
+        assert_eq!(s.calculate_root()?, EXPECTED_ROOT);
         for i in 1..42u32 {
             let key = H256::from_u32(i);
             let value2 = H256::from_u32(i + 1);
@@ -786,7 +789,7 @@ mod tests {
         assert!(s.calculate_root().is_err());
         // test finalise value
         s.finalise()?;
-        assert_eq!(s.calculate_root()?, EXPECTED_ROOT.into());
+        assert_eq!(s.calculate_root()?, EXPECTED_ROOT);
         Ok(())
     }
 

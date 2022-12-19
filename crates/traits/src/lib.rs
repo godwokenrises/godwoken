@@ -1,8 +1,7 @@
 use std::cell::RefCell;
 
 use anyhow::Result;
-use gw_common::H256;
-use gw_types::{bytes::Bytes, packed::Script};
+use gw_types::{bytes::Bytes, h256::H256, packed::Script};
 
 pub trait CodeStore {
     fn insert_script(&mut self, script_hash: H256, script: Script);

@@ -4,24 +4,25 @@
 
 use anyhow::{anyhow, Result};
 use gw_common::{
-    h256_ext::H256Ext,
     merkle_utils::{calculate_ckb_merkle_root, calculate_state_checkpoint, ckb_merkle_leaf_hash},
-    smt::Blake2bHasher,
-    sparse_merkle_tree::CompiledMerkleProof,
     state::State,
-    H256,
 };
 use gw_generator::Generator;
 use gw_mem_pool::mem_block::MemBlock;
+use gw_smt::{
+    smt::{Blake2bHasher, SMTH256},
+    smt_h256_ext::SMTH256Ext,
+    sparse_merkle_tree::CompiledMerkleProof,
+};
 use gw_store::{
     state::{history::history_state::RWConfig, BlockStateDB},
     traits::chain_store::ChainStore,
     transaction::StoreTransaction,
     Store,
 };
-use gw_types::core::Timepoint;
 use gw_types::{
     core::Status,
+    h256::*,
     offchain::{BlockParam, DepositInfo, FinalizedCustodianCapacity},
     packed::{
         AccountMerkleState, BlockMerkleState, GlobalState, L2Block, RawL2Block, SubmitTransactions,
@@ -29,6 +30,7 @@ use gw_types::{
     },
     prelude::*,
 };
+use gw_utils::global_state_finalized_timepoint;
 use tracing::instrument;
 
 #[derive(Clone)]
@@ -80,17 +82,16 @@ pub fn produce_block(
     } = param;
 
     let rollup_context = generator.rollup_context();
-    let parent_block_hash: H256 = parent_block.hash().into();
+    let parent_block_hash: H256 = parent_block.hash();
 
     // assemble block
     let submit_txs = {
         let tx_witness_root = calculate_ckb_merkle_root(
             txs.iter()
                 .enumerate()
-                .map(|(id, tx)| ckb_merkle_leaf_hash(id as u32, &tx.witness_hash().into()))
+                .map(|(id, tx)| ckb_merkle_leaf_hash(id as u32, &tx.witness_hash()))
                 .collect(),
-        )
-        .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
+        );
         let tx_count = txs.len() as u32;
         SubmitTransactions::new_builder()
             .tx_witness_root(tx_witness_root.pack())
@@ -103,12 +104,9 @@ pub fn produce_block(
             withdrawals
                 .iter()
                 .enumerate()
-                .map(|(id, request)| {
-                    ckb_merkle_leaf_hash(id as u32, &request.witness_hash().into())
-                })
+                .map(|(id, request)| ckb_merkle_leaf_hash(id as u32, &request.witness_hash()))
                 .collect(),
-        )
-        .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
+        );
         let withdrawal_count = withdrawals.len() as u32;
         SubmitWithdrawals::new_builder()
             .withdrawal_witness_root(withdrawal_witness_root.pack())
@@ -140,9 +138,9 @@ pub fn produce_block(
         .build();
     let block_smt = db.block_smt()?;
     let block_proof = block_smt
-        .merkle_proof(vec![H256::from_u64(number)])
+        .merkle_proof(vec![SMTH256::from_u64(number)])
         .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
-        .compile(vec![H256::from_u64(number)])?;
+        .compile(vec![SMTH256::from_u64(number)])?;
     let packed_kv_state = kv_state.pack();
     let withdrawal_requests = withdrawals.iter().map(|w| w.request());
     let block = L2Block::new_builder()
@@ -164,22 +162,12 @@ pub fn produce_block(
             .build()
     };
 
-    let last_finalized_timepoint = if rollup_context
-        .fork_config
-        .use_timestamp_as_timepoint(number)
-    {
-        let finality_time_in_ms = rollup_context.rollup_config.finality_time_in_ms();
-        Timepoint::from_timestamp(
-            block
-                .raw()
-                .timestamp()
-                .unpack()
-                .saturating_sub(finality_time_in_ms),
-        )
-    } else {
-        let finality_as_blocks = rollup_context.rollup_config.finality_blocks().unpack();
-        Timepoint::from_block_number(number.saturating_sub(finality_as_blocks))
-    };
+    let last_finalized_timepoint = global_state_finalized_timepoint(
+        &rollup_context.rollup_config,
+        &rollup_context.fork_config,
+        block.raw().number().unpack(),
+        block.raw().timestamp().unpack(),
+    );
     let global_state = GlobalState::new_builder()
         .account(post_merkle_state)
         .block(post_block)
@@ -233,7 +221,7 @@ pub fn generate_produce_block_param(
     } else {
         let state_smt = db.state_smt()?;
 
-        let keys: Vec<H256> = kv_state.iter().map(|(k, _v)| *k).collect();
+        let keys: Vec<SMTH256> = kv_state.iter().map(|(k, _v)| (*k).into()).collect();
         state_smt
             .merkle_proof(keys.clone())
             .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
@@ -289,16 +277,22 @@ pub fn generate_produce_block_param(
         let expected_kv_state_root: H256 = prev_merkle_state.merkle_root().unpack();
         let smt = db.state_smt()?;
         assert_eq!(
-            smt.root(),
-            &expected_kv_state_root,
+            H256::from(*smt.root()),
+            expected_kv_state_root,
             "check smt root consistent"
         );
 
         if !kv_state_proof.is_empty() {
             log::debug!("[output mem-block] check merkle proof");
             // check state merkle proof before output
-            let prev_kv_state_root = CompiledMerkleProof(kv_state_proof.clone())
-                .compute_root::<Blake2bHasher>(kv_state.clone())?;
+            let prev_kv_state_root: H256 = CompiledMerkleProof(kv_state_proof.clone())
+                .compute_root::<Blake2bHasher>(
+                    kv_state
+                        .iter()
+                        .map(|(k, v)| ((*k).into(), (*v).into()))
+                        .collect(),
+                )?
+                .into();
             let expected_kv_state_root: H256 = prev_merkle_state.merkle_root().unpack();
             assert_eq!(
                 expected_kv_state_root, prev_kv_state_root,

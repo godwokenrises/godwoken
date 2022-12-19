@@ -1,22 +1,19 @@
-use alloc::vec;
+use ckb_smt::smt::{Pair, Tree};
 use core::convert::TryInto;
-use gw_common::{smt::Blake2bHasher, sparse_merkle_tree::CompiledMerkleProof, H256};
-use gw_types::{
-    core::{ChallengeTargetType, Status, Timepoint},
-    packed::{GlobalState, RollupConfig},
-    prelude::*,
-};
-use gw_utils::finality::is_finalized;
+use gw_utils::finality::{finality_time_in_ms, is_finalized};
 use gw_utils::fork::Fork;
 use gw_utils::{
     cells::lock_cells::{collect_burn_cells, find_challenge_cell},
     ckb_std::{ckb_constants::Source, debug},
     error::Error,
 };
-use gw_utils::{cells::types::ChallengeCell, gw_types};
+use gw_utils::{cells::types::ChallengeCell};
 use gw_utils::{
-    gw_common,
-    gw_types::packed::{RawL2Block, RollupEnterChallengeReader},
+    gw_types::{
+        core::{ChallengeTargetType, Status, Timepoint, H256},
+        packed::{GlobalState, RawL2Block, RollupConfig, RollupEnterChallengeReader},
+        prelude::*,
+    },
 };
 
 use super::{check_rollup_lock_cells, check_status};
@@ -44,8 +41,12 @@ pub fn verify_enter_challenge(
     // check challenged block isn't finazlied
     let post_version: u8 = post_global_state.version().into();
     let block_timepoint = if Fork::use_timestamp_as_timepoint(post_version) {
-        Timepoint::from_timestamp(challenged_block.timestamp().unpack())
+        // new form, represents the future finalized timestamp
+        Timepoint::from_timestamp(
+            challenged_block.timestamp().unpack() + finality_time_in_ms(config),
+        )
     } else {
+        // legacy form, represents the current block number
         Timepoint::from_block_number(challenged_block.number().unpack())
     };
     let is_block_finalized = is_finalized(config, post_global_state, &block_timepoint);
@@ -54,19 +55,28 @@ pub fn verify_enter_challenge(
         return Err(Error::InvalidChallengeTarget);
     }
 
-    let valid = {
-        let merkle_proof = CompiledMerkleProof(witness.block_proof().unpack());
-        let leaves = vec![(
-            RawL2Block::compute_smt_key(challenged_block.number().unpack()).into(),
-            challenged_block.hash().into(),
-        )];
-        merkle_proof
-            .verify::<Blake2bHasher>(&prev_global_state.block().merkle_root().unpack(), leaves)?
-    };
-    if !valid {
-        debug!("enter challenge prev state merkle proof error");
-        return Err(Error::MerkleProof);
+    // merkle proof
+    {
+        let mut tree_buf = [Pair::default(); 1];
+        let mut smt_tree = Tree::new(&mut tree_buf);
+        let key = RawL2Block::compute_smt_key(challenged_block.number().unpack()).into();
+        let block_hash = challenged_block.hash().into();
+        smt_tree.update(&key, &block_hash).map_err(|err| {
+            debug!("[verify_enter_challenge] update smt tree error: {}", err);
+            Error::MerkleProof
+        })?;
+
+        let root = prev_global_state.block().merkle_root().unpack();
+        let proof = witness.block_proof().raw_data();
+        smt_tree.verify(&root, &proof).map_err(|err| {
+            debug!(
+                "[verify_enter_challenge] verify merkle proof error: {}",
+                err
+            );
+            Error::MerkleProof
+        })?;
     }
+
     let challenge_target = challenge_cell.args.target();
     let challenged_block_hash: [u8; 32] = challenge_target.block_hash().unpack();
     if challenged_block.hash() != challenged_block_hash {

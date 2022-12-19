@@ -115,7 +115,6 @@ async fn sync_l1_unknown(
             ..Default::default()
         }));
     let mut last_cursor = None;
-    let tx_hash: [u8; 32] = tx_hash.into();
     let last_confirmed_tx_hash = tx_hash.into();
     let mut seen_last_confirmed = false;
     let mut reverted = false;
@@ -144,9 +143,7 @@ async fn sync_l1_unknown(
             if !reverted {
                 // It's likely that this transaction confirms the next block. In
                 // this case, we just update the last confirmed block.
-                if store_tx.get_block_submit_tx_hash(last_confirmed + 1)
-                    == Some(tx.tx_hash.0.into())
-                {
+                if store_tx.get_block_submit_tx_hash(last_confirmed + 1) == Some(tx.tx_hash.0) {
                     last_confirmed += 1;
                     log::info!("confirmed block {last_confirmed}");
                     continue;

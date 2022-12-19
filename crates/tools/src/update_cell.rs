@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 
 pub struct UpdateCellArgs<'a, P> {
     pub ckb_rpc_url: &'a str,
-    pub indexer_rpc_url: &'a str,
+    pub indexer_rpc_url: Option<&'a str>,
     pub tx_hash: [u8; 32],
     pub index: u32,
     pub type_id: [u8; 32],
@@ -39,7 +39,11 @@ pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_, P>) -> Result<
     } = args;
 
     let mut rpc_client = CkbRpcClient::new(ckb_rpc_url);
-    let indexer_client = CKBIndexerClient::with_url(indexer_rpc_url)?;
+    let indexer_client = if let Some(indexer_url) = indexer_rpc_url {
+        CKBIndexerClient::with_url(indexer_url)
+    } else {
+        CKBIndexerClient::with_ckb_url(ckb_rpc_url)
+    }?;
     // check existed_cell
     let tx_with_status = rpc_client
         .get_transaction(tx_hash.into())
@@ -153,7 +157,7 @@ pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_, P>) -> Result<
         .map_err(|err| anyhow!("{}", err))?;
     println!("Send tx...");
     CKBClient::with_url(ckb_rpc_url)?
-        .wait_tx_committed_with_timeout_and_logging(tx_hash.0.into(), 600)
+        .wait_tx_committed_with_timeout_and_logging(tx_hash.0, 600)
         .await?;
     println!("{}", update_message);
     println!("Cell is updated!");

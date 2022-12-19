@@ -75,8 +75,6 @@ async fn main() -> Result<()> {
     let arg_indexer_rpc = Arg::with_name("indexer-rpc-url")
         .long("ckb-indexer-rpc")
         .takes_value(true)
-        .default_value("http://127.0.0.1:8116")
-        .required(true)
         .help("The URL of ckb indexer");
     let arg_deployment_results_path = Arg::with_name("scripts-deployment-path")
         .long("scripts-deployment-path")
@@ -818,7 +816,7 @@ async fn main() -> Result<()> {
         .subcommand(
             SubCommand::with_name("stat-custodian-ckb")
                 .about("Output amount of layer2 custodian CKB")
-                .arg(arg_indexer_rpc.clone())
+                .arg(arg_indexer_rpc.clone().required(true))
                 .arg(
                     Arg::with_name("rollup-type-hash")
                         .long("rollup-type-hash")
@@ -938,7 +936,7 @@ async fn main() -> Result<()> {
         }
         Some(("generate-config", m)) => {
             let ckb_url = m.value_of("ckb-rpc-url").unwrap().to_string();
-            let indexer_url = m.value_of("indexer-rpc-url").unwrap().to_string();
+            let indexer_url = m.value_of("indexer-rpc-url").map(Into::into);
             let scripts_results_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let genesis_path = Path::new(m.value_of("genesis-deployment-path").unwrap());
             let user_rollup_config_path = Path::new(m.value_of("user-rollup-config-path").unwrap());
@@ -1036,7 +1034,7 @@ async fn main() -> Result<()> {
         }
         Some(("update-cell", m)) => {
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
-            let indexer_rpc_url = m.value_of("indexer-rpc-url").unwrap();
+            let indexer_rpc_url = m.value_of("indexer-rpc-url");
             let tx_hash = cli_args::to_h256(m.value_of("tx-hash").unwrap())?;
             let index: u32 = m.value_of("index").unwrap().parse()?;
             let type_id = cli_args::to_h256(m.value_of("type-id").unwrap())?;
@@ -1116,7 +1114,7 @@ async fn main() -> Result<()> {
         }
         Some(("setup", m)) => {
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
-            let indexer_url = m.value_of("indexer-rpc-url").unwrap();
+            let indexer_url = m.value_of("indexer-rpc-url");
             let setup_config_path = Path::new(m.value_of("setup-config-path").unwrap());
             let mode = value_t!(m, "mode", prepare_scripts::ScriptsBuildMode).unwrap();
             let wallet_network = value_t!(m, "network", setup::WalletNetwork).unwrap();
@@ -1493,8 +1491,8 @@ async fn main() -> Result<()> {
 
             let stat = stat::stat_custodian_cells(
                 &rpc_client,
-                &rollup_type_hash.into(),
-                &custodian_script_type_hash.into(),
+                &rollup_type_hash,
+                &custodian_script_type_hash,
                 Some(min_capacity),
                 &compatible_finalized_timepoint,
             )

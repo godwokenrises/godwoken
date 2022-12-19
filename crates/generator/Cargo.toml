@@ -12,8 +12,9 @@ detect-asm = ["ckb-vm/detect-asm", "ckb-vm-aot"]
 enable-always-success-lock = []
 
 [dependencies]
-gw-types = { path = "../types" }
-gw-common = { path = "../common" }
+gw-types = { path = "../../gwos/crates/types" }
+gw-common = { path = "../../gwos/crates/common" }
+gw-smt = { path = "../smt" }
 gw-config = { path = "../config" }
 gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
@@ -25,7 +26,7 @@ ckb-vm-aot = { version = "=0.22.0", optional = true }
 thiserror = "1.0"
 lazy_static = "1.4"
 rlp = "0.5.0"
-secp256k1 = { version = "0.20", features = ["recovery"] }
+secp256k1 = { version = "0.24", features = ["recovery"] }
 substrate-bn = { git = "https://github.com/paritytech/bn.git", rev = "63f8c58" }
 sha3 = "0.10.6"
 log = "0.4"

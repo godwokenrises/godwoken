@@ -7,7 +7,7 @@ https://github.com/godwokenrises/godwoken/pull/836 changes the way to determine 
 ### `Timepoint`
 
 To understand specific changes, we must understand `Timepoint`, a new underlying type introduced in https://github.com/godwokenrises/godwoken/pull/836.
-A `Timepoint` is a type, underlying `u64`, that is interpretated according to its highest bit.
+A `Timepoint` is a type, underlying `u64`, that is interpreted according to its highest bit.
 
   - When the highest bit is `0`, the rest bits are represented by block number
   - When the highest bit is `1`, the rest bits are represented by timestamp
@@ -33,11 +33,11 @@ Here are some test vectors:
 - The `timepoint_flag == 0` indicates that its `timepoint_value` is the **finalized block number**, so any blocks with a lower number are finalized.
 - The `timepoint_flag == 1` indicates that its `timepoint_value` is the **finalized timestamp**, so any blocks with a lower timestamp are finalized.
 
-### Interpretation of `WithdrawalLockArgs.withdrawal_block_timepoint`
+### Interpretation of `WithdrawalLockArgs.withdrawal_finalized_timepoint`
 
-> **NOTE**: **[`WithdrawalLockArgs.withdrawal_block_number`](https://github.com/godwokenrises/godwoken/blob/5617b579927d85509e8f88ac4fb4493ef449b642/crates/types/schemas/godwoken.mol#L206) was renamed to [`WithdrawalLockArgs.withdrawal_block_timepoint`](https://github.com/godwokenrises/godwoken/pull/836/files#diff-96e540dc83a433d447e1d2dae392fc5eafce72e839ea3900f6f1f8638aaada6bL206-R209).**
+> **NOTE**: **[`WithdrawalLockArgs.withdrawal_block_number`](https://github.com/godwokenrises/godwoken/blob/5617b579927d85509e8f88ac4fb4493ef449b642/crates/types/schemas/godwoken.mol#L206) was renamed to [`WithdrawalLockArgs.withdrawal_finalized_timepoint`](https://github.com/godwokenrises/godwoken/pull/836/files#diff-96e540dc83a433d447e1d2dae392fc5eafce72e839ea3900f6f1f8638aaada6bL206-R209).**
 
-`WithdrawalLockArgs.withdrawal_block_timepoint` was changed to type `Timepoint`:
+`WithdrawalLockArgs.withdrawal_finalized_timepoint` was changed to type `Timepoint`:
 - If `timepoint_flag == 0` then its `timepoint_value` is the **withdrawn block number**, so it becomes finalized when the tip block number exceeds `rollup_config.finality_blocks` blocks above the **withdrawn block number**.
 - If `timepoint_flag == 1` then its `timepoint_value` is the **withdrawn block timestamp**, so it becomes finalized when `GlobalState.last_finalized_timepoint` exceeds the **withdrawn block timestamp**.
 
@@ -66,7 +66,7 @@ fn is_withdrawal_finalized(
     global_state: &GlobalState,
     withdrawal_lock_args: &WithdrawalLockArgs
 ) -> bool {
-    let withdrawn_timepoint = withdrawal_lock_args.withdrawal_block_timepoint().unpack();
+    let withdrawn_timepoint = withdrawal_lock_args.withdrawal_finalized_timepoint().unpack();
     let finalized_timepoint = global_state.last_finalized_timepoint().unpack();
     let finalized_block_number = global_state.block().count().unpack() - 1 - rollup_config.finality_blocks().unpack();
 
@@ -105,7 +105,7 @@ fn estimate_future_pending_time(
     withdrawal_lock_args: &WithdrawalLockArgs,
 ) -> u64 {
     let finalized_block_number = global_state.block().count().unpack() - 1 - rollup_config.finality_blocks().unpack();
-    match Timepoint::from_full_value(withdrawal_lock_args.withdrawal_block_timepoint().unpack()) {
+    match Timepoint::from_full_value(withdrawal_lock_args.withdrawal_finalized_timepoint().unpack()) {
         Timepoint::BlockNumber(wbn) => {
             max(0, wbn - finalized_block_number) * ESTIMATE_BLOCK_INTERVAL
         }

@@ -3,9 +3,9 @@ use crate::types::{RevertContext, RevertWitness};
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::Reader;
 use ckb_types::prelude::{Builder, Entity};
-use gw_common::smt::Blake2bHasher;
-use gw_common::H256;
-use gw_types::core::{Status, Timepoint};
+use gw_smt::smt::{Blake2bHasher, SMTH256};
+use gw_types::core::Status;
+use gw_types::h256::H256;
 use gw_types::offchain::CellInfo;
 use gw_types::packed::BlockMerkleState;
 use gw_types::packed::ChallengeLockArgsReader;
@@ -19,11 +19,10 @@ use gw_types::{
     bytes::Bytes,
     prelude::{Pack, Unpack},
 };
-use gw_utils::RollupContext;
+use gw_utils::{global_state_finalized_timepoint, RollupContext};
 
 pub struct Revert<'a> {
     rollup_context: RollupContext,
-    finality_blocks: u64,
     reward_burn_rate: u8,
     prev_global_state: GlobalState,
     challenge_cell: &'a CellInfo, // capacity and rewards lock
@@ -50,17 +49,15 @@ impl<'a> Revert<'a> {
         revert_context: RevertContext,
     ) -> Self {
         let reward_burn_rate = rollup_context.rollup_config.reward_burn_rate().into();
-        let finality_blocks = rollup_context.rollup_config.finality_blocks().unpack();
 
         Revert {
             rollup_context,
-            finality_blocks,
             prev_global_state,
             challenge_cell,
             stake_cells,
             burn_lock,
             reward_burn_rate,
-            post_reverted_block_root: revert_context.post_reverted_block_root.into(),
+            post_reverted_block_root: revert_context.post_reverted_block_root,
             revert_witness: revert_context.revert_witness,
         }
     }
@@ -86,12 +83,14 @@ impl<'a> Revert<'a> {
         };
         let block_merkle_state = {
             let leaves = {
-                let to_leave = |b: RawL2Block| (b.smt_key().into(), H256::zero());
+                let to_leave = |b: RawL2Block| (b.smt_key().into(), SMTH256::zero());
                 let reverted_blocks = self.revert_witness.reverted_blocks.clone();
                 reverted_blocks.into_iter().map(to_leave)
             };
             let block_merkle_proof = self.revert_witness.block_proof.clone();
-            let block_root = block_merkle_proof.compute_root::<Blake2bHasher>(leaves.collect())?;
+            let block_root: H256 = block_merkle_proof
+                .compute_root::<Blake2bHasher>(leaves.collect())?
+                .into();
             let block_count = first_reverted_block.number();
 
             BlockMerkleState::new_builder()
@@ -99,26 +98,27 @@ impl<'a> Revert<'a> {
                 .count(block_count)
                 .build()
         };
-        let last_finalized_timepoint = if self
-            .rollup_context
-            .fork_config
-            .use_timestamp_as_timepoint(first_reverted_block.number().unpack())
-        {
-            Timepoint::Timestamp(
-                first_reverted_block
-                    .timestamp()
-                    .unpack()
-                    .saturating_sub(self.rollup_context.rollup_config.finality_time_in_ms()),
-            )
-        } else {
-            Timepoint::from_block_number(
-                first_reverted_block
-                    .number()
-                    .unpack()
-                    .saturating_sub(1)
-                    .saturating_sub(self.finality_blocks),
-            )
-        };
+
+        // NOTE: When revert in v1, `Fork::use_timestamp_as_timepoint()` is disabled,
+        //       revert the last_finalized_timepoint to the **the previous block that did not revert**;
+        //       when revert in v2, `Fork::use_timestamp_as_timepoint()` is enabled,
+        //       keep the last_finalized_timepoint up to date, which is the last block timestamp
+        let last_reverted_block = self
+            .revert_witness
+            .reverted_blocks
+            .clone()
+            .into_iter()
+            .last()
+            .ok_or_else(|| anyhow!("no last block"))?;
+        let last_block_timestamp = last_reverted_block.timestamp().unpack();
+        let previous_non_reverted_block_number =
+            first_reverted_block.number().unpack().saturating_sub(1);
+        let reverted_last_finalized_timepoint = global_state_finalized_timepoint(
+            &self.rollup_context.rollup_config,
+            &self.rollup_context.fork_config,
+            previous_non_reverted_block_number,
+            last_block_timestamp,
+        );
         let running_status: u8 = Status::Running.into();
 
         let post_global_state = self
@@ -128,7 +128,7 @@ impl<'a> Revert<'a> {
             .block(block_merkle_state)
             .tip_block_hash(first_reverted_block.parent_block_hash())
             .tip_block_timestamp(self.revert_witness.new_tip_block.timestamp())
-            .last_finalized_timepoint(last_finalized_timepoint.full_value().pack())
+            .last_finalized_timepoint(reverted_last_finalized_timepoint.full_value().pack())
             .reverted_block_root(self.post_reverted_block_root.pack())
             .status(running_status.into())
             .build();

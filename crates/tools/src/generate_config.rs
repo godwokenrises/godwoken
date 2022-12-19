@@ -27,7 +27,7 @@ pub struct GenerateNodeConfigArgs<'a> {
     pub scripts_deployment: &'a ScriptsDeploymentResult,
     pub privkey_path: &'a Path,
     pub ckb_url: String,
-    pub indexer_url: String,
+    pub indexer_url: Option<String>,
     pub build_scripts_result: &'a BuildScriptsResult,
     pub server_url: String,
     pub user_rollup_config: &'a UserRollupConfig,

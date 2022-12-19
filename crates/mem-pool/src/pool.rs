@@ -11,7 +11,7 @@
 use anyhow::{anyhow, Context, Result};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, registry_address::RegistryAddress,
-    state::State, H256,
+    state::State,
 };
 use gw_config::{MemBlockConfig, MemPoolConfig, NodeMode, SyscallCyclesConfig};
 use gw_dynamic_config::manager::DynamicConfigManager;
@@ -33,6 +33,7 @@ use gw_store::{
 use gw_traits::CodeStore;
 use gw_types::packed::GlobalState;
 use gw_types::{
+    h256::*,
     offchain::{DepositInfo, FinalizedCustodianCapacity},
     packed::{
         AccountMerkleState, BlockInfo, L2Block, L2Transaction, NextMemBlock, Script, TxReceipt,
@@ -147,10 +148,10 @@ impl MemPool {
             let db = &store.begin_transaction();
             let tip_block = db.get_last_valid_tip_block()?;
             let tip_global_state = db
-                .get_block_post_global_state(&tip_block.hash().into())?
+                .get_block_post_global_state(&tip_block.hash())?
                 .expect("tip block post global");
             (
-                tip_block.hash().into(),
+                tip_block.hash(),
                 tip_block.raw().number().unpack(),
                 tip_global_state,
             )
@@ -320,7 +321,7 @@ impl MemPool {
         tx: L2Transaction,
     ) -> Result<()> {
         // check duplication
-        let tx_hash: H256 = tx.raw().hash().into();
+        let tx_hash: H256 = tx.raw().hash();
         if self.mem_block.txs_set().contains(&tx_hash) {
             return Err(anyhow!("duplicated tx"));
         }
@@ -380,7 +381,7 @@ impl MemPool {
         withdrawal: WithdrawalRequestExtra,
     ) -> Result<()> {
         // check duplication
-        let withdrawal_hash: H256 = withdrawal.raw().hash().into();
+        let withdrawal_hash: H256 = withdrawal.raw().hash();
         if self.mem_block.withdrawals_set().contains(&withdrawal_hash) {
             return Err(anyhow!("duplicated withdrawal"));
         }
@@ -670,7 +671,7 @@ impl MemPool {
                         let withdrawal = rem.withdrawals().get(index).unwrap();
                         let withdrawal_extra = self
                             .store
-                            .get_withdrawal(&withdrawal.hash().into())?
+                            .get_withdrawal(&withdrawal.hash())?
                             .expect("get withdrawal");
                         discarded_withdrawals.push_front(withdrawal_extra);
                     }
@@ -878,7 +879,7 @@ impl MemPool {
             // drop txs if tx.nonce lower than nonce
             let deprecated_txs = list.remove_lower_nonce_txs(nonce);
             for tx in deprecated_txs {
-                let tx_hash = tx.hash().into();
+                let tx_hash = tx.hash();
                 db.remove_mem_pool_transaction(&tx_hash)?;
             }
             // Drop all withdrawals that are have no enough balance
@@ -896,7 +897,7 @@ impl MemPool {
                 );
                 let deprecated_withdrawals = list.remove_lower_nonce_withdrawals(nonce, capacity);
                 for withdrawal in deprecated_withdrawals {
-                    let withdrawal_hash: H256 = withdrawal.hash().into();
+                    let withdrawal_hash: H256 = withdrawal.hash();
                     db.remove_mem_pool_withdrawal(&withdrawal_hash)?;
                 }
             }
@@ -1074,7 +1075,7 @@ impl MemPool {
         let finalized_custodians = self.collect_finalized_custodian_capacity()?;
         let asset_scripts: HashMap<H256, Script> = {
             let sudt_value = finalized_custodians.sudt.values();
-            sudt_value.map(|(_, script)| (script.hash().into(), script.to_owned()))
+            sudt_value.map(|(_, script)| (script.hash(), script.to_owned()))
         }
         .collect();
         // verify the withdrawals
@@ -1096,9 +1097,10 @@ impl MemPool {
                 unused_withdrawals.push(withdrawal_hash);
                 continue;
             }
-            let asset_script = asset_scripts
-                .get(&withdrawal.raw().sudt_script_hash().unpack())
-                .cloned();
+            let asset_script = {
+                let script_hash: H256 = withdrawal.raw().sudt_script_hash().unpack();
+                asset_scripts.get(&script_hash).cloned()
+            };
             if let Err(err) = WithdrawalVerifier::new(
                 state,
                 self.generator.rollup_context(),
@@ -1137,7 +1139,7 @@ impl MemPool {
                     let post_state = state.calculate_merkle_state()?;
                     let touched_keys = state.state_tracker().unwrap().touched_keys();
 
-                    let withdrawal_hash = withdrawal.hash().into();
+                    let withdrawal_hash = withdrawal.hash();
 
                     // Add to pending list and db if the withdrawal isn't
                     // already in them. This can happen when the withdrawal is
@@ -1261,8 +1263,7 @@ impl MemPool {
         let merkle_state = state.calculate_merkle_state()?;
 
         // generate tx receipt
-        let tx_receipt =
-            TxReceipt::build_receipt(tx.witness_hash().into(), run_result, merkle_state);
+        let tx_receipt = TxReceipt::build_receipt(tx.witness_hash(), run_result, merkle_state);
 
         if let Some(ref sync_server) = self.sync_server {
             sync_server.lock().unwrap().publish_transaction(tx);
@@ -1441,7 +1442,7 @@ mod test {
 
     use gw_common::merkle_utils::calculate_state_checkpoint;
     use gw_common::registry_address::RegistryAddress;
-    use gw_common::H256;
+    use gw_types::h256::*;
     use gw_types::offchain::{DepositInfo, FinalizedCustodianCapacity};
     use gw_types::packed::{AccountMerkleState, BlockInfo, DepositRequest};
     use gw_types::prelude::{Builder, Entity, Pack, Unpack};
@@ -1672,7 +1673,7 @@ mod test {
     }
 
     fn random_hash() -> H256 {
-        rand::random::<[u8; 32]>().into()
+        rand::random()
     }
 
     fn random_state() -> AccountMerkleState {

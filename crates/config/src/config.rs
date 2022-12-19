@@ -79,7 +79,10 @@ pub struct RPCServerConfig {
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RPCClientConfig {
-    pub indexer_url: String,
+    /// Specify standalone ckb indexer URL.
+    ///
+    /// If this is None we use CKB builtin indexer RPC instead.
+    pub indexer_url: Option<String>,
     pub ckb_url: String,
 }
 

@@ -1,19 +1,23 @@
 use crate::script_tests::programs::WITHDRAWAL_LOCK_PROGRAM;
 use crate::script_tests::utils::init_env_log;
-use crate::script_tests::utils::layer1::build_simple_tx_with_out_point;
 use crate::script_tests::utils::layer1::random_out_point;
+use crate::script_tests::utils::layer1::{
+    build_simple_tx_with_out_point_and_since, since_timestamp,
+};
 use crate::script_tests::utils::rollup::{random_always_success_script, CellContext};
 use crate::script_tests::utils::rollup_config::default_rollup_config;
 
+use crate::testing_tool::chain::DEFAULT_FINALITY_BLOCKS;
 use ckb_error::assert_error_eq;
 use ckb_script::ScriptError;
+use ckb_types::packed::Uint64;
 use ckb_types::prelude::{Builder, Entity};
 use gw_types::core::{ScriptHashType, Timepoint};
 use gw_types::packed::{
     BlockMerkleState, Byte32, CellDep, CellInput, CellOutput, GlobalState, OutPoint, Script,
     WithdrawalLockArgs,
 };
-use gw_types::prelude::{Pack, Unpack};
+use gw_types::prelude::Pack;
 use rand::random;
 
 use super::witness_unlock_withdrawal_via_finalize;
@@ -26,12 +30,14 @@ const NOT_FINALIZED_EXIT_CODE: i8 = 45;
 struct CaseParam {
     // test case id
     id: usize,
-    // GlobalState.block.count - 1 - rollup_config.finality_blocks
-    finalized_block_number: u64,
+    // tip block number
+    tip_block_number: u64,
     // GlobalState.last_finalized_timepoint
-    finalized_block_timestamp: u64,
-    // WithdrawalLockArgs.withdrawal_block_timepoint
-    withdrawal_block_timepoint: Timepoint,
+    global_state_last_finalized_timepoint: Timepoint,
+    // WithdrawalLockArgs.withdrawal_finalized_timepoint
+    withdrawal_finalized_timepoint: Timepoint,
+    // Input since
+    since: Uint64,
 
     // Even if the withdrawal cell is finalized, it needs one of the below condition matched:
     // - the same-index output with withdrawal cell has the same content
@@ -46,23 +52,20 @@ struct CaseParam {
 #[test]
 fn test_finality_of_withdrawal_lock() {
     init_env_log();
-    let finalized_block_number = random::<u32>() as u64 + 100;
-    let finalized_block_timestamp = random::<u32>() as u64 + 7 * 24 * 60 * 60 * 1000;
-    let finalized_timepoint_by_block_number = Timepoint::from_block_number(finalized_block_number);
-    let finalized_timepoint_by_block_timestamp =
-        Timepoint::from_timestamp(finalized_block_timestamp);
-    let unfinalized_timepoint_by_block_number =
-        Timepoint::from_block_number(finalized_block_number + 1);
-    let unfinalized_timepoint_by_block_timestamp =
-        Timepoint::from_timestamp(finalized_block_timestamp + 1);
+    let tip_block_number = random::<u32>() as u64 + 100;
+    let random_timestamp = random::<u32>() as u64 + 7 * 24 * 60 * 60 * 1000;
+    let global_state_last_finalized_timepoint = Timepoint::from_timestamp(random_timestamp);
 
     let cases = vec![
         CaseParam {
             // withdrawal_state_cell is finalized by block number
             id: 0,
-            finalized_block_number,
-            finalized_block_timestamp,
-            withdrawal_block_timepoint: finalized_timepoint_by_block_number.clone(),
+            tip_block_number,
+            global_state_last_finalized_timepoint: global_state_last_finalized_timepoint.clone(),
+            withdrawal_finalized_timepoint: Timepoint::from_block_number(
+                tip_block_number - DEFAULT_FINALITY_BLOCKS,
+            ),
+            since: Default::default(),
             unlock_path_include_one_owner_input: true,
             unlock_path_same_index_same_content_output: false,
             expected_result: Ok(()),
@@ -70,9 +73,12 @@ fn test_finality_of_withdrawal_lock() {
         CaseParam {
             // withdrawal_state_cell is not finalized by block number
             id: 1,
-            finalized_block_number,
-            finalized_block_timestamp,
-            withdrawal_block_timepoint: unfinalized_timepoint_by_block_number,
+            tip_block_number,
+            global_state_last_finalized_timepoint: global_state_last_finalized_timepoint.clone(),
+            withdrawal_finalized_timepoint: Timepoint::from_block_number(
+                tip_block_number + 1 - DEFAULT_FINALITY_BLOCKS,
+            ),
+            since: Default::default(),
             unlock_path_include_one_owner_input: true,
             unlock_path_same_index_same_content_output: false,
             expected_result: Err(NOT_FINALIZED_EXIT_CODE),
@@ -80,9 +86,10 @@ fn test_finality_of_withdrawal_lock() {
         CaseParam {
             // withdrawal_state_cell is finalized by block timestamp
             id: 2,
-            finalized_block_number,
-            finalized_block_timestamp,
-            withdrawal_block_timepoint: finalized_timepoint_by_block_timestamp,
+            tip_block_number,
+            global_state_last_finalized_timepoint: global_state_last_finalized_timepoint.clone(),
+            withdrawal_finalized_timepoint: global_state_last_finalized_timepoint.clone(),
+            since: since_timestamp(random_timestamp),
             unlock_path_include_one_owner_input: true,
             unlock_path_same_index_same_content_output: false,
             expected_result: Ok(()),
@@ -90,9 +97,10 @@ fn test_finality_of_withdrawal_lock() {
         CaseParam {
             // withdrawal_state_cell is not finalized by block timestamp
             id: 3,
-            finalized_block_number,
-            finalized_block_timestamp,
-            withdrawal_block_timepoint: unfinalized_timepoint_by_block_timestamp,
+            tip_block_number,
+            global_state_last_finalized_timepoint: global_state_last_finalized_timepoint.clone(),
+            withdrawal_finalized_timepoint: global_state_last_finalized_timepoint.clone(),
+            since: since_timestamp(random_timestamp - 1000),
             unlock_path_include_one_owner_input: true,
             unlock_path_same_index_same_content_output: false,
             expected_result: Err(NOT_FINALIZED_EXIT_CODE),
@@ -100,9 +108,12 @@ fn test_finality_of_withdrawal_lock() {
         CaseParam {
             // withdrawal_state_cell is finalized by block number, but we miss the owner input
             id: 4,
-            finalized_block_number,
-            finalized_block_timestamp,
-            withdrawal_block_timepoint: finalized_timepoint_by_block_number.clone(),
+            tip_block_number,
+            global_state_last_finalized_timepoint: global_state_last_finalized_timepoint.clone(),
+            withdrawal_finalized_timepoint: Timepoint::from_block_number(
+                tip_block_number - DEFAULT_FINALITY_BLOCKS,
+            ),
+            since: Default::default(),
             unlock_path_include_one_owner_input: false,
             unlock_path_same_index_same_content_output: false,
             expected_result: Err(OWNER_CELL_NOT_FOUND_EXIT_CODE),
@@ -110,9 +121,12 @@ fn test_finality_of_withdrawal_lock() {
         CaseParam {
             // withdrawal_state_cell is finalized by block number, unlock via check_output_cell_has_same_content
             id: 5,
-            finalized_block_number,
-            finalized_block_timestamp,
-            withdrawal_block_timepoint: finalized_timepoint_by_block_number,
+            tip_block_number,
+            global_state_last_finalized_timepoint,
+            withdrawal_finalized_timepoint: Timepoint::from_block_number(
+                tip_block_number - DEFAULT_FINALITY_BLOCKS,
+            ),
+            since: Default::default(),
             unlock_path_include_one_owner_input: false,
             unlock_path_same_index_same_content_output: true,
             expected_result: Ok(()),
@@ -125,20 +139,17 @@ fn run_case(case: CaseParam) {
     println!("{:?}", case);
     let CaseParam {
         id: _id,
-        finalized_block_number,
-        finalized_block_timestamp,
-        withdrawal_block_timepoint,
+        tip_block_number,
+        global_state_last_finalized_timepoint,
+        withdrawal_finalized_timepoint,
+        since,
         expected_result,
         unlock_path_same_index_same_content_output,
         unlock_path_include_one_owner_input,
     } = case;
     let rollup_config = default_rollup_config();
-
     let rollup_config_hash = rollup_config.hash();
-    let global_state_block_count =
-        1 + finalized_block_number + rollup_config.finality_blocks().unpack();
-    let global_state_last_finalized_timepoint =
-        Timepoint::from_timestamp(finalized_block_timestamp);
+    let global_state_block_count = 1 + tip_block_number;
 
     // Prepare context
     let prev_global_state = GlobalState::new_builder()
@@ -194,7 +205,9 @@ fn run_case(case: CaseParam) {
                         .owner_lock_hash(Byte32::new_unchecked(
                             withdrawal_owner_lock_hash.as_bytes(),
                         ))
-                        .withdrawal_block_timepoint(withdrawal_block_timepoint.full_value().pack())
+                        .withdrawal_finalized_timepoint(
+                            withdrawal_finalized_timepoint.full_value().pack(),
+                        )
                         .build();
                     let mut args = Vec::new();
                     args.extend_from_slice(rollup_state_type_hash.as_slice());
@@ -213,10 +226,10 @@ fn run_case(case: CaseParam) {
     let witness_args = witness_unlock_withdrawal_via_finalize();
 
     // Build transaction
-    let mut tx = build_simple_tx_with_out_point(
+    let mut tx = build_simple_tx_with_out_point_and_since(
         &mut ctx.inner,
         (withdrawal_state_cell.to_ckb(), Default::default()),
-        withdrawal_state_out_point,
+        (withdrawal_state_out_point, since),
         (
             CellOutput::new_builder().build().to_ckb(),
             Default::default(),
@@ -292,7 +305,7 @@ fn run_case(case: CaseParam) {
 // Build common-used cells for testing stake-lock:
 //   - rollup_config_cell, finality_blocks = ROLLUP_CONFIG_FINALITY_BLOCKS
 //   - rollup_code_cell, is ALWAYS_SUCCESS_PROGRAM
-//   - rollup_state_cell, last_finalized_block_number = ROLLUP_STATE_LAST_FINALIZED_BLOCK_NUMBER
+//   - rollup_state_cell, last_finalized_timepoint = ROLLUP_STATE_LAST_FINALIZED_BLOCK_NUMBER
 //   - withdrawal_code_cell, is withdrawal_LOCK_PROGRAM
 //   - withdrawal_owner_cell, is ALWAYS_SUCCESS_PROGRAM
 //

@@ -1,23 +1,23 @@
 use crate::types::{VerifyContext, VerifyWitness};
 
 use anyhow::{anyhow, bail, Context, Result};
-use gw_common::h256_ext::H256Ext;
 use gw_common::merkle_utils::{
     calculate_ckb_merkle_root, calculate_state_checkpoint, ckb_merkle_leaf_hash, CBMT,
 };
 use gw_common::registry_address::RegistryAddress;
-use gw_common::smt::{Blake2bHasher, SMT};
-use gw_common::sparse_merkle_tree::default_store::DefaultStore;
 use gw_common::state::{
     build_account_field_key, State, GW_ACCOUNT_NONCE_TYPE, GW_ACCOUNT_SCRIPT_HASH_TYPE,
 };
-use gw_common::H256;
 use gw_generator::traits::StateExt;
+use gw_smt::smt::{Blake2bHasher, SMT, SMTH256};
+use gw_smt::smt_h256_ext::SMTH256Ext;
+use gw_smt::sparse_merkle_tree::default_store::DefaultStore;
 use gw_store::state::traits::JournalDB;
 use gw_store::state::MemStateDB;
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
-use gw_types::core::{ChallengeTargetType, Status, Timepoint};
+use gw_types::core::{ChallengeTargetType, Status};
+use gw_types::h256::*;
 use gw_types::offchain::RunResult;
 use gw_types::packed::{
     AccountMerkleState, BlockMerkleState, Byte32, CCTransactionSignatureWitness,
@@ -25,13 +25,12 @@ use gw_types::packed::{
     RawL2Block, Script, SubmitTransactions, SubmitWithdrawals, Uint64, WithdrawalRequestExtra,
 };
 use gw_types::prelude::*;
-use gw_utils::RollupContext;
+use gw_utils::{global_state_finalized_timepoint, RollupContext};
 
 type MemTree = MemStateDB;
 
 pub struct MockBlockParam {
     rollup_context: RollupContext,
-    finality_blocks: u64,
     number: u64,
     rollup_config_hash: Byte32,
     block_producer: RegistryAddress,
@@ -61,7 +60,6 @@ impl MockBlockParam {
         reverted_block_root: H256,
     ) -> Self {
         MockBlockParam {
-            finality_blocks: rollup_context.rollup_config.finality_blocks().unpack(),
             rollup_config_hash: rollup_context.rollup_config.hash().pack(),
             rollup_context,
             block_producer,
@@ -301,14 +299,16 @@ impl MockBlockParam {
     ) -> Result<GlobalState> {
         let block_smt = db.block_smt()?;
         let block_proof = block_smt
-            .merkle_proof(vec![H256::from_u64(self.number)])
+            .merkle_proof(vec![SMTH256::from_u64(self.number)])
             .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
-            .compile(vec![H256::from_u64(self.number)])?;
+            .compile(vec![SMTH256::from_u64(self.number)])?;
         let post_block = {
-            let post_block_root = block_proof.compute_root::<Blake2bHasher>(vec![(
-                raw_block.smt_key().into(),
-                raw_block.hash().into(),
-            )])?;
+            let post_block_root: H256 = block_proof
+                .compute_root::<Blake2bHasher>(vec![(
+                    raw_block.smt_key().into(),
+                    raw_block.hash().into(),
+                )])?
+                .into();
             let block_count = self.number + 1;
             BlockMerkleState::new_builder()
                 .merkle_root(post_block_root.pack())
@@ -316,15 +316,12 @@ impl MockBlockParam {
                 .build()
         };
 
-        let last_finalized_timepoint = if self
-            .rollup_context
-            .fork_config
-            .use_timestamp_as_timepoint(self.number)
-        {
-            unimplemented!()
-        } else {
-            Timepoint::from_block_number(self.number.saturating_sub(self.finality_blocks))
-        };
+        let last_finalized_timepoint = global_state_finalized_timepoint(
+            &self.rollup_context.rollup_config,
+            &self.rollup_context.fork_config,
+            self.number,
+            self.timestamp.unpack(),
+        );
         let global_state = GlobalState::new_builder()
             .account(post_account)
             .block(post_block)
@@ -344,9 +341,9 @@ impl MockBlockParam {
         sender_script: Script,
         owner_lock: Script,
     ) -> Result<VerifyContext> {
-        let mut tree: SMT<DefaultStore<H256>> = Default::default();
+        let mut tree: SMT<DefaultStore<SMTH256>> = Default::default();
         for (index, witness_hash) in self.withdrawals.witness_hashes.iter().enumerate() {
-            tree.update(H256::from_u32(index as u32), witness_hash.to_owned())?;
+            tree.update(SMTH256::from_u32(index as u32), (*witness_hash).into())?;
         }
 
         let withdrawal_index = self.withdrawals.witness_hashes.len().saturating_sub(1) as u32;
@@ -391,11 +388,11 @@ impl MockBlockParam {
         let kv_state: Vec<(H256, H256)> = vec![
             (
                 build_account_field_key(sender_id, GW_ACCOUNT_SCRIPT_HASH_TYPE),
-                sender_script.hash().into(),
+                sender_script.hash(),
             ),
             (
                 build_account_field_key(receiver_id, GW_ACCOUNT_SCRIPT_HASH_TYPE),
-                receiver_script.hash().into(),
+                receiver_script.hash(),
             ),
             (
                 build_account_field_key(sender_id, GW_ACCOUNT_NONCE_TYPE),
@@ -407,7 +404,7 @@ impl MockBlockParam {
             Unpack::<u32>::unpack(&tx.raw().nonce())
         );
 
-        let touched_keys: Vec<H256> = kv_state.iter().map(|(key, _)| key.to_owned()).collect();
+        let touched_keys: Vec<SMTH256> = kv_state.iter().map(|(key, _)| (*key).into()).collect();
         let kv_state_proof = {
             let smt = mem_tree.inner_smt_tree();
             smt.merkle_proof(touched_keys.clone())?
@@ -584,12 +581,12 @@ impl RawBlockWithdrawalRequests {
     }
 
     fn contains(&self, req: &WithdrawalRequestExtra) -> bool {
-        self.witness_hashes.contains(&req.witness_hash().into())
+        self.witness_hashes.contains(&req.witness_hash())
     }
 
     fn push(&mut self, req: WithdrawalRequestExtra, post_account: AccountMerkleState) {
         let wth_index = self.witness_hashes.len() as u32;
-        let witness_hash: H256 = req.witness_hash().into();
+        let witness_hash: H256 = req.witness_hash();
         let merkle_leaf_hash = ckb_merkle_leaf_hash(wth_index, &witness_hash);
 
         self.witness_hashes.push(witness_hash);
@@ -599,8 +596,7 @@ impl RawBlockWithdrawalRequests {
     }
 
     fn submit_withdrawals(&self) -> Result<SubmitWithdrawals> {
-        let root = calculate_ckb_merkle_root(self.merkle_leaf_hashes.clone())
-            .map_err(|err| anyhow!("mock submit withdrawal error: {}", err))?;
+        let root = calculate_ckb_merkle_root(self.merkle_leaf_hashes.clone());
         let count = self.inner.len() as u32;
 
         Ok(SubmitWithdrawals::new_builder()
@@ -641,12 +637,12 @@ impl RawBlockTransactions {
     }
 
     fn contains(&self, tx: &L2Transaction) -> bool {
-        self.witness_hashes.contains(&tx.witness_hash().into())
+        self.witness_hashes.contains(&tx.witness_hash())
     }
 
     fn push(&mut self, tx: L2Transaction, post_account: AccountMerkleState) {
         let tx_index = self.merkle_leaf_hashes.len() as u32;
-        let witness_hash: H256 = tx.witness_hash().into();
+        let witness_hash: H256 = tx.witness_hash();
         let merkle_leaf_hash = ckb_merkle_leaf_hash(tx_index, &witness_hash);
 
         self.witness_hashes.push(witness_hash);
@@ -656,8 +652,7 @@ impl RawBlockTransactions {
     }
 
     fn submit_transactions(&self) -> Result<SubmitTransactions> {
-        let root = calculate_ckb_merkle_root(self.merkle_leaf_hashes.clone())
-            .map_err(|err| anyhow!("mock submit transaction error: {}", err))?;
+        let root = calculate_ckb_merkle_root(self.merkle_leaf_hashes.clone());
         let count = self.inner.len() as u32;
 
         Ok(SubmitTransactions::new_builder()

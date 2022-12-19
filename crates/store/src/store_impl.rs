@@ -9,8 +9,8 @@ use autorocks::autorocks_sys::rocksdb::{
 };
 use autorocks::moveit::moveit;
 use autorocks::{DbOptions, TransactionDb, WriteBatch};
-use gw_common::smt::Blake2bHasher;
 use gw_config::StoreConfig;
+use gw_smt::smt::Blake2bHasher;
 use gw_types::prelude::*;
 use serde::Serialize;
 use tempfile::TempDir;

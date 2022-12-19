@@ -5,12 +5,12 @@ use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     registry_address::RegistryAddress,
     state::State,
-    H256,
 };
 use gw_generator::traits::StateExt;
 use gw_store::traits::chain_store::ChainStore;
 use gw_types::{
     core::ScriptHashType,
+    h256::*,
     packed::{LogItem, Script},
     prelude::{Builder, Entity, Pack},
 };

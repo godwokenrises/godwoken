@@ -35,7 +35,7 @@ jobs:
       run: rustup component add rustfmt && rustup component add clippy
     - name: Install moleculec
       run: |
-        export MOLC_VERSION=$(cat deps/godwoken-scripts/c/Makefile | egrep "MOLC_VERSION :=" | awk '{print $3}')
+        export MOLC_VERSION=$(cat ../gwos/c/Makefile | egrep "MOLC_VERSION :=" | awk '{print $3}')
         test "$(moleculec --version)" = "Moleculec $MOLC_VERSION" \
         || CARGO_TARGET_DIR=target/ cargo install moleculec --version $MOLC_VERSION
     - name: Install ckb-cli from nervos/godwoken-prebuilds:latest

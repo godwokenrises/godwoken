@@ -13,7 +13,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use futures::future::OptionFuture;
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainMockContextBuildArgs};
-use gw_common::{blake2b::new_blake2b, registry_address::RegistryAddress, H256};
+use gw_common::{blake2b::new_blake2b, registry_address::RegistryAddress};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
 use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_generator::{
@@ -43,6 +43,7 @@ use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     core::AllowedEoaType,
+    h256::*,
     packed::{Byte32, CellDep, NumberHash, RollupConfig, Script},
     prelude::*,
 };
@@ -202,7 +203,7 @@ impl ChainTask {
             }
 
             // update tip
-            Ok(Some((new_block_number, block.header().hash().into())))
+            Ok(Some((new_block_number, block.header().hash())))
         } else {
             log::debug!(
                 "Not found layer1 block #{} sleep {}s then retry",
@@ -272,16 +273,17 @@ impl BaseInitComponents {
         let rollup_config: RollupConfig = config.genesis.rollup_config.clone().into();
         let rollup_context = RollupContext {
             rollup_config: rollup_config.clone(),
-            rollup_script_hash: {
-                let rollup_script_hash: [u8; 32] = config.genesis.rollup_type_hash.clone().into();
-                rollup_script_hash.into()
-            },
+            rollup_script_hash: config.genesis.rollup_type_hash.clone().into(),
             fork_config: config.fork.clone(),
         };
         let rollup_type_script: Script = config.chain.rollup_type_script.clone().into();
         let rpc_client = {
-            let indexer_client = CKBIndexerClient::with_url(&config.rpc_client.indexer_url)?;
             let ckb_client = CKBClient::with_url(&config.rpc_client.ckb_url)?;
+            let indexer_client = if let Some(ref indexer_url) = config.rpc_client.indexer_url {
+                CKBIndexerClient::with_url(indexer_url)?
+            } else {
+                CKBIndexerClient::new(ckb_client.client().clone(), false)
+            };
             let rollup_type_script =
                 ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
             RPCClient::new(
@@ -333,7 +335,7 @@ impl BaseInitComponents {
             let out_point = config.genesis.secp_data_dep.out_point.clone();
             rpc_client
                 .ckb
-                .get_transaction(out_point.tx_hash.0.into())
+                .get_transaction(out_point.tx_hash.0)
                 .await?
                 .ok_or_else(|| anyhow!("can not found transaction: {:?}", out_point.tx_hash))?
                 .raw()
@@ -360,7 +362,7 @@ impl BaseInitComponents {
         if let Some(res) = gw_dynamic_config::try_reload(dynamic_config_manager.clone()).await {
             log::info!("Reload dynamic config: {:?}", res);
         }
-        let rollup_config_hash: H256 = rollup_config.hash().into();
+        let rollup_config_hash: H256 = rollup_config.hash();
         let generator = {
             let backend_manage = BackendManage::from_config(config.fork.backend_forks.clone())
                 .with_context(|| "config backends")?;
@@ -399,7 +401,7 @@ impl BaseInitComponents {
         };
         let mut builtin_load_data = HashMap::new();
         builtin_load_data.insert(
-            to_hash(secp_data.as_ref()).into(),
+            to_hash(secp_data.as_ref()),
             config.genesis.secp_data_dep.clone().into(),
         );
 

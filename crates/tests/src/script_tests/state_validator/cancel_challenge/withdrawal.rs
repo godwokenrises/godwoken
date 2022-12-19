@@ -22,7 +22,6 @@ use ckb_types::{
 };
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::state::State;
-use gw_common::H256;
 use gw_generator::account_lock_manage::{
     eip712::{
         traits::EIP712Encode,
@@ -30,10 +29,12 @@ use gw_generator::account_lock_manage::{
     },
     {always_success::AlwaysSuccess, AccountLockManage},
 };
+use gw_smt::smt_h256_ext::SMTH256;
 use gw_store::state::traits::JournalDB;
 use gw_store::state::MemStateDB;
 use gw_types::core::AllowedEoaType;
 use gw_types::core::SigningType;
+use gw_types::h256::*;
 use gw_types::packed::AllowedTypeHash;
 use gw_types::packed::CCWithdrawalWitness;
 use gw_types::packed::WithdrawalRequestExtra;
@@ -79,7 +80,7 @@ async fn test_cancel_withdrawal() {
         .build();
     // setup chain
     let mut account_lock_manage = AccountLockManage::default();
-    account_lock_manage.register_lock_algorithm(eoa_lock_type_hash.into(), Arc::new(AlwaysSuccess));
+    account_lock_manage.register_lock_algorithm(eoa_lock_type_hash, Arc::new(AlwaysSuccess));
     let mut chain = setup_chain_with_account_lock_manage(
         rollup_type_script.clone(),
         rollup_config.clone(),
@@ -279,20 +280,21 @@ async fn test_cancel_withdrawal() {
     let mut tree = MemStateDB::from_store(chain.store().get_snapshot()).unwrap();
     tree.set_state_tracker(Default::default());
     let withdrawal_address = tree
-        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &sender_script.hash().into())
+        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &sender_script.hash())
         .unwrap()
         .unwrap();
     let account_count = tree.get_account_count().unwrap();
-    let touched_keys: Vec<H256> = {
+    let touched_keys: Vec<SMTH256> = {
         let keys = tree.state_tracker().unwrap().touched_keys();
         let unlock = keys.lock().unwrap();
-        unlock.clone().into_iter().collect()
+        unlock.iter().cloned().map(Into::into).collect()
     };
     let kv_state = touched_keys
         .iter()
         .map(|k| {
-            let v = tree.get_raw(k).unwrap();
-            (*k, v)
+            let k = (*k).into();
+            let v = tree.get_raw(&k).unwrap();
+            (k, v)
         })
         .collect::<Vec<(H256, H256)>>();
     let kv_state_proof: Bytes = {
@@ -311,7 +313,7 @@ async fn test_cancel_withdrawal() {
                 .withdrawals()
                 .into_iter()
                 .enumerate()
-                .map(|(_, withdrawal)| withdrawal.witness_hash().into())
+                .map(|(_, withdrawal)| withdrawal.witness_hash())
                 .collect();
             let proof = build_merkle_proof(&leaves, &[challenge_target_index]);
             // we do not actually execute the signature verification in this test

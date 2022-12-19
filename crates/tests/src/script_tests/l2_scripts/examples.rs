@@ -7,10 +7,8 @@ use super::{
     ACCOUNT_OP_PROGRAM_PATH, GW_LOG_SUDT_TRANSFER, RECOVER_PROGRAM_CODE_HASH, RECOVER_PROGRAM_PATH,
     SUDT_TOTAL_SUPPLY_PROGRAM_CODE_HASH, SUM_PROGRAM_CODE_HASH, SUM_PROGRAM_PATH,
 };
-use gw_common::smt::SMT;
 use gw_common::{
-    builtins::ETH_REGISTRY_ACCOUNT_ID, h256_ext::H256Ext, registry_address::RegistryAddress,
-    state::State, H256,
+    builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, state::State,
 };
 use gw_config::{BackendConfig, BackendForkConfig, BackendType};
 use gw_generator::backend_manage::BackendManage;
@@ -23,6 +21,7 @@ use gw_generator::{
     traits::StateExt,
     Generator,
 };
+use gw_smt::smt::{SMT, SMTH256};
 use gw_store::smt::smt_store::SMTStateStore;
 use gw_store::snapshot::StoreSnapshot;
 use gw_store::state::overlay::mem_state::MemStateTree;
@@ -35,6 +34,7 @@ use gw_types::packed::AllowedTypeHash;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
+    h256::*,
     packed::{RawL2Transaction, RollupConfig, Script},
     prelude::*,
     U256,
@@ -42,7 +42,7 @@ use gw_types::{
 use gw_utils::RollupContext;
 
 fn new_state(store: StoreSnapshot) -> MemStateDB {
-    let smt = SMT::new(H256::zero(), SMTStateStore::new(MemStore::new(store)));
+    let smt = SMT::new(SMTH256::zero(), SMTStateStore::new(MemStore::new(store)));
     let inner = MemStateTree::new(smt, 0);
     MemStateDB::new(inner)
 }
@@ -62,7 +62,7 @@ fn test_example_sum() {
         .expect("create account");
     tree.mapping_registry_address_to_script_hash(
         RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, vec![42u8; 20]),
-        sender_script.hash().into(),
+        sender_script.hash(),
     )
     .unwrap();
     let init_value: u64 = 0;
@@ -95,7 +95,7 @@ fn test_example_sum() {
             .register_lock_algorithm(H256::zero(), Arc::new(AlwaysSuccess::default()));
         let rollup_context = RollupContext {
             rollup_config: Default::default(),
-            rollup_script_hash: [42u8; 32].into(),
+            rollup_script_hash: [42u8; 32],
             ..Default::default()
         };
         let generator = Generator::new(
@@ -204,7 +204,7 @@ fn test_example_account_operation() {
         .expect("create account");
     tree.mapping_registry_address_to_script_hash(
         RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, vec![42u8; 20]),
-        sender_script.hash().into(),
+        sender_script.hash(),
     )
     .unwrap();
 
@@ -240,7 +240,7 @@ fn test_example_account_operation() {
                 .pack(),
             )
             .build(),
-        rollup_script_hash: [42u8; 32].into(),
+        rollup_script_hash: [42u8; 32],
         ..Default::default()
     };
     let generator = Generator::new(
@@ -441,7 +441,7 @@ fn test_example_recover_account() {
         .expect("create account");
     tree.mapping_registry_address_to_script_hash(
         RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, vec![42u8; 20]),
-        sender_script.hash().into(),
+        sender_script.hash(),
     )
     .unwrap();
 
@@ -469,7 +469,7 @@ fn test_example_recover_account() {
     let secp256k1_code_hash = H256::from_u32(11);
     account_lock_manage
         .register_lock_algorithm(secp256k1_code_hash, Arc::new(Secp256k1Eth::default()));
-    let rollup_script_hash: H256 = [42u8; 32].into();
+    let rollup_script_hash: H256 = [42u8; 32];
     let rollup_context = RollupContext {
         rollup_config: RollupConfig::new_builder()
             .allowed_contract_type_hashes(
@@ -602,7 +602,7 @@ fn test_sudt_total_supply() {
         .args([1u8; 32].to_vec().pack())
         .hash_type(ScriptHashType::Type.into())
         .build();
-    let alice_hash: H256 = alice.hash().into();
+    let alice_hash: H256 = alice.hash();
     let eth_registry_id = gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
     let alice_address = RegistryAddress::new(eth_registry_id, alice_hash.as_slice().to_vec());
     let alice_id = tree
@@ -616,7 +616,7 @@ fn test_sudt_total_supply() {
         .args([2u8; 32].to_vec().pack())
         .hash_type(ScriptHashType::Type.into())
         .build();
-    let bob_hash: H256 = bob.hash().into();
+    let bob_hash: H256 = bob.hash();
     let bob_address = RegistryAddress::new(eth_registry_id, bob_hash.as_slice().to_vec());
     tree.create_account_from_script(bob)
         .expect("create bob account");
@@ -647,12 +647,12 @@ fn test_sudt_total_supply() {
         .unwrap();
         let mut account_lock_manage = AccountLockManage::default();
         account_lock_manage.register_lock_algorithm(
-            (*ALWAYS_SUCCESS_CODE_HASH).into(),
+            *ALWAYS_SUCCESS_CODE_HASH,
             Arc::new(AlwaysSuccess::default()),
         );
         let rollup_context = RollupContext {
             rollup_config,
-            rollup_script_hash: [42u8; 32].into(),
+            rollup_script_hash: [42u8; 32],
             ..Default::default()
         };
         let generator = Generator::new(

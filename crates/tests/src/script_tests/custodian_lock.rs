@@ -24,8 +24,8 @@ struct CaseParam {
     finalized_block_number: u64,
     // GlobalState.last_finalized_timepoint
     finalized_block_timestamp: u64,
-    // CustodianLockArgs.deposit_block_timepoint
-    deposit_block_timepoint: Timepoint,
+    // CustodianLockArgs.deposit_finalized_timepoint
+    deposit_finalized_timepoint: Timepoint,
     // expected running result of the test case, Ok(()) or Err(exit_code)
     expected_result: Result<(), i8>,
 }
@@ -49,7 +49,7 @@ fn test_finality_of_custodian_lock() {
             id: 0,
             finalized_block_number,
             finalized_block_timestamp,
-            deposit_block_timepoint: finalized_timepoint_by_block_number,
+            deposit_finalized_timepoint: finalized_timepoint_by_block_number,
             expected_result: Ok(()),
         },
         CaseParam {
@@ -57,7 +57,7 @@ fn test_finality_of_custodian_lock() {
             id: 1,
             finalized_block_number,
             finalized_block_timestamp,
-            deposit_block_timepoint: unfinalized_timepoint_by_block_number,
+            deposit_finalized_timepoint: unfinalized_timepoint_by_block_number,
             expected_result: Err(INDEX_OUT_OF_BOUND_EXIT_CODE),
         },
         CaseParam {
@@ -65,7 +65,7 @@ fn test_finality_of_custodian_lock() {
             id: 2,
             finalized_block_number,
             finalized_block_timestamp,
-            deposit_block_timepoint: finalized_timepoint_by_block_timestamp,
+            deposit_finalized_timepoint: finalized_timepoint_by_block_timestamp,
             expected_result: Ok(()),
         },
         CaseParam {
@@ -73,7 +73,7 @@ fn test_finality_of_custodian_lock() {
             id: 3,
             finalized_block_number,
             finalized_block_timestamp,
-            deposit_block_timepoint: unfinalized_timepoint_by_block_timestamp,
+            deposit_finalized_timepoint: unfinalized_timepoint_by_block_timestamp,
             expected_result: Err(INDEX_OUT_OF_BOUND_EXIT_CODE),
         },
     ];
@@ -86,7 +86,7 @@ fn run_case(case: CaseParam) {
         id: _id,
         finalized_block_number,
         finalized_block_timestamp,
-        deposit_block_timepoint,
+        deposit_finalized_timepoint,
         expected_result,
     } = case;
     let rollup_config = default_rollup_config();
@@ -129,7 +129,9 @@ fn run_case(case: CaseParam) {
                 .hash_type(ScriptHashType::Type.into())
                 .args({
                     let custodian_lock_args = CustodianLockArgs::new_builder()
-                        .deposit_block_timepoint(deposit_block_timepoint.full_value().pack())
+                        .deposit_finalized_timepoint(
+                            deposit_finalized_timepoint.full_value().pack(),
+                        )
                         .build();
                     let mut args = Vec::new();
                     args.extend_from_slice(rollup_state_type_hash.as_slice());
@@ -185,7 +187,7 @@ fn run_case(case: CaseParam) {
 // Build common-used cells for testing custodian-lock:
 //   - rollup_config_cell, finality_blocks = ROLLUP_CONFIG_FINALITY_BLOCKS
 //   - rollup_code_cell, is ALWAYS_SUCCESS_PROGRAM, we won't use it
-//   - rollup_state_cell, last_finalized_block_number = ROLLUP_STATE_LAST_FINALIZED_BLOCK_NUMBER
+//   - rollup_state_cell, last_finalized_timepoint = ROLLUP_STATE_LAST_FINALIZED_BLOCK_NUMBER
 //   - custodian_code_cell, is CUSTODIAN_LOCK_PROGRAM
 //
 // Return (ctx, rollup_state_out_point, custodian_code_out_point);

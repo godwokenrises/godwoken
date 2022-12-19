@@ -1,9 +1,10 @@
 #![allow(clippy::mutable_key_type)]
 
 use anyhow::{anyhow, Result};
-use gw_common::H256;
 use gw_config::ContractsCellDep;
 use gw_mem_pool::{custodian::sum_withdrawals, withdrawal::Generator};
+use gw_types::core::Timepoint;
+use gw_types::h256::*;
 use gw_types::offchain::CompatibleFinalizedTimepoint;
 use gw_types::packed::RollupConfig;
 use gw_types::{
@@ -17,6 +18,7 @@ use gw_types::{
     },
     prelude::*,
 };
+use gw_utils::withdrawal::parse_lock_args;
 use gw_utils::RollupContext;
 use std::{
     collections::HashMap,
@@ -48,7 +50,7 @@ pub fn generate(
     let total_withdrawal_amount = sum_withdrawals(block.withdrawals().into_iter());
     let mut generator = Generator::new(rollup_context, finalized_custodians.into());
     for req in block.withdrawals().into_iter() {
-        let req_extra = match withdrawal_extras.get(&req.hash().into()) {
+        let req_extra = match withdrawal_extras.get(&req.hash()) {
             Some(req_extra) => req_extra.to_owned(),
             None => WithdrawalRequestExtra::new_builder().request(req).build(),
         };
@@ -190,6 +192,7 @@ pub fn revert(
     }))
 }
 
+#[derive(Debug)]
 pub struct UnlockedWithdrawals {
     pub deps: Vec<CellDep>,
     pub inputs: Vec<InputCellInfo>,
@@ -202,6 +205,7 @@ pub fn unlock_to_owner(
     rollup_config: &RollupConfig,
     contracts_dep: &ContractsCellDep,
     withdrawal_cells: Vec<CellInfo>,
+    global_state_since: u64,
 ) -> Result<Option<UnlockedWithdrawals>> {
     if withdrawal_cells.is_empty() {
         return Ok(None);
@@ -229,6 +233,7 @@ pub fn unlock_to_owner(
         rollup_config.finality_blocks().unpack(),
     );
     let l1_sudt_script_hash = rollup_config.l1_sudt_script_type_hash();
+    let mut if_exist_legacy_withdrawal_cells = false;
     for withdrawal_cell in withdrawal_cells {
         // Double check
         if let Err(err) = gw_rpc_client::withdrawal::verify_unlockable_to_owner(
@@ -238,6 +243,10 @@ pub fn unlock_to_owner(
         ) {
             log::error!("[unlock withdrawal] unexpected verify failed {}", err);
             continue;
+        }
+
+        if !if_exist_legacy_withdrawal_cells {
+            if_exist_legacy_withdrawal_cells = is_legacy_finality_withdrawal_cell(&withdrawal_cell);
         }
 
         let owner_lock = {
@@ -254,6 +263,7 @@ pub fn unlock_to_owner(
         let withdrawal_input = {
             let input = CellInput::new_builder()
                 .previous_output(withdrawal_cell.out_point.clone())
+                .since(global_state_since.pack())
                 .build();
 
             InputCellInfo {
@@ -282,12 +292,21 @@ pub fn unlock_to_owner(
     let withdrawal_lock_dep = contracts_dep.withdrawal_cell_lock.clone();
     let sudt_type_dep = contracts_dep.l1_sudt_type.clone();
 
-    let mut cell_deps = vec![
-        // rollup_dep and rollup_config_dep will be used by withdrawal_lock_script
-        rollup_dep,
-        rollup_config_dep.into(),
-        withdrawal_lock_dep.into(),
-    ];
+    let mut cell_deps = if if_exist_legacy_withdrawal_cells {
+        // Some withdrawal cells were born at legacy version, withdrawal_lock_script checks finality of withdrawal
+        // cells by comparing with GlobalState.last_finalized_timepoint, so rollup_dep and
+        // rollup_config_dep are required
+        vec![
+            rollup_dep,
+            rollup_config_dep.into(),
+            withdrawal_lock_dep.into(),
+        ]
+    } else {
+        // All withdrawal cells were born at v2, withdrawal_lock_script checks finality of withdrawal
+        // cells by comparing with `since`.
+        vec![withdrawal_lock_dep.into()]
+    };
+
     if unlocked_to_owner_outputs
         .iter()
         .any(|output| output.0.type_().to_opt().is_some())
@@ -303,26 +322,41 @@ pub fn unlock_to_owner(
     }))
 }
 
+fn is_legacy_finality_withdrawal_cell(withdrawal_cell: &CellInfo) -> bool {
+    let withdrawal_lock_args = parse_lock_args(&withdrawal_cell.output.lock().args().raw_data())
+        .expect("parse withdrawal lock args");
+    match Timepoint::from_full_value(
+        withdrawal_lock_args
+            .lock_args
+            .withdrawal_finalized_timepoint()
+            .unpack(),
+    ) {
+        Timepoint::BlockNumber(_) => true,
+        Timepoint::Timestamp(_) => false,
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
+    use crate::utils::global_state_last_finalized_timepoint_to_since;
     use crate::withdrawal::generate;
-    use gw_common::{h256_ext::H256Ext, H256};
-    use gw_config::ContractsCellDep;
+    use gw_config::{ContractsCellDep, ForkConfig};
     use gw_types::core::{DepType, ScriptHashType, Timepoint};
+    use gw_types::h256::*;
     use gw_types::offchain::{
         CellInfo, CollectedCustodianCells, CompatibleFinalizedTimepoint, InputCellInfo,
     };
     use gw_types::packed::{
-        CellDep, CellInput, CellOutput, GlobalState, L2Block, OutPoint, RawL2Block,
-        RawWithdrawalRequest, RollupConfig, Script, UnlockWithdrawalViaFinalize,
+        BlockMerkleState, CellDep, CellInput, CellOutput, GlobalState, L2Block, OutPoint,
+        RawL2Block, RawWithdrawalRequest, RollupConfig, Script, UnlockWithdrawalViaFinalize,
         UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion, WithdrawalLockArgs,
         WithdrawalRequest, WithdrawalRequestExtra, WitnessArgs,
     };
     use gw_types::prelude::{Builder, Entity, Pack, PackVec, Unpack};
-    use gw_utils::RollupContext;
+    use gw_utils::{global_state_finalized_timepoint, RollupContext};
 
     use super::unlock_to_owner;
 
@@ -384,8 +418,7 @@ mod test {
             .request(withdrawal.clone())
             .owner_lock(owner_lock)
             .build();
-        let withdrawal_extras =
-            HashMap::from_iter([(withdrawal.hash().into(), withdrawal_extra.clone())]);
+        let withdrawal_extras = HashMap::from_iter([(withdrawal.hash(), withdrawal_extra.clone())]);
 
         let generated = generate(
             &rollup_context,
@@ -401,7 +434,7 @@ mod test {
         let (expected_output, expected_data) = gw_generator::utils::build_withdrawal_cell_output(
             &rollup_context,
             &withdrawal_extra,
-            &block.hash().into(),
+            &block.hash(),
             &block_timepoint,
             Some(sudt_script.clone()),
         )
@@ -430,7 +463,7 @@ mod test {
     }
 
     #[test]
-    fn test_unlock_to_owner() {
+    fn test_unlock_to_owner_v1() {
         // Output should only change lock to owner lock
         let last_finalized_timepoint = Timepoint::from_block_number(100);
         let global_state = GlobalState::new_builder()
@@ -458,7 +491,7 @@ mod test {
             .build();
 
         let rollup_context = RollupContext {
-            rollup_script_hash: rollup_type.hash().into(),
+            rollup_script_hash: rollup_type.hash(),
             rollup_config: RollupConfig::new_builder()
                 .withdrawal_script_type_hash(H256::from_u32(5).pack())
                 .l1_sudt_script_type_hash(sudt_script.code_hash())
@@ -497,7 +530,7 @@ mod test {
         let withdrawal_without_owner_lock = {
             let lock_args = WithdrawalLockArgs::new_builder()
                 .owner_lock_hash(owner_lock.hash().pack())
-                .withdrawal_block_timepoint(last_finalized_timepoint.full_value().pack())
+                .withdrawal_finalized_timepoint(last_finalized_timepoint.full_value().pack())
                 .build();
 
             let mut args = rollup_type.hash().to_vec();
@@ -513,7 +546,7 @@ mod test {
         let withdrawal_with_owner_lock = {
             let lock_args = WithdrawalLockArgs::new_builder()
                 .owner_lock_hash(owner_lock.hash().pack())
-                .withdrawal_block_timepoint(last_finalized_timepoint.full_value().pack())
+                .withdrawal_finalized_timepoint(last_finalized_timepoint.full_value().pack())
                 .build();
 
             let mut args = rollup_type.hash().to_vec();
@@ -532,6 +565,7 @@ mod test {
             }
         };
 
+        let global_state_since = global_state_last_finalized_timepoint_to_since(&global_state);
         let unlocked = unlock_to_owner(
             rollup_cell.clone(),
             &rollup_context.rollup_config,
@@ -540,6 +574,7 @@ mod test {
                 withdrawal_without_owner_lock,
                 withdrawal_with_owner_lock.clone(),
             ],
+            global_state_since,
         )
         .expect("unlock")
         .expect("some unlocked");
@@ -614,5 +649,239 @@ mod test {
             unlocked.deps.get(3).unwrap().as_slice(),
             CellDep::from(contracts_dep.l1_sudt_type).as_slice(),
         );
+    }
+
+    #[test]
+    fn test_unlock_to_owner_finality() {
+        const FINALITY_BLOCKS: u64 = 10;
+        const UPGRADE_GLOBAL_STATE_VERSION_TO_V2: u64 = 100;
+        const BLOCK_TIMESTAMP: u64 = 1670000000000;
+
+        let cases = vec![
+            CaseParam {
+                // v1 withdrawal, v1 global state, not finalized
+                id: 0,
+                finality_blocks: FINALITY_BLOCKS,
+                upgrade_global_state_version_to_v2: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
+                block_timestamp: BLOCK_TIMESTAMP,
+                block_number: UPGRADE_GLOBAL_STATE_VERSION_TO_V2 - 1,
+                withdrawal_finalized_timepoint: Timepoint::BlockNumber(
+                    UPGRADE_GLOBAL_STATE_VERSION_TO_V2 - FINALITY_BLOCKS,
+                ),
+                expected_result: Err(()),
+            },
+            CaseParam {
+                // v1 withdrawal, v1 global state, finalized
+                id: 1,
+                finality_blocks: FINALITY_BLOCKS,
+                upgrade_global_state_version_to_v2: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
+                block_timestamp: BLOCK_TIMESTAMP,
+                block_number: UPGRADE_GLOBAL_STATE_VERSION_TO_V2 - 1,
+                withdrawal_finalized_timepoint: Timepoint::BlockNumber(
+                    UPGRADE_GLOBAL_STATE_VERSION_TO_V2 - 1 - FINALITY_BLOCKS,
+                ),
+                expected_result: Ok(()),
+            },
+            CaseParam {
+                // v1 withdrawal, v2 global state, not finalized
+                id: 2,
+                finality_blocks: FINALITY_BLOCKS,
+                upgrade_global_state_version_to_v2: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
+                block_timestamp: BLOCK_TIMESTAMP,
+                block_number: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
+                withdrawal_finalized_timepoint: Timepoint::BlockNumber(
+                    UPGRADE_GLOBAL_STATE_VERSION_TO_V2 + 1 - FINALITY_BLOCKS,
+                ),
+                expected_result: Err(()),
+            },
+            CaseParam {
+                // v1 withdrawal, v2 global state, finalized
+                id: 3,
+                finality_blocks: FINALITY_BLOCKS,
+                upgrade_global_state_version_to_v2: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
+                block_timestamp: BLOCK_TIMESTAMP,
+                block_number: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
+                withdrawal_finalized_timepoint: Timepoint::BlockNumber(
+                    UPGRADE_GLOBAL_STATE_VERSION_TO_V2 - FINALITY_BLOCKS,
+                ),
+                expected_result: Ok(()),
+            },
+            CaseParam {
+                // v2 withdrawal, v2 global state, not finalized
+                id: 4,
+                finality_blocks: FINALITY_BLOCKS,
+                upgrade_global_state_version_to_v2: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
+                block_timestamp: BLOCK_TIMESTAMP,
+                block_number: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
+                withdrawal_finalized_timepoint: Timepoint::Timestamp(BLOCK_TIMESTAMP + 1),
+                expected_result: Err(()),
+            },
+            CaseParam {
+                // v2 withdrawal, v2 global state, finalized
+                id: 5,
+                finality_blocks: FINALITY_BLOCKS,
+                upgrade_global_state_version_to_v2: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
+                block_timestamp: BLOCK_TIMESTAMP,
+                block_number: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
+                withdrawal_finalized_timepoint: Timepoint::Timestamp(BLOCK_TIMESTAMP),
+                expected_result: Ok(()),
+            },
+        ];
+        for case in cases {
+            run_case(case);
+        }
+
+        #[derive(Debug)]
+        struct CaseParam {
+            #[allow(dead_code)]
+            id: usize,
+            finality_blocks: u64,
+            upgrade_global_state_version_to_v2: u64,
+            block_timestamp: u64,
+            block_number: u64,
+            withdrawal_finalized_timepoint: Timepoint,
+            expected_result: Result<(), ()>,
+        }
+
+        fn run_case(case_param: CaseParam) {
+            println!("case: {:?}", case_param);
+            let CaseParam {
+                id: _,
+                finality_blocks,
+                upgrade_global_state_version_to_v2,
+                block_number,
+                block_timestamp,
+                withdrawal_finalized_timepoint,
+                expected_result,
+            } = case_param;
+
+            let sudt_script = Script::new_builder()
+                .code_hash(H256::from_u32(3).pack())
+                .hash_type(ScriptHashType::Type.into())
+                .args(vec![4u8; 32].pack())
+                .build();
+            let rollup_config = RollupConfig::new_builder()
+                .l1_sudt_script_type_hash(sudt_script.code_hash())
+                .finality_blocks(finality_blocks.pack())
+                .build();
+            let fork_config = ForkConfig {
+                upgrade_global_state_version_to_v2: Some(upgrade_global_state_version_to_v2),
+                ..Default::default()
+            };
+            let global_state = GlobalState::new_builder()
+                .rollup_config_hash(rollup_config.hash().pack())
+                .last_finalized_timepoint(
+                    global_state_finalized_timepoint(
+                        &rollup_config,
+                        &fork_config,
+                        block_number,
+                        block_timestamp,
+                    )
+                    .full_value()
+                    .pack(),
+                )
+                .block(
+                    BlockMerkleState::new_builder()
+                        .count((block_number + 1).pack())
+                        .build(),
+                )
+                .build();
+            let rollup_state_script = Script::new_builder()
+                .code_hash(H256::from_u32(1).pack())
+                .build();
+            let rollup_state_cell = CellInfo {
+                data: global_state.as_bytes(),
+                out_point: OutPoint::new_builder()
+                    .tx_hash(H256::from_u32(2).pack())
+                    .build(),
+                output: CellOutput::new_builder()
+                    .type_(Some(rollup_state_script.clone()).pack())
+                    .build(),
+            };
+            let rollup_context = RollupContext {
+                rollup_script_hash: rollup_state_script.hash(),
+                rollup_config: rollup_config.clone(),
+                fork_config,
+            };
+            let contracts_dep = {
+                ContractsCellDep {
+                    withdrawal_cell_lock: CellDep::new_builder()
+                        .out_point(
+                            OutPoint::new_builder()
+                                .tx_hash(H256::from_u32(6).pack())
+                                .build(),
+                        )
+                        .build()
+                        .into(),
+                    l1_sudt_type: CellDep::new_builder()
+                        .out_point(
+                            OutPoint::new_builder()
+                                .tx_hash(H256::from_u32(7).pack())
+                                .build(),
+                        )
+                        .build()
+                        .into(),
+                    ..Default::default()
+                }
+            };
+
+            // Build owner's lock script and withdrawal cell
+            let owner_lock_script = Script::new_builder()
+                .code_hash(H256::from_u32(8).pack())
+                .hash_type(ScriptHashType::Type.into())
+                .args(vec![9u8; 32].pack())
+                .build();
+            let withdrawal_lock_args = WithdrawalLockArgs::new_builder()
+                .owner_lock_hash(owner_lock_script.hash().pack())
+                .withdrawal_finalized_timepoint(withdrawal_finalized_timepoint.full_value().pack())
+                .build();
+            let withdrawal_cell = CellInfo {
+                output: CellOutput::new_builder()
+                    .type_(Some(sudt_script).pack())
+                    .lock(
+                        Script::new_builder()
+                            .code_hash(rollup_config.withdrawal_script_type_hash())
+                            .hash_type(ScriptHashType::Type.into())
+                            .args({
+                                let mut args = rollup_state_script.hash().to_vec();
+                                args.extend_from_slice(&withdrawal_lock_args.as_bytes());
+                                args.extend_from_slice(
+                                    &(owner_lock_script.as_bytes().len() as u32).to_be_bytes(),
+                                );
+                                args.extend_from_slice(&owner_lock_script.as_bytes());
+                                args.pack()
+                            })
+                            .build(),
+                    )
+                    .build(),
+                data: 100u128.pack().as_bytes(),
+                ..Default::default()
+            };
+
+            let unlocked = unlock_to_owner(
+                rollup_state_cell,
+                &rollup_context.rollup_config,
+                &contracts_dep,
+                vec![withdrawal_cell],
+                global_state_last_finalized_timepoint_to_since(&global_state),
+            )
+            .expect("unlock");
+
+            match expected_result {
+                Ok(()) => {
+                    assert!(unlocked.is_some());
+                    let unlocked = unlocked.unwrap();
+                    for input in unlocked.inputs.iter() {
+                        assert_eq!(
+                            input.input.since().unpack(),
+                            global_state_last_finalized_timepoint_to_since(&global_state),
+                        );
+                    }
+                }
+                Err(()) => {
+                    assert!(unlocked.is_none(), "actual unlocked: {:?}", unlocked);
+                }
+            }
+        }
     }
 }
