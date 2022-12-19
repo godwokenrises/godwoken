@@ -31,9 +31,6 @@ pub struct StoreTransaction {
     pub(crate) inner: autorocks::Transaction,
 }
 
-/// Temporary hack.
-unsafe impl Sync for StoreTransaction {}
-
 impl KVStoreRead for StoreTransaction {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
         moveit! {
