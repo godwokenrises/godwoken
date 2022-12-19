@@ -5,6 +5,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.8.0-rc2] - 2022-12-19
+
+A major change in this release is re-interpreting the meaning of the `xxx_timepoint` field to `finalized timestamp`. 
+Thus, we can use the CKB transaction's `since` field to determine the l1 timestamp and to unlock l1 cells without reference to the Rollup cell. It also simplifies the finality determination of withdrawal cells.
+
+- feat: change timepoint interpretation [#897](https://github.com/godwokenrises/godwoken/pull/897)
+- refactor: rename structure fields [#912](https://github.com/godwokenrises/godwoken/pull/912)
+
+We also adjust the documentation:
+
+- doc: update Finality Mechanism Changes [#913](https://github.com/godwokenrises/godwoken/pull/913/files)
+
+Other changes:
+
+- refactor: move gw-types and gw-common to gwos folder [#905](https://github.com/godwokenrises/godwoken/pull/905)
+- feat: support CKB built-in indexer #907 [#907](https://github.com/godwokenrises/godwoken/pull/907)
+
 ## [v1.8.0-rc1] - 2022-12-09
 
 In this version, an upgrading of on-chain scripts is included:
@@ -15,6 +32,10 @@ In this version, an upgrading of on-chain scripts is included:
 We also introduce a change to activate the new behavior.
 
 - feat: determine global state version according to fork height[#858](https://github.com/godwokenrises/godwoken/pull/858)
+
+Experimental gas-less feature [(discussion link)](https://github.com/godwokenrises/godwoken/discussions/860):
+
+- feat: (optionally) support gasless transactions [#869](https://github.com/godwokenrises/godwoken/pull/869)
 
 Other changes:
 
