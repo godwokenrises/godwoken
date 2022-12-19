@@ -233,7 +233,7 @@ pub fn unlock_to_owner(
         rollup_config.finality_blocks().unpack(),
     );
     let l1_sudt_script_hash = rollup_config.l1_sudt_script_type_hash();
-    let mut if_exist_v1_withdrawal_cells = false;
+    let mut if_exist_legacy_withdrawal_cells = false;
     for withdrawal_cell in withdrawal_cells {
         // Double check
         if let Err(err) = gw_rpc_client::withdrawal::verify_unlockable_to_owner(
@@ -245,8 +245,8 @@ pub fn unlock_to_owner(
             continue;
         }
 
-        if !if_exist_v1_withdrawal_cells {
-            if_exist_v1_withdrawal_cells = is_v1_withdrawal_cell(&withdrawal_cell);
+        if !if_exist_legacy_withdrawal_cells {
+            if_exist_legacy_withdrawal_cells = is_legacy_finality_withdrawal_cell(&withdrawal_cell);
         }
 
         let owner_lock = {
@@ -292,8 +292,8 @@ pub fn unlock_to_owner(
     let withdrawal_lock_dep = contracts_dep.withdrawal_cell_lock.clone();
     let sudt_type_dep = contracts_dep.l1_sudt_type.clone();
 
-    let mut cell_deps = if if_exist_v1_withdrawal_cells {
-        // Some withdrawal cells were born at v1, withdrawal_lock_script checks finality of withdrawal
+    let mut cell_deps = if if_exist_legacy_withdrawal_cells {
+        // Some withdrawal cells were born at legacy version, withdrawal_lock_script checks finality of withdrawal
         // cells by comparing with GlobalState.last_finalized_timepoint, so rollup_dep and
         // rollup_config_dep are required
         vec![
@@ -322,13 +322,13 @@ pub fn unlock_to_owner(
     }))
 }
 
-fn is_v1_withdrawal_cell(withdrawal_cell: &CellInfo) -> bool {
+fn is_legacy_finality_withdrawal_cell(withdrawal_cell: &CellInfo) -> bool {
     let withdrawal_lock_args = parse_lock_args(&withdrawal_cell.output.lock().args().raw_data())
         .expect("parse withdrawal lock args");
     match Timepoint::from_full_value(
         withdrawal_lock_args
             .lock_args
-            .withdrawal_block_timepoint()
+            .withdrawal_finalized_timepoint()
             .unpack(),
     ) {
         Timepoint::BlockNumber(_) => true,
@@ -530,7 +530,7 @@ mod test {
         let withdrawal_without_owner_lock = {
             let lock_args = WithdrawalLockArgs::new_builder()
                 .owner_lock_hash(owner_lock.hash().pack())
-                .withdrawal_block_timepoint(last_finalized_timepoint.full_value().pack())
+                .withdrawal_finalized_timepoint(last_finalized_timepoint.full_value().pack())
                 .build();
 
             let mut args = rollup_type.hash().to_vec();
@@ -546,7 +546,7 @@ mod test {
         let withdrawal_with_owner_lock = {
             let lock_args = WithdrawalLockArgs::new_builder()
                 .owner_lock_hash(owner_lock.hash().pack())
-                .withdrawal_block_timepoint(last_finalized_timepoint.full_value().pack())
+                .withdrawal_finalized_timepoint(last_finalized_timepoint.full_value().pack())
                 .build();
 
             let mut args = rollup_type.hash().to_vec();
@@ -665,7 +665,7 @@ mod test {
                 upgrade_global_state_version_to_v2: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
                 block_timestamp: BLOCK_TIMESTAMP,
                 block_number: UPGRADE_GLOBAL_STATE_VERSION_TO_V2 - 1,
-                withdrawal_block_timepoint: Timepoint::BlockNumber(
+                withdrawal_finalized_timepoint: Timepoint::BlockNumber(
                     UPGRADE_GLOBAL_STATE_VERSION_TO_V2 - FINALITY_BLOCKS,
                 ),
                 expected_result: Err(()),
@@ -677,7 +677,7 @@ mod test {
                 upgrade_global_state_version_to_v2: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
                 block_timestamp: BLOCK_TIMESTAMP,
                 block_number: UPGRADE_GLOBAL_STATE_VERSION_TO_V2 - 1,
-                withdrawal_block_timepoint: Timepoint::BlockNumber(
+                withdrawal_finalized_timepoint: Timepoint::BlockNumber(
                     UPGRADE_GLOBAL_STATE_VERSION_TO_V2 - 1 - FINALITY_BLOCKS,
                 ),
                 expected_result: Ok(()),
@@ -689,7 +689,7 @@ mod test {
                 upgrade_global_state_version_to_v2: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
                 block_timestamp: BLOCK_TIMESTAMP,
                 block_number: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
-                withdrawal_block_timepoint: Timepoint::BlockNumber(
+                withdrawal_finalized_timepoint: Timepoint::BlockNumber(
                     UPGRADE_GLOBAL_STATE_VERSION_TO_V2 + 1 - FINALITY_BLOCKS,
                 ),
                 expected_result: Err(()),
@@ -701,7 +701,7 @@ mod test {
                 upgrade_global_state_version_to_v2: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
                 block_timestamp: BLOCK_TIMESTAMP,
                 block_number: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
-                withdrawal_block_timepoint: Timepoint::BlockNumber(
+                withdrawal_finalized_timepoint: Timepoint::BlockNumber(
                     UPGRADE_GLOBAL_STATE_VERSION_TO_V2 - FINALITY_BLOCKS,
                 ),
                 expected_result: Ok(()),
@@ -713,7 +713,7 @@ mod test {
                 upgrade_global_state_version_to_v2: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
                 block_timestamp: BLOCK_TIMESTAMP,
                 block_number: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
-                withdrawal_block_timepoint: Timepoint::Timestamp(BLOCK_TIMESTAMP + 1),
+                withdrawal_finalized_timepoint: Timepoint::Timestamp(BLOCK_TIMESTAMP + 1),
                 expected_result: Err(()),
             },
             CaseParam {
@@ -723,7 +723,7 @@ mod test {
                 upgrade_global_state_version_to_v2: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
                 block_timestamp: BLOCK_TIMESTAMP,
                 block_number: UPGRADE_GLOBAL_STATE_VERSION_TO_V2,
-                withdrawal_block_timepoint: Timepoint::Timestamp(BLOCK_TIMESTAMP),
+                withdrawal_finalized_timepoint: Timepoint::Timestamp(BLOCK_TIMESTAMP),
                 expected_result: Ok(()),
             },
         ];
@@ -739,7 +739,7 @@ mod test {
             upgrade_global_state_version_to_v2: u64,
             block_timestamp: u64,
             block_number: u64,
-            withdrawal_block_timepoint: Timepoint,
+            withdrawal_finalized_timepoint: Timepoint,
             expected_result: Result<(), ()>,
         }
 
@@ -751,7 +751,7 @@ mod test {
                 upgrade_global_state_version_to_v2,
                 block_number,
                 block_timestamp,
-                withdrawal_block_timepoint,
+                withdrawal_finalized_timepoint,
                 expected_result,
             } = case_param;
 
@@ -833,7 +833,7 @@ mod test {
                 .build();
             let withdrawal_lock_args = WithdrawalLockArgs::new_builder()
                 .owner_lock_hash(owner_lock_script.hash().pack())
-                .withdrawal_block_timepoint(withdrawal_block_timepoint.full_value().pack())
+                .withdrawal_finalized_timepoint(withdrawal_finalized_timepoint.full_value().pack())
                 .build();
             let withdrawal_cell = CellInfo {
                 output: CellOutput::new_builder()

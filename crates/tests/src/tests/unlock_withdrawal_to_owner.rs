@@ -384,10 +384,10 @@ async fn test_build_unlock_to_owner_tx() {
         }
     };
     let output_stake = {
-        let stake_block_timepoint =
+        let stake_finalized_timepoint =
             Timepoint::from_block_number(withdrawal_block_result.block.raw().number().unpack());
         let stake_lock_args = StakeLockArgs::new_builder()
-            .stake_block_timepoint(stake_block_timepoint.full_value().pack())
+            .stake_finalized_timepoint(stake_finalized_timepoint.full_value().pack())
             .build();
 
         let mut lock_args = rollup_script_hash.as_slice().to_vec();
@@ -652,10 +652,10 @@ async fn test_build_unlock_to_owner_tx() {
     let output_rollup_cell = (rollup_cell.output, block_result.global_state.as_bytes());
 
     let output_stake = {
-        let stake_block_timepoint =
+        let stake_finalized_timepoint =
             Timepoint::from_block_number(block_result.block.raw().number().unpack());
         let stake_lock_args = StakeLockArgs::new_builder()
-            .stake_block_timepoint(stake_block_timepoint.full_value().pack())
+            .stake_finalized_timepoint(stake_finalized_timepoint.full_value().pack())
             .build();
 
         let mut lock_args = rollup_script_hash.as_slice().to_vec();
