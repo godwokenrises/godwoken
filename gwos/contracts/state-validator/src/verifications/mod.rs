@@ -1,9 +1,8 @@
-use gw_common::H256;
 use gw_types::{
     core::Status,
+    h256::H256,
     packed::{GlobalState, RollupConfig},
 };
-use gw_utils::gw_common;
 use gw_utils::gw_types;
 use gw_utils::{
     cells::lock_cells::{

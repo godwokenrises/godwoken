@@ -1,9 +1,10 @@
 use std::convert::{TryFrom, TryInto};
 
 use anyhow::{anyhow, bail, Result};
-use gw_common::{builtins::ETH_REGISTRY_ACCOUNT_ID, H256};
+use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_types::{
     core::ScriptHashType,
+    h256::*,
     packed::{RawL2Transaction, RawWithdrawalRequest},
     prelude::Unpack,
 };
@@ -182,7 +183,7 @@ impl L2Transaction {
             chain_id: data.chain_id().unpack(),
             nonce: data.nonce().unpack(),
             from: sender_address,
-            to: to_script_hash.into(),
+            to: to_script_hash,
             args: data.args().unpack(),
         };
         Ok(tx)
@@ -466,7 +467,7 @@ mod tests {
             buf
         };
         let pubkey_hash = Secp256k1Eth::default()
-            .recover(message.into(), &signature)
+            .recover(message, &signature)
             .unwrap();
         assert_eq!(hex::encode(mail.from.wallet), hex::encode(pubkey_hash));
     }
@@ -517,7 +518,7 @@ mod tests {
         let message = withdrawal.eip712_message(domain_seperator.hash_struct());
         let signature: [u8; 65] = hex::decode("22cae59f1bfaf58f423d1a414cbcaefd45a89dd54c9142fccbb2473c74f4741b45f77f1f3680b8c0b6362957c8d79f96a683a859ccbf22a6cfc1ebc311b936d301").unwrap().try_into().unwrap();
         let pubkey_hash = Secp256k1Eth::default()
-            .recover(message.into(), &signature)
+            .recover(message, &signature)
             .unwrap();
         assert_eq!(
             "cc3e7fb0176a0e22a7f675306ceeb61d26eb0dc4".to_string(),
@@ -555,7 +556,7 @@ mod tests {
         let message = tx.eip712_message(domain_seperator.hash_struct());
         let signature: [u8; 65] = hex::decode("64b164f5303000c283119974d7ba8f050cc7429984af904134d5cda6d3ce045934cc6b6f513ec939c2ae4cfb9cbee249ba8ae86f6274e4035c150f9c8e634a3a1b").unwrap().try_into().unwrap();
         let pubkey_hash = Secp256k1Eth::default()
-            .recover(message.into(), &signature)
+            .recover(message, &signature)
             .unwrap();
         assert_eq!(
             "e8ae579256c3b84efb76bbb69cb6bcbef1375f00".to_string(),

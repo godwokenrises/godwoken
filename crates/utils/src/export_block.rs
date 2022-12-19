@@ -1,12 +1,13 @@
 use std::io::{ErrorKind, Read, Seek, SeekFrom};
 
 use anyhow::{anyhow, bail, Context, Result};
-use gw_common::{h256_ext::H256Ext, H256};
+use gw_smt::smt_h256_ext::SMTH256Ext;
 use gw_store::{
     readonly::StoreReadonly, traits::chain_store::ChainStore, transaction::StoreTransaction,
 };
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     offchain::ExportedBlock,
     packed::{self, GlobalState},
     prelude::{Builder, Entity, Pack, Reader, Unpack},
@@ -50,7 +51,7 @@ pub fn export_block(snap: &StoreReadonly, block_number: u64) -> Result<ExportedB
     let withdrawals = {
         let reqs = block.as_reader().withdrawals();
         let extra_reqs = reqs.iter().map(|w| {
-            let h = w.hash().into();
+            let h = w.hash();
             snap.get_withdrawal(&h)?
                 .ok_or_else(|| anyhow!("block {} withdrawal {} not found", block_number, h.pack()))
         });
@@ -180,15 +181,15 @@ pub fn insert_bad_block_hashes(
     for bad_block_hashes in bad_block_hashes_vec {
         let prev_smt_root = *reverted_block_smt.root();
         for block_hash in bad_block_hashes.iter() {
-            reverted_block_smt.update(*block_hash, H256::one())?;
+            reverted_block_smt.update((*block_hash).into(), SMTH256Ext::one())?;
         }
         tx_db.set_reverted_block_hashes(
-            reverted_block_smt.root(),
-            prev_smt_root,
+            &(*reverted_block_smt.root()).into(),
+            prev_smt_root.into(),
             bad_block_hashes,
         )?;
     }
-    tx_db.set_reverted_block_smt_root(*reverted_block_smt.root())?;
+    tx_db.set_reverted_block_smt_root((*reverted_block_smt.root()).into())?;
 
     Ok(())
 }

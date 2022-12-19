@@ -42,7 +42,7 @@ pub fn generate_transaction_message_to_sign(
 pub fn generate_eip712_message_to_sign(
     raw_l2transaction: RawL2Transaction,
     sender_address: gw_common::registry_address::RegistryAddress,
-    receiver_script_hash: gw_common::H256,
+    receiver_script_hash: gw_types::h256::H256,
 ) -> H256 {
     let chain_id = raw_l2transaction.chain_id().unpack();
     let typed_tx = eip712::types::L2Transaction::from_raw(

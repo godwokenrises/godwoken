@@ -24,7 +24,6 @@ root
 │  ├─ secp256k1-utils: Secp256k1
 │  ├─ stake-lock: The lock script of stake cell
 │  ├─ state-validator: The type script constaint the on-chain operation of Rollup cell
-│  ├─ tron-account-lock: The lock script used to check Tron signatures on-chain(deprecated)
 │  ├─ withdrawal-lock: The lock script protects withdrawal cells
 ├─ tests: scripting tests
 ├─ tools: tools used in CI

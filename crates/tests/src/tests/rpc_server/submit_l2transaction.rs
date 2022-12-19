@@ -2,15 +2,14 @@ use std::time::Duration;
 
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{
-    blake2b::new_blake2b,
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
-    h256_ext::H256Ext,
     state::State,
-    H256,
 };
+use gw_smt::blake2b::new_blake2b;
 use gw_store::state::traits::JournalDB;
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     packed::{Fee, RawL2Transaction, SUDTArgs, SUDTTransfer, Script},
     prelude::{Pack, Unpack},
     U256,
@@ -139,7 +138,7 @@ async fn test_in_queue_query_with_signature_hash() {
     let deploy_tx_hash = {
         let id = state.get_account_count().unwrap();
         let raw = raw_tx.clone().as_builder().from_id(id.pack()).build();
-        raw.hash().into()
+        raw.hash()
     };
     let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
 
@@ -151,7 +150,7 @@ async fn test_in_queue_query_with_signature_hash() {
         hasher.update(&sig);
         let mut hash = [0u8; 32];
         hasher.finalize(&mut hash);
-        H256::from(hash)
+        hash
     };
 
     rpc_server.submit_l2transaction(&deploy_tx).await.unwrap();
@@ -208,7 +207,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     let deploy_tx_hash = {
         let id = state.get_account_count().unwrap();
         let raw = raw_tx.clone().as_builder().from_id(id.pack()).build();
-        raw.hash().into()
+        raw.hash()
     };
     let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
 
@@ -272,7 +271,7 @@ async fn test_polyjuice_tx_from_id_zero() {
     let deploy_tx_hash = {
         let id = expected_id;
         let raw = raw_tx.clone().as_builder().from_id(id.pack()).build();
-        raw.hash().into()
+        raw.hash()
     };
     let deploy_tx = test_wallet.sign_polyjuice_tx(&state, raw_tx).unwrap();
 

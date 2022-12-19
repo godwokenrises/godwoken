@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
-use gw_common::{registry_address::RegistryAddress, H256};
+use gw_common::registry_address::RegistryAddress;
+use gw_types::h256::*;
 use gw_types::{
     bytes::Bytes,
     packed::{L2Transaction, Script, WithdrawalRequestExtra},

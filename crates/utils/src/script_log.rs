@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use gw_common::registry_address::RegistryAddress;
-use gw_common::H256;
+use gw_types::h256::*;
 use gw_types::packed::LogItem;
 use gw_types::prelude::*;
 use gw_types::U256;
@@ -211,7 +211,7 @@ pub fn parse_log(item: &LogItem) -> Result<GwLog> {
                 let mut topic = [0u8; 32];
                 topic.copy_from_slice(&data[offset..offset + 32]);
                 offset += 32;
-                topics.push(topic.into());
+                topics.push(topic);
             }
             if offset != data.len() {
                 return Err(anyhow!(

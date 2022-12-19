@@ -7,6 +7,7 @@ use gw_types::{
     packed::{ChallengeLockArgs, RollupConfig},
     prelude::*,
 };
+use gw_utils::gw_types::{self, h256::H256, packed::RawL2Transaction};
 use gw_utils::{
     ckb_std::{
         ckb_constants::Source,
@@ -21,10 +22,6 @@ use gw_utils::{
         },
     },
     signature::check_l2_account_signature_cell,
-};
-use gw_utils::{
-    gw_common::H256,
-    gw_types::{self, packed::RawL2Transaction},
 };
 use sha3::{Digest, Keccak256};
 

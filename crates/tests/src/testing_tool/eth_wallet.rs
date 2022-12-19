@@ -6,12 +6,12 @@ use gw_common::{
     registry::eth_registry::extract_eth_address_from_eoa,
     registry_address::RegistryAddress,
     state::State,
-    H256,
 };
 use gw_generator::{account_lock_manage::secp256k1::Secp256k1Eth, traits::StateExt};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     packed::{L2Transaction, RawL2Transaction, Script},
     prelude::{Pack, Unpack},
     U256,
@@ -37,7 +37,7 @@ impl EthWallet {
         let account_script = privkey_to_eth_account_script(
             &privkey,
             &rollup_script_hash,
-            &(*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
+            &(*ETH_ACCOUNT_LOCK_CODE_HASH),
         )
         .expect("random wallet");
 
@@ -64,7 +64,7 @@ impl EthWallet {
     }
 
     pub fn account_script_hash(&self) -> H256 {
-        self.inner.lock_script().hash().into()
+        self.inner.lock_script().hash()
     }
 
     pub fn sign_polyjuice_tx(
@@ -85,7 +85,7 @@ impl EthWallet {
         let chain_id = raw_tx.chain_id().unpack();
         let signing_message =
             Secp256k1Eth::polyjuice_tx_signing_message(chain_id, &raw_tx, &to_script)?;
-        let sig = self.sign_message(signing_message.into())?;
+        let sig = self.sign_message(signing_message)?;
 
         let tx = L2Transaction::new_builder()
             .raw(raw_tx)
@@ -108,7 +108,7 @@ impl EthWallet {
 
         state.mapping_registry_address_to_script_hash(
             self.registry_address.to_owned(),
-            self.account_script().hash().into(),
+            self.account_script().hash(),
         )?;
         state.mint_sudt(CKB_SUDT_ACCOUNT_ID, &self.registry_address, ckb_balance)?;
 

@@ -4,7 +4,7 @@ use gw_block_producer::produce_block::{
     generate_produce_block_param, produce_block, ProduceBlockParam, ProduceBlockResult,
 };
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
-use gw_common::{blake2b::new_blake2b, H256};
+use gw_common::blake2b::new_blake2b;
 use gw_config::{BackendConfig, BackendForkConfig, ChainConfig, GenesisConfig, MemPoolConfig};
 use gw_generator::{
     account_lock_manage::{
@@ -19,6 +19,7 @@ use gw_store::{mem_pool_state::MemPoolState, traits::chain_store::ChainStore, St
 use gw_types::{
     bytes::Bytes,
     core::{AllowedContractType, AllowedEoaType, ScriptHashType},
+    h256::*,
     offchain::{CellInfo, DepositInfo},
     packed::{
         AllowedTypeHash, CellOutput, DepositInfoVec, DepositLockArgs, DepositRequest, L2Block,
@@ -216,9 +217,9 @@ impl TestChain {
         let rollup_config = chain.generator().rollup_context().rollup_config.to_owned();
         let mut account_lock_manage = AccountLockManage::default();
         account_lock_manage
-            .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Arc::new(AlwaysSuccess));
+            .register_lock_algorithm(*ALWAYS_SUCCESS_CODE_HASH, Arc::new(AlwaysSuccess));
         account_lock_manage.register_lock_algorithm(
-            (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
+            *ETH_ACCOUNT_LOCK_CODE_HASH,
             Arc::new(Secp256k1Eth::default()),
         );
 
@@ -378,10 +379,9 @@ pub async fn setup_chain(rollup_type_script: Script) -> Chain {
         .finality_blocks(DEFAULT_FINALITY_BLOCKS.pack())
         .chain_id(TEST_CHAIN_ID.pack())
         .build();
-    account_lock_manage
-        .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Arc::new(AlwaysSuccess));
+    account_lock_manage.register_lock_algorithm(*ALWAYS_SUCCESS_CODE_HASH, Arc::new(AlwaysSuccess));
     account_lock_manage.register_lock_algorithm(
-        (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
+        *ETH_ACCOUNT_LOCK_CODE_HASH,
         Arc::new(Secp256k1Eth::default()),
     );
     let chain = setup_chain_with_account_lock_manage(
@@ -402,10 +402,9 @@ pub async fn setup_chain_with_config(
     rollup_config: RollupConfig,
 ) -> Chain {
     let mut account_lock_manage = AccountLockManage::default();
-    account_lock_manage
-        .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Arc::new(AlwaysSuccess));
+    account_lock_manage.register_lock_algorithm(*ALWAYS_SUCCESS_CODE_HASH, Arc::new(AlwaysSuccess));
     account_lock_manage.register_lock_algorithm(
-        (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
+        *ETH_ACCOUNT_LOCK_CODE_HASH,
         Arc::new(Secp256k1Eth::default()),
     );
     setup_chain_with_account_lock_manage(
@@ -427,10 +426,9 @@ pub async fn restart_chain(
 ) -> Chain {
     let mut account_lock_manage = AccountLockManage::default();
     let rollup_config = chain.generator().rollup_context().rollup_config.to_owned();
-    account_lock_manage
-        .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Arc::new(AlwaysSuccess));
+    account_lock_manage.register_lock_algorithm(*ALWAYS_SUCCESS_CODE_HASH, Arc::new(AlwaysSuccess));
     account_lock_manage.register_lock_algorithm(
-        (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
+        *ETH_ACCOUNT_LOCK_CODE_HASH,
         Arc::new(Secp256k1Eth::default()),
     );
     let restore_path = {
@@ -456,15 +454,14 @@ pub async fn restart_chain(
 pub fn chain_generator(chain: &Chain, rollup_type_script: Script) -> Arc<Generator> {
     let rollup_config = chain.generator().rollup_context().rollup_config.to_owned();
     let mut account_lock_manage = AccountLockManage::default();
-    account_lock_manage
-        .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Arc::new(AlwaysSuccess));
+    account_lock_manage.register_lock_algorithm(*ALWAYS_SUCCESS_CODE_HASH, Arc::new(AlwaysSuccess));
     account_lock_manage.register_lock_algorithm(
-        (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
+        *ETH_ACCOUNT_LOCK_CODE_HASH,
         Arc::new(Secp256k1Eth::default()),
     );
     let backend_manage = build_backend_manage(&rollup_config);
     let rollup_context = RollupContext {
-        rollup_script_hash: rollup_type_script.hash().into(),
+        rollup_script_hash: rollup_type_script.hash(),
         rollup_config,
         ..Default::default()
     };
@@ -501,7 +498,7 @@ pub async fn setup_chain_with_account_lock_manage(
     init_genesis(&store, &genesis_config, &[0u8; 32], Bytes::default()).unwrap();
     let backend_manage = build_backend_manage(&rollup_config);
     let rollup_context = RollupContext {
-        rollup_script_hash: rollup_script_hash.into(),
+        rollup_script_hash,
         rollup_config: rollup_config.clone(),
         ..Default::default()
     };
@@ -592,7 +589,7 @@ pub async fn apply_block_result(
     let mem_pool = chain.mem_pool();
     let mut mem_pool = mem_pool.as_deref().unwrap().lock().await;
     mem_pool
-        .notify_new_tip(hash.into(), &Default::default())
+        .notify_new_tip(hash, &Default::default())
         .await
         .unwrap();
     Ok(())
@@ -622,7 +619,7 @@ pub async fn construct_block_with_timestamp(
     let stake_cell_owner_lock_hash = H256::zero();
     let db = &chain.store().begin_transaction();
     let generator = chain.generator();
-    let rollup_config_hash = chain.rollup_config_hash().into();
+    let rollup_config_hash = chain.rollup_config_hash();
 
     let provider = DummyMemPoolProvider {
         deposit_cells: deposit_info_vec.unpack(),

@@ -8,16 +8,13 @@ use ckb_vm::{
     registers::{A0, A1, A3, A7},
     DefaultMachineBuilder, Error as VMError, Register, SupportMachine, Syscalls,
 };
-use gw_common::{
-    h256_ext::H256Ext,
-    state::{build_data_hash_key, State},
-    H256,
-};
+use gw_common::state::{build_data_hash_key, State};
 use gw_config::SyscallCyclesConfig;
 use gw_generator::syscalls::store_data;
 use gw_store::traits::chain_store::ChainStore;
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     packed::RawL2Transaction,
     prelude::{Builder, Entity, Pack},
 };

@@ -9,8 +9,8 @@ edition = "2018"
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 faster-hex = "0.4"
-gw-types = { path = "../types" }
-gw-common = { path = "../common" }
+gw-types = { path = "../../gwos/crates/types" }
+gw-common = { path = "../../gwos/crates/common" }
 ckb-jsonrpc-types = "0.105.1"
 ckb-fixed-hash = "0.105.1"
 anyhow = "1.0"

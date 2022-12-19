@@ -137,11 +137,11 @@ async fn test_enter_challenge() {
         let db = chain.store().begin_transaction();
         let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
         let sender_id = tree
-            .get_account_id_by_script_hash(&sender_script.hash().into())
+            .get_account_id_by_script_hash(&sender_script.hash())
             .unwrap()
             .unwrap();
         let receiver_id = tree
-            .get_account_id_by_script_hash(&receiver_script.hash().into())
+            .get_account_id_by_script_hash(&receiver_script.hash())
             .unwrap()
             .unwrap();
         let receiver_script_hash = tree.get_script_hash(receiver_id).expect("get script hash");
@@ -374,7 +374,7 @@ async fn test_enter_challenge_finalized_block() {
         let db = chain.store().begin_transaction();
         let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
         let sender_id = tree
-            .get_account_id_by_script_hash(&sender_script.hash().into())
+            .get_account_id_by_script_hash(&sender_script.hash())
             .unwrap()
             .unwrap();
         (sender_id, receiver_address)

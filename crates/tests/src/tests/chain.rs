@@ -11,7 +11,7 @@ use gw_chain::chain::{
     Chain, ChallengeCell, L1Action, L1ActionContext, RevertL1ActionContext, RevertedL1Action,
     SyncEvent, SyncParam,
 };
-use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, state::State, H256};
+use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, state::State};
 use gw_store::{
     state::{history::history_state::RWConfig, BlockStateDB},
     traits::chain_store::ChainStore,
@@ -19,6 +19,7 @@ use gw_store::{
 use gw_types::{
     bytes::Bytes,
     core::{ScriptHashType, Status},
+    h256::*,
     packed::{
         CellInput, CellOutput, DepositInfoVec, DepositRequest, GlobalState, RawWithdrawalRequest,
         Script, WithdrawalRequest, WithdrawalRequestExtra,
@@ -136,8 +137,8 @@ async fn test_produce_blocks() {
     {
         let db = chain.store().begin_transaction();
         let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
-        let script_hash_a: H256 = user_script_a.hash().into();
-        let script_hash_b: H256 = user_script_b.hash().into();
+        let script_hash_a: H256 = user_script_a.hash();
+        let script_hash_b: H256 = user_script_b.hash();
         let id_a = tree
             .get_account_id_by_script_hash(&script_hash_a)
             .unwrap()
@@ -510,7 +511,7 @@ async fn test_layer1_revert() {
         );
 
         assert_eq!(tree.get_account_count().unwrap(), 4);
-        let alice_script_hash: H256 = alice_script.hash().into();
+        let alice_script_hash: H256 = alice_script.hash();
         let alice_id = tree
             .get_account_id_by_script_hash(&alice_script_hash)
             .unwrap()
@@ -532,7 +533,7 @@ async fn test_layer1_revert() {
         );
 
         let bob_id_opt = tree
-            .get_account_id_by_script_hash(&bob_script.hash().into())
+            .get_account_id_by_script_hash(&bob_script.hash())
             .unwrap();
         assert!(bob_id_opt.is_none());
     }
@@ -564,7 +565,7 @@ async fn test_layer1_revert() {
         );
 
         assert_eq!(tree.get_account_count().unwrap(), 5);
-        let alice_script_hash: H256 = alice_script.hash().into();
+        let alice_script_hash: H256 = alice_script.hash();
         let alice_id = tree
             .get_account_id_by_script_hash(&alice_script_hash)
             .unwrap()
@@ -585,7 +586,7 @@ async fn test_layer1_revert() {
             CKBCapacity::from_layer1(400 * CKB).to_layer2()
         );
 
-        let bob_script_hash: H256 = bob_script.hash().into();
+        let bob_script_hash: H256 = bob_script.hash();
         let bob_id = tree
             .get_account_id_by_script_hash(&bob_script_hash)
             .unwrap()
@@ -627,7 +628,7 @@ async fn test_sync_blocks() {
             args.pack()
         })
         .build();
-    let sudt_script_hash: H256 = [42u8; 32].into();
+    let sudt_script_hash: H256 = [42u8; 32];
     let deposit = DepositRequest::new_builder()
         .capacity((400u64 * CKB).pack())
         .script(user_script_a.clone())
@@ -679,16 +680,16 @@ async fn test_sync_blocks() {
         let tip_block = db.get_tip_block().unwrap();
         let tip_block_number: u64 = tip_block.raw().number().unpack();
         let tip_block_hash = db.get_tip_block_hash().unwrap();
-        assert_eq!(tip_block_hash, tip_block.hash().into());
+        assert_eq!(tip_block_hash, tip_block.hash());
         assert_eq!(tip_block_number, 3);
 
         let tree = BlockStateDB::from_store(db, RWConfig::readonly()).unwrap();
-        let script_hash_a: H256 = user_script_a.hash().into();
+        let script_hash_a: H256 = user_script_a.hash();
         let id_a = tree
             .get_account_id_by_script_hash(&script_hash_a)
             .unwrap()
             .unwrap();
-        let script_hash_b: H256 = user_script_b.hash().into();
+        let script_hash_b: H256 = user_script_b.hash();
         let id_b = tree
             .get_account_id_by_script_hash(&script_hash_b)
             .unwrap()

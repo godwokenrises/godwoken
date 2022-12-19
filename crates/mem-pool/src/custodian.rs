@@ -1,7 +1,7 @@
 use std::{collections::HashSet, time::Instant};
 
 use anyhow::{anyhow, bail, Result};
-use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
+use gw_common::CKB_SUDT_SCRIPT_ARGS;
 use gw_rpc_client::{
     indexer_client::CKBIndexerClient,
     indexer_types::{Order, SearchKey, SearchKeyFilter},
@@ -13,6 +13,7 @@ use gw_types::offchain::CompatibleFinalizedTimepoint;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
+    h256::*,
     offchain::{CellInfo, CollectedCustodianCells, DepositInfo, WithdrawalsAmount},
     packed::{
         CellOutput, CustodianLockArgs, CustodianLockArgsReader, DepositLockArgs, Script,
@@ -184,7 +185,7 @@ fn sum_change_capacity(
     withdrawals_amount: &WithdrawalsAmount,
 ) -> u128 {
     let to_change_capacity = |sudt_script_hash: &[u8; 32]| -> u128 {
-        match db.get_asset_script(&H256::from(*sudt_script_hash)) {
+        match db.get_asset_script(sudt_script_hash) {
             Ok(Some(script)) => {
                 let (change, _data) = generate_finalized_custodian(rollup_context, 1, script);
                 change.capacity().unpack() as u128
@@ -391,7 +392,7 @@ mod tests {
     #[tokio::test]
     async fn test_query_finalized_custodians() {
         let rollup_context = RollupContext {
-            rollup_script_hash: [1u8; 32].into(),
+            rollup_script_hash: [1u8; 32],
             rollup_config: RollupConfig::new_builder()
                 .custodian_script_type_hash([2u8; 32].pack())
                 .l1_sudt_script_type_hash([3u8; 32].pack())

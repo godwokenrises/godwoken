@@ -171,11 +171,7 @@ fn test_simple_transfer() {
             )
             .expect("construct");
         // [SimpleTransfer to EoA] used cycles: 725217 < 736K
-        helper::check_cycles(
-            "SimpleTransfer to EoA",
-            run_result.cycles,
-            908_000,
-        );
+        helper::check_cycles("SimpleTransfer to EoA", run_result.cycles, 908_000);
         state.finalise().expect("update state");
 
         let new_balance = state

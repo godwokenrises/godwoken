@@ -1,4 +1,4 @@
-use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
+use gw_common::CKB_SUDT_SCRIPT_ARGS;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_telemetry::metric::{
     encoding::text::Encode, family::Family, gauge::Gauge, prometheus_client, registry::Registry,
@@ -48,11 +48,11 @@ impl CustodianMetrics {
 
         let cal = |balance: &u128, decimal| balance.saturating_div(10u128.pow(decimal)) as u64;
         for custodian in config.custodian_map.values() {
-            if custodian.type_hash == H256::from(CKB_SUDT_SCRIPT_ARGS) {
+            if custodian.type_hash == CKB_SUDT_SCRIPT_ARGS {
                 self.finalized(custodian, |g, d| g.set(cal(&(local.capacity as u128), d)));
                 continue;
             }
-            if let Some((balance, _)) = local.sudt.get::<[u8; 32]>(&custodian.type_hash.into()) {
+            if let Some((balance, _)) = local.sudt.get::<[u8; 32]>(&custodian.type_hash) {
                 self.finalized(custodian, |g, d| g.set(cal(balance, d)));
             }
         }

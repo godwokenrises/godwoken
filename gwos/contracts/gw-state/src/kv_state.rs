@@ -2,8 +2,8 @@ use crate::ckb_smt::smt::{Pair, Tree};
 use core::cell::RefCell;
 use gw_utils::ckb_std::debug;
 use gw_utils::error::Error;
-use gw_utils::gw_common::{error::Error as SMTError, state::State, H256};
-use gw_utils::gw_types::{packed::KVPairVecReader, prelude::*};
+use gw_utils::gw_common::{error::Error as SMTError, state::State, };
+use gw_utils::gw_types::{packed::KVPairVecReader, prelude::*, h256::H256};
 
 pub struct KVState<'a> {
     tree: RefCell<Tree<'a>>,

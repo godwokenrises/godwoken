@@ -5,12 +5,12 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::Entity;
-use gw_common::H256;
 use gw_jsonrpc_types::{
     ckb_jsonrpc_types,
     debugger::{ReprMockCellDep, ReprMockInfo, ReprMockInput, ReprMockTransaction},
 };
 use gw_rpc_client::rpc_client::RPCClient;
+use gw_types::h256::*;
 use gw_types::{
     core::DepType,
     offchain::TxStatus,
@@ -134,7 +134,7 @@ pub async fn build_mock_transaction(
         };
         inputs.push(mock_input);
         if let Some(input_block_hash) = input_block_hash {
-            header_deps_hashes.push(input_block_hash.into());
+            header_deps_hashes.push(input_block_hash);
         }
     }
 
@@ -191,7 +191,7 @@ pub async fn build_mock_transaction(
         };
         cell_deps.push(mock_cell_dep);
         if let Some(dep_cell_block_hash) = dep_cell_block_hash {
-            header_deps_hashes.push(dep_cell_block_hash.into());
+            header_deps_hashes.push(dep_cell_block_hash);
         }
     }
 

@@ -1,0 +1,18 @@
+[package]
+name = "gw-smt"
+version = "1.8.0-rc1"
+authors = ["Nervos Network"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cfg-if = "0.1"
+sparse-merkle-tree = { version = "0.6.1", default-features = false }
+gw-hash = { path = "../../gwos/crates/hash" }
+gw-types = { path = "../../gwos/crates/types", default-features = false }
+
+[features]
+default = ["std"]
+std = ["sparse-merkle-tree/std", "gw-types/std"]
+smt-trie = ["sparse-merkle-tree/trie"]

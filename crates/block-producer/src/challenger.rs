@@ -16,7 +16,6 @@ use gw_challenge::offchain::verify_tx::{verify_tx, TxWithContext};
 use gw_challenge::offchain::{mock_cancel_challenge_tx, OffChainMockContext};
 use gw_challenge::revert::Revert;
 use gw_challenge::types::{RevertContext, VerifyContext};
-use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig};
 use gw_generator::types::vm::ChallengeContext;
 use gw_jsonrpc_types::test_mode::TestModePayload;
@@ -24,6 +23,7 @@ use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::bytes::Bytes;
 use gw_types::core::{ChallengeTargetType, Status};
+use gw_types::h256::*;
 use gw_types::offchain::{global_state_from_slice, CellInfo, InputCellInfo, TxStatus};
 use gw_types::packed::{
     CellDep, CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, ChallengeTarget,

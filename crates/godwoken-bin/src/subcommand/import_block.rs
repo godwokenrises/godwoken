@@ -159,7 +159,7 @@ impl ImportBlock {
         let (new_block, _size) = block_reader
             .peek_block()?
             .ok_or_else(|| anyhow!("no new block"))?;
-        if new_block.parent_block_hash() != db_tip_block.hash().into() {
+        if new_block.parent_block_hash() != db_tip_block.hash() {
             bail!("diff parent block {}", db_tip_block_number);
         }
 
@@ -254,7 +254,7 @@ fn insert_block(
     check_block_post_state(&tx_db, block_number, &exported.post_global_state)?;
 
     if let Some(hash) = exported.submit_tx_hash {
-        tx_db.set_block_submit_tx_hash(block_number, &hash.into())?;
+        tx_db.set_block_submit_tx_hash(block_number, &hash)?;
         *last_submitted_block = Some(block_number);
     };
     chain.calculate_and_store_finalized_custodians(&tx_db, block_number)?;

@@ -1,4 +1,4 @@
-use gw_common::smt::SMT;
+use gw_smt::smt::SMT;
 use gw_types::packed::LogItem;
 
 use super::state_db::StateTracker;

@@ -21,4 +21,4 @@ pub mod withdrawal;
 pub use calc_finalizing_range::calc_finalizing_range;
 pub use query_rollup_cell::query_rollup_cell;
 pub use rollup_context::RollupContext;
-pub use timepoint::{block_timepoint, global_state_finalized_timepoint};
+pub use timepoint::{finalized_timepoint, global_state_finalized_timepoint};

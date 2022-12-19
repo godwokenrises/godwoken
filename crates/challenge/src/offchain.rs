@@ -3,13 +3,13 @@
 use anyhow::{anyhow, bail, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
 use gw_common::registry_address::RegistryAddress;
-use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig, OffChainValidatorConfig};
 use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::state::MemStateDB;
 use gw_store::transaction::StoreTransaction;
 use gw_types::core::DepType;
+use gw_types::h256::*;
 use gw_types::offchain::{CellInfo, InputCellInfo};
 use gw_types::packed::{
     CellDep, CellInput, L2Block, OutPoint, OutPointVec, WithdrawalRequestExtra,

@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::blake2b::new_blake2b;
 use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
-use gw_common::{state::State, H256};
+use gw_common::state::State;
 use gw_config::{
     BackendForkConfig, ChainConfig, ConsensusConfig, FeeConfig, GaslessTxSupportConfig,
     MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig, SyscallCyclesConfig,
@@ -46,6 +46,7 @@ use gw_traits::CodeStore;
 use gw_types::packed::RawL2Transaction;
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     packed::{self, BlockInfo, Byte32, L2Transaction, RollupConfig, WithdrawalRequestExtra},
     prelude::*,
     U256,
@@ -918,7 +919,7 @@ async fn get_block_committed_info(
                 .await?;
             if let Some(block_hash) = opt_block_hash {
                 let number = rpc_client
-                    .get_header(block_hash.into())
+                    .get_header(block_hash)
                     .await?
                     .context("get block header")?
                     .inner
@@ -954,12 +955,12 @@ async fn get_block(
 
     // check block status
     let mut status = L2BlockStatus::Unfinalized;
-    if !db.reverted_block_smt()?.get(&block_hash)?.is_zero() {
+    if !db.reverted_block_smt()?.get(&block_hash.into())?.is_zero() {
         // block is reverted
         status = L2BlockStatus::Reverted;
     } else {
         // return None if block is not on the main chain
-        if db.block_smt()?.get(&block.smt_key().into())? != block_hash {
+        if H256::from(db.block_smt()?.get(&block.smt_key().into())?) != block_hash {
             return Ok(None);
         }
 
@@ -1178,7 +1179,7 @@ async fn execute_l2transaction(
 
     if run_result.exit_code != 0 {
         let receipt = gw_types::offchain::ErrorTxReceipt {
-            tx_hash: tx_hash.into(),
+            tx_hash,
             block_number: number,
             return_data: run_result.return_data,
             last_log: run_result.logs.pop(),
@@ -1256,7 +1257,7 @@ async fn execute_raw_l2transaction(
     };
 
     let execute_l2tx_max_cycles = mem_pool_config.execute_l2tx_max_cycles;
-    let tx_hash: H256 = raw_l2tx.hash().into();
+    let tx_hash: H256 = raw_l2tx.hash();
     let block_number: u64 = block_info.number().unpack();
     let mut cycles_pool = CyclesPool::new(
         ctx.mem_pool_config.mem_block.max_cycles_limit,
@@ -1379,7 +1380,7 @@ async fn submit_l2transaction(
 ) -> Result<Option<JsonH256>, RpcError> {
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
-    let tx_hash: H256 = tx.hash().into();
+    let tx_hash: H256 = tx.hash();
 
     let sender_id: u32 = tx.raw().from_id().unpack();
     let eth_recover = &ctx.polyjuice_sender_recover.eth;
@@ -1394,7 +1395,7 @@ async fn submit_l2transaction(
     let tx_hash_json = if 0 == sender_id {
         None
     } else {
-        Some(to_jsonh256(tx.hash().into()))
+        Some(to_jsonh256(tx.hash()))
     };
 
     // check rate limit
@@ -1491,7 +1492,7 @@ async fn submit_l2transaction(
             hasher.update(&sig);
             let mut hash = [0u8; 32];
             hasher.finalize(&mut hash);
-            H256::from(hash)
+            hash
         }
     };
     let request = Request::Tx(tx);
@@ -1576,7 +1577,7 @@ async fn submit_withdrawal_request(
     if let Some(handle) = in_queue_request_map
         .as_ref()
         .expect("in_queue_request_map")
-        .insert(withdrawal_hash.into(), request.clone())
+        .insert(withdrawal_hash, request.clone())
     {
         // Send if the request wasn't already in the map.
         let in_queue_span = tracing::info_span!("submit_queue.send");
@@ -1894,7 +1895,7 @@ async fn compute_l2_sudt_script_hash(
 ) -> Result<JsonH256> {
     let l2_sudt_script =
         build_l2_sudt_script(generator.rollup_context(), &to_h256(l1_sudt_script_hash));
-    Ok(to_jsonh256(l2_sudt_script.hash().into()))
+    Ok(to_jsonh256(l2_sudt_script.hash()))
 }
 
 fn get_backend_info(generator: Arc<Generator>) -> Vec<BackendInfo> {
@@ -1905,9 +1906,9 @@ fn get_backend_info(generator: Arc<Generator>) -> Vec<BackendInfo> {
         .1
         .values()
         .map(|b| BackendInfo {
-            validator_code_hash: ckb_fixed_hash::H256(b.checksum.validator.into()),
-            generator_code_hash: ckb_fixed_hash::H256(b.checksum.generator.into()),
-            validator_script_type_hash: ckb_fixed_hash::H256(b.validator_script_type_hash.into()),
+            validator_code_hash: ckb_fixed_hash::H256(b.checksum.validator),
+            generator_code_hash: ckb_fixed_hash::H256(b.checksum.generator),
+            validator_script_type_hash: ckb_fixed_hash::H256(b.validator_script_type_hash),
             backend_type: to_rpc_backend_type(&b.backend_type),
         })
         .collect()

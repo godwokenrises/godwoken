@@ -1,4 +1,4 @@
-use gw_common::H256;
+use gw_types::h256::*;
 use gw_types::offchain::RunResult;
 use log::debug;
 

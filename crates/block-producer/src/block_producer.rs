@@ -12,7 +12,6 @@ use crate::{
 use anyhow::{bail, ensure, Context, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
 use gw_chain::chain::Chain;
-use gw_common::H256;
 use gw_config::BlockProducerConfig;
 use gw_generator::Generator;
 use gw_jsonrpc_types::test_mode::TestModePayload;
@@ -21,10 +20,12 @@ use gw_mem_pool::{
     pool::{MemPool, OutputParam},
 };
 use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
+use gw_smt::smt::SMTH256;
 use gw_store::Store;
 use gw_types::offchain::{global_state_from_slice, CompatibleFinalizedTimepoint};
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     offchain::{DepositInfo, InputCellInfo},
     packed::{
         CellDep, CellInput, CellOutput, GlobalState, L2Block, RollupAction, RollupActionUnion,
@@ -33,7 +34,7 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::{
-    block_timepoint, fee::fill_tx_fee_with_local, genesis_info::CKBGenesisInfo,
+    fee::fill_tx_fee_with_local, finalized_timepoint, genesis_info::CKBGenesisInfo,
     local_cells::LocalCellsManager, query_rollup_cell, since::Since,
     transaction_skeleton::TransactionSkeleton, wallet::Wallet, RollupContext,
 };
@@ -59,15 +60,15 @@ fn generate_custodian_cells(
     block: &L2Block,
     deposit_cells: &[DepositInfo],
 ) -> Vec<(CellOutput, Bytes)> {
-    let block_hash: H256 = block.hash().into();
-    let block_timepoint = block_timepoint(
+    let block_hash: H256 = block.hash();
+    let finalized_timepoint = finalized_timepoint(
         &rollup_context.rollup_config,
         &rollup_context.fork_config,
         block.raw().number().unpack(),
         block.raw().timestamp().unpack(),
     );
     let to_custodian = |deposit| -> _ {
-        to_custodian_cell(rollup_context, &block_hash, &block_timepoint, deposit)
+        to_custodian_cell(rollup_context, &block_hash, &finalized_timepoint, deposit)
             .expect("sanitized deposit")
     };
 
@@ -172,11 +173,11 @@ impl BlockProducer {
         let reverted_block_root: H256 = {
             let db = self.store.begin_transaction();
             let smt = db.reverted_block_smt()?;
-            smt.root().to_owned()
+            (*smt.root()).into()
         };
 
         let param = ProduceBlockParam {
-            stake_cell_owner_lock_hash: self.wallet.lock_script().hash().into(),
+            stake_cell_owner_lock_hash: self.wallet.lock_script().hash(),
             reverted_block_root,
             rollup_config_hash: self.rollup_config_hash,
             block_param,
@@ -258,20 +259,24 @@ impl BlockProducer {
                 let db = self.store.begin_transaction();
                 let block_smt = db.reverted_block_smt()?;
 
-                let local_root: &H256 = block_smt.root();
+                let local_root: H256 = (*block_smt.root()).into();
                 let global_revert_block_root: H256 = global_state.reverted_block_root().unpack();
-                assert_eq!(local_root, &global_revert_block_root);
+                assert_eq!(local_root, global_revert_block_root);
 
                 let keys: Vec<H256> = collected_block_hashes.into_iter().collect();
                 for key in keys.iter() {
                     log::info!("submit revert block {:?}", hex::encode(key.as_slice()));
                 }
-                let proof = block_smt
-                    .merkle_proof(keys.clone())?
-                    .compile(keys.clone())?;
+                let reverted_block_hashes = keys.pack();
+                let proof = {
+                    let smt_keys: Vec<SMTH256> = keys.into_iter().map(Into::into).collect();
+                    block_smt
+                        .merkle_proof(smt_keys.clone())?
+                        .compile(smt_keys)?
+                };
 
                 RollupSubmitBlock::new_builder()
-                    .reverted_block_hashes(keys.pack())
+                    .reverted_block_hashes(reverted_block_hashes)
                     .reverted_block_proof(proof.0.pack())
             } else {
                 RollupSubmitBlock::new_builder()
@@ -373,7 +378,7 @@ impl BlockProducer {
         }
 
         // withdrawal cells
-        let map_withdrawal_extras = withdrawal_extras.into_iter().map(|w| (w.hash().into(), w));
+        let map_withdrawal_extras = withdrawal_extras.into_iter().map(|w| (w.hash(), w));
         if let Some(generated_withdrawal_cells) = crate::withdrawal::generate(
             rollup_context,
             finalized_custodians,

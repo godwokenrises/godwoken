@@ -107,7 +107,7 @@ pub async fn create_creator_account(
         let typed_tx = eip712::types::L2Transaction::from_raw(
             &raw_l2_transaction,
             sender_address,
-            receiver_script_hash.into(),
+            receiver_script_hash,
         )
         .unwrap();
         let domain_seperator = eip712::types::EIP712Domain {

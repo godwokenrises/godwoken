@@ -269,7 +269,7 @@ dependencies = [
  "faster-hex 0.6.1",
  "lazy_static",
  "rand 0.7.3",
- "secp256k1 0.24.1",
+ "secp256k1",
  "thiserror",
 ]
 
@@ -902,7 +902,6 @@ dependencies = [
  "gw-hash",
  "gw-types",
  "merkle-cbt",
- "sparse-merkle-tree",
  "thiserror",
 ]
 
@@ -941,6 +940,7 @@ dependencies = [
  "ethabi",
  "gw-common",
  "gw-config",
+ "gw-smt",
  "gw-store",
  "gw-traits",
  "gw-types",
@@ -949,7 +949,7 @@ dependencies = [
  "lazy_static",
  "log",
  "rlp",
- "secp256k1 0.20.3",
+ "secp256k1",
  "sha3",
  "substrate-bn",
  "thiserror",
@@ -1010,6 +1010,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gw-smt"
+version = "1.8.0-rc1"
+dependencies = [
+ "cfg-if 0.1.10",
+ "gw-hash",
+ "gw-types",
+ "sparse-merkle-tree",
+]
+
+[[package]]
 name = "gw-store"
 version = "1.8.0-rc1"
 dependencies = [
@@ -1018,6 +1028,7 @@ dependencies = [
  "gw-common",
  "gw-config",
  "gw-db",
+ "gw-smt",
  "gw-traits",
  "gw-types",
  "im",
@@ -1044,7 +1055,6 @@ dependencies = [
  "gw-hash",
  "molecule",
  "primitive-types",
- "sparse-merkle-tree",
 ]
 
 [[package]]
@@ -1060,12 +1070,13 @@ dependencies = [
  "gw-config",
  "gw-jsonrpc-types",
  "gw-rpc-client",
+ "gw-smt",
  "gw-store",
  "gw-types",
  "hex-literal",
  "log",
  "rand 0.8.5",
- "secp256k1 0.21.3",
+ "secp256k1",
  "sha3",
  "tokio",
  "zstd",
@@ -1665,6 +1676,7 @@ dependencies = [
  "gw-config",
  "gw-db",
  "gw-generator",
+ "gw-smt",
  "gw-store",
  "gw-traits",
  "gw-types",
@@ -1972,38 +1984,11 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.20.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97d03ceae636d0fed5bae6a7f4f664354c5f4fcedf6eef053fef17e49f837d0a"
-dependencies = [
- "secp256k1-sys 0.4.2",
-]
-
-[[package]]
-name = "secp256k1"
-version = "0.21.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c42e6f1735c5f00f51e43e28d6634141f2bcad10931b2609ddd74a86d751260"
-dependencies = [
- "secp256k1-sys 0.4.2",
-]
-
-[[package]]
-name = "secp256k1"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff55dc09d460954e9ef2fa8a7ced735a964be9981fd50e870b2b3b0705e14964"
 dependencies = [
- "secp256k1-sys 0.6.1",
-]
-
-[[package]]
-name = "secp256k1-sys"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "957da2573cde917463ece3570eab4a0b3f19de6f1646cde62e6fd3868f566036"
-dependencies = [
- "cc",
+ "secp256k1-sys",
 ]
 
 [[package]]

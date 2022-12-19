@@ -3,9 +3,9 @@ use crate::types::{RevertContext, RevertWitness};
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::Reader;
 use ckb_types::prelude::{Builder, Entity};
-use gw_common::smt::Blake2bHasher;
-use gw_common::H256;
+use gw_smt::smt::{Blake2bHasher, SMTH256};
 use gw_types::core::Status;
+use gw_types::h256::H256;
 use gw_types::offchain::CellInfo;
 use gw_types::packed::BlockMerkleState;
 use gw_types::packed::ChallengeLockArgsReader;
@@ -57,7 +57,7 @@ impl<'a> Revert<'a> {
             stake_cells,
             burn_lock,
             reward_burn_rate,
-            post_reverted_block_root: revert_context.post_reverted_block_root.into(),
+            post_reverted_block_root: revert_context.post_reverted_block_root,
             revert_witness: revert_context.revert_witness,
         }
     }
@@ -83,12 +83,14 @@ impl<'a> Revert<'a> {
         };
         let block_merkle_state = {
             let leaves = {
-                let to_leave = |b: RawL2Block| (b.smt_key().into(), H256::zero());
+                let to_leave = |b: RawL2Block| (b.smt_key().into(), SMTH256::zero());
                 let reverted_blocks = self.revert_witness.reverted_blocks.clone();
                 reverted_blocks.into_iter().map(to_leave)
             };
             let block_merkle_proof = self.revert_witness.block_proof.clone();
-            let block_root = block_merkle_proof.compute_root::<Blake2bHasher>(leaves.collect())?;
+            let block_root: H256 = block_merkle_proof
+                .compute_root::<Blake2bHasher>(leaves.collect())?
+                .into();
             let block_count = first_reverted_block.number();
 
             BlockMerkleState::new_builder()

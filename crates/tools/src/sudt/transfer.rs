@@ -87,7 +87,7 @@ pub async fn transfer(
     let message = generate_eip712_message_to_sign(
         raw_l2transaction.to_owned(),
         sender_registry_address,
-        gw_common::H256::from(to_script_hash),
+        to_script_hash,
     );
     let signature = eth_sign(&message, privkey)?;
 

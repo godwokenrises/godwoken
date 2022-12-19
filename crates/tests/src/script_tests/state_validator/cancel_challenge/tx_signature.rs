@@ -21,7 +21,7 @@ use ckb_types::{
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::merkle_utils::ckb_merkle_leaf_hash;
 use gw_common::registry_address::RegistryAddress;
-use gw_common::{state::State, H256};
+use gw_common::state::State;
 use gw_generator::account_lock_manage::always_success::AlwaysSuccess;
 use gw_generator::account_lock_manage::eip712;
 use gw_generator::account_lock_manage::eip712::traits::EIP712Encode;
@@ -36,6 +36,7 @@ use gw_traits::CodeStore;
 use gw_types::core::AllowedContractType;
 use gw_types::core::AllowedEoaType;
 use gw_types::core::SigningType;
+use gw_types::h256::*;
 use gw_types::packed::AllowedTypeHash;
 use gw_types::packed::CCTransactionSignatureWitness;
 use gw_types::packed::Fee;
@@ -96,7 +97,7 @@ async fn test_cancel_tx_signature() {
         .build();
     // setup chain
     let mut account_lock_manage = AccountLockManage::default();
-    account_lock_manage.register_lock_algorithm(eoa_lock_type_hash.into(), Arc::new(AlwaysSuccess));
+    account_lock_manage.register_lock_algorithm(eoa_lock_type_hash, Arc::new(AlwaysSuccess));
     let mut chain = setup_chain_with_account_lock_manage(
         rollup_type_script.clone(),
         rollup_config.clone(),
@@ -183,7 +184,7 @@ async fn test_cancel_tx_signature() {
         let db = chain.store().begin_transaction();
         let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
         let sender_id = tree
-            .get_account_id_by_script_hash(&sender_script.hash().into())
+            .get_account_id_by_script_hash(&sender_script.hash())
             .unwrap()
             .unwrap();
         let sudt_script_hash = tree.get_script_hash(sudt_id).unwrap();
@@ -296,7 +297,7 @@ async fn test_cancel_tx_signature() {
                 .transactions()
                 .into_iter()
                 .enumerate()
-                .map(|(idx, tx)| ckb_merkle_leaf_hash(idx as u32, &tx.witness_hash().into()))
+                .map(|(idx, tx)| ckb_merkle_leaf_hash(idx as u32, &tx.witness_hash()))
                 .collect();
             let tx_proof = super::build_merkle_proof(&leaves, &[challenge_target_index]);
             let challenged_block_number =
@@ -316,20 +317,17 @@ async fn test_cancel_tx_signature() {
             let mut tree = MemStateDB::from_store(chain.store().get_snapshot()).unwrap();
             tree.set_state_tracker(Default::default());
             let sender_id = tree
-                .get_account_id_by_script_hash(&sender_script.hash().into())
+                .get_account_id_by_script_hash(&sender_script.hash())
                 .unwrap()
                 .unwrap();
             sender_address = tree
-                .get_registry_address_by_script_hash(
-                    ETH_REGISTRY_ACCOUNT_ID,
-                    &sender_script.hash().into(),
-                )
+                .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &sender_script.hash())
                 .unwrap()
                 .expect("get sender address");
             tree.get_script_hash(sender_id).unwrap();
             tree.get_nonce(sender_id).unwrap();
             let receiver_id = tree
-                .get_account_id_by_script_hash(&receiver_script.hash().into())
+                .get_account_id_by_script_hash(&receiver_script.hash())
                 .unwrap()
                 .unwrap();
             tree.get_script_hash(receiver_id).unwrap();
@@ -352,9 +350,10 @@ async fn test_cancel_tx_signature() {
 
             let kv_state_proof: Bytes = {
                 let smt = SMTStateStore::new(&db).to_smt().unwrap();
-                smt.merkle_proof(touched_keys.clone())
+                let smt_touched_keys: Vec<_> = touched_keys.iter().map(|k| (*k).into()).collect();
+                smt.merkle_proof(smt_touched_keys.clone())
                     .unwrap()
-                    .compile(touched_keys)
+                    .compile(smt_touched_keys)
                     .unwrap()
                     .0
                     .into()
@@ -387,7 +386,7 @@ async fn test_cancel_tx_signature() {
             let typed_tx = eip712::types::L2Transaction::from_raw(
                 &tx.raw(),
                 sender_address,
-                sudt_script.hash().into(),
+                sudt_script.hash(),
             )
             .unwrap();
             let domain_seperator = EIP712Domain {

@@ -1,10 +1,7 @@
-use gw_common::{
-    h256_ext::H256Ext,
-    smt::{Blake2bHasher, CompiledMerkleProof},
-    H256,
-};
+use ckb_smt::smt::{Pair, Tree};
 use gw_types::{
     core::{Status, Timepoint},
+    h256::{H256, H256Ext},
     packed::{BlockMerkleState, Byte32, GlobalState, RawL2Block, RollupConfig},
     prelude::*,
 };
@@ -27,13 +24,14 @@ use gw_utils::{
 };
 use gw_utils::{
     fork::Fork,
-    gw_common,
     gw_types::packed::{RawL2BlockReader, RollupRevertReader},
 };
 
 use super::{check_rollup_lock_cells_except_stake, check_status};
 use alloc::{collections::BTreeSet, vec::Vec};
 use gw_utils::error::Error;
+
+const MAX_REVERTED_BLOCKS: usize = 128;
 
 /// Check challenge cell is maturity(on the layer1)
 fn check_challenge_maturity(
@@ -161,9 +159,13 @@ fn check_reverted_blocks(
     if reverted_blocks.is_empty() {
         return Err(Error::InvalidRevertedBlocks);
     }
-    let reverted_block_hashes: Vec<H256> =
+    if reverted_blocks.len() > MAX_REVERTED_BLOCKS {
+        debug!("Exceeded maximum number of reverted blocks");
+        return Err(Error::InvalidRevertedBlocks);
+    }
+    let reverted_block_hashes: Vec<[u8; 32]> =
         reverted_blocks.iter().map(|b| b.hash().into()).collect();
-    let reverted_block_smt_keys: Vec<H256> = reverted_blocks
+    let reverted_block_smt_keys: Vec<[u8; 32]> = reverted_blocks
         .iter()
         .map(|b| RawL2Block::compute_smt_key(b.number().unpack()).into())
         .collect();
@@ -191,55 +193,97 @@ fn check_reverted_blocks(
             return Err(Error::InvalidRevertedBlocks);
         }
     }
+
     // prove the target block exists in the main chain
-    let block_merkle_proof = CompiledMerkleProof(revert_args.block_proof().unpack());
-    let is_main_chain_block = {
-        let leaves = reverted_block_smt_keys
-            .clone()
-            .into_iter()
+    let mut tree_buf = [Pair::default(); MAX_REVERTED_BLOCKS];
+    let block_merkle_proof = revert_args.block_proof().raw_data();
+    {
+        let mut smt_tree = Tree::new(&mut tree_buf);
+        for (key, block_hash) in reverted_block_smt_keys
+            .iter()
             .zip(reverted_block_hashes.clone())
-            .collect();
-        block_merkle_proof
-            .verify::<Blake2bHasher>(&prev_global_state.block().merkle_root().unpack(), leaves)?
-    };
-    if !is_main_chain_block {
-        return Err(Error::InvalidRevertedBlocks);
+        {
+            smt_tree.update(&key, &block_hash).map_err(|err| {
+                debug!("[check_reverted_blocks] update smt tree error: {}", err);
+                Error::MerkleProof
+            })?;
+        }
+
+        let root = prev_global_state.block().merkle_root().unpack();
+        smt_tree.verify(&root, &block_merkle_proof).map_err(|err| {
+            debug!(
+                "[check_reverted_blocks] expected target block exists in the main chain: {}",
+                err
+            );
+            Error::InvalidRevertedBlocks
+        })?;
     }
+
     // prove the target block isn't in the prev reverted block root
-    let reverted_block_merkle_proof =
-        CompiledMerkleProof(revert_args.reverted_block_proof().unpack());
-    let is_not_prev_reverted_block = {
-        let reverted_block_root: H256 = prev_global_state.reverted_block_root().unpack();
-        let leaves: Vec<_> = reverted_block_hashes
-            .clone()
-            .into_iter()
-            .map(|hash| (hash, H256::zero()))
-            .collect();
-        reverted_block_merkle_proof.verify::<Blake2bHasher>(&reverted_block_root, leaves)?
-    };
-    if !is_not_prev_reverted_block {
-        return Err(Error::InvalidRevertedBlocks);
+    let reverted_block_merkle_proof = revert_args.reverted_block_proof().raw_data();
+    {
+        tree_buf.fill_with(Default::default);
+        let mut smt_tree = Tree::new(&mut tree_buf);
+        let block_hash = H256::zero().into();
+        for key in &reverted_block_hashes {
+            smt_tree.update(key, &block_hash).map_err(|err| {
+                debug!("[check_reverted_blocks] update smt tree error: {}", err);
+                Error::MerkleProof
+            })?;
+        }
+
+        let reverted_block_root: [u8; 32] = prev_global_state.reverted_block_root().unpack();
+        smt_tree
+            .verify(&reverted_block_root, &reverted_block_merkle_proof)
+            .map_err(|err| {
+                debug!(
+                    "[check_reverted_blocks] expected target block isn't reverted: {}",
+                    err
+                );
+                Error::InvalidRevertedBlocks
+            })?
     }
     // prove the target block in the post reverted block root
-    let is_post_reverted_block = {
-        let leaves: Vec<_> = reverted_block_hashes
-            .into_iter()
-            .map(|hash| (hash, H256::one()))
-            .collect();
-        reverted_block_merkle_proof
-            .verify::<Blake2bHasher>(&post_global_state.reverted_block_root().unpack(), leaves)?
-    };
-    if !is_post_reverted_block {
-        return Err(Error::InvalidRevertedBlocks);
+    {
+        tree_buf.fill_with(Default::default);
+        let mut smt_tree = Tree::new(&mut tree_buf);
+        let block_hash = H256::one().into();
+        for key in &reverted_block_hashes {
+            smt_tree.update(key, &block_hash).map_err(|err| {
+                debug!("[check_reverted_blocks] update smt tree error: {}", err);
+                Error::MerkleProof
+            })?;
+        }
+
+        let root: [u8; 32] = post_global_state.reverted_block_root().unpack();
+        smt_tree
+            .verify(&root, &reverted_block_merkle_proof)
+            .map_err(|err| {
+                debug!("[check_reverted_blocks] expected target block is in the post reverted block root: {}", err);
+                Error::InvalidRevertedBlocks
+            })?
     }
     let reverted_block_root = post_global_state.reverted_block_root();
-    // calculate the prev block merkle state (delete reverted block hashes)
+    // calculate the new block merkle state (delete reverted block hashes from root)
     let block_merkle_state = {
-        let leaves = reverted_block_smt_keys
-            .into_iter()
-            .map(|smt_key| (smt_key, H256::zero()))
-            .collect();
-        let block_root = block_merkle_proof.compute_root::<Blake2bHasher>(leaves)?;
+        let block_root = {
+            tree_buf.fill_with(Default::default);
+            let mut smt_tree = Tree::new(&mut tree_buf);
+            let block_hash = H256::zero().into();
+            for key in &reverted_block_smt_keys {
+                smt_tree.update(key, &block_hash).map_err(|err| {
+                    debug!("[check_reverted_blocks] update smt tree error: {}", err);
+                    Error::MerkleProof
+                })?;
+            }
+
+            smt_tree
+                .calculate_root(&block_merkle_proof)
+                .map_err(|err| {
+                    debug!("[check_reverted_blocks] calculate new block root: {}", err);
+                    Error::InvalidRevertedBlocks
+                })?
+        };
         let block_count = reverted_blocks[0].number();
         BlockMerkleState::new_builder()
             .merkle_root(block_root.pack())
@@ -284,7 +328,7 @@ fn check_reverted_blocks(
             .block(block_merkle_state)
             .tip_block_hash(tip_block_hash.to_entity())
             .tip_block_timestamp(tip_block_timestamp.to_entity())
-            .last_finalized_block_number(last_finalized.full_value().pack())
+            .last_finalized_timepoint(last_finalized.full_value().pack())
             .reverted_block_root(reverted_block_root)
             .status(status.into())
             .build()

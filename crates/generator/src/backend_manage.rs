@@ -1,7 +1,8 @@
 use anyhow::{bail, Context, Result};
-use gw_common::{blake2b::new_blake2b, H256};
+use gw_common::blake2b::new_blake2b;
 use gw_config::{BackendConfig, BackendForkConfig, BackendType};
 use gw_types::bytes::Bytes;
+use gw_types::h256::*;
 use std::{collections::HashMap, fs};
 
 #[cfg(has_asm)]
@@ -44,14 +45,14 @@ impl Backend {
                 hasher.update(&validator);
                 let mut buf = [0u8; 32];
                 hasher.finalize(&mut buf);
-                buf.into()
+                buf
             };
             let generator = {
                 let mut hasher = new_blake2b();
                 hasher.update(&generator);
                 let mut buf = [0u8; 32];
                 hasher.finalize(&mut buf);
-                buf.into()
+                buf
             };
 
             BackendCheckSum {
@@ -127,13 +128,9 @@ impl BackendManage {
                     format!("load generator from {}", generator_path.to_string_lossy())
                 })?
                 .into();
-            let validator_script_type_hash = {
-                let hash: [u8; 32] = validator_script_type_hash.into();
-                hash.into()
-            };
             let backend = Backend::new(
                 backend_type,
-                validator_script_type_hash,
+                validator_script_type_hash.into(),
                 validator,
                 generator,
             );
@@ -248,24 +245,15 @@ mod tests {
         };
         m.register_backend_fork(config, false).unwrap();
         assert!(m.get_backends_at_height(0).is_none(), "no backends at 0");
+        assert!(m.get_backend(1, &[42u8; 32]).is_some(), "get backend at 1");
         assert!(
-            m.get_backend(1, &[42u8; 32].into()).is_some(),
-            "get backend at 1"
-        );
-        assert!(
-            m.get_backend(100, &[42u8; 32].into()).is_some(),
+            m.get_backend(100, &[42u8; 32]).is_some(),
             "get backend at 100"
         );
+        assert!(m.get_backend(0, &[43u8; 32]).is_none(), "get backend at 0");
+        assert!(m.get_backend(1, &[43u8; 32]).is_some(), "get backend at 1");
         assert!(
-            m.get_backend(0, &[43u8; 32].into()).is_none(),
-            "get backend at 0"
-        );
-        assert!(
-            m.get_backend(1, &[43u8; 32].into()).is_some(),
-            "get backend at 1"
-        );
-        assert!(
-            m.get_backend(100, &[43u8; 32].into()).is_some(),
+            m.get_backend(100, &[43u8; 32]).is_some(),
             "get backend at 100"
         );
 
@@ -290,55 +278,34 @@ mod tests {
         assert!(m.get_backends_at_height(0).is_none(), "no backends at 0");
         // sudt
         assert_eq!(
-            m.get_backend(4, &[42u8; 32].into())
-                .unwrap()
-                .generator
-                .to_vec(),
+            m.get_backend(4, &[42u8; 32]).unwrap().generator.to_vec(),
             b"sudt_v0".to_vec(),
         );
         assert_eq!(
-            m.get_backend(5, &[42u8; 32].into())
-                .unwrap()
-                .generator
-                .to_vec(),
+            m.get_backend(5, &[42u8; 32]).unwrap().generator.to_vec(),
             b"sudt_v1".to_vec(),
         );
         assert_eq!(
-            m.get_backend(42, &[42u8; 32].into())
-                .unwrap()
-                .generator
-                .to_vec(),
+            m.get_backend(42, &[42u8; 32]).unwrap().generator.to_vec(),
             b"sudt_v1".to_vec(),
         );
         // meta
-        assert!(m.get_backend(1, &[41u8; 32].into()).is_none());
+        assert!(m.get_backend(1, &[41u8; 32]).is_none());
         assert_eq!(
-            m.get_backend(5, &[41u8; 32].into())
-                .unwrap()
-                .generator
-                .to_vec(),
+            m.get_backend(5, &[41u8; 32]).unwrap().generator.to_vec(),
             b"meta_v0".to_vec(),
         );
         assert_eq!(
-            m.get_backend(42, &[41u8; 32].into())
-                .unwrap()
-                .generator
-                .to_vec(),
+            m.get_backend(42, &[41u8; 32]).unwrap().generator.to_vec(),
             b"meta_v0".to_vec(),
         );
         // addr
         assert_eq!(
-            m.get_backend(1, &[43u8; 32].into())
-                .unwrap()
-                .generator
-                .to_vec(),
+            m.get_backend(1, &[43u8; 32]).unwrap().generator.to_vec(),
             b"addr_v0".to_vec(),
         );
         assert_eq!(
-            m.get_backend(42, &[43u8; 32].into())
-                .unwrap()
-                .generator
-                .to_vec(),
+            m.get_backend(42, &[43u8; 32]).unwrap().generator.to_vec(),
             b"addr_v0".to_vec(),
         );
     }

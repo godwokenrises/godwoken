@@ -1,11 +1,12 @@
 use anyhow::anyhow;
 use gw_common::{
-    builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, state::State, H256,
+    builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, state::State,
 };
 use gw_generator::account_lock_manage::{secp256k1::Secp256k1Eth, LockAlgorithm};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     packed::{L2Transaction, RawL2Transaction, Script},
     prelude::{Pack, Unpack},
 };
@@ -39,7 +40,7 @@ impl PolyjuiceTxEthSender {
         let account_script = ctx.to_account_script(&registry_address);
 
         match state.get_script_hash_by_registry_address(&registry_address)? {
-            Some(script_hash) if script_hash != account_script.hash().into() => {
+            Some(script_hash) if script_hash != account_script.hash() => {
                 Err(PolyjuiceTxSenderRecoverError::DifferentScript {
                     registry_address,
                     script_hash,

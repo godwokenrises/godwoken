@@ -5,10 +5,10 @@ use std::sync::Arc;
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use gw_common::H256;
 use gw_config::{ContractsCellDep, DebugConfig};
 use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_rpc_client::rpc_client::RPCClient;
+use gw_types::h256::*;
 use gw_types::offchain::{
     global_state_from_slice, CellInfo, CompatibleFinalizedTimepoint, TxStatus,
 };

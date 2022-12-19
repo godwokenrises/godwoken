@@ -1,5 +1,4 @@
-use gw_common::H256;
-use gw_types::{bytes::Bytes, core::ScriptHashType, packed::Script, prelude::*};
+use gw_types::{bytes::Bytes, core::ScriptHashType, h256::*, packed::Script, prelude::*};
 use gw_utils::RollupContext;
 
 pub fn build_l2_sudt_script(rollup_context: &RollupContext, l1_sudt_script_hash: &H256) -> Script {

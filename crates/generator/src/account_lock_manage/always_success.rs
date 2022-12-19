@@ -1,6 +1,7 @@
-use gw_common::{registry_address::RegistryAddress, H256};
+use gw_common::registry_address::RegistryAddress;
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     packed::{L2Transaction, Script},
 };
 use gw_utils::RollupContext;
