@@ -1,8 +1,11 @@
-name: Docker Build Push (Web3)
+name: Web3 Docker Build Push
 
 on:
   push:
-    branches: ["main", '*-rc*']
+    branches: ["develop", '*-rc*']
+    paths:
+       - 'web3/**'
+    # todo: how to release tag under monorepo?
     tags: ["v*.*.*"]
   workflow_dispatch:
 
@@ -15,6 +18,9 @@ env:
 jobs:
   docker-build-push:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web3
 
     # If you specify the access for any of these scopes, all of those that are not specified are set to none.
     permissions:

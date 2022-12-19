@@ -1,12 +1,12 @@
-name: Unit Tests
+name: Web3 Unit Tests
 
 on:
   push:
-    branches:
-      - main
-      - develop
+    paths:
+      - 'web3/**'
   pull_request:
-  workflow_dispatch:
+    paths:
+      - 'web3/**'
 
 env:
   # Environment variables propagated to godwoken-kicker
@@ -18,7 +18,11 @@ env:
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
-    steps:
+    defaults:
+      run:
+        working-directory: web3
+
+   steps:
 
     # Godwoken-Kicker
     - uses: actions/checkout@v3

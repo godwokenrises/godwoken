@@ -1,18 +1,22 @@
-name: Rust
+name: Web3 Rust
 
 on:
   push:
-    branches: [ main ]
+    paths:
+      - 'web3/**'
   pull_request:
-
+    paths:
+      - 'web3/**'
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  Build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web3
 
     steps:
     - uses: actions/checkout@v2
