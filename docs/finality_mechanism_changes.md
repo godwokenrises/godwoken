@@ -1,6 +1,8 @@
-# Finality Mechanism Changes - from the perspective of dApp developers
+# Finality Mechanism Changes
 
-https://github.com/godwokenrises/godwoken/pull/836 changes the way to determine finality. The following guide is for dApp developers to help them understand what has changed and how to adapt.
+https://github.com/godwokenrises/godwoken/pull/836 introduces a new finality mechanism.
+
+The following guide is for developers whose program needs to determine the layer-2 finality, such as an assets bridge or an off-chain program reads finalized state from layer-2. You can skip this document if you are a layer-2 EVM contract developer and do not care about the finality.
 
 ## What Has Changed
 
@@ -27,23 +29,25 @@ Here are some test vectors:
 
 ### Interpretation of `GlobalState.last_finalized_timepoint`
 
-> **NOTE**: **[`GlobalState.last_finalized_block_number`](https://github.com/godwokenrises/godwoken/blob/5617b579927d85509e8f88ac4fb4493ef449b642/crates/types/schemas/godwoken.mol#L33) was renamed to [`GlobalState.last_finalized_timepoint`](https://github.com/godwokenrises/godwoken/pull/891/files#diff-96e540dc83a433d447e1d2dae392fc5eafce72e839ea3900f6f1f8638aaada6bL34-R34).**
+> **NOTE**: **[`GlobalState.last_finalized_block_number`](https://github.com/godwokenrises/godwoken/blob/5617b579927d85509e8f88ac4fb4493ef449b642/crates/types/schemas/godwoken.mol#L33) was renamed to [`GlobalState.last_finalized_timepoint`](https://github.com/godwokenrises/godwoken/blob/f71d2bf86f8da8873522b3655de0b4d4866ac965/gwos/crates/types/schemas/godwoken.mol#L34).**
 
-`GlobalState.last_finalized_timepoint` was changed to type `Timepoint`:
-- The `timepoint_flag == 0` indicates that its `timepoint_value` is the **finalized block number**, so any blocks with a lower number are finalized.
-- The `timepoint_flag == 1` indicates that its `timepoint_value` is the **finalized timestamp**, so any blocks with a lower timestamp are finalized.
+`GlobalState.last_finalized_timepoint` is changed to type `Timepoint`:
+- The `timepoint_flag == 0` indicates the `timepoint_value` represents the **finalized block number**, so any blocks with a lower number are finalized.
+- The `timepoint_flag == 1` indicates the `timepoint_value` represents the **finalized timestamp**, so any blocks with a lower timestamp are finalized.
 
 ### Interpretation of `WithdrawalLockArgs.withdrawal_finalized_timepoint`
 
-> **NOTE**: **[`WithdrawalLockArgs.withdrawal_block_number`](https://github.com/godwokenrises/godwoken/blob/5617b579927d85509e8f88ac4fb4493ef449b642/crates/types/schemas/godwoken.mol#L206) was renamed to [`WithdrawalLockArgs.withdrawal_finalized_timepoint`](https://github.com/godwokenrises/godwoken/pull/836/files#diff-96e540dc83a433d447e1d2dae392fc5eafce72e839ea3900f6f1f8638aaada6bL206-R209).**
+> **NOTE**: **[`WithdrawalLockArgs.withdrawal_block_number`](https://github.com/godwokenrises/godwoken/blob/5617b579927d85509e8f88ac4fb4493ef449b642/crates/types/schemas/godwoken.mol#L206) was renamed to [`WithdrawalLockArgs.withdrawal_finalized_timepoint`](https://github.com/godwokenrises/godwoken/blob/f71d2bf86f8da8873522b3655de0b4d4866ac965/gwos/crates/types/schemas/godwoken.mol#L209).**
 
 `WithdrawalLockArgs.withdrawal_finalized_timepoint` was changed to type `Timepoint`:
-- If `timepoint_flag == 0` then its `timepoint_value` is the **withdrawn block number**, so it becomes finalized when the tip block number exceeds `rollup_config.finality_blocks` blocks above the **withdrawn block number**.
-- If `timepoint_flag == 1` then its `timepoint_value` is the **withdrawn block timestamp**, so it becomes finalized when `GlobalState.last_finalized_timepoint` exceeds the **withdrawn block timestamp**.
+- If `timepoint_flag == 0` then the `timepoint_value` represents the **withdrawn block number**, so it is finalized when the tip block number exceeds `rollup_config.finality_blocks` blocks higher than the **withdrawn block number**.
+- If `timepoint_flag == 1` then the `timepoint_value` represents the **withdrawn finalized timestamp**, so it is finalized when `GlobalState.last_finalized_timepoint` exceeds the **withdrawn finalized timestamp**.
 
-## How to Adapt
+## Finality determination changes
 
-### For dApps that determine and filter finalized blocks
+Developers must upgrade their code to adapt to the finality changes before Godwoken activates the feature. The following code can handle the finality determination correctly before and after the new finality mechanism.
+
+### Determine finalized blocks
 
 ```rust
 const TIMEPOINT_FLAG_MASK: u64 = 1 << 63;
@@ -56,7 +60,7 @@ fn is_block_finalized(global_state: &GlobalState, l2block: &L2Block) -> bool {
 }
 ```
 
-### For dApps that determine and filter finalized withdrawals
+### Determine finalized withdrawals
 
 ```rust
 const TIMEPOINT_FLAG_MASK: u64 = 1 << 63;
@@ -93,7 +97,7 @@ fn is_withdrawal_finalized(
 }
 ```
 
-### For dApps that estimate the future pending time of withdrawals
+### Estimate the future pending time of withdrawals
 
 ```rust
 const TIMEPOINT_FLAG_MASK: u64 = 1 << 63;
@@ -119,4 +123,20 @@ fn estimate_future_pending_time(
         }
     }
 }
+```
+
+## RPC Changes
+
+### TestMode `tests_get_global_state`
+
+After activate the feature, the response of the RPC will changed, the field:
+
+``` json
+    "last_finalized_block_number"
+```
+
+will changed to 
+
+``` json
+    "last_finalized_timestamp"
 ```
