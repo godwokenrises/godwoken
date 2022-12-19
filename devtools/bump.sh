@@ -10,7 +10,7 @@ main() {
     exit 1
   fi
   local v="$1"
-  find ./crates -name 'Cargo.toml' -print0 | xargs -0 sed -i.bak \
+  find ./crates ./gwos/crates -name 'Cargo.toml' -print0 | xargs -0 sed -i.bak \
     -e 's/^version = .*/version = "'"$v"'"/' \
     -e 's/\({.*path = ".*",.* version = "= \)[^"]*/\1'"$v"'/'
   find . -name 'Cargo.toml.bak' -exec rm -f {} \;
