@@ -20,7 +20,7 @@ We also adjust the documentation:
 Other changes:
 
 - refactor: move gw-types and gw-common to gwos folder [#905](https://github.com/godwokenrises/godwoken/pull/905)
-- feat: support CKB built-in indexer #907 [#907](https://github.com/godwokenrises/godwoken/pull/907)
+- feat: support CKB built-in indexer [#907](https://github.com/godwokenrises/godwoken/pull/907)
 
 ## [v1.8.0-rc1] - 2022-12-09
 
