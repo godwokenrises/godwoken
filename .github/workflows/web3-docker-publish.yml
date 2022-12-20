@@ -6,7 +6,7 @@ on:
     paths:
        - 'web3/**'
     # todo: how to release tag under monorepo?
-    tags: ["v*.*.*"]
+    tags: ["web3@v*.*.*"]
   workflow_dispatch:
 
 env:
@@ -60,18 +60,26 @@ jobs:
         if: ${{ github.ref_type != 'tag' }}
         uses: docker/build-push-action@v2
         with:
-          context: .
+          context: ./web3
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}-${{ steps.commit.outputs.sha_short }}
           labels: ${{ steps.meta.outputs.labels }}
 
+      # extract web3 tags from the special format: web3@v*.*.*
+      - name: Split web3 tags
+        if: ${{ startsWith(github.ref, 'refs/tags') }}
+        env:
+          metatags: ${{ steps.meta.outputs.tags }}
+        id: split
+        run: echo "::set-output name=tags::${metatags/web3@/}"
+    
       # Build and push Docker image with Buildx (don't push on PR)
       # only for new tag
       - name: Official Release Build => Build and push tag image to ${{ env.REGISTRY }}
         if: ${{ startsWith(github.ref, 'refs/tags') }}
         uses: docker/build-push-action@v2
         with:
-          context: .
+          context: ./web3 
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.split.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
