@@ -86,6 +86,7 @@ impl MemPoolState {
     }
 
     pub fn set_completed_initial_syncing(&self) {
+        log::info!("set completed initial syncing");
         self.completed_initial_syncing.store(true, Ordering::SeqCst);
     }
 }

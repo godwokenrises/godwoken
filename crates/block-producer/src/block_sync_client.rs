@@ -443,6 +443,7 @@ async fn notify_new_tip(client: &mut BlockSyncClient, update_state: bool) -> Res
             mem_pool.reset_read_only(Some(new_tip), update_state)?;
             mem_pool.mem_pool_state().set_completed_initial_syncing();
         }
+        log::info!("completed initial syncing");
         client.completed_initial_syncing = true;
     } else if let Some(ref mem_pool) = client.mem_pool {
         let mut mem_pool = mem_pool.lock().await;
