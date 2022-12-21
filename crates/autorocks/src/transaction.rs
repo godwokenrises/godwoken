@@ -4,10 +4,10 @@ use autorocks_sys::{
     rocksdb::{PinnableSlice, ReadOptions},
     TransactionWrapper,
 };
-use moveit::moveit;
+use moveit::{moveit, Slot};
 
 use crate::{
-    into_result, slice::as_rust_slice, DbIterator, Direction, Result, SharedSnapshot, SnapshotRef,
+    into_result, slice::PinnedSlice, DbIterator, Direction, Result, SharedSnapshot, SnapshotRef,
     TransactionDb,
 };
 
@@ -35,36 +35,37 @@ impl Transaction {
         into_result(&status)
     }
 
-    pub fn get<'b>(
-        &self,
+    pub fn get<'a>(
+        &'a self,
         col: usize,
         key: &[u8],
-        buf: Pin<&'b mut PinnableSlice>,
-    ) -> Result<Option<&'b [u8]>> {
+        slot: Slot<'a, PinnableSlice>,
+    ) -> Result<Option<PinnedSlice<'a>>> {
         moveit! {
             let options = ReadOptions::new();
         }
-        self.get_with_options(&options, col, key, buf)
+        self.get_with_options(&options, col, key, slot)
     }
 
-    pub fn get_with_options<'b>(
-        &self,
+    pub fn get_with_options<'a>(
+        &'a self,
         options: &ReadOptions,
         col: usize,
         key: &[u8],
-        buf: Pin<&'b mut PinnableSlice>,
-    ) -> Result<Option<&'b [u8]>> {
-        let slice = unsafe { buf.get_unchecked_mut() };
+        slot: Slot<'a, PinnableSlice>,
+    ) -> Result<Option<PinnedSlice<'a>>> {
         let cf = self.db.as_inner().get_cf(col);
         assert!(!cf.is_null());
+        let mut slice = slot.emplace(PinnableSlice::new());
+        let slice_ptr = unsafe { slice.as_mut().get_unchecked_mut() };
         moveit! {
-            let status = unsafe { self.as_inner().get(options, cf, &key.into(), slice) };
+            let status = unsafe { self.as_inner().get(options, cf, &key.into(), slice_ptr) };
         }
         if status.IsNotFound() {
             return Ok(None);
         }
         into_result(&status)?;
-        Ok(Some(as_rust_slice(slice)))
+        Ok(Some(PinnedSlice::new(slice)))
     }
 
     /// # Panics

@@ -1,4 +1,4 @@
-use autorocks::{autorocks_sys::rocksdb::PinnableSlice, moveit::moveit, Direction, Snapshot};
+use autorocks::{moveit::slot, Direction, Snapshot};
 
 use crate::{
     schema::{Col, COLUMN_MEM_POOL_TRANSACTION},
@@ -19,13 +19,11 @@ impl ChainStore for StoreSnapshot {}
 
 impl KVStoreRead for StoreSnapshot {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
-        moveit! {
-            let mut buf = PinnableSlice::new();
-        }
+        slot!(slice);
         self.inner
-            .get(col, key, buf.as_mut())
+            .get(col, key, slice)
             .expect("db operation should be ok")
-            .map(Into::into)
+            .map(|p| p.as_ref().into())
     }
 }
 

@@ -1,4 +1,4 @@
-use autorocks::{autorocks_sys::rocksdb::PinnableSlice, moveit::moveit, SharedSnapshot};
+use autorocks::{moveit::slot, SharedSnapshot};
 
 use crate::traits::{chain_store::ChainStore, kv_store::KVStoreRead};
 
@@ -8,13 +8,11 @@ pub struct TransactionSnapshot {
 
 impl KVStoreRead for TransactionSnapshot {
     fn get(&self, col: crate::schema::Col, key: &[u8]) -> Option<Box<[u8]>> {
-        moveit! {
-            let mut buf = PinnableSlice::new();
-        }
+        slot!(slice);
         self.inner
-            .get(col, key, buf.as_mut())
+            .get(col, key, slice)
             .unwrap()
-            .map(Into::into)
+            .map(|p| p.as_ref().into())
     }
 }
 

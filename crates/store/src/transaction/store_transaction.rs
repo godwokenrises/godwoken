@@ -3,8 +3,7 @@
 use std::collections::HashSet;
 
 use anyhow::{bail, Context, Result};
-use autorocks::autorocks_sys::rocksdb::PinnableSlice;
-use autorocks::moveit::moveit;
+use autorocks::moveit::slot;
 use autorocks::{DbIterator, Direction};
 use gw_common::merkle_utils::calculate_state_checkpoint;
 use gw_smt::smt_h256_ext::SMTH256Ext;
@@ -33,13 +32,11 @@ pub struct StoreTransaction {
 
 impl KVStoreRead for StoreTransaction {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
-        moveit! {
-            let mut buf = PinnableSlice::new();
-        }
+        slot!(slice);
         self.inner
-            .get(col, key, buf.as_mut())
+            .get(col, key, slice)
             .expect("db operation should be ok")
-            .map(Into::into)
+            .map(|p| p.as_ref().into())
     }
 }
 

@@ -6,9 +6,8 @@ use std::{cmp::Ordering, collections::BTreeMap};
 
 use anyhow::{bail, Result};
 use autorocks::{
-    autorocks_sys::rocksdb::{PinnableSlice, Status_SubCode},
-    moveit::moveit,
-    DbOptions, Direction, ReadOnlyDb, TransactionDb,
+    autorocks_sys::rocksdb::Status_SubCode, moveit::slot, DbOptions, Direction, ReadOnlyDb,
+    TransactionDb,
 };
 use gw_config::StoreConfig;
 
@@ -66,10 +65,8 @@ pub(crate) fn init_db_version(db: &TransactionDb, db_ver: Option<&str>) -> Resul
 }
 
 fn check_readonly_db_version(db: &ReadOnlyDb, db_ver: Option<&str>) -> Result<Ordering> {
-    moveit! {
-        let mut buf = PinnableSlice::new();
-    }
-    let version = match db.get(db.default_col(), MIGRATION_VERSION_KEY, buf.as_mut())? {
+    slot!(slice);
+    let version = match db.get(db.default_col(), MIGRATION_VERSION_KEY, slice)? {
         Some(version_bytes) => {
             String::from_utf8(version_bytes.to_vec()).expect("version bytes to utf8")
         }
@@ -87,10 +84,8 @@ fn check_readonly_db_version(db: &ReadOnlyDb, db_ver: Option<&str>) -> Result<Or
 }
 
 fn is_non_empty_rdb(db: &ReadOnlyDb) -> bool {
-    moveit! {
-        let mut buf = PinnableSlice::new();
-    }
-    if let Ok(v) = db.get(COLUMN_META, META_TIP_BLOCK_HASH_KEY, buf.as_mut()) {
+    slot!(slice);
+    if let Ok(v) = db.get(COLUMN_META, META_TIP_BLOCK_HASH_KEY, slice) {
         if v.is_some() {
             return true;
         }
@@ -137,19 +132,14 @@ struct BadBlockColumnMigration;
 impl Migration for BadBlockColumnMigration {
     fn migrate(&self, mut db: TransactionDb) -> Result<TransactionDb> {
         // Check that there are no bad blocks.
-        moveit! {
-            let mut buf1 = PinnableSlice::new();
-            let mut buf2 = PinnableSlice::new();
-        }
-        if db.get(COLUMN_META, META_TIP_BLOCK_HASH_KEY, buf1.as_mut())?
-            != db.get(
-                COLUMN_META,
-                META_LAST_VALID_TIP_BLOCK_HASH_KEY,
-                buf2.as_mut(),
-            )?
-        {
+        slot!(slice1, slice2);
+        let tip = db.get(COLUMN_META, META_TIP_BLOCK_HASH_KEY, slice1)?;
+        let valid_tip = db.get(COLUMN_META, META_LAST_VALID_TIP_BLOCK_HASH_KEY, slice2)?;
+        if tip.as_deref() != valid_tip.as_deref() {
             bail!("Cannot migrate to version 20221024 when there are bad blocks. You have to rewind or revert first");
         }
+        drop(tip);
+        drop(valid_tip);
 
         // Clear this reused column.
         db.drop_cf(COLUMN_BAD_BLOCK)?;
@@ -225,11 +215,9 @@ impl MigrationFactory {
     }
 
     fn migrate(&self, db: TransactionDb) -> Result<TransactionDb> {
-        moveit! {
-            let mut buf = PinnableSlice::new();
-        }
+        slot!(slice);
         let db_version = db
-            .get(db.default_col(), MIGRATION_VERSION_KEY, buf.as_mut())?
+            .get(db.default_col(), MIGRATION_VERSION_KEY, slice)?
             .map(|v| String::from_utf8(v.to_vec()).expect("version bytes to utf8"))
             .unwrap_or_else(|| "".to_string());
         let mut db = db;
@@ -275,11 +263,9 @@ mod tests {
 
         assert!(db.is_ok());
         let db = db.unwrap();
-        moveit! {
-            let mut buf = PinnableSlice::new();
-        }
+        slot!(slice);
         let v = db
-            .get(db.default_col(), MIGRATION_VERSION_KEY, buf.as_mut())?
+            .get(db.default_col(), MIGRATION_VERSION_KEY, slice)?
             .map(|v| String::from_utf8(v.to_vec()));
 
         assert_eq!(v, Some(Ok(factory.last_db_version().unwrap().to_string())));
@@ -296,15 +282,16 @@ mod tests {
             cache_size: None,
         };
         let db = open_or_create_db(&config, init_migration_factory())?;
-        moveit! {
-            let mut buf = PinnableSlice::new();
+        {
+            slot!(slice);
+            let v = db.get(db.default_col(), MIGRATION_VERSION_KEY, slice)?;
+            assert!(v.is_some());
         }
-        let v = db.get(db.default_col(), MIGRATION_VERSION_KEY, buf.as_mut())?;
-        assert!(v.is_some());
         let factory = init_migration_factory();
 
+        slot!(slice);
         let v = db
-            .get(db.default_col(), MIGRATION_VERSION_KEY, buf.as_mut())?
+            .get(db.default_col(), MIGRATION_VERSION_KEY, slice)?
             .map(|v| String::from_utf8(v.to_vec()));
 
         assert_eq!(v, Some(Ok(factory.last_db_version().unwrap().to_string())));

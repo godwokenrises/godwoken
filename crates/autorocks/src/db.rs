@@ -8,10 +8,10 @@ use autorocks_sys::{
     },
     DbOptionsWrapper, ReadOnlyDbWrapper, TransactionDBWrapper, TransactionWrapper,
 };
-use moveit::{moveit, Emplace, New};
+use moveit::{moveit, Emplace, New, Slot};
 
 use crate::{
-    into_result, slice::as_rust_slice, DbIterator, Direction, Result, RocksDBStatusError, Snapshot,
+    into_result, slice::PinnedSlice, DbIterator, Direction, Result, RocksDBStatusError, Snapshot,
     Transaction, WriteBatch,
 };
 
@@ -175,36 +175,37 @@ impl TransactionDb {
         self.delete_with_options(&options, col, key)
     }
 
-    pub fn get<'b>(
-        &self,
+    pub fn get<'a>(
+        &'a self,
         col: usize,
         key: &[u8],
-        buf: Pin<&'b mut PinnableSlice>,
-    ) -> Result<Option<&'b [u8]>> {
+        slot: Slot<'a, PinnableSlice>,
+    ) -> Result<Option<PinnedSlice<'a>>> {
         moveit! {
             let options = ReadOptions::new();
         }
-        self.get_with_options(&options, col, key, buf)
+        self.get_with_options(&options, col, key, slot)
     }
 
-    pub fn get_with_options<'b>(
-        &self,
+    pub fn get_with_options<'a>(
+        &'a self,
         options: &ReadOptions,
         col: usize,
         key: &[u8],
-        buf: Pin<&'b mut PinnableSlice>,
-    ) -> Result<Option<&'b [u8]>> {
-        let slice = unsafe { buf.get_unchecked_mut() };
+        slot: Slot<'a, PinnableSlice>,
+    ) -> Result<Option<PinnedSlice<'a>>> {
         let cf = self.inner.get_cf(col);
         assert!(!cf.is_null());
+        let mut slice = slot.emplace(PinnableSlice::new());
+        let slice_ptr = unsafe { slice.as_mut().get_unchecked_mut() };
         moveit! {
-            let status = unsafe { self.inner.get(options, cf, &key.into(), slice) };
+            let status = unsafe { self.inner.get(options, cf, &key.into(), slice_ptr) };
         }
         if status.IsNotFound() {
             return Ok(None);
         }
         into_result(&status)?;
-        Ok(Some(as_rust_slice(slice)))
+        Ok(Some(PinnedSlice::new(slice)))
     }
 
     pub fn get_int_property(&self, col: usize, property: &str) -> Option<u64> {
@@ -356,36 +357,37 @@ impl ReadOnlyDb {
         self.inner.default_col()
     }
 
-    pub fn get<'b>(
-        &self,
+    pub fn get<'a>(
+        &'a self,
         col: usize,
         key: &[u8],
-        buf: Pin<&'b mut PinnableSlice>,
-    ) -> Result<Option<&'b [u8]>> {
+        slot: Slot<'a, PinnableSlice>,
+    ) -> Result<Option<PinnedSlice<'a>>> {
         moveit! {
             let options = ReadOptions::new();
         }
-        self.get_with_options(&options, col, key, buf)
+        self.get_with_options(&options, col, key, slot)
     }
 
-    pub fn get_with_options<'b>(
-        &self,
+    pub fn get_with_options<'a>(
+        &'a self,
         options: &ReadOptions,
         col: usize,
         key: &[u8],
-        buf: Pin<&'b mut PinnableSlice>,
-    ) -> Result<Option<&'b [u8]>> {
-        let slice = unsafe { buf.get_unchecked_mut() };
+        slot: Slot<'a, PinnableSlice>,
+    ) -> Result<Option<PinnedSlice<'a>>> {
         let cf = self.inner.get_cf(col);
         assert!(!cf.is_null());
+        let mut slice = slot.emplace(PinnableSlice::new());
+        let slice_ptr = unsafe { slice.as_mut().get_unchecked_mut() };
         moveit! {
-            let status = unsafe { self.inner.get(options, cf, &key.into(), slice) };
+            let status = unsafe { self.inner.get(options, cf, &key.into(), slice_ptr) };
         }
         if status.IsNotFound() {
             return Ok(None);
         }
         into_result(&status)?;
-        Ok(Some(as_rust_slice(slice)))
+        Ok(Some(PinnedSlice::new(slice)))
     }
 
     pub fn iter(&self, col: usize, dir: Direction) -> DbIterator<&'_ Self> {

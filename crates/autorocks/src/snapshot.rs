@@ -1,10 +1,10 @@
-use std::{hint::unreachable_unchecked, marker::PhantomData, pin::Pin};
+use std::{hint::unreachable_unchecked, marker::PhantomData};
 
 use autocxx::cxx::SharedPtr;
 use autorocks_sys::{rocksdb::PinnableSlice, ReadOptionsWrapper};
-use moveit::moveit;
+use moveit::{moveit, Slot};
 
-use crate::{DbIterator, Direction, Result, Transaction, TransactionDb};
+use crate::{slice::PinnedSlice, DbIterator, Direction, Result, Transaction, TransactionDb};
 
 pub struct Snapshot {
     pub(crate) inner: *const autorocks_sys::rocksdb::Snapshot,
@@ -15,19 +15,20 @@ unsafe impl Send for Snapshot {}
 unsafe impl Sync for Snapshot {}
 
 impl Snapshot {
-    pub fn get<'b>(
-        &self,
+    pub fn get<'a>(
+        &'a self,
         col: usize,
         key: &[u8],
-        buf: Pin<&'b mut PinnableSlice>,
-    ) -> Result<Option<&'b [u8]>> {
+        slot: Slot<'a, PinnableSlice>,
+    ) -> Result<Option<PinnedSlice<'a>>> {
         moveit! {
             let mut options = ReadOptionsWrapper::new();
         }
         unsafe {
             options.as_mut().set_snapshot(self.inner);
         }
-        self.db.get_with_options((*options).as_ref(), col, key, buf)
+        self.db
+            .get_with_options((*options).as_ref(), col, key, slot)
     }
 
     pub fn iter(&self, col: usize, dir: Direction) -> DbIterator<&'_ Self> {
@@ -73,19 +74,20 @@ impl SharedSnapshot {
         }
     }
 
-    pub fn get<'b>(
-        &self,
+    pub fn get<'a>(
+        &'a self,
         col: usize,
         key: &[u8],
-        buf: Pin<&'b mut PinnableSlice>,
-    ) -> Result<Option<&'b [u8]>> {
+        slot: Slot<'a, PinnableSlice>,
+    ) -> Result<Option<PinnedSlice<'a>>> {
         moveit! {
             let mut options = ReadOptionsWrapper::new();
         }
         unsafe {
             options.as_mut().set_snapshot(self.as_inner());
         }
-        self.db.get_with_options((*options).as_ref(), col, key, buf)
+        self.db
+            .get_with_options((*options).as_ref(), col, key, slot)
     }
 
     pub fn iter(&self, col: usize, dir: Direction) -> DbIterator<&'_ Self> {
@@ -114,19 +116,20 @@ unsafe impl Send for SnapshotRef<'_> {}
 unsafe impl Sync for SnapshotRef<'_> {}
 
 impl<'a> SnapshotRef<'a> {
-    pub fn get<'b>(
+    pub fn get(
         &'a self,
         col: usize,
-        key: &'a [u8],
-        buf: Pin<&'b mut PinnableSlice>,
-    ) -> Result<Option<&'b [u8]>> {
+        key: &[u8],
+        slot: Slot<'a, PinnableSlice>,
+    ) -> Result<Option<PinnedSlice<'a>>> {
         moveit! {
             let mut options = ReadOptionsWrapper::new();
         }
         unsafe {
             options.as_mut().set_snapshot(self.inner);
         }
-        self.tx.get_with_options((*options).as_ref(), col, key, buf)
+        self.tx
+            .get_with_options((*options).as_ref(), col, key, slot)
     }
 
     pub fn iter(&self, col: usize, dir: Direction) -> DbIterator<&'_ Self> {

@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use autorocks::*;
-use autorocks_sys::rocksdb::{CompressionType, PinnableSlice, Status_Code};
-use moveit::moveit;
+use autorocks_sys::rocksdb::{CompressionType, Status_Code};
+use moveit::slot;
 use tempfile::{tempdir, TempDir};
 
 fn open_temp(columns: usize) -> (TransactionDb, TempDir) {
@@ -23,18 +23,18 @@ fn test_db_open_put_get_delete_drop_cf_int_property() {
     db.put(0, b"key", b"value").unwrap();
     assert_eq!(db.default_col(), 1);
     db.put(db.default_col(), b"default", b"default").unwrap();
-    moveit! {
-        let mut slice = PinnableSlice::new();
-    }
-    let v = db.get(0, b"key", slice.as_mut()).unwrap();
-    assert_eq!(v.unwrap(), b"value");
-    let v = db
-        .get(db.default_col(), b"default", slice.as_mut())
-        .unwrap();
-    assert_eq!(v.unwrap(), b"default");
+    slot!(slice);
+    let v = db.get(0, b"key", slice).unwrap();
+    assert_eq!(v.unwrap().as_ref(), b"value");
+    slot!(slice);
+    let v = db.get(db.default_col(), b"default", slice).unwrap();
+    assert_eq!(v.unwrap().as_ref(), b"default");
     db.delete(0, b"key").unwrap();
-    let v = db.get(0, b"key", slice.as_mut()).unwrap();
-    assert!(v.is_none());
+    {
+        slot!(slice);
+        let v = db.get(0, b"key", slice).unwrap();
+        assert!(v.is_none());
+    }
 
     db.drop_cf(0).unwrap();
 
@@ -72,11 +72,9 @@ fn test_read_only_db() {
     drop(db);
 
     let rdb = DbOptions::new(dir.path(), 1).open_read_only().unwrap();
-    moveit! {
-        let mut slice = PinnableSlice::new();
-    }
-    let v = rdb.get(0, b"key", slice.as_mut()).unwrap();
-    assert_eq!(v.unwrap(), b"value");
+    slot!(slice);
+    let v = rdb.get(0, b"key", slice).unwrap();
+    assert_eq!(v.unwrap().as_ref(), b"value");
 }
 
 #[cfg(feature = "snappy")]
@@ -99,14 +97,14 @@ fn test_snapshot() {
     let snap = db.snapshot();
     db.put(0, b"key", b"value1").unwrap();
     let snap1 = db.snapshot();
-    moveit! {
-        let mut slice = PinnableSlice::new();
-    }
-    let v = snap.get(0, b"key", slice.as_mut()).unwrap();
-    assert_eq!(v.unwrap(), b"value");
-    let v = snap1.get(0, b"key", slice.as_mut()).unwrap();
-    assert_eq!(v.unwrap(), b"value1");
-    let v = snap1.get(0, b"key1", slice.as_mut()).unwrap();
+    slot!(slice);
+    let v = snap.get(0, b"key", slice).unwrap();
+    assert_eq!(v.unwrap().as_ref(), b"value");
+    slot!(slice);
+    let v = snap1.get(0, b"key", slice).unwrap();
+    assert_eq!(v.unwrap().as_ref(), b"value1");
+    slot!(slice);
+    let v = snap1.get(0, b"key1", slice).unwrap();
     assert!(v.is_none());
 }
 
@@ -114,32 +112,40 @@ fn test_snapshot() {
 fn test_tx_and_tx_snapshot() {
     let (db, _dir) = open_temp(1);
     db.put(0, b"key", b"value").unwrap();
-    moveit! {
-        let mut slice = PinnableSlice::new();
-    }
     let mut tx = db.begin_transaction();
 
     db.put(0, b"key", b"value1").unwrap();
 
     let snap = tx.snapshot();
     let snap1 = tx.timestamped_snapshot();
-    let v = snap.get(0, b"key", slice.as_mut()).unwrap().unwrap();
-    assert_eq!(v, b"value");
-    let v = tx.get(0, b"key", slice.as_mut()).unwrap().unwrap();
-    assert_eq!(v, b"value1");
+    {
+        slot!(slice);
+        let v = snap.get(0, b"key", slice).unwrap().unwrap();
+        assert_eq!(v.as_ref(), b"value");
+    }
+    {
+        slot!(slice);
+        let v = tx.get(0, b"key", slice).unwrap().unwrap();
+        assert_eq!(v.as_ref(), b"value1");
+    }
 
     tx.put(0, b"key1", b"value1").unwrap();
     let err = tx.put(0, b"key", b"value2").unwrap_err();
     assert!(err.code == Status_Code::kBusy);
     tx.delete(0, b"key1").unwrap();
-    let v = tx.get(0, b"key1", slice.as_mut()).unwrap();
-    assert!(v.is_none());
+
+    {
+        slot!(slice);
+        let v = tx.get(0, b"key1", slice).unwrap();
+        assert!(v.is_none());
+    }
 
     tx.commit().unwrap();
     drop(tx);
 
-    let v = snap1.get(0, b"key", slice.as_mut()).unwrap().unwrap();
-    assert_eq!(v, b"value");
+    slot!(slice);
+    let v = snap1.get(0, b"key", slice).unwrap().unwrap();
+    assert_eq!(v.as_ref(), b"value");
 }
 
 #[test]
@@ -171,11 +177,10 @@ fn test_write_batch() {
     wb.put(0, b"key1", b"value1").unwrap();
     wb.delete(0, b"key").unwrap();
     db.write(&mut wb).unwrap();
-    moveit! {
-        let mut buf = PinnableSlice::new();
-    }
-    assert!(db.get(0, b"key", buf.as_mut()).unwrap().is_none());
-    assert!(db.get(0, b"key1", buf.as_mut()).unwrap().is_some());
+    slot!(slice);
+    assert!(db.get(0, b"key", slice).unwrap().is_none());
+    slot!(slice);
+    assert!(db.get(0, b"key1", slice).unwrap().is_some());
 }
 
 #[test]

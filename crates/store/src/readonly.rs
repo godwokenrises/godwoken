@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use anyhow::Result;
-use autorocks::{autorocks_sys::rocksdb::PinnableSlice, moveit::moveit, DbOptions, ReadOnlyDb};
+use autorocks::{moveit::slot, DbOptions, ReadOnlyDb};
 use gw_types::{
     from_box_should_be_ok,
     h256::H256,
@@ -44,13 +44,11 @@ impl ChainStore for StoreReadonly {}
 
 impl KVStoreRead for StoreReadonly {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
-        moveit! {
-            let mut buf = PinnableSlice::new();
-        }
+        slot!(slice);
         self.inner
-            .get(col, key, buf.as_mut())
+            .get(col, key, slice)
             .expect("db operation should be ok")
-            .map(Into::into)
+            .map(|p| p.as_ref().into())
     }
 }
 

@@ -1,13 +1,12 @@
 //! Storage implementation
 
-use std::pin::Pin;
 use std::sync::Arc;
 
 use anyhow::Result;
 use autorocks::autorocks_sys::rocksdb::{
-    PinnableSlice, TransactionDBWriteOptimizations, TransactionOptions, WriteOptions,
+    TransactionDBWriteOptimizations, TransactionOptions, WriteOptions,
 };
-use autorocks::moveit::moveit;
+use autorocks::moveit::{moveit, slot};
 use autorocks::{DbOptions, TransactionDb, WriteBatch};
 use gw_config::StoreConfig;
 use gw_smt::smt::Blake2bHasher;
@@ -27,7 +26,7 @@ pub struct Store {
     _temp_dir: Option<Arc<TempDir>>,
 }
 
-impl<'a> Store {
+impl Store {
     pub fn open(config: &StoreConfig, columns: usize) -> Result<Self> {
         let mut opts = DbOptions::new(&config.path, columns);
         if let Some(ref opts_file) = config.options_file {
@@ -56,17 +55,6 @@ impl<'a> Store {
                 .open()?,
             _temp_dir: Some(dir.into()),
         })
-    }
-
-    fn get<'b>(
-        &'a self,
-        col: Col,
-        key: &[u8],
-        buf: Pin<&'b mut PinnableSlice>,
-    ) -> Option<&'b [u8]> {
-        self.db
-            .get(col, key, buf)
-            .expect("db operation should be ok")
     }
 
     pub fn begin_transaction(&self) -> StoreTransaction {
@@ -177,10 +165,11 @@ impl ChainStore for Store {}
 
 impl KVStoreRead for Store {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
-        moveit! {
-            let mut buf = PinnableSlice::new();
-        }
-        self.get(col, key, buf.as_mut()).map(Into::into)
+        slot!(slice);
+        self.db
+            .get(col, key, slice)
+            .expect("db operation should be ok")
+            .map(|p| p.as_ref().into())
     }
 }
 
