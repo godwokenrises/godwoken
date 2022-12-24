@@ -500,7 +500,6 @@ pub fn setup() -> (Store, DummyState, Generator) {
         .build();
     let fork_config = ForkConfig {
         increase_max_l2_tx_cycles_to_500m: None,
-        upgrade_global_state_version_to_v2: None,
         backend_forks: fork_configs,
     };
     let rollup_context = RollupContext {
