@@ -59,7 +59,7 @@ int test_contract(const uint8_t n,
   ctx.sys_load_data = sys_load_data;
   ctx.sys_load = sys_load;
   ctx._internal_load_raw = _internal_load_raw;
-  ret = contract(&ctx, NULL, 0, EVMC_CALL, true, input_src, input_size, &output, &output_size);
+  ret = contract(&ctx, NULL, EVMC_CALL, true, input_src, input_size, &output, &output_size);
   if (ret != 0) {
     debug_print_int("run contract failed", ret);
     goto test_contract_cleanup;
