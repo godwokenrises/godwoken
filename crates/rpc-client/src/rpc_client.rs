@@ -3,12 +3,11 @@
 use crate::ckb_client::CKBClient;
 use crate::indexer_client::CKBIndexerClient;
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
-use crate::utils::{to_h256, to_jsonh256, DEFAULT_QUERY_LIMIT, TYPE_ID_CODE_HASH};
+use crate::utils::{to_h256, to_jsonh256, DEFAULT_QUERY_LIMIT};
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::Params as ClientParams;
-use ckb_types::core::hardfork::HardForkSwitch;
 use ckb_types::prelude::Entity;
-use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, Consensus, Uint32};
+use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, Uint32};
 use gw_types::offchain::{CellStatus, CellWithStatus, CompatibleFinalizedTimepoint, DepositInfo};
 use gw_types::{
     bytes::Bytes,
@@ -176,66 +175,6 @@ impl RPCClient {
             return Ok(Some(cell_info));
         }
         Ok(None)
-    }
-
-    /// this function queries identity cell by args
-    #[instrument(skip_all)]
-    pub async fn query_identity_cell(&self, args: Bytes) -> Result<Option<CellInfo>> {
-        let search_key = SearchKey {
-            script: ckb_types::packed::Script::new_builder()
-                .code_hash(ckb_types::prelude::Pack::pack(&*TYPE_ID_CODE_HASH))
-                .hash_type(ScriptHashType::Type.into())
-                .args(ckb_types::prelude::Pack::pack(&args))
-                .build()
-                .into(),
-            script_type: ScriptType::Type,
-            filter: None,
-        };
-        let order = Order::Desc;
-        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
-
-        let mut cell = None;
-        let mut cursor = None;
-        while cell.is_none() {
-            let cells: Pagination<Cell> = self
-                .indexer
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(cursor),
-                    ])),
-                )
-                .await?;
-            cursor = Some(cells.last_cursor);
-            assert!(
-                cells.objects.len() <= 1,
-                "Never returns more than 1 identity cells"
-            );
-            cell = cells
-                .objects
-                .into_iter()
-                .map(|cell| {
-                    let out_point = {
-                        let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
-                        OutPoint::new_unchecked(out_point.as_bytes())
-                    };
-                    let output = {
-                        let output: ckb_types::packed::CellOutput = cell.output.into();
-                        CellOutput::new_unchecked(output.as_bytes())
-                    };
-                    let data = cell.output_data.into_bytes();
-                    CellInfo {
-                        out_point,
-                        output,
-                        data,
-                    }
-                })
-                .next();
-        }
-        Ok(cell)
     }
 
     /// this function return a cell that do not has data & _type fields
@@ -1023,43 +962,6 @@ impl RPCClient {
         let epoch_view: ckb_jsonrpc_types::EpochView =
             self.ckb.request("get_current_epoch", None).await?;
         let epoch_number: u64 = epoch_view.number.into();
-        Ok(epoch_number)
-    }
-
-    #[instrument(skip_all)]
-    pub async fn get_hardfork_switch(&self) -> Result<HardForkSwitch> {
-        let consensus: Consensus = self.ckb.request("get_consensus", None).await?;
-        let rfc_0028 = self.get_hardfork_feature_epoch_number(&consensus, "0028")?;
-        let rfc_0029 = self.get_hardfork_feature_epoch_number(&consensus, "0029")?;
-        let rfc_0030 = self.get_hardfork_feature_epoch_number(&consensus, "0030")?;
-        let rfc_0031 = self.get_hardfork_feature_epoch_number(&consensus, "0031")?;
-        let rfc_0032 = self.get_hardfork_feature_epoch_number(&consensus, "0032")?;
-        let rfc_0036 = self.get_hardfork_feature_epoch_number(&consensus, "0036")?;
-        let rfc_0038 = self.get_hardfork_feature_epoch_number(&consensus, "0038")?;
-        let hardfork_switch = HardForkSwitch::new_builder()
-            .rfc_0028(rfc_0028)
-            .rfc_0029(rfc_0029)
-            .rfc_0030(rfc_0030)
-            .rfc_0031(rfc_0031)
-            .rfc_0032(rfc_0032)
-            .rfc_0036(rfc_0036)
-            .rfc_0038(rfc_0038)
-            .build()
-            .map_err(|err| anyhow!(err))?;
-
-        Ok(hardfork_switch)
-    }
-
-    #[instrument(skip_all)]
-    fn get_hardfork_feature_epoch_number(&self, consensus: &Consensus, rfc: &str) -> Result<u64> {
-        let rfc_info = consensus
-            .hardfork_features
-            .iter()
-            .find(|f| f.rfc == rfc)
-            .ok_or_else(|| anyhow!("rfc {} hardfork feature not found!", rfc))?;
-
-        // if epoch_number is null, which means the fork will never going to happen
-        let epoch_number: u64 = rfc_info.epoch_number.map(Into::into).unwrap_or(u64::MAX);
         Ok(epoch_number)
     }
 
