@@ -1,5 +1,6 @@
 use std::{convert::TryInto, ptr, sync::atomic};
 
+use anyhow::{Context, Result};
 use ckb_dao_utils::extract_dao_data;
 use ckb_types::{
     core::{Capacity, EpochNumber, EpochNumberWithFraction, HeaderView},
@@ -7,9 +8,9 @@ use ckb_types::{
     prelude::*,
     H160, H256, U256,
 };
+use gw_rpc_client::ckb_client::CkbClient;
 use sha3::{Digest, Keccak256};
 
-use crate::utils::sdk::rpc::CkbRpcClient;
 use crate::utils::sdk::traits::LiveCell;
 
 pub fn zeroize_privkey(key: &mut secp256k1::SecretKey) {
@@ -27,18 +28,14 @@ pub fn zeroize_slice(data: &mut [u8]) {
     }
 }
 
-pub fn get_max_mature_number(rpc_client: &mut CkbRpcClient) -> Result<u64, String> {
+pub async fn get_max_mature_number(rpc_client: &CkbClient) -> Result<u64> {
     let cellbase_maturity = EpochNumberWithFraction::from_full_value(
-        rpc_client
-            .get_consensus()
-            .map_err(|err| err.to_string())?
-            .cellbase_maturity
-            .value(),
+        rpc_client.get_consensus().await?.cellbase_maturity.value(),
     );
     let tip_epoch = rpc_client
         .get_tip_header()
-        .map(|header| EpochNumberWithFraction::from_full_value(header.inner.epoch.value()))
-        .map_err(|err| err.to_string())?;
+        .await
+        .map(|header| EpochNumberWithFraction::from_full_value(header.inner.epoch.value()))?;
 
     let tip_epoch_rational = tip_epoch.to_rational();
     let cellbase_maturity_rational = cellbase_maturity.to_rational();
@@ -59,8 +56,8 @@ pub fn get_max_mature_number(rpc_client: &mut CkbRpcClient) -> Result<u64, Strin
         .into();
         let max_mature_epoch = rpc_client
             .get_epoch_by_number(epoch_number)
-            .map_err(|err| err.to_string())?
-            .ok_or_else(|| "Can not get epoch less than current epoch number".to_string())?;
+            .await?
+            .context("Can not get epoch less than current epoch number")?;
 
         let max_mature_block_number = (difference_delta
             * U256::from(max_mature_epoch.length.value())

@@ -35,7 +35,7 @@ use generate_config::GenerateNodeConfigArgs;
 use godwoken_rpc::GodwokenRpcClient;
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType;
-use gw_rpc_client::indexer_client::CKBIndexerClient;
+use gw_rpc_client::indexer_client::CkbIndexerClient;
 use gw_types::offchain::CompatibleFinalizedTimepoint;
 use std::{
     collections::HashMap,
@@ -1452,7 +1452,7 @@ async fn main() -> Result<()> {
                 m.value_of("tip-block-number").unwrap_or_default().parse()?;
             let _finalize_blocks: u64 =
                 m.value_of("finality-blocks").unwrap_or_default().parse()?;
-            let rpc_client = CKBIndexerClient::with_url(indexer_rpc_url)?;
+            let rpc_client = CkbIndexerClient::with_url(indexer_rpc_url)?;
 
             let alias: HashMap<ckb_types::bytes::Bytes, String> = [
                 (

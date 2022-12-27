@@ -2,7 +2,7 @@ use crate::account::{privkey_to_eth_address, read_privkey};
 use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::hasher::CkbHasher;
 use crate::types::ScriptsDeploymentResult;
-use crate::utils::sdk::{Address, AddressPayload, CkbRpcClient, HumanCapacity, SECP256K1};
+use crate::utils::sdk::{Address, AddressPayload, HumanCapacity, SECP256K1};
 use crate::utils::transaction::{get_network_type, read_config, run_cmd};
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
@@ -12,6 +12,7 @@ use ckb_types::{
     prelude::Unpack as CKBUnpack,
 };
 use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
+use gw_rpc_client::ckb_client::CkbClient;
 use gw_types::core::Timepoint;
 use gw_types::packed::{CellOutput, CustodianLockArgs};
 use gw_types::U256;
@@ -99,8 +100,8 @@ pub async fn deposit_ckb(
 
     let deposit_lock_code_hash = &scripts_deployment.deposit_lock.script_type_hash;
 
-    let mut rpc_client = CkbRpcClient::new(ckb_rpc_url);
-    let network_type = get_network_type(&mut rpc_client)?;
+    let rpc_client = CkbClient::with_url(ckb_rpc_url)?;
+    let network_type = get_network_type(&rpc_client).await?;
     let address_payload = AddressPayload::new_full(
         ScriptHashType::Type,
         CKBPack::pack(deposit_lock_code_hash),
@@ -118,7 +119,7 @@ pub async fn deposit_ckb(
     loop {
         let result = run_cmd(vec![
             "--url",
-            rpc_client.url.as_str(),
+            ckb_rpc_url,
             "wallet",
             "transfer",
             "--privkey-path",
@@ -146,7 +147,7 @@ pub async fn deposit_ckb(
         let tx_hash = H256::from_str(output.trim().trim_start_matches("0x"))?;
         log::info!("tx_hash: {:#x}", tx_hash);
 
-        if let Err(e) = gw_rpc_client::ckb_client::CKBClient::with_url(ckb_rpc_url)?
+        if let Err(e) = gw_rpc_client::ckb_client::CkbClient::with_url(ckb_rpc_url)?
             .wait_tx_committed_with_timeout_and_logging(tx_hash.0, 600)
             .await
         {

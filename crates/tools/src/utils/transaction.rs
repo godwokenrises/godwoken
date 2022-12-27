@@ -1,13 +1,13 @@
 //! Transaction related utils
 //! NOTICE: Some functions should be moved to a more proper module than this.
 
-use crate::utils::sdk::CkbRpcClient;
 use crate::utils::sdk::NetworkType;
 use anyhow::anyhow;
 use anyhow::Result;
 use ckb_fixed_hash::{h256, H256};
 use gw_config::Config;
 use gw_jsonrpc_types::godwoken::TxReceipt;
+use gw_rpc_client::ckb_client::CkbClient;
 use std::fs;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -77,10 +77,8 @@ where
     }
 }
 
-pub fn get_network_type(rpc_client: &mut CkbRpcClient) -> Result<NetworkType> {
-    let chain_info = rpc_client
-        .get_blockchain_info()
-        .map_err(|err| anyhow!(err))?;
+pub async fn get_network_type(rpc_client: &CkbClient) -> Result<NetworkType> {
+    let chain_info = rpc_client.get_blockchain_info().await?;
     NetworkType::from_raw_str(chain_info.chain.as_str())
         .ok_or_else(|| anyhow!("Unexpected network type: {}", chain_info.chain))
 }

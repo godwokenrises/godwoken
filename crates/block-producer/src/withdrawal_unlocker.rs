@@ -9,9 +9,7 @@ use gw_config::{ContractsCellDep, DebugConfig};
 use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::h256::*;
-use gw_types::offchain::{
-    global_state_from_slice, CellInfo, CompatibleFinalizedTimepoint, TxStatus,
-};
+use gw_types::offchain::{global_state_from_slice, CellInfo, CompatibleFinalizedTimepoint};
 use gw_types::packed::{OutPoint, RollupConfig, Transaction};
 use gw_types::prelude::*;
 use gw_utils::fee::fill_tx_fee;
@@ -116,28 +114,22 @@ impl FinalizedWithdrawalUnlocker {
                     drop_txs.push(*tx_hash);
                 }
                 Ok(Some(tx_status)) => {
+                    use gw_jsonrpc_types::ckb_jsonrpc_types::Status;
                     match tx_status {
-                        TxStatus::Pending | TxStatus::Proposed => continue, // Wait
-                        TxStatus::Committed => {
+                        Status::Pending | Status::Proposed => continue, // Wait
+                        Status::Committed => {
                             log::info!(
                                 "[unlock withdrawal] unlock {} withdrawals in tx {}",
                                 withdrawal_to_unlock.len(),
                                 tx_hash.pack(),
                             );
                         }
-                        TxStatus::Unknown | TxStatus::Rejected => {
+                        Status::Unknown | Status::Rejected => {
                             log::debug!(
                                 "[unlock withdrawal] unlock withdrawals tx {} status {:?}, drop it",
                                 tx_hash.pack(),
                                 tx_status
                             );
-                        }
-                        _ => {
-                            log::warn!(
-                                "[unlock withdrawal] unhandled unlock withdrawals tx {} status {:?}, drop it",
-                                tx_hash.pack(),
-                                tx_status
-                            )
                         }
                     }
                     drop_txs.push(*tx_hash);

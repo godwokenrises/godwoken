@@ -71,7 +71,7 @@ impl ChainUpdater {
         let tx = self
             .rpc_client
             .ckb
-            .get_transaction(tx_hash.0)
+            .get_packed_transaction(tx_hash.0)
             .await?
             .context("get transaction")?;
 
@@ -219,7 +219,7 @@ impl ChainUpdater {
             let tx = self
                 .rpc_client
                 .ckb
-                .get_transaction(tx_hash.0)
+                .get_packed_transaction(tx_hash.0)
                 .await?
                 .ok_or_else(|| QueryL1TxError::new(&tx_hash, anyhow!("cannot locate tx")))?;
             let cell_output = tx

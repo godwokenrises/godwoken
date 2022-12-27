@@ -1,13 +1,13 @@
 use anyhow::Result;
 use ckb_types::prelude::{Builder, Entity};
-use gw_rpc_client::indexer_client::CKBIndexerClient;
+use gw_rpc_client::indexer_client::CkbIndexerClient;
 use gw_types::h256::*;
 use gw_types::offchain::CompatibleFinalizedTimepoint;
 use gw_types::{core::ScriptHashType, offchain::CustodianStat, packed::Script, prelude::Pack};
 
 /// Query custodian ckb from ckb-indexer
 pub async fn stat_custodian_cells(
-    rpc_client: &CKBIndexerClient,
+    rpc_client: &CkbIndexerClient,
     rollup_type_hash: &H256,
     custodian_script_type_hash: &H256,
     min_capacity: Option<u64>,

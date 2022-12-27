@@ -1,4 +1,4 @@
-use crate::utils::sdk::{Address, AddressPayload, CkbRpcClient, HumanCapacity};
+use crate::utils::sdk::{Address, AddressPayload, HumanCapacity};
 use crate::{
     types::{BuildScriptsResult, DeployItem, Programs, ScriptsDeploymentResult},
     utils::transaction::{get_network_type, run_cmd, TYPE_ID_CODE_HASH},
@@ -26,7 +26,7 @@ struct DeploymentIndex {
 pub async fn deploy_program(
     privkey_path: &Path,
     ckb_rpc_url: &str,
-    gw_ckb_client: &gw_rpc_client::ckb_client::CKBClient,
+    gw_ckb_client: &gw_rpc_client::ckb_client::CkbClient,
     binary_path: &Path,
     target_lock: &packed::Script,
     target_address: &Address,
@@ -91,7 +91,7 @@ pub async fn deploy_program(
         .wait_tx_committed_with_timeout_and_logging(tx_hash.0, 600)
         .await?;
     let tx = gw_ckb_client
-        .get_transaction(tx_hash.0)
+        .get_packed_transaction(tx_hash.0)
         .await?
         .ok_or_else(|| anyhow!("tx not found"))?;
     let first_output_type_script = tx
@@ -128,9 +128,8 @@ pub async fn deploy_scripts(
         ));
     }
 
-    let mut rpc_client = CkbRpcClient::new(ckb_rpc_url);
-    let gw_ckb_client = gw_rpc_client::ckb_client::CKBClient::with_url(ckb_rpc_url)?;
-    let network_type = get_network_type(&mut rpc_client)?;
+    let ckb_client = gw_rpc_client::ckb_client::CkbClient::with_url(ckb_rpc_url)?;
+    let network_type = get_network_type(&ckb_client).await?;
     let target_lock = packed::Script::from(scripts_result.lock.clone());
     let address_payload = AddressPayload::from(target_lock.clone());
     let target_address = Address::new(network_type, address_payload, true);
@@ -168,7 +167,7 @@ pub async fn deploy_scripts(
     let custodian_lock = deploy_program(
         privkey_path,
         ckb_rpc_url,
-        &gw_ckb_client,
+        &ckb_client,
         &scripts_result.programs.custodian_lock,
         &target_lock,
         &target_address,
@@ -177,7 +176,7 @@ pub async fn deploy_scripts(
     let deposit_lock = deploy_program(
         privkey_path,
         ckb_rpc_url,
-        &gw_ckb_client,
+        &ckb_client,
         &scripts_result.programs.deposit_lock,
         &target_lock,
         &target_address,
@@ -186,7 +185,7 @@ pub async fn deploy_scripts(
     let withdrawal_lock = deploy_program(
         privkey_path,
         ckb_rpc_url,
-        &gw_ckb_client,
+        &ckb_client,
         &scripts_result.programs.withdrawal_lock,
         &target_lock,
         &target_address,
@@ -195,7 +194,7 @@ pub async fn deploy_scripts(
     let challenge_lock = deploy_program(
         privkey_path,
         ckb_rpc_url,
-        &gw_ckb_client,
+        &ckb_client,
         &scripts_result.programs.challenge_lock,
         &target_lock,
         &target_address,
@@ -204,7 +203,7 @@ pub async fn deploy_scripts(
     let stake_lock = deploy_program(
         privkey_path,
         ckb_rpc_url,
-        &gw_ckb_client,
+        &ckb_client,
         &scripts_result.programs.stake_lock,
         &target_lock,
         &target_address,
@@ -213,7 +212,7 @@ pub async fn deploy_scripts(
     let omni_lock = deploy_program(
         privkey_path,
         ckb_rpc_url,
-        &gw_ckb_client,
+        &ckb_client,
         &scripts_result.programs.omni_lock,
         &target_lock,
         &target_address,
@@ -222,7 +221,7 @@ pub async fn deploy_scripts(
     let state_validator = deploy_program(
         privkey_path,
         ckb_rpc_url,
-        &gw_ckb_client,
+        &ckb_client,
         &scripts_result.programs.state_validator,
         &target_lock,
         &target_address,
@@ -231,7 +230,7 @@ pub async fn deploy_scripts(
     let l2_sudt_validator = deploy_program(
         privkey_path,
         ckb_rpc_url,
-        &gw_ckb_client,
+        &ckb_client,
         &scripts_result.programs.l2_sudt_validator,
         &target_lock,
         &target_address,
@@ -240,7 +239,7 @@ pub async fn deploy_scripts(
     let meta_contract_validator = deploy_program(
         privkey_path,
         ckb_rpc_url,
-        &gw_ckb_client,
+        &ckb_client,
         &scripts_result.programs.meta_contract_validator,
         &target_lock,
         &target_address,
@@ -249,7 +248,7 @@ pub async fn deploy_scripts(
     let eth_account_lock = deploy_program(
         privkey_path,
         ckb_rpc_url,
-        &gw_ckb_client,
+        &ckb_client,
         &scripts_result.programs.eth_account_lock,
         &target_lock,
         &target_address,
@@ -259,7 +258,7 @@ pub async fn deploy_scripts(
     let polyjuice_validator = deploy_program(
         privkey_path,
         ckb_rpc_url,
-        &gw_ckb_client,
+        &ckb_client,
         &scripts_result.programs.polyjuice_validator,
         &target_lock,
         &target_address,
@@ -268,7 +267,7 @@ pub async fn deploy_scripts(
     let eth_addr_reg_validator = deploy_program(
         privkey_path,
         ckb_rpc_url,
-        &gw_ckb_client,
+        &ckb_client,
         &scripts_result.programs.eth_addr_reg_validator,
         &target_lock,
         &target_address,

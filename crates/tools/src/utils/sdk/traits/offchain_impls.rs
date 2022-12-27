@@ -1,18 +1,17 @@
 //! For for implement offchain operations or for testing purpose
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use ckb_types::{
     bytes::Bytes,
     core::{HeaderView, TransactionView},
-    packed::{Byte32, CellDep, CellOutput, OutPoint, Script, Transaction},
+    packed::{Byte32, CellDep, CellOutput, OutPoint, Script},
     prelude::*,
     H256,
 };
 
 use crate::utils::sdk::traits::{
-    CellCollector, CellCollectorError, CellDepResolver, CellQueryOptions, HeaderDepResolver,
-    LiveCell, TransactionDependencyError, TransactionDependencyProvider,
+    CellDepResolver, HeaderDepResolver, TransactionDependencyError, TransactionDependencyProvider,
 };
 use crate::utils::sdk::types::ScriptId;
 use anyhow::anyhow;
@@ -44,92 +43,6 @@ impl HeaderDepResolver for OffchainHeaderDepResolver {
     }
     fn resolve_by_number(&self, number: u64) -> Result<Option<HeaderView>, anyhow::Error> {
         Ok(self.by_number.get(&number).cloned())
-    }
-}
-
-/// A cell collector only use offchain data
-#[derive(Default, Clone)]
-pub struct OffchainCellCollector {
-    pub locked_cells: HashSet<(H256, u32)>,
-    pub live_cells: Vec<LiveCell>,
-    pub max_mature_number: u64,
-}
-
-impl OffchainCellCollector {
-    pub fn new(
-        locked_cells: HashSet<(H256, u32)>,
-        live_cells: Vec<LiveCell>,
-        max_mature_number: u64,
-    ) -> OffchainCellCollector {
-        OffchainCellCollector {
-            locked_cells,
-            live_cells,
-            max_mature_number,
-        }
-    }
-
-    pub fn collect(&self, query: &CellQueryOptions) -> (Vec<LiveCell>, Vec<LiveCell>, u64) {
-        let mut total_capacity = 0;
-        let (cells, rest_cells): (Vec<_>, Vec<_>) =
-            self.live_cells.clone().into_iter().partition(|cell| {
-                if total_capacity < query.min_total_capacity
-                    && query.match_cell(cell, self.max_mature_number)
-                {
-                    let capacity: u64 = cell.output.capacity().unpack();
-                    total_capacity += capacity;
-                    true
-                } else {
-                    false
-                }
-            });
-        (cells, rest_cells, total_capacity)
-    }
-}
-
-impl CellCollector for OffchainCellCollector {
-    fn collect_live_cells(
-        &mut self,
-        query: &CellQueryOptions,
-        apply_changes: bool,
-    ) -> Result<(Vec<LiveCell>, u64), CellCollectorError> {
-        let (cells, rest_cells, total_capacity) = self.collect(query);
-        if apply_changes {
-            self.live_cells = rest_cells;
-            for cell in &cells {
-                self.lock_cell(cell.out_point.clone())?;
-            }
-        }
-        Ok((cells, total_capacity))
-    }
-
-    fn lock_cell(&mut self, out_point: OutPoint) -> Result<(), CellCollectorError> {
-        self.locked_cells
-            .insert((out_point.tx_hash().unpack(), out_point.index().unpack()));
-        Ok(())
-    }
-    fn apply_tx(&mut self, tx: Transaction) -> Result<(), CellCollectorError> {
-        let tx_view = tx.into_view();
-        let tx_hash = tx_view.hash();
-        for out_point in tx_view.input_pts_iter() {
-            self.lock_cell(out_point)?;
-        }
-        for (output_index, (output, data)) in tx_view.outputs_with_data_iter().enumerate() {
-            let out_point = OutPoint::new(tx_hash.clone(), output_index as u32);
-            let info = LiveCell {
-                output: output.clone(),
-                output_data: data.clone(),
-                out_point,
-                block_number: 0,
-                tx_index: 0,
-            };
-            self.live_cells.push(info);
-        }
-        Ok(())
-    }
-
-    fn reset(&mut self) {
-        self.locked_cells.clear();
-        self.live_cells.clear();
     }
 }
 

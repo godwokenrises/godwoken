@@ -31,8 +31,8 @@ use gw_mem_pool::{
 use gw_p2p_network::P2PNetwork;
 use gw_polyjuice_sender_recover::recover::PolyjuiceSenderRecover;
 use gw_rpc_client::{
-    ckb_client::CKBClient, contract::ContractsCellDepManager, error::RPCRequestError,
-    indexer_client::CKBIndexerClient, rpc_client::RPCClient,
+    ckb_client::CkbClient, contract::ContractsCellDepManager, error::get_jsonrpc_error_code,
+    indexer_client::CkbIndexerClient, rpc_client::RPCClient,
 };
 use gw_rpc_server::{
     registry::{Registry, RegistryArgs},
@@ -278,11 +278,11 @@ impl BaseInitComponents {
         };
         let rollup_type_script: Script = config.chain.rollup_type_script.clone().into();
         let rpc_client = {
-            let ckb_client = CKBClient::with_url(&config.rpc_client.ckb_url)?;
+            let ckb_client = CkbClient::with_url(&config.rpc_client.ckb_url)?;
             let indexer_client = if let Some(ref indexer_url) = config.rpc_client.indexer_url {
-                CKBIndexerClient::with_url(indexer_url)?
+                CkbIndexerClient::with_url(indexer_url)?
             } else {
-                CKBIndexerClient::new(ckb_client.client().clone(), false)
+                CkbIndexerClient::from(ckb_client.clone())
             };
             let rollup_type_script =
                 ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
@@ -335,7 +335,7 @@ impl BaseInitComponents {
             let out_point = config.genesis.secp_data_dep.out_point.clone();
             rpc_client
                 .ckb
-                .get_transaction(out_point.tx_hash.0)
+                .get_packed_transaction(out_point.tx_hash.0)
                 .await?
                 .ok_or_else(|| anyhow!("can not found transaction: {:?}", out_point.tx_hash))?
                 .raw()
@@ -900,7 +900,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                                 .instrument(sleep_span)
                                 .await;
                         }
-                        Err(err) if err.is::<RPCRequestError>() => {
+                        Err(err) if get_jsonrpc_error_code(&err).is_some() => {
                             // Reset status and refresh tip number hash
                             run_status = ChainTaskRunStatus::default();
                             let backoff_sleep = backoff.next_sleep();
@@ -1097,8 +1097,7 @@ fn is_l1_query_error(err: &anyhow::Error) -> bool {
     use crate::chain_updater::QueryL1TxError;
 
     // TODO: filter rpc request method?
-    err.downcast_ref::<RPCRequestError>().is_some()
-        || err.downcast_ref::<QueryL1TxError>().is_some()
+    get_jsonrpc_error_code(err).is_some() || err.downcast_ref::<QueryL1TxError>().is_some()
 }
 
 async fn sigint_or_sigterm() {

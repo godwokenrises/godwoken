@@ -6,14 +6,14 @@ use std::str::FromStr;
 
 use anyhow::{anyhow, Context, Result};
 use ckb_types::bytes::{BufMut, BytesMut};
-use gw_rpc_client::ckb_client::CKBClient;
+use gw_rpc_client::ckb_client::CkbClient;
 use tempfile::NamedTempFile;
 
 use crate::utils::sdk::{
     constants::{MIN_SECP_CELL_CAPACITY, ONE_CKB},
     traits::DefaultCellDepResolver,
     util::get_max_mature_number,
-    Address, AddressPayload, CkbRpcClient, HumanCapacity,
+    Address, AddressPayload, HumanCapacity,
 };
 use ckb_fixed_hash::H256;
 use ckb_hash::new_blake2b;
@@ -52,8 +52,7 @@ struct DeployContext<'a> {
     owner_address: &'a Address,
     genesis_info: &'a GenesisInfo,
     deployment_result: &'a ScriptsDeploymentResult,
-    rpc_client: &'a mut CkbRpcClient,
-    gw_ckb_client: &'a CKBClient,
+    ckb_client: &'a CkbClient,
 }
 
 impl<'a> DeployContext<'a> {
@@ -74,14 +73,10 @@ impl<'a> DeployContext<'a> {
             })
             .sum();
         let total_capacity = total_output_capacity + tx_fee;
-        let tip_number = self
-            .rpc_client
-            .get_tip_block_number()
-            .map_err(|err| anyhow!(err))?;
-        let max_mature_number =
-            get_max_mature_number(self.rpc_client).map_err(|err| anyhow!(err))?;
+        let tip_number = self.ckb_client.get_tip_block_number().await?;
+        let max_mature_number = get_max_mature_number(self.ckb_client).await?;
         let (inputs, total_input_capacity) = collect_live_cells(
-            self.rpc_client.url.as_str(),
+            self.ckb_client.url(),
             self.owner_address.to_string().as_str(),
             max_mature_number,
             tip_number.into(),
@@ -133,7 +128,7 @@ impl<'a> DeployContext<'a> {
         let tx_path_str = tx_file.path().to_str().unwrap();
         let _output = run_cmd(&[
             "--url",
-            self.rpc_client.url.as_str(),
+            self.ckb_client.url(),
             "tx",
             "init",
             "--tx-file",
@@ -148,7 +143,7 @@ impl<'a> DeployContext<'a> {
         std::fs::write(tx_path_str, cli_tx_content.as_bytes())?;
         let _output = run_cmd(&[
             "--url",
-            self.rpc_client.url.as_str(),
+            self.ckb_client.url(),
             "tx",
             "sign-inputs",
             "--privkey-path",
@@ -161,7 +156,7 @@ impl<'a> DeployContext<'a> {
         // 8. send and then wait for tx
         let send_output = run_cmd(&[
             "--url",
-            self.rpc_client.url.as_str(),
+            self.ckb_client.url(),
             "tx",
             "send",
             "--tx-file",
@@ -172,7 +167,7 @@ impl<'a> DeployContext<'a> {
         ])?;
         let tx_hash = H256::from_str(send_output.trim().trim_start_matches("0x"))?;
         log::info!("tx_hash: {:#x}", tx_hash);
-        self.gw_ckb_client
+        self.ckb_client
             .wait_tx_committed_with_timeout_and_logging(tx_hash.0, 600)
             .await?;
         Ok(tx_hash)
@@ -221,9 +216,8 @@ pub async fn deploy_rollup_cell(args: DeployRollupCellArgs<'_>) -> Result<Rollup
         }
     }
 
-    let gw_ckb_client = gw_rpc_client::ckb_client::CKBClient::with_url(ckb_rpc_url)?;
-    let mut rpc_client = CkbRpcClient::new(ckb_rpc_url);
-    let network_type = get_network_type(&mut rpc_client)?;
+    let ckb_client = gw_rpc_client::ckb_client::CkbClient::with_url(ckb_rpc_url)?;
+    let network_type = get_network_type(&ckb_client).await?;
     let privkey_string = std::fs::read_to_string(privkey_path)?
         .split_whitespace()
         .next()
@@ -236,11 +230,11 @@ pub async fn deploy_rollup_cell(args: DeployRollupCellArgs<'_>) -> Result<Rollup
     let owner_address_payload = AddressPayload::from_pubkey(&pubkey);
     let owner_address = Address::new(network_type, owner_address_payload.clone(), true);
     let owner_address_string = owner_address.to_string();
-    let max_mature_number = get_max_mature_number(&mut rpc_client).map_err(anyhow::Error::msg)?;
-    let genesis_block: BlockView = rpc_client
+    let max_mature_number = get_max_mature_number(&ckb_client).await?;
+    let genesis_block: BlockView = ckb_client
         .get_block_by_number(0.into())
-        .map_err(|err| anyhow!(err))?
-        .expect("Can not get genesis block?")
+        .await?
+        .context("get genesis block")?
         .into();
     let genesis_info = GenesisInfo(
         DefaultCellDepResolver::from_genesis(&genesis_block).map_err(anyhow::Error::msg)?,
@@ -341,14 +335,13 @@ pub async fn deploy_rollup_cell(args: DeployRollupCellArgs<'_>) -> Result<Rollup
         .allowed_eoa_type_hashes(GwPackVec::pack(allowed_eoa_type_hashes))
         .allowed_contract_type_hashes(GwPackVec::pack(allowed_contract_type_hashes))
         .build();
-    let (secp_data, secp_data_dep) = get_secp_data(&mut rpc_client)?;
+    let (secp_data, secp_data_dep) = get_secp_data(&ckb_client).await?;
     let mut deploy_context = DeployContext {
         privkey_path,
         owner_address: &owner_address,
         genesis_info: &genesis_info,
         deployment_result: scripts_result,
-        rpc_client: &mut rpc_client,
-        gw_ckb_client: &gw_ckb_client,
+        ckb_client: &ckb_client,
     };
 
     let (rollup_config_output, rollup_config_data): (ckb_packed::CellOutput, Bytes) = {
@@ -692,14 +685,14 @@ pub fn is_mature(number: u64, tx_index: u64, max_mature_number: u64) -> bool {
         || number <= max_mature_number
 }
 
-pub fn get_secp_data(
-    rpc_client: &mut CkbRpcClient,
+pub async fn get_secp_data(
+    rpc_client: &CkbClient,
 ) -> Result<(Bytes, gw_jsonrpc_types::blockchain::CellDep)> {
     let mut cell_dep = None;
     rpc_client
         .get_block_by_number(0.into())
-        .map_err(|err| anyhow!(err))?
-        .expect("get CKB genesis block")
+        .await?
+        .context("get CKB genesis block")?
         .transactions
         .iter()
         .for_each(|tx| {

@@ -14,7 +14,7 @@ use gw_store::{snapshot::StoreSnapshot, traits::chain_store::ChainStore, Store};
 use gw_telemetry::traits::{OpenTelemetrySpanExt, TraceContextExt};
 use gw_types::{
     h256::*,
-    offchain::{CellStatus, DepositInfo, TxStatus},
+    offchain::{CellStatus, DepositInfo},
     packed::{
         self, Confirmed, GlobalState, LocalBlock, NumberHash, OutPoint, Revert, Script, ScriptVec,
         Submitted, Transaction, WithdrawalKey,
@@ -639,9 +639,10 @@ async fn poll_tx_confirmed(rpc_client: &RPCClient, tx: &Transaction) -> Result<(
     let mut last_sent = Instant::now();
     loop {
         let status = rpc_client.ckb.get_transaction_status(tx.hash()).await?;
+        use gw_jsonrpc_types::ckb_jsonrpc_types::Status;
         let should_resend = match status {
-            Some(TxStatus::Committed) => break,
-            Some(TxStatus::Rejected) => true,
+            Some(Status::Committed) => break,
+            Some(Status::Rejected) => true,
             // Resend the transaction if it has been unknown, pending, or
             // proposed for some time. Or the transaction could be stuck in the
             // current state.
