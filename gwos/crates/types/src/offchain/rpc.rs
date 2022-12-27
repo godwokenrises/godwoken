@@ -50,23 +50,6 @@ pub struct WithdrawalsAmount {
     pub sudt: HashMap<[u8; 32], u128>,
 }
 
-#[derive(Debug, Clone)]
-#[non_exhaustive]
-pub enum TxStatus {
-    /// Status "pending". The transaction is in the pool, and not proposed yet.
-    Pending,
-    /// Status "proposed". The transaction is in the pool and has been proposed.
-    Proposed,
-    /// Status "committed". The transaction has been committed to the canonical chain.
-    Committed,
-    /// Status "unknown". The node has not seen the transaction,
-    /// or it should be rejected but was cleared due to storage limitations.
-    Unknown,
-    /// Status "rejected". The transaction has been recently removed from the pool.
-    /// Due to storage limitations, the node can only hold the most recently removed transactions.
-    Rejected,
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct DepositInfo {
     pub request: DepositRequest,

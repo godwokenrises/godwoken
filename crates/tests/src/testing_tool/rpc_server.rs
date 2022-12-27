@@ -13,7 +13,7 @@ use gw_jsonrpc_types::{
 };
 use gw_polyjuice_sender_recover::recover::PolyjuiceSenderRecover;
 use gw_rpc_client::{
-    ckb_client::CKBClient, indexer_client::CKBIndexerClient, rpc_client::RPCClient,
+    ckb_client::CkbClient, indexer_client::CkbIndexerClient, rpc_client::RPCClient,
 };
 use gw_rpc_server::registry::{Registry, RegistryArgs};
 use gw_types::{
@@ -48,8 +48,8 @@ impl RPCServer {
         let rollup_config = generator.rollup_context().rollup_config.to_owned();
         let rollup_context = generator.rollup_context().to_owned();
         let rpc_client = {
-            let ckb_client = CKBClient::with_url(&RPCClientConfig::default().ckb_url).unwrap();
-            let indexer_client = CKBIndexerClient::new(ckb_client.client().clone(), false);
+            let ckb_client = CkbClient::with_url(&RPCClientConfig::default().ckb_url).unwrap();
+            let indexer_client = CkbIndexerClient::from(ckb_client.clone());
             let rollup_type_script =
                 ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
             RPCClient::new(

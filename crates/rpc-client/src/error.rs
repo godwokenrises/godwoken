@@ -1,31 +1,6 @@
-use thiserror::Error;
-
-// NOTE: Error only for [client].request() not to_result()
-#[derive(Error, Debug)]
-#[error("{client} error, method: {method} error: {source}")]
-pub struct RPCRequestError {
-    pub client: &'static str,
-    pub method: &'static str,
-    pub source: anyhow::Error,
-}
-
-impl RPCRequestError {
-    pub fn new<E: Into<anyhow::Error>>(
-        client: &'static str,
-        method: &'static str,
-        source: E,
-    ) -> Self {
-        RPCRequestError {
-            client,
-            method,
-            source: source.into(),
-        }
-    }
-}
-
 /// Get JSONRPC error code from errors returned by RPC methods.
 pub fn get_jsonrpc_error_code(e: &anyhow::Error) -> Option<i64> {
-    let e: &async_jsonrpc_client::Error = e.downcast_ref()?;
+    let e: &jsonrpc_core::types::error::Error = e.downcast_ref()?;
     Some(e.code.code())
 }
 

@@ -5,7 +5,7 @@ use ckb_types::{
 };
 use gw_config::ContractsCellDep;
 use gw_rpc_client::{
-    indexer_client::CKBIndexerClient,
+    indexer_client::CkbIndexerClient,
     indexer_types::{Order, SearchKey, SearchKeyFilter},
     rpc_client::RPCClient,
 };
@@ -138,7 +138,7 @@ pub async fn generate(
 /// Returns a finalized stake_state_cell if `compatible_finalize_timepoint_opt` is some,
 /// otherwise returns a random stake_state_cell.
 pub async fn query_stake(
-    client: &CKBIndexerClient,
+    client: &CkbIndexerClient,
     rollup_context: &RollupContext,
     owner_lock_hash: [u8; 32],
     required_staking_capacity: u64,

@@ -13,7 +13,6 @@ use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::h256::*;
 use gw_types::{
     core::DepType,
-    offchain::TxStatus,
     packed::{CellDep, OutPointVec, Transaction},
     prelude::*,
 };
@@ -110,7 +109,7 @@ pub async fn build_mock_transaction(
 
         let input_tx_hash = input.previous_output().tx_hash().unpack();
         let input_block_hash = match rpc_client.ckb.get_transaction_status(input_tx_hash).await? {
-            Some(TxStatus::Committed) => {
+            Some(gw_jsonrpc_types::ckb_jsonrpc_types::Status::Committed) => {
                 let block_hash = rpc_client
                     .ckb
                     .get_transaction_block_hash(input_tx_hash)
@@ -167,7 +166,7 @@ pub async fn build_mock_transaction(
             .get_transaction_status(dep_cell_tx_hash)
             .await?
         {
-            Some(TxStatus::Committed) => {
+            Some(gw_jsonrpc_types::ckb_jsonrpc_types::Status::Committed) => {
                 let query = rpc_client
                     .ckb
                     .get_transaction_block_hash(dep_cell_tx_hash)

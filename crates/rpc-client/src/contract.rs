@@ -4,15 +4,13 @@ use std::time::Instant;
 
 use anyhow::{anyhow, bail, Result};
 use arc_swap::ArcSwap;
-use async_jsonrpc_client::Params as ClientParams;
 use gw_config::{ContractTypeScriptConfig, ContractsCellDep};
 use gw_jsonrpc_types::blockchain::{CellDep, Script};
 use gw_types::packed::RollupConfig;
 use gw_types::prelude::Pack;
-use serde_json::json;
 use tracing::instrument;
 
-use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey};
+use crate::indexer_types::{Order, ScriptType, SearchKey};
 use crate::rpc_client::RPCClient;
 
 pub use arc_swap::Guard;
@@ -178,16 +176,10 @@ async fn query_by_type_script(
     let order = Order::Desc;
     let limit = Uint32::from(1);
 
-    let get_contract_cell = rpc_client.indexer.request(
-        "get_cells",
-        Some(ClientParams::Array(vec![
-            json!(search_key),
-            json!(order),
-            json!(limit),
-        ])),
-    );
-
-    let mut cells: Pagination<Cell> = get_contract_cell.await?;
+    let mut cells = rpc_client
+        .indexer
+        .get_cells(&search_key, &order, limit, &None)
+        .await?;
     match cells.objects.pop() {
         Some(cell) => Ok(Into::into(CellDep {
             dep_type: DepType::Code,

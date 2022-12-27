@@ -3,7 +3,7 @@ use std::{collections::HashSet, time::Instant};
 use anyhow::{anyhow, bail, Result};
 use gw_common::CKB_SUDT_SCRIPT_ARGS;
 use gw_rpc_client::{
-    indexer_client::CKBIndexerClient,
+    indexer_client::CkbIndexerClient,
     indexer_types::{Order, SearchKey, SearchKeyFilter},
     rpc_client::{QueryResult, RPCClient},
 };
@@ -210,7 +210,7 @@ fn sum_change_capacity(
 #[allow(clippy::too_many_arguments)]
 async fn query_finalized_custodian_cells(
     local_cells_manager: &LocalCellsManager,
-    indexer: &CKBIndexerClient,
+    indexer: &CkbIndexerClient,
     rollup_context: &RollupContext,
     withdrawals_amount: &WithdrawalsAmount,
     custodian_change_capacity: u128,
@@ -375,7 +375,7 @@ async fn query_finalized_custodian_cells(
 mod tests {
     use std::collections::HashMap;
 
-    use gw_rpc_client::indexer_client::CKBIndexerClient;
+    use gw_rpc_client::indexer_client::CkbIndexerClient;
     use gw_rpc_client::rpc_client::QueryResult;
     use gw_types::bytes::Bytes;
     use gw_types::core::{ScriptHashType, Timepoint};
@@ -438,7 +438,7 @@ mod tests {
             local_cells_manager.add_live(c);
         }
 
-        let indexer_client = CKBIndexerClient::with_url("http://host.invalid").unwrap();
+        let indexer_client = CkbIndexerClient::with_url("http://host.invalid").unwrap();
 
         let result = super::query_finalized_custodian_cells(
             &local_cells_manager,

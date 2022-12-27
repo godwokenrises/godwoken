@@ -24,7 +24,7 @@ use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::bytes::Bytes;
 use gw_types::core::{ChallengeTargetType, Status};
 use gw_types::h256::*;
-use gw_types::offchain::{global_state_from_slice, CellInfo, InputCellInfo, TxStatus};
+use gw_types::offchain::{global_state_from_slice, CellInfo, InputCellInfo};
 use gw_types::packed::{
     CellDep, CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, ChallengeTarget,
     GlobalState, OutPoint, Script, Transaction, WitnessArgs,
@@ -127,8 +127,9 @@ impl Challenger {
         if let Some(last_submit_tx) = self.last_submit_tx {
             let ckb_client = &self.rpc_client.ckb;
             let tx_status = ckb_client.get_transaction_status(last_submit_tx).await?;
+            use gw_jsonrpc_types::ckb_jsonrpc_types::Status;
             match tx_status {
-                Some(TxStatus::Pending) | Some(TxStatus::Proposed) => return Ok(()),
+                Some(Status::Pending) | Some(Status::Proposed) => return Ok(()),
                 _ => {
                     log::debug!("last challenger submit tx {:?}", tx_status);
                     self.last_submit_tx = None;
@@ -409,7 +410,10 @@ impl Challenger {
         let challenge_tx_block_number = {
             let tx_hash: H256 = challenge_cell.out_point.tx_hash().unpack();
             let tx_status = self.rpc_client.ckb.get_transaction_status(tx_hash).await?;
-            if !matches!(tx_status, Some(TxStatus::Committed)) {
+            if !matches!(
+                tx_status,
+                Some(gw_jsonrpc_types::ckb_jsonrpc_types::Status::Committed)
+            ) {
                 log::debug!("challenge tx isn't committed");
                 return Ok(());
             }

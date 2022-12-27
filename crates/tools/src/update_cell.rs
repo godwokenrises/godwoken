@@ -1,9 +1,8 @@
-use crate::utils::sdk::CkbRpcClient;
 use anyhow::{anyhow, Result};
 use ckb_jsonrpc_types::{Either, OutputsValidator};
 use ckb_types::prelude::{Entity, Unpack as CKBUnpack};
 use gw_config::WalletConfig;
-use gw_rpc_client::{ckb_client::CKBClient, indexer_client::CKBIndexerClient};
+use gw_rpc_client::{ckb_client::CkbClient, indexer_client::CkbIndexerClient};
 use gw_types::{
     offchain::{CellInfo, InputCellInfo},
     packed::{CellInput, CellOutput, OutPoint},
@@ -38,16 +37,16 @@ pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_, P>) -> Result<
         fee_rate,
     } = args;
 
-    let mut rpc_client = CkbRpcClient::new(ckb_rpc_url);
+    let rpc_client = CkbClient::with_url(ckb_rpc_url)?;
     let indexer_client = if let Some(indexer_url) = indexer_rpc_url {
-        CKBIndexerClient::with_url(indexer_url)
+        CkbIndexerClient::with_url(indexer_url)?
     } else {
-        CKBIndexerClient::with_ckb_url(ckb_rpc_url)
-    }?;
+        CkbIndexerClient::from(rpc_client.clone())
+    };
     // check existed_cell
     let tx_with_status = rpc_client
-        .get_transaction(tx_hash.into())
-        .map_err(|err| anyhow!("{}", err))?
+        .get_transaction(tx_hash.into(), 2.into())
+        .await?
         .ok_or_else(|| anyhow!("can't found transaction"))?;
     let tv = match tx_with_status
         .transaction
@@ -95,7 +94,7 @@ pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_, P>) -> Result<
     let ckb_genesis_info = {
         let ckb_genesis = rpc_client
             .get_block_by_number(0u64.into())
-            .map_err(|err| anyhow!("{}", err))?
+            .await?
             .ok_or_else(|| anyhow!("can't found CKB genesis block"))?;
         let block: ckb_types::core::BlockView = ckb_genesis.into();
         let block = gw_types::packed::Block::new_unchecked(block.data().as_bytes());
@@ -154,9 +153,9 @@ pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_, P>) -> Result<
             ckb_types::packed::Transaction::new_unchecked(tx.as_bytes()).into(),
             Some(OutputsValidator::Passthrough),
         )
-        .map_err(|err| anyhow!("{}", err))?;
+        .await?;
     println!("Send tx...");
-    CKBClient::with_url(ckb_rpc_url)?
+    rpc_client
         .wait_tx_committed_with_timeout_and_logging(tx_hash.0, 600)
         .await?;
     println!("{}", update_message);
