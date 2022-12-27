@@ -1744,7 +1744,6 @@ version = "1.8.0-rc3"
 dependencies = [
  "anyhow",
  "async-channel",
- "async-jsonrpc-client",
  "async-trait",
  "bytes",
  "ckb-chain-spec",
@@ -2015,7 +2014,6 @@ name = "gw-replay-chain"
 version = "1.8.0-rc3"
 dependencies = [
  "anyhow",
- "async-jsonrpc-client",
  "ckb-fixed-hash",
  "ckb-types",
  "clap 3.2.22",
@@ -2047,29 +2045,20 @@ version = "1.8.0-rc3"
 dependencies = [
  "anyhow",
  "arc-swap",
- "async-channel",
  "async-jsonrpc-client",
  "async-trait",
- "ckb-crypto",
  "ckb-fixed-hash",
  "ckb-types",
- "env_logger 0.8.4",
- "faster-hex 0.4.1",
- "futures",
  "gw-common",
  "gw-config",
  "gw-jsonrpc-types",
  "gw-types",
- "hex",
- "lazy_static",
  "log",
  "rand 0.8.5",
- "semver",
  "serde",
  "serde_json",
  "thiserror",
  "tokio",
- "toml",
  "tracing",
 ]
 
@@ -2173,7 +2162,6 @@ name = "gw-tests"
 version = "1.8.0-rc3"
 dependencies = [
  "anyhow",
- "async-jsonrpc-client",
  "async-trait",
  "blake2b-rs",
  "ckb-crypto",
