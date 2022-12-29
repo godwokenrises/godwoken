@@ -116,14 +116,14 @@ pub fn get_polyjuice_creator_id<S: State + CodeStore>(
     backend_manage: &BackendManage,
     state: &S,
 ) -> Result<Option<u32>, gw_common::error::Error> {
-    let polyjuice_backend =
-        backend_manage
-            .get_backends_at_height(u64::MAX)
-            .and_then(|(_, backends)| {
-                backends
-                    .values()
-                    .find(|backend| backend.backend_type == BackendType::Polyjuice)
-            });
+    let polyjuice_backend = backend_manage
+        .get_block_consensus_at_height(u64::MAX)
+        .and_then(|(_, consensus)| {
+            consensus
+                .backends
+                .values()
+                .find(|backend| backend.backend_type == BackendType::Polyjuice)
+        });
     if let Some(backend) = polyjuice_backend {
         let mut args = rollup_context.rollup_script_hash.as_slice().to_vec();
         args.extend_from_slice(&CKB_SUDT_ACCOUNT_ID.to_le_bytes());

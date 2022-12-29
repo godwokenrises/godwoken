@@ -279,6 +279,7 @@ int load_account_code(gw_context_t* gw_ctx, uint32_t account_id,
   uint8_t key[32];
   uint8_t data_hash[32];
   polyjuice_build_contract_code_key(account_id, key);
+  /* FIXME: should read contract code from system level KV */
   ret = gw_ctx->sys_load(gw_ctx, account_id, key, GW_KEY_BYTES, data_hash);
   if (ret != 0) {
     debug_print_int("[load_account_code] sys_load failed", ret);
@@ -407,6 +408,16 @@ enum evmc_storage_status set_storage(struct evmc_host_context* context,
                                      const evmc_bytes32* value) {
   ckb_debug("BEGIN set_storage");
   evmc_storage_status status = EVMC_STORAGE_ADDED;
+  /* FIXME: check confliction with the code key */
+  uint8_t contract_code_key[32];
+  polyjuice_build_contract_code_key(context->to_id, contract_code_key);
+  if (memcmp(contract_code_key, key->bytes, 32) == 0) {
+    ckb_debug("contract try to change account code");
+    context->error_code = FATAL_POLYJUICE;
+    status = EVMC_STORAGE_UNCHANGED;
+    return status;
+  }
+
   int ret = context->gw_ctx->sys_store(context->gw_ctx, context->to_id,
                                        key->bytes, GW_KEY_BYTES, value->bytes);
   if (ret != 0) {
@@ -646,7 +657,7 @@ struct evmc_result call(struct evmc_host_context* context,
     }
     res.gas_left = msg->gas - (int64_t)gas_cost;
     ret = contract(gw_ctx,
-                   context->code_data, context->code_size,
+                   msg->sender.bytes,
                    context->kind,
                    msg->flags == EVMC_STATIC,
                    msg->input_data, msg->input_size,
@@ -1223,7 +1234,7 @@ int store_contract_code(gw_context_t* ctx,
   polyjuice_build_contract_code_key(to_id, key);
   ckb_debug("BEGIN store data key");
   debug_print_data("code_data_hash", data_hash, 32);
-  /* to_id must exists here */
+  /* FIXME: should store contract code to system level KV */
   ret = ctx->sys_store(ctx, to_id, key, GW_KEY_BYTES, data_hash);
   if (ret != 0) {
     return ret;

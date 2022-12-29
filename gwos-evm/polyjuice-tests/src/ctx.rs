@@ -13,7 +13,7 @@ use gw_common::{
     CKB_SUDT_SCRIPT_ARGS,
 };
 
-use gw_config::{BackendConfig, BackendForkConfig, BackendType};
+use gw_config::{BackendConfig, BackendForkConfig, BackendType, SUDTProxyConfig};
 use gw_db::schema::{COLUMN_INDEX, COLUMN_META, META_TIP_BLOCK_HASH_KEY};
 use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
@@ -466,6 +466,10 @@ impl Config {
         let secp_data_hash = load_code_hash(&path);
         let backends = BackendForkConfig {
             fork_height: 0,
+            sudt_proxy: SUDTProxyConfig {
+                permit_sudt_transfer_from_dangerous_contract: false,
+                address_list: Vec::new(),
+            },
             backends: vec![
                 BackendConfig {
                     backend_type: BackendType::Meta,

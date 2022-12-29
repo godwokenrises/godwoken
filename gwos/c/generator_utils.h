@@ -42,6 +42,8 @@
 /* Syscall state */
 #define GW_SYS_SNAPSHOT 3701
 #define GW_SYS_REVERT 3702
+/* Syscall permissions */
+#define GW_SYS_CHECK_SUDT_ADDR_PERMISSION 3801
 
 typedef struct gw_context_t {
   /* verification context */
@@ -75,6 +77,7 @@ typedef struct gw_context_t {
       sys_get_script_hash_by_registry_address;
   gw_snapshot_fn sys_snapshot;
   gw_revert_fn sys_revert;
+  gw_check_sudt_addr_permission_fn sys_check_sudt_addr_permission;
   _gw_load_raw_fn _internal_load_raw;
   _gw_store_raw_fn _internal_store_raw;
 } gw_context_t;
@@ -125,6 +128,7 @@ int sys_load(gw_context_t *ctx, uint32_t account_id, const uint8_t *key,
   gw_build_account_key(account_id, key, key_len, raw_key);
   return _internal_load_raw(ctx, raw_key, value);
 }
+
 int sys_store(gw_context_t *ctx, uint32_t account_id, const uint8_t *key,
               const uint64_t key_len, const uint8_t value[GW_VALUE_BYTES]) {
   if (ctx == NULL) {
@@ -426,6 +430,16 @@ int sys_revert(gw_context_t *ctx, uint32_t snapshot) {
   return syscall(GW_SYS_REVERT, snapshot, 0, 0, 0, 0, 0);
 }
 
+int sys_check_sudt_addr_permission(gw_context_t *ctx,
+                                   const uint8_t sudt_proxy_addr[20]) {
+  if (ctx == NULL) {
+    return GW_FATAL_INVALID_CONTEXT;
+  }
+
+  return syscall(GW_SYS_CHECK_SUDT_ADDR_PERMISSION, sudt_proxy_addr, 0, 0, 0, 0,
+                 0);
+}
+
 int _sys_load_rollup_config(uint8_t *addr, uint64_t *len) {
   volatile uint64_t inner_len = *len;
   int ret = syscall(GW_SYS_LOAD_ROLLUP_CONFIG, addr, &inner_len, 0, 0, 0, 0);
@@ -471,6 +485,7 @@ int gw_context_init(gw_context_t *ctx) {
       _gw_get_script_hash_by_registry_address;
   ctx->sys_snapshot = sys_snapshot;
   ctx->sys_revert = sys_revert;
+  ctx->sys_check_sudt_addr_permission = sys_check_sudt_addr_permission;
   ctx->_internal_load_raw = _internal_load_raw;
   ctx->_internal_store_raw = _internal_store_raw;
 

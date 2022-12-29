@@ -1,5 +1,5 @@
 use crate::{
-    account_lock_manage::AccountLockManage, generator::CyclesPool,
+    account_lock_manage::AccountLockManage, backend_manage::BlockConsensus, generator::CyclesPool,
     syscalls::error_codes::GW_FATAL_UNKNOWN_ARGS,
 };
 use ckb_vm::{
@@ -27,11 +27,12 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::RollupContext;
-use std::cmp;
+use std::{cmp, convert::TryInto};
 
 use self::error_codes::{
     GW_ERROR_ACCOUNT_NOT_FOUND, GW_ERROR_DUPLICATED_SCRIPT_HASH, GW_ERROR_INVALID_ACCOUNT_SCRIPT,
-    GW_ERROR_NOT_FOUND, GW_ERROR_RECOVER, GW_ERROR_UNKNOWN_SCRIPT_CODE_HASH, SUCCESS,
+    GW_ERROR_NOT_FOUND, GW_ERROR_RECOVER, GW_ERROR_UNKNOWN_SCRIPT_CODE_HASH,
+    GW_SUDT_ERROR_UNPERMITTED_ADDRESS, SUCCESS,
 };
 
 mod bn;
@@ -67,6 +68,8 @@ const SYS_BN_PAIRING: u64 = 3603;
 /* Syscall state revert */
 const SYS_SNAPSHOT: u64 = 3701;
 const SYS_REVERT: u64 = 3702;
+/* Syscall permissions */
+const SYS_CHECK_SUDT_ADDRESS: u64 = 3801;
 /* CKB compatible syscalls */
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
@@ -90,6 +93,7 @@ pub(crate) struct L2Syscalls<'a, 'b, S, C> {
     pub(crate) rollup_context: &'a RollupContext,
     pub(crate) account_lock_manage: &'a AccountLockManage,
     pub(crate) block_info: &'a BlockInfo,
+    pub(crate) block_consensus: &'a BlockConsensus,
     pub(crate) raw_tx: &'a RawL2Transaction,
     pub(crate) context: &'b mut RunContext,
     pub(crate) cycles_pool: &'b mut Option<&'a mut CyclesPool>,
@@ -635,6 +639,28 @@ impl<'a, 'b, S: State + CodeStore + JournalDB, C: ChainView, Mac: SupportMachine
                     .revert(snapshot_id as usize)
                     .map_err(|err| VMError::Unexpected(format!("revert: {}", err)))?;
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
+            SYS_CHECK_SUDT_ADDRESS => {
+                let sudt_proxy_addr = machine.registers()[A0].to_u64();
+                let address: [u8; 20] = load_bytes(machine, sudt_proxy_addr, 20)?
+                    .try_into()
+                    .unwrap();
+                let is_permit = self
+                    .block_consensus
+                    .sudt_proxy
+                    .address_list
+                    .contains(&address);
+                if self
+                    .block_consensus
+                    .sudt_proxy
+                    .permit_sudt_transfer_from_dangerous_contract
+                    || is_permit
+                {
+                    machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                } else {
+                    machine.set_register(A0, Mac::REG::from_i8(GW_SUDT_ERROR_UNPERMITTED_ADDRESS));
+                }
                 Ok(true)
             }
             DEBUG_PRINT_SYSCALL_NUMBER => {

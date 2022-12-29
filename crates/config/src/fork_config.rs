@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use ckb_fixed_hash::H256;
+use ckb_fixed_hash::{H160, H256};
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{
@@ -8,7 +8,7 @@ use crate::constants::{
     MAX_WITHDRAWAL_SIZE, MAX_WRITE_DATA_BYTES,
 };
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BackendType {
     Meta,
     Sudt,
@@ -23,10 +23,21 @@ impl Default for BackendType {
     }
 }
 
+/// SUDT Proxy config
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SUDTProxyConfig {
+    /// Should only be used in test environment
+    pub permit_sudt_transfer_from_dangerous_contract: bool,
+    /// Allowed sUDT proxy address list
+    pub address_list: Vec<H160>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BackendForkConfig {
     pub fork_height: u64,
+    pub sudt_proxy: SUDTProxyConfig,
     pub backends: Vec<BackendConfig>,
 }
 

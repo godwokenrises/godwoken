@@ -5,7 +5,9 @@ use gw_block_producer::produce_block::{
 };
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
 use gw_common::blake2b::new_blake2b;
-use gw_config::{BackendConfig, BackendForkConfig, ChainConfig, GenesisConfig, MemPoolConfig};
+use gw_config::{
+    BackendConfig, BackendForkConfig, ChainConfig, GenesisConfig, MemPoolConfig, SUDTProxyConfig,
+};
 use gw_generator::{
     account_lock_manage::{
         always_success::AlwaysSuccess, secp256k1::Secp256k1Eth, AccountLockManage,
@@ -345,6 +347,10 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
     ];
     BackendManage::from_config(vec![BackendForkConfig {
         fork_height: 0,
+        sudt_proxy: SUDTProxyConfig {
+            permit_sudt_transfer_from_dangerous_contract: false,
+            address_list: Vec::new(),
+        },
         backends,
     }])
     .expect("default backend")

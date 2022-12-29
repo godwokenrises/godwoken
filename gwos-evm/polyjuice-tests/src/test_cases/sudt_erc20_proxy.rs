@@ -4,8 +4,8 @@
 use crate::helper::{
     self, build_eth_l2_script, build_l2_sudt_script, deploy, eth_addr_to_ethabi_addr,
     new_block_info, new_contract_account_script, print_gas_used, setup, PolyjuiceArgsBuilder,
-    CKB_SUDT_ACCOUNT_ID, CREATOR_ACCOUNT_ID, FATAL_PRECOMPILED_CONTRACTS, L2TX_MAX_CYCLES,
-    SUDT_ERC20_PROXY_USER_DEFINED_DECIMALS_CODE,
+    CKB_SUDT_ACCOUNT_ID, CREATOR_ACCOUNT_ID, ERROR_REVERT, FATAL_PRECOMPILED_CONTRACTS,
+    L2TX_MAX_CYCLES, SUDT_ERC20_PROXY_USER_DEFINED_DECIMALS_CODE,
 };
 use crate::DummyState;
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
@@ -16,13 +16,15 @@ use gw_store::state::traits::JournalDB;
 use gw_store::traits::chain_store::ChainStore;
 use gw_store::{chain_view::ChainView, Store};
 use gw_types::{bytes::Bytes, packed::RawL2Transaction, prelude::*, U256};
+use std::convert::TryInto;
 
 fn test_sudt_erc20_proxy_inner(
-    generator: &Generator,
+    generator: &mut Generator,
     store: &Store,
     state: &mut DummyState,
     new_sudt_id: u32,
     decimals: Option<u8>,
+    whitelist_new_erc20: bool,
 ) -> anyhow::Result<()> {
     let decimals = decimals.unwrap_or(18);
     let block_producer_id = crate::helper::create_block_producer(state);
@@ -73,6 +75,25 @@ fn test_sudt_erc20_proxy_inner(
         .get_account_id_by_script_hash(&script_hash)
         .unwrap()
         .unwrap();
+
+    if whitelist_new_erc20 {
+        // write address to sUDT proxy list
+        let reg_addr = state
+            .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &script_hash)
+            .unwrap()
+            .unwrap();
+        let erc20_eth_addr = reg_addr.address.clone();
+        if let Some((_height, block_consensus)) = generator
+            .backend_manage_mut()
+            .get_mut_block_consensus_at_height(0)
+        {
+            block_consensus
+                .sudt_proxy
+                .address_list
+                .insert(erc20_eth_addr.try_into().unwrap());
+        }
+    }
+
     let eoa1_hex = hex::encode(eth_addr_to_ethabi_addr(&from_eth_address1));
     let eoa2_hex = hex::encode(eth_addr_to_ethabi_addr(&from_eth_address2));
     let eoa3_hex = hex::encode(eth_addr_to_ethabi_addr(&from_eth_address3));
@@ -406,20 +427,49 @@ fn test_sudt_erc20_proxy_inner(
 
 #[test]
 fn test_sudt_erc20_proxy_user_defined_decimals() {
-    let (store, mut state, generator) = setup();
+    let (store, mut state, mut generator) = setup();
 
     let new_sudt_script = build_l2_sudt_script([0xffu8; 32]);
     let new_sudt_id = state.create_account_from_script(new_sudt_script).unwrap();
 
     assert_eq!(CKB_SUDT_ACCOUNT_ID, 1);
-    assert!(
-        test_sudt_erc20_proxy_inner(&generator, &store, &mut state, new_sudt_id, Some(8)).is_ok()
+    assert!(test_sudt_erc20_proxy_inner(
+        &mut generator,
+        &store,
+        &mut state,
+        new_sudt_id,
+        Some(8),
+        true
+    )
+    .is_ok());
+}
+
+#[test]
+fn test_sudt_erc20_proxy_user_defined_decimals_without_whitelist() {
+    let (store, mut state, mut generator) = setup();
+
+    let new_sudt_script = build_l2_sudt_script([0xffu8; 32]);
+    let new_sudt_id = state.create_account_from_script(new_sudt_script).unwrap();
+
+    assert_eq!(CKB_SUDT_ACCOUNT_ID, 1);
+    assert_eq!(
+        test_sudt_erc20_proxy_inner(
+            &mut generator,
+            &store,
+            &mut state,
+            new_sudt_id,
+            Some(8),
+            false
+        )
+        .unwrap_err()
+        .downcast_ref::<TransactionError>(),
+        Some(&TransactionError::InvalidExitCode(ERROR_REVERT))
     );
 }
 
 #[test]
 fn test_error_sudt_id_sudt_erc20_proxy() {
-    let (store, mut state, generator) = setup();
+    let (store, mut state, mut generator) = setup();
 
     let error_new_sudt_script = build_eth_l2_script(&[0xffu8; 20]);
     let error_new_sudt_id = state
@@ -428,9 +478,16 @@ fn test_error_sudt_id_sudt_erc20_proxy() {
 
     assert_eq!(CKB_SUDT_ACCOUNT_ID, 1);
     assert_eq!(
-        test_sudt_erc20_proxy_inner(&generator, &store, &mut state, error_new_sudt_id, None)
-            .unwrap_err()
-            .downcast_ref::<TransactionError>(),
+        test_sudt_erc20_proxy_inner(
+            &mut generator,
+            &store,
+            &mut state,
+            error_new_sudt_id,
+            None,
+            true
+        )
+        .unwrap_err()
+        .downcast_ref::<TransactionError>(),
         Some(&TransactionError::InvalidExitCode(
             FATAL_PRECOMPILED_CONTRACTS
         ))

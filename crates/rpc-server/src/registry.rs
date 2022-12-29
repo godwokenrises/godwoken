@@ -477,8 +477,9 @@ fn req_to_entry(
             let receiver: u32 = tx.raw().to_id().unpack();
             let script_hash = state.get_script_hash(receiver)?;
             let backend_type = generator
-                .load_backend(0, state, &script_hash)
+                .load_backend_and_block_consensus(0, state, &script_hash)
                 .ok_or_else(|| anyhow!("can't find backend for receiver: {}", receiver))?
+                .0
                 .backend_type;
             FeeEntry::from_tx(
                 tx,
@@ -1904,9 +1905,10 @@ async fn compute_l2_sudt_script_hash(
 fn get_backend_info(generator: Arc<Generator>) -> Vec<BackendInfo> {
     generator
         .backend_manage()
-        .get_backends_at_height(0)
+        .get_block_consensus_at_height(0)
         .expect("backends")
         .1
+        .backends
         .values()
         .map(|b| BackendInfo {
             validator_code_hash: ckb_fixed_hash::H256(b.checksum.validator),

@@ -333,6 +333,16 @@ typedef int (*gw_snapshot_fn)(struct gw_context_t *ctx, uint32_t *snapshot_id);
 typedef int (*gw_revert_fn)(struct gw_context_t *ctx, uint32_t snapshot_id);
 
 /**
+ * Revert state
+ *
+ * @param ctx        The godwoken context
+ * @param sudt_proxy_addr The address of sudt proxy contract
+ * @return           The status code, 0 is success
+ */
+typedef int (*gw_check_sudt_addr_permission_fn)(
+    struct gw_context_t *ctx, const uint8_t sudt_proxy_addr[20]);
+
+/**
  * Load value by raw key from state tree
  *
  * @param ctx        The godwoken context
