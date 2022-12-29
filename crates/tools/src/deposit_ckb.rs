@@ -147,7 +147,7 @@ pub async fn deposit_ckb(
         let tx_hash = H256::from_str(output.trim().trim_start_matches("0x"))?;
         log::info!("tx_hash: {:#x}", tx_hash);
 
-        if let Err(e) = gw_rpc_client::ckb_client::CkbClient::with_url(ckb_rpc_url)?
+        if let Err(e) = rpc_client
             .wait_tx_committed_with_timeout_and_logging(tx_hash.0, 600)
             .await
         {
