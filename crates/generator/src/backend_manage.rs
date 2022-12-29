@@ -3,7 +3,10 @@ use gw_common::blake2b::new_blake2b;
 use gw_config::{BackendConfig, BackendForkConfig, BackendType};
 use gw_types::bytes::Bytes;
 use gw_types::h256::*;
-use std::{collections::HashMap, fs};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+};
 
 #[cfg(has_asm)]
 use crate::types::vm::AotCode;
@@ -71,9 +74,24 @@ impl Backend {
     }
 }
 
+/// SUDT Proxy config
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SUDTProxyConfig {
+    /// Should only be used in test environment
+    pub permit_sudt_transfer_from_dangerous_contract: bool,
+    /// Allowed sUDT proxy address list
+    pub address_list: HashSet<[u8; 20]>,
+}
+
+#[derive(Clone)]
+pub struct BlockConsensus {
+    pub sudt_proxy: SUDTProxyConfig,
+    pub backends: HashMap<H256, Backend>,
+}
+
 #[derive(Default)]
 pub struct BackendManage {
-    backend_forks: Vec<(u64, HashMap<H256, Backend>)>,
+    backend_forks: Vec<(u64, BlockConsensus)>,
     /// define here not in backends,
     /// so we don't need to implement the trait `Clone` of AotCode
     #[cfg(has_asm)]
@@ -104,11 +122,19 @@ impl BackendManage {
         let mut backends = self
             .backend_forks
             .last()
-            .map(|(_height, backends)| backends)
-            .cloned()
+            .map(|(_height, consensus)| consensus.backends.clone())
             .unwrap_or_default();
 
         let fork_height = config.fork_height;
+
+        // set sudt proxy
+        let sudt_proxy = config.sudt_proxy.clone();
+        if sudt_proxy.permit_sudt_transfer_from_dangerous_contract {
+            log::warn!(
+                "`permit_sudt_transfer_from_dangerous_contract` is set to `true` at height {}.",
+                fork_height
+            );
+        }
 
         // register backends
         for config in config.backends {
@@ -149,7 +175,22 @@ impl BackendManage {
             backends.insert(backend.validator_script_type_hash, backend);
         }
 
-        self.backend_forks.push((config.fork_height, backends));
+        let sudt_proxy = SUDTProxyConfig {
+            permit_sudt_transfer_from_dangerous_contract: sudt_proxy
+                .permit_sudt_transfer_from_dangerous_contract,
+            address_list: sudt_proxy
+                .address_list
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        };
+
+        let block_consensus = BlockConsensus {
+            sudt_proxy,
+            backends,
+        };
+        self.backend_forks
+            .push((config.fork_height, block_consensus));
         Ok(())
     }
 
@@ -162,19 +203,29 @@ impl BackendManage {
         );
     }
 
-    pub fn get_backends_at_height(
+    pub fn get_block_consensus_at_height(
         &self,
         block_number: u64,
-    ) -> Option<&(u64, HashMap<H256, Backend>)> {
+    ) -> Option<&(u64, BlockConsensus)> {
         self.backend_forks
             .iter()
             .rev()
             .find(|(height, _)| block_number >= *height)
     }
 
+    pub fn get_mut_block_consensus_at_height(
+        &mut self,
+        block_number: u64,
+    ) -> Option<&mut (u64, BlockConsensus)> {
+        self.backend_forks
+            .iter_mut()
+            .rev()
+            .find(|(height, _)| block_number >= *height)
+    }
+
     pub fn get_backend(&self, block_number: u64, code_hash: &H256) -> Option<&Backend> {
-        self.get_backends_at_height(block_number)
-            .and_then(|(_number, backends)| backends.get(code_hash))
+        self.get_block_consensus_at_height(block_number)
+            .and_then(|(_number, consensus)| consensus.backends.get(code_hash))
             .map(|backend| {
                 log::debug!(
                     "get backend {:?}({:?}) at height {}",
@@ -228,6 +279,10 @@ mod tests {
 
         let config = BackendForkConfig {
             fork_height: 1,
+            sudt_proxy: gw_config::SUDTProxyConfig {
+                permit_sudt_transfer_from_dangerous_contract: false,
+                address_list: Default::default(),
+            },
             backends: vec![
                 BackendConfig {
                     validator_script_type_hash: [42u8; 32].into(),
@@ -244,7 +299,10 @@ mod tests {
             ],
         };
         m.register_backend_fork(config, false).unwrap();
-        assert!(m.get_backends_at_height(0).is_none(), "no backends at 0");
+        assert!(
+            m.get_block_consensus_at_height(0).is_none(),
+            "no backends at 0"
+        );
         assert!(m.get_backend(1, &[42u8; 32]).is_some(), "get backend at 1");
         assert!(
             m.get_backend(100, &[42u8; 32]).is_some(),
@@ -259,6 +317,10 @@ mod tests {
 
         let config = BackendForkConfig {
             fork_height: 5,
+            sudt_proxy: gw_config::SUDTProxyConfig {
+                permit_sudt_transfer_from_dangerous_contract: false,
+                address_list: Default::default(),
+            },
             backends: vec![
                 BackendConfig {
                     validator_script_type_hash: [41u8; 32].into(),
@@ -275,7 +337,10 @@ mod tests {
             ],
         };
         m.register_backend_fork(config, false).unwrap();
-        assert!(m.get_backends_at_height(0).is_none(), "no backends at 0");
+        assert!(
+            m.get_block_consensus_at_height(0).is_none(),
+            "no backends at 0"
+        );
         // sudt
         assert_eq!(
             m.get_backend(4, &[42u8; 32]).unwrap().generator.to_vec(),

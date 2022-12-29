@@ -80,6 +80,7 @@ typedef struct gw_context_t {
       sys_get_script_hash_by_registry_address;
   gw_snapshot_fn sys_snapshot;
   gw_revert_fn sys_revert;
+  gw_check_sudt_addr_permission_fn sys_check_sudt_addr_permission;
   _gw_load_raw_fn _internal_load_raw;
   _gw_store_raw_fn _internal_store_raw;
 
@@ -697,6 +698,11 @@ int sys_snapshot(gw_context_t *ctx, uint32_t *snapshot) {
 }
 
 int sys_revert(gw_context_t *ctx, uint32_t snapshot) {
+  return GW_UNIMPLEMENTED;
+}
+
+int sys_check_sudt_addr_permission(gw_context_t *ctx,
+                                   const uint8_t sudt_proxy_addr[20]) {
   return GW_UNIMPLEMENTED;
 }
 
@@ -1635,6 +1641,7 @@ int gw_context_init(gw_context_t *ctx) {
       _gw_get_script_hash_by_registry_address;
   ctx->sys_snapshot = sys_snapshot;
   ctx->sys_revert = sys_revert;
+  ctx->sys_check_sudt_addr_permission = sys_check_sudt_addr_permission;
   ctx->_internal_load_raw = _internal_load_raw;
   ctx->_internal_store_raw = _internal_store_raw;
 

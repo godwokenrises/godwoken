@@ -6,7 +6,7 @@ pub use gw_common::{
 };
 use gw_types::h256::*;
 
-use gw_config::{BackendConfig, BackendForkConfig, BackendType, ForkConfig};
+use gw_config::{BackendConfig, BackendForkConfig, BackendType, ForkConfig, SUDTProxyConfig};
 use gw_db::schema::{COLUMN_INDEX, COLUMN_META, META_TIP_BLOCK_HASH_KEY};
 pub use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
@@ -71,6 +71,7 @@ pub const GW_LOG_POLYJUICE_SYSTEM: u8 = 0x2;
 pub const GW_LOG_POLYJUICE_USER: u8 = 0x3;
 
 // pub const FATAL_POLYJUICE: i8 = -50;
+pub const ERROR_REVERT: i8 = 2;
 pub const FATAL_PRECOMPILED_CONTRACTS: i8 = -51;
 
 pub(crate) const SUDT_ERC20_PROXY_USER_DEFINED_DECIMALS_CODE: &str =
@@ -441,6 +442,10 @@ pub fn setup() -> (Store, DummyState, Generator) {
     // ==== Build generator
     let fork_configs = vec![BackendForkConfig {
         fork_height: 0,
+        sudt_proxy: SUDTProxyConfig {
+            permit_sudt_transfer_from_dangerous_contract: false,
+            address_list: Vec::new(),
+        },
         backends: vec![
             BackendConfig {
                 backend_type: BackendType::Meta,

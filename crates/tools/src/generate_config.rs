@@ -12,8 +12,8 @@ use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_config::{
     BackendConfig, BackendForkConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config,
     ConsensusConfig, ContractTypeScriptConfig, ForkConfig, GenesisConfig, NodeMode,
-    P2PNetworkConfig, RPCClientConfig, RPCServerConfig, RegistryAddressConfig, StoreConfig,
-    WalletConfig,
+    P2PNetworkConfig, RPCClientConfig, RPCServerConfig, RegistryAddressConfig, SUDTProxyConfig,
+    StoreConfig, WalletConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 use gw_rpc_client::ckb_client::CKBClient;
@@ -182,6 +182,10 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
     ];
     let backend_forks = vec![BackendForkConfig {
         fork_height: 0,
+        sudt_proxy: SUDTProxyConfig {
+            permit_sudt_transfer_from_dangerous_contract: false,
+            address_list: Vec::new(),
+        },
         backends,
     }];
 

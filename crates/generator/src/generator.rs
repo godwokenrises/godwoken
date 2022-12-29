@@ -3,7 +3,7 @@ use std::{collections::HashSet, sync::Arc, time::Instant};
 
 use crate::{
     account_lock_manage::AccountLockManage,
-    backend_manage::BackendManage,
+    backend_manage::{BackendManage, BlockConsensus},
     error::{BlockError, TransactionValidateError, WithdrawalError},
     syscalls::RunContext,
     typed_transaction::types::TypedRawTransaction,
@@ -138,9 +138,10 @@ pub struct MachineRunArgs<'a, C, S> {
     chain: &'a C,
     state: &'a mut S,
     block_info: &'a BlockInfo,
+    block_consensus: &'a BlockConsensus,
     raw_tx: &'a RawL2Transaction,
     max_cycles: u64,
-    backend: Backend,
+    backend: &'a Backend,
     cycles_pool: Option<&'a mut CyclesPool>,
 }
 
@@ -201,6 +202,7 @@ impl Generator {
             chain,
             state,
             block_info,
+            block_consensus,
             raw_tx,
             max_cycles,
             backend,
@@ -220,6 +222,7 @@ impl Generator {
                     chain,
                     state,
                     block_info,
+                    block_consensus,
                     raw_tx,
                     rollup_context: &self.rollup_context,
                     account_lock_manage: &self.account_lock_manage,
@@ -710,33 +713,38 @@ impl Generator {
     }
 
     #[instrument(skip_all, fields(script_hash = %script_hash.pack()))]
-    pub fn load_backend<S: State + CodeStore>(
+    pub fn load_backend_and_block_consensus<S: State + CodeStore>(
         &self,
         block_number: u64,
         state: &S,
         script_hash: &H256,
-    ) -> Option<Backend> {
+    ) -> Option<(&Backend, &BlockConsensus)> {
         log::debug!(
             "load_backend for script_hash: {}",
             hex::encode(script_hash.as_slice())
         );
-        state
-            .get_script(script_hash)
-            .and_then(|script| {
-                // only accept type script hash type for now
-                if script.hash_type() == ScriptHashType::Type.into() {
-                    let code_hash: [u8; 32] = script.code_hash().unpack();
-                    log::debug!("load_backend by code_hash: {}", hex::encode(code_hash));
-                    self.backend_manage.get_backend(block_number, &code_hash)
-                } else {
-                    log::error!(
-                        "Found a invalid account script which hash_type is data: {:?}",
-                        script
-                    );
-                    None
-                }
-            })
-            .cloned()
+        state.get_script(script_hash).and_then(|script| {
+            // only accept type script hash type for now
+            if script.hash_type() == ScriptHashType::Type.into() {
+                let code_hash: [u8; 32] = script.code_hash().unpack();
+                log::debug!("load_backend by code_hash: {}", hex::encode(code_hash));
+                let block_consensus = self
+                    .backend_manage
+                    .get_block_consensus_at_height(block_number);
+                block_consensus.and_then(|(_height, consensus)| {
+                    consensus
+                        .backends
+                        .get(&code_hash)
+                        .map(|backend| (backend, consensus))
+                })
+            } else {
+                log::error!(
+                    "Found a invalid account script which hash_type is data: {:?}",
+                    script
+                );
+                None
+            }
+        })
     }
 
     /// execute a layer2 tx
@@ -767,8 +775,8 @@ impl Generator {
     ) -> Result<RunResult> {
         let account_id = raw_tx.to_id().unpack();
         let script_hash = state.get_script_hash(account_id)?;
-        let backend = self
-            .load_backend(block_info.number().unpack(), state, &script_hash)
+        let (backend, block_consensus) = self
+            .load_backend_and_block_consensus(block_info.number().unpack(), state, &script_hash)
             .ok_or(TransactionError::BackendNotFound { script_hash })?;
         let block_number = block_info.number().unpack();
 
@@ -799,6 +807,7 @@ impl Generator {
             chain,
             state,
             block_info,
+            block_consensus,
             raw_tx,
             max_cycles,
             backend,
@@ -917,6 +926,10 @@ impl Generator {
 
     pub fn backend_manage(&self) -> &BackendManage {
         &self.backend_manage
+    }
+
+    pub fn backend_manage_mut(&mut self) -> &mut BackendManage {
+        &mut self.backend_manage
     }
 
     pub fn get_polyjuice_creator_id<S: State + CodeStore>(

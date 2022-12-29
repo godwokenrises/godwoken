@@ -29,8 +29,7 @@ int recover_account_gas(const uint8_t* input_src,
     output[0..32] => account script hash
  */
 int recover_account(gw_context_t* ctx,
-                    const uint8_t* code_data,
-                    const size_t code_size,
+                    const uint8_t* msg_sender,
                     const enum evmc_call_kind parent_kind,
                     bool is_static_call,
                     const uint8_t* input_src,
