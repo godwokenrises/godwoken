@@ -112,9 +112,8 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
     };
     let (_data, secp_data_dep) = get_secp_data(&rpc_client).await.context("get secp data")?;
 
-    let ckb_client = CkbClient::with_url(&ckb_url)?;
     let contract_type_scripts = query_contracts_script(
-        &ckb_client,
+        &rpc_client,
         scripts_deployment,
         user_rollup_config,
         omni_lock_config,
