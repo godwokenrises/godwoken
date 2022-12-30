@@ -82,6 +82,7 @@ fn test_example_sum() {
         // NOTICE in this test we won't need SUM validator
         let backend_manage = BackendManage::from_config(vec![BackendForkConfig {
             fork_height: 0,
+            sudt_proxy: Default::default(),
             backends: vec![BackendConfig {
                 validator_path: SUM_PROGRAM_PATH.to_path_buf(),
                 generator_path: SUM_PROGRAM_PATH.to_path_buf(),
@@ -220,6 +221,7 @@ fn test_example_account_operation() {
 
     let backend_manage = BackendManage::from_config(vec![BackendForkConfig {
         fork_height: 0,
+        sudt_proxy: Default::default(),
         backends: vec![BackendConfig {
             validator_path: ACCOUNT_OP_PROGRAM_PATH.clone(),
             generator_path: ACCOUNT_OP_PROGRAM_PATH.clone(),
@@ -457,6 +459,7 @@ fn test_example_recover_account() {
 
     let backend_manage = BackendManage::from_config(vec![BackendForkConfig {
         fork_height: 0,
+        sudt_proxy: Default::default(),
         backends: vec![BackendConfig {
             validator_path: RECOVER_PROGRAM_PATH.clone(),
             generator_path: RECOVER_PROGRAM_PATH.clone(),
@@ -637,6 +640,7 @@ fn test_sudt_total_supply() {
         // NOTICE in this test we won't need SUM validator
         let backend_manage = BackendManage::from_config(vec![BackendForkConfig {
             fork_height: 0,
+            sudt_proxy: Default::default(),
             backends: vec![BackendConfig {
                 validator_path: SUDT_TOTAL_SUPPLY_PROGRAM_PATH.clone(),
                 generator_path: SUDT_TOTAL_SUPPLY_PROGRAM_PATH.clone(),

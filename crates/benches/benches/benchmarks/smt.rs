@@ -166,6 +166,7 @@ impl BenchExecutionEnvironment {
                 },
             ];
             BackendManage::from_config(vec![BackendForkConfig {
+                sudt_proxy: Default::default(),
                 fork_height: 0,
                 backends: configs,
             }])

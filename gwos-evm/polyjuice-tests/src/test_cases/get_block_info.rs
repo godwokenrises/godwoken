@@ -8,10 +8,9 @@ use crate::helper::{
     PolyjuiceArgsBuilder, CREATOR_ACCOUNT_ID, L2TX_MAX_CYCLES,
 };
 use gw_common::state::State;
-use gw_db::schema::COLUMN_INDEX;
 use gw_store::traits::chain_store::ChainStore;
 use gw_store::traits::kv_store::KVStoreWrite;
-use gw_store::{chain_view::ChainView, state::traits::JournalDB};
+use gw_store::{chain_view::ChainView, schema::*, state::traits::JournalDB};
 use gw_types::{
     bytes::Bytes,
     packed::{RawL2Transaction, Uint64},
@@ -28,7 +27,7 @@ fn test_get_block_info() {
         let genesis_number: Uint64 = 0.pack();
         // See: BlockInfo.sol
         let block_hash = [7u8; 32];
-        let tx = &store.begin_transaction();
+        let mut tx = store.begin_transaction();
         tx.insert_raw(COLUMN_INDEX, genesis_number.as_slice(), &block_hash[..])
             .unwrap();
         tx.commit().unwrap();
