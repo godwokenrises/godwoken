@@ -1,26 +1,26 @@
-# Run command in ghcr.io/godwokenrises/godwoken-prebuilds:dev-poly1.5.0
+# Run command in ghcr.io/godwokenrises/godwoken:tag
 # ```bash
 # find /scripts -type f -exec sha1sum {} \;
 # ```
 
 ############################## Godwoken scripts ################################
 # https://github.com/godwokenrises/godwoken-scripts/releases/tag/v1.3.0-rc1
-56d24b532b9d790d24ca236782e8ed034b375399  /scripts/godwoken-scripts/sudt-validator
-65556f1157bfa7819befe8cb1cf6af73924fdefa  /scripts/godwoken-scripts/eth-addr-reg-validator
-678e163a475dd82c14f71fec189982643916c5ca  /scripts/godwoken-scripts/meta-contract-validator
-df27b2036e747e07a8b9703262d17dc386736173  /scripts/godwoken-scripts/sudt-generator
-7716f9c629d1780129531929c21717050a8b20df  /scripts/godwoken-scripts/meta-contract-generator
-e72547948d6028328bfc06a8caf5ccdbe2c4be19  /scripts/godwoken-scripts/eth-addr-reg-generator
-677be9b2545c8d1b15aaeb039ac501b6a0f6244e  /scripts/godwoken-scripts/eth-account-lock
-e1a2acd8764648a795fd8f513d39820baf0a00d0  /scripts/godwoken-scripts/state-validator
-248c7d2d85749d163423f3477b12231de1a9b3cd  /scripts/godwoken-scripts/always-success
-87586b3bf1117389cc0cc0785b0b3dfb74b9632b  /scripts/godwoken-scripts/custodian-lock
-dfb6ad1ceda1dd19eb70bc0b3c01528134a7fe9b  /scripts/godwoken-scripts/stake-lock
-502391a6bde1b5d6261fdd4f96204a69796adb38  /scripts/godwoken-scripts/deposit-lock
-cb92414b9d489115880bb09c8d0a2df60839d471  /scripts/godwoken-scripts/tron-account-lock
-0f2d54a4b0c016404f8f6e80b5d538ee0f4411e8  /scripts/godwoken-scripts/withdrawal-lock
-0f22b0f4249504a01d9eb615ae03176f5a1d5ac3  /scripts/godwoken-scripts/challenge-lock
-dab522b3b5a7c6fd179915f9059dac92891756eb  /scripts/godwoken-scripts/omni_lock
+56d24b532b9d790d24ca236782e8ed034b375399  /scripts/gwos-v1.3.0-rc1/sudt-validator
+65556f1157bfa7819befe8cb1cf6af73924fdefa  /scripts/gwos-v1.3.0-rc1/eth-addr-reg-validator
+678e163a475dd82c14f71fec189982643916c5ca  /scripts/gwos-v1.3.0-rc1/meta-contract-validator
+df27b2036e747e07a8b9703262d17dc386736173  /scripts/gwos-v1.3.0-rc1/sudt-generator
+7716f9c629d1780129531929c21717050a8b20df  /scripts/gwos-v1.3.0-rc1/meta-contract-generator
+e72547948d6028328bfc06a8caf5ccdbe2c4be19  /scripts/gwos-v1.3.0-rc1/eth-addr-reg-generator
+677be9b2545c8d1b15aaeb039ac501b6a0f6244e  /scripts/gwos-v1.3.0-rc1/eth-account-lock
+e1a2acd8764648a795fd8f513d39820baf0a00d0  /scripts/gwos-v1.3.0-rc1/state-validator
+248c7d2d85749d163423f3477b12231de1a9b3cd  /scripts/gwos-v1.3.0-rc1/always-success
+87586b3bf1117389cc0cc0785b0b3dfb74b9632b  /scripts/gwos-v1.3.0-rc1/custodian-lock
+dfb6ad1ceda1dd19eb70bc0b3c01528134a7fe9b  /scripts/gwos-v1.3.0-rc1/stake-lock
+502391a6bde1b5d6261fdd4f96204a69796adb38  /scripts/gwos-v1.3.0-rc1/deposit-lock
+cb92414b9d489115880bb09c8d0a2df60839d471  /scripts/gwos-v1.3.0-rc1/tron-account-lock
+0f2d54a4b0c016404f8f6e80b5d538ee0f4411e8  /scripts/gwos-v1.3.0-rc1/withdrawal-lock
+0f22b0f4249504a01d9eb615ae03176f5a1d5ac3  /scripts/gwos-v1.3.0-rc1/challenge-lock
+dab522b3b5a7c6fd179915f9059dac92891756eb  /scripts/gwos-v1.3.0-rc1/omni_lock
 
 ############################## polyjuice-v1.5.0 ################################
 # https://github.com/godwokenrises/godwoken-polyjuice/releases/tag/1.5.0
