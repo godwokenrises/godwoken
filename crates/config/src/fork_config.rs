@@ -24,7 +24,7 @@ impl Default for BackendType {
 }
 
 /// SUDT Proxy config
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SUDTProxyConfig {
     /// Should only be used in test environment

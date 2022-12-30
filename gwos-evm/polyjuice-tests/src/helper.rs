@@ -7,15 +7,14 @@ pub use gw_common::{
 use gw_types::h256::*;
 
 use gw_config::{BackendConfig, BackendForkConfig, BackendType, ForkConfig, SUDTProxyConfig};
-use gw_db::schema::{COLUMN_INDEX, COLUMN_META, META_TIP_BLOCK_HASH_KEY};
 pub use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
     backend_manage::{Backend, BackendManage},
     traits::StateExt,
     Generator,
 };
-use gw_store::traits::kv_store::KVStoreWrite;
 pub use gw_store::{chain_view::ChainView, Store};
+use gw_store::{schema::*, traits::kv_store::KVStoreWrite};
 use gw_store::{state::traits::JournalDB, traits::chain_store::ChainStore};
 use gw_traits::CodeStore;
 use gw_types::packed::{ETHAddrRegArgs, ETHAddrRegArgsUnion};
@@ -520,7 +519,7 @@ pub fn setup() -> (Store, DummyState, Generator) {
         Default::default(),
     );
 
-    let tx = &store.begin_transaction();
+    let mut tx = store.begin_transaction();
     let tip_block_number: Uint64 = 8.pack();
     let tip_block_hash = [8u8; 32];
     tx.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &tip_block_hash[..])

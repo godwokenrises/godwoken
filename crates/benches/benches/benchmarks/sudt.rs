@@ -62,6 +62,7 @@ fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
     ];
     BackendManage::from_config(vec![BackendForkConfig {
         fork_height: 0,
+        sudt_proxy: Default::default(),
         backends: configs,
     }])
     .expect("default backend")

@@ -14,7 +14,6 @@ use gw_common::{
 };
 
 use gw_config::{BackendConfig, BackendForkConfig, BackendType, SUDTProxyConfig};
-use gw_db::schema::{COLUMN_INDEX, COLUMN_META, META_TIP_BLOCK_HASH_KEY};
 use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
     backend_manage::BackendManage,
@@ -23,6 +22,7 @@ use gw_generator::{
 };
 use gw_store::{
     chain_view::ChainView,
+    schema::*,
     state::traits::JournalDB,
     traits::{chain_store::ChainStore, kv_store::KVStoreWrite},
     Store,
@@ -417,7 +417,7 @@ impl Context {
             Default::default(),
         );
 
-        let tx = &store.begin_transaction();
+        let mut tx = store.begin_transaction();
         let tip_block_number: Uint64 = 8.pack();
         let tip_block_hash = [8u8; 32];
         tx.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &tip_block_hash[..])

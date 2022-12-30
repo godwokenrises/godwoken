@@ -12,7 +12,6 @@ path = "src/lib.rs"
 gw-common    = { path = "../../gwos/crates/common/" }
 gw-types     = { path = "../../gwos/crates/types/" }
 gw-smt     = { path = "../../crates/smt/" }
-gw-db        = { path = "../../crates/db/" }
 gw-store     = { path = "../../crates/store/" }
 gw-utils     = { path = "../../crates/utils/" }
 gw-config    = { path = "../../crates/config/" }
