@@ -49,6 +49,11 @@ COPY --from=historical-versions /scripts/godwoken-polyjuice-v1.4.5/ \
 COPY --from=historical-versions /scripts/godwoken-polyjuice/* \
                                 /scripts/godwoken-polyjuice-v1.5.0/
 
+# https://github.com/godwokenrises/godwoken-scripts/releases/tag/v1.3.0-rc1
+COPY --from=historical-versions /scripts/godwoken-scripts/* \
+                                /scripts/gwos-v1.3.0-rc1/
+
+
 #################################### latest ####################################
 # COPY [--chown=<user>:<group>] ["<src>",... "<dest>"]
 
