@@ -17,7 +17,6 @@ gw-challenge = { path = "../challenge" }
 gw-common = { path = "../../gwos/crates/common" }
 gw-smt = { path = "../smt" }
 gw-config = { path = "../config" }
-gw-db = { path = "../db" }
 gw-generator = { path = "../generator" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-telemetry = { path = "../telemetry" }
@@ -40,7 +39,7 @@ tikv-jemallocator = { version = "0.4.0", features = ["unprefixed_malloc_on_suppo
 
 [features]
 profiling = ["tikv-jemallocator/profiling"]
-smt-trie = ["gw-smt/smt-trie", "gw-db/smt-trie", "gw-store/smt-trie"]
+smt-trie = ["gw-smt/smt-trie", "gw-store/smt-trie"]
 
 [lib]
 path = "src/lib.rs"

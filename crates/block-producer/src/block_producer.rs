@@ -171,7 +171,7 @@ impl BlockProducer {
 
         // produce block
         let reverted_block_root: H256 = {
-            let db = self.store.begin_transaction();
+            let mut db = self.store.begin_transaction();
             let smt = db.reverted_block_smt()?;
             (*smt.root()).into()
         };
@@ -182,8 +182,8 @@ impl BlockProducer {
             rollup_config_hash: self.rollup_config_hash,
             block_param,
         };
-        let db = self.store.begin_transaction();
-        let mut result = produce_block(&db, &self.generator, param)?;
+        let mut db = self.store.begin_transaction();
+        let mut result = produce_block(&mut db, &self.generator, param)?;
         result.remaining_capacity = remaining_capacity;
         Ok(result)
     }
@@ -256,7 +256,7 @@ impl BlockProducer {
         // rollup action
         let rollup_action = {
             let submit_builder = if !collected_block_hashes.is_empty() {
-                let db = self.store.begin_transaction();
+                let mut db = self.store.begin_transaction();
                 let block_smt = db.reverted_block_smt()?;
 
                 let local_root: H256 = (*block_smt.root()).into();

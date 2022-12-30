@@ -174,7 +174,7 @@ impl<Reader: Read + Seek> Iterator for ExportedBlockReader<Reader> {
 }
 
 pub fn insert_bad_block_hashes(
-    tx_db: &StoreTransaction,
+    tx_db: &mut StoreTransaction,
     bad_block_hashes_vec: Vec<Vec<H256>>,
 ) -> Result<()> {
     let mut reverted_block_smt = tx_db.reverted_block_smt()?;
@@ -183,13 +183,17 @@ pub fn insert_bad_block_hashes(
         for block_hash in bad_block_hashes.iter() {
             reverted_block_smt.update((*block_hash).into(), SMTH256Ext::one())?;
         }
-        tx_db.set_reverted_block_hashes(
-            &(*reverted_block_smt.root()).into(),
-            prev_smt_root.into(),
-            bad_block_hashes,
-        )?;
+        let root = *reverted_block_smt.root();
+        reverted_block_smt
+            .store_mut()
+            .inner_store_mut()
+            .set_reverted_block_hashes(&root.into(), prev_smt_root.into(), bad_block_hashes)?;
     }
-    tx_db.set_reverted_block_smt_root((*reverted_block_smt.root()).into())?;
+    let root = *reverted_block_smt.root();
+    reverted_block_smt
+        .store_mut()
+        .inner_store_mut()
+        .set_reverted_block_smt_root(root.into())?;
 
     Ok(())
 }

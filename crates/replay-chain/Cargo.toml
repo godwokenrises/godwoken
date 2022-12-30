@@ -14,7 +14,6 @@ gw-common = { path = "../../gwos/crates/common" }
 gw-generator = { path = "../generator" }
 gw-mem-pool = { path = "../mem-pool" }
 gw-store = { path = "../store" }
-gw-db = { path = "../db" }
 gw-traits = { path = "../traits" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-rpc-client = { path = "../rpc-client" }

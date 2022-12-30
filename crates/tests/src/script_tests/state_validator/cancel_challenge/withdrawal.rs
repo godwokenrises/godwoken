@@ -29,7 +29,7 @@ use gw_generator::account_lock_manage::{
     },
     {always_success::AlwaysSuccess, AccountLockManage},
 };
-use gw_store::smt::smt_store::SMTStateStore;
+use gw_smt::smt_h256_ext::SMTH256;
 use gw_store::state::traits::JournalDB;
 use gw_store::state::MemStateDB;
 use gw_types::core::AllowedEoaType;
@@ -284,25 +284,25 @@ async fn test_cancel_withdrawal() {
         .unwrap()
         .unwrap();
     let account_count = tree.get_account_count().unwrap();
-    let touched_keys: Vec<H256> = {
+    let touched_keys: Vec<SMTH256> = {
         let keys = tree.state_tracker().unwrap().touched_keys();
         let unlock = keys.lock().unwrap();
-        unlock.clone().into_iter().collect()
+        unlock.iter().cloned().map(Into::into).collect()
     };
     let kv_state = touched_keys
         .iter()
         .map(|k| {
-            let v = tree.get_raw(k).unwrap();
-            (*k, v)
+            let k = (*k).into();
+            let v = tree.get_raw(&k).unwrap();
+            (k, v)
         })
         .collect::<Vec<(H256, H256)>>();
     let kv_state_proof: Bytes = {
-        let db = chain.store().begin_transaction();
-        let smt = SMTStateStore::new(&db).to_smt().unwrap();
-        let smt_touched_keys: Vec<_> = touched_keys.iter().map(|k| (*k).into()).collect();
-        smt.merkle_proof(smt_touched_keys.clone())
+        let mut db = chain.store().begin_transaction();
+        let smt = db.state_smt().unwrap();
+        smt.merkle_proof(touched_keys.clone())
             .unwrap()
-            .compile(smt_touched_keys)
+            .compile(touched_keys)
             .unwrap()
             .0
             .into()

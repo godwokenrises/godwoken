@@ -11,7 +11,7 @@ use gw_generator::generator::CyclesPool;
 use gw_mem_pool::pool::MemPool;
 use gw_p2p_network::{FnSpawn, P2P_SYNC_PROTOCOL, P2P_SYNC_PROTOCOL_NAME};
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_store::{traits::chain_store::ChainStore, Store};
+use gw_store::{autorocks::RocksDBStatusError, traits::chain_store::ChainStore, Store};
 use gw_telemetry::{
     trace::{SpanContext, SpanId, TraceFlags, TraceId, TraceState},
     traits::{TelemetryContextNewSpan, TraceContextExt},
@@ -77,7 +77,7 @@ impl BlockSyncClient {
         loop {
             if let Some(ref mut s) = p2p_stream {
                 if let Err(err) = run_with_p2p_stream(&mut self, s).await {
-                    if err.is::<gw_db::transaction::CommitError>() {
+                    if err.is::<RocksDBStatusError>() {
                         // Cannot recover from db commit error.
                         log::error!("db error, exiting: {:#}", err);
                         return;
@@ -96,7 +96,7 @@ impl BlockSyncClient {
                     continue;
                 }
                 if let Err(err) = run_once_without_p2p_stream(&mut self).await {
-                    if err.is::<gw_db::transaction::CommitError>() {
+                    if err.is::<RocksDBStatusError>() {
                         // Cannot recover from db error.
                         log::error!("db error, exiting: {:#}", err);
                         return;
@@ -221,7 +221,7 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
 
             check_number_hash(client, &r.number_hash())?;
 
-            let store_tx = client.store.begin_transaction();
+            let mut store_tx = client.store.begin_transaction();
             let nh = r.number_hash();
             let nh = &nh.as_reader();
             store_tx.set_last_confirmed_block_number_hash(nh)?;
@@ -253,7 +253,7 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
 
             check_number_hash(client, &s.number_hash())?;
 
-            let store_tx = client.store.begin_transaction();
+            let mut store_tx = client.store.begin_transaction();
             store_tx.set_block_submit_tx_hash(
                 s.number_hash().number().unpack(),
                 &s.tx_hash().unpack(),
@@ -270,7 +270,7 @@ async fn apply_msg(client: &mut BlockSyncClient, msg: BlockSync) -> Result<()> {
 
             check_number_hash(client, &c.number_hash())?;
 
-            let store_tx = client.store.begin_transaction();
+            let mut store_tx = client.store.begin_transaction();
             store_tx.set_last_confirmed_block_number_hash(&c.number_hash().as_reader())?;
             store_tx.commit()?;
             client.liveness.tick();
@@ -336,12 +336,12 @@ async fn handle_local_block(
         "received block {block_number} {}",
         ckb_types::H256::from(block_hash),
     );
-    let store_tx = &client.store.begin_transaction();
+    let mut store_tx = client.store.begin_transaction();
     let store_block_hash = store_tx.get_block_hash_by_number(block_number)?;
     if let Some(store_block_hash) = store_block_hash {
         if store_block_hash != block_hash {
             log::info!("revert to {}", block_number - 1);
-            revert(client, store_tx, block_number - 1).await?;
+            revert(client, &mut store_tx, block_number - 1).await?;
             store_tx.commit()?;
         } else {
             log::info!("block already known");
@@ -352,16 +352,16 @@ async fn handle_local_block(
         log::info!("update local block");
         let mut chain = client.chain.lock().await;
         block_in_place(|| {
-            let store_tx = client.store.begin_transaction();
+            let mut store_tx = client.store.begin_transaction();
             chain.update_local(
-                &store_tx,
+                &mut store_tx,
                 l.block(),
                 l.deposit_info_vec(),
                 l.deposit_asset_scripts().into_iter().collect(),
                 l.withdrawals().into_iter().collect(),
                 l.post_global_state(),
             )?;
-            chain.calculate_and_store_finalized_custodians(&store_tx, block_number)?;
+            chain.calculate_and_store_finalized_custodians(&mut store_tx, block_number)?;
             store_tx.commit()?;
             anyhow::Ok(())
         })?;

@@ -6,7 +6,7 @@ use replay::*;
 use anyhow::{anyhow, Context, Result};
 use clap::{App, Arg, SubCommand};
 use gw_config::Config;
-use gw_db::schema::COLUMNS;
+use gw_store::schema::COLUMNS;
 use setup::{setup, SetupArgs};
 use std::{fs, path::Path};
 

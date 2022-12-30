@@ -1,11 +1,9 @@
 use anyhow::Error;
-use gw_db::{
-    schema::{COLUMN_BLOCK_STATE_RECORD, COLUMN_BLOCK_STATE_REVERSE_RECORD},
-    DBRawIterator, Direction, IteratorMode,
-};
+use autorocks::Direction;
 use gw_types::h256::*;
 
 use crate::{
+    schema::{COLUMN_BLOCK_STATE_RECORD, COLUMN_BLOCK_STATE_REVERSE_RECORD},
     state::history::{
         block_state_record::{BlockStateRecordKey, BlockStateRecordKeyReverse},
         history_state::HistoryStateStore,
@@ -15,21 +13,19 @@ use crate::{
 
 use super::StoreTransaction;
 
-impl HistoryStateStore for &StoreTransaction {
+impl HistoryStateStore for StoreTransaction {
     type BlockStateRecordKeyIter = Vec<BlockStateRecordKey>;
 
     fn iter_block_state_record(&self, block_number: u64) -> Self::BlockStateRecordKeyIter {
         let start_key = BlockStateRecordKey::new(block_number, &H256::zero());
-        self.get_iter(
-            COLUMN_BLOCK_STATE_RECORD,
-            IteratorMode::From(start_key.as_slice(), Direction::Forward),
-        )
-        .map(|(key, _value)| BlockStateRecordKey::from_slice(&key))
-        .take_while(move |key| key.block_number() == block_number)
-        .collect()
+        let mut iter = self.get_iter(COLUMN_BLOCK_STATE_RECORD, Direction::Forward);
+        iter.seek(start_key.as_slice());
+        iter.map(|(key, _value)| BlockStateRecordKey::from_slice(&key))
+            .take_while(move |key| key.block_number() == block_number)
+            .collect()
     }
 
-    fn remove_block_state_record(&self, block_number: u64) -> Result<(), Error> {
+    fn remove_block_state_record(&mut self, block_number: u64) -> Result<(), Error> {
         let iter = self.iter_block_state_record(block_number);
         for record_key in iter {
             // delete record key
@@ -44,9 +40,10 @@ impl HistoryStateStore for &StoreTransaction {
 
     fn get_history_state(&self, block_number: u64, state_key: &H256) -> Option<H256> {
         let key = BlockStateRecordKeyReverse::new(block_number, state_key);
-        let mut raw_iter: DBRawIterator = self
-            .get_iter(COLUMN_BLOCK_STATE_REVERSE_RECORD, IteratorMode::Start)
-            .into();
+        let mut raw_iter = self.get_iter(
+            COLUMN_BLOCK_STATE_REVERSE_RECORD,
+            autorocks::Direction::Forward,
+        );
         raw_iter.seek_for_prev(key.as_slice());
 
         if !raw_iter.valid() {
@@ -78,7 +75,7 @@ impl HistoryStateStore for &StoreTransaction {
     }
 
     fn record_block_state(
-        &self,
+        &mut self,
         block_number: u64,
         state_key: H256,
         value: H256,

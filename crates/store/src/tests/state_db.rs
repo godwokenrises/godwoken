@@ -1,17 +1,18 @@
-use crate::{
-    state::{history::history_state::RWConfig, traits::JournalDB, BlockStateDB},
-    traits::{chain_store::ChainStore, kv_store::KVStoreWrite},
-    transaction::StoreTransaction,
-    Store,
-};
 use gw_common::{merkle_utils::calculate_state_checkpoint, state::State};
-use gw_db::schema::COLUMN_BLOCK;
 use gw_types::{
     h256::*,
     packed::{
         AccountMerkleState, L2Block, NumberHash, RawL2Block, SubmitTransactions, Transaction,
     },
     prelude::{Builder, Entity, Pack, Unpack},
+};
+
+use crate::{
+    schema::COLUMN_BLOCK,
+    state::{history::history_state::RWConfig, traits::JournalDB, BlockStateDB},
+    traits::{chain_store::ChainStore, kv_store::KVStoreWrite},
+    transaction::StoreTransaction,
+    Store,
 };
 
 fn build_block<S: State + JournalDB>(
@@ -39,7 +40,7 @@ fn build_block<S: State + JournalDB>(
         .build()
 }
 
-fn commit_block(db: &StoreTransaction, block: L2Block) {
+fn commit_block(db: &mut StoreTransaction, block: L2Block) {
     let block_hash = block.hash();
     db.insert_raw(COLUMN_BLOCK, &block_hash, block.as_slice())
         .unwrap();
@@ -62,15 +63,15 @@ fn test_state_with_version() {
                 .build(),
         )
         .build();
-    let db = store.begin_transaction();
+    let mut db = store.begin_transaction();
     db.set_block_smt_root(H256::zero()).unwrap();
-    commit_block(&db, genesis);
+    commit_block(&mut db, genesis);
     db.commit().unwrap();
 
     // block 1
     {
-        let db = store.begin_transaction();
-        let mut state = BlockStateDB::from_store(&db, RWConfig::attach_block(1)).unwrap();
+        let mut db = store.begin_transaction();
+        let mut state = BlockStateDB::from_store(&mut db, RWConfig::attach_block(1)).unwrap();
         state
             .update_raw(H256::from_u32(1), H256::from_u32(2))
             .unwrap();
@@ -89,8 +90,9 @@ fn test_state_with_version() {
         state
             .update_raw(H256::from_u32(4), H256::from_u32(4))
             .unwrap();
-        commit_block(&db, build_block(&mut state, 1, prev_txs_state_checkpoint));
+        let block = build_block(&mut state, 1, prev_txs_state_checkpoint);
         prev_txs_state_checkpoint = state.calculate_state_checkpoint().unwrap();
+        commit_block(&mut db, block);
         db.set_block_submit_tx(1, &Transaction::default().as_reader())
             .unwrap();
         db.set_last_submitted_block_number_hash(
@@ -103,8 +105,8 @@ fn test_state_with_version() {
         db.commit().unwrap();
     }
     {
-        let db = &store.begin_transaction();
-        let state = BlockStateDB::from_store(db, RWConfig::readonly()).unwrap();
+        let mut db = store.begin_transaction();
+        let state = BlockStateDB::from_store(&mut db, RWConfig::readonly()).unwrap();
         let v = state.get_raw(&H256::from_u32(1)).unwrap();
         assert_eq!(v, H256::from_u32(1));
         let v = state.get_raw(&H256::from_u32(2)).unwrap();
@@ -121,8 +123,8 @@ fn test_state_with_version() {
 
     // attach block 2
     {
-        let db = &store.begin_transaction();
-        let mut state = BlockStateDB::from_store(db, RWConfig::attach_block(2)).unwrap();
+        let mut db = store.begin_transaction();
+        let mut state = BlockStateDB::from_store(&mut db, RWConfig::attach_block(2)).unwrap();
         state
             .update_raw(H256::from_u32(1), H256::from_u32(1))
             .unwrap();
@@ -133,7 +135,8 @@ fn test_state_with_version() {
         state
             .update_raw(H256::from_u32(5), H256::from_u32(25))
             .unwrap();
-        commit_block(db, build_block(&mut state, 2, prev_txs_state_checkpoint));
+        let block = build_block(&mut state, 2, prev_txs_state_checkpoint);
+        commit_block(&mut db, block);
         db.set_last_confirmed_block_number_hash(
             &NumberHash::new_builder()
                 .number(2.pack())
@@ -150,7 +153,7 @@ fn test_state_with_version() {
     }
     {
         let db = store.begin_transaction();
-        let state = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
+        let state = BlockStateDB::from_store(db, RWConfig::readonly()).unwrap();
         let v = state.get_raw(&H256::from_u32(1)).unwrap();
         assert_eq!(v, H256::from_u32(1));
         let v = state.get_raw(&H256::from_u32(2)).unwrap();
@@ -165,16 +168,16 @@ fn test_state_with_version() {
 
     // detach block 2
     {
-        let db = &store.begin_transaction();
+        let mut db = store.begin_transaction();
         db.detach_block(&db.get_tip_block().unwrap()).unwrap();
-        let mut state = BlockStateDB::from_store(db, RWConfig::detach_block()).unwrap();
+        let mut state = BlockStateDB::from_store(&mut db, RWConfig::detach_block()).unwrap();
         state.detach_block_state(2).unwrap();
         prev_txs_state_checkpoint = state.calculate_state_checkpoint().unwrap();
         db.commit().unwrap();
     }
     {
-        let db = &store.begin_transaction();
-        let state = BlockStateDB::from_store(db, RWConfig::readonly()).unwrap();
+        let mut db = store.begin_transaction();
+        let state = BlockStateDB::from_store(&mut db, RWConfig::readonly()).unwrap();
         let v = state.get_raw(&H256::from_u32(1)).unwrap();
         assert_eq!(v, H256::from_u32(1));
         let v = state.get_raw(&H256::from_u32(2)).unwrap();
@@ -194,8 +197,8 @@ fn test_state_with_version() {
 
     // attach 2 again
     {
-        let db = store.begin_transaction();
-        let mut state = BlockStateDB::from_store(&db, RWConfig::attach_block(2)).unwrap();
+        let mut db = store.begin_transaction();
+        let mut state = BlockStateDB::from_store(&mut db, RWConfig::attach_block(2)).unwrap();
         state
             .update_raw(H256::from_u32(1), H256::from_u32(1))
             .unwrap();
@@ -206,12 +209,13 @@ fn test_state_with_version() {
         state
             .update_raw(H256::from_u32(5), H256::from_u32(25))
             .unwrap();
-        commit_block(&db, build_block(&mut state, 2, prev_txs_state_checkpoint));
+        let block = build_block(&mut state, 2, prev_txs_state_checkpoint);
+        commit_block(&mut db, block);
         db.commit().unwrap();
     }
     {
-        let db = store.begin_transaction();
-        let state = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
+        let mut db = store.begin_transaction();
+        let state = BlockStateDB::from_store(&mut db, RWConfig::readonly()).unwrap();
         let v = state.get_raw(&H256::from_u32(1)).unwrap();
         assert_eq!(v, H256::from_u32(1));
         let v = state.get_raw(&H256::from_u32(2)).unwrap();
@@ -226,8 +230,8 @@ fn test_state_with_version() {
 
     // check block 1
     {
-        let db = store.begin_transaction();
-        let state = BlockStateDB::from_store(&db, RWConfig::history_block(1)).unwrap();
+        let mut db = store.begin_transaction();
+        let state = BlockStateDB::from_store(&mut db, RWConfig::history_block(1)).unwrap();
         let v = state.get_raw(&H256::from_u32(1)).unwrap();
         assert_eq!(v, H256::from_u32(1));
         let v = state.get_raw(&H256::from_u32(2)).unwrap();

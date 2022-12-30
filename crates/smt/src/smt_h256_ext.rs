@@ -1,7 +1,9 @@
 // type aliases
 
 use gw_types::U256;
-pub use sparse_merkle_tree::H256 as SMTH256;
+
+// Use pub type so that rust-analyzer knows how to import `SMTH256`.
+pub type SMTH256 = sparse_merkle_tree::H256;
 
 pub trait SMTH256Ext {
     fn one() -> Self;

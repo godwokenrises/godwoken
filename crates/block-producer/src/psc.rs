@@ -168,8 +168,8 @@ impl ProduceSubmitConfirm {
                         let revert_to = should_revert.0 - 1;
                         log::info!("revert to block {revert_to}");
 
-                        let store_tx = self.context.store.begin_transaction();
-                        revert(&*self.context, &store_tx, revert_to).await?;
+                        let mut store_tx = self.context.store.begin_transaction();
+                        revert(&*self.context, &mut store_tx, revert_to).await?;
                         store_tx.commit()?;
                     }
                     if e.is::<ShouldResyncError>() || e.is::<ShouldRevertError>() {
@@ -319,7 +319,7 @@ async fn run(state: &mut ProduceSubmitConfirm) -> Result<()> {
                     Err(err) if err.is_panic() => bail!("sync task panic: {:?}", err.into_panic()),
                     Ok(nh) => {
                         let nh = nh?;
-                        let store_tx = state.context.store.begin_transaction();
+                        let mut store_tx = state.context.store.begin_transaction();
                         store_tx.set_last_confirmed_block_number_hash(&nh.as_reader())?;
                         store_tx.commit()?;
                         if let Some(ref sync_server) = state.context.block_sync_server_state {
@@ -338,7 +338,7 @@ async fn run(state: &mut ProduceSubmitConfirm) -> Result<()> {
                     Err(err) if err.is_panic() => bail!("submit task panic: {:?}", err.into_panic()),
                     Ok(nh) => {
                         let nh = nh?;
-                        let store_tx = state.context.store.begin_transaction();
+                        let mut store_tx = state.context.store.begin_transaction();
                         store_tx.set_last_submitted_block_number_hash(&nh.as_reader())?;
                         store_tx.commit()?;
                         if let Some(ref sync_server) = state.context.block_sync_server_state {
@@ -437,9 +437,9 @@ async fn produce_local_block(ctx: &PSCContext) -> Result<()> {
 
     let mut chain = ctx.chain.lock().await;
     tokio::task::block_in_place(|| {
-        let store_tx = ctx.store.begin_transaction();
+        let mut store_tx = ctx.store.begin_transaction();
         chain.update_local(
-            &store_tx,
+            &mut store_tx,
             block,
             deposit_info_vec,
             deposit_asset_scripts,
@@ -561,7 +561,7 @@ async fn submit_block(
                 }
             })?;
 
-        let store_tx = ctx.store.begin_transaction();
+        let mut store_tx = ctx.store.begin_transaction();
         store_tx.set_block_submit_tx(block_number, &tx.as_reader())?;
         store_tx.commit()?;
 

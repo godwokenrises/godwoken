@@ -9,7 +9,6 @@ members = [
   "crates/mem-pool",
   "crates/generator",
   "crates/traits",
-  "crates/db",
   "crates/store",
   "crates/block-producer",
   "crates/jsonrpc-types",
@@ -31,6 +30,10 @@ members = [
 ]
 
 exclude = [
+ # Autorocks is in its own workspace because it's relatively independent of
+ # other godwoken crates. This also makes rust-analyzer and cargo faster when
+ # working on godwoken.
+ "crates/autorocks",
  "gwos-evm/polyjuice-tests",
  "gwos/contracts",
 ]

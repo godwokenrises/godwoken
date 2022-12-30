@@ -1,64 +1,120 @@
 //! Storage implementation
 
-use crate::smt::smt_store::SMTBlockStore;
-use crate::state::history::history_state::RWConfig;
-use crate::state::BlockStateDB;
-use crate::traits::chain_store::ChainStore;
-use crate::traits::kv_store::KVStoreRead;
-use crate::write_batch::StoreWriteBatch;
-use crate::{snapshot::StoreSnapshot, transaction::StoreTransaction};
-use anyhow::Result;
-use gw_common::error::Error;
-use gw_smt::smt::Blake2bHasher;
+use std::sync::Arc;
 
-use gw_db::{
-    schema::{Col, COLUMNS},
-    CfMemStat, DBPinnableSlice, RocksDB,
+use anyhow::Result;
+use autorocks::autorocks_sys::rocksdb::{
+    TransactionDBWriteOptimizations, TransactionOptions, WriteOptions,
 };
+use autorocks::moveit::{moveit, slot};
+use autorocks::{DbOptions, TransactionDb, WriteBatch};
+use gw_config::StoreConfig;
+use gw_smt::smt::Blake2bHasher;
 use gw_types::prelude::*;
+use serde::Serialize;
+use tempfile::TempDir;
+
+use crate::schema::{Col, COLUMNS};
+use crate::smt::smt_store::SMTBlockStore;
+use crate::state::{history::history_state::RWConfig, BlockStateDB};
+use crate::traits::{chain_store::ChainStore, kv_store::KVStoreRead};
+use crate::{snapshot::StoreSnapshot, transaction::StoreTransaction};
 
 #[derive(Clone)]
 pub struct Store {
-    db: RocksDB,
+    db: TransactionDb,
+    _temp_dir: Option<Arc<TempDir>>,
 }
 
-impl<'a> Store {
-    pub fn new(db: RocksDB) -> Self {
-        Store { db }
-    }
-
-    pub fn open_tmp() -> Result<Self> {
-        let db = RocksDB::open_tmp(COLUMNS);
+impl Store {
+    pub fn open(config: &StoreConfig, columns: usize) -> Result<Self> {
+        let mut opts = DbOptions::new(&config.path, columns);
+        if let Some(ref opts_file) = config.options_file {
+            opts.load_options_from_file(opts_file, config.cache_size.unwrap_or(0))?;
+        }
+        opts.create_if_missing(true);
+        opts.create_missing_column_families(true);
+        let db = opts.open()?;
+        // TODO: repair.
         Ok(Self::new(db))
     }
 
-    fn get(&'a self, col: Col, key: &[u8]) -> Option<DBPinnableSlice<'a>> {
-        self.db
-            .get_pinned(col, key)
-            .expect("db operation should be ok")
+    pub fn new(db: TransactionDb) -> Self {
+        Store {
+            db,
+            _temp_dir: None,
+        }
+    }
+
+    pub fn open_tmp() -> Result<Self> {
+        let dir = tempfile::tempdir()?;
+        Ok(Self {
+            db: DbOptions::new(dir.path(), COLUMNS)
+                .create_if_missing(true)
+                .create_missing_column_families(true)
+                .open()?,
+            _temp_dir: Some(dir.into()),
+        })
     }
 
     pub fn begin_transaction(&self) -> StoreTransaction {
         StoreTransaction {
-            inner: self.db.transaction(),
+            inner: self.db.begin_transaction(),
+        }
+    }
+
+    /// Begin transaction but disable concurrency control.
+    ///
+    /// This should be faster than a normal transaction when you know that there
+    /// won't be any conflicts.
+    pub fn begin_transaction_skip_concurrency_control(&self) -> StoreTransaction {
+        moveit! {
+            let write_options = WriteOptions::new();
+            let mut transaction_options = TransactionOptions::new();
+        }
+        transaction_options.as_mut().skip_concurrency_control = true;
+        transaction_options.as_mut().set_snapshot = true;
+        StoreTransaction {
+            inner: self
+                .db
+                .begin_transaction_with_options(&write_options, &transaction_options),
         }
     }
 
     pub fn gather_mem_stats(&self) -> Vec<CfMemStat> {
-        self.db.gather_mem_stats()
+        let last_col = self.as_inner().default_col();
+        let mut result = Vec::with_capacity((last_col + 1) * 6);
+
+        for c in 0..=last_col {
+            for p in [
+                "rocksdb.estimate-table-readers-mem",
+                "rocksdb.size-all-mem-tables",
+                "rocksdb.cur-size-all-mem-tables",
+                "rocksdb.block-cache-capacity",
+                "rocksdb.block-cache-usage",
+                "rocksdb.block-cache-pinned-usage",
+            ] {
+                result.push(CfMemStat {
+                    name: c,
+                    // Skip rocksdb.
+                    type_: &p[8..],
+                    value: self.as_inner().get_int_property(c, p),
+                })
+            }
+        }
+        result
     }
 
-    pub fn new_write_batch(&self) -> StoreWriteBatch {
-        StoreWriteBatch {
-            inner: self.db.new_write_batch(),
+    /// Transactional range delete is not supported. If there are range deletes
+    /// in the write_batch, must use this.
+    pub fn write_skip_concurrency_control(&self, write_batch: &mut WriteBatch) -> Result<()> {
+        moveit! {
+            let options = WriteOptions::new();
+            let mut optimizations = TransactionDBWriteOptimizations::new();
         }
-    }
-
-    pub fn write(&self, write_batch: &StoreWriteBatch) -> Result<(), Error> {
-        if let Err(err) = self.db.write(&write_batch.inner) {
-            log::error!("Store error: {}", err);
-            return Err(Error::Store);
-        }
+        optimizations.skip_concurrency_control = true;
+        self.db
+            .write_with_options(&options, &optimizations, write_batch)?;
         Ok(())
     }
 
@@ -66,7 +122,7 @@ impl<'a> Store {
         // check state tree
         {
             let db = self.begin_transaction();
-            let tree = BlockStateDB::from_store(&db, RWConfig::readonly())?;
+            let tree = BlockStateDB::from_store(db, RWConfig::readonly())?;
             tree.check_state()?;
         }
 
@@ -89,21 +145,38 @@ impl<'a> Store {
     }
 
     pub fn get_snapshot(&self) -> StoreSnapshot {
-        StoreSnapshot::new(self.db.get_snapshot())
+        StoreSnapshot::new(self.db.snapshot())
     }
 
-    pub fn as_inner(&self) -> &RocksDB {
+    pub fn as_inner(&self) -> &TransactionDb {
         &self.db
     }
 
-    pub fn into_inner(self) -> RocksDB {
+    pub fn as_inner_mut(&mut self) -> &mut TransactionDb {
+        &mut self.db
+    }
+
+    pub fn into_inner(self) -> TransactionDb {
         self.db
     }
 }
 
 impl ChainStore for Store {}
+
 impl KVStoreRead for Store {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
-        self.get(col, key).map(|v| Box::<[u8]>::from(v.as_ref()))
+        slot!(slice);
+        self.db
+            .get(col, key, slice)
+            .expect("db operation should be ok")
+            .map(|p| p.as_ref().into())
     }
+}
+
+#[derive(Serialize)]
+pub struct CfMemStat {
+    // Column name.
+    name: usize,
+    type_: &'static str,
+    value: Option<u64>,
 }

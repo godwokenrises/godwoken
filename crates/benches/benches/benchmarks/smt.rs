@@ -9,7 +9,6 @@ use gw_common::{
     state::State,
 };
 use gw_config::{BackendConfig, BackendForkConfig, GenesisConfig, StoreConfig};
-use gw_db::{schema::COLUMNS, RocksDB};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::BackendManage,
@@ -19,6 +18,7 @@ use gw_generator::{
 };
 use gw_store::{
     mem_pool_state::MemPoolState,
+    schema::COLUMNS,
     state::{
         history::history_state::{HistoryState, RWConfig},
         state_db::StateDB,
@@ -74,9 +74,8 @@ pub fn bench_ckb_transfer(c: &mut Criterion) {
         path: "./smt_data/db".parse().unwrap(),
         options_file: Some("./smt_data/db.toml".parse().unwrap()),
         cache_size: Some(1073741824),
-        ..Default::default()
     };
-    let store = Store::new(RocksDB::open(&config, COLUMNS));
+    let store = Store::open(&config, COLUMNS).unwrap();
     let ee = BenchExecutionEnvironment::new_with_accounts(store, 7000);
 
     let mut group = c.benchmark_group("ckb_transfer");
@@ -322,9 +321,10 @@ impl BenchExecutionEnvironment {
             }
         }
 
-        let db = store.begin_transaction();
+        let mut db = store.begin_transaction();
         db.setup_chain_id(ROLLUP_TYPE_HASH).unwrap();
-        let (db, genesis_state) = build_genesis_from_store(db, config, Default::default()).unwrap();
+        let (mut db, genesis_state) =
+            build_genesis_from_store(db, config, Default::default()).unwrap();
 
         let smt = db
             .state_smt_with_merkle_state(genesis_state.genesis.raw().post_account())

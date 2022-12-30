@@ -479,14 +479,16 @@ impl Default for DBBlockValidatorConfig {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StoreConfig {
-    #[serde(default)]
+    #[serde(default = "default_store_path")]
     pub path: PathBuf,
     #[serde(default)]
     pub cache_size: Option<usize>,
     #[serde(default)]
     pub options_file: Option<PathBuf>,
-    #[serde(default)]
-    pub options: HashMap<String, String>,
+}
+
+fn default_store_path() -> PathBuf {
+    "./gw-db".into()
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

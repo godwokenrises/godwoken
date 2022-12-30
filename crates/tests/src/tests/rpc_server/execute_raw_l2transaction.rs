@@ -387,14 +387,16 @@ async fn test_polyjuice_tx_from_id_zero_with_block_number() {
         .await
         .unwrap();
 
-    let db = chain.store().begin_transaction();
-    let pre_block1_hist_state = BlockStateDB::from_store(&db, RWConfig::history_block(1)).unwrap();
+    let mut db = chain.store().begin_transaction();
+    let pre_block1_hist_state =
+        BlockStateDB::from_store(&mut db, RWConfig::history_block(1)).unwrap();
     let hist_balance = pre_block1_hist_state
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, test_wallet.reg_address())
         .unwrap();
     assert_eq!(hist_balance, pre_block1_balance);
 
-    let post_block1_hist_state = BlockStateDB::from_store(&db, RWConfig::history_block(2)).unwrap();
+    let post_block1_hist_state =
+        BlockStateDB::from_store(&mut db, RWConfig::history_block(2)).unwrap();
     let hist_balance = post_block1_hist_state
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, test_wallet.reg_address())
         .unwrap();

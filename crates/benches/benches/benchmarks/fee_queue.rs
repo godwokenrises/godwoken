@@ -26,10 +26,10 @@ fn bench_add_full(b: &mut Bencher) {
     let store = Store::open_tmp().expect("open store");
     setup_genesis(&store);
     {
-        let db = &store.begin_transaction();
+        let mut db = store.begin_transaction();
         let genesis = db.get_tip_block().expect("tip");
         assert_eq!(genesis.raw().number().unpack(), 0);
-        let mut state = BlockStateDB::from_store(db, RWConfig::attach_block(1)).unwrap();
+        let mut state = BlockStateDB::from_store(&mut db, RWConfig::attach_block(1)).unwrap();
 
         // create accounts
         for i in 0..4 {
@@ -82,10 +82,10 @@ fn bench_add_fetch_20(b: &mut Bencher) {
     let store = Store::open_tmp().expect("open store");
     setup_genesis(&store);
     {
-        let db = &store.begin_transaction();
+        let mut db = store.begin_transaction();
         let genesis = db.get_tip_block().expect("tip");
         assert_eq!(genesis.raw().number().unpack(), 0);
-        let mut state = BlockStateDB::from_store(db, RWConfig::attach_block(1)).unwrap();
+        let mut state = BlockStateDB::from_store(&mut db, RWConfig::attach_block(1)).unwrap();
 
         // create accounts
         for i in 0..4 {

@@ -1,0 +1,30 @@
+name: Autorocks Tests
+
+on:
+  push:
+    paths:
+      - "crates/autorocks/**"
+  pull_request:
+    paths:
+      - "crates/autorocks/**"
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/autorocks
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - name: Install Rust components
+        run: rustup component add rustfmt && rustup component add clippy
+      - name: Check format
+        run: cargo fmt --all -- --check
+      - name: Cargo clippy
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo clippy
+      - name: Cargo test
+        run: cargo test

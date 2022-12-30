@@ -2,13 +2,12 @@ use crate::{
     traits::kv_store::{KVStoreRead, KVStoreWrite},
     Store,
 };
-use gw_db::{DBRawIterator, Direction::Forward, IteratorMode};
 use std::collections::HashMap;
 
 #[test]
 fn insert_and_get() {
     let store = Store::open_tmp().unwrap();
-    let store_txn = &store.begin_transaction();
+    let mut store_txn = store.begin_transaction();
 
     store_txn.insert_raw(0, &[0, 0], &[0, 0, 0]).unwrap();
     store_txn.insert_raw(1, &[1, 1], &[1, 1, 1]).unwrap();
@@ -32,7 +31,7 @@ fn insert_and_get() {
         store_txn.get(1, &[2]).unwrap()
     );
 
-    let iter = store_txn.get_iter(1, IteratorMode::Start);
+    let iter = store_txn.get_iter(1, autorocks::Direction::Forward);
     let mut r = HashMap::new();
     for (key, val) in iter {
         r.insert(key.to_vec(), val.to_vec());
@@ -46,7 +45,7 @@ fn insert_and_get() {
 #[test]
 fn delete() {
     let store = Store::open_tmp().unwrap();
-    let store_txn = &store.begin_transaction();
+    let mut store_txn = store.begin_transaction();
 
     store_txn.insert_raw(1, &[2], &[1, 1, 1]).unwrap();
     store_txn.delete(1, &[2]).unwrap();
@@ -57,7 +56,7 @@ fn delete() {
     assert!(store_txn.get(1, &[2]).is_none());
 
     // delete a nonexistent
-    let store_txn = &store.begin_transaction();
+    let mut store_txn = store.begin_transaction();
     assert!(store_txn.delete(1, &[3]).is_ok());
     assert!(store_txn.commit().is_ok());
 }
@@ -65,7 +64,7 @@ fn delete() {
 #[test]
 fn insert_without_commit() {
     let store = Store::open_tmp().unwrap();
-    let store_txn = &store.begin_transaction();
+    let mut store_txn = store.begin_transaction();
 
     // insert without commit
     store_txn.insert_raw(0, &[0, 0], &[0, 0, 0]).unwrap();
@@ -79,77 +78,9 @@ fn insert_without_commit() {
 }
 
 #[test]
-fn intersect_transactions() {
-    let store = Store::open_tmp().unwrap();
-    let store_txn_1 = &store.begin_transaction();
-    let store_txn_2 = &store.begin_transaction();
-    let store_txn_3 = &store.begin_transaction();
-    let store_txn_4 = &store.begin_transaction();
-
-    // store_txn_2 insert key without commit
-    store_txn_2.insert_raw(1, &[1, 1], &[1, 1, 1]).unwrap();
-
-    assert!(store_txn_1.get(1, &[1, 1]).is_none());
-    assert_eq!(
-        vec![1, 1, 1].into_boxed_slice(),
-        store_txn_2.get(1, &[1, 1]).unwrap()
-    );
-    assert!(store_txn_3.get(1, &[1, 1]).is_none());
-    assert!(store_txn_4.get(1, &[1, 1]).is_none());
-
-    store_txn_4.insert_raw(1, &[2, 2], &[2, 2, 2]).unwrap();
-    store_txn_4.commit().unwrap();
-
-    // Transaction isolation level: Read Committed
-    assert_eq!(
-        vec![2, 2, 2].into_boxed_slice(),
-        store_txn_1.get(1, &[2, 2]).unwrap()
-    );
-    assert_eq!(
-        vec![2, 2, 2].into_boxed_slice(),
-        store_txn_2.get(1, &[2, 2]).unwrap()
-    );
-    assert_eq!(
-        vec![2, 2, 2].into_boxed_slice(),
-        store_txn_3.get(1, &[2, 2]).unwrap()
-    );
-    assert_eq!(
-        vec![2, 2, 2].into_boxed_slice(),
-        store_txn_4.get(1, &[2, 2]).unwrap()
-    );
-
-    // overwrite store_txn_2's key inserted without commit
-    store_txn_4.insert_raw(1, &[1, 1], &[0, 0, 0]).unwrap();
-    store_txn_4.commit().unwrap();
-
-    assert_eq!(
-        vec![0, 0, 0].into_boxed_slice(),
-        store_txn_1.get(1, &[1, 1]).unwrap()
-    );
-    assert_eq!(
-        vec![1, 1, 1].into_boxed_slice(),
-        store_txn_2.get(1, &[1, 1]).unwrap() // keep modified
-    );
-    assert_eq!(
-        vec![0, 0, 0].into_boxed_slice(),
-        store_txn_3.get(1, &[1, 1]).unwrap()
-    );
-    assert_eq!(
-        vec![0, 0, 0].into_boxed_slice(),
-        store_txn_4.get(1, &[1, 1]).unwrap()
-    );
-
-    // RosksDB's PessimisticTransaction mode will lock the key when insert
-    // RosksDB's OptimisticTransaction mode won't lock the key when insert
-    // but check conflict when commit
-    // gw_store::Store use OptimisticTransaction mode by default
-    assert!(store_txn_2.commit().is_err());
-}
-
-#[test]
 fn seek_for_prev() {
     let store = Store::open_tmp().unwrap();
-    let store_txn = &store.begin_transaction();
+    let mut store_txn = store.begin_transaction();
 
     store_txn.insert_raw(1, &[0], &[0, 0, 0]).unwrap();
     store_txn.insert_raw(1, &[1], &[1, 1, 1]).unwrap();
@@ -176,7 +107,7 @@ fn seek_for_prev() {
     );
 
     let store_txn = store.begin_transaction();
-    let iter = store_txn.get_iter(1, IteratorMode::Start);
+    let iter = store_txn.get_iter(1, autorocks::Direction::Forward);
     let mut r = HashMap::new();
     for (key, val) in iter {
         r.insert(key.to_vec(), val.to_vec());
@@ -186,21 +117,20 @@ fn seek_for_prev() {
     assert_eq!(Some(&vec![1u8, 1, 1]), r.get(&vec![1]));
     assert_eq!(Some(&vec![3u8, 3, 3]), r.get(&vec![3]));
 
-    let iter = store_txn.get_iter(1, IteratorMode::Start);
-    let mut raw_iter: DBRawIterator = iter.into();
-    raw_iter.seek_for_prev([5]);
+    let mut raw_iter = store_txn.get_iter(1, autorocks::Direction::Forward);
+    raw_iter.seek_for_prev(&[5]);
     assert_eq!(&[3], raw_iter.key().unwrap());
     assert_eq!(&[3, 3, 3], raw_iter.value().unwrap());
 
-    raw_iter.seek_for_prev([3]);
+    raw_iter.seek_for_prev(&[3]);
     assert_eq!(&[3], raw_iter.key().unwrap());
     assert_eq!(&[3, 3, 3], raw_iter.value().unwrap());
 
-    raw_iter.seek_for_prev([2]);
+    raw_iter.seek_for_prev(&[2]);
     assert_eq!(&[1], raw_iter.key().unwrap());
     assert_eq!(&[1, 1, 1], raw_iter.value().unwrap());
 
-    raw_iter.seek_for_prev([1]);
+    raw_iter.seek_for_prev(&[1]);
     assert_eq!(&[1], raw_iter.key().unwrap());
     assert_eq!(&[1, 1, 1], raw_iter.value().unwrap());
 }
@@ -208,7 +138,7 @@ fn seek_for_prev() {
 #[test]
 fn seek_for_prev_with_suffix() {
     let store = Store::open_tmp().unwrap();
-    let store_txn = &store.begin_transaction();
+    let mut store_txn = store.begin_transaction();
 
     let (block_num_1, tx_idx_5) = (1u64, 5u32);
     let (block_num_2, tx_idx_7) = (2u64, 7u32);
@@ -278,23 +208,22 @@ fn seek_for_prev_with_suffix() {
     let key_2_with_ver_2_6 = [&key_2[..], &block_num_2.to_be_bytes(), &6u32.to_be_bytes()].concat();
     let key_1_with_ver_1_4 = [&key_1[..], &block_num_1.to_be_bytes(), &4u32.to_be_bytes()].concat();
 
-    let iter = store_txn.get_iter(1, IteratorMode::Start);
-    let mut raw_iter: DBRawIterator = iter.into();
+    let mut raw_iter = store_txn.get_iter(1, autorocks::Direction::Forward);
 
-    raw_iter.seek_for_prev(key_3_with_ver_257_1);
+    raw_iter.seek_for_prev(&key_3_with_ver_257_1);
     assert_eq!(&key_3_with_ver_256_2, &raw_iter.key().unwrap());
     assert_eq!(&value_3, raw_iter.value().unwrap());
 
-    raw_iter.seek_for_prev(key_3_with_ver_256_9);
+    raw_iter.seek_for_prev(&key_3_with_ver_256_9);
     assert_eq!(&key_3_with_ver_256_2, &raw_iter.key().unwrap());
     assert_eq!(&value_3, raw_iter.value().unwrap());
 
-    raw_iter.seek_for_prev(key_3_with_ver_256_2.clone());
+    raw_iter.seek_for_prev(&key_3_with_ver_256_2);
     assert_eq!(&key_3_with_ver_256_2, &raw_iter.key().unwrap());
     assert_eq!(&value_3, raw_iter.value().unwrap());
 
     let n = key_3_with_ver_256_1.len();
-    raw_iter.seek_for_prev(key_3_with_ver_256_1);
+    raw_iter.seek_for_prev(&key_3_with_ver_256_1);
     assert_eq!(&key_2_with_ver_2_7, &raw_iter.key().unwrap());
     assert_eq!(
         key_2,
@@ -304,12 +233,12 @@ fn seek_for_prev_with_suffix() {
     assert_ne!(key_3, raw_iter.key().unwrap()[..n - 12]);
 
     let n = key_2_with_ver_2_6.len();
-    raw_iter.seek_for_prev(key_2_with_ver_2_6);
+    raw_iter.seek_for_prev(&key_2_with_ver_2_6);
     assert_eq!(&key_1_with_ver_1_5, &raw_iter.key().unwrap());
     assert_eq!(&value_1, raw_iter.value().unwrap());
     assert_ne!(key_1, raw_iter.key().unwrap()[..n - 12]);
 
-    raw_iter.seek_for_prev(key_1_with_ver_1_4);
+    raw_iter.seek_for_prev(&key_1_with_ver_1_4);
     assert!(!raw_iter.valid());
     assert!(raw_iter.key().is_none());
 }
@@ -318,16 +247,16 @@ fn seek_for_prev_with_suffix() {
 fn delete_range() {
     let store = Store::open_tmp().unwrap();
 
-    let store_txn = &store.begin_transaction();
+    let mut store_txn = store.begin_transaction();
     store_txn.insert_raw(1, &[0], &[0, 0]).unwrap();
     store_txn.insert_raw(1, &[1], &[1, 1]).unwrap();
     store_txn.insert_raw(1, &[2], &[2, 2]).unwrap();
     store_txn.insert_raw(1, &[3], &[3, 3]).unwrap();
     store_txn.commit().unwrap();
 
-    let mut batch = store.new_write_batch();
-    batch.inner.delete_range(1, &[0], &[3]).unwrap();
-    store.write(&batch).unwrap();
+    let mut batch = store.as_inner().new_write_batch();
+    batch.delete_range(1, &[0], &[3]).unwrap();
+    store.write_skip_concurrency_control(&mut batch).unwrap();
 
     assert!(store_txn.get(1, &[0]).is_none());
     assert!(store_txn.get(1, &[1]).is_none());
@@ -339,7 +268,7 @@ fn delete_range() {
 fn range_search_and_delete() {
     let store = Store::open_tmp().unwrap();
 
-    let store_txn = &store.begin_transaction();
+    let mut store_txn = store.begin_transaction();
     store_txn.insert_raw(1, &[0, 0], &[1, 0, 0]).unwrap();
     store_txn.insert_raw(1, &[0, 1], &[1, 0, 1]).unwrap();
     store_txn.insert_raw(1, &[0, 2], &[3, 0, 2]).unwrap();
@@ -354,11 +283,11 @@ fn range_search_and_delete() {
     store_txn.insert_raw(1, &[1, 3], &[6, 1, 2]).unwrap();
     store_txn.commit().unwrap();
 
-    let iter = store_txn.get_iter(1, IteratorMode::From(&[1, 0], Forward));
-    for (key, _) in iter.take_while(|(key, _)| key[0] <= 5) {
-        store_txn.delete(1, &key).unwrap();
-    }
+    let mut wb = store.as_inner().new_write_batch();
+    wb.delete_range(1, &[1, 0], &[6]).unwrap();
+    store.write_skip_concurrency_control(&mut wb).unwrap();
 
+    let store_txn = &store.begin_transaction();
     assert!(store_txn.get(1, &[0, 0]).is_some());
     assert!(store_txn.get(1, &[0, 1]).is_some());
     assert!(store_txn.get(1, &[0, 2]).is_some());

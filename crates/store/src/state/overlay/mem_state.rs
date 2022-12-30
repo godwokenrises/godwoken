@@ -1,13 +1,13 @@
 //! Mem State DB
 //!
 
+use crate::schema::{COLUMN_DATA, COLUMN_SCRIPT};
 use crate::smt::smt_store::SMTStateStore;
 use crate::snapshot::StoreSnapshot;
 use crate::traits::kv_store::KVStoreRead;
 use crate::traits::kv_store::KVStoreWrite;
 use anyhow::Result;
 use gw_common::{error::Error as StateError, state::State};
-use gw_db::schema::{COLUMN_DATA, COLUMN_SCRIPT};
 use gw_smt::smt::SMT;
 use gw_traits::CodeStore;
 use gw_types::from_box_should_be_ok;
@@ -47,6 +47,10 @@ impl MemStateTree {
 
     fn db(&self) -> &SMTStateStore<MemStore<StoreSnapshot>> {
         self.tree.store()
+    }
+
+    fn db_mut(&mut self) -> &mut SMTStateStore<MemStore<StoreSnapshot>> {
+        self.tree.store_mut()
     }
 }
 
@@ -93,8 +97,8 @@ impl State for MemStateTree {
 
 impl CodeStore for MemStateTree {
     fn insert_script(&mut self, script_hash: H256, script: packed::Script) {
-        self.db()
-            .inner_store()
+        self.db_mut()
+            .inner_store_mut()
             .insert_raw(COLUMN_SCRIPT, script_hash.as_slice(), script.as_slice())
             .expect("insert script");
     }
@@ -107,8 +111,8 @@ impl CodeStore for MemStateTree {
     }
 
     fn insert_data(&mut self, data_hash: H256, code: Bytes) {
-        self.db()
-            .inner_store()
+        self.db_mut()
+            .inner_store_mut()
             .insert_raw(COLUMN_DATA, data_hash.as_slice(), &code)
             .expect("insert data");
     }

@@ -1,6 +1,6 @@
 use crate::testing_tool::chain::setup_chain;
 use gw_config::ForkConfig;
-use gw_db::schema::{COLUMN_BLOCK, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_INDEX};
+use gw_store::schema::{COLUMN_BLOCK, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_INDEX};
 use gw_store::traits::kv_store::KVStoreWrite;
 use gw_types::core::Timepoint;
 use gw_types::packed::{BlockMerkleState, L2Block, RawL2Block};
@@ -91,7 +91,7 @@ async fn test_calc_finalizing_range() {
     // ## Process Blocks Finalizing Range
     for (block, global_state) in blocks.iter().zip(global_states.iter()) {
         let raw = block.raw();
-        let db = &chain.store().begin_transaction();
+        let mut db = chain.store().begin_transaction();
         db.insert_raw(
             COLUMN_BLOCK_GLOBAL_STATE,
             block.hash().as_slice(),

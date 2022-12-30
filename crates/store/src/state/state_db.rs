@@ -529,6 +529,8 @@ impl<S: CodeStore> CodeStore for StateDB<S> {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+
     use anyhow::Result;
     use gw_common::state::State;
     use gw_smt::smt::{SMT, SMTH256};
@@ -554,7 +556,22 @@ mod tests {
         MemStateDB::new(inner)
     }
 
-    fn new_block_state(store: &StoreTransaction) -> BlockStateDB<&'_ StoreTransaction> {
+    fn new_block_state(store: &mut StoreTransaction) -> BlockStateDB<&mut StoreTransaction> {
+        let smt = SMT::new(SMTH256::zero(), SMTStateStore::new(store));
+        let inner = HistoryState::new(
+            smt,
+            0,
+            RWConfig {
+                read: ReadOpt::Any,
+                write: WriteOpt::NoRecord,
+            },
+        );
+        BlockStateDB::new(inner)
+    }
+
+    fn new_block_state_ref_cell<'a>(
+        store: &'a RefCell<&'a mut StoreTransaction>,
+    ) -> BlockStateDB<&'a RefCell<&'a mut StoreTransaction>> {
         let smt = SMT::new(SMTH256::zero(), SMTStateStore::new(store));
         let inner = HistoryState::new(
             smt,
@@ -724,14 +741,15 @@ mod tests {
         // test block store
         let store = Store::open_tmp().unwrap();
         {
-            let db = &store.begin_transaction();
+            let db = &mut store.begin_transaction();
             let mut state = new_block_state(db);
             test_state_update(&mut state).unwrap();
         }
         {
-            let db = &store.begin_transaction();
-            let mut state_1 = new_block_state(db);
-            let mut state_2 = new_block_state(db);
+            let mut db = store.begin_transaction();
+            let db = RefCell::new(&mut db);
+            let mut state_1 = new_block_state_ref_cell(&db);
+            let mut state_2 = new_block_state_ref_cell(&db);
             test_state_revert(&mut state_1, &mut state_2).unwrap();
         }
     }

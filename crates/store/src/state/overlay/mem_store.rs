@@ -2,11 +2,10 @@ use std::{
     borrow::Borrow,
     collections::HashSet,
     hash::{Hash, Hasher},
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
 
 use anyhow::Result;
-use gw_db::schema::{Col, COLUMN_DATA, COLUMN_SCRIPT};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
@@ -18,6 +17,7 @@ use gw_types::{
 use im::HashMap;
 
 use crate::{
+    schema::{Col, COLUMN_DATA, COLUMN_SCRIPT},
     state::history::{block_state_record::BlockStateRecordKey, history_state::HistoryStateStore},
     traits::{
         chain_store::ChainStore,
@@ -31,14 +31,14 @@ enum Value<T> {
     Deleted,
 }
 
-type ColumnsKeyValueMap = HashMap<(u8, Vec<u8>), Value<Vec<u8>>>;
+type ColumnsKeyValueMap = HashMap<(Col, Vec<u8>), Value<Vec<u8>>>;
 type KeyValueMapByBlock = HashMap<u64, HashMap<H256, H256>>;
 
 pub struct MemStore<S> {
     inner: Arc<S>,
     // (column, key) -> value.
-    mem: RwLock<ColumnsKeyValueMap>,
-    history_mem: RwLock<KeyValueMapByBlock>,
+    mem: ColumnsKeyValueMap,
+    history_mem: KeyValueMapByBlock,
 }
 
 impl<S> MemStore<S> {
@@ -77,7 +77,7 @@ impl<S: KVStoreRead> CodeStore for MemStore<S> {
 
 impl<S: KVStoreRead> KVStoreRead for MemStore<S> {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
-        match self.mem.read().unwrap().get(&(col, key) as &dyn Key) {
+        match self.mem.get(&(col, key) as &dyn Key) {
             Some(Value::Exist(v)) => Some(v.clone().into_boxed_slice()),
             Some(Value::Deleted) => None,
             None => self.inner.get(col, key),
@@ -86,19 +86,14 @@ impl<S: KVStoreRead> KVStoreRead for MemStore<S> {
 }
 
 impl<S> KVStoreWrite for MemStore<S> {
-    fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<()> {
+    fn insert_raw(&mut self, col: Col, key: &[u8], value: &[u8]) -> Result<()> {
         self.mem
-            .write()
-            .unwrap()
             .insert((col, key.into()), Value::Exist(value.to_vec()));
         Ok(())
     }
 
-    fn delete(&self, col: Col, key: &[u8]) -> Result<()> {
-        self.mem
-            .write()
-            .unwrap()
-            .insert((col, key.into()), Value::Deleted);
+    fn delete(&mut self, col: Col, key: &[u8]) -> Result<()> {
+        self.mem.insert((col, key.into()), Value::Deleted);
         Ok(())
     }
 }
@@ -109,7 +104,7 @@ impl<S: HistoryStateStore> HistoryStateStore for MemStore<S> {
     type BlockStateRecordKeyIter = HashSet<BlockStateRecordKey>;
 
     fn iter_block_state_record(&self, block_number: u64) -> Self::BlockStateRecordKeyIter {
-        let mut list = match self.history_mem.read().unwrap().get(&block_number) {
+        let mut list = match self.history_mem.get(&block_number) {
             Some(map) => map
                 .keys()
                 .map(|k| BlockStateRecordKey::new(block_number, k))
@@ -120,16 +115,14 @@ impl<S: HistoryStateStore> HistoryStateStore for MemStore<S> {
         list
     }
 
-    fn remove_block_state_record(&self, block_number: u64) -> Result<()> {
-        self.history_mem.write().unwrap().remove(&block_number);
+    fn remove_block_state_record(&mut self, block_number: u64) -> Result<()> {
+        self.history_mem.remove(&block_number);
         Ok(())
     }
 
     fn get_history_state(&self, block_number: u64, state_key: &H256) -> Option<H256> {
         match self
             .history_mem
-            .read()
-            .unwrap()
             .get(&block_number)
             .and_then(|m| m.get(state_key))
             .cloned()
@@ -139,10 +132,13 @@ impl<S: HistoryStateStore> HistoryStateStore for MemStore<S> {
         }
     }
 
-    fn record_block_state(&self, block_number: u64, state_key: H256, value: H256) -> Result<()> {
+    fn record_block_state(
+        &mut self,
+        block_number: u64,
+        state_key: H256,
+        value: H256,
+    ) -> Result<()> {
         self.history_mem
-            .write()
-            .unwrap()
             .entry(block_number)
             .or_default()
             .insert(state_key, value);
@@ -157,8 +153,8 @@ impl<S> Clone for MemStore<S> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            mem: RwLock::new(self.mem.read().unwrap().clone()),
-            history_mem: RwLock::new(self.history_mem.read().unwrap().clone()),
+            mem: self.mem.clone(),
+            history_mem: self.history_mem.clone(),
         }
     }
 }
@@ -168,7 +164,7 @@ impl<S> Clone for MemStore<S> {
 //
 // https://stackoverflow.com/questions/36480845/how-to-avoid-temporary-allocations-when-using-a-complex-key-for-a-hashmap/50478038#50478038
 trait Key {
-    fn to_key(&self) -> (u8, &[u8]);
+    fn to_key(&self) -> (Col, &[u8]);
 }
 
 impl Hash for dyn Key + '_ {
@@ -185,19 +181,19 @@ impl PartialEq for dyn Key + '_ {
 
 impl Eq for dyn Key + '_ {}
 
-impl Key for (u8, Vec<u8>) {
-    fn to_key(&self) -> (u8, &[u8]) {
+impl Key for (Col, Vec<u8>) {
+    fn to_key(&self) -> (Col, &[u8]) {
         (self.0, &self.1[..])
     }
 }
 
-impl<'a> Key for (u8, &'a [u8]) {
-    fn to_key(&self) -> (u8, &[u8]) {
+impl<'a> Key for (Col, &'a [u8]) {
+    fn to_key(&self) -> (Col, &[u8]) {
         *self
     }
 }
 
-impl<'a> Borrow<dyn Key + 'a> for (u8, Vec<u8>) {
+impl<'a> Borrow<dyn Key + 'a> for (Col, Vec<u8>) {
     fn borrow(&self) -> &(dyn Key + 'a) {
         self
     }

@@ -203,7 +203,7 @@ impl TestModeControl {
 
         let block_number = bad_block.raw().number().unpack();
         let bad_global_state = {
-            let db = self.store.begin_transaction();
+            let mut db = self.store.begin_transaction();
 
             let bad_block_proof = db
                 .block_smt()?
@@ -252,7 +252,7 @@ impl TestModeControl {
             (block_number, target_index, target_type)
         };
 
-        let db = &self.store.begin_transaction();
+        let mut db = self.store.begin_transaction();
         let block_hash = db.get_block_hash_by_number(block_number)?;
         let block =
             db.get_block(&block_hash.ok_or_else(|| anyhow!("block {} not found", block_number))?)?;

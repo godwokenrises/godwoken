@@ -1,13 +1,15 @@
-use gw_db::schema::{COLUMN_DATA, COLUMN_SCRIPT};
 use gw_traits::CodeStore;
 use gw_types::h256::*;
 use gw_types::{bytes::Bytes, from_box_should_be_ok, packed, prelude::*};
 
-use crate::traits::kv_store::{KVStoreRead, KVStoreWrite};
+use crate::{
+    schema::{COLUMN_DATA, COLUMN_SCRIPT},
+    traits::kv_store::{KVStoreRead, KVStoreWrite},
+};
 
 use super::StoreTransaction;
 
-impl CodeStore for &StoreTransaction {
+impl CodeStore for StoreTransaction {
     fn insert_script(&mut self, script_hash: H256, script: packed::Script) {
         self.insert_raw(COLUMN_SCRIPT, script_hash.as_slice(), script.as_slice())
             .expect("insert script");

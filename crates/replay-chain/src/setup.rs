@@ -4,7 +4,6 @@ use anyhow::{anyhow, Context as AnyHowContext, Result};
 use ckb_types::{bytes::Bytes, prelude::Entity};
 use gw_chain::chain::Chain;
 use gw_config::{Config, StoreConfig};
-use gw_db::{schema::COLUMNS, RocksDB};
 use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
     backend_manage::BackendManage,
@@ -14,13 +13,13 @@ use gw_generator::{
 use gw_rpc_client::{
     ckb_client::CKBClient, indexer_client::CKBIndexerClient, rpc_client::RPCClient,
 };
-use gw_store::Store;
+use gw_store::{schema::COLUMNS, Store};
 use gw_types::{core::AllowedEoaType, packed::RollupConfig, prelude::Unpack};
 use gw_utils::RollupContext;
 
 pub struct SetupArgs {
     pub from_db_store: PathBuf,
-    pub from_db_columns: u32,
+    pub from_db_columns: usize,
     pub to_db_store: PathBuf,
     pub config: Config,
 }
@@ -41,11 +40,10 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
 
     let store_config = StoreConfig {
         path: to_db_store,
-        options: config.store.options.clone(),
         options_file: config.store.options_file.clone(),
         cache_size: config.store.cache_size,
     };
-    let local_store = Store::new(RocksDB::open(&store_config, COLUMNS));
+    let local_store = Store::open(&store_config, COLUMNS).unwrap();
     let rollup_type_script = {
         let script: gw_types::packed::Script = config.chain.rollup_type_script.clone().into();
         script
@@ -127,11 +125,10 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
     let from_store = {
         let store_config = StoreConfig {
             path: from_db_store,
-            options: config.store.options.clone(),
             options_file: config.store.options_file.clone(),
             cache_size: config.store.cache_size,
         };
-        Store::new(RocksDB::open(&store_config, from_db_columns))
+        Store::open(&store_config, from_db_columns).unwrap()
     };
 
     println!(

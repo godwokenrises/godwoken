@@ -1,20 +1,16 @@
-use anyhow::{bail, Result};
-use gw_db::{
-    schema::{Col, COLUMN_MEM_POOL_TRANSACTION},
-    DBIterator, RocksDBSnapshot,
-};
+use autorocks::{moveit::slot, Direction, Snapshot};
 
-use crate::traits::{
-    chain_store::ChainStore,
-    kv_store::{KVStore, KVStoreRead, KVStoreWrite},
+use crate::{
+    schema::{Col, COLUMN_MEM_POOL_TRANSACTION},
+    traits::{chain_store::ChainStore, kv_store::KVStoreRead},
 };
 
 pub struct StoreSnapshot {
-    inner: RocksDBSnapshot,
+    inner: Snapshot,
 }
 
 impl StoreSnapshot {
-    pub(crate) fn new(inner: RocksDBSnapshot) -> Self {
+    pub(crate) fn new(inner: Snapshot) -> Self {
         Self { inner }
     }
 }
@@ -23,31 +19,18 @@ impl ChainStore for StoreSnapshot {}
 
 impl KVStoreRead for StoreSnapshot {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
+        slot!(slice);
         self.inner
-            .get_pinned(col, key)
+            .get(col, key, slice)
             .expect("db operation should be ok")
-            .map(|v| Box::<[u8]>::from(v.as_ref()))
+            .map(|p| p.as_ref().into())
     }
 }
-
-/// We implement the write for snapshot for readonly operations
-impl KVStoreWrite for StoreSnapshot {
-    fn insert_raw(&self, _col: Col, _key: &[u8], _value: &[u8]) -> Result<()> {
-        bail!("Can't write to snapshot")
-    }
-
-    fn delete(&self, _col: Col, _key: &[u8]) -> Result<()> {
-        bail!("Can't delete key from snapshot")
-    }
-}
-
-impl KVStore for StoreSnapshot {}
 
 impl StoreSnapshot {
     pub fn iter_mem_pool_transactions(&self) -> impl Iterator<Item = Box<[u8]>> + '_ {
         self.inner
-            .iter(COLUMN_MEM_POOL_TRANSACTION, gw_db::IteratorMode::Start)
-            .expect("db read should not fail")
+            .iter(COLUMN_MEM_POOL_TRANSACTION, Direction::Forward)
             .map(|(k, _)| k)
     }
 }

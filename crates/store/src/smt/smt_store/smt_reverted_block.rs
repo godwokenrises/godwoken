@@ -2,10 +2,9 @@
 
 use std::convert::TryInto;
 
-use crate::traits::{chain_store::ChainStore, kv_store::KVStore};
-use gw_db::schema::{COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF};
 use gw_smt::{
-    smt::{SMT, SMTH256},
+    smt::SMT,
+    smt_h256_ext::SMTH256,
     sparse_merkle_tree::{
         error::Error as SMTError,
         traits::{StoreReadOps, StoreWriteOps},
@@ -13,7 +12,11 @@ use gw_smt::{
     },
 };
 
-use crate::smt::serde::{branch_key_to_vec, branch_node_to_vec, slice_to_branch_node};
+use crate::{
+    schema::{COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF},
+    smt::serde::{branch_key_to_vec, branch_node_to_vec, slice_to_branch_node},
+    traits::{chain_store::ChainStore, kv_store::KVStore},
+};
 
 pub struct SMTRevertedBlockStore<DB>(DB);
 
@@ -31,6 +34,10 @@ impl<DB: KVStore> SMTRevertedBlockStore<DB> {
 
     pub fn inner_store(&self) -> &DB {
         &self.0
+    }
+
+    pub fn inner_store_mut(&mut self) -> &mut DB {
+        &mut self.0
     }
 }
 

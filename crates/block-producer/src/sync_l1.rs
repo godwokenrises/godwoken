@@ -7,7 +7,10 @@ use gw_rpc_client::{
     indexer_types::{Order, SearchKey, SearchKeyFilter},
     rpc_client::RPCClient,
 };
-use gw_store::{traits::chain_store::ChainStore, transaction::StoreTransaction, Store};
+use gw_store::{
+    autorocks::RocksDBStatusError, traits::chain_store::ChainStore, transaction::StoreTransaction,
+    Store,
+};
 use gw_types::{
     offchain::TxStatus,
     packed::{NumberHash, Script},
@@ -35,7 +38,7 @@ pub async fn sync_l1(ctx: &(dyn SyncL1Context + Sync + Send)) -> Result<()> {
     let mut backoff = ExponentialBackoff::new(Duration::from_secs(1));
     loop {
         if let Err(err) = sync_l1_impl(ctx).await {
-            if err.is::<gw_db::transaction::CommitError>() {
+            if err.is::<RocksDBStatusError>() {
                 // We cannot recover from db commit error because Chain
                 // local_state would be wrong. Chain always assumes that commit
                 // will success.
@@ -51,7 +54,7 @@ pub async fn sync_l1(ctx: &(dyn SyncL1Context + Sync + Send)) -> Result<()> {
 
 async fn sync_l1_impl(ctx: &(dyn SyncL1Context + Sync + Send)) -> Result<()> {
     log::info!("syncing with L1");
-    let store_tx = &ctx.store().begin_transaction();
+    let mut store_tx = ctx.store().begin_transaction();
     let last_confirmed_local = store_tx
         .get_last_confirmed_block_number_hash()
         .context("get last confirmed")?;
@@ -75,7 +78,7 @@ async fn sync_l1_impl(ctx: &(dyn SyncL1Context + Sync + Send)) -> Result<()> {
         }
     }
 
-    sync_l1_unknown(ctx, store_tx, last_confirmed_l1).await?;
+    sync_l1_unknown(ctx, &mut store_tx, last_confirmed_l1).await?;
 
     Ok(())
 }
@@ -86,7 +89,7 @@ async fn sync_l1_impl(ctx: &(dyn SyncL1Context + Sync + Send)) -> Result<()> {
 // accidentally running two godwoken full nodes.
 async fn sync_l1_unknown(
     ctx: &(dyn SyncL1Context + Send + Sync),
-    store_tx: &StoreTransaction,
+    store_tx: &mut StoreTransaction,
     mut last_confirmed: u64,
 ) -> Result<()> {
     log::info!("syncing unknown L2 blocks from L1");
@@ -181,7 +184,7 @@ async fn sync_l1_unknown(
 /// Revert L2 blocks.
 pub async fn revert(
     ctx: &(dyn SyncL1Context + Send + Sync),
-    store_tx: &StoreTransaction,
+    store_tx: &mut StoreTransaction,
     revert_to_last_valid: u64,
 ) -> Result<()> {
     let mut chain = ctx.chain().lock().await;

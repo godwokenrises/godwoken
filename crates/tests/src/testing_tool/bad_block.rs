@@ -54,7 +54,7 @@ pub fn generate_bad_block_using_first_withdrawal(
 
     let block_number = block.raw().number().unpack();
     let global_state = {
-        let db = chain.store().begin_transaction();
+        let mut db = chain.store().begin_transaction();
 
         let bad_block_proof = db
             .block_smt()

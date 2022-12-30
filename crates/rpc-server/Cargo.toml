@@ -12,7 +12,6 @@ gw-common = { path = "../../gwos/crates/common" }
 gw-smt = { path = "../smt" }
 gw-config = { path = "../config" }
 gw-chain = { path = "../chain" }
-gw-db = { path = "../db" }
 gw-types = { path = "../../gwos/crates/types" }
 gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }

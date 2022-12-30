@@ -27,7 +27,7 @@ use gw_generator::account_lock_manage::eip712;
 use gw_generator::account_lock_manage::eip712::traits::EIP712Encode;
 use gw_generator::account_lock_manage::eip712::types::EIP712Domain;
 use gw_generator::account_lock_manage::AccountLockManage;
-use gw_store::smt::smt_store::SMTStateStore;
+use gw_smt::smt_h256_ext::SMTH256;
 use gw_store::state::history::history_state::RWConfig;
 use gw_store::state::traits::JournalDB;
 use gw_store::state::BlockStateDB;
@@ -181,8 +181,8 @@ async fn test_cancel_tx_signature() {
         )
         .await
         .unwrap();
-        let db = chain.store().begin_transaction();
-        let tree = BlockStateDB::from_store(&db, RWConfig::readonly()).unwrap();
+        let mut db = chain.store().begin_transaction();
+        let tree = BlockStateDB::from_store(&mut db, RWConfig::readonly()).unwrap();
         let sender_id = tree
             .get_account_id_by_script_hash(&sender_script.hash())
             .unwrap()
@@ -304,11 +304,12 @@ async fn test_cancel_tx_signature() {
                 gw_types::prelude::Unpack::unpack(&challenged_block.raw().number());
 
             // Detach block to get right state snapshot
-            let db = chain.store().begin_transaction();
+            let mut db = chain.store().begin_transaction();
             {
                 db.detach_block(&challenged_block).unwrap();
                 {
-                    let mut tree = BlockStateDB::from_store(&db, RWConfig::detach_block()).unwrap();
+                    let mut tree =
+                        BlockStateDB::from_store(&mut db, RWConfig::detach_block()).unwrap();
                     tree.detach_block_state(challenged_block_number).unwrap();
                 }
             }
@@ -334,26 +335,26 @@ async fn test_cancel_tx_signature() {
             tree.get_nonce(receiver_id).unwrap();
             tree.get_script_hash(sudt_id).unwrap();
             let account_count = tree.get_account_count().unwrap();
-            let touched_keys: Vec<H256> = {
+            let touched_keys: Vec<SMTH256> = {
                 let keys = tree.state_tracker().unwrap().touched_keys();
                 let unlock = keys.lock().unwrap();
-                unlock.clone().into_iter().collect()
+                unlock.iter().cloned().map(Into::into).collect()
             };
 
             let kv_state = touched_keys
                 .iter()
                 .map(|k| {
-                    let v = tree.get_raw(k).unwrap();
-                    (*k, v)
+                    let k = (*k).into();
+                    let v = tree.get_raw(&k).unwrap();
+                    (k, v)
                 })
                 .collect::<Vec<(H256, H256)>>();
 
             let kv_state_proof: Bytes = {
-                let smt = SMTStateStore::new(&db).to_smt().unwrap();
-                let smt_touched_keys: Vec<_> = touched_keys.iter().map(|k| (*k).into()).collect();
-                smt.merkle_proof(smt_touched_keys.clone())
+                let smt = db.state_smt().unwrap();
+                smt.merkle_proof(touched_keys.clone())
                     .unwrap()
-                    .compile(smt_touched_keys)
+                    .compile(touched_keys)
                     .unwrap()
                     .0
                     .into()

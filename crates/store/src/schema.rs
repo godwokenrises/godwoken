@@ -1,9 +1,9 @@
 //! The schema include constants define the low level database column families.
 
 /// Column families alias type
-pub type Col = u8;
+pub type Col = usize;
 /// Total column number
-pub const COLUMNS: u32 = 37;
+pub const COLUMNS: usize = 37;
 /// Column store meta data
 pub const COLUMN_META: Col = 0;
 /// Column store chain index

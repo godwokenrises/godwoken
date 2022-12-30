@@ -203,7 +203,7 @@ impl ImportBlock {
         // When the node starts it will sync with L1 and correct the last
         // confirmed block.
         if let Some(last_submitted_block) = last_submitted_block {
-            let tx_db = &self.chain.store().begin_transaction();
+            let mut tx_db = self.chain.store().begin_transaction();
             let block_hash = tx_db
                 .get_block_hash_by_number(last_submitted_block)?
                 .context("get block hash")?;
@@ -232,11 +232,11 @@ fn insert_block(
     exported: ExportedBlock,
     last_submitted_block: &mut Option<u64>,
 ) -> Result<()> {
-    let tx_db = chain.store().begin_transaction();
+    let mut tx_db = chain.store().begin_transaction_skip_concurrency_control();
     let block_number = exported.block_number();
 
     if let Some(_challenge_target) = chain.process_block(
-        &tx_db,
+        &mut tx_db,
         exported.block,
         exported.post_global_state.clone(),
         exported.deposit_info_vec,
@@ -248,7 +248,7 @@ fn insert_block(
 
     // Update reverted blocks smt
     if let Some(bad_block_hashes_vec) = exported.bad_block_hashes {
-        insert_bad_block_hashes(&tx_db, bad_block_hashes_vec)?;
+        insert_bad_block_hashes(&mut tx_db, bad_block_hashes_vec)?;
     }
 
     check_block_post_state(&tx_db, block_number, &exported.post_global_state)?;
@@ -257,7 +257,7 @@ fn insert_block(
         tx_db.set_block_submit_tx_hash(block_number, &hash)?;
         *last_submitted_block = Some(block_number);
     };
-    chain.calculate_and_store_finalized_custodians(&tx_db, block_number)?;
+    chain.calculate_and_store_finalized_custodians(&mut tx_db, block_number)?;
 
     tx_db.commit()?;
 
