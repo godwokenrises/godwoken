@@ -35,7 +35,7 @@ use gw_rpc_client::{
     indexer_client::CkbIndexerClient, rpc_client::RPCClient,
 };
 use gw_rpc_server::{
-    registry::{Registry, RegistryArgs},
+    registry::{BoxedTestModeRpc, Registry, RegistryArgs},
     server::start_jsonrpc_server,
 };
 use gw_store::migrate::{init_migration_factory, open_or_create_db};
@@ -748,7 +748,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         store: store.clone(),
         mem_pool: mem_pool.clone(),
         generator,
-        tests_rpc_impl: test_mode_control.map(Box::new),
+        tests_rpc_impl: test_mode_control.map(|t| Arc::new(t) as BoxedTestModeRpc),
         rollup_config,
         chain_config: config.chain.to_owned(),
         consensus_config: config.consensus.to_owned(),
@@ -763,7 +763,8 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         gasless_tx_support_config: config.gasless_tx_support.clone(),
     };
 
-    let rpc_registry = Registry::create(args).await;
+    let rpc_registry = Registry::create(args).await?;
+    let rpc_handler = Arc::new(rpc_registry.to_handler());
 
     let rpc_address: SocketAddr = {
         let mut addrs: Vec<_> = config.rpc_server.listen.to_socket_addrs()?.collect();
@@ -931,7 +932,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     let rpc_task = spawn(async move {
         if let Err(err) = start_jsonrpc_server(
             rpc_address,
-            rpc_registry,
+            rpc_handler,
             liveness,
             rpc_shutdown_send,
             sub_shutdown,

@@ -1,39 +1,30 @@
 use std::{collections::HashSet, iter::FromIterator, sync::Arc, time::Duration};
 
 use anyhow::{bail, Result};
-use ckb_types::prelude::Entity;
-use gw_block_producer::test_mode_control::TestModeControl;
 use gw_chain::chain::Chain;
 use gw_config::{NodeMode::FullNode, RPCClientConfig, RPCMethods};
-use gw_types::h256::*;
-
 use gw_jsonrpc_types::{
-    ckb_jsonrpc_types::{Byte32, JsonBytes, Uint64},
-    godwoken::RunResult,
+    ckb_jsonrpc_types::{JsonBytes, Uint64},
+    godwoken::{MolJsonBytes, RunResult},
 };
 use gw_polyjuice_sender_recover::recover::PolyjuiceSenderRecover;
 use gw_rpc_client::{
     ckb_client::CkbClient, indexer_client::CkbIndexerClient, rpc_client::RPCClient,
 };
-use gw_rpc_server::registry::{Registry, RegistryArgs};
+use gw_rpc_server::registry::{GwRpc, Registry, RegistryArgs};
 use gw_types::{
     bytes::Bytes,
+    h256::*,
     packed::{L2Transaction, RawL2Transaction, Script, WithdrawalRequestExtra},
-    prelude::Pack,
+    prelude::*,
 };
-
 use gw_utils::wallet::Wallet;
-use jsonrpc_v2::{
-    MapRouter, RequestBuilder, RequestObject, ResponseObject, ResponseObjects, Server,
-};
-use serde::de::DeserializeOwned;
+use jsonrpc_core::Result as RpcResult;
 
-use crate::testing_tool::chain::chain_generator;
-
-use super::chain::TestChain;
+use super::chain::{chain_generator, TestChain};
 
 pub struct RPCServer {
-    inner: Arc<Server<MapRouter>>,
+    inner: Arc<Registry>,
 }
 
 impl RPCServer {
@@ -41,7 +32,7 @@ impl RPCServer {
         chain: &Chain,
         rollup_type_script: Script,
         creator_wallet: Option<Wallet>,
-    ) -> RegistryArgs<TestModeControl> {
+    ) -> RegistryArgs {
         let store = chain.store().clone();
         let mem_pool = chain.mem_pool().clone();
         let generator = chain_generator(chain, rollup_type_script.clone());
@@ -86,11 +77,9 @@ impl RPCServer {
         }
     }
 
-    pub async fn build_from_registry_args(
-        registry_args: RegistryArgs<TestModeControl>,
-    ) -> Result<Self> {
+    pub async fn build_from_registry_args(registry_args: RegistryArgs) -> Result<Self> {
         let server = RPCServer {
-            inner: Registry::create(registry_args).await.build_rpc_server()?,
+            inner: Registry::create(registry_args).await?,
         };
 
         Ok(server)
@@ -103,36 +92,20 @@ impl RPCServer {
         Self::build_from_registry_args(registry_args).await
     }
 
-    pub async fn submit_l2transaction(&self, tx: &L2Transaction) -> Result<Option<H256>> {
-        let params = {
-            let bytes = JsonBytes::from_bytes(tx.as_bytes());
-            serde_json::to_value(&(bytes,))?
-        };
-
-        let req = RequestBuilder::default()
-            .with_id(1)
-            .with_method("gw_submit_l2transaction")
-            .with_params(params)
-            .finish();
-
-        let tx_hash: Option<Byte32> = self.handle_single_request(req).await?;
-        Ok(tx_hash.map(|h| h.0))
+    pub async fn submit_l2transaction(&self, tx: &L2Transaction) -> RpcResult<Option<H256>> {
+        let r = self
+            .inner
+            .gw_submit_l2transaction(MolJsonBytes(tx.clone()))
+            .await?;
+        Ok(r.map(Into::into))
     }
 
-    pub async fn execute_l2transaction(&self, tx: &L2Transaction) -> Result<RunResult> {
-        let params = {
-            let bytes = JsonBytes::from_bytes(tx.as_bytes());
-            serde_json::to_value(&(bytes,))?
-        };
-
-        let req = RequestBuilder::default()
-            .with_id(1)
-            .with_method("gw_execute_l2transaction")
-            .with_params(params)
-            .finish();
-
-        let run_result = self.handle_single_request(req).await?;
-        Ok(run_result)
+    pub async fn execute_l2transaction(&self, tx: &L2Transaction) -> RpcResult<RunResult> {
+        let r = self
+            .inner
+            .gw_execute_l2transaction(MolJsonBytes(tx.clone()))
+            .await?;
+        Ok(r)
     }
 
     pub async fn execute_raw_l2transaction(
@@ -140,78 +113,31 @@ impl RPCServer {
         raw_tx: &RawL2Transaction,
         opt_block_number: Option<u64>,
         opt_registry_address: Option<Bytes>,
-    ) -> Result<RunResult> {
-        let raw_tx_bytes = JsonBytes::from_bytes(raw_tx.as_bytes());
-        let params = match (opt_block_number, opt_registry_address) {
-            (None, None) => serde_json::to_value(&(raw_tx_bytes))?,
-            (Some(block_number), None) => {
-                let block_number: Uint64 = block_number.into();
-                serde_json::to_value(&(raw_tx_bytes, block_number))?
-            }
-            (Some(block_number), Some(registry_address_bytes)) => {
-                let block_number: Uint64 = block_number.into();
-                let address_bytes = JsonBytes::from_bytes(registry_address_bytes);
-                serde_json::to_value(&(raw_tx_bytes, block_number, address_bytes))?
-            }
-            (None, Some(registry_address_bytes)) => {
-                let address_bytes = JsonBytes::from_bytes(registry_address_bytes);
-                serde_json::to_value(&(raw_tx_bytes, Option::<Uint64>::None, address_bytes))?
-            }
-        };
-
-        let req = RequestBuilder::default()
-            .with_id(1)
-            .with_method("gw_execute_raw_l2transaction")
-            .with_params(params)
-            .finish();
-
-        let run_result = self.handle_single_request(req).await?;
-        Ok(run_result)
+    ) -> RpcResult<RunResult> {
+        let params = serde_json::to_value(&(
+            MolJsonBytes(raw_tx.clone()),
+            opt_block_number.map(Uint64::from),
+            opt_registry_address.map(JsonBytes::from_bytes),
+        ))
+        .unwrap();
+        let (a, b, c) = serde_json::from_value(params)
+            .map_err(|e| jsonrpc_core::Error::invalid_params(e.to_string()))?;
+        let r = self.inner.gw_execute_raw_l2transaction(a, b, c).await?;
+        Ok(r)
     }
 
-    pub async fn is_request_in_queue(&self, hash: H256) -> Result<bool> {
-        let fixed_hash = ckb_fixed_hash::H256(hash);
-        let params = serde_json::to_value(&(fixed_hash,))?;
-
-        let req = RequestBuilder::default()
-            .with_id(1)
-            .with_method("gw_is_request_in_queue")
-            .with_params(params)
-            .finish();
-
-        let result = self.handle_single_request(req).await?;
+    pub async fn is_request_in_queue(&self, hash: H256) -> RpcResult<bool> {
+        let result = self.inner.gw_is_request_in_queue(hash.into()).await?;
         Ok(result)
     }
 
-    pub async fn submit_withdrawal_request(&self, req: &WithdrawalRequestExtra) -> Result<H256> {
-        let params = {
-            let bytes = JsonBytes::from_bytes(req.as_bytes());
-            serde_json::to_value(&(bytes,))?
-        };
+    pub async fn submit_withdrawal_request(&self, req: &WithdrawalRequestExtra) -> RpcResult<H256> {
+        let r = self
+            .inner
+            .gw_submit_withdrawal_request(MolJsonBytes(req.clone()))
+            .await?;
 
-        let req = RequestBuilder::default()
-            .with_id(1)
-            .with_method("gw_submit_withdrawal_request")
-            .with_params(params)
-            .finish();
-
-        let hash: Byte32 = self.handle_single_request(req).await?;
-        Ok(hash.0)
-    }
-
-    async fn handle_single_request<R: DeserializeOwned>(&self, req: RequestObject) -> Result<R> {
-        let ret = match self.inner.handle(req).await {
-            ResponseObjects::One(ResponseObject::Result { result, .. }) => {
-                serde_json::to_value(result)?
-            }
-            ResponseObjects::One(ResponseObject::Error { error, .. }) => {
-                bail!(serde_json::to_string(&error)?)
-            }
-            ResponseObjects::Empty => serde_json::to_value(ResponseObjects::Empty)?,
-            ResponseObjects::Many(_) => unreachable!(),
-        };
-
-        Ok(serde_json::from_value(ret)?)
+        Ok(r.into())
     }
 }
 

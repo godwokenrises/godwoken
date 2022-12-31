@@ -1,10 +1,11 @@
 use crate::blockchain::Script;
-use anyhow::{anyhow, Error as JsonError};
+use anyhow::{anyhow, Context, Error as JsonError};
 use ckb_fixed_hash::{H160, H256};
 use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32, Uint64};
 use gw_types::core::Timepoint;
 use gw_types::{bytes::Bytes, offchain, packed, prelude::*};
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::convert::{TryFrom, TryInto};
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
@@ -1464,5 +1465,65 @@ impl From<gw_common::registry_address::RegistryAddress> for RegistryAddress {
             registry_id: registry_id.into(),
             address: JsonBytes::from_vec(address),
         }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(try_from = "JsonBytes", into = "JsonBytes")]
+pub struct RegistryAddressJsonBytes(pub gw_common::registry_address::RegistryAddress);
+
+impl From<RegistryAddressJsonBytes> for JsonBytes {
+    fn from(r: RegistryAddressJsonBytes) -> Self {
+        JsonBytes::from_vec(r.0.to_bytes())
+    }
+}
+
+impl TryFrom<JsonBytes> for RegistryAddressJsonBytes {
+    type Error = anyhow::Error;
+    fn try_from(value: JsonBytes) -> Result<Self, Self::Error> {
+        let a = gw_common::registry_address::RegistryAddress::from_slice(value.as_bytes())
+            .context("Invalid registry address")?;
+        Ok(Self(a))
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(bound = "T: Entity", try_from = "JsonBytes", into = "JsonBytes")]
+pub struct MolJsonBytes<T>(pub T);
+
+impl<T: Entity> From<MolJsonBytes<T>> for JsonBytes {
+    fn from(t: MolJsonBytes<T>) -> Self {
+        JsonBytes::from_bytes(t.0.as_bytes())
+    }
+}
+
+impl<T: Entity> TryFrom<JsonBytes> for MolJsonBytes<T> {
+    type Error = anyhow::Error;
+    fn try_from(value: JsonBytes) -> Result<Self, Self::Error> {
+        let t = T::from_slice(value.as_bytes())?;
+        Ok(Self(t))
+    }
+}
+
+pub type L2TransactionJsonBytes = MolJsonBytes<packed::L2Transaction>;
+pub type RawL2TransactionJsonBytes = MolJsonBytes<packed::RawL2Transaction>;
+pub type WithdrawalRequestExtraJsonBytes = MolJsonBytes<packed::WithdrawalRequestExtra>;
+
+#[derive(Serialize_repr, Deserialize_repr, Debug, PartialEq, Eq, Copy, Clone)]
+#[repr(u8)]
+pub enum GetVerbose {
+    WithStatus = 0,
+    OnlyStatus = 1,
+}
+
+impl Default for GetVerbose {
+    fn default() -> Self {
+        Self::WithStatus
+    }
+}
+
+impl GetVerbose {
+    pub fn verbose(self) -> bool {
+        self == GetVerbose::WithStatus
     }
 }

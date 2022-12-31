@@ -49,4 +49,4 @@ tokio = "1"
 env_logger = "0.8"
 tempfile = "3"
 async-trait = "0.1"
-jsonrpc-v2 = { version = "0.10.0", default-features = false, features = ["easy-errors"] }
+jsonrpc-core = "18.0.0"

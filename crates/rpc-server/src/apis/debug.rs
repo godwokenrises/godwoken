@@ -3,7 +3,6 @@ use std::{convert::TryInto, sync::Arc, time::Instant};
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256 as JsonH256;
 use ckb_types::prelude::{Builder, Entity};
-use gw_generator::Generator;
 use gw_jsonrpc_types::{ckb_jsonrpc_types::Uint64, debug::DebugRunResult};
 use gw_store::{
     chain_view::ChainView,
@@ -14,35 +13,18 @@ use gw_store::{
         BlockStateDB,
     },
     traits::chain_store::ChainStore,
-    Store,
 };
 use gw_types::{packed::BlockInfo, prelude::Unpack};
-use jsonrpc_v2::{Data, Params};
 
-use crate::utils::to_h256;
-
-pub(crate) struct DebugTransactionContext {
-    pub store: Store,
-    pub generator: Arc<Generator>,
-    pub debug_generator: Arc<Generator>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(untagged)]
-pub(crate) enum DebugReplayTxParams {
-    Default((JsonH256,)),
-    WithMaxCycles((JsonH256, Uint64)),
-}
+use crate::{registry::Registry, utils::to_h256};
 
 pub(crate) async fn replay_transaction(
-    Params(param): Params<DebugReplayTxParams>,
-    ctx: Data<DebugTransactionContext>,
+    ctx: Arc<Registry>,
+    tx_hash: JsonH256,
+    max_cycles: Option<Uint64>,
 ) -> Result<Option<DebugRunResult>> {
-    let (tx_hash, max_cycles) = match param {
-        DebugReplayTxParams::Default((tx_hash,)) => (tx_hash, None),
-        DebugReplayTxParams::WithMaxCycles((tx_hash, cycles)) => (tx_hash, Some(cycles.value())),
-    };
     let tx_hash = to_h256(tx_hash);
+    let max_cycles: Option<u64> = max_cycles.map(Into::into);
 
     if ctx.store.get_transaction(&tx_hash)?.is_none() {
         return Ok(None);
