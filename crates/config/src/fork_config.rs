@@ -37,8 +37,8 @@ pub struct SUDTProxyConfig {
 #[serde(deny_unknown_fields)]
 pub struct BackendForkConfig {
     pub fork_height: u64,
-    pub sudt_proxy: SUDTProxyConfig,
     pub backends: Vec<BackendConfig>,
+    pub sudt_proxy: SUDTProxyConfig,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
