@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::ckb_client::CkbClient;
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter, Tx};
 use crate::utils::{TracingHttpClient, DEFAULT_QUERY_LIMIT};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use ckb_types::prelude::Entity;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{JsonBytes, Uint32};
 use gw_types::core::Timepoint;

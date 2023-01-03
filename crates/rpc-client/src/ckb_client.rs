@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use crate::utils::{JsonH256, TracingHttpClient};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Result};
 use gw_jsonrpc_types::{blockchain::CellDep, ckb_jsonrpc_types::*};
 use gw_types::{h256::H256, packed, prelude::*};
 use jsonrpc_utils::rpc_client;
