@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use jsonrpc_utils::HttpClient;
 use reqwest::Client;
 use tracing::{field, instrument, Span};
@@ -40,6 +40,9 @@ impl TracingHttpClient {
             Span::current().record("params", field::display(&params));
         }
 
-        self.inner.rpc(method, params).await
+        self.inner
+            .rpc(method, params)
+            .await
+            .with_context(|| format!("rpc {method}"))
     }
 }
