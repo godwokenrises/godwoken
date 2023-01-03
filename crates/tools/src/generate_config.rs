@@ -188,7 +188,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
     let fork = ForkConfig {
         backend_forks,
         increase_max_l2_tx_cycles_to_500m: None,
-        upgrade_global_state_version_to_v2: None,
+        upgrade_global_state_version_to_v2: Some(0),
     };
 
     let store = StoreConfig {
