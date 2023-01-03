@@ -9,6 +9,7 @@ OBJCOPY := $(TARGET)-objcopy
 
 SECP_DIR := deps/secp256k1-fix
 SECP256K1_SRC := $(SECP_DIR)/src/ecmult_static_pre_context.h
+GW_SCRIPTS := ../gwos/c
 
 CFLAGS_CKB_STD = -Ideps/ckb-c-stdlib -Ideps/ckb-c-stdlib/molecule
 CFLAGS_SECP := -isystem $(SECP_DIR)/src -isystem $(SECP_DIR)
@@ -17,8 +18,8 @@ CFLAGS_ETHASH := -Ideps/ethash/include -Ideps/ethash/lib/ethash -Ideps/ethash/li
 CFLAGS_CRYPTO_ALGORITHMS := -Ideps/crypto-algorithms
 CFLAGS_MBEDTLS := -Ideps/mbedtls/include
 CFLAGS_EVMONE := -Ideps/evmone/lib/evmone -Ideps/evmone/include -Ideps/evmone/evmc/include
-CFLAGS_SMT := -Ideps/godwoken-scripts/c/deps/sparse-merkle-tree/c
-CFLAGS_GODWOKEN := -Ideps/godwoken-scripts/c
+CFLAGS_SMT := -I$(GW_SCRIPTS)/deps/sparse-merkle-tree/c
+CFLAGS_GODWOKEN := -I$(GW_SCRIPTS)
 
 # -O3: Higher level of optmization. Slower compile-time, better for production builds.
 CFLAGS := -O3 -Ic/ripemd160 $(CFLAGS_INTX) $(CFLAGS_CKB_STD) $(CFLAGS_EVMONE) $(CFLAGS_ETHASH) $(CFLAGS_CRYPTO_ALGORITHMS) $(CFLAGS_MBEDTLS) $(CFLAGS_SMT) $(CFLAGS_GODWOKEN) $(CFLAGS_SECP)
@@ -37,8 +38,8 @@ GENERATOR_FLAGS := -DGW_GENERATOR
 VALIDATOR_FLAGS := -DGW_VALIDATOR
 
 MOLC := moleculec
-MOLC_VERSION := $(shell cat deps/godwoken-scripts/c/Makefile | egrep "MOLC_VERSION :=" | awk '{print $$3}')
-PROTOCOL_VERSION := $(shell cat deps/godwoken-scripts/c/Makefile | egrep "PROTOCOL_VERSION :=" | awk '{print $$3}')
+MOLC_VERSION := $(shell cat $(GW_SCRIPTS)/Makefile | egrep "MOLC_VERSION :=" | awk '{print $$3}')
+PROTOCOL_VERSION := $(shell cat $(GW_SCRIPTS)/Makefile | egrep "PROTOCOL_VERSION :=" | awk '{print $$3}')
 PROTOCOL_SCHEMA_URL := https://raw.githubusercontent.com/nervosnetwork/godwoken/${PROTOCOL_VERSION}/crates/types/schemas
 
 ALL_OBJS := build/execution_state.o build/baseline.o build/analysis.o build/instruction_metrics.o build/instruction_names.o build/execution.o build/instructions.o build/instructions_calls.o build/evmone.o \
@@ -62,7 +63,7 @@ all: build/blockchain.h build/godwoken.h \
 
 all-via-docker: generate-protocol fetch-gw-scripts
 	mkdir -p build
-	docker run --rm -v `pwd`:/code -w /code ${BUILDER_DOCKER} make
+	docker run --rm -v `readlink -f ..`:/code -w /code/gwos-evm ${BUILDER_DOCKER} make
 	make patch-generator && make patch-generator_log
 log-version-via-docker: generate-protocol
 	mkdir -p build
@@ -81,32 +82,25 @@ clean-via-docker:
 
 dist: clean-via-docker all-via-docker
 
-CKB_BIN_PATCHER := deps/ckb-binary-patcher/target/release/ckb-binary-patcher
-build/ckb-binary-patcher:
-	cd deps && [ -d "ckb-binary-patcher" ] \
-	  || ( \
-		echo "fetch ckb-binary-patcher with [Remove atomic instructions] feature" && \
-		git clone -b master https://github.com/nervosnetwork/ckb-binary-patcher.git)
-	[ -f ${CKB_BIN_PATCHER} ] \
-	  || ( \
-		echo "build ckb-binary-patcher" && \
-		cd deps/ckb-binary-patcher && \
-		git checkout b9489de4b3b9d59bc29bce945279bc6f28413113 && \
-		cargo build --release)
-patch-generator: build/ckb-binary-patcher
-	${CKB_BIN_PATCHER} --remove-a -i build/generator -o build/generator.aot
+install/ckb-binary-patcher:
+	(which ckb-binary-patcher) \
+	|| (echo "install ckb-binary-patcher from https://github.com/nervosnetwork/ckb-binary-patcher/commits/master" \
+	&& cargo install --git https://github.com/nervosnetwork/ckb-binary-patcher.git \
+					 --rev b9489de4b3b9d59bc29bce945279bc6f28413113)
+patch-generator: install/ckb-binary-patcher
+	ckb-binary-patcher --remove-a -i build/generator -o build/generator.aot
 	mv build/generator build/generator.asm
 	cp build/generator.aot build/generator
-patch-generator_log: build/ckb-binary-patcher
-	${CKB_BIN_PATCHER} --remove-a -i build/generator_log -o build/generator_log.aot
+patch-generator_log: install/ckb-binary-patcher
+	ckb-binary-patcher --remove-a -i build/generator_log -o build/generator_log.aot
 	mv build/generator_log build/generator_log.asm
 	cp build/generator_log.aot build/generator_log
-# patch-validator: build/ckb-binary-patcher
-# 	${CKB_BIN_PATCHER} --remove-a -i build/validator -o build/validator.aot
-# patch-validator_log: build/ckb-binary-patcher
-# 	${CKB_BIN_PATCHER} --remove-a -i build/validator_log -o build/validator_log.aot
-# patch-test_contracts: build/ckb-binary-patcher
-# 	${CKB_BIN_PATCHER} --remove-a -i build/test_contracts -o build/test_contracts.aot
+# patch-validator: install/ckb-binary-patcher
+# 	ckb-binary-patcher --remove-a -i build/validator -o build/validator.aot
+# patch-validator_log: install/ckb-binary-patcher
+# 	ckb-binary-patcher --remove-a -i build/validator_log -o build/validator_log.aot
+# patch-test_contracts: install/ckb-binary-patcher
+# 	ckb-binary-patcher --remove-a -i build/test_contracts -o build/test_contracts.aot
 
 build/generator: c/generator.c $(GENERATOR_DEPS)
 	cd $(SECP_DIR) && (git apply workaround-fix-g++-linking.patch || true) && cd - # apply patch

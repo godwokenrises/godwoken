@@ -1,5 +1,6 @@
 use crate::helper::{
     self, deploy, new_block_info, MockContractInfo, PolyjuiceArgsBuilder, CREATOR_ACCOUNT_ID,
+    L2TX_MAX_CYCLES,
 };
 use gw_common::state::State;
 use gw_store::traits::chain_store::ChainStore;
@@ -64,7 +65,7 @@ fn test_get_contract_code() {
             &mut state,
             &block_info,
             &raw_l2tx,
-            gw_generator::constants::L2TX_MAX_CYCLES,
+            L2TX_MAX_CYCLES,
             None,
         )
         .expect("call createMemoryArray function");
@@ -99,7 +100,7 @@ fn test_get_contract_code() {
             &mut state,
             &block_info,
             &raw_l2tx,
-            gw_generator::constants::L2TX_MAX_CYCLES,
+            L2TX_MAX_CYCLES,
             None,
         )
         .expect("call getCode function");

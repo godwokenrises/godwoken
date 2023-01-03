@@ -3,6 +3,7 @@
 #define SUDT_CONTRACTS_H_
 
 #include "polyjuice_utils.h"
+#include "mainnet_sudt_proxy.h"
 
 #define BALANCE_OF_ANY_SUDT_GAS 150
 #define TOTAL_SUPPLY_OF_ANY_SUDT_GAS 150
@@ -26,8 +27,8 @@ int balance_of_any_sudt_gas(const uint8_t* input_src, const size_t input_size,
    =======
      output[0..32] => amount
  */
-int balance_of_any_sudt(gw_context_t* ctx, const uint8_t* code_data,
-                        const size_t code_size,
+int balance_of_any_sudt(gw_context_t* ctx,
+                        const uint8_t* msg_sender,
                         const enum evmc_call_kind parent_kind,
                         bool is_static_call,
                         const uint8_t* input_src, const size_t input_size,
@@ -96,8 +97,8 @@ int total_supply_of_any_sudt_gas(const uint8_t* input_src,
    =======
      output[0..32] => amount
  */
-int total_supply_of_any_sudt(gw_context_t* ctx, const uint8_t* code_data,
-                             const size_t code_size,
+int total_supply_of_any_sudt(gw_context_t* ctx,
+                             const uint8_t* msg_sender,
                              const enum evmc_call_kind parent_kind,
                              bool is_static_call,
                              const uint8_t* input_src, const size_t input_size,
@@ -165,33 +166,22 @@ int transfer_to_any_sudt_gas(const uint8_t* input_src, const size_t input_size,
 
    output: []
  */
-int transfer_to_any_sudt(gw_context_t* ctx, const uint8_t* code_data,
-                         const size_t code_size,
+int transfer_to_any_sudt(gw_context_t* ctx,
+                         const uint8_t* msg_sender,
                          const enum evmc_call_kind parent_kind,
                          bool is_static_call,
                          const uint8_t* input_src, const size_t input_size,
                          uint8_t** output, size_t* output_size) {
-  /* Contract code hash of `SudtERC20Proxy_UserDefinedDecimals.ContractCode`
-     => 0xde4542f5a5bd32c09cd98e9752281f88900a059aab7ac103edd9df214f136c52 */
-  static const uint8_t
-      sudt_erc20_proxy_user_defined_decimals_contract_code_hash[32] = {
-          0xde, 0x45, 0x42, 0xf5, 0xa5, 0xbd, 0x32, 0xc0, 0x9c, 0xd9, 0x8e,
-          0x97, 0x52, 0x28, 0x1f, 0x88, 0x90, 0x0a, 0x05, 0x9a, 0xab, 0x7a,
-          0xc1, 0x03, 0xed, 0xd9, 0xdf, 0x21, 0x4f, 0x13, 0x6c, 0x52};
-  if (code_data == NULL || code_size == 0) {
-    ckb_debug("Invalid caller contract code");
-    return ERROR_TRANSFER_TO_ANY_SUDT;
+  /* check msg_sender is in allow list */
+  int is_allowed = 0;
+  for(int i = 0; i < SUDT_PROXY_ADDRS_COUNT; i++) {
+    if(memcmp(SUDT_PROXY_ADDRS[i], msg_sender, 20) == 0) {
+      is_allowed = 1;
+      break;
+    }
   }
-  uint8_t code_hash[32] = {0};
-  blake2b_hash(code_hash, (uint8_t*)code_data, code_size);
-  if (memcmp(code_hash,
-             sudt_erc20_proxy_user_defined_decimals_contract_code_hash,
-             32) != 0) {
-    ckb_debug("The contract is not allowed to call transfer_to_any_sudt");
-    debug_print_data("     got code hash", code_hash, 32);
-    debug_print_data("expected code hash",
-                     sudt_erc20_proxy_user_defined_decimals_contract_code_hash,
-                     32);
+  if (!is_allowed) {
+    ckb_debug("Disallowed sUDT proxy contract");
     return ERROR_TRANSFER_TO_ANY_SUDT;
   }
 

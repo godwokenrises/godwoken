@@ -27,6 +27,12 @@ members = [
   "crates/godwoken-bin",
 ]
 
+exclude = [
+ "gwos-evm/polyjuice-tests",
+ "gwos-evm/mainnet-sudt-address",
+ "gwos-evm/deps/ckb-binary-patcher"
+]
+
 [profile.release]
 overflow-checks = true
 
@@ -35,3 +41,4 @@ opt-level = 3
 
 [profile.bench.build-override]
 opt-level = 3
+

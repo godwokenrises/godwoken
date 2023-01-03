@@ -90,7 +90,7 @@ fn test_error_handling() {
     let db = &store.begin_transaction();
     let tip_block_hash = store.get_tip_block_hash().unwrap();
     let run_result = generator
-        .unchecked_execute_transaction(
+        .execute_transaction(
             &ChainView::new(&db, tip_block_hash),
             &mut state,
             &block_info,
@@ -164,7 +164,7 @@ fn test_error_handling() {
     let db = &store.begin_transaction();
     let tip_block_hash = store.get_tip_block_hash().unwrap();
     let run_result = generator
-        .unchecked_execute_transaction(
+        .execute_transaction(
             &ChainView::new(&db, tip_block_hash),
             &mut state,
             &block_info,
@@ -201,7 +201,7 @@ fn test_error_handling() {
     let db = &store.begin_transaction();
     let tip_block_hash = store.get_tip_block_hash().unwrap();
     let run_result = generator
-        .unchecked_execute_transaction(
+        .execute_transaction(
             &ChainView::new(&db, tip_block_hash),
             &mut state,
             &block_info,
@@ -236,7 +236,7 @@ fn test_error_handling() {
     let db = &store.begin_transaction();
     let tip_block_hash = store.get_tip_block_hash().unwrap();
     let run_result = generator
-        .unchecked_execute_transaction(
+        .execute_transaction(
             &ChainView::new(&db, tip_block_hash),
             &mut state,
             &block_info,

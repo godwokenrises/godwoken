@@ -38,8 +38,8 @@ LIMIT_ERROR := -ferror-limit=1
 
 # TODO: read PROTOCOL_VERSION from deps/godwoken-scripts/c/Makefile
 MOLC := moleculec
-MOLC_VERSION := $(shell cat $(DEPS)/godwoken-scripts/c/Makefile | egrep "MOLC_VERSION :=" | awk '{print $$3}')
-PROTOCOL_VERSION := $(shell cat $(DEPS)/godwoken-scripts/c/Makefile | egrep "PROTOCOL_VERSION :=" | awk '{print $$3}')
+MOLC_VERSION := 0.7.2
+PROTOCOL_VERSION := bf76c19c43e4e59cfaba871e722681bf7d3d6948
 PROTOCOL_SCHEMA_URL := https://raw.githubusercontent.com/nervosnetwork/godwoken/${PROTOCOL_VERSION}/crates/types/schemas
 
 ALL_OBJS := $(BUILD)/keccak.o $(BUILD)/keccakf800.o \

@@ -6,9 +6,8 @@ pub use gw_common::{
     CKB_SUDT_SCRIPT_ARGS, H256,
 };
 
-use gw_config::{BackendConfig, BackendForkConfig, BackendType};
+use gw_config::{BackendConfig, BackendForkConfig, BackendType, ForkConfig};
 use gw_db::schema::{COLUMN_INDEX, COLUMN_META, META_TIP_BLOCK_HASH_KEY};
-use gw_generator::error::TransactionError;
 pub use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
     backend_manage::{Backend, BackendManage},
@@ -19,10 +18,11 @@ use gw_store::traits::kv_store::KVStoreWrite;
 pub use gw_store::{chain_view::ChainView, Store};
 use gw_store::{state::traits::JournalDB, traits::chain_store::ChainStore};
 use gw_traits::CodeStore;
+use gw_types::packed::{ETHAddrRegArgs, ETHAddrRegArgsUnion};
 use gw_types::{
     bytes::Bytes,
     core::{AllowedContractType, AllowedEoaType, ScriptHashType},
-    offchain::{RunResult, CycleMeter},
+    offchain::{CycleMeter, RunResult},
     packed::{
         AllowedTypeHash, BatchSetMapping, BlockInfo, Fee, LogItem, RawL2Transaction, RollupConfig,
         Script, SetMapping, Uint64,
@@ -30,12 +30,9 @@ use gw_types::{
     prelude::*,
     U256,
 };
-use gw_types::{
-    packed::{ETHAddrRegArgs, ETHAddrRegArgsUnion},
-};
-use rlp::RlpStream;
-use std::{convert::TryInto, fs, io::Read, path::PathBuf};
 use gw_utils::RollupContext;
+use rlp::RlpStream;
+use std::{convert::TryInto, fs, io::Read, path::PathBuf, sync::Arc};
 
 pub use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID, RESERVED_ACCOUNT_ID};
 
@@ -43,7 +40,7 @@ use crate::{new_dummy_state, DummyState};
 pub const CREATOR_ACCOUNT_ID: u32 = 3;
 pub const CHAIN_ID: u64 = 202204;
 
-pub const L2TX_MAX_CYCLES: u64 = 7000_0000;
+pub const L2TX_MAX_CYCLES: Option<u64> = Some(7000_0000);
 
 // meta contract
 pub const META_VALIDATOR_PATH: &str = "../build/godwoken-scripts/meta-contract-validator";
@@ -442,8 +439,8 @@ pub fn setup() -> (Store, DummyState, Generator) {
         .expect("update secp data key");
 
     // ==== Build generator
-    let configs = vec![BackendForkConfig {
-        switch_height: 0,
+    let fork_configs = vec![BackendForkConfig {
+        fork_height: 0,
         backends: vec![
             BackendConfig {
                 backend_type: BackendType::Meta,
@@ -471,12 +468,12 @@ pub fn setup() -> (Store, DummyState, Generator) {
             },
         ],
     }];
-    let backend_manage = BackendManage::from_config(configs).expect("default backend");
+    let backend_manage = BackendManage::from_config(fork_configs.clone()).expect("default backend");
     // NOTICE in this test we won't need SUM validator
     let mut account_lock_manage = AccountLockManage::default();
     account_lock_manage.register_lock_algorithm(
         SECP_LOCK_CODE_HASH.into(),
-        Box::new(Secp256k1Eth::default()),
+        Arc::new(Secp256k1Eth::default()),
     );
     let rollup_config = RollupConfig::new_builder()
         .chain_id(CHAIN_ID.pack())
@@ -501,9 +498,14 @@ pub fn setup() -> (Store, DummyState, Generator) {
             .pack(),
         )
         .build();
+    let fork_config = ForkConfig {
+        increase_max_l2_tx_cycles_to_500m: None,
+        backend_forks: fork_configs,
+    };
     let rollup_context = RollupContext {
         rollup_script_hash: ROLLUP_SCRIPT_HASH.into(),
         rollup_config,
+        fork_config,
     };
     let generator = Generator::new(
         backend_manage,
@@ -781,7 +783,7 @@ pub(crate) fn eth_address_regiser(
     from_id: u32,
     block_info: BlockInfo,
     set_mapping_args: SetMappingArgs,
-) -> Result<RunResult, TransactionError> {
+) -> anyhow::Result<RunResult> {
     let args = match set_mapping_args {
         SetMappingArgs::One(gw_script_hash) => {
             let fee = Fee::new_builder()
