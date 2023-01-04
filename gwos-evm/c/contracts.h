@@ -43,6 +43,8 @@ uint256 _activate_size_optimization(uint256 x, uint256 y) {
 #define BLAKE2F_FINAL_BLOCK_BYTES 0x1
 #define BLAKE2F_NON_FINAL_BLOCK_BYTES 0x0
 
+#define BIG_MOD_EXP_SIZE_LIMIT (132 * 1024)  // same as GW_MAX_L2TX_SIZE 
+
 /* pre-compiled Ethereum contracts */
 
 typedef int (*precompiled_contract_gas_fn)(const uint8_t* input_src,
@@ -330,6 +332,7 @@ int big_mod_exp_required_gas(const uint8_t* input, const size_t input_size,
   size_t content_extra_size = 0;
   if (__builtin_uaddl_overflow(base_size, exp_size, &content_size) ||
       __builtin_uaddl_overflow(content_size, mod_size, &content_size) ||
+      content_size > BIG_MOD_EXP_SIZE_LIMIT ||
       __builtin_uaddl_overflow(content_size, 96, &content_extra_size)) {
     mbedtls_mpi_free(&base_len);
     mbedtls_mpi_free(&exp_len);
@@ -344,19 +347,14 @@ int big_mod_exp_required_gas(const uint8_t* input, const size_t input_size,
   const size_t copy_size = input_size > content_extra_size 
     ? content_size
     : (input_size > 96 ? input_size - 96 : 0);
-  // `copy_size` <= input_size - 96 and input_size <= 132kb
-  uint8_t *content = (uint8_t*)malloc(copy_size);
+  uint8_t *content = (uint8_t*)malloc(content_size);
   if (content == NULL) {
     return_value = FATAL_PRECOMPILED_CONTRACTS;
     goto mod_exp_gas_cleanup;
   }
-  memset(content, 0, copy_size);
+  memset(content, 0, content_size);
   memcpy(content, input + 96, copy_size);
 
-  if (base_size > copy_size) {
-    return_value = ERROR_MOD_EXP;
-    goto mod_exp_gas_cleanup;
-  }
   ret = mbedtls_mpi_read_binary(&exp_head, content + base_size, exp_head_size);
   if (ret != 0) {
     return_value = ERROR_MOD_EXP;
@@ -473,6 +471,7 @@ int big_mod_exp(gw_context_t* ctx,
   size_t content_extra_size = 0;
   if (__builtin_uaddl_overflow(base_size, exp_size, &content_size) ||
       __builtin_uaddl_overflow(content_size, mod_size, &content_size) ||
+      content_size > BIG_MOD_EXP_SIZE_LIMIT ||
       __builtin_uaddl_overflow(content_size, 96, &content_extra_size)) {
     mbedtls_mpi_free(&base_len);
     mbedtls_mpi_free(&exp_len);
@@ -487,34 +486,21 @@ int big_mod_exp(gw_context_t* ctx,
   const size_t copy_size = input_size > content_extra_size
     ? content_size
     : (input_size > 96 ? input_size - 96 : 0);
-  // `copy_size` <= input_size - 96 and input_size <= 132kb
-  uint8_t *content = (uint8_t*)malloc(copy_size);
+  uint8_t *content = (uint8_t*)malloc(content_size);
   if (content == NULL) {
     return_value = FATAL_PRECOMPILED_CONTRACTS;
     goto mod_exp_cleanup;
   }
-  memset(content, 0, copy_size);
+  memset(content, 0, content_size);
   memcpy(content, input_src + 96, copy_size);
 
-  if (base_size > copy_size) {
-    return_value = ERROR_MOD_EXP;
-    goto mod_exp_cleanup;
-  }
   ret = mbedtls_mpi_read_binary(&base, content, base_size);
   if (ret != 0) {
     return_value = ERROR_MOD_EXP;
     goto mod_exp_cleanup;
   }
-  if (exp_size > copy_size - base_size) {
-    return_value = ERROR_MOD_EXP;
-    goto mod_exp_cleanup;
-  }
   ret = mbedtls_mpi_read_binary(&exp, content + base_size, exp_size);
   if (ret != 0) {
-    return_value = ERROR_MOD_EXP;
-    goto mod_exp_cleanup;
-  }
-  if (mod_size > copy_size - base_size - exp_size) {
     return_value = ERROR_MOD_EXP;
     goto mod_exp_cleanup;
   }
