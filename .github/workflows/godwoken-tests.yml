@@ -16,4 +16,10 @@ jobs:
         GODWOKEN_GIT_CHECKOUT=${{ github.ref }}
         MANUAL_BUILD_SCRIPTS=true
         SCRIPTS_GIT_URL="https://github.com/${{ github.repository }}"
-        SCRIPTS_GIT_CHECKOUT=${{ github.ref }}
+        SCRIPTS_GIT_CHECKOUT=${{ github.ref }}        
+        MANUAL_BUILD_WEB3=true
+        MANUAL_BUILD_WEB3_INDEXER=true
+        WEB3_GIT_URL="https://github.com/${{ github.repository }}"
+        WEB3_GIT_CHECKOUT=${{ github.ref }}
+        GODWOKEN_KICKER_REPO=RetricSu/godwoken-kicker
+        GODWOKEN_KICKER_REF=fix-manual-build-web3

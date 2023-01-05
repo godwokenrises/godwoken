@@ -1,0 +1,8 @@
+[workspace]
+members = [
+  "crates/rpc-client",
+  "crates/indexer",
+]
+
+[profile.release]
+overflow-checks = true

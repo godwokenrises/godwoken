@@ -4,3 +4,15 @@ build/
 crates/benches/smt_data/db/
 crates/tests/mem_block/
 gwos-evm/deps/ckb-binary-patcher/
+
+web3/node_modules/
+web3/lib/
+web3/*.env
+web3/packages/api-server/allowed-addresses.json
+web3/crates/**/target
+web3/target
+web3/indexer-config.toml
+web3/*.sql
+web3/*.log
+web3/*.cpuprofile
+web3/*.heapsnapshot

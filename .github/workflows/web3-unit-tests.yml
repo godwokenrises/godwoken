@@ -1,0 +1,61 @@
+name: Web3 Unit Tests
+
+on:
+  push:
+    paths:
+      - 'web3/**'
+  pull_request:
+    paths:
+      - 'web3/**'
+
+env:
+  # Environment variables propagated to godwoken-kicker
+  MANUAL_BUILD_WEB3: "true"
+  MANUAL_BUILD_WEB3_INDEXER: "true"
+  WEB3_GIT_URL: "https://github.com/${{ github.repository }}"
+  WEB3_GIT_CHECKOUT: "${{ github.sha }}"
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web3
+
+   steps:
+
+    # Godwoken-Kicker
+    - uses: actions/checkout@v3
+      with:
+        repository: godwokenrises/godwoken-kicker
+        ref: 'develop'
+    - name: Kicker init
+      run: ./kicker init
+    - name: Kicker start
+      run: |
+        # Temporary workaround unreliable web3 health check
+        (echo " == kicker start attempt: 1 == " && ./kicker start) || \
+        (echo " == kicker start attempt: 2 == " && ./kicker stop && ./kicker start) || \
+        (echo " == kicker start failed == " && docker-compose --file docker/docker-compose.yml logs --tail 6 && exit 1)
+        docker-compose --file docker/docker-compose.yml logs --tail 6
+      # FIXME: Sometimes, Godwoken service is not running
+      # https://github.com/Flouse/godwoken/runs/3639382192?check_suite_focus=true#step:8:667
+    - name: Kicker ps
+      run: sleep 60 && ./kicker ps && ./kicker logs web3
+    - name: Store kicker network information as environment variables
+      run: |
+        cat docker/layer2/config/web3-config.env | grep -v '^#'           >> $GITHUB_ENV
+        echo "DATABASE_URL=postgres://user:password@127.0.0.1:5432/lumos" >> $GITHUB_ENV
+        echo "REDIS_URL=redis://127.0.0.1:6379"                           >> $GITHUB_ENV
+
+    # Godwoken-Web3
+    - uses: actions/checkout@v3
+      with:
+        path: godwoken-web3
+    - name: Yarn run test
+      working-directory: godwoken-web3
+      run: yarn && yarn run build && yarn run test
+
+    - name: Kicker logs if failure
+      if: ${{ failure() }}
+      run: ./kicker ps && ./kicker logs
