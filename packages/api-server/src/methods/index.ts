@@ -45,19 +45,20 @@ function getMethods(argsList: ModConstructorArgs = {}) {
             }
 
             if (isRpcError(err)) {
+              const error = {
+                code: err.code,
+                message: err.message,
+              } as RpcError;
+
               if (err.data) {
-                cb({
-                  code: err.code,
-                  message: err.message,
-                  data: err.data,
-                } as RpcError);
-              } else {
-                cb({
-                  code: err.code,
-                  message: err.message,
-                });
+                error.data = err.data;
               }
 
+              if (err.extra) {
+                error.extra = err.extra;
+              }
+
+              cb(error);
               // NOTE: Our error responses are not automatically collected by NewRelic because we use Jayson instead of
               // express' error handler.
               //

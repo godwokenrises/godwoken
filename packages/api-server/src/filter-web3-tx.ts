@@ -263,7 +263,7 @@ export async function filterWeb3Transaction(
   return undefined;
 }
 
-function parsePolyjuiceSystemLog(data: HexString): PolyjuiceSystemLog {
+export function parsePolyjuiceSystemLog(data: HexString): PolyjuiceSystemLog {
   // 2 + (8 + 8 + 20 + 4) * 2
   if (data.length !== 82) {
     throw new Error(`invalid system log raw data length: ${data.length}`);

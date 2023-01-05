@@ -31,7 +31,7 @@ export interface ErrorTxReceipt {
   tx_hash: Hash;
   block_number: HexU64;
   return_data: HexString;
-  last_log?: LogItem[];
+  last_log?: LogItem;
   exit_code: HexU32;
 }
 
