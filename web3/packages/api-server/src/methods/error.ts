@@ -12,16 +12,32 @@ import {
 } from "./error-code";
 import { HexString } from "@ckb-lumos/base";
 
+// evmc/polyjuice/godwoken exit code error
+export interface Extra {
+  exit_code: string;
+  message: string;
+  stack: ExtraStack;
+}
+// exit code throw stack
+export enum ExtraStack {
+  evmc = "EVMC",
+  poly = "POLYJUICE",
+  gw = "GODWOKEN",
+  unknown = "UNKNOWN",
+}
+
 export class RpcError extends Error implements JSONRPCError {
   code: number;
   data?: any;
+  extra?: Extra;
 
-  constructor(code: number, message: string, data?: any) {
+  constructor(code: number, message: string, data?: any, extra?: Extra) {
     super(message);
     this.name = "RpcError";
 
     this.code = code;
     this.data = data;
+    this.extra = extra;
   }
 }
 
@@ -30,8 +46,8 @@ export function isRpcError(err: any): err is RpcError {
 }
 
 export class TransactionExecutionError extends RpcError {
-  constructor(message: string, data?: HexString) {
-    super(TRANSACTION_EXECUTION_ERROR, message, data);
+  constructor(message: string, data?: HexString, extra?: Extra) {
+    super(TRANSACTION_EXECUTION_ERROR, message, data, extra);
   }
 }
 

@@ -1,11 +1,23 @@
 // From https://github.com/ethereum/evmc/blob/v9.0.0/include/evmc/evmc.h#L212
 
 import abiCoder, { AbiCoder } from "web3-eth-abi";
-import { RpcError, TransactionExecutionError } from "./error";
+import {
+  Extra,
+  ExtraStack,
+  RpcError,
+  TransactionExecutionError,
+} from "./error";
 import { HexNumber, HexString } from "@ckb-lumos/base";
 import { logger } from "../base/logger";
 import { ErrorTxReceipt, isErrorTxReceipt } from "@godwoken-web3/godwoken";
+import {
+  EVMC_EXIT_CODE_MAPPING,
+  GODWOKEN_EXIT_CODE_MAPPING,
+  matchExitCode,
+  POLYJUICE_EXIT_CODE_MAPPING,
+} from "./exit-code";
 import { INTERNAL_ERROR } from "./error-code";
+import { parsePolyjuiceSystemLog } from "../filter-web3-tx";
 
 const GODWOKEN_SERVER_ERROR_MESSAGE_PREFIX = "JSONRPCError: server error ";
 
@@ -74,24 +86,91 @@ export function handleGwError(gwJsonRpcError: any) {
  * @throws TransactionExecutionError
  */
 export function handleErrorTxReceipt(errorTxReceipt: ErrorTxReceipt) {
-  const GW_VM_MAX_CYCLE_EXIT_CODE = "0xff";
+  const exitCode = errorTxReceipt.exit_code;
+  const logItem = errorTxReceipt.last_log;
+  const returnData =
+    errorTxReceipt.return_data.slice(2).length > 0
+      ? errorTxReceipt.return_data
+      : undefined;
 
-  if (errorTxReceipt.exit_code === GW_VM_MAX_CYCLE_EXIT_CODE) {
-    throw new TransactionExecutionError("out of gas");
+  let message: string = "unknown error";
+  let extraMessage: string = "unknown error";
+  let extraStack: ExtraStack = ExtraStack.unknown;
+  let extraExitCode: HexNumber = exitCode;
+
+  // if logItem exits, try parse polyjuice/evmc exit code for error message
+  if (logItem) {
+    const polySystemLog = parsePolyjuiceSystemLog(logItem.data);
+    const statusCode: HexNumber = polySystemLog.statusCode;
+
+    // 1. parse evmc exit code
+    const evmcCode = matchExitCode(statusCode, EVMC_EXIT_CODE_MAPPING);
+    if (evmcCode != null) {
+      if (evmcCode === EVMC_EXIT_CODE_MAPPING.revert) {
+        // fill the message with detailed abi-encoded revert reason
+        message = parseRevertReason(returnData || "0x");
+      } else {
+        message = evmcCode.message;
+      }
+      extraMessage = evmcCode.message;
+      extraExitCode = statusCode;
+      extraStack = ExtraStack.evmc;
+    }
+
+    // 2. parse polyjuice exit code
+    const polyCode = matchExitCode(statusCode, POLYJUICE_EXIT_CODE_MAPPING);
+    if (polyCode != null) {
+      message = polyCode.message;
+      extraMessage = polyCode.message;
+      extraExitCode = statusCode;
+      extraStack = ExtraStack.poly;
+    }
+
+    // 3. if both un-matched, fallback to parse godwoken exit code
+    if (evmcCode == null && polyCode == null) {
+      const result = parseGwExitCodeForErrorMessage(exitCode);
+      message = result.message;
+      extraMessage = result.extraMessage;
+      extraExitCode = exitCode;
+      extraStack = ExtraStack.gw;
+    }
+  } else {
+    // if logItem not exits, just parse godwoken exit code directly
+    const result = parseGwExitCodeForErrorMessage(exitCode);
+    message = result.message;
+    extraMessage = result.extraMessage;
+    extraExitCode = exitCode;
+    extraStack = ExtraStack.gw;
   }
 
-  // fallback to general revert error
-  handleRevertError(errorTxReceipt);
+  const extra: Extra = {
+    exit_code: extraExitCode,
+    message: extraMessage,
+    stack: extraStack,
+  };
+
+  throw new TransactionExecutionError(message, returnData, extra);
 }
 
-function handleRevertError(errorTxReceipt: ErrorTxReceipt) {
-  const returnData = errorTxReceipt.return_data;
-  const message = parseReturnData(returnData);
-  if (errorTxReceipt.return_data.length > 2) {
-    throw new TransactionExecutionError(message, returnData);
-  } else {
-    throw new TransactionExecutionError(message);
+function parseGwExitCodeForErrorMessage(exitCode: HexNumber): {
+  message: string;
+  extraMessage: string;
+} {
+  let message = "unknown error";
+  let extraMessage = "unknown error";
+  const gwCode = matchExitCode(exitCode, GODWOKEN_EXIT_CODE_MAPPING);
+  if (gwCode != null) {
+    extraMessage = gwCode.message;
+    if (gwCode === GODWOKEN_EXIT_CODE_MAPPING.vmReachedMaxCycles) {
+      message = `out of gas(${gwCode.message})`;
+    } else {
+      message = gwCode.message;
+    }
   }
+  return {
+    message,
+    extraMessage,
+  };
 }
 
 /**
@@ -101,7 +180,7 @@ function handleRevertError(errorTxReceipt: ErrorTxReceipt) {
  *
  * @see {@link https://docs.soliditylang.org/en/v0.8.13/control-structures.html#panic-via-assert-and-error-via-require}
  */
-export function parseReturnData(returnData: HexString): string {
+export function parseRevertReason(returnData: HexString): string {
   if (returnData.slice(0, REVERT_SELECTOR.length) === REVERT_SELECTOR) {
     return unpackRevert(returnData);
   } else if (returnData.slice(0, PANIC_SELECTOR.length) === PANIC_SELECTOR) {
