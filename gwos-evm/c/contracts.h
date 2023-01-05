@@ -334,6 +334,7 @@ int big_mod_exp_required_gas(const uint8_t* input, const size_t input_size,
       __builtin_uaddl_overflow(content_size, mod_size, &content_size) ||
       content_size > BIG_MOD_EXP_SIZE_LIMIT ||
       __builtin_uaddl_overflow(content_size, 96, &content_extra_size)) {
+    ckb_debug("[big_mod_exp_required_gas] content_size overflow");
     mbedtls_mpi_free(&base_len);
     mbedtls_mpi_free(&exp_len);
     mbedtls_mpi_free(&mod_len);
