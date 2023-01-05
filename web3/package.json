@@ -30,6 +30,6 @@
     "eslint": "^8.5.0",
     "prettier": "^2.2.1"
   },
-  "version": "1.9.1",
+  "version": "1.10.0-rc2",
   "author": "hupeng <bitrocks.hu@gmail.com>"
 }

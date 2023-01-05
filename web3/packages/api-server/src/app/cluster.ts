@@ -1,3 +1,7 @@
+import { startOpentelemetry } from "../opentelemetry";
+// Start before logger
+startOpentelemetry();
+
 import cluster from "cluster";
 import { cpus } from "os";
 import { envConfig } from "../base/env-config";
@@ -5,13 +9,10 @@ import { logger } from "../base/logger";
 import { BlockEmitter } from "../block-emitter";
 import { CKBPriceOracle } from "../price-oracle";
 import { initSentry } from "../sentry";
-import { startOpentelemetry } from "../opentelemetry";
 
 const numCPUs = cpus().length;
 const clusterCount = +(envConfig.clusterCount || 0);
 const numOfCluster = clusterCount || numCPUs;
-
-startOpentelemetry();
 
 if (cluster.isMaster) {
   logger.info(`Master ${process.pid} is running`);
