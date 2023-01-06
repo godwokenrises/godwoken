@@ -43,6 +43,8 @@ uint256 _activate_size_optimization(uint256 x, uint256 y) {
 #define BLAKE2F_FINAL_BLOCK_BYTES 0x1
 #define BLAKE2F_NON_FINAL_BLOCK_BYTES 0x0
 
+#define BIG_MOD_EXP_SIZE_LIMIT (132 * 1024)  // same as GW_MAX_L2TX_SIZE 
+
 /* pre-compiled Ethereum contracts */
 
 typedef int (*precompiled_contract_gas_fn)(const uint8_t* input_src,
@@ -326,8 +328,24 @@ int big_mod_exp_required_gas(const uint8_t* input, const size_t input_size,
   size_t base_gas = 0;
   uint128_t gas = 0;
 
-  const size_t content_size = base_size + exp_size + mod_size;
-  const size_t copy_size = input_size > content_size + 96
+  size_t content_size = 0;
+  size_t content_extra_size = 0;
+  if (__builtin_uaddl_overflow(base_size, exp_size, &content_size) ||
+      __builtin_uaddl_overflow(content_size, mod_size, &content_size) ||
+      content_size > BIG_MOD_EXP_SIZE_LIMIT ||
+      __builtin_uaddl_overflow(content_size, 96, &content_extra_size)) {
+    ckb_debug("[big_mod_exp_required_gas] content_size overflow");
+    mbedtls_mpi_free(&base_len);
+    mbedtls_mpi_free(&exp_len);
+    mbedtls_mpi_free(&mod_len);
+
+    mbedtls_mpi_free(&exp_head);
+    mbedtls_mpi_free(&adj_exp_len);
+    mbedtls_mpi_free(&gas_big);
+    return ERROR_MOD_EXP;
+  }
+  
+  const size_t copy_size = input_size > content_extra_size 
     ? content_size
     : (input_size > 96 ? input_size - 96 : 0);
   uint8_t *content = (uint8_t*)malloc(content_size);
@@ -450,8 +468,23 @@ int big_mod_exp(gw_context_t* ctx,
   mbedtls_mpi_init(&mod);
   mbedtls_mpi_init(&result);
 
-  const size_t content_size = base_size + exp_size + mod_size;
-  const size_t copy_size = input_size > content_size + 96
+  size_t content_size = 0;
+  size_t content_extra_size = 0;
+  if (__builtin_uaddl_overflow(base_size, exp_size, &content_size) ||
+      __builtin_uaddl_overflow(content_size, mod_size, &content_size) ||
+      content_size > BIG_MOD_EXP_SIZE_LIMIT ||
+      __builtin_uaddl_overflow(content_size, 96, &content_extra_size)) {
+    mbedtls_mpi_free(&base_len);
+    mbedtls_mpi_free(&exp_len);
+    mbedtls_mpi_free(&mod_len);
+    mbedtls_mpi_free(&base);
+    mbedtls_mpi_free(&exp);
+    mbedtls_mpi_free(&mod);
+    mbedtls_mpi_free(&result);
+
+    return ERROR_MOD_EXP;
+  }
+  const size_t copy_size = input_size > content_extra_size
     ? content_size
     : (input_size > 96 ? input_size - 96 : 0);
   uint8_t *content = (uint8_t*)malloc(content_size);
@@ -461,7 +494,6 @@ int big_mod_exp(gw_context_t* ctx,
   }
   memset(content, 0, content_size);
   memcpy(content, input_src + 96, copy_size);
-
 
   ret = mbedtls_mpi_read_binary(&base, content, base_size);
   if (ret != 0) {
