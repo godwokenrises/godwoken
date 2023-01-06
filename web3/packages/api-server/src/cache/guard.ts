@@ -11,8 +11,10 @@ const configPath = path.resolve(__dirname, "../../rate-limit-config.json");
 
 export const EXPIRED_TIME_MILSECS = 1 * 60 * 1000; // milsec, default 1 minutes
 export const MAX_REQUEST_COUNT = 30;
+export const BATCH_LIMIT = 100000; // 100_000 RPCs in single batch req
 
 export interface RateLimitConfig {
+  batch_limit: number;
   expired_time_milsec: number;
   methods: RpcMethodLimit;
 }
@@ -39,6 +41,7 @@ export class AccessGuard {
   public store: Store;
   public rpcMethods: RpcMethodLimit;
   public expiredTimeMilsecs: number;
+  public batchLimit: number;
 
   constructor(
     enableExpired = true,
@@ -51,6 +54,7 @@ export class AccessGuard {
     this.store = store || new Store(enableExpired, expiredTimeMilsecs);
     this.rpcMethods = config.methods;
     this.expiredTimeMilsecs = expiredTimeMilsecs || CACHE_EXPIRED_TIME_MILSECS;
+    this.batchLimit = config.batch_limit || BATCH_LIMIT;
   }
 
   async setMaxReqLimit(rpcMethod: string, maxReqCount: number) {
@@ -75,11 +79,15 @@ export class AccessGuard {
     }
   }
 
-  async updateCount(rpcMethod: string, reqId: string) {
+  async updateCount(rpcMethod: string, reqId: string, offset: number = 1) {
     const isExist = await this.isExist(rpcMethod, reqId);
     if (isExist === true) {
       const id = getId(rpcMethod, reqId);
-      await this.store.incr(id);
+      if (offset > 1) {
+        await this.store.incrBy(id, offset);
+      } else {
+        await this.store.incr(id);
+      }
     }
   }
 
@@ -90,13 +98,17 @@ export class AccessGuard {
     return true;
   }
 
-  async isOverRate(rpcMethod: string, reqId: string): Promise<boolean> {
+  async isOverRate(
+    rpcMethod: string,
+    reqId: string,
+    offset: number = 1
+  ): Promise<boolean> {
     const id = getId(rpcMethod, reqId);
     const data = await this.store.get(id);
     if (data == null) return false;
     if (this.rpcMethods[rpcMethod] == null) return false;
 
-    const count = +data;
+    const count = +data + offset;
     const maxNumber = this.rpcMethods[rpcMethod];
     if (count > maxNumber) {
       return true;
