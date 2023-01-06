@@ -60,6 +60,7 @@ rate limit config
 ```bash
 $ cat > ./packages/api-server/rate-limit-config.json <<EOF
 {
+  "batch_limit": 1000,
   "expired_time_milsec": 60000,
   "methods": {
     "poly_executeRawL2Transaction": 30,
