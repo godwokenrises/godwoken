@@ -50,11 +50,7 @@ fn test_fallback_function() {
             )
             .expect("construct");
         // [Deploy FallbackFunction] used cycles: 587271 < 590K
-        helper::check_cycles(
-            "Deploy FallbackFunction",
-            run_result.cycles,
-            920_000,
-        );
+        helper::check_cycles("Deploy FallbackFunction", run_result.cycles, 920_000);
         state.finalise().expect("update state");
     }
 

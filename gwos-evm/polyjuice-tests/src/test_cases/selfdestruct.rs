@@ -120,11 +120,7 @@ fn test_selfdestruct() {
             )
             .expect("construct");
         // [call SelfDestruct.done()] used cycles: 589657 < 600K
-        helper::check_cycles(
-            "call SelfDestruct.done()",
-            run_result.cycles,
-            740_000,
-        );
+        helper::check_cycles("call SelfDestruct.done()", run_result.cycles, 740_000);
         state.finalise().expect("update state");
     }
     assert_eq!(
