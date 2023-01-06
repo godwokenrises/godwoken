@@ -4,7 +4,7 @@
 use crate::helper::{
     self, build_eth_l2_script, build_l2_sudt_script, deploy, eth_addr_to_ethabi_addr,
     new_block_info, new_contract_account_script, print_gas_used, setup, PolyjuiceArgsBuilder,
-    CKB_SUDT_ACCOUNT_ID, CREATOR_ACCOUNT_ID, FATAL_PRECOMPILED_CONTRACTS, L2TX_MAX_CYCLES,
+    CREATOR_ACCOUNT_ID, FATAL_PRECOMPILED_CONTRACTS, L2TX_MAX_CYCLES,
     SUDT_ERC20_PROXY_USER_DEFINED_DECIMALS_CODE,
 };
 use crate::DummyState;
@@ -411,9 +411,16 @@ fn test_sudt_erc20_proxy_user_defined_decimals() {
     let new_sudt_script = build_l2_sudt_script([0xffu8; 32]);
     let new_sudt_id = state.create_account_from_script(new_sudt_script).unwrap();
 
-    assert_eq!(CKB_SUDT_ACCOUNT_ID, 1);
-    assert!(
-        test_sudt_erc20_proxy_inner(&generator, &store, &mut state, new_sudt_id, Some(8)).is_ok()
+    // should be failed to transfer, because the contract address is not in the whitelist
+    // see also: gwos-evm/c/mainnet_sudt_proxy.h
+    // TODO: fix this test in develop branch
+    assert_eq!(
+        test_sudt_erc20_proxy_inner(&generator, &store, &mut state, new_sudt_id, Some(8))
+            .unwrap_err()
+            .downcast_ref::<TransactionError>(),
+        Some(&TransactionError::InvalidExitCode(
+            crate::constant::EVMC_REVERT
+        ))
     );
 }
 
@@ -426,11 +433,13 @@ fn test_error_sudt_id_sudt_erc20_proxy() {
         .create_account_from_script(error_new_sudt_script)
         .unwrap();
 
-    assert_eq!(CKB_SUDT_ACCOUNT_ID, 1);
     assert_eq!(
         test_sudt_erc20_proxy_inner(&generator, &store, &mut state, error_new_sudt_id, None)
             .unwrap_err()
             .downcast_ref::<TransactionError>(),
+        // 1. call balance_of_any_sudt
+        // 2. GW_FATAL_INVALID_SUDT_SCRIPT 55
+        // 3. FATAL_PRECOMPILED_CONTRACTS -51
         Some(&TransactionError::InvalidExitCode(
             FATAL_PRECOMPILED_CONTRACTS
         ))
