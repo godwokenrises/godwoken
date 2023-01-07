@@ -1,9 +1,11 @@
 #![allow(clippy::mutable_key_type)]
 
+use std::{collections::HashSet, fs, path::PathBuf, sync::Arc, time::Duration};
+
 use gw_block_producer::produce_block::{
     generate_produce_block_param, produce_block, ProduceBlockParam, ProduceBlockResult,
 };
-use gw_builtin_binaries::Resource;
+use gw_builtin_binaries::{file_checksum, Resource};
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
 use gw_common::blake2b::new_blake2b;
 use gw_config::{
@@ -31,12 +33,9 @@ use gw_types::{
     },
     prelude::*,
 };
-use gw_utils::{checksum::file_checksum, RollupContext};
+use gw_utils::RollupContext;
 use lazy_static::lazy_static;
 use tokio::sync::{Mutex, MutexGuard};
-
-use std::{collections::HashSet, time::Duration};
-use std::{fs, path::PathBuf, sync::Arc};
 
 use super::mem_pool_provider::DummyMemPoolProvider;
 

@@ -1,14 +1,15 @@
 use ckb_fixed_hash::{H160, H256};
+pub use gw_builtin_binaries::content_checksum;
 use gw_builtin_binaries::Resource;
+use gw_jsonrpc_types::{
+    blockchain::{CellDep, Script, Transaction},
+    godwoken::{L2BlockCommittedInfo, RollupConfig},
+};
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{
     L2TX_MAX_CYCLES_150M, L2TX_MAX_CYCLES_500M, MAX_TOTAL_READ_DATA_BYTES, MAX_TX_SIZE,
     MAX_WITHDRAWAL_SIZE, MAX_WRITE_DATA_BYTES,
-};
-use gw_jsonrpc_types::{
-    blockchain::{CellDep, Script, Transaction},
-    godwoken::{L2BlockCommittedInfo, RollupConfig},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -92,6 +93,8 @@ pub struct SystemTypeScriptConfig {
     pub challenge_lock: Script,
     pub l1_sudt: Script,
     pub omni_lock: Script,
+    pub delegate_cell_lock: Option<Script>,
+    pub delegate_cell: Option<Script>,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]

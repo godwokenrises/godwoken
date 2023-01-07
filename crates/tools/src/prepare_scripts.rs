@@ -275,6 +275,7 @@ fn generate_script_deploy_config(
         meta_contract_validator: get_path("meta_contract_validator"),
         polyjuice_validator: get_path("polyjuice_validator"),
         eth_addr_reg_validator: get_path("eth_addr_reg_validator"),
+        delegate_cell_lock: get_path("delegate_cell_lock"),
     };
     let build_scripts_result = BuildScriptsResult {
         programs,

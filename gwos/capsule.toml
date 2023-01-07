@@ -36,3 +36,7 @@ template_type = "Rust"
 [[contracts]]
 name = "eth-account-lock"
 template_type = "Rust"
+
+[[contracts]]
+name = "delegate-cell-lock"
+template_type = "Rust"

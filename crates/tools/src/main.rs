@@ -142,12 +142,14 @@ async fn main() -> Result<()> {
                         .required(true)
                         .help("The user rollup config json file path"),
                 )
+                // This is unused but kept for compatibility for now.
+                // TODO: remove.
                 .arg(
                     Arg::with_name("omni-lock-config-path")
                         .long("omni-lock-config-path")
                         .short('l')
                         .takes_value(true)
-                        .required(true)
+                        .required(false)
                         .help("The omni lock config json file path"),
                 )
                 .arg(
@@ -878,9 +880,10 @@ async fn main() -> Result<()> {
                 let content = std::fs::read(input_path)?;
                 serde_json::from_slice(&content)?
             };
-            match deploy_scripts::deploy_scripts(privkey_path, ckb_rpc_url, &build_script_result)
-                .await
-            {
+            let result =
+                deploy_scripts::deploy_scripts(privkey_path, ckb_rpc_url, &build_script_result)
+                    .await;
+            match result {
                 Ok(script_deployment) => {
                     output_json_file(&script_deployment, output_path);
                 }
@@ -896,7 +899,6 @@ async fn main() -> Result<()> {
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let user_rollup_path = Path::new(m.value_of("user-rollup-config-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
-            let omni_lock_config_path = Path::new(m.value_of("omni-lock-config-path").unwrap());
             let timestamp = m
                 .value_of("genesis-timestamp")
                 .map(|s| s.parse().expect("timestamp in milliseconds"));
@@ -910,11 +912,6 @@ async fn main() -> Result<()> {
                 let content = std::fs::read(user_rollup_path)?;
                 serde_json::from_slice(&content)?
             };
-            let omni_lock_config: OmniLockConfig = {
-                let content = std::fs::read(omni_lock_config_path)?;
-                let json: serde_json::Value = serde_json::from_slice(&content)?;
-                serde_json::from_value(json["omni_lock"].clone())?
-            };
 
             let args = DeployRollupCellArgs {
                 skip_config_check,
@@ -922,7 +919,6 @@ async fn main() -> Result<()> {
                 ckb_rpc_url,
                 scripts_result: &script_results,
                 user_rollup_config: &user_rollup_config,
-                omni_lock_config: &omni_lock_config,
                 timestamp,
             };
 
@@ -1001,7 +997,7 @@ async fn main() -> Result<()> {
             };
 
             let config = generate_config::generate_node_config(args).await?;
-            let content = toml_edit::easy::to_string_pretty(&config)?;
+            let content = toml_edit::ser::to_string_pretty(&config)?;
             std::fs::write(output_path, content).context("writing config file")?;
             log::info!("Generate file {:?}", output_path);
         }

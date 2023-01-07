@@ -1,5 +1,6 @@
 mod account_lock_scripts;
 mod custodian_lock;
+mod delegate_cell_lock;
 mod l2_scripts;
 mod l2_scripts_validator;
 mod programs;
