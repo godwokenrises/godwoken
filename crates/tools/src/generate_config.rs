@@ -3,7 +3,7 @@ use std::path::Path;
 use anyhow::{anyhow, Context, Result};
 use ckb_jsonrpc_types::{CellDep, JsonBytes};
 use ckb_types::prelude::{Builder, Entity};
-use gw_builtin_binaries::Resource;
+use gw_builtin_binaries::{file_checksum, Resource};
 use gw_config::{
     BackendConfig, BackendForkConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config,
     Consensus, ForkConfig, GenesisConfig, NodeMode, P2PNetworkConfig, RPCClientConfig,
@@ -13,7 +13,6 @@ use gw_config::{
 use gw_jsonrpc_types::{godwoken::L2BlockCommittedInfo, JsonCalcHash};
 use gw_rpc_client::ckb_client::CkbClient;
 use gw_types::{core::ScriptHashType, packed::Script, prelude::*};
-use gw_utils::checksum::file_checksum;
 
 use crate::{
     deploy_genesis::get_secp_data,
@@ -113,6 +112,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         scripts_deployment,
         user_rollup_config,
         omni_lock_config,
+        rollup_result.delegate_cell_type_script.clone(),
     )
     .await
     .map_err(|err| anyhow!("query contracts script {}", err))?;
@@ -286,6 +286,7 @@ async fn query_contracts_script(
     deployment: &ScriptsDeploymentResult,
     user_rollup_config: &UserRollupConfig,
     omni_lock_config: &OmniLockConfig,
+    delegate_cell_type_script: gw_jsonrpc_types::blockchain::Script,
 ) -> Result<SystemTypeScriptConfig> {
     let query = |contract: &'static str, cell_dep: CellDep| -> _ {
         ckb_client.query_type_script(contract, cell_dep)
@@ -330,6 +331,16 @@ async fn query_contracts_script(
 
     let l1_sudt = query("l1 sudt", user_rollup_config.l1_sudt_cell_dep.clone()).await?;
     assert_eq!(l1_sudt.hash(), user_rollup_config.l1_sudt_script_type_hash);
+
+    let delegate_cell_lock = query(
+        "delegate_cell_lock",
+        deployment.delegate_cell_lock.cell_dep.clone(),
+    )
+    .await?;
+    assert_eq!(
+        delegate_cell_lock.hash(),
+        deployment.delegate_cell_lock.script_type_hash
+    );
 
     // Allowed eoa script deps
     let eth_account_lock =
@@ -392,5 +403,7 @@ async fn query_contracts_script(
         omni_lock,
         allowed_eoa_scripts,
         allowed_contract_scripts,
+        delegate_cell_lock: Some(delegate_cell_lock),
+        delegate_cell: Some(delegate_cell_type_script),
     })
 }

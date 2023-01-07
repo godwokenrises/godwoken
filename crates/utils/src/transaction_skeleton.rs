@@ -12,6 +12,9 @@ use gw_types::{
 };
 use std::collections::{HashMap, HashSet};
 
+pub const SIGHASH_TYPE_HASH: [u8; 32] =
+    ckb_types::h256!("0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8").0;
+
 #[derive(Debug, Clone, Copy)]
 pub enum SignatureKind {
     OmniLockSecp256k1,
@@ -153,12 +156,15 @@ impl TransactionSkeleton {
             }
 
             let lock = input.cell.output.lock();
-            let lock_hash = lock.hash();
-            let kind = if Some(lock.code_hash().unpack()) == self.omni_lock_code_hash {
+            let code_hash: [u8; 32] = lock.as_reader().code_hash().unpack();
+            let kind = if Some(code_hash) == self.omni_lock_code_hash {
                 SignatureKind::OmniLockSecp256k1
-            } else {
+            } else if code_hash == SIGHASH_TYPE_HASH {
                 SignatureKind::GenesisSecp256k1
+            } else {
+                continue;
             };
+            let lock_hash = lock.hash();
             let entry = entries.entry(lock_hash).or_insert_with(|| SignatureEntry {
                 lock_hash,
                 indexes: Vec::new(),

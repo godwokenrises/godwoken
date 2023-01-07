@@ -10,6 +10,7 @@ members = [
   "eth-account-lock",
   "ckb-smt",
   "gw-utils",
+  "delegate-cell-lock",
 ]
 
 [profile.release]

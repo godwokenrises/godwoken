@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
-use gw_builtin_binaries::Resource;
+use gw_builtin_binaries::{file_checksum, Resource};
 use gw_common::{
     blake2b::new_blake2b,
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
@@ -42,7 +42,7 @@ use gw_types::{
     prelude::*,
     U256,
 };
-use gw_utils::{checksum::file_checksum, RollupContext};
+use gw_utils::RollupContext;
 use pprof::criterion::{Output, PProfProfiler};
 
 // meta contract

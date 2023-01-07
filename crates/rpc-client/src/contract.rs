@@ -144,6 +144,16 @@ async fn query_cell_deps(
     let challenge_cell_lock = query("challenge", script_config.challenge_lock.clone()).await?;
     let l1_sudt_type = query("l1 sudt", script_config.l1_sudt.clone()).await?;
     let omni_lock = query("omni", script_config.omni_lock.clone()).await?;
+    let delegate_cell_lock = if let Some(ref d) = script_config.delegate_cell_lock {
+        Some(query("delegate cell lock", d.clone()).await?)
+    } else {
+        None
+    };
+    let delegate_cell = if let Some(ref d) = script_config.delegate_cell {
+        Some(query("delegate cell", d.clone()).await?)
+    } else {
+        None
+    };
 
     let mut allowed_eoa_locks = HashMap::with_capacity(script_config.allowed_eoa_scripts.len());
     for eoa_script in script_config.allowed_eoa_scripts.iter() {
@@ -172,6 +182,8 @@ async fn query_cell_deps(
         omni_lock,
         allowed_eoa_locks,
         allowed_contract_types,
+        delegate_cell_lock,
+        delegate_cell,
     })
 }
 

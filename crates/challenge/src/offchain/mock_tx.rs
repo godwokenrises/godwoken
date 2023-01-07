@@ -101,17 +101,20 @@ pub fn mock_cancel_challenge_tx(
     };
     inputs.push(rollup_input.clone());
 
-    let rollup_deps = vec![
-        contracts_dep.rollup_cell_type.clone().into(),
-        mock_rollup
-            .rollup_context
-            .fork_config
-            .chain
-            .rollup_config_cell_dep
-            .clone()
-            .into(),
-        contracts_dep.omni_lock.clone().into(),
+    let deps = [
+        &contracts_dep.rollup_cell_type,
+        mock_rollup.rollup_context.rollup_config_cell_dep(),
+        &contracts_dep.omni_lock,
     ];
+    let opt_deps = [
+        contracts_dep.delegate_cell.as_ref(),
+        contracts_dep.delegate_cell_lock.as_ref(),
+    ];
+    let rollup_deps = deps
+        .into_iter()
+        .chain(opt_deps.into_iter().flatten())
+        .map(|d| d.clone().into());
+
     let rollup_output = (
         rollup_input.cell.output.clone(),
         cancel_output.post_global_state.as_bytes(),

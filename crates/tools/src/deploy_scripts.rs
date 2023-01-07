@@ -136,6 +136,7 @@ pub async fn deploy_scripts(
     let target_address = Address::new(network_type, address_payload, true);
 
     let mut total_file_size = 0;
+
     for path in &[
         &scripts_result.programs.custodian_lock,
         &scripts_result.programs.deposit_lock,
@@ -149,6 +150,7 @@ pub async fn deploy_scripts(
         &scripts_result.programs.meta_contract_validator,
         &scripts_result.programs.polyjuice_validator,
         &scripts_result.programs.eth_addr_reg_validator,
+        &scripts_result.programs.delegate_cell_lock,
     ] {
         match fs::metadata(path).map_err(|err| err.to_string()) {
             Ok(metadata) => {
@@ -274,6 +276,16 @@ pub async fn deploy_scripts(
         &target_address,
     )
     .await?;
+    let delegate_cell_lock = deploy_program(
+        privkey_path,
+        ckb_rpc_url,
+        &ckb_client,
+        &scripts_result.programs.delegate_cell_lock,
+        &target_lock,
+        &target_address,
+    )
+    .await?;
+
     let deployment_result = ScriptsDeploymentResult {
         custodian_lock,
         deposit_lock,
@@ -287,6 +299,7 @@ pub async fn deploy_scripts(
         eth_account_lock,
         polyjuice_validator,
         eth_addr_reg_validator,
+        delegate_cell_lock,
     };
     Ok(deployment_result)
 }

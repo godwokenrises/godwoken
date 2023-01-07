@@ -6,7 +6,7 @@ use std::{collections::HashSet, sync::Arc, time::Instant};
 use anyhow::{bail, ensure, Context, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
 use gw_chain::chain::Chain;
-use gw_config::BlockProducerConfig;
+use gw_config::{BlockProducerConfig, ContractsCellDep};
 use gw_generator::Generator;
 use gw_jsonrpc_types::{test_mode::TestModePayload, JsonCalcHash};
 use gw_mem_pool::{
@@ -18,11 +18,12 @@ use gw_smt::smt::SMTH256;
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
+    core::ScriptHashType,
     h256::*,
     offchain::{global_state_from_slice, CompatibleFinalizedTimepoint, DepositInfo, InputCellInfo},
     packed::{
         CellDep, CellInput, CellOutput, GlobalState, L2Block, RollupAction, RollupActionUnion,
-        RollupSubmitBlock, Transaction, WithdrawalRequestExtra, WitnessArgs,
+        RollupSubmitBlock, Script, Transaction, WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::*,
 };
@@ -212,8 +213,24 @@ impl BlockProducer {
             .context("rollup cell not found")?;
 
         let rollup_context = self.generator.rollup_context();
+        let contracts_dep = self.contracts_dep_manager.load();
         let omni_lock_code_hash = self.contracts_dep_manager.load_scripts().omni_lock.hash();
         let mut tx_skeleton = TransactionSkeleton::new(omni_lock_code_hash.0);
+
+        let deps = [
+            &contracts_dep.rollup_cell_type,
+            rollup_context.rollup_config_cell_dep(),
+            // TODO: remove after migrating to delegate-cell-lock.
+            &contracts_dep.omni_lock,
+        ];
+        let opt_deps = [
+            contracts_dep.delegate_cell.as_ref(),
+            contracts_dep.delegate_cell_lock.as_ref(),
+        ];
+        let rollup_deps = deps
+            .into_iter()
+            .chain(opt_deps.into_iter().flatten())
+            .map(|d| d.clone().into());
 
         // rollup cell
         tx_skeleton.inputs_mut().push(InputCellInfo {
@@ -223,20 +240,8 @@ impl BlockProducer {
                 .build(),
             cell: rollup_cell.clone(),
         });
-        let contracts_dep = self.contracts_dep_manager.load();
         // rollup deps
-        tx_skeleton
-            .cell_deps_mut()
-            .push(contracts_dep.rollup_cell_type.clone().into());
-        // rollup config cell
-        tx_skeleton.cell_deps_mut().push(
-            rollup_context
-                .fork_config
-                .chain
-                .rollup_config_cell_dep
-                .clone()
-                .into(),
-        );
+        tx_skeleton.cell_deps_mut().extend(rollup_deps);
         // deposit lock dep
         if !deposit_cells.is_empty() {
             let cell_dep: CellDep = contracts_dep.deposit_cell_lock.clone().into();
@@ -246,10 +251,6 @@ impl BlockProducer {
         tx_skeleton
             .cell_deps_mut()
             .push(self.ckb_genesis_info.sighash_dep());
-        // omni lock
-        tx_skeleton
-            .cell_deps_mut()
-            .push(contracts_dep.omni_lock.clone().into());
 
         // Package pending revert withdrawals and custodians
         let db = { self.chain.lock().await.store().begin_transaction() };
@@ -311,13 +312,49 @@ impl BlockProducer {
         tx_skeleton.witnesses_mut().push(witness);
 
         // output
+
+        // Try to change rollup cell lock to delegate cell lock.
+        //
+        // TODO: remove this when lock has been upgraded on all networks.
+        let scripts = self.contracts_dep_manager.load_scripts();
+        let d = scripts.delegate_cell.as_ref().map(|s| s.hash());
+        let dl = scripts.delegate_cell_lock.as_ref().map(|s| s.hash());
+        let rollup_output = if let (Some(d), Some(dl)) = (d, dl) {
+            let new_lock = Script::new_builder()
+                .code_hash(dl.pack())
+                .hash_type(ScriptHashType::Type.into())
+                .args(d.as_bytes().pack())
+                .build();
+            let old_lock = rollup_cell.output.as_reader().lock();
+            if old_lock.as_slice() != new_lock.as_slice() {
+                if let Err(e) = self.check_delegate_cell_lock(&contracts_dep).await {
+                    log::warn!(
+                        "check delegate cell lock failed, not changing lock: {:#}",
+                        e
+                    );
+                    rollup_cell.output.clone()
+                } else {
+                    log::info!("chaging lock from {:?} to {:?}", old_lock, new_lock);
+                    rollup_cell
+                        .output
+                        .clone()
+                        .as_builder()
+                        .lock(new_lock)
+                        .build()
+                }
+            } else {
+                rollup_cell.output.clone()
+            }
+        } else {
+            rollup_cell.output.clone()
+        };
+
         let output_data = global_state.as_bytes();
         let output = {
-            let dummy = rollup_cell.output.clone();
-            let capacity = dummy
+            let capacity = rollup_output
                 .occupied_capacity_bytes(output_data.len())
                 .expect("capacity overflow");
-            dummy.as_builder().capacity(capacity.pack()).build()
+            rollup_output.as_builder().capacity(capacity.pack()).build()
         };
         tx_skeleton.outputs_mut().push((output, output_data));
 
@@ -491,6 +528,40 @@ impl BlockProducer {
         );
         log::debug!("final tx size: {}", tx.as_slice().len());
         Ok(tx)
+    }
+
+    // TODO: remove after migrating to delegate cell.
+    /// Check delegate cell lock and delegate cell.
+    async fn check_delegate_cell_lock(&self, contracts_dep: &ContractsCellDep) -> Result<()> {
+        let delegate_cell_lock_dep = contracts_dep.delegate_cell_lock.as_ref().unwrap();
+        let delegate_cell_lock_cell = self
+            .rpc_client
+            .get_cell(delegate_cell_lock_dep.out_point.clone().into())
+            .await?
+            .context("get delegate cell lock cell")?;
+        let delegate_cell_lock_data = delegate_cell_lock_cell.cell.unwrap().data;
+        // This is short living code, so just hard code the script path.
+        let delegate_cell_lock_program =
+            std::fs::read("/scripts/godwoken-scripts/delegate-cell-lock")
+                .context("load delegate cell lock program")?;
+        if delegate_cell_lock_data != delegate_cell_lock_program {
+            bail!("delegate cell lock program mismatch");
+        }
+
+        let delegate_cell = contracts_dep.delegate_cell.as_ref().unwrap();
+        let delegate_cell = self
+            .rpc_client
+            .get_cell(delegate_cell.out_point.clone().into())
+            .await?
+            .context("get delegate cell")?;
+        let delegate_cell_data = delegate_cell.cell.unwrap().data;
+        let wallet_lock_hash = self.wallet.lock_script().hash();
+        ensure!(
+            delegate_cell_data == wallet_lock_hash[..20],
+            "delegate cell data does not match wallet lock hash 160"
+        );
+
+        Ok(())
     }
 }
 

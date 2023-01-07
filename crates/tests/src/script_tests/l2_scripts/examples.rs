@@ -1,47 +1,50 @@
-use crate::script_tests::l2_scripts::SUDT_TOTAL_SUPPLY_PROGRAM_PATH;
-use crate::testing_tool::chain::ALWAYS_SUCCESS_CODE_HASH;
 use std::sync::Arc;
 
-use super::{
-    new_block_info, DummyChainStore, SudtLog, SudtLogType, ACCOUNT_OP_PROGRAM_CODE_HASH,
-    ACCOUNT_OP_PROGRAM_PATH, GW_LOG_SUDT_TRANSFER, RECOVER_PROGRAM_CODE_HASH, RECOVER_PROGRAM_PATH,
-    SUDT_TOTAL_SUPPLY_PROGRAM_CODE_HASH, SUM_PROGRAM_CODE_HASH, SUM_PROGRAM_PATH,
-};
-use gw_builtin_binaries::Resource;
+use gw_builtin_binaries::{file_checksum, Resource};
 use gw_common::{
     builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, state::State,
 };
 use gw_config::{BackendConfig, BackendForkConfig, BackendType};
-use gw_generator::backend_manage::BackendManage;
 use gw_generator::{
     account_lock_manage::{
         always_success::AlwaysSuccess, secp256k1::Secp256k1Eth, AccountLockManage,
     },
+    backend_manage::BackendManage,
     error::TransactionError,
     syscalls::error_codes::{GW_ERROR_ACCOUNT_NOT_FOUND, GW_ERROR_RECOVER, GW_FATAL_UNKNOWN_ARGS},
     traits::StateExt,
     Generator,
 };
 use gw_smt::smt::{SMT, SMTH256};
-use gw_store::smt::smt_store::SMTStateStore;
-use gw_store::snapshot::StoreSnapshot;
-use gw_store::state::overlay::mem_state::MemStateTree;
-use gw_store::state::overlay::mem_store::MemStore;
-use gw_store::state::traits::JournalDB;
-use gw_store::state::MemStateDB;
-use gw_store::Store;
-use gw_types::core::AllowedContractType;
-use gw_types::packed::AllowedTypeHash;
+use gw_store::{
+    smt::smt_store::SMTStateStore,
+    snapshot::StoreSnapshot,
+    state::{
+        overlay::{mem_state::MemStateTree, mem_store::MemStore},
+        traits::JournalDB,
+        MemStateDB,
+    },
+    Store,
+};
 use gw_types::{
     bytes::Bytes,
-    core::ScriptHashType,
+    core::{AllowedContractType, ScriptHashType},
     h256::*,
-    packed::{RawL2Transaction, RollupConfig, Script},
+    packed::{AllowedTypeHash, RawL2Transaction, RollupConfig, Script},
     prelude::*,
     U256,
 };
-use gw_utils::checksum::file_checksum;
 use gw_utils::RollupContext;
+
+use super::{
+    new_block_info, DummyChainStore, SudtLog, SudtLogType, ACCOUNT_OP_PROGRAM_CODE_HASH,
+    ACCOUNT_OP_PROGRAM_PATH, GW_LOG_SUDT_TRANSFER, RECOVER_PROGRAM_CODE_HASH, RECOVER_PROGRAM_PATH,
+    SUDT_TOTAL_SUPPLY_PROGRAM_CODE_HASH, SUM_PROGRAM_CODE_HASH, SUM_PROGRAM_PATH,
+};
+use crate::{
+    script_tests::l2_scripts::SUDT_TOTAL_SUPPLY_PROGRAM_PATH,
+    testing_tool::chain::ALWAYS_SUCCESS_CODE_HASH,
+};
 
 fn new_state(store: StoreSnapshot) -> MemStateDB {
     let smt = SMT::new(SMTH256::zero(), SMTStateStore::new(MemStore::new(store)));

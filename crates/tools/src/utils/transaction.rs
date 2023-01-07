@@ -1,19 +1,22 @@
 //! Transaction related utils
 //! NOTICE: Some functions should be moved to a more proper module than this.
 
-use crate::utils::sdk::NetworkType;
-use anyhow::anyhow;
-use anyhow::Result;
+use std::{
+    env,
+    ffi::OsStr,
+    fs,
+    path::Path,
+    process::{Command, Stdio},
+    time::{Duration, Instant},
+};
+
+use anyhow::{anyhow, bail, Result};
 use ckb_fixed_hash::{h256, H256};
 use gw_config::Config;
 use gw_jsonrpc_types::godwoken::TxReceipt;
 use gw_rpc_client::ckb_client::CkbClient;
-use std::fs;
-use std::path::Path;
-use std::time::{Duration, Instant};
-use std::{env, ffi::OsStr, process::Command};
 
-use crate::godwoken_rpc::GodwokenRpcClient;
+use crate::{godwoken_rpc::GodwokenRpcClient, utils::sdk::NetworkType};
 
 // "TYPE_ID" in hex
 pub const TYPE_ID_CODE_HASH: H256 = h256!("0x545950455f4944");
@@ -62,14 +65,12 @@ where
         .env("RUST_BACKTRACE", "full")
         .env("RUST_LOG", "warn")
         .args(args)
+        .stderr(Stdio::inherit())
         .output()
         .expect("Run command failed");
 
     if !init_output.status.success() {
-        Err(anyhow!(String::from_utf8_lossy(
-            init_output.stderr.as_slice()
-        )
-        .to_string()))
+        bail!("command exited with status {}", init_output.status)
     } else {
         let stdout = String::from_utf8_lossy(init_output.stdout.as_slice()).to_string();
         log::debug!("stdout: {}", stdout);
@@ -112,7 +113,7 @@ where
 // Read config.toml
 pub fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
     let content = fs::read(&path)?;
-    let config = toml_edit::easy::from_slice(&content)?;
+    let config = toml_edit::de::from_slice(&content)?;
     Ok(config)
 }
 

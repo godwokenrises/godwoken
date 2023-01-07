@@ -1,18 +1,22 @@
-use crate::deploy_genesis::{deploy_rollup_cell, DeployRollupCellArgs};
-use crate::deploy_scripts::deploy_scripts;
-use crate::generate_config::{generate_node_config, GenerateNodeConfigArgs};
-use crate::prepare_scripts::{self, prepare_scripts, ScriptsBuildMode};
-use crate::types::{SetupConfig, UserRollupConfig};
-use crate::utils;
-use crate::utils::transaction::run_in_output_mode;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    thread, time,
+};
+
 use anyhow::Result;
 use clap::arg_enum;
 use gw_config::NodeMode;
 use rand::Rng;
-use std::fs;
-use std::{
-    path::{Path, PathBuf},
-    thread, time,
+
+use crate::{
+    deploy_genesis::{deploy_rollup_cell, DeployRollupCellArgs},
+    deploy_scripts::deploy_scripts,
+    generate_config::{generate_node_config, GenerateNodeConfigArgs},
+    prepare_scripts::{self, prepare_scripts, ScriptsBuildMode},
+    types::{SetupConfig, UserRollupConfig},
+    utils,
+    utils::transaction::run_in_output_mode,
 };
 
 arg_enum! {
@@ -138,7 +142,6 @@ pub async fn setup(args: SetupArgs<'_>) {
             ckb_rpc_url,
             scripts_result: &deploy_scripts_result,
             user_rollup_config: &rollup_config,
-            omni_lock_config: &setup_config.omni_lock_config,
             timestamp: None,
             skip_config_check: false,
         };
@@ -178,7 +181,7 @@ pub async fn setup(args: SetupArgs<'_>) {
         };
         let config = generate_node_config(args).await.expect("generate_config");
         let output_content =
-            toml_edit::easy::to_string_pretty(&config).expect("serde toml to string pretty");
+            toml_edit::ser::to_string_pretty(&config).expect("serde toml to string pretty");
         fs::write(output_file_path, output_content.as_bytes()).unwrap();
     }
 

@@ -2,7 +2,11 @@ use blake2b::new_blake2b;
 use ckb_types::bytes::Bytes;
 use gw_common::blake2b;
 use lazy_static::lazy_static;
-use std::{fs, io::Read, path::PathBuf};
+use std::{
+    fs,
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 const SCRIPT_DIR: &str = "../../gwos/build/debug";
 const CHALLENGE_LOCK_PATH: &str = "challenge-lock";
@@ -10,6 +14,7 @@ const WITHDRAWAL_LOCK_PATH: &str = "withdrawal-lock";
 const CUSTODIAN_LOCK_PATH: &str = "custodian-lock";
 const STAKE_LOCK_PATH: &str = "stake-lock";
 const STATE_VALIDATOR: &str = "state-validator";
+const DELEGATE_CELL_LOCK_PATH: &str = "delegate-cell-lock";
 const SECP256K1_DATA_PATH: &str = "../../gwos/c/deps/ckb-production-scripts/build/secp256k1_data";
 const ANYONE_CAN_PAY_LOCK_PATH: &str =
     "../../gwos/c/deps/ckb-production-scripts/build/anyone_can_pay";
@@ -176,4 +181,10 @@ lazy_static! {
         hasher.finalize(&mut buf);
         buf
     };
+    pub static ref DELEGATE_CELL_LOCK_PROGRAM: Bytes =
+        fs::read(Path::new(SCRIPT_DIR).join(DELEGATE_CELL_LOCK_PATH))
+            .expect("load delegate cell lock program")
+            .into();
+    pub static ref DELEGATE_CELL_LOCK_CODE_HASH: [u8; 32] =
+        blake2b::hash(&DELEGATE_CELL_LOCK_PROGRAM);
 }

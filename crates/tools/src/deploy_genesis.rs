@@ -1,21 +1,13 @@
-use std::collections::HashSet;
-use std::iter::FromIterator;
-use std::ops::Sub;
-use std::path::Path;
-use std::str::FromStr;
+use std::{
+    collections::HashSet,
+    iter::FromIterator,
+    ops::Sub,
+    path::Path,
+    str::FromStr,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use anyhow::{anyhow, Context, Result};
-use ckb_types::bytes::{BufMut, BytesMut};
-use gw_jsonrpc_types::JsonCalcHash;
-use gw_rpc_client::ckb_client::CkbClient;
-use tempfile::NamedTempFile;
-
-use crate::utils::sdk::{
-    constants::{MIN_SECP_CELL_CAPACITY, ONE_CKB},
-    traits::DefaultCellDepResolver,
-    util::get_max_mature_number,
-    Address, AddressPayload, HumanCapacity,
-};
 use ckb_fixed_hash::H256;
 use ckb_hash::new_blake2b;
 use ckb_jsonrpc_types as rpc_types;
@@ -27,19 +19,29 @@ use ckb_types::{
 };
 use gw_config::GenesisConfig;
 use gw_generator::genesis::build_genesis;
+use gw_jsonrpc_types::JsonCalcHash;
+use gw_rpc_client::ckb_client::CkbClient;
 use gw_types::{
     core::{AllowedContractType, AllowedEoaType},
     packed as gw_packed,
     packed::RollupConfig,
     prelude::{Pack as CKBPack, Unpack as CKBUnpack, *},
 };
+use tempfile::NamedTempFile;
 
-use crate::types::{
-    OmniLockConfig, RollupDeploymentResult, ScriptsDeploymentResult, UserRollupConfig,
+use crate::{
+    sdk::constants::TYPE_ID_CODE_HASH,
+    types::{RollupDeploymentResult, ScriptsDeploymentResult, UserRollupConfig},
+    utils::{
+        sdk::{
+            constants::{MIN_SECP_CELL_CAPACITY, ONE_CKB},
+            traits::DefaultCellDepResolver,
+            util::get_max_mature_number,
+            Address, AddressPayload, HumanCapacity,
+        },
+        transaction::{get_network_type, run_cmd},
+    },
 };
-use crate::utils::transaction::{get_network_type, run_cmd};
-
-use std::time::{SystemTime, UNIX_EPOCH};
 
 struct GenesisInfo(DefaultCellDepResolver);
 
@@ -175,7 +177,6 @@ pub struct DeployRollupCellArgs<'a> {
     pub ckb_rpc_url: &'a str,
     pub scripts_result: &'a ScriptsDeploymentResult,
     pub user_rollup_config: &'a UserRollupConfig,
-    pub omni_lock_config: &'a OmniLockConfig,
     pub timestamp: Option<u64>,
     pub skip_config_check: bool,
 }
@@ -186,7 +187,6 @@ pub async fn deploy_rollup_cell(args: DeployRollupCellArgs<'_>) -> Result<Rollup
         ckb_rpc_url,
         scripts_result,
         user_rollup_config,
-        omni_lock_config,
         timestamp,
         skip_config_check,
     } = args;
@@ -396,6 +396,21 @@ pub async fn deploy_rollup_cell(args: DeployRollupCellArgs<'_>) -> Result<Rollup
     let rollup_script_hash: H256 = CKBUnpack::unpack(&rollup_type_script.calc_script_hash());
     log::info!("rollup_script_hash: {:#x}", rollup_script_hash);
 
+    // Delegate cell.
+    let owner_lock = ckb_packed::Script::from(&owner_address_payload);
+    let delegate_cell_data = owner_lock.calc_script_hash().as_bytes().slice(..20);
+    let delegate_cell_type_id_args: Bytes = calculate_type_id(&first_cell_input, 1);
+    let delegate_cell_type_script = ckb_packed::Script::new_builder()
+        .code_hash(CKBPack::pack(&TYPE_ID_CODE_HASH))
+        .hash_type(ScriptHashType::Type.into())
+        .args(CKBPack::pack(&delegate_cell_type_id_args))
+        .build();
+    let delegate_cell_output = ckb_packed::CellOutput::new_builder()
+        .type_(CKBPack::pack(&Some(delegate_cell_type_script.clone())))
+        .lock(owner_lock)
+        .build();
+    let delegate_cell_output = fit_output_capacity(delegate_cell_output, delegate_cell_data.len());
+
     // 1. build genesis block
     let genesis_config = GenesisConfig {
         timestamp,
@@ -413,34 +428,24 @@ pub async fn deploy_rollup_cell(args: DeployRollupCellArgs<'_>) -> Result<Rollup
     };
     let genesis_with_global_state = build_genesis(&genesis_config, secp_data)?;
 
-    // 2. build rollup cell (with type id)
-    const OMNI_LOCK_IDENTITY_FLAGS_PUBKEY_HASH: u8 = 0;
-    const OMNI_LOCK_FLAG_OWNER_PUBKEY_HASH_ONLY: u8 = 0;
+    // 2. build rollup cell
     let (rollup_output, rollup_data): (ckb_packed::CellOutput, Bytes) = {
         let data = genesis_with_global_state.global_state.as_bytes();
-        let omni_lock = {
-            let pubkey_h160 = match omni_lock_config.pubkey_h160.as_ref() {
-                Some(h160) => Bytes::copy_from_slice(h160.as_bytes()),
-                // Use pubkey from deploy privkey
-                None => ckb_packed::Script::from(&owner_address_payload)
-                    .args()
-                    .unpack(),
-            };
-            let args = {
-                let mut buf = BytesMut::new();
-                buf.put_u8(OMNI_LOCK_IDENTITY_FLAGS_PUBKEY_HASH);
-                buf.put(pubkey_h160.as_ref());
-                buf.put_u8(OMNI_LOCK_FLAG_OWNER_PUBKEY_HASH_ONLY);
-                CKBPack::pack(&buf.freeze())
-            };
+        // Use delegate-cell-lock.
+        let lock = {
             ckb_packed::Script::new_builder()
-                .code_hash(CKBPack::pack(&omni_lock_config.script_type_hash))
+                .code_hash(CKBPack::pack(
+                    &scripts_result.delegate_cell_lock.script_type_hash,
+                ))
                 .hash_type(ScriptHashType::Type.into())
-                .args(args)
+                // Delegate cell type script hash.
+                .args(CKBPack::pack(
+                    &delegate_cell_type_script.calc_script_hash().as_bytes(),
+                ))
                 .build()
         };
         let output = ckb_packed::CellOutput::new_builder()
-            .lock(omni_lock)
+            .lock(lock)
             .type_(CKBPack::pack(&Some(rollup_type_script.clone())))
             .build();
         let output = fit_output_capacity(output, data.len());
@@ -456,8 +461,8 @@ pub async fn deploy_rollup_cell(args: DeployRollupCellArgs<'_>) -> Result<Rollup
     };
 
     // 4. deploy genesis rollup cell
-    let outputs_data = vec![rollup_data];
-    let outputs = vec![rollup_output];
+    let outputs_data = vec![rollup_data, delegate_cell_data];
+    let outputs = vec![rollup_output, delegate_cell_output];
     let tx_hash = deploy_context
         .deploy(
             outputs,
@@ -476,6 +481,7 @@ pub async fn deploy_rollup_cell(args: DeployRollupCellArgs<'_>) -> Result<Rollup
         rollup_type_script: rollup_type_script.into(),
         rollup_config: rollup_config.into(),
         rollup_config_cell_dep: rollup_config_cell_dep.into(),
+        delegate_cell_type_script: delegate_cell_type_script.into(),
         genesis_config,
         layer2_genesis_hash: genesis_with_global_state.genesis.hash().into(),
     };
