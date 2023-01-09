@@ -38,6 +38,9 @@ use self::error_codes::{
 mod bn;
 pub mod error_codes;
 
+/// Max buffer size: 4MB
+const MAX_BUF_SIZE: usize = 4 * 1024 * 1024;
+
 /* Constants */
 // Increasing from 25k(ethereum contract code size) to 128k.
 const MAX_SET_RETURN_DATA_SIZE: u64 = 1024 * 128;
@@ -125,6 +128,9 @@ fn load_bytes<Mac: SupportMachine>(
     addr: u64,
     len: usize,
 ) -> Result<Vec<u8>, VMError> {
+    if len > MAX_BUF_SIZE as usize {
+        return Err(VMError::MemOutOfBound);
+    }
     let mut data = vec![0; len];
     for i in 0..len {
         data[i] = machine

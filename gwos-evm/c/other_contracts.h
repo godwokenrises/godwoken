@@ -49,7 +49,7 @@ int recover_account(gw_context_t* ctx,
     debug_print_int("parse signature length failed", ret);
     return ERROR_RECOVER_ACCOUNT;
   }
-  if (signature_len + 128 > input_size) {
+  if (signature_len > input_size - 128) {
     debug_print_int("invalid input_size", input_size);
     return ERROR_RECOVER_ACCOUNT;
   }
