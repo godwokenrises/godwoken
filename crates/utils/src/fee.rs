@@ -10,7 +10,7 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use gw_rpc_client::{
-    indexer_client::CKBIndexerClient,
+    indexer_client::CkbIndexerClient,
     indexer_types::{Order, SearchKey},
 };
 use gw_types::{
@@ -28,7 +28,7 @@ fn calculate_required_tx_fee(tx_size: usize, fee_rate: u64) -> u64 {
 /// Add fee cell to tx skeleton
 pub async fn fill_tx_fee_with_local(
     tx_skeleton: &mut TransactionSkeleton,
-    client: &CKBIndexerClient,
+    client: &CkbIndexerClient,
     lock_script: Script,
     local_cells_manager: &LocalCellsManager,
     fee_rate: u64,
@@ -126,7 +126,7 @@ pub async fn fill_tx_fee_with_local(
 /// Add fee cell to tx skeleton
 pub async fn fill_tx_fee(
     tx_skeleton: &mut TransactionSkeleton,
-    client: &CKBIndexerClient,
+    client: &CkbIndexerClient,
     lock_script: Script,
     fee_rate: u64,
 ) -> Result<()> {
@@ -143,7 +143,7 @@ pub async fn fill_tx_fee(
 /// query payment cells, the returned cells should provide at least required_capacity fee,
 /// and the remained fees should be enough to cover a charge cell
 pub async fn collect_payment_cells(
-    client: &CKBIndexerClient,
+    client: &CkbIndexerClient,
     lock: Script,
     required_capacity: u64,
     taken_outpoints: &HashSet<OutPoint>,

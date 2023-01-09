@@ -8,7 +8,7 @@ use std::{
 use anyhow::Result;
 use gw_jsonrpc_types::ckb_jsonrpc_types::JsonBytes;
 use gw_rpc_client::{
-    indexer_client::CKBIndexerClient,
+    indexer_client::CkbIndexerClient,
     indexer_types::{Order, ScriptType, SearchKey},
 };
 use gw_types::{
@@ -120,7 +120,7 @@ impl CollectLocalAndIndexerCursor {
 /// local cells manager are not returned.
 pub async fn collect_local_and_indexer_cells(
     local_cells_manager: &LocalCellsManager,
-    indexer_client: &CKBIndexerClient,
+    indexer_client: &CkbIndexerClient,
     search_key: &SearchKey,
     order: &Order,
     limit: Option<u32>,
@@ -138,7 +138,12 @@ pub async fn collect_local_and_indexer_cells(
         }
         CollectLocalAndIndexerCursor::Indexer(ref mut indexer_cursor) => {
             let result = indexer_client
-                .get_cells(search_key, order, limit.map(Into::into), indexer_cursor)
+                .get_cells(
+                    search_key,
+                    order,
+                    limit.unwrap_or(500).into(),
+                    indexer_cursor,
+                )
                 .await?;
             if result.last_cursor.is_empty() {
                 *cursor = CollectLocalAndIndexerCursor::Ended;

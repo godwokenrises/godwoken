@@ -40,7 +40,7 @@ faster-hex = "0.5.0"
 rand = "0.8"
 hex = "0.4"
 tokio = { version = "1", features = ["full"] }
-jsonrpc-core = "17"
+jsonrpc-core = "18"
 csv = "1.1.6"
 bech32 = "0.8.1"
 tracing-subscriber = { version = "0.3.11", default-features = false, features = ["tracing-log"] }

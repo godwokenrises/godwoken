@@ -11,7 +11,7 @@ use gw_generator::{
     Generator,
 };
 use gw_rpc_client::{
-    ckb_client::CKBClient, indexer_client::CKBIndexerClient, rpc_client::RPCClient,
+    ckb_client::CkbClient, indexer_client::CkbIndexerClient, rpc_client::RPCClient,
 };
 use gw_store::{schema::COLUMNS, Store};
 use gw_types::{core::AllowedEoaType, packed::RollupConfig, prelude::Unpack};
@@ -56,11 +56,11 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
     };
     let secp_data: Bytes = {
         let rpc_client = {
-            let ckb_client = CKBClient::with_url(&config.rpc_client.ckb_url)?;
+            let ckb_client = CkbClient::with_url(&config.rpc_client.ckb_url)?;
             let indexer_client = if let Some(ref indexer_url) = config.rpc_client.indexer_url {
-                CKBIndexerClient::with_url(indexer_url)?
+                CkbIndexerClient::with_url(indexer_url)?
             } else {
-                CKBIndexerClient::new(ckb_client.client().clone(), false)
+                CkbIndexerClient::from(ckb_client.clone())
             };
             let rollup_type_script =
                 ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
@@ -74,7 +74,7 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
         let out_point = config.genesis.secp_data_dep.out_point.clone();
         rpc_client
             .ckb
-            .get_transaction(out_point.tx_hash.0)
+            .get_packed_transaction(out_point.tx_hash.0)
             .await?
             .ok_or_else(|| anyhow!("can not found transaction: {:?}", out_point.tx_hash))?
             .raw()

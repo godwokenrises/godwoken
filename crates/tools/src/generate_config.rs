@@ -4,8 +4,7 @@ use crate::types::{
     BuildScriptsResult, OmniLockConfig, RollupDeploymentResult, ScriptsDeploymentResult,
     UserRollupConfig,
 };
-use crate::utils::sdk::CkbRpcClient;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use ckb_jsonrpc_types::{CellDep, JsonBytes};
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
@@ -16,7 +15,7 @@ use gw_config::{
     StoreConfig, WalletConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
-use gw_rpc_client::ckb_client::CKBClient;
+use gw_rpc_client::ckb_client::CkbClient;
 use gw_types::{core::ScriptHashType, packed::Script, prelude::*};
 use std::collections::HashMap;
 use std::iter::FromIterator;
@@ -55,11 +54,11 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         p2p_dial,
     } = args;
 
-    let mut rpc_client = CkbRpcClient::new(&ckb_url);
+    let rpc_client = CkbClient::with_url(&ckb_url)?;
     let tx_with_status = rpc_client
-        .get_transaction(rollup_result.tx_hash.clone())
-        .map_err(|err| anyhow!("get transaction error: {}", err))?
-        .ok_or_else(|| anyhow!("can't find genesis block transaction"))?;
+        .get_transaction(rollup_result.tx_hash.clone(), 2.into())
+        .await?
+        .context("can't find genesis block transaction")?;
     let block_hash = tx_with_status.tx_status.block_hash.ok_or_else(|| {
         anyhow!(
             "the genesis transaction haven't been packaged into chain, please retry after a while"
@@ -67,7 +66,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
     })?;
     let number = rpc_client
         .get_header(block_hash.clone())
-        .map_err(|err| anyhow!("{}", err))?
+        .await?
         .ok_or_else(|| anyhow!("can't find block"))?
         .inner
         .number;
@@ -111,12 +110,10 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
             rollup_result.rollup_config_cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(cell_dep.as_bytes()).into()
     };
-    let (_data, secp_data_dep) =
-        get_secp_data(&mut rpc_client).map_err(|err| anyhow!("get secp data {}", err))?;
+    let (_data, secp_data_dep) = get_secp_data(&rpc_client).await.context("get secp data")?;
 
-    let ckb_client = CKBClient::with_url(&ckb_url)?;
     let contract_type_scripts = query_contracts_script(
-        &ckb_client,
+        &rpc_client,
         scripts_deployment,
         user_rollup_config,
         omni_lock_config,
@@ -268,7 +265,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
 }
 
 async fn query_contracts_script(
-    ckb_client: &CKBClient,
+    ckb_client: &CkbClient,
     deployment: &ScriptsDeploymentResult,
     user_rollup_config: &UserRollupConfig,
     omni_lock_config: &OmniLockConfig,

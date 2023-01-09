@@ -12,8 +12,7 @@ use crate::utils::sdk::{
         SIGHASH_TYPE_HASH,
     },
     traits::{
-        CellCollector, CellCollectorError, CellDepResolver, CellQueryOptions,
-        DefaultCellDepResolver, HeaderDepResolver, LiveCell, TransactionDependencyError,
+        CellDepResolver, DefaultCellDepResolver, HeaderDepResolver, TransactionDependencyError,
         TransactionDependencyProvider,
     },
     tx_fee::tx_fee,
@@ -419,59 +418,6 @@ impl CellDepResolver for Context {
             }
         }
         None
-    }
-}
-
-impl CellCollector for LiveCellsContext {
-    fn collect_live_cells(
-        &mut self,
-        query: &CellQueryOptions,
-        apply_changes: bool,
-    ) -> Result<(Vec<LiveCell>, u64), CellCollectorError> {
-        let mut total_capacity = 0;
-        let mut cells = Vec::new();
-        for (idx, item) in self.inputs.iter().enumerate() {
-            if self.used_inputs.contains(&idx) {
-                continue;
-            }
-            let mut block_number: u64 = 0;
-            if let Some(hash) = item.header.as_ref() {
-                for header in &self.header_deps {
-                    if *hash == header.hash() {
-                        block_number = header.number();
-                    }
-                }
-            }
-            let capacity: u64 = item.output.capacity().unpack();
-            let live_cell = LiveCell {
-                output: item.output.clone(),
-                output_data: item.data.clone(),
-                out_point: item.input.previous_output().clone(),
-                block_number,
-                tx_index: 0,
-            };
-            if query.match_cell(&live_cell, 0) {
-                total_capacity += capacity;
-                cells.push(live_cell);
-                if apply_changes {
-                    self.used_inputs.insert(idx);
-                }
-            }
-            if total_capacity >= query.min_total_capacity {
-                break;
-            }
-        }
-        Ok((cells, total_capacity))
-    }
-
-    fn lock_cell(&mut self, _out_point: OutPoint) -> Result<(), CellCollectorError> {
-        unimplemented!()
-    }
-    fn apply_tx(&mut self, _tx: Transaction) -> Result<(), CellCollectorError> {
-        unimplemented!()
-    }
-    fn reset(&mut self) {
-        self.used_inputs.clear();
     }
 }
 

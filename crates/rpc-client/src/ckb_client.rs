@@ -1,138 +1,120 @@
 use std::time::{Duration, Instant};
 
-use crate::{
-    error::RPCRequestError,
-    utils::{to_jsonh256, to_result, DEFAULT_HTTP_TIMEOUT},
-};
-use anyhow::{anyhow, bail, Context, Result};
-use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
-use gw_jsonrpc_types::{
-    blockchain::CellDep,
-    ckb_jsonrpc_types::{self, Either},
-};
-use gw_types::{h256::H256, offchain::TxStatus, packed::Transaction, prelude::*};
-use serde::de::DeserializeOwned;
-use serde_json::json;
+use crate::utils::{JsonH256, TracingHttpClient};
+use anyhow::{anyhow, bail, Result};
+use gw_jsonrpc_types::{blockchain::CellDep, ckb_jsonrpc_types::*};
+use gw_types::{h256::H256, packed, prelude::*};
+use jsonrpc_utils::rpc_client;
 use tracing::instrument;
 
 #[derive(Clone)]
-pub struct CKBClient {
-    ckb_client: HttpClient,
+pub struct CkbClient {
+    pub(crate) inner: TracingHttpClient,
 }
 
-impl CKBClient {
-    pub fn new(ckb_client: HttpClient) -> Self {
-        Self { ckb_client }
-    }
-
-    pub fn with_url(url: &str) -> Result<Self> {
-        let client = HttpClient::builder()
-            .timeout(DEFAULT_HTTP_TIMEOUT)
-            .build(url)?;
-        Ok(Self::new(client))
-    }
-
-    pub fn client(&self) -> &HttpClient {
-        &self.ckb_client
-    }
-
-    #[instrument(skip_all, fields(method = method))]
-    pub async fn request<T: DeserializeOwned>(
+#[rpc_client]
+impl CkbClient {
+    pub async fn get_block(&self, hash: JsonH256) -> Result<Option<BlockView>>;
+    pub async fn get_block_by_number(&self, number: BlockNumber) -> Result<Option<BlockView>>;
+    pub async fn get_block_hash(&self, number: BlockNumber) -> Result<Option<JsonH256>>;
+    pub async fn get_current_epoch(&self) -> Result<EpochView>;
+    pub async fn get_epoch_by_number(&self, number: EpochNumber) -> Result<Option<EpochView>>;
+    pub async fn get_header(&self, hash: JsonH256) -> Result<Option<HeaderView>>;
+    pub async fn get_header_by_number(&self, number: BlockNumber) -> Result<Option<HeaderView>>;
+    pub async fn get_live_cell(
         &self,
-        method: &'static str,
-        params: Option<ClientParams>,
-    ) -> Result<T> {
-        let response = self
-            .client()
-            .request(method, params)
-            .await
-            .map_err(|err| RPCRequestError::new("ckb client", method, err))?;
-        to_result(response).with_context(|| format!("ckb-client {method}"))
+        out_point: OutPoint,
+        with_data: bool,
+    ) -> Result<CellWithStatus>;
+    pub async fn get_tip_block_number(&self) -> Result<BlockNumber>;
+    pub async fn get_tip_header(&self) -> Result<HeaderView>;
+    pub async fn get_transaction(
+        &self,
+        hash: JsonH256,
+        verbosity: Uint32,
+    ) -> Result<Option<TransactionWithStatusResponse>>;
+    pub async fn get_transaction_proof(
+        &self,
+        tx_hashes: Vec<JsonH256>,
+        block_hash: Option<JsonH256>,
+    ) -> Result<TransactionProof>;
+    pub async fn verify_transaction_proof(
+        &self,
+        tx_proof: TransactionProof,
+    ) -> Result<Vec<JsonH256>>;
+    pub async fn get_fork_block(&self, block_hash: JsonH256) -> Result<Option<BlockView>>;
+    pub async fn get_consensus(&self) -> Result<Consensus>;
+    pub async fn get_block_median_time(&self, block_hash: JsonH256) -> Result<Option<Timestamp>>;
+    pub async fn get_block_economic_state(
+        &self,
+        block_hash: JsonH256,
+    ) -> Result<Option<BlockEconomicState>>;
+    pub async fn send_transaction(
+        &self,
+        tx: Transaction,
+        outputs_validator: Option<OutputsValidator>,
+    ) -> Result<JsonH256>;
+    pub async fn estimate_cycles(&self, tx: Transaction) -> Result<EstimateCycles>;
+    pub async fn local_node_info(&self) -> Result<LocalNode>;
+    pub async fn get_blockchain_info(&self) -> Result<ChainInfo>;
+}
+
+impl CkbClient {
+    pub fn with_url(url: &str) -> Result<Self> {
+        Ok(Self {
+            inner: TracingHttpClient::with_url(url.into())?,
+        })
     }
 
-    #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]
+    pub fn url(&self) -> &str {
+        self.inner.url()
+    }
+
     pub async fn get_transaction_block_hash(&self, tx_hash: H256) -> Result<Option<[u8; 32]>> {
-        let tx_with_status = self.get_transaction_with_status(tx_hash).await?;
+        let tx_with_status = self.get_transaction(tx_hash.into(), 1.into()).await?;
         Ok(tx_with_status
             .and_then(|tx_with_status| tx_with_status.tx_status.block_hash)
             .map(Into::into))
     }
 
-    #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]
     pub async fn get_transaction_block_number(&self, tx_hash: H256) -> Result<Option<u64>> {
         match self.get_transaction_block_hash(tx_hash).await? {
             Some(block_hash) => {
-                let block = self.get_block(block_hash).await?;
+                let block = self.get_block(block_hash.into()).await?;
                 Ok(block.map(|b| b.header.inner.number.value()))
             }
             None => Ok(None),
         }
     }
 
-    #[instrument(skip_all, fields(block_hash = %block_hash.pack()))]
-    pub async fn get_block(
-        &self,
-        block_hash: H256,
-    ) -> Result<Option<ckb_jsonrpc_types::BlockView>> {
-        let block: Option<ckb_jsonrpc_types::BlockView> = self
-            .request(
-                "get_block",
-                Some(ClientParams::Array(vec![json!(to_jsonh256(block_hash))])),
-            )
-            .await?;
-
-        Ok(block)
-    }
-
-    /// Get transaction with status.
-    pub async fn get_transaction_with_status(
+    pub async fn get_packed_transaction(
         &self,
         tx_hash: H256,
-    ) -> Result<Option<ckb_jsonrpc_types::TransactionWithStatusResponse>> {
-        self.request(
-            "get_transaction",
-            Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
-        )
-        .await
-    }
-
-    #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]
-    pub async fn get_transaction(&self, tx_hash: H256) -> Result<Option<Transaction>> {
-        let tx_with_status = self.get_transaction_with_status(tx_hash).await?;
+    ) -> Result<Option<packed::Transaction>> {
+        let tx_with_status = self.get_transaction(tx_hash.into(), 2.into()).await?;
         tx_with_status
             .and_then(|tx_with_status| tx_with_status.transaction)
             .map(|tv| {
-                let tv: ckb_jsonrpc_types::TransactionView = match tv.inner {
-                    Either::Left(v) => v,
-                    Either::Right(_v) => unreachable!(),
+                let tv = match tv.inner {
+                    Either::Left(tv) => tv,
+                    Either::Right(_) => bail!("unexpected bytes response for get_transaction"),
                 };
-                let tx: ckb_types::packed::Transaction = tv.inner.into();
-                Ok(Transaction::new_unchecked(tx.as_bytes()))
+                let tx = ckb_types::packed::Transaction::from(tv.inner);
+                Ok(packed::Transaction::new_unchecked(tx.as_bytes()))
             })
             .transpose()
     }
 
-    #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]
-    pub async fn get_transaction_status(&self, tx_hash: H256) -> Result<Option<TxStatus>> {
-        use ckb_jsonrpc_types::Status;
-
-        let tx_with_status = self.get_transaction_with_status(tx_hash).await?;
-        Ok(
-            tx_with_status.map(|tx_with_status| match tx_with_status.tx_status.status {
-                Status::Pending => TxStatus::Pending,
-                Status::Proposed => TxStatus::Proposed,
-                Status::Committed => TxStatus::Committed,
-                Status::Unknown => TxStatus::Unknown,
-                Status::Rejected => TxStatus::Rejected,
-            }),
-        )
+    pub async fn get_transaction_status(&self, tx_hash: H256) -> Result<Option<Status>> {
+        let tx_with_status = self.get_transaction(tx_hash.into(), 1.into()).await?;
+        Ok(tx_with_status.map(|tx_with_status| tx_with_status.tx_status.status))
     }
 
     pub async fn wait_tx_proposed(&self, tx_hash: H256) -> Result<()> {
         loop {
             match self.get_transaction_status(tx_hash).await? {
-                Some(TxStatus::Proposed) | Some(TxStatus::Committed) => return Ok(()),
-                Some(TxStatus::Rejected) => bail!("rejected"),
+                Some(Status::Proposed) | Some(Status::Committed) => return Ok(()),
+                Some(Status::Rejected) => bail!("rejected"),
                 _ => (),
             }
 
@@ -143,8 +125,8 @@ impl CKBClient {
     pub async fn wait_tx_committed(&self, tx_hash: H256) -> Result<()> {
         loop {
             match self.get_transaction_status(tx_hash).await? {
-                Some(TxStatus::Committed) => return Ok(()),
-                Some(TxStatus::Rejected) => bail!("rejected"),
+                Some(Status::Committed) => return Ok(()),
+                Some(Status::Rejected) => bail!("rejected"),
                 _ => (),
             }
 
@@ -162,11 +144,11 @@ impl CKBClient {
 
         loop {
             match self.get_transaction_status(tx_hash).await? {
-                Some(TxStatus::Committed) => {
+                Some(Status::Committed) => {
                     log::info!("transaction committed");
                     return Ok(());
                 }
-                Some(TxStatus::Rejected) => bail!("transaction rejected"),
+                Some(Status::Rejected) => bail!("transaction rejected"),
                 Some(status) => log::info!("waiting for transaction, status: {:?}", status),
                 None => log::info!("waiting for transaction, not found"),
             }
@@ -185,16 +167,10 @@ impl CKBClient {
         contract: &str,
         cell_dep: CellDep,
     ) -> Result<gw_jsonrpc_types::blockchain::Script> {
-        use ckb_jsonrpc_types::TransactionWithStatusResponse;
-
         let tx_hash = cell_dep.out_point.tx_hash;
-        let tx_with_status: Option<TransactionWithStatusResponse> = self
-            .request(
-                "get_transaction",
-                Some(ClientParams::Array(vec![json!(tx_hash)])),
-            )
-            .await?;
-        let tx: ckb_jsonrpc_types::TransactionView = match tx_with_status {
+        let tx_with_status: Option<TransactionWithStatusResponse> =
+            self.get_transaction(tx_hash.clone(), 2.into()).await?;
+        let tx: TransactionView = match tx_with_status {
             Some(TransactionWithStatusResponse {
                 transaction: Some(tv),
                 ..

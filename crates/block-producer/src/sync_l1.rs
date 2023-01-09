@@ -12,7 +12,6 @@ use gw_store::{
     Store,
 };
 use gw_types::{
-    offchain::TxStatus,
     packed::{NumberHash, Script},
     prelude::*,
 };
@@ -66,7 +65,7 @@ async fn sync_l1_impl(ctx: &(dyn SyncL1Context + Sync + Send)) -> Result<()> {
             .store()
             .get_block_submit_tx_hash(last_confirmed_l1)
             .context("get submit tx")?;
-        if let Some(TxStatus::Committed) =
+        if let Some(gw_jsonrpc_types::ckb_jsonrpc_types::Status::Committed) =
             ctx.rpc_client().ckb.get_transaction_status(tx_hash).await?
         {
             log::info!("L2 block {last_confirmed_l1} is on L1");
@@ -122,7 +121,7 @@ async fn sync_l1_unknown(
         let mut txs = ctx
             .rpc_client()
             .indexer
-            .get_transactions(&search_key, &Order::Asc, None, &last_cursor)
+            .get_transactions(&search_key, &Order::Asc, 500.into(), &last_cursor)
             .await?;
         txs.objects.dedup_by_key(|obj| obj.tx_hash.clone());
         if txs.objects.is_empty() {

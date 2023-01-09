@@ -11,25 +11,18 @@ gw-common = { path = "../../gwos/crates/common" }
 gw-config = { path = "../config" }
 gw-types = { path = "../../gwos/crates/types" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
-faster-hex = "0.4"
-ckb-crypto = "0.105.1"
 ckb-fixed-hash = "0.105.1"
 ckb-types = "0.105.1"
-toml = "0.5"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-async-channel = "1.4.2"
-async-jsonrpc-client = { version = "0.3.0", default-features = false, features = ["http-tokio"] }
-env_logger = "0.8.3"
-futures = "0.3.13"
 log = "0.4.14"
 serde_json = "1.0"
 tokio = "1"
-lazy_static = "1.4"
-hex = "0.4"
 async-trait = "0.1"
-semver = "1.0"
 rand = "0.8"
 arc-swap = "1.5"
 thiserror = "1.0"
 tracing = { version = "0.1", features = ["attributes"] }
+reqwest = { version = "0.11.13", default-features = false }
+jsonrpc-utils = { version = "0.2.0-preview.2", features = ["client"] }
+jsonrpc-core = "18.0.0"

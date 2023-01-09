@@ -2,121 +2,71 @@
 
 use std::collections::HashMap;
 
-use crate::error::RPCRequestError;
+use crate::ckb_client::CkbClient;
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter, Tx};
-use crate::utils::{to_result, DEFAULT_HTTP_TIMEOUT, DEFAULT_QUERY_LIMIT};
-use anyhow::{Context, Result};
-use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
+use crate::utils::{TracingHttpClient, DEFAULT_QUERY_LIMIT};
+use anyhow::Result;
 use ckb_types::prelude::Entity;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{JsonBytes, Uint32};
 use gw_types::core::Timepoint;
 use gw_types::offchain::{CompatibleFinalizedTimepoint, CustodianStat, SUDTStat};
-use gw_types::packed::{CustodianLockArgs, NumberHash};
+use gw_types::packed::CustodianLockArgs;
 use gw_types::{packed::Script, prelude::*};
-use serde::de::DeserializeOwned;
-use serde_json::json;
+use jsonrpc_utils::rpc_client;
 use tracing::instrument;
 
 #[derive(Clone)]
-pub struct CKBIndexerClient {
-    client: HttpClient,
+pub struct CkbIndexerClient {
+    inner: TracingHttpClient,
     // True when using standalone CKB indexer, false when using the new built in CKB indexer.
     is_standalone: bool,
 }
 
-impl CKBIndexerClient {
-    pub fn new(ckb_indexer_client: HttpClient, is_standalone: bool) -> Self {
-        Self {
-            client: ckb_indexer_client,
-            is_standalone,
-        }
-    }
-
-    /// Create a new CKBIndexerClient with ckb RPC url.
-    pub fn with_ckb_url(url: &str) -> Result<Self> {
-        let client = HttpClient::builder()
-            .timeout(DEFAULT_HTTP_TIMEOUT)
-            .build(url)?;
-        Ok(Self::new(client, false))
-    }
-
-    /// Create a new CKBIndexerClient with standalone indexer url.
-    pub fn with_url(url: &str) -> Result<Self> {
-        let client = HttpClient::builder()
-            .timeout(DEFAULT_HTTP_TIMEOUT)
-            .build(url)?;
-        Ok(Self::new(client, true))
-    }
-
-    fn client(&self) -> &HttpClient {
-        &self.client
-    }
-
-    #[instrument(skip_all)]
-    pub async fn get_tip(&self) -> Result<NumberHash> {
-        let number_hash: gw_jsonrpc_types::blockchain::NumberHash = self
-            .request(
-                if self.is_standalone {
-                    "get_tip"
-                } else {
-                    "get_indexer_tip"
-                },
-                None,
-            )
-            .await?;
-        Ok(number_hash.into())
-    }
-
-    #[instrument(skip_all, fields(method = method))]
-    pub async fn request<T: DeserializeOwned>(
-        &self,
-        method: &'static str,
-        params: Option<ClientParams>,
-    ) -> Result<T> {
-        let response = self
-            .client()
-            .request(method, params)
-            .await
-            .map_err(|err| RPCRequestError::new("ckb indexer client", method, err))?;
-        to_result(response).with_context(|| format!("ckb-indexer-client {method}"))
-    }
-
+#[rpc_client]
+impl CkbIndexerClient {
+    async fn get_tip(&self) -> Result<gw_jsonrpc_types::blockchain::NumberHash>;
+    async fn get_indexer_tip(&self) -> Result<gw_jsonrpc_types::blockchain::NumberHash>;
     pub async fn get_cells(
         &self,
         search_key: &SearchKey,
         order: &Order,
-        limit: Option<Uint32>,
+        limit: Uint32,
         cursor: &Option<JsonBytes>,
-    ) -> Result<Pagination<Cell>> {
-        self.request(
-            "get_cells",
-            Some(ClientParams::Array(vec![
-                json!(search_key),
-                json!(order),
-                json!(limit.unwrap_or_else(|| (DEFAULT_QUERY_LIMIT as u32).into())),
-                json!(cursor),
-            ])),
-        )
-        .await
-    }
-
+    ) -> Result<Pagination<Cell>>;
     pub async fn get_transactions(
         &self,
         search_key: &SearchKey,
         order: &Order,
-        limit: Option<Uint32>,
+        limit: Uint32,
         cursor: &Option<JsonBytes>,
-    ) -> Result<Pagination<Tx>> {
-        self.request(
-            "get_transactions",
-            Some(ClientParams::Array(vec![
-                json!(search_key),
-                json!(order),
-                json!(limit.unwrap_or_else(|| (DEFAULT_QUERY_LIMIT as u32).into())),
-                json!(cursor),
-            ])),
-        )
-        .await
+    ) -> Result<Pagination<Tx>>;
+}
+
+impl From<CkbClient> for CkbIndexerClient {
+    fn from(c: CkbClient) -> Self {
+        Self {
+            inner: c.inner,
+            is_standalone: false,
+        }
+    }
+}
+
+impl CkbIndexerClient {
+    /// Create a new CKBIndexerClient with standalone indexer url.
+    pub fn with_url(url: &str) -> Result<Self> {
+        let inner = TracingHttpClient::with_url(url.into())?;
+        Ok(Self {
+            inner,
+            is_standalone: true,
+        })
+    }
+
+    pub async fn get_indexer_tip1(&self) -> Result<gw_jsonrpc_types::blockchain::NumberHash> {
+        if self.is_standalone {
+            self.get_tip().await
+        } else {
+            self.get_indexer_tip().await
+        }
     }
 
     #[instrument(skip_all, err(Debug), fields(timepoint = ?compatible_finalized_timepoint))]
@@ -151,18 +101,7 @@ impl CKBIndexerClient {
         let mut ckb_cells_count = 0;
         let mut cursor = None;
         loop {
-            let cells: Pagination<Cell> = self
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(cursor),
-                    ])),
-                )
-                .await?;
-
+            let cells = self.get_cells(&search_key, &order, limit, &cursor).await?;
             if cells.last_cursor.is_empty() {
                 break;
             }

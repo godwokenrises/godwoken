@@ -3,20 +3,11 @@
 
 pub mod default_impls;
 pub mod dummy_impls;
-pub mod light_client_impls;
 pub mod offchain_impls;
 
-pub use default_impls::{
-    DefaultCellCollector, DefaultCellDepResolver, DefaultHeaderDepResolver,
-    DefaultTransactionDependencyProvider, SecpCkbRawKeySigner,
-};
-pub use light_client_impls::{
-    LightClientCellCollector, LightClientHeaderDepResolver,
-    LightClientTransactionDependencyProvider,
-};
+pub use default_impls::{DefaultCellDepResolver, SecpCkbRawKeySigner};
 pub use offchain_impls::{
-    OffchainCellCollector, OffchainCellDepResolver, OffchainHeaderDepResolver,
-    OffchainTransactionDependencyProvider,
+    OffchainCellDepResolver, OffchainHeaderDepResolver, OffchainTransactionDependencyProvider,
 };
 
 use thiserror::Error;
@@ -30,7 +21,7 @@ use ckb_types::{
         error::OutPointError,
         EpochExt, HeaderView, TransactionView,
     },
-    packed::{Byte32, CellDep, CellOutput, OutPoint, Script, Transaction},
+    packed::{Byte32, CellDep, CellOutput, OutPoint, Script},
     prelude::*,
 };
 
@@ -373,23 +364,6 @@ impl CellQueryOptions {
             MaturityOption::Both => true,
         }
     }
-}
-pub trait CellCollector {
-    /// Collect live cells by query options, if `apply_changes` is true will
-    /// mark all collected cells as dead cells.
-    fn collect_live_cells(
-        &mut self,
-        query: &CellQueryOptions,
-        apply_changes: bool,
-    ) -> Result<(Vec<LiveCell>, u64), CellCollectorError>;
-
-    /// Mark this cell as dead cell
-    fn lock_cell(&mut self, out_point: OutPoint) -> Result<(), CellCollectorError>;
-    /// Mark all inputs as dead cells and outputs as live cells in the transaction.
-    fn apply_tx(&mut self, tx: Transaction) -> Result<(), CellCollectorError>;
-
-    /// Clear cache and locked cells
-    fn reset(&mut self);
 }
 
 pub trait CellDepResolver {

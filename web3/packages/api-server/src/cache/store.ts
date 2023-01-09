@@ -55,6 +55,17 @@ export class Store {
     return await this.client.incr(key);
   }
 
+  async incrBy(key: string, offset: number) {
+    const data = await this.client.get(key);
+    if (data == null) {
+      throw new Error("can not update before key exits");
+    }
+    if (isNaN(data as any)) {
+      throw new Error("can not update with NaN value");
+    }
+    return await this.client.incrBy(key, offset);
+  }
+
   async ttl(key: string) {
     return await this.client.ttl(key);
   }

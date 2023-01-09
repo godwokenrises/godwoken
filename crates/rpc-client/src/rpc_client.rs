@@ -1,14 +1,12 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::ckb_client::CKBClient;
-use crate::indexer_client::CKBIndexerClient;
-use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
-use crate::utils::{to_h256, to_jsonh256, DEFAULT_QUERY_LIMIT, TYPE_ID_CODE_HASH};
+use crate::ckb_client::CkbClient;
+use crate::indexer_client::CkbIndexerClient;
+use crate::indexer_types::{Cell, Order, ScriptType, SearchKey, SearchKeyFilter};
+use crate::utils::DEFAULT_QUERY_LIMIT;
 use anyhow::{anyhow, Result};
-use async_jsonrpc_client::Params as ClientParams;
-use ckb_types::core::hardfork::HardForkSwitch;
 use ckb_types::prelude::Entity;
-use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, Consensus, Uint32};
+use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, OutputsValidator, Uint32};
 use gw_types::offchain::{CellStatus, CellWithStatus, CompatibleFinalizedTimepoint, DepositInfo};
 use gw_types::{
     bytes::Bytes,
@@ -24,7 +22,6 @@ use gw_types::{
     prelude::*,
 };
 use rand::prelude::*;
-use serde_json::json;
 use tracing::instrument;
 
 use gw_types::core::Timepoint;
@@ -110,8 +107,8 @@ impl<T> QueryResult<T> {
 
 #[derive(Clone)]
 pub struct RPCClient {
-    pub indexer: CKBIndexerClient,
-    pub ckb: CKBClient,
+    pub indexer: CkbIndexerClient,
+    pub ckb: CkbClient,
     pub rollup_type_script: ckb_types::packed::Script,
     pub rollup_config: RollupConfig,
 }
@@ -120,8 +117,8 @@ impl RPCClient {
     pub fn new(
         rollup_type_script: ckb_types::packed::Script,
         rollup_config: RollupConfig,
-        ckb: CKBClient,
-        indexer: CKBIndexerClient,
+        ckb: CkbClient,
+        indexer: CkbIndexerClient,
     ) -> Self {
         Self {
             indexer,
@@ -147,16 +144,9 @@ impl RPCClient {
         let order = Order::Desc;
         let limit = Uint32::from(1);
 
-        let mut cells: Pagination<Cell> = self
+        let mut cells = self
             .indexer
-            .request(
-                "get_cells",
-                Some(ClientParams::Array(vec![
-                    json!(search_key),
-                    json!(order),
-                    json!(limit),
-                ])),
-            )
+            .get_cells(&search_key, &order, limit, &None)
             .await?;
         if let Some(cell) = cells.objects.pop() {
             let out_point = {
@@ -176,66 +166,6 @@ impl RPCClient {
             return Ok(Some(cell_info));
         }
         Ok(None)
-    }
-
-    /// this function queries identity cell by args
-    #[instrument(skip_all)]
-    pub async fn query_identity_cell(&self, args: Bytes) -> Result<Option<CellInfo>> {
-        let search_key = SearchKey {
-            script: ckb_types::packed::Script::new_builder()
-                .code_hash(ckb_types::prelude::Pack::pack(&*TYPE_ID_CODE_HASH))
-                .hash_type(ScriptHashType::Type.into())
-                .args(ckb_types::prelude::Pack::pack(&args))
-                .build()
-                .into(),
-            script_type: ScriptType::Type,
-            filter: None,
-        };
-        let order = Order::Desc;
-        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
-
-        let mut cell = None;
-        let mut cursor = None;
-        while cell.is_none() {
-            let cells: Pagination<Cell> = self
-                .indexer
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(cursor),
-                    ])),
-                )
-                .await?;
-            cursor = Some(cells.last_cursor);
-            assert!(
-                cells.objects.len() <= 1,
-                "Never returns more than 1 identity cells"
-            );
-            cell = cells
-                .objects
-                .into_iter()
-                .map(|cell| {
-                    let out_point = {
-                        let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
-                        OutPoint::new_unchecked(out_point.as_bytes())
-                    };
-                    let output = {
-                        let output: ckb_types::packed::CellOutput = cell.output.into();
-                        CellOutput::new_unchecked(output.as_bytes())
-                    };
-                    let data = cell.output_data.into_bytes();
-                    CellInfo {
-                        out_point,
-                        output,
-                        data,
-                    }
-                })
-                .next();
-        }
-        Ok(cell)
     }
 
     /// this function return a cell that do not has data & _type fields
@@ -259,19 +189,10 @@ impl RPCClient {
         let mut cell = None;
         let mut cursor = None;
         while cell.is_none() {
-            let cells: Pagination<Cell> = self
+            let cells = self
                 .indexer
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(cursor),
-                    ])),
-                )
+                .get_cells(&search_key, &order, limit, &cursor)
                 .await?;
-
             if cells.last_cursor.is_empty() {
                 return Err(anyhow!("no owner cell"));
             }
@@ -301,21 +222,7 @@ impl RPCClient {
             let out_point = ckb_types::packed::OutPoint::new_unchecked(out_point.as_bytes());
             out_point.into()
         };
-        let cell_with_status: Option<gw_jsonrpc_types::ckb_jsonrpc_types::CellWithStatus> = self
-            .ckb
-            .request(
-                "get_live_cell",
-                Some(ClientParams::Array(vec![
-                    json!(json_out_point),
-                    json!(true),
-                ])),
-            )
-            .await?;
-
-        if cell_with_status.is_none() {
-            return Ok(None);
-        }
-        let cell_with_status = cell_with_status.unwrap();
+        let cell_with_status = self.ckb.get_live_cell(json_out_point, true).await?;
         let cell_info = cell_with_status.cell.map(|cell| {
             let output: ckb_types::packed::CellOutput = cell.output.into();
             let output = CellOutput::new_unchecked(output.as_bytes());
@@ -346,7 +253,7 @@ impl RPCClient {
     pub async fn get_cell_from_mempool(&self, out_point: OutPoint) -> Result<Option<CellInfo>> {
         let tx = match self
             .ckb
-            .get_transaction(out_point.tx_hash().unpack())
+            .get_packed_transaction(out_point.tx_hash().unpack())
             .await?
         {
             Some(tx) => tx,
@@ -373,32 +280,16 @@ impl RPCClient {
     }
 
     pub async fn get_tip(&self) -> Result<NumberHash> {
-        self.indexer.get_tip().await
+        self.indexer.get_indexer_tip1().await.map(Into::into)
     }
 
-    #[instrument(skip_all, fields(block_hash = %block_hash.pack()))]
     pub async fn get_block_median_time(&self, block_hash: H256) -> Result<Option<Duration>> {
-        let opt_median_time: Option<gw_jsonrpc_types::ckb_jsonrpc_types::Uint64> = self
-            .ckb
-            .request(
-                "get_block_median_time",
-                Some(ClientParams::Array(vec![json!(to_jsonh256(block_hash))])),
-            )
-            .await?;
-
+        let opt_median_time = self.ckb.get_block_median_time(block_hash.into()).await?;
         Ok(opt_median_time.map(|t| Duration::from_millis(t.into())))
     }
 
-    #[instrument(skip_all, fields(block = number))]
     pub async fn get_block_by_number(&self, number: u64) -> Result<Option<Block>> {
-        let block_number = BlockNumber::from(number);
-        let block_opt: Option<ckb_jsonrpc_types::BlockView> = self
-            .ckb
-            .request(
-                "get_block_by_number",
-                Some(ClientParams::Array(vec![json!(block_number)])),
-            )
-            .await?;
+        let block_opt = self.ckb.get_block_by_number(number.into()).await?;
         Ok(block_opt.map(|b| {
             let block: ckb_types::core::BlockView = b.into();
             Block::new_unchecked(block.data().as_bytes())
@@ -454,17 +345,9 @@ impl RPCClient {
         while deposit_infos.len() < count {
             let limit = Uint32::from((count - deposit_infos.len()) as u32);
 
-            let cells: Pagination<Cell> = self
+            let cells = self
                 .indexer
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(cursor),
-                    ])),
-                )
+                .get_cells(&search_key, &order, limit, &cursor)
                 .await?;
 
             log::debug!(target: "collect-deposit-cells", "query {} cells", cells.objects.len());
@@ -573,19 +456,10 @@ impl RPCClient {
         let mut cursor = None;
 
         while collected_owners.len() != owner_lock_hashes.len() {
-            let cells: Pagination<Cell> = self
+            let cells = self
                 .indexer
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(cursor),
-                    ])),
-                )
+                .get_cells(&search_key, &order, limit, &cursor)
                 .await?;
-
             if cells.last_cursor.is_empty() {
                 return Err(anyhow!("no all reward stake cells found"));
             }
@@ -635,17 +509,9 @@ impl RPCClient {
         let mut cursor = None;
 
         while collected.is_empty() {
-            let cells: Pagination<Cell> = self
+            let cells = self
                 .indexer
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(cursor),
-                    ])),
-                )
+                .get_cells(&search_key, &order, limit, &cursor)
                 .await?;
 
             if cells.last_cursor.is_empty() {
@@ -707,17 +573,9 @@ impl RPCClient {
 
         let mut cursor = None;
         loop {
-            let cells: Pagination<Cell> = self
+            let cells = self
                 .indexer
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(cursor),
-                    ])),
-                )
+                .get_cells(&search_key, &order, limit, &cursor)
                 .await?;
 
             if cells.last_cursor.is_empty() {
@@ -770,17 +628,9 @@ impl RPCClient {
         let mut cursor = None;
 
         while collected.is_empty() {
-            let cells: Pagination<Cell> = self
+            let cells = self
                 .indexer
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(cursor),
-                    ])),
-                )
+                .get_cells(&search_key, &order, limit, &cursor)
                 .await?;
 
             if cells.last_cursor.is_empty() {
@@ -842,17 +692,9 @@ impl RPCClient {
         let mut cursor = None;
 
         while verifier_cell.is_none() {
-            let cells: Pagination<Cell> = self
+            let cells = self
                 .indexer
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(cursor),
-                    ])),
-                )
+                .get_cells(&search_key, &order, limit, &cursor)
                 .await?;
 
             if cells.last_cursor.is_empty() {
@@ -903,17 +745,9 @@ impl RPCClient {
         let mut cursor = None;
 
         while collected.is_empty() {
-            let cells: Pagination<Cell> = self
+            let cells = self
                 .indexer
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(cursor),
-                    ])),
-                )
+                .get_cells(&search_key, &order, limit, &cursor)
                 .await?;
 
             for cell in cells.objects.into_iter() {
@@ -947,120 +781,45 @@ impl RPCClient {
         Ok(collected)
     }
 
-    #[instrument(skip_all, fields(block_hash = %block_hash.pack()))]
     pub async fn get_header(
         &self,
         block_hash: H256,
     ) -> Result<Option<ckb_jsonrpc_types::HeaderView>> {
-        let block: Option<ckb_jsonrpc_types::HeaderView> = self
-            .ckb
-            .request(
-                "get_header",
-                Some(ClientParams::Array(vec![json!(to_jsonh256(block_hash))])),
-            )
-            .await?;
-
-        Ok(block)
+        self.ckb.get_header(block_hash.into()).await
     }
 
-    #[instrument(skip_all, fields(number = %number))]
     pub async fn get_header_by_number(
         &self,
         number: u64,
     ) -> Result<Option<ckb_jsonrpc_types::HeaderView>> {
-        let block_number = BlockNumber::from(number);
-        let header: Option<ckb_jsonrpc_types::HeaderView> = self
-            .ckb
-            .request(
-                "get_header_by_number",
-                Some(ClientParams::Array(vec![json!(block_number)])),
-            )
-            .await?;
-
-        Ok(header)
+        self.ckb.get_header_by_number(number.into()).await
     }
 
-    #[instrument(skip_all, fields(tx_hash = %tx.hash().pack()))]
     pub async fn send_transaction(&self, tx: &Transaction) -> Result<H256> {
         let tx: ckb_jsonrpc_types::Transaction = {
             let tx = ckb_types::packed::Transaction::new_unchecked(tx.as_bytes());
             tx.into()
         };
-        let tx_hash: ckb_types::H256 = self
+
+        let tx_hash = self
             .ckb
-            .request(
-                "send_transaction",
-                Some(ClientParams::Array(vec![json!(tx), json!("passthrough")])),
-            )
+            .send_transaction(tx, Some(OutputsValidator::Passthrough))
             .await?;
-        Ok(to_h256(tx_hash))
+        Ok(tx_hash.into())
     }
 
-    #[instrument(skip_all)]
     pub async fn get_ckb_version(&self) -> Result<String> {
-        let node: ckb_jsonrpc_types::LocalNode = self.ckb.request("local_node_info", None).await?;
+        let node = self.ckb.local_node_info().await?;
         Ok(node.version)
     }
 
-    #[instrument(skip_all, fields(tx_hash = %tx.hash().pack()))]
     pub async fn dry_run_transaction(&self, tx: &Transaction) -> Result<u64> {
         let tx: ckb_jsonrpc_types::Transaction = {
             let tx = ckb_types::packed::Transaction::new_unchecked(tx.as_bytes());
             tx.into()
         };
-        let dry_run_result: ckb_jsonrpc_types::EstimateCycles = self
-            .ckb
-            .request(
-                "dry_run_transaction",
-                Some(ClientParams::Array(vec![json!(tx)])),
-            )
-            .await?;
-        Ok(dry_run_result.cycles.into())
-    }
-
-    #[instrument(skip_all)]
-    pub async fn get_current_epoch_number(&self) -> Result<u64> {
-        let epoch_view: ckb_jsonrpc_types::EpochView =
-            self.ckb.request("get_current_epoch", None).await?;
-        let epoch_number: u64 = epoch_view.number.into();
-        Ok(epoch_number)
-    }
-
-    #[instrument(skip_all)]
-    pub async fn get_hardfork_switch(&self) -> Result<HardForkSwitch> {
-        let consensus: Consensus = self.ckb.request("get_consensus", None).await?;
-        let rfc_0028 = self.get_hardfork_feature_epoch_number(&consensus, "0028")?;
-        let rfc_0029 = self.get_hardfork_feature_epoch_number(&consensus, "0029")?;
-        let rfc_0030 = self.get_hardfork_feature_epoch_number(&consensus, "0030")?;
-        let rfc_0031 = self.get_hardfork_feature_epoch_number(&consensus, "0031")?;
-        let rfc_0032 = self.get_hardfork_feature_epoch_number(&consensus, "0032")?;
-        let rfc_0036 = self.get_hardfork_feature_epoch_number(&consensus, "0036")?;
-        let rfc_0038 = self.get_hardfork_feature_epoch_number(&consensus, "0038")?;
-        let hardfork_switch = HardForkSwitch::new_builder()
-            .rfc_0028(rfc_0028)
-            .rfc_0029(rfc_0029)
-            .rfc_0030(rfc_0030)
-            .rfc_0031(rfc_0031)
-            .rfc_0032(rfc_0032)
-            .rfc_0036(rfc_0036)
-            .rfc_0038(rfc_0038)
-            .build()
-            .map_err(|err| anyhow!(err))?;
-
-        Ok(hardfork_switch)
-    }
-
-    #[instrument(skip_all)]
-    fn get_hardfork_feature_epoch_number(&self, consensus: &Consensus, rfc: &str) -> Result<u64> {
-        let rfc_info = consensus
-            .hardfork_features
-            .iter()
-            .find(|f| f.rfc == rfc)
-            .ok_or_else(|| anyhow!("rfc {} hardfork feature not found!", rfc))?;
-
-        // if epoch_number is null, which means the fork will never going to happen
-        let epoch_number: u64 = rfc_info.epoch_number.map(Into::into).unwrap_or(u64::MAX);
-        Ok(epoch_number)
+        let cycles = self.ckb.estimate_cycles(tx).await?;
+        Ok(cycles.cycles.into())
     }
 
     #[instrument(skip_all, err(Debug), fields(timepoint = ?compatible_finalized_timepoint))]
@@ -1095,17 +854,9 @@ impl RPCClient {
         let mut sudt_type_script_set = HashSet::new();
         let mut cursor = None;
         while sudt_type_script_set.len() < max {
-            let cells: Pagination<Cell> = self
+            let cells = self
                 .indexer
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(cursor),
-                    ])),
-                )
+                .get_cells(&search_key, &order, limit, &cursor)
                 .await?;
 
             for cell in cells.objects.into_iter() {
@@ -1200,17 +951,9 @@ impl RPCClient {
         let mut collected_set = exclusions.clone();
         let mut cursor = None;
         while collected.len() < max_cells {
-            let cells: Pagination<Cell> = self
+            let cells = self
                 .indexer
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(cursor),
-                    ])),
-                )
+                .get_cells(&search_key, &order, limit, &cursor)
                 .await?;
 
             for cell in cells.objects.into_iter() {

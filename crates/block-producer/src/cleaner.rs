@@ -9,7 +9,7 @@ use gw_challenge::cancel_challenge::RecoverAccountsContext;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::core::Status;
 use gw_types::h256::*;
-use gw_types::offchain::{global_state_from_slice, CellInfo, InputCellInfo, TxStatus};
+use gw_types::offchain::{global_state_from_slice, CellInfo, InputCellInfo};
 use gw_types::packed::{CellDep, CellInput, Transaction, WitnessArgs};
 use gw_types::prelude::Unpack;
 use tracing::instrument;
@@ -113,7 +113,10 @@ impl Cleaner {
         let tip_l1_block_number = rpc_client.get_tip().await?.number().unpack();
         for tx_hash in consumed_txs {
             let tx_status = rpc_client.ckb.get_transaction_status(tx_hash).await?;
-            if !matches!(tx_status, Some(TxStatus::Committed)) {
+            if !matches!(
+                tx_status,
+                Some(gw_jsonrpc_types::ckb_jsonrpc_types::Status::Committed)
+            ) {
                 continue;
             }
 
@@ -167,7 +170,10 @@ impl Cleaner {
                 .ckb
                 .get_transaction_status(verifier.tx_hash())
                 .await?;
-            if !matches!(verifier_status, Some(TxStatus::Committed)) {
+            if !matches!(
+                verifier_status,
+                Some(gw_jsonrpc_types::ckb_jsonrpc_types::Status::Committed)
+            ) {
                 continue;
             }
 
