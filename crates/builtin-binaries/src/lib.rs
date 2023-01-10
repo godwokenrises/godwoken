@@ -8,7 +8,7 @@
 //! // Read bundled godwoken binaries
 //! use gw_builtin_binaries::Resource;
 //!
-//! let binary = Resource::bundled(".builtin/godwoken-polyjuice-v1.2.0/generator").get().unwrap();
+//! let binary = Resource::bundled("builtin/godwoken-polyjuice-v1.2.0/generator".to_string()).get().unwrap();
 //! ```
 //!
 mod bundled {
