@@ -1,81 +1,50 @@
 use anyhow::{bail, Context, Result};
-use gw_common::blake2b::new_blake2b;
 use gw_config::{BackendConfig, BackendForkConfig, BackendType};
 use gw_types::bytes::Bytes;
 use gw_types::h256::*;
-use std::{
-    collections::{HashMap, HashSet},
-    fs,
-};
+use gw_utils::checksum::content_checksum;
+use std::collections::{HashMap, HashSet};
 
 #[cfg(has_asm)]
 use crate::types::vm::AotCode;
 
-#[derive(Default, Clone)]
-pub struct BackendCheckSum {
-    pub validator: H256,
-    pub generator: H256,
-}
-
-impl std::fmt::Debug for BackendCheckSum {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BackendCheckSum")
-            .field("validator", &hex::encode(self.validator.as_slice()))
-            .field("generator", &hex::encode(self.generator.as_slice()))
-            .finish()
-    }
-}
-
 #[derive(Clone)]
 pub struct Backend {
-    pub validator: Bytes,
     pub generator: Bytes,
     pub validator_script_type_hash: H256,
     pub backend_type: BackendType,
-    pub checksum: BackendCheckSum,
+    pub generator_checksum: H256,
 }
 
 impl Backend {
-    pub fn new(
+    pub fn build(
         backend_type: BackendType,
         validator_script_type_hash: H256,
-        validator: Bytes,
         generator: Bytes,
-    ) -> Self {
-        let checksum = {
-            let validator = {
-                let mut hasher = new_blake2b();
-                hasher.update(&validator);
-                let mut buf = [0u8; 32];
-                hasher.finalize(&mut buf);
-                buf
-            };
-            let generator = {
-                let mut hasher = new_blake2b();
-                hasher.update(&generator);
-                let mut buf = [0u8; 32];
-                hasher.finalize(&mut buf);
-                buf
-            };
+        generator_checksum: H256,
+    ) -> Result<Self> {
+        let checksum: H256 = content_checksum(&generator)?;
 
-            BackendCheckSum {
-                validator,
-                generator,
-            }
-        };
+        if generator_checksum != checksum {
+            bail!(
+                "Backend {:?} checksum mismatch, expected: {}, actual: {}",
+                backend_type,
+                hex::encode(generator_checksum),
+                hex::encode(checksum)
+            );
+        }
 
-        Self {
-            validator,
+        Ok(Self {
             generator,
             validator_script_type_hash,
             backend_type,
-            checksum,
-        }
+            generator_checksum,
+        })
     }
 }
 
 /// SUDT Proxy config
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct SUDTProxyConfig {
     /// Should only be used in test environment
     pub permit_sudt_transfer_from_dangerous_contract: bool,
@@ -83,7 +52,7 @@ pub struct SUDTProxyConfig {
     pub address_list: HashSet<[u8; 20]>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct BlockConsensus {
     pub sudt_proxy: SUDTProxyConfig,
     pub backends: HashMap<H256, Backend>,
@@ -118,18 +87,32 @@ impl BackendManage {
                 bail!("BackendForkConfig with fork_height {} is less or equals to the last fork_height {}", config.fork_height, height);
             }
         }
-        // inherit backends
-        let mut backends = self
+        // inherit block consensus
+        let mut block_consensus = self
             .backend_forks
             .last()
-            .map(|(_height, consensus)| consensus.backends.clone())
+            .map(|(_height, consensus)| consensus.clone())
             .unwrap_or_default();
 
         let fork_height = config.fork_height;
 
         // set sudt proxy
-        let sudt_proxy = config.sudt_proxy.clone();
-        if sudt_proxy.permit_sudt_transfer_from_dangerous_contract {
+        if let Some(sudt_proxy) = config.sudt_proxy {
+            block_consensus.sudt_proxy = SUDTProxyConfig {
+                permit_sudt_transfer_from_dangerous_contract: sudt_proxy
+                    .permit_sudt_transfer_from_dangerous_contract,
+                address_list: sudt_proxy
+                    .address_list
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
+            };
+        }
+
+        if block_consensus
+            .sudt_proxy
+            .permit_sudt_transfer_from_dangerous_contract
+        {
             log::warn!(
                 "`permit_sudt_transfer_from_dangerous_contract` is set to `true` at height {}.",
                 fork_height
@@ -139,56 +122,39 @@ impl BackendManage {
         // register backends
         for config in config.backends {
             let BackendConfig {
-                validator_path,
-                generator_path,
+                generator,
+                generator_checksum,
                 validator_script_type_hash,
                 backend_type,
             } = config;
-            let validator = fs::read(&validator_path)
-                .with_context(|| {
-                    format!("load validator from {}", validator_path.to_string_lossy())
-                })?
+            let generator = generator
+                .get()
+                .with_context(|| format!("load generator from {}", generator))?
+                .into_owned()
                 .into();
-            let generator = fs::read(&generator_path)
-                .with_context(|| {
-                    format!("load generator from {}", generator_path.to_string_lossy())
-                })?
-                .into();
-            let backend = Backend::new(
+            let backend = Backend::build(
                 backend_type,
                 validator_script_type_hash.into(),
-                validator,
                 generator,
-            );
+                generator_checksum.into(),
+            )?;
             #[cfg(has_asm)]
             if compile {
                 self.compile_backend(&backend);
             }
 
             log::debug!(
-                "registry backend {:?}({:?}) at height {}",
+                "registry backend {:?}({}) at height {}",
                 backend.backend_type,
-                backend.checksum,
+                hex::encode(backend.generator_checksum),
                 fork_height
             );
 
-            backends.insert(backend.validator_script_type_hash, backend);
+            block_consensus
+                .backends
+                .insert(backend.validator_script_type_hash, backend);
         }
 
-        let sudt_proxy = SUDTProxyConfig {
-            permit_sudt_transfer_from_dangerous_contract: sudt_proxy
-                .permit_sudt_transfer_from_dangerous_contract,
-            address_list: sudt_proxy
-                .address_list
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        };
-
-        let block_consensus = BlockConsensus {
-            sudt_proxy,
-            backends,
-        };
         self.backend_forks
             .push((config.fork_height, block_consensus));
         Ok(())
@@ -197,7 +163,7 @@ impl BackendManage {
     #[cfg(has_asm)]
     fn compile_backend(&mut self, backend: &Backend) {
         self.aot_codes.insert(
-            backend.checksum.generator,
+            backend.generator_checksum,
             self.aot_compile(&backend.generator)
                 .expect("Ahead-of-time compile"),
         );
@@ -228,9 +194,9 @@ impl BackendManage {
             .and_then(|(_number, consensus)| consensus.backends.get(code_hash))
             .map(|backend| {
                 log::debug!(
-                    "get backend {:?}({:?}) at height {}",
+                    "get backend {:?}({}) at height {}",
                     backend.backend_type,
-                    backend.checksum,
+                    hex::encode(backend.generator_checksum),
                     block_number
                 );
                 backend
@@ -259,12 +225,14 @@ impl BackendManage {
 
 #[cfg(test)]
 mod tests {
+    use gw_builtin_binaries::Resource;
     use gw_config::{BackendConfig, BackendForkConfig, BackendType};
+    use gw_utils::checksum::content_checksum;
 
     use super::BackendManage;
 
     #[test]
-    fn test_get_backend() {
+    fn test_get_block_consensus() {
         let mut m = BackendManage::default();
         // prepare fake binaries
         let dir = tempfile::tempdir().unwrap().into_path();
@@ -279,22 +247,26 @@ mod tests {
 
         let config = BackendForkConfig {
             fork_height: 1,
-            sudt_proxy: gw_config::SUDTProxyConfig {
-                permit_sudt_transfer_from_dangerous_contract: false,
-                address_list: Default::default(),
-            },
+            sudt_proxy: Some(gw_config::SUDTProxyConfig {
+                permit_sudt_transfer_from_dangerous_contract: true,
+                address_list: vec![[1u8; 20].into()],
+            }),
             backends: vec![
                 BackendConfig {
                     validator_script_type_hash: [42u8; 32].into(),
                     backend_type: BackendType::Sudt,
-                    generator_path: format!("{}/sudt_v0", dir.to_string_lossy()).into(),
-                    validator_path: format!("{}/sudt_v0", dir.to_string_lossy()).into(),
+                    generator: Resource::file_system(
+                        format!("{}/sudt_v0", dir.to_string_lossy()).into(),
+                    ),
+                    generator_checksum: content_checksum(b"sudt_v0").unwrap().into(),
                 },
                 BackendConfig {
                     validator_script_type_hash: [43u8; 32].into(),
                     backend_type: BackendType::EthAddrReg,
-                    generator_path: format!("{}/addr_v0", dir.to_string_lossy()).into(),
-                    validator_path: format!("{}/addr_v0", dir.to_string_lossy()).into(),
+                    generator: Resource::file_system(
+                        format!("{}/addr_v0", dir.to_string_lossy()).into(),
+                    ),
+                    generator_checksum: content_checksum(b"addr_v0").unwrap().into(),
                 },
             ],
         };
@@ -314,25 +286,48 @@ mod tests {
             m.get_backend(100, &[43u8; 32]).is_some(),
             "get backend at 100"
         );
+        // sudt proxy
+        assert!(
+            m.get_block_consensus_at_height(1)
+                .unwrap()
+                .1
+                .sudt_proxy
+                .permit_sudt_transfer_from_dangerous_contract
+        );
 
+        assert_eq!(
+            m.get_block_consensus_at_height(1)
+                .unwrap()
+                .1
+                .sudt_proxy
+                .address_list
+                .clone()
+                .into_iter()
+                .collect::<Vec<_>>(),
+            vec![[1u8; 20]]
+        );
         let config = BackendForkConfig {
             fork_height: 5,
-            sudt_proxy: gw_config::SUDTProxyConfig {
+            sudt_proxy: Some(gw_config::SUDTProxyConfig {
                 permit_sudt_transfer_from_dangerous_contract: false,
-                address_list: Default::default(),
-            },
+                address_list: vec![[42u8; 20].into()],
+            }),
             backends: vec![
                 BackendConfig {
                     validator_script_type_hash: [41u8; 32].into(),
                     backend_type: BackendType::Meta,
-                    generator_path: format!("{}/meta_v0", dir.to_string_lossy()).into(),
-                    validator_path: format!("{}/meta_v0", dir.to_string_lossy()).into(),
+                    generator: Resource::file_system(
+                        format!("{}/meta_v0", dir.to_string_lossy()).into(),
+                    ),
+                    generator_checksum: content_checksum(b"meta_v0").unwrap().into(),
                 },
                 BackendConfig {
                     validator_script_type_hash: [42u8; 32].into(),
                     backend_type: BackendType::Sudt,
-                    generator_path: format!("{}/sudt_v1", dir.to_string_lossy()).into(),
-                    validator_path: format!("{}/sudt_v1", dir.to_string_lossy()).into(),
+                    generator: Resource::file_system(
+                        format!("{}/sudt_v1", dir.to_string_lossy()).into(),
+                    ),
+                    generator_checksum: content_checksum(b"sudt_v1").unwrap().into(),
                 },
             ],
         };
@@ -372,6 +367,54 @@ mod tests {
         assert_eq!(
             m.get_backend(42, &[43u8; 32]).unwrap().generator.to_vec(),
             b"addr_v0".to_vec(),
+        );
+        // sudt proxy
+        assert!(
+            !m.get_block_consensus_at_height(42)
+                .unwrap()
+                .1
+                .sudt_proxy
+                .permit_sudt_transfer_from_dangerous_contract
+        );
+
+        assert_eq!(
+            m.get_block_consensus_at_height(42)
+                .unwrap()
+                .1
+                .sudt_proxy
+                .address_list
+                .clone()
+                .into_iter()
+                .collect::<Vec<_>>(),
+            vec![[42u8; 20]]
+        );
+
+        // test sudt inherited
+        let config = BackendForkConfig {
+            fork_height: 50,
+            sudt_proxy: None,
+            backends: vec![],
+        };
+        m.register_backend_fork(config, false).unwrap();
+        // sudt proxy
+        assert!(
+            !m.get_block_consensus_at_height(55)
+                .unwrap()
+                .1
+                .sudt_proxy
+                .permit_sudt_transfer_from_dangerous_contract
+        );
+
+        assert_eq!(
+            m.get_block_consensus_at_height(55)
+                .unwrap()
+                .1
+                .sudt_proxy
+                .address_list
+                .clone()
+                .into_iter()
+                .collect::<Vec<_>>(),
+            vec![[42u8; 20]]
         );
     }
 }

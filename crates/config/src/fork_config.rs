@@ -1,11 +1,14 @@
-use std::path::PathBuf;
-
 use ckb_fixed_hash::{H160, H256};
+use gw_builtin_binaries::Resource;
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{
     L2TX_MAX_CYCLES_150M, L2TX_MAX_CYCLES_500M, MAX_TOTAL_READ_DATA_BYTES, MAX_TX_SIZE,
     MAX_WITHDRAWAL_SIZE, MAX_WRITE_DATA_BYTES,
+};
+use gw_jsonrpc_types::{
+    blockchain::{CellDep, Script},
+    godwoken::{L2BlockCommittedInfo, RollupConfig},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,16 +41,55 @@ pub struct SUDTProxyConfig {
 pub struct BackendForkConfig {
     pub fork_height: u64,
     pub backends: Vec<BackendConfig>,
-    pub sudt_proxy: SUDTProxyConfig,
+    pub sudt_proxy: Option<SUDTProxyConfig>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BackendConfig {
+    pub generator: Resource,
+    pub generator_checksum: H256,
+    pub validator_script_type_hash: H256,
+    pub backend_type: BackendType,
+}
+
+/// Onchain rollup cell config
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChainConfig {
+    /// Ignore invalid state caused by blocks
+    #[serde(default)]
+    pub skipped_invalid_block_list: Vec<H256>,
+    pub genesis_committed_info: L2BlockCommittedInfo,
+    pub rollup_type_script: Script,
+}
+
+/// Genesis config
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GenesisConfig {
+    pub timestamp: u64,
+    pub rollup_type_hash: H256,
+    pub meta_contract_validator_type_hash: H256,
+    pub eth_registry_validator_type_hash: H256,
+    pub rollup_config: RollupConfig,
+    // For load secp data and use in challenge transaction
+    pub secp_data_dep: CellDep,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct BackendConfig {
-    pub validator_path: PathBuf,
-    pub generator_path: PathBuf,
-    pub validator_script_type_hash: H256,
-    pub backend_type: BackendType,
+pub struct SystemTypeScriptConfig {
+    pub state_validator: Script,
+    pub deposit_lock: Script,
+    pub stake_lock: Script,
+    pub custodian_lock: Script,
+    pub withdrawal_lock: Script,
+    pub challenge_lock: Script,
+    pub l1_sudt: Script,
+    pub omni_lock: Script,
+    pub allowed_eoa_scripts: Vec<Script>,
+    pub allowed_contract_scripts: Vec<Script>,
 }
 
 /// Fork changes and activation heights.
@@ -65,6 +107,15 @@ pub struct ForkConfig {
 
     /// Backend fork configs
     pub backend_forks: Vec<BackendForkConfig>,
+
+    /// Genesis config
+    pub genesis: GenesisConfig,
+
+    /// Chain config
+    pub chain: ChainConfig,
+
+    /// system type scripts
+    pub system_type_scripts: SystemTypeScriptConfig,
 }
 
 impl ForkConfig {

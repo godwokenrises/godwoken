@@ -1,5 +1,5 @@
 use gw_common::state::State;
-use gw_config::RPCConfig;
+use gw_config::MemPoolExtraConfig;
 use gw_traits::CodeStore;
 use gw_types::bytes::Bytes;
 use gw_types::h256::*;
@@ -31,7 +31,7 @@ pub struct PolyjuiceContractCreatorAllowList {
 }
 
 impl PolyjuiceContractCreatorAllowList {
-    pub fn from_rpc_config(config: &RPCConfig) -> Option<Self> {
+    pub fn from_config(config: &MemPoolExtraConfig) -> Option<Self> {
         match (
             &config.allowed_polyjuice_contract_creator_address,
             &config.polyjuice_script_code_hash,

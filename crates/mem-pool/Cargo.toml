@@ -16,7 +16,6 @@ gw-traits = { path = "../traits" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-config = { path = "../config" }
 gw-utils = { path = "../utils" }
-gw-dynamic-config = { path = "../dynamic-config" }
 gw-p2p-network = { path = "../p2p-network" }
 gw-tx-filter = { path = "../tx-filter" }
 gw-telemetry = { path = "../telemetry" }

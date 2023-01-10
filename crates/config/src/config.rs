@@ -3,7 +3,7 @@ pub use gw_jsonrpc_types::godwoken::GaslessTxSupportConfig;
 use gw_jsonrpc_types::{
     blockchain::{CellDep, Script},
     ckb_jsonrpc_types::JsonBytes,
-    godwoken::{ChallengeTargetType, L2BlockCommittedInfo, RollupConfig},
+    godwoken::ChallengeTargetType,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -12,7 +12,7 @@ use std::{
     path::PathBuf,
 };
 
-use crate::{fork_config::BackendForkConfig, ForkConfig};
+use crate::{consensus::Consensus, fork_config::BackendForkConfig};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "lowercase")]
@@ -29,9 +29,7 @@ pub struct Config {
     #[serde(default)]
     pub contract_log_config: ContractLogConfig,
     pub debug_backend_forks: Option<Vec<BackendForkConfig>>,
-    pub fork: ForkConfig,
-    pub genesis: GenesisConfig,
-    pub chain: ChainConfig,
+    pub consensus: Consensus,
     pub rpc_client: RPCClientConfig,
     pub rpc_server: RPCServerConfig,
     #[serde(default)]
@@ -46,11 +44,6 @@ pub struct Config {
     pub store: StoreConfig,
     #[serde(default)]
     pub trace: Option<Trace>,
-    #[serde(default)]
-    pub consensus: ConsensusConfig,
-    pub reload_config_github_url: Option<GithubConfigUrl>,
-    #[serde(default)]
-    pub dynamic_config: DynamicConfig,
     #[serde(default)]
     pub p2p_network_config: Option<P2PNetworkConfig>,
     #[serde(default)]
@@ -74,6 +67,7 @@ pub struct RPCServerConfig {
     pub listen: String,
     #[serde(default)]
     pub enable_methods: HashSet<RPCMethods>,
+    pub send_tx_rate_limit: Option<RPCRateLimit>,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -87,42 +81,17 @@ pub struct RPCClientConfig {
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RPCConfig {
+pub struct MemPoolExtraConfig {
     pub allowed_sudt_proxy_creator_account_id: Vec<u32>,
     pub sudt_proxy_code_hashes: Vec<H256>,
     pub allowed_polyjuice_contract_creator_address: Option<HashSet<H160>>,
     pub polyjuice_script_code_hash: Option<H256>,
-    pub send_tx_rate_limit: Option<RPCRateLimit>,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RPCRateLimit {
     pub seconds: u64,
     pub lru_size: usize,
-}
-
-/// Onchain rollup cell config
-#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ChainConfig {
-    /// Ignore invalid state caused by blocks
-    #[serde(default)]
-    pub skipped_invalid_block_list: Vec<H256>,
-    pub genesis_committed_info: L2BlockCommittedInfo,
-    pub rollup_type_script: Script,
-}
-
-/// Genesis config
-#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct GenesisConfig {
-    pub timestamp: u64,
-    pub rollup_type_hash: H256,
-    pub meta_contract_validator_type_hash: H256,
-    pub eth_registry_validator_type_hash: H256,
-    pub rollup_config: RollupConfig,
-    // For load secp data and use in challenge transaction
-    pub secp_data_dep: CellDep,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -141,21 +110,6 @@ pub struct ChallengerConfig {
     pub burn_lock: Script,
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ContractTypeScriptConfig {
-    pub state_validator: Script,
-    pub deposit_lock: Script,
-    pub stake_lock: Script,
-    pub custodian_lock: Script,
-    pub withdrawal_lock: Script,
-    pub challenge_lock: Script,
-    pub l1_sudt: Script,
-    pub omni_lock: Script,
-    pub allowed_eoa_scripts: HashMap<H256, Script>,
-    pub allowed_contract_scripts: HashMap<H256, Script>,
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct ContractsCellDep {
     pub rollup_config: CellDep,
@@ -169,11 +123,6 @@ pub struct ContractsCellDep {
     pub omni_lock: CellDep,
     pub allowed_eoa_locks: HashMap<H256, CellDep>,
     pub allowed_contract_types: HashMap<H256, CellDep>,
-}
-
-#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ConsensusConfig {
-    pub contract_type_scripts: ContractTypeScriptConfig,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -341,6 +290,8 @@ pub struct MemPoolConfig {
     pub restore_path: PathBuf,
     #[serde(default)]
     pub mem_block: MemBlockConfig,
+    pub fee: FeeConfig,
+    pub extra: MemPoolExtraConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -425,6 +376,8 @@ impl Default for MemPoolConfig {
             execute_l2tx_max_cycles: 100_000_000,
             restore_path: default_restore_path(),
             mem_block: MemBlockConfig::default(),
+            fee: Default::default(),
+            extra: Default::default(),
         }
     }
 }
@@ -533,14 +486,6 @@ pub struct GithubConfigUrl {
     pub branch: String,
     pub path: String,
     pub token: String,
-}
-
-// Configs in DynamicConfig can be hot reloaded from remote. But GithubConfigUrl must be setup.
-#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct DynamicConfig {
-    pub fee_config: FeeConfig,
-    pub rpc_config: RPCConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

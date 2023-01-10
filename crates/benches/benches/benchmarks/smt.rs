@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
+use gw_builtin_binaries::Resource;
 use gw_common::{
     blake2b::new_blake2b,
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
@@ -41,17 +42,17 @@ use gw_types::{
     prelude::*,
     U256,
 };
-use gw_utils::RollupContext;
+use gw_utils::{checksum::file_checksum, RollupContext};
 use pprof::criterion::{Output, PProfProfiler};
 
 // meta contract
-const META_VALIDATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/meta-contract-validator";
-const META_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/meta-contract-generator";
+const META_GENERATOR_PATH: &str =
+    "../../crates/builtin-binaries/builtin/godwoken-scripts/meta-contract-generator";
 const META_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [1u8; 32];
 
 // sudt contract
-const SUDT_VALIDATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/sudt-validator";
-const SUDT_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/sudt-generator";
+const SUDT_GENERATOR_PATH: &str =
+    "../../crates/builtin-binaries/builtin/godwoken-scripts/sudt-generator";
 const SUDT_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [2u8; 32];
 
 // always success lock
@@ -153,14 +154,14 @@ impl BenchExecutionEnvironment {
         let backend_manage = {
             let configs = vec![
                 BackendConfig {
-                    validator_path: META_VALIDATOR_PATH.into(),
-                    generator_path: META_GENERATOR_PATH.into(),
+                    generator: Resource::file_system(META_GENERATOR_PATH.into()),
+                    generator_checksum: file_checksum(&META_GENERATOR_PATH).unwrap().into(),
                     validator_script_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
                     backend_type: gw_config::BackendType::Meta,
                 },
                 BackendConfig {
-                    validator_path: SUDT_VALIDATOR_PATH.into(),
-                    generator_path: SUDT_GENERATOR_PATH.into(),
+                    generator: Resource::file_system(SUDT_GENERATOR_PATH.into()),
+                    generator_checksum: file_checksum(&SUDT_GENERATOR_PATH).unwrap().into(),
                     validator_script_type_hash: SUDT_VALIDATOR_SCRIPT_TYPE_HASH.into(),
                     backend_type: gw_config::BackendType::Sudt,
                 },

@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use anyhow::{anyhow, bail, Result};
 use arc_swap::ArcSwap;
-use gw_config::{ContractTypeScriptConfig, ContractsCellDep};
+use gw_config::{ContractsCellDep, SystemTypeScriptConfig};
 use gw_jsonrpc_types::blockchain::{CellDep, Script};
 use gw_types::packed::RollupConfig;
 use gw_types::prelude::Pack;
@@ -19,14 +19,14 @@ pub use arc_swap::Guard;
 #[derive(Clone)]
 pub struct ContractsCellDepManager {
     rpc_client: RPCClient,
-    scripts: Arc<ContractTypeScriptConfig>,
+    scripts: Arc<SystemTypeScriptConfig>,
     deps: Arc<ArcSwap<ContractsCellDep>>,
 }
 
 impl ContractsCellDepManager {
     pub async fn build(
         rpc_client: RPCClient,
-        scripts: ContractTypeScriptConfig,
+        scripts: SystemTypeScriptConfig,
         rollup_config_cell_dep: CellDep,
     ) -> Result<Self> {
         let now = Instant::now();
@@ -44,7 +44,7 @@ impl ContractsCellDepManager {
         self.deps.load()
     }
 
-    pub fn load_scripts(&self) -> &ContractTypeScriptConfig {
+    pub fn load_scripts(&self) -> &SystemTypeScriptConfig {
         &self.scripts
     }
 
@@ -65,7 +65,7 @@ impl ContractsCellDepManager {
 }
 
 pub fn check_script(
-    script_config: &ContractTypeScriptConfig,
+    script_config: &SystemTypeScriptConfig,
     rollup_config: &RollupConfig,
     rollup_type_script: &Script,
 ) -> Result<()> {
@@ -88,7 +88,8 @@ pub fn check_script(
         bail!("challenge lock hash not match one in rollup config");
     }
 
-    for (eoa_hash, eoa_script) in script_config.allowed_eoa_scripts.iter() {
+    for eoa_script in script_config.allowed_eoa_scripts.iter() {
+        let eoa_hash = eoa_script.hash();
         let type_hashes: Vec<_> = {
             let type_hashes = rollup_config.allowed_eoa_type_hashes();
             type_hashes.into_iter().collect()
@@ -100,7 +101,8 @@ pub fn check_script(
         }
     }
 
-    for (contract_hash, contract_script) in script_config.allowed_contract_scripts.iter() {
+    for contract_script in script_config.allowed_contract_scripts.iter() {
+        let contract_hash = contract_script.hash();
         let type_hashes: Vec<_> = {
             let type_hashes = rollup_config.allowed_contract_type_hashes();
             type_hashes.into_iter().collect()
@@ -117,7 +119,7 @@ pub fn check_script(
 
 pub async fn query_cell_deps(
     rpc_client: &RPCClient,
-    script_config: &ContractTypeScriptConfig,
+    script_config: &SystemTypeScriptConfig,
     rollup_config_cell_dep: CellDep,
 ) -> Result<ContractsCellDep> {
     let query = |contract, type_script: Script| -> _ {
@@ -134,14 +136,16 @@ pub async fn query_cell_deps(
     let omni_lock = query("omni", script_config.omni_lock.clone()).await?;
 
     let mut allowed_eoa_locks = HashMap::with_capacity(script_config.allowed_eoa_scripts.len());
-    for (eoa_hash, eoa_script) in script_config.allowed_eoa_scripts.iter() {
+    for eoa_script in script_config.allowed_eoa_scripts.iter() {
+        let eoa_hash = eoa_script.hash();
         let eoa_lock = query("allowed eoa", eoa_script.clone()).await?;
         allowed_eoa_locks.insert(eoa_hash.to_owned(), eoa_lock);
     }
 
     let mut allowed_contract_types =
         HashMap::with_capacity(script_config.allowed_contract_scripts.len());
-    for (contract_hash, contract_script) in script_config.allowed_contract_scripts.iter() {
+    for contract_script in script_config.allowed_contract_scripts.iter() {
+        let contract_hash = contract_script.hash();
         let contract_type = query("allowed contract", contract_script.clone()).await?;
         allowed_contract_types.insert(contract_hash.to_owned(), contract_type);
     }

@@ -38,7 +38,7 @@ pub async fn deploy(
         serde_json::from_str(&scripts_deployment_string)?;
 
     let config = read_config(config_path)?;
-    let rollup_type_hash = &config.genesis.rollup_type_hash;
+    let rollup_type_hash = &config.consensus.get_config().genesis.rollup_type_hash;
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
@@ -81,7 +81,7 @@ pub async fn send_transaction(
         serde_json::from_str(&scripts_deployment_string)?;
 
     let config = read_config(config_path)?;
-    let rollup_type_hash = &config.genesis.rollup_type_hash;
+    let rollup_type_hash = &config.consensus.get_config().genesis.rollup_type_hash;
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 

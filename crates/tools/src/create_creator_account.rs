@@ -35,7 +35,8 @@ pub async fn create_creator_account(
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
     let config = read_config(config_path)?;
-    let rollup_type_hash = &config.genesis.rollup_type_hash;
+    let consensus = config.consensus.get_config();
+    let rollup_type_hash = &consensus.genesis.rollup_type_hash;
     let privkey = read_privkey(privkey_path)?;
 
     let from_script_hash =
@@ -47,7 +48,7 @@ pub async fn create_creator_account(
     log::info!("from id: {}", from_id);
 
     let polyjuice_validator_script_hash = {
-        let mut backends = config.fork.backend_forks[0].backends.iter();
+        let mut backends = consensus.backend_forks[0].backends.iter();
         let polyjuice_backend = backends
             .find(|backend| backend.backend_type == BackendType::Polyjuice)
             .ok_or_else(|| anyhow!("polyjuice backend not found in config"))?;
@@ -85,7 +86,13 @@ pub async fn create_creator_account(
 
     let l2tx_args = MetaContractArgs::new_builder().set(create_account).build();
     let nonce = godwoken_rpc_client.get_nonce(from_id).await?;
-    let chain_id: u64 = config.genesis.rollup_config.chain_id.into();
+    let chain_id: u64 = config
+        .consensus
+        .get_config()
+        .genesis
+        .rollup_config
+        .chain_id
+        .into();
     let raw_l2_transaction = RawL2Transaction::new_builder()
         .chain_id(chain_id.pack())
         .from_id(from_id.pack())

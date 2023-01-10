@@ -53,7 +53,7 @@ impl ImportBlock {
         let chain = Chain::create(
             base.rollup_config.clone(),
             &base.rollup_type_script,
-            &args.config.chain,
+            &args.config.consensus.get_config().chain,
             base.store,
             base.generator,
             None,

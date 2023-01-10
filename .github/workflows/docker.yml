@@ -196,7 +196,7 @@ jobs:
           docker run --rm ${{ env.IMAGE }} gw-tools --version
           docker run --rm ${{ env.IMAGE }} ckb --version
           docker run --rm ${{ env.IMAGE }} ckb-cli --version
-          docker run --rm ${{ env.IMAGE }} find /scripts -type f -exec sha1sum {} \;
+          docker run --rm ${{ env.IMAGE }} find /scripts -type f -exec sha256sum {} \;
 
       - name: Record image info to the outputs of this jobs
         id: result

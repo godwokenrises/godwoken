@@ -1,0 +1,79 @@
+name: Publish gw-builtin-binaries
+
+on:
+  push:
+    tags: [ 'builtin-binaries-v*.*.*' ]
+
+jobs:
+  publish:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        submodules: true
+
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+        key: ${{ runner.os }}-cargo-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+    - name: Install Rust components
+      run: rustup component add rustfmt && rustup component add clippy
+    - name: Install moleculec
+      run: |
+        test "$(moleculec --version)" = "Moleculec 0.7.2" \
+        || cargo install moleculec --version 0.7.2 --force
+    - name: Install capsule
+      env:
+        CAPSULE_VERSION: v0.7.0
+      run: |
+        (which capsule && test "$(capsule --version)" = "Capsule 0.7.0") \
+        || curl -OL https://github.com/nervosnetwork/capsule/releases/download/${CAPSULE_VERSION}/capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz \
+        && tar xf capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz \
+        && mv capsule_${CAPSULE_VERSION}_x86_64-linux/capsule ~/.cargo/bin/
+        capsule --version
+
+    - name: Cache of component.gwos
+      id: gwos-cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          gwos/build/release/*
+          gwos/c/build/*-generator
+          gwos/c/build/*-validator
+          gwos/c/build/account_locks/*
+        key: component.gwos-${{ hashFiles('gwos/**') }}
+    - name: Build gwos binaries
+      if: steps.gwos-cache.outputs.cache-hit != 'true'
+      working-directory: gwos
+      run: cd c && make && cd .. && capsule build --release --debug-output
+
+    - name: Cache of component.gwos-evm
+      id: godwoken-polyjuice-cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          gwos-evm/build/*generator*
+          gwos-evm/build/*validator*
+        key: component.gwos-evm-${{ hashFiles('gwos-evm/**') }}
+    - name: Build godwoken-polyjuice
+      if: steps.godwoken-polyjuice-cache.outputs.cache-hit != 'true'
+      working-directory: gwos-evm
+      run: |
+        git submodule update --init --recursive --depth=1
+        make all-via-docker
+    - name: Copy contracts from prebuild docker images
+      run: devtools/fetch-binaries.sh
+    - name: cargo login
+      run: cargo login $CRATES_IO_TOKEN
+      env:
+        CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+    - name: cargo publish
+      working-directory: crates/builtin-binaries
+      run: cargo publish --allow-dirty

@@ -31,7 +31,7 @@ impl RewindToLastValidBlockCommand {
         let mut chain = Chain::create(
             base.rollup_config,
             &base.rollup_type_script,
-            &config.chain,
+            &config.consensus.get_config().chain,
             base.store,
             base.generator,
             None,

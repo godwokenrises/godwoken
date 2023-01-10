@@ -54,7 +54,7 @@ pub async fn deposit_ckb(
     };
     log::info!("eth address: 0x{:#x}", eth_address_bytes);
 
-    let rollup_type_hash = &config.genesis.rollup_type_hash;
+    let rollup_type_hash = &config.consensus.get_config().genesis.rollup_type_hash;
 
     let owner_lock_hash = Byte32::from_slice(privkey_to_lock_hash(&privkey)?.as_bytes())?;
 

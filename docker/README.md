@@ -59,7 +59,7 @@ docker inspect godwoken-prebuilds:[TAG] | egrep ref.component
 All the scripts used by Godwoken can be found at `/scripts` folder:
 
 ```bash
-$ docker run --rm godwoken-prebuilds find /scripts -type f -exec sha1sum {} \;
+$ docker run --rm godwoken-prebuilds find /scripts -type f -exec sha256sum {} \;
 ```
 
 ### Result

@@ -28,14 +28,15 @@ lazy_static = "1.4"
 rlp = "0.5.0"
 secp256k1 = { version = "0.24", features = ["recovery"] }
 substrate-bn = { git = "https://github.com/paritytech/bn.git", rev = "63f8c58" }
-sha3 = "0.10.6"
 log = "0.4"
 hex = "0.4"
 tokio = "1"
+sha3 = "0.10.6"
 arc-swap = "1.5"
 ethabi = { version = "18.0.0", default-features = false, features = ["thiserror", "std"] }
 tracing = { version = "0.1", features = ["attributes"] }
 
 [dev-dependencies]
 gw-utils = {path = "../utils" }
+gw-builtin-binaries = { path = "../builtin-binaries" }
 tempfile = "3"

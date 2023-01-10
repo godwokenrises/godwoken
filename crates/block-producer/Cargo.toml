@@ -18,7 +18,6 @@ gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-rpc-server = { path = "../rpc-server" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-utils = { path = "../utils" }
-gw-dynamic-config = { path = "../dynamic-config"}
 gw-polyjuice-sender-recover = { path = "../polyjuice-sender-recover" }
 gw-telemetry = { path = "../telemetry" }
 gw-metrics = { path = "../metrics" }
