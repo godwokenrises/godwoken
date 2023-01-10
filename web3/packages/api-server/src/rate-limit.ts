@@ -12,6 +12,10 @@ export async function wsApplyBatchRateLimitByIp(
 ): Promise<JSONRPCError[] | undefined> {
   const ip = getIp(req);
   const methods = Object.keys(accessGuard.rpcMethods);
+  if (methods.length === 0) {
+    return undefined;
+  }
+
   for (const targetMethod of methods) {
     const count = calcMethodCount(objs, targetMethod);
     if (count > 0 && ip != null) {
@@ -30,7 +34,7 @@ export async function wsApplyBatchRateLimitByIp(
         };
 
         logger.debug(
-          `Rate Limit Exceed, ip: ${ip}, method: ${targetMethod}, ttl: ${remainSecs}s`
+          `WS Batch Rate Limit Exceed, ip: ${ip}, method: ${targetMethod}, ttl: ${remainSecs}s`
         );
 
         return new Array(objs.length).fill(error);
@@ -38,9 +42,10 @@ export async function wsApplyBatchRateLimitByIp(
         await accessGuard.updateCount(targetMethod, ip, count);
       }
     }
-
-    return undefined;
+    // continue next loop
   }
+
+  return undefined;
 }
 
 export async function wsApplyRateLimitByIp(

@@ -5,6 +5,7 @@ crates/benches/smt_data/db/
 crates/tests/mem_block/
 gwos-evm/deps/ckb-binary-patcher/
 
+node_modules
 web3/node_modules/
 web3/lib/
 web3/*.env
