@@ -189,9 +189,9 @@ pub const ETH_REGISTRY_GENERATOR_PATH: &str =
 
 // polyjuice
 pub const POLYJUICE_VALIDATOR_PATH: &str =
-    "../../crates/builtin-binaries/builtin/godwoken-polyjuice/validator";
+    "../../crates/builtin-binaries/builtin/godwoken-polyjuice-v1.5.0/validator";
 pub const POLYJUICE_GENERATOR_PATH: &str =
-    "../../crates/builtin-binaries/builtin/godwoken-polyjuice/generator";
+    "../../crates/builtin-binaries/builtin/godwoken-polyjuice-v1.5.0/generator";
 
 pub const DEFAULT_FINALITY_BLOCKS: u64 = 6;
 
