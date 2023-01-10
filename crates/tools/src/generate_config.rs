@@ -7,18 +7,18 @@ use crate::types::{
 use anyhow::{anyhow, Context, Result};
 use ckb_jsonrpc_types::{CellDep, JsonBytes};
 use ckb_types::prelude::{Builder, Entity};
+use gw_builtin_binaries::Resource;
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_config::{
     BackendConfig, BackendForkConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config,
-    ConsensusConfig, ContractTypeScriptConfig, ForkConfig, GenesisConfig, NodeMode,
-    P2PNetworkConfig, RPCClientConfig, RPCServerConfig, RegistryAddressConfig, SUDTProxyConfig,
-    StoreConfig, WalletConfig,
+    Consensus, ForkConfig, GenesisConfig, NodeMode, P2PNetworkConfig, RPCClientConfig,
+    RPCServerConfig, RegistryAddressConfig, SUDTProxyConfig, StoreConfig, SystemTypeScriptConfig,
+    WalletConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 use gw_rpc_client::ckb_client::CkbClient;
 use gw_types::{core::ScriptHashType, packed::Script, prelude::*};
-use std::collections::HashMap;
-use std::iter::FromIterator;
+use gw_utils::checksum::file_checksum;
 use std::path::Path;
 
 pub struct GenerateNodeConfigArgs<'a> {
@@ -112,7 +112,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
     };
     let (_data, secp_data_dep) = get_secp_data(&rpc_client).await.context("get secp data")?;
 
-    let contract_type_scripts = query_contracts_script(
+    let system_type_scripts = query_contracts_script(
         &rpc_client,
         scripts_deployment,
         user_rollup_config,
@@ -140,72 +140,108 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
     };
 
     let backends: Vec<BackendConfig> = vec![
-        BackendConfig {
-            validator_path: build_scripts_result.built_scripts["meta_contract_validator"].clone(),
-            generator_path: build_scripts_result.built_scripts["meta_contract_generator"].clone(),
-            validator_script_type_hash: scripts_deployment
-                .meta_contract_validator
-                .script_type_hash
-                .clone(),
-            backend_type: gw_config::BackendType::Meta,
+        {
+            let generator_path =
+                build_scripts_result.built_scripts["meta_contract_generator"].clone();
+            let generator = Resource::file_system(generator_path.clone());
+            let generator_checksum = file_checksum(&generator_path)?.into();
+            BackendConfig {
+                generator,
+                generator_checksum,
+                validator_script_type_hash: scripts_deployment
+                    .meta_contract_validator
+                    .script_type_hash
+                    .clone(),
+                backend_type: gw_config::BackendType::Meta,
+            }
         },
-        BackendConfig {
-            validator_path: build_scripts_result.built_scripts["l2_sudt_validator"].clone(),
-            generator_path: build_scripts_result.built_scripts["l2_sudt_generator"].clone(),
-            validator_script_type_hash: scripts_deployment
-                .l2_sudt_validator
-                .script_type_hash
-                .clone(),
-            backend_type: gw_config::BackendType::Sudt,
+        {
+            let generator_path = build_scripts_result.built_scripts["l2_sudt_generator"].clone();
+            let generator = Resource::file_system(generator_path.clone());
+            let generator_checksum = file_checksum(&generator_path)?.into();
+            BackendConfig {
+                generator,
+                generator_checksum,
+                validator_script_type_hash: scripts_deployment
+                    .l2_sudt_validator
+                    .script_type_hash
+                    .clone(),
+                backend_type: gw_config::BackendType::Sudt,
+            }
         },
-        BackendConfig {
-            validator_path: build_scripts_result.built_scripts["polyjuice_validator"].clone(),
-            generator_path: build_scripts_result.built_scripts["polyjuice_generator"].clone(),
-            validator_script_type_hash: scripts_deployment
-                .polyjuice_validator
-                .script_type_hash
-                .clone(),
-            backend_type: gw_config::BackendType::Polyjuice,
+        {
+            let generator_path = build_scripts_result.built_scripts["polyjuice_generator"].clone();
+            let generator = Resource::file_system(generator_path.clone());
+            let generator_checksum = file_checksum(&generator_path)?.into();
+            BackendConfig {
+                generator,
+                generator_checksum,
+                validator_script_type_hash: scripts_deployment
+                    .polyjuice_validator
+                    .script_type_hash
+                    .clone(),
+                backend_type: gw_config::BackendType::Polyjuice,
+            }
         },
-        BackendConfig {
-            validator_path: build_scripts_result.built_scripts["eth_addr_reg_validator"].clone(),
-            generator_path: build_scripts_result.built_scripts["eth_addr_reg_generator"].clone(),
-            validator_script_type_hash: scripts_deployment
-                .eth_addr_reg_validator
-                .script_type_hash
-                .clone(),
-            backend_type: gw_config::BackendType::EthAddrReg,
+        {
+            let generator_path =
+                build_scripts_result.built_scripts["eth_addr_reg_generator"].clone();
+            let generator = Resource::file_system(generator_path.clone());
+            let generator_checksum = file_checksum(&generator_path)?.into();
+            BackendConfig {
+                generator,
+                generator_checksum,
+                validator_script_type_hash: scripts_deployment
+                    .eth_addr_reg_validator
+                    .script_type_hash
+                    .clone(),
+                backend_type: gw_config::BackendType::EthAddrReg,
+            }
         },
     ];
     let backend_forks = vec![BackendForkConfig {
         fork_height: 0,
-        sudt_proxy: SUDTProxyConfig {
+        sudt_proxy: Some(SUDTProxyConfig {
             permit_sudt_transfer_from_dangerous_contract: true,
             address_list: Vec::new(),
-        },
+        }),
         backends,
     }];
+
+    let genesis_committed_info = L2BlockCommittedInfo {
+        block_hash,
+        number,
+        transaction_hash: rollup_result.tx_hash.clone(),
+    };
+
+    let chain: ChainConfig = ChainConfig {
+        genesis_committed_info,
+        rollup_type_script,
+        skipped_invalid_block_list: Default::default(),
+    };
+
+    let genesis: GenesisConfig = GenesisConfig {
+        timestamp: rollup_result.timestamp,
+        rollup_type_hash,
+        meta_contract_validator_type_hash,
+        eth_registry_validator_type_hash,
+        rollup_config,
+        secp_data_dep,
+    };
 
     let fork = ForkConfig {
         backend_forks,
         increase_max_l2_tx_cycles_to_500m: None,
         upgrade_global_state_version_to_v2: Some(0),
+        genesis,
+        chain,
+        system_type_scripts,
     };
 
     let store = StoreConfig {
         path: "./gw-db".into(),
         options_file: None,
         cache_size: None,
-    };
-    let genesis_committed_info = L2BlockCommittedInfo {
-        block_hash,
-        number,
-        transaction_hash: rollup_result.tx_hash.clone(),
-    };
-    let chain: ChainConfig = ChainConfig {
-        genesis_committed_info,
-        rollup_type_script,
-        skipped_invalid_block_list: Default::default(),
     };
     let rpc_client: RPCClientConfig = RPCClientConfig {
         indexer_url,
@@ -214,9 +250,6 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
     let rpc_server = RPCServerConfig {
         listen: server_url,
         ..Default::default()
-    };
-    let consensus = ConsensusConfig {
-        contract_type_scripts,
     };
     let block_producer: Option<BlockProducerConfig> = Some(BlockProducerConfig {
         block_producer: RegistryAddressConfig {
@@ -229,14 +262,6 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         wallet_config: Some(wallet_config),
         ..Default::default()
     });
-    let genesis: GenesisConfig = GenesisConfig {
-        timestamp: rollup_result.timestamp,
-        rollup_type_hash,
-        meta_contract_validator_type_hash,
-        eth_registry_validator_type_hash,
-        rollup_config,
-        secp_data_dep,
-    };
     let p2p_network_config = if !p2p_dial.is_empty() || p2p_listen.is_some() {
         Some(P2PNetworkConfig {
             listen: p2p_listen,
@@ -248,12 +273,11 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
     };
 
     let config: Config = Config {
-        fork,
-        genesis,
-        chain,
+        consensus: Consensus::Config {
+            config: Box::new(fork),
+        },
         rpc_client,
         rpc_server,
-        consensus,
         block_producer,
         node_mode,
         store,
@@ -269,7 +293,7 @@ async fn query_contracts_script(
     deployment: &ScriptsDeploymentResult,
     user_rollup_config: &UserRollupConfig,
     omni_lock_config: &OmniLockConfig,
-) -> Result<ContractTypeScriptConfig> {
+) -> Result<SystemTypeScriptConfig> {
     let query = |contract: &'static str, cell_dep: CellDep| -> _ {
         ckb_client.query_type_script(contract, cell_dep.into())
     };
@@ -352,20 +376,19 @@ async fn query_contracts_script(
         deployment.eth_addr_reg_validator.script_type_hash
     );
 
-    let allowed_eoa_scripts: HashMap<_, _> =
-        HashMap::from_iter([(eth_account_lock.hash(), eth_account_lock)]);
+    let allowed_eoa_scripts = vec![eth_account_lock];
 
-    let allowed_contract_scripts: HashMap<_, _> = HashMap::from_iter([
-        (meta_validator.hash(), meta_validator),
-        (l2_sudt_validator.hash(), l2_sudt_validator),
-        (polyjuice_validator.hash(), polyjuice_validator),
-        (eth_addr_reg_validator.hash(), eth_addr_reg_validator),
-    ]);
+    let allowed_contract_scripts = vec![
+        meta_validator,
+        l2_sudt_validator,
+        polyjuice_validator,
+        eth_addr_reg_validator,
+    ];
 
     let omni_lock = query("omni lock", omni_lock_config.cell_dep.clone()).await?;
     assert_eq!(omni_lock.hash(), omni_lock_config.script_type_hash);
 
-    Ok(ContractTypeScriptConfig {
+    Ok(SystemTypeScriptConfig {
         state_validator,
         deposit_lock,
         stake_lock,

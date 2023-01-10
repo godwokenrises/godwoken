@@ -98,7 +98,10 @@ impl ExportBlock {
                 .ok_or_else(|| anyhow!("no file name in path"))?
                 .to_os_string();
 
-            file_name.push(format!("_{:x}", args.config.genesis.rollup_type_hash));
+            file_name.push(format!(
+                "_{:x}",
+                args.config.consensus.get_config().genesis.rollup_type_hash
+            ));
             file_name.push(format!("_{}_{}", from_block, to_block));
 
             output.set_file_name(file_name);

@@ -38,6 +38,8 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
         from_db_columns,
     } = args;
 
+    let consensus = config.consensus.get_config();
+
     let store_config = StoreConfig {
         path: to_db_store,
         options_file: config.store.options_file.clone(),
@@ -45,14 +47,14 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
     };
     let local_store = Store::open(&store_config, COLUMNS).unwrap();
     let rollup_type_script = {
-        let script: gw_types::packed::Script = config.chain.rollup_type_script.clone().into();
+        let script: gw_types::packed::Script = consensus.chain.rollup_type_script.clone().into();
         script
     };
-    let rollup_config: RollupConfig = config.genesis.rollup_config.clone().into();
+    let rollup_config: RollupConfig = consensus.genesis.rollup_config.clone().into();
     let rollup_context = RollupContext {
         rollup_config: rollup_config.clone(),
-        rollup_script_hash: config.genesis.rollup_type_hash.clone().into(),
-        fork_config: config.fork.clone(),
+        rollup_script_hash: consensus.genesis.rollup_type_hash.clone().into(),
+        fork_config: consensus.clone().into_owned(),
     };
     let secp_data: Bytes = {
         let rpc_client = {
@@ -71,7 +73,7 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
                 indexer_client,
             )
         };
-        let out_point = config.genesis.secp_data_dep.out_point.clone();
+        let out_point = consensus.genesis.secp_data_dep.out_point.clone();
         rpc_client
             .ckb
             .get_packed_transaction(out_point.tx_hash.0)
@@ -84,16 +86,21 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
             .raw_data()
     };
 
-    let genesis_tx_hash = config
+    let genesis_tx_hash = consensus
         .chain
         .genesis_committed_info
         .transaction_hash
         .clone()
         .into();
-    init_genesis(&local_store, &config.genesis, &genesis_tx_hash, secp_data)
-        .with_context(|| "init genesis")?;
+    init_genesis(
+        &local_store,
+        &consensus.genesis,
+        &genesis_tx_hash,
+        secp_data,
+    )
+    .with_context(|| "init genesis")?;
     let generator = {
-        let backend_manage = BackendManage::from_config(config.fork.backend_forks.clone())
+        let backend_manage = BackendManage::from_config(consensus.backend_forks.clone())
             .with_context(|| "config backends")?;
         let mut account_lock_manage = AccountLockManage::default();
         let allowed_eoa_type_hashes = rollup_config.as_reader().allowed_eoa_type_hashes();
@@ -116,7 +123,7 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
     let chain = Chain::create(
         rollup_config,
         &rollup_type_script,
-        &config.chain,
+        &consensus.chain,
         local_store.clone(),
         generator,
         None,
@@ -134,6 +141,8 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
     println!(
         "Skip blocks: {:?}",
         config
+            .consensus
+            .get_config()
             .chain
             .skipped_invalid_block_list
             .iter()

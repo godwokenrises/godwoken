@@ -22,6 +22,7 @@ gw-types = { path = "../../gwos/crates/types" }
 gw-traits = { path = "../traits" }
 gw-config = { path = "../config" }
 gw-utils = { path = "../utils" }
+gw-builtin-binaries = { path = "../builtin-binaries" }
 
 [[bench]]
 name = "bench_main"

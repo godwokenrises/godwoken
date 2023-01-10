@@ -1,178 +1,177 @@
-# Run command in ghcr.io/godwokenrises/godwoken:tag
+# Run command in ghcr.io/godwokenrises/godwoken-prebuilds:dev-poly1.5.0
 # ```bash
-# find /scripts -type f -exec sha1sum {} \;
+# find /scripts -type f -exec sha256sum {} \;
 # ```
 
 ############################## Godwoken scripts ################################
 # https://github.com/godwokenrises/godwoken-scripts/releases/tag/v1.3.0-rc1
-56d24b532b9d790d24ca236782e8ed034b375399  /scripts/gwos-v1.3.0-rc1/sudt-validator
-65556f1157bfa7819befe8cb1cf6af73924fdefa  /scripts/gwos-v1.3.0-rc1/eth-addr-reg-validator
-678e163a475dd82c14f71fec189982643916c5ca  /scripts/gwos-v1.3.0-rc1/meta-contract-validator
-df27b2036e747e07a8b9703262d17dc386736173  /scripts/gwos-v1.3.0-rc1/sudt-generator
-7716f9c629d1780129531929c21717050a8b20df  /scripts/gwos-v1.3.0-rc1/meta-contract-generator
-e72547948d6028328bfc06a8caf5ccdbe2c4be19  /scripts/gwos-v1.3.0-rc1/eth-addr-reg-generator
-677be9b2545c8d1b15aaeb039ac501b6a0f6244e  /scripts/gwos-v1.3.0-rc1/eth-account-lock
-e1a2acd8764648a795fd8f513d39820baf0a00d0  /scripts/gwos-v1.3.0-rc1/state-validator
-248c7d2d85749d163423f3477b12231de1a9b3cd  /scripts/gwos-v1.3.0-rc1/always-success
-87586b3bf1117389cc0cc0785b0b3dfb74b9632b  /scripts/gwos-v1.3.0-rc1/custodian-lock
-dfb6ad1ceda1dd19eb70bc0b3c01528134a7fe9b  /scripts/gwos-v1.3.0-rc1/stake-lock
-502391a6bde1b5d6261fdd4f96204a69796adb38  /scripts/gwos-v1.3.0-rc1/deposit-lock
-cb92414b9d489115880bb09c8d0a2df60839d471  /scripts/gwos-v1.3.0-rc1/tron-account-lock
-0f2d54a4b0c016404f8f6e80b5d538ee0f4411e8  /scripts/gwos-v1.3.0-rc1/withdrawal-lock
-0f22b0f4249504a01d9eb615ae03176f5a1d5ac3  /scripts/gwos-v1.3.0-rc1/challenge-lock
-dab522b3b5a7c6fd179915f9059dac92891756eb  /scripts/gwos-v1.3.0-rc1/omni_lock
+c27b4f1bf551fabc3a1997d38db6410f9d6b35a1f2ce83e429518f3598b60cbb  /scripts/godwoken-scripts/meta-contract-validator
+00aba1a935fcfd4bf316d26fd85f62e18f0f15ec6ac84c6c88fccb595bee52e5  /scripts/godwoken-scripts/eth-addr-reg-validator
+8803bc5749737bce5f730a47d1c75c26312fe41a33c328a0521833c480655a7e  /scripts/godwoken-scripts/sudt-validator
+b1544a9736a1f47c00b1509f9a0b16d001c3c1e3ed7eafecd6f669f96398ef8e  /scripts/godwoken-scripts/meta-contract-generator
+2aa7b75eb466b754cff54463702860f8477c266c2446cea98cd26b82bf67d5dd  /scripts/godwoken-scripts/eth-addr-reg-generator
+f543d621e9e1655b0f4c9291114e1680dfe25a2364637a9e67f3a0bc5a7c8054  /scripts/godwoken-scripts/sudt-generator
+c17d035dfd2387a8a815c9c57a0c38178a880ddb001efd88b6982c6239d7c333  /scripts/godwoken-scripts/custodian-lock
+ac9841e8e80c2e713430cbc5807c2af77f5a40f9071fca89f503896cce88c139  /scripts/godwoken-scripts/tron-account-lock
+a0979f11a0addb0465d04c13d1b69f3899e8179f17791f192cb42d5262f23985  /scripts/godwoken-scripts/stake-lock
+c40d924bd58c853aa7eff4bd50aed91bdc8b65f93739d2d6bc7de5e450c7eeeb  /scripts/godwoken-scripts/withdrawal-lock
+b90222fdd9c646d7468c41b66afdcaa56d00e869ee49f5d5051df49fff602836  /scripts/godwoken-scripts/eth-account-lock
+16bfc4f1a3c8d5f78d0c4540b04f0c20eb96e0dd0444d8323acd1790f676c608  /scripts/godwoken-scripts/always-success
+baf191aac3da6810a2b205f98712181c12d76f59587b5bfa4972f54a61384104  /scripts/godwoken-scripts/state-validator
+c755f7ee65287d5ef2e563d14a628ae4b38eaab4ee795dc80dba7f15fb33db89  /scripts/godwoken-scripts/deposit-lock
+a58952c291a01f5774327e091054602232b03c5d0e956a87314ce2e32f5c11a7  /scripts/godwoken-scripts/challenge-lock
+6fab322eafce4e7df95ce5f014ffb27053d69ece8284ed76db6bf4ab18af16ec  /scripts/godwoken-scripts/omni_lock
 
 ############################## polyjuice-v1.5.0 ################################
 # https://github.com/godwokenrises/godwoken-polyjuice/releases/tag/1.5.0
-f82b92b2c8189d87e1baccd9e491b1ba06b64896  /scripts/godwoken-polyjuice-v1.5.0/validator
-4a405cead970d93b54d3682d1b988815d7566e5b  /scripts/godwoken-polyjuice-v1.5.0/validator.debug
-bc962eec16855eb2b854d3036b0ac4fc47386a9c  /scripts/godwoken-polyjuice-v1.5.0/validator_log
-07921053dd22b8f8af8a9f58699435e22c328822  /scripts/godwoken-polyjuice-v1.5.0/validator_log.debug
-c415d5789453ecaea8b349c7158a5ad1d65eeec5  /scripts/godwoken-polyjuice-v1.5.0/generator_log.debug
-9695481ef6c7f844b183b35d6b9da9ef351d2278  /scripts/godwoken-polyjuice-v1.5.0/generator.debug
-d6bc9842d0ffb0f9b43ef081d5b1559cf6865b55  /scripts/godwoken-polyjuice-v1.5.0/generator
-d6bc9842d0ffb0f9b43ef081d5b1559cf6865b55  /scripts/godwoken-polyjuice-v1.5.0/generator.aot
-9e2d276a59455aaf42cbb35f991749a537a3372e  /scripts/godwoken-polyjuice-v1.5.0/generator_log.asm
-a4874e3de7dec54f8a7f590a57de9e4a85600368  /scripts/godwoken-polyjuice-v1.5.0/generator_log.aot
-a4874e3de7dec54f8a7f590a57de9e4a85600368  /scripts/godwoken-polyjuice-v1.5.0/generator_log
-d26f4a19fa098b1023dfc26b9bc32578103f4e0d  /scripts/godwoken-polyjuice-v1.5.0/generator.asm
+feb065078e57e1cc25cf128c044daa96964117035babd7e93f411ba956b0c007  /scripts/godwoken-polyjuice/validator_log
+413a41ae7c8da719ad1b3bdf30204792457bcfc42a230e3fba9f3d6b0418be6e  /scripts/godwoken-polyjuice/validator_log.debug
+0751ab744f07b0997ba15d4a49d6ed6561a9ae69598dc905f52f48e74d5731ab  /scripts/godwoken-polyjuice/validator.debug
+e6c274dbe07c87f5c3f9b424100d3e613832f2cfd4cb2349faa6c2b25ee4f80f  /scripts/godwoken-polyjuice/validator
+392a710e592e1f6cdce53de8d7faf8acf09db44f31f66010992631c505721c00  /scripts/godwoken-polyjuice/generator_log.asm
+074b501a4bf6b76090a8ea4c1dc276714b6041bb6652c4342589f5b9f24573b5  /scripts/godwoken-polyjuice/generator.asm
+5a67965be8a8334ec9feb27e143f8b1eb9c8e0ffff3728b1fd8903acd62e34df  /scripts/godwoken-polyjuice/generator.debug
+46b5bf0ff4341ec7b510e49cb38929882d402f9c0f56f94bd462e0e64ed037ce  /scripts/godwoken-polyjuice/generator_log.debug
+f89d4eb312fa4b8df9a3acc0a25f870201106825d9a609612c61aa8263cda1b8  /scripts/godwoken-polyjuice/generator.aot
+f89d4eb312fa4b8df9a3acc0a25f870201106825d9a609612c61aa8263cda1b8  /scripts/godwoken-polyjuice/generator
+526011ac225461c5ac338b2ef563cbf56c8d76362fae02b081915af9d6a63a83  /scripts/godwoken-polyjuice/generator_log
+526011ac225461c5ac338b2ef563cbf56c8d76362fae02b081915af9d6a63a83  /scripts/godwoken-polyjuice/generator_log.aot
 
 ############################## polyjuice-v1.4.6 ################################
 # https://github.com/godwokenrises/godwoken-polyjuice/releases/tag/1.4.6
-ab74da9f111f980af23782ace59e344d92d46c47  /scripts/godwoken-polyjuice-v1.4.6/validator
-0684a9216b6734ba99a8dee1620c9d17f5d8e314  /scripts/godwoken-polyjuice-v1.4.6/validator.debug
-dc91baddc5e35eb533f74bf55e6d826aa9cfbc73  /scripts/godwoken-polyjuice-v1.4.6/validator_log
-e9a8be7f52c91a5f7aaab2b7ffd06d76a624ec93  /scripts/godwoken-polyjuice-v1.4.6/validator_log.debug
-bd77600fc95d1478da76975f75618afa82fea499  /scripts/godwoken-polyjuice-v1.4.6/generator_log.debug
-2ae44ba49d92fc677478096f17e1feb4fa36cdff  /scripts/godwoken-polyjuice-v1.4.6/generator.debug
-674d89bbde9b1505767bfda7ef4b7e9c6e1fde69  /scripts/godwoken-polyjuice-v1.4.6/generator
-674d89bbde9b1505767bfda7ef4b7e9c6e1fde69  /scripts/godwoken-polyjuice-v1.4.6/generator.aot
-89161b4c90ee580d549fa2cef6ddbd5bd569601b  /scripts/godwoken-polyjuice-v1.4.6/generator_log.asm
-84ea59bd860e178433014f9b92d86d4caaf8f9b8  /scripts/godwoken-polyjuice-v1.4.6/generator_log.aot
-84ea59bd860e178433014f9b92d86d4caaf8f9b8  /scripts/godwoken-polyjuice-v1.4.6/generator_log
-6591a8dca95a0f68b3322acc754b02ab10b2831c  /scripts/godwoken-polyjuice-v1.4.6/generator.asm
+bfdcc23e68438a4118a016c4a5da55e810d21596a7a4d8ced79167ee9fee3dc9  /scripts/godwoken-polyjuice-v1.4.6/validator_log
+c638443c5d357abe3fec1728c362427d1718a0615b6a40472310b39ddc917e3d  /scripts/godwoken-polyjuice-v1.4.6/generator_log.asm
+29ef5b3f2ec1f6ab88ff403b4e9c2ee04d8a78eeca1078712b8b30bf5a397f8c  /scripts/godwoken-polyjuice-v1.4.6/generator.asm
+d04c058dd652a84b27f7cb74e2d79f5ed9185353aed0acf38ed6ba515cb69987  /scripts/godwoken-polyjuice-v1.4.6/generator.debug
+447a18b641e02a9ce243e037b2f765d0e54876a3af83294ccfb30c18871ce7ca  /scripts/godwoken-polyjuice-v1.4.6/generator_log.debug
+a5db2b7d584616fb103061fff02923702b6c1957173aa61b8464a45b794a7318  /scripts/godwoken-polyjuice-v1.4.6/generator.aot
+a5db2b7d584616fb103061fff02923702b6c1957173aa61b8464a45b794a7318  /scripts/godwoken-polyjuice-v1.4.6/generator
+6c816da9b86a99f9448fa6c8f68b8ee22c1499acb99f42aab94d7357c61cd50e  /scripts/godwoken-polyjuice-v1.4.6/validator_log.debug
+3e55f5553217f2e21dd23381510de650523400d18beaf52a33578380d81cd14c  /scripts/godwoken-polyjuice-v1.4.6/validator.debug
+72062f669a57241a7b8615e2c17a72da8468f33331127a1cddf2c38aa9e6a67c  /scripts/godwoken-polyjuice-v1.4.6/validator
+d2c15c41f93462605c4155b74cba3d24529fb2f1f023928dc0d6c4a9858d26a9  /scripts/godwoken-polyjuice-v1.4.6/generator_log
+d2c15c41f93462605c4155b74cba3d24529fb2f1f023928dc0d6c4a9858d26a9  /scripts/godwoken-polyjuice-v1.4.6/generator_log.aot
 
 ############################## polyjuice-v1.4.5 ################################
 # https://github.com/godwokenrises/godwoken-polyjuice/releases/tag/1.4.5
-2f749b73a63d022fdcb94e42fb6f924efdcfb8c5  /scripts/godwoken-polyjuice-v1.4.5/validator
-c19540b8821783d05af6bc1e3960cdc00dbaff87  /scripts/godwoken-polyjuice-v1.4.5/validator.debug
-962ddcfa894ed27f08cfcf5e59951f388ce456f8  /scripts/godwoken-polyjuice-v1.4.5/validator_log
-6d6aaa6080c3f2d0f6c8345d2b1746204e883643  /scripts/godwoken-polyjuice-v1.4.5/validator_log.debug
-c4049acd646dbe3df0e57d0f8a29ca9efce567a2  /scripts/godwoken-polyjuice-v1.4.5/generator_log.debug
-65d6e3df32473038a4e8dbdd85f19a81b64d53eb  /scripts/godwoken-polyjuice-v1.4.5/generator.debug
-85f6ec98a6494ee795ba3357bd827401592de610  /scripts/godwoken-polyjuice-v1.4.5/generator
-85f6ec98a6494ee795ba3357bd827401592de610  /scripts/godwoken-polyjuice-v1.4.5/generator.aot
-f7efcba16d1119a34303581eed6d765130185a89  /scripts/godwoken-polyjuice-v1.4.5/generator_log.asm
-ab8fc52528862063ac41712ca2abb59e1165aa70  /scripts/godwoken-polyjuice-v1.4.5/generator_log.aot
-ab8fc52528862063ac41712ca2abb59e1165aa70  /scripts/godwoken-polyjuice-v1.4.5/generator_log
-5febfd0fd5adeb15cc225d61304c2e107c82ee37  /scripts/godwoken-polyjuice-v1.4.5/generator.asm
+37a1ffc2a082395ed3ed82d76c82c232b4edf22a804238c6c3f080f13a9c426b  /scripts/godwoken-polyjuice-v1.4.5/validator_log
+3b39635ed78e8164add5e46baad28de0546f2805fd9929f5449cdbc64e760c56  /scripts/godwoken-polyjuice-v1.4.5/generator_log.asm
+375359daf9ad3d3aacf62eee95e8383851a3ff869bc8d2f612c74df2767f4b23  /scripts/godwoken-polyjuice-v1.4.5/generator.asm
+d00759f32fe075dcc3078204fc37951c25efe6ea1102b1ba227d14e023e16398  /scripts/godwoken-polyjuice-v1.4.5/generator.debug
+1b6b27614e65cd54bab9ba44144f662f0bfe6d9cbab8d3990898c2a9dece2770  /scripts/godwoken-polyjuice-v1.4.5/generator_log.debug
+ee766d4a0e56a4c46f8917d52847a20bf9dcc3cd38f705faceec81dc39cdd53a  /scripts/godwoken-polyjuice-v1.4.5/generator.aot
+ee766d4a0e56a4c46f8917d52847a20bf9dcc3cd38f705faceec81dc39cdd53a  /scripts/godwoken-polyjuice-v1.4.5/generator
+3fb8310d8766112cff91cdf7f91a8ea41fd68832953dcdae75bd326dc44558d8  /scripts/godwoken-polyjuice-v1.4.5/validator_log.debug
+82d9cec77c0ae9958c9a497238c485c5ee417ef8badfe0a7d7919b6c901dc8fe  /scripts/godwoken-polyjuice-v1.4.5/validator.debug
+474375f3b462de26335a235805da0377bea2a92200daa21447e8afa1096c9a6a  /scripts/godwoken-polyjuice-v1.4.5/validator
+1b7604edbfe8623d2b19444dabf720bc4555e244eb31c20af6ab513330b77a88  /scripts/godwoken-polyjuice-v1.4.5/generator_log
+1b7604edbfe8623d2b19444dabf720bc4555e244eb31c20af6ab513330b77a88  /scripts/godwoken-polyjuice-v1.4.5/generator_log.aot
 
 ############################## polyjuice-v1.4.4 ################################
 # https://github.com/godwokenrises/godwoken-polyjuice/releases/tag/1.4.4
-# polyjuice commit: f8385446ce5be78d55bee583a21e15205725b7af or 5f146f764067afb103f2ee9c7705e4a77e63beed
-7e71da732e2e66cac21feac7fe182346ca40ac29  /scripts/godwoken-polyjuice-v1.4.4/validator
-af2783ed65ac1f48cb23020d975a1a36e6f79006  /scripts/godwoken-polyjuice-v1.4.4/validator.debug
-5886c688558da022bcaaffe251be4d457802a067  /scripts/godwoken-polyjuice-v1.4.4/validator_log
-67e839c64ac90c630801c0b14bc58c6f5ba464ba  /scripts/godwoken-polyjuice-v1.4.4/validator_log.debug
-fceed518ed4e55bc025210072f9cd98ae36226d9  /scripts/godwoken-polyjuice-v1.4.4/generator_log.debug
-379f85d2fee595f090716d9dd30baef427081ed3  /scripts/godwoken-polyjuice-v1.4.4/generator.debug
-c46b5a6218bd4c27b75ce2784969043e2b85d548  /scripts/godwoken-polyjuice-v1.4.4/generator
-c46b5a6218bd4c27b75ce2784969043e2b85d548  /scripts/godwoken-polyjuice-v1.4.4/generator.aot
-c452a9d1dcc03152ddc39eb3f223c2ebbc3d5b69  /scripts/godwoken-polyjuice-v1.4.4/generator_log.asm
-473894521a20a79461d774f9e27e4f651c07d221  /scripts/godwoken-polyjuice-v1.4.4/generator_log.aot
-473894521a20a79461d774f9e27e4f651c07d221  /scripts/godwoken-polyjuice-v1.4.4/generator_log
-804679fdc2d78d386de95cae712d1714f146b12f  /scripts/godwoken-polyjuice-v1.4.4/generator.asm
+1608331839d4807644e19d388e72faf8906d75fc15ec4f616f7187b3d98da595  /scripts/godwoken-polyjuice-v1.4.4/validator_log
+dcb7bee54c7d819ac186f7bccfa99c5b74dfe33ee4b9f0c96610ce28d4cfc6c2  /scripts/godwoken-polyjuice-v1.4.4/generator_log.asm
+8e3b2af314a476a17258ac95d29f937ffa5c86035c7f3ab05cceaa0e7d884c3d  /scripts/godwoken-polyjuice-v1.4.4/generator.asm
+26f8340bb187c70930badd7f629a2c3b2eebd51a3a7007ab4091908b1b20c9a3  /scripts/godwoken-polyjuice-v1.4.4/generator.debug
+854886718302bd553d95c29ae708553ec04eca70a3ea9333e2b2b8edb380f20d  /scripts/godwoken-polyjuice-v1.4.4/generator_log.debug
+b8dad24a58d487c613570d8414cfc8a342186aa5d98d48c8728073a2351682e7  /scripts/godwoken-polyjuice-v1.4.4/generator.aot
+b8dad24a58d487c613570d8414cfc8a342186aa5d98d48c8728073a2351682e7  /scripts/godwoken-polyjuice-v1.4.4/generator
+38ccdcab1fcebe6319206d94fd0d00e2b874e0a104e30fa362e8f4cc78a8a45c  /scripts/godwoken-polyjuice-v1.4.4/validator_log.debug
+858b0be093ccd14180c813cab560a2bf0cd640fc1017189dd069259f14488390  /scripts/godwoken-polyjuice-v1.4.4/validator.debug
+9373278c7d2c60db726f6c158041394c2654c37687064ed25eed32013799673e  /scripts/godwoken-polyjuice-v1.4.4/validator
+e213b29e276dcc778fd4c03d40a3d399a2987e0813b645fa1cdea55f8751af7b  /scripts/godwoken-polyjuice-v1.4.4/generator_log
+e213b29e276dcc778fd4c03d40a3d399a2987e0813b645fa1cdea55f8751af7b  /scripts/godwoken-polyjuice-v1.4.4/generator_log.aot
 
 ############################## polyjuice-v1.4.2 ################################
 # TODO: deprecated this useless version
 # polyjuice commit: e16ce9be7859ba93e2da5ca565c4f518fed160d9
-11cf4d6d51448e74314943b52691142b747ffa04  /scripts/godwoken-polyjuice-v1.4.2/generator_log.debug
-5a373dbc96add6408604140652834be5b3a20288  /scripts/godwoken-polyjuice-v1.4.2/generator.debug
-dfe6a33d298a9532a9b49da2ceacdadd575f4e4d  /scripts/godwoken-polyjuice-v1.4.2/validator
-2248a67dc2c487b1a70af8dfec50570f20f6d3c7  /scripts/godwoken-polyjuice-v1.4.2/generator
-2248a67dc2c487b1a70af8dfec50570f20f6d3c7  /scripts/godwoken-polyjuice-v1.4.2/generator.aot
-5cac4d9331f5be6f1f056722f5342c08b2925b11  /scripts/godwoken-polyjuice-v1.4.2/generator_log.asm
-a82cba554dcd829e838e8f63572ca4e61a6f6f53  /scripts/godwoken-polyjuice-v1.4.2/validator.debug
-e49b4f29b65b27d60b6abdafaf070cdcc4b35f7f  /scripts/godwoken-polyjuice-v1.4.2/validator_log
-c95f24d2cf66ef952e8d389bd8c1e5d86e47906c  /scripts/godwoken-polyjuice-v1.4.2/validator_log.debug
-e05ab6544cae382bc9b1cdb9e79a1ae66f419757  /scripts/godwoken-polyjuice-v1.4.2/generator_log.aot
-e05ab6544cae382bc9b1cdb9e79a1ae66f419757  /scripts/godwoken-polyjuice-v1.4.2/generator_log
-d4277ae8f939d35c4402c6943a81fc5710993497  /scripts/godwoken-polyjuice-v1.4.2/generator.asm
+4e567d1877d0a69ea0f7dc98b466d1fa2e23f7ffaa82f5604b67a4115425cb42  /scripts/godwoken-polyjuice-v1.4.2/validator_log
+ebf52deb771550685fbd8de18d809517a6d521e021b3a30bdfb9a0b64031391b  /scripts/godwoken-polyjuice-v1.4.2/generator_log.asm
+0a0c8e0c29e975375b790454b9cc7045b44c068b7ba66ff9d8370d579e8122c1  /scripts/godwoken-polyjuice-v1.4.2/generator.asm
+092cf5bb3933739d91ecb2dc05b011df2bdc198ed54b1301f4970d0f255ef154  /scripts/godwoken-polyjuice-v1.4.2/generator.debug
+af7d211bbf29f25a64fedcfd7c0162fe7865db5b2ae356d92c6b2731f116a0b9  /scripts/godwoken-polyjuice-v1.4.2/generator_log.debug
+022b31bfdc32c3b526d60caafd267d1f327526e8b0978b6d304b3b22f92712d3  /scripts/godwoken-polyjuice-v1.4.2/generator.aot
+022b31bfdc32c3b526d60caafd267d1f327526e8b0978b6d304b3b22f92712d3  /scripts/godwoken-polyjuice-v1.4.2/generator
+87cf1ffa42fd720ceebbd70be3d15a88f0d5e899d886457b1d28f981167f2e1a  /scripts/godwoken-polyjuice-v1.4.2/validator_log.debug
+2c7b03d1da9c2fecc2ccb94cc4a1879073aadcd344ecaccf15e3ac5c5b7e161a  /scripts/godwoken-polyjuice-v1.4.2/validator.debug
+a898ed94e3bfcfa4e40ad5d2f0efe978552143f9fd815aaae5f10fb99cd2f580  /scripts/godwoken-polyjuice-v1.4.2/validator
+e6ba1f8d93cd472abfd6e15be957c160eeaf3a06554f832a34811deb7e281972  /scripts/godwoken-polyjuice-v1.4.2/generator_log
+e6ba1f8d93cd472abfd6e15be957c160eeaf3a06554f832a34811deb7e281972  /scripts/godwoken-polyjuice-v1.4.2/generator_log.aot
 
 ############################## polyjuice-v1.4.1 ################################
 # https://github.com/godwokenrises/godwoken-polyjuice/releases/tag/1.4.1
-f788606a0c9fc88cbff8aa06e3e3536a4f7f46f6  /scripts/godwoken-polyjuice-v1.4.1/generator_log.debug
-a3e4ab6616ad1df2fe390f8e69f089f7342789e9  /scripts/godwoken-polyjuice-v1.4.1/generator.debug
-0a9c0ca1cb2f30ddc20411eb0a0d2fe9fb7b030a  /scripts/godwoken-polyjuice-v1.4.1/validator
-1aaab8204d65f490047450c7d6b06e30be46c786  /scripts/godwoken-polyjuice-v1.4.1/generator
-1aaab8204d65f490047450c7d6b06e30be46c786  /scripts/godwoken-polyjuice-v1.4.1/generator.aot
-e0091db46761bfe31f29f2a8ad8087dd07908e1e  /scripts/godwoken-polyjuice-v1.4.1/generator_log.asm
-5bf1cad9c533d78c9789fda676b7d26ccc9a207d  /scripts/godwoken-polyjuice-v1.4.1/validator.debug
-4063af3289308f5b97fb342d2b995a31bcb60a14  /scripts/godwoken-polyjuice-v1.4.1/validator_log
-9c27c25f807ae365dbcc5fe4b08e8f93789e6cc1  /scripts/godwoken-polyjuice-v1.4.1/validator_log.debug
-91a0f9b98274e1c72c9355723c44691df275b9d8  /scripts/godwoken-polyjuice-v1.4.1/generator_log.aot
-91a0f9b98274e1c72c9355723c44691df275b9d8  /scripts/godwoken-polyjuice-v1.4.1/generator_log
-663280beff09594b4172576d6b90733b7d1ec3a3  /scripts/godwoken-polyjuice-v1.4.1/generator.asm
+4732de6527e8ef1d8f9635449caf43ea9b33075ad825a3a20a3f87900997ac47  /scripts/godwoken-polyjuice-v1.4.1/validator_log
+fc03ddb293cde2e3478936c7f5e1e7695278e090b9c03a7d91185332ca6fe2b4  /scripts/godwoken-polyjuice-v1.4.1/generator_log.asm
+4d52d11aeebffa8e1214dc014c048a44925031512138f9cd8b6763428a39b664  /scripts/godwoken-polyjuice-v1.4.1/generator.asm
+8ff1f67572b3e2533455ea7a743f7fae7de203e74c5ba8b3a9790de43a2fa4db  /scripts/godwoken-polyjuice-v1.4.1/generator.debug
+8ff85eaaa039ca15f13f36d8ce574ca48ec39ea6b5136d99f5f83cbc9c3fe84b  /scripts/godwoken-polyjuice-v1.4.1/generator_log.debug
+2a42be6177fe639b72f3b93e24fa1c6e037cf80678f62a809c85fc90662daf16  /scripts/godwoken-polyjuice-v1.4.1/generator.aot
+2a42be6177fe639b72f3b93e24fa1c6e037cf80678f62a809c85fc90662daf16  /scripts/godwoken-polyjuice-v1.4.1/generator
+93ebf43a955f0f4146370378ade0495a6040afa1748b532c282a83aaeb80b522  /scripts/godwoken-polyjuice-v1.4.1/validator_log.debug
+0cbc70772149d9c008edba7595a353dc433c39e3618409cc0e3d51712199bce3  /scripts/godwoken-polyjuice-v1.4.1/validator.debug
+586f39a72bde7c96a241dbba7107a61926519b58034a42b1b5a340c26d8f679e  /scripts/godwoken-polyjuice-v1.4.1/validator
+aaed6b05b36af25235c8534f5c84274c52ed6f7d8adb19641d0e8eb57972ada1  /scripts/godwoken-polyjuice-v1.4.1/generator_log
+aaed6b05b36af25235c8534f5c84274c52ed6f7d8adb19641d0e8eb57972ada1  /scripts/godwoken-polyjuice-v1.4.1/generator_log.aot
 
 ############################## polyjuice-v1.4.0 ################################
 # https://github.com/godwokenrises/godwoken-polyjuice/releases/tag/1.4.0
-f788606a0c9fc88cbff8aa06e3e3536a4f7f46f6  /scripts/godwoken-polyjuice-v1.4.0/generator_log.debug
-a3e4ab6616ad1df2fe390f8e69f089f7342789e9  /scripts/godwoken-polyjuice-v1.4.0/generator.debug
-19c1d90af029d1985d38fcef00026e8af9b9bfc0  /scripts/godwoken-polyjuice-v1.4.0/validator
-83f5ac4c187425f99a4fcd155d3662e3b6702e42  /scripts/godwoken-polyjuice-v1.4.0/generator
-83f5ac4c187425f99a4fcd155d3662e3b6702e42  /scripts/godwoken-polyjuice-v1.4.0/generator.aot
-c1b534ab2a44b82c70525eb574ccac94dfe1ee6d  /scripts/godwoken-polyjuice-v1.4.0/generator_log.asm
-5bf1cad9c533d78c9789fda676b7d26ccc9a207d  /scripts/godwoken-polyjuice-v1.4.0/validator.debug
-c99c6480c4778f17ac6bd40b2d983d13fb4ab3b6  /scripts/godwoken-polyjuice-v1.4.0/validator_log
-9c27c25f807ae365dbcc5fe4b08e8f93789e6cc1  /scripts/godwoken-polyjuice-v1.4.0/validator_log.debug
-18f528d3acc9f8c52c9685f1620b2f87133bb44c  /scripts/godwoken-polyjuice-v1.4.0/generator_log.aot
-18f528d3acc9f8c52c9685f1620b2f87133bb44c  /scripts/godwoken-polyjuice-v1.4.0/generator_log
-98d2229564422e06e69dc548111a3d097fd91a73  /scripts/godwoken-polyjuice-v1.4.0/generator.asm
+4353be2c87ac082b8d1a8af67f8f1a01f34a674112ca680a454e4d594f4f8106  /scripts/godwoken-polyjuice-v1.4.0/validator_log
+e1cf33d7ece7ae8f1701d8cb03e3563e0557832bb6176be593423c166120c630  /scripts/godwoken-polyjuice-v1.4.0/generator_log.asm
+59e39c510c6ba2adc84387a251842201f3d1aed855df07f66ca7eb249b146339  /scripts/godwoken-polyjuice-v1.4.0/generator.asm
+8ff1f67572b3e2533455ea7a743f7fae7de203e74c5ba8b3a9790de43a2fa4db  /scripts/godwoken-polyjuice-v1.4.0/generator.debug
+8ff85eaaa039ca15f13f36d8ce574ca48ec39ea6b5136d99f5f83cbc9c3fe84b  /scripts/godwoken-polyjuice-v1.4.0/generator_log.debug
+a8a7868cc051af1e61e7cee267a42d2a957beac4788653e8a335d9a72f578a9b  /scripts/godwoken-polyjuice-v1.4.0/generator.aot
+a8a7868cc051af1e61e7cee267a42d2a957beac4788653e8a335d9a72f578a9b  /scripts/godwoken-polyjuice-v1.4.0/generator
+93ebf43a955f0f4146370378ade0495a6040afa1748b532c282a83aaeb80b522  /scripts/godwoken-polyjuice-v1.4.0/validator_log.debug
+0cbc70772149d9c008edba7595a353dc433c39e3618409cc0e3d51712199bce3  /scripts/godwoken-polyjuice-v1.4.0/validator.debug
+6733d05a2786e2970916dd57fff05729ba76aec7cb85ad7305ae38a5d968e47b  /scripts/godwoken-polyjuice-v1.4.0/validator
+32ee54e497a5f769d1bd65fe464d0b52587a6811240147c6aae26119153bea41  /scripts/godwoken-polyjuice-v1.4.0/generator_log
+32ee54e497a5f769d1bd65fe464d0b52587a6811240147c6aae26119153bea41  /scripts/godwoken-polyjuice-v1.4.0/generator_log.aot
 
 ############################## polyjuice-v1.3.0 ################################
 # Godwoken testnet_v1 blocks[180000..] use godwoken-polyjuice-v1.3.0
 # https://github.com/godwokenrises/godwoken-polyjuice/releases/tag/1.3.0
-58dd869500d3a7ff21e973664fbe0647aad4afd2  /scripts/godwoken-polyjuice-v1.3.0/generator_log.debug
-1ab4b82f61e10912789699a4281a9e70365a2ee6  /scripts/godwoken-polyjuice-v1.3.0/generator.debug
-cbd218999c11179ed5d6d3193abe7f9178d8d58f  /scripts/godwoken-polyjuice-v1.3.0/validator
-e4a47d037cc6bd433b370e822ee6132b16dd9b0f  /scripts/godwoken-polyjuice-v1.3.0/generator
-e4a47d037cc6bd433b370e822ee6132b16dd9b0f  /scripts/godwoken-polyjuice-v1.3.0/generator.aot
-3fcc5519ec1834934f9471002c346e499c242c3c  /scripts/godwoken-polyjuice-v1.3.0/generator_log.asm
-5d4a374e797b8da741766a53bd2504528122d90b  /scripts/godwoken-polyjuice-v1.3.0/validator.debug
-a1e5e6885d9c9fb465655e2c42a234b989ae1732  /scripts/godwoken-polyjuice-v1.3.0/validator_log
-8db84dd427884bda3cfb8efe91651c1b44318eb5  /scripts/godwoken-polyjuice-v1.3.0/validator_log.debug
-8fd6c431fd0c35eb3ddcbd0c187551c00807620c  /scripts/godwoken-polyjuice-v1.3.0/generator_log.aot
-8fd6c431fd0c35eb3ddcbd0c187551c00807620c  /scripts/godwoken-polyjuice-v1.3.0/generator_log
-3a8b3ce21d8f47fd6cc00b7469ce76c5c841f6a7  /scripts/godwoken-polyjuice-v1.3.0/generator.asm
+8ef0ff25df19e2c926c2b9f6888f6834d2676d256fafcbbc75be5535c0b300b9  /scripts/godwoken-polyjuice-v1.3.0/validator_log
+9db1fd211596c40cbb5b73cfccc26582c33cb2f76fa8b0c9f07564814bc61a4d  /scripts/godwoken-polyjuice-v1.3.0/generator_log.asm
+c850ed01f24312fca36fbe24cf06c21f5a8889ffd9d3d45ee091ba28c9a53a3a  /scripts/godwoken-polyjuice-v1.3.0/generator.asm
+0bdeee857270ffe98ce55f77e2fa116db3061a50565e70c82a13320146293480  /scripts/godwoken-polyjuice-v1.3.0/generator.debug
+5f575a58ff3c5fc833df1f70aebafac2291befaae7efc3f48cb92c9c9dd4ae7b  /scripts/godwoken-polyjuice-v1.3.0/generator_log.debug
+9dc4dff8632d71bd05c84bb71e9210be3439aa8bb227f374cac134304ec096d1  /scripts/godwoken-polyjuice-v1.3.0/generator.aot
+9dc4dff8632d71bd05c84bb71e9210be3439aa8bb227f374cac134304ec096d1  /scripts/godwoken-polyjuice-v1.3.0/generator
+842c5ee5d9da4c25f5403af591fcce4ec2bc3752698a16321399cfa50fd479fb  /scripts/godwoken-polyjuice-v1.3.0/validator_log.debug
+6f2085d3300676f448d50db854609a07154c599258b15cfb0b49c489d3e880b2  /scripts/godwoken-polyjuice-v1.3.0/validator.debug
+5263e92d5effc28cd7cac4bbc0aa1866b2606b48f2610d1dbe3d3b7c40891366  /scripts/godwoken-polyjuice-v1.3.0/validator
+94f7e8a26087760ea1e08e3576b0e47d9c5b0032d37f0fdc6f9aec19ff975f3c  /scripts/godwoken-polyjuice-v1.3.0/generator_log
+94f7e8a26087760ea1e08e3576b0e47d9c5b0032d37f0fdc6f9aec19ff975f3c  /scripts/godwoken-polyjuice-v1.3.0/generator_log.aot
 
 ############################## polyjuice-v1.2.0 ################################
 # Godwoken testnet_v1 blocks[110000..180000) use godwoken-polyjuice-v1.2.0
 # https://github.com/godwokenrises/godwoken-polyjuice/releases/tag/1.2.0
-b287e270d518620592822f908aa24752613edd0d  /scripts/godwoken-polyjuice-v1.2.0/generator_log.debug
-5b216531ea89d9da981937f4e0e9761243ff2bb0  /scripts/godwoken-polyjuice-v1.2.0/generator.debug
-86e2b0ecf246584ada7e64e4b5ebbac6918d7551  /scripts/godwoken-polyjuice-v1.2.0/validator
-b237ed5461b22079c0ec54d6db6dc10d6519ac3a  /scripts/godwoken-polyjuice-v1.2.0/generator
-b237ed5461b22079c0ec54d6db6dc10d6519ac3a  /scripts/godwoken-polyjuice-v1.2.0/generator.aot
-5faedf249944ef516780581bdab4fe307882c87d  /scripts/godwoken-polyjuice-v1.2.0/generator_log.asm
-50ff83099f174ff5c34d73e56c8eec04235e1352  /scripts/godwoken-polyjuice-v1.2.0/validator.debug
-41f24f61ea0b195245d6da8a98c02ae45efa35a6  /scripts/godwoken-polyjuice-v1.2.0/validator_log
-b7ab7425ffb17203d35f5dd2706c8161e4b70c25  /scripts/godwoken-polyjuice-v1.2.0/validator_log.debug
-d0059d518c764e034f30823283fed5cd6082e308  /scripts/godwoken-polyjuice-v1.2.0/generator_log.aot
-d0059d518c764e034f30823283fed5cd6082e308  /scripts/godwoken-polyjuice-v1.2.0/generator_log
-b8a17d45ccce7459e8e8da9e519dd5d9e1e320ab  /scripts/godwoken-polyjuice-v1.2.0/generator.asm
+089207690c054060d72bed01de72dd84cc9a34bc3087ce5798432069164422fe  /scripts/godwoken-polyjuice-v1.2.0/validator_log
+95445039e8c63c7ad8293d8626cc47fdd8dd0629a147e71c39f5724484aae64a  /scripts/godwoken-polyjuice-v1.2.0/generator_log.asm
+c32a53c4f53f035a7b7e74a5a23d55c0509034637a22fa37135426653d14afcc  /scripts/godwoken-polyjuice-v1.2.0/generator.asm
+1368dd12b87adaf821275c1db8a634151a51d59aeb830517139c9a80e95b15fe  /scripts/godwoken-polyjuice-v1.2.0/generator.debug
+76fff84d1dfe5e7db60f6d7878d905348e69b8d177f88f069afcd15f50563c28  /scripts/godwoken-polyjuice-v1.2.0/generator_log.debug
+1e48c135dcb6eb97a96295bbe7e9b104df05d7e48a8a115b4cfebc36f4555634  /scripts/godwoken-polyjuice-v1.2.0/generator.aot
+1e48c135dcb6eb97a96295bbe7e9b104df05d7e48a8a115b4cfebc36f4555634  /scripts/godwoken-polyjuice-v1.2.0/generator
+1fc6a1b574009c3d448e47bbc9fbf419863a0cf757d6c953c549fa5c3eba0008  /scripts/godwoken-polyjuice-v1.2.0/validator_log.debug
+e816bd95d355cecc7e62ae2f59383161d7c4ef6eb0e4570821c351f77a87e0fc  /scripts/godwoken-polyjuice-v1.2.0/validator.debug
+3421f770f5b664066b8d4355506bda0a5e02ca383c1260187216d43bbbcee6d7  /scripts/godwoken-polyjuice-v1.2.0/validator
+ff9eff648a1002f7dc9652ed82cdcb43760db688bee64b04bc9b2e10f2fc0d7c  /scripts/godwoken-polyjuice-v1.2.0/generator_log
+ff9eff648a1002f7dc9652ed82cdcb43760db688bee64b04bc9b2e10f2fc0d7c  /scripts/godwoken-polyjuice-v1.2.0/generator_log.aot
 
 ############################ polyjuice-v1.1.5-beta #############################
 # Godwoken testnet_v1 blocks[0..110000) use polyjuice-v1.1.5-beta
 # https://github.com/godwokenrises/godwoken-polyjuice/releases/tag/v1.1.5-beta
-77d28b59cdd676c9f8e2f1a5e67d4e4e459964ff  /scripts/godwoken-polyjuice-v1.1.5-beta/generator_log.debug
-4af40a410c9c77ad70125c61d2b9fd5e01187a30  /scripts/godwoken-polyjuice-v1.1.5-beta/generator.debug
-d5cacaa93d92adc9748d4ed6e88259522b21161a  /scripts/godwoken-polyjuice-v1.1.5-beta/validator
-9f0188ce6a63728dc94866ef2afdd4a1be3f92d3  /scripts/godwoken-polyjuice-v1.1.5-beta/generator
-9f0188ce6a63728dc94866ef2afdd4a1be3f92d3  /scripts/godwoken-polyjuice-v1.1.5-beta/generator.aot
-b1ad76ebfd33d78dfe64eb83ccda48aa894eb1bf  /scripts/godwoken-polyjuice-v1.1.5-beta/generator_log.asm
-ac794559ba1ed447bbc4d981760dcdd5b206761b  /scripts/godwoken-polyjuice-v1.1.5-beta/validator.debug
-72c65857191fb3573082e575c4895198c4fc0847  /scripts/godwoken-polyjuice-v1.1.5-beta/validator_log
-4f3f1e5fc557477fb1f9430771e8adacd1b384f2  /scripts/godwoken-polyjuice-v1.1.5-beta/validator_log.debug
-6a48d77057e5f0273979940f58df91c03059a84e  /scripts/godwoken-polyjuice-v1.1.5-beta/generator_log.aot
-6a48d77057e5f0273979940f58df91c03059a84e  /scripts/godwoken-polyjuice-v1.1.5-beta/generator_log
-1c420832bcecf00e9507679e8d978167f24ba6c8  /scripts/godwoken-polyjuice-v1.1.5-beta/generator.asm
+47da16733cd446666c2ec349ece5cc6dfae896e91683e133803889e3c4301bcc  /scripts/godwoken-polyjuice-v1.1.5-beta/validator_log
+ba3b2cb68069d108d461852fb48c1709a8fd3b0de888e927922e659cf6ecfc20  /scripts/godwoken-polyjuice-v1.1.5-beta/generator_log.asm
+af49930b3a1f38552b826d0d233be6b582166af769a621346644ca5bcf7cefc7  /scripts/godwoken-polyjuice-v1.1.5-beta/generator.asm
+1050a2d4069f8496595e422b01dbbc04587787bd1e64e2f57a6f7b283216d7c9  /scripts/godwoken-polyjuice-v1.1.5-beta/generator.debug
+dd80406409e4cb1b083fb9033a9909cd51d31436c737976aae8bfd46a58e6f9a  /scripts/godwoken-polyjuice-v1.1.5-beta/generator_log.debug
+1829c695c91572840352794505714113025d0d55c8d318c2e013c4c2c971cf02  /scripts/godwoken-polyjuice-v1.1.5-beta/generator.aot
+1829c695c91572840352794505714113025d0d55c8d318c2e013c4c2c971cf02  /scripts/godwoken-polyjuice-v1.1.5-beta/generator
+55644b5e858169d11dceba5112235003d1de95f9dd5e46566c415e1a1539fbfc  /scripts/godwoken-polyjuice-v1.1.5-beta/validator_log.debug
+d836c1c8cce81bb3bc1cf47d8f0e5f9e96497602f6f110ca97391b6a536285c9  /scripts/godwoken-polyjuice-v1.1.5-beta/validator.debug
+8a70a0e4134e53c101a3c252ce28908860064644eede98739b12c2055c18888d  /scripts/godwoken-polyjuice-v1.1.5-beta/validator
+9c81df0ac65336a9433f972660415a66db2ae7428b0367c2ea1102d505e468d1  /scripts/godwoken-polyjuice-v1.1.5-beta/generator_log
+9c81df0ac65336a9433f972660415a66db2ae7428b0367c2ea1102d505e468d1  /scripts/godwoken-polyjuice-v1.1.5-beta/generator_log.aot

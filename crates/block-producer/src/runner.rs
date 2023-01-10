@@ -15,12 +15,11 @@ use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainMockContextBuildArgs};
 use gw_common::{blake2b::new_blake2b, registry_address::RegistryAddress};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
-use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
     backend_manage::BackendManage,
     genesis::init_genesis,
-    ArcSwap, Generator,
+    Generator,
 };
 use gw_mem_pool::{
     account_creator::AccountCreator,
@@ -265,18 +264,18 @@ pub struct BaseInitComponents {
     pub store: Store,
     pub generator: Arc<Generator>,
     pub contracts_dep_manager: Option<ContractsCellDepManager>,
-    pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
 }
 
 impl BaseInitComponents {
     pub async fn init(config: &Config, skip_config_check: bool) -> Result<Self> {
-        let rollup_config: RollupConfig = config.genesis.rollup_config.clone().into();
+        let consensus = config.consensus.get_config();
+        let rollup_config: RollupConfig = consensus.genesis.rollup_config.clone().into();
         let rollup_context = RollupContext {
             rollup_config: rollup_config.clone(),
-            rollup_script_hash: config.genesis.rollup_type_hash.clone().into(),
-            fork_config: config.fork.clone(),
+            rollup_script_hash: consensus.genesis.rollup_type_hash.clone().into(),
+            fork_config: consensus.clone().into_owned(),
         };
-        let rollup_type_script: Script = config.chain.rollup_type_script.clone().into();
+        let rollup_type_script: Script = consensus.chain.rollup_type_script.clone().into();
         let rpc_client = {
             let ckb_client = CkbClient::with_url(&config.rpc_client.ckb_url)?;
             let indexer_client = if let Some(ref indexer_url) = config.rpc_client.indexer_url {
@@ -298,8 +297,8 @@ impl BaseInitComponents {
         let opt_block_producer_config = config.block_producer.as_ref();
         if let Some(block_producer_config) = opt_block_producer_config {
             use gw_rpc_client::contract::check_script;
-            let script_config = config.consensus.contract_type_scripts.clone();
-            let rollup_type_script = &config.chain.rollup_type_script;
+            let script_config = consensus.system_type_scripts.clone();
+            let rollup_type_script = &consensus.chain.rollup_type_script;
             let rollup_config_cell_dep = block_producer_config.rollup_config_cell_dep.clone();
 
             check_script(&script_config, &rollup_config, rollup_type_script)?;
@@ -332,7 +331,7 @@ impl BaseInitComponents {
         log::debug!("Open rocksdb costs: {}ms.", elapsed_ms);
 
         let secp_data: Bytes = {
-            let out_point = config.genesis.secp_data_dep.out_point.clone();
+            let out_point = consensus.genesis.secp_data_dep.out_point.clone();
             rpc_client
                 .ckb
                 .get_packed_transaction(out_point.tx_hash.0)
@@ -345,26 +344,23 @@ impl BaseInitComponents {
                 .raw_data()
         };
 
-        let genesis_tx_hash = config
+        let genesis_tx_hash = consensus
             .chain
             .genesis_committed_info
             .transaction_hash
             .clone()
             .into();
-        init_genesis(&store, &config.genesis, &genesis_tx_hash, secp_data.clone())
-            .with_context(|| "init genesis")?;
+        init_genesis(
+            &store,
+            &consensus.genesis,
+            &genesis_tx_hash,
+            secp_data.clone(),
+        )
+        .with_context(|| "init genesis")?;
 
-        let dynamic_config_manager = Arc::new(ArcSwap::from_pointee(DynamicConfigManager::create(
-            config.clone(),
-        )));
-
-        //Reload config
-        if let Some(res) = gw_dynamic_config::try_reload(dynamic_config_manager.clone()).await {
-            log::info!("Reload dynamic config: {:?}", res);
-        }
         let rollup_config_hash: H256 = rollup_config.hash();
         let generator = {
-            let backend_manage = BackendManage::from_config(config.fork.backend_forks.clone())
+            let backend_manage = BackendManage::from_config(consensus.backend_forks.clone())
                 .with_context(|| "config backends")?;
             let mut account_lock_manage = AccountLockManage::default();
             let allowed_eoa_type_hashes = rollup_config.as_reader().allowed_eoa_type_hashes();
@@ -402,7 +398,7 @@ impl BaseInitComponents {
         let mut builtin_load_data = HashMap::new();
         builtin_load_data.insert(
             to_hash(secp_data.as_ref()),
-            config.genesis.secp_data_dep.clone().into(),
+            consensus.genesis.secp_data_dep.clone().into(),
         );
 
         let base = BaseInitComponents {
@@ -416,7 +412,6 @@ impl BaseInitComponents {
             store,
             generator,
             contracts_dep_manager,
-            dynamic_config_manager,
         };
 
         Ok(base)
@@ -528,7 +523,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     provider: Box::new(mem_pool_provider),
                     config: config.mem_pool.clone(),
                     node_mode: config.node_mode,
-                    dynamic_config_manager: base.dynamic_config_manager.clone(),
                     sync_server: block_sync_server_state.clone(),
                     account_creator,
                 };
@@ -554,7 +548,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         store,
         generator,
         contracts_dep_manager,
-        dynamic_config_manager,
         ..
     } = base;
 
@@ -568,11 +561,12 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         store.check_state()?;
         log::info!("Check state db done: {}ms", t.elapsed().as_millis());
     }
+    let consensus = config.consensus.get_config();
     let chain = Arc::new(Mutex::new(
         Chain::create(
             rollup_config.clone(),
-            &config.chain.rollup_type_script.clone().into(),
-            &config.chain,
+            &consensus.chain.rollup_type_script.clone().into(),
+            &consensus.chain,
             store.clone(),
             generator.clone(),
             mem_pool.clone(),
@@ -750,14 +744,14 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
         generator,
         tests_rpc_impl: test_mode_control.map(|t| Arc::new(t) as BoxedTestModeRpc),
         rollup_config,
-        chain_config: config.chain.to_owned(),
-        consensus_config: config.consensus.to_owned(),
+        chain_config: consensus.chain.to_owned(),
+        system_type_script_config: consensus.system_type_scripts.to_owned(),
         mem_pool_config: config.mem_pool.clone(),
+        fee_config: config.mem_pool.fee.clone(),
         node_mode: config.node_mode,
         rpc_client: rpc_client.clone(),
-        send_tx_rate_limit: config.dynamic_config.rpc_config.send_tx_rate_limit.clone(),
+        send_tx_rate_limit: config.rpc_server.send_tx_rate_limit.clone(),
         server_config: config.rpc_server.clone(),
-        dynamic_config_manager,
         polyjuice_sender_recover,
         debug_backend_forks: config.debug_backend_forks.clone(),
         gasless_tx_support_config: config.gasless_tx_support.clone(),

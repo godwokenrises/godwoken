@@ -1,0 +1,23 @@
+[package]
+name = "gw-builtin-binaries"
+version = "1.8.0-rc1"
+edition = "2021"
+authors = ["Godwoken"]
+license = "MIT"
+description = "Godwoken builtin binaries"
+repository = "https://github.com/godwokenrises/godwoken"
+include = ["src/**/*", "Cargo.toml", "build.rs", "builtin/**/*", "README.md"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+phf = "0.8.0"
+includedir = "0.6.0"
+serde = { version = "1.0", features = ["derive"] }
+anyhow = "1.0"
+
+[build-dependencies]
+includedir_codegen = "0.6.0"
+ckb-fixed-hash = "0.105.1"
+anyhow = "1.0"
+sha2 = "0.10.6"

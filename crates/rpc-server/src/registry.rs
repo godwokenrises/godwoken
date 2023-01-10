@@ -12,16 +12,15 @@ use gw_common::blake2b::new_blake2b;
 use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
 use gw_common::state::State;
 use gw_config::{
-    BackendForkConfig, ChainConfig, ConsensusConfig, FeeConfig, GaslessTxSupportConfig,
-    MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig, SyscallCyclesConfig,
+    BackendForkConfig, ChainConfig, FeeConfig, GaslessTxSupportConfig, MemPoolConfig, NodeMode,
+    RPCMethods, RPCRateLimit, RPCServerConfig, SyscallCyclesConfig, SystemTypeScriptConfig,
 };
-use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
 use gw_generator::backend_manage::BackendManage;
 use gw_generator::generator::CyclesPool;
 use gw_generator::utils::get_tx_type;
 use gw_generator::{
     error::TransactionError, sudt::build_l2_sudt_script,
-    verification::transaction::TransactionVerifier, ArcSwap, Generator,
+    verification::transaction::TransactionVerifier, Generator,
 };
 use gw_jsonrpc_types::{
     blockchain::Script,
@@ -59,6 +58,12 @@ use jsonrpc_utils::{pub_sub::Session, rpc};
 use lru::LruCache;
 use once_cell::sync::Lazy;
 use pprof::ProfilerGuard;
+use std::collections::HashMap;
+use std::{
+    convert::{TryFrom, TryInto},
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tokio::sync::{mpsc, Mutex};
 use tracing::instrument;
 
@@ -166,6 +171,30 @@ impl Drop for RequestContext {
     }
 }
 
+pub struct ExecutionTransactionContext {
+    mem_pool: MemPool,
+    generator: Arc<Generator>,
+    store: Store,
+    mem_pool_state: Arc<MemPoolState>,
+    polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
+    mem_pool_config: MemPoolConfig,
+}
+
+pub struct SubmitTransactionContext {
+    in_queue_request_map: Option<Arc<InQueueRequestMap>>,
+    generator: Arc<Generator>,
+    submit_tx: mpsc::Sender<(Request, RequestContext)>,
+    mem_pool_state: Arc<MemPoolState>,
+    rate_limiter: Option<SendTransactionRateLimiter>,
+    rate_limit_config: Option<RPCRateLimit>,
+    polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
+}
+
+pub struct SystemTypeScripts {
+    eoa: HashMap<H256, Script>,
+    contract: HashMap<H256, Script>,
+}
+
 pub struct RegistryArgs {
     pub store: Store,
     pub mem_pool: MemPool,
@@ -178,9 +207,9 @@ pub struct RegistryArgs {
     pub send_tx_rate_limit: Option<RPCRateLimit>,
     pub server_config: RPCServerConfig,
     pub chain_config: ChainConfig,
-    pub consensus_config: ConsensusConfig,
+    pub fee_config: FeeConfig,
+    pub system_type_script_config: SystemTypeScriptConfig,
     pub gasless_tx_support_config: Option<GaslessTxSupportConfig>,
-    pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     pub polyjuice_sender_recover: PolyjuiceSenderRecover,
     pub debug_backend_forks: Option<Vec<BackendForkConfig>>,
 }
@@ -200,13 +229,14 @@ pub struct Registry {
     pub(crate) send_tx_rate_limit_config: Option<RPCRateLimit>,
     pub(crate) server_config: RPCServerConfig,
     pub(crate) chain_config: ChainConfig,
-    pub(crate) consensus_config: ConsensusConfig,
     pub(crate) gasless_tx_support_config: Option<GaslessTxSupportConfig>,
-    pub(crate) dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     pub(crate) mem_pool_state: Arc<MemPoolState>,
     pub(crate) in_queue_request_map: Option<Arc<InQueueRequestMap>>,
     pub(crate) polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
     pub(crate) debug_generator: Arc<Generator>,
+    pub(crate) system_type_script_config: SystemTypeScriptConfig,
+    pub(crate) system_type_scripts: SystemTypeScripts,
+    pub(crate) fee_config: FeeConfig,
 }
 
 impl Registry {
@@ -223,8 +253,8 @@ impl Registry {
             send_tx_rate_limit: send_tx_rate_limit_config,
             server_config,
             chain_config,
-            consensus_config,
-            dynamic_config_manager,
+            fee_config,
+            system_type_script_config,
             polyjuice_sender_recover,
             debug_backend_forks,
             gasless_tx_support_config,
@@ -254,7 +284,7 @@ impl Registry {
                 mem_pool: Arc::clone(mem_pool),
                 submit_rx,
                 queue: FeeQueue::new(),
-                dynamic_config_manager: dynamic_config_manager.clone(),
+                fee_config: fee_config.clone(),
                 generator: generator.clone(),
                 mem_pool_state: mem_pool_state.clone(),
                 store: store.clone(),
@@ -280,6 +310,23 @@ impl Registry {
             }
         };
 
+        let system_type_scripts = SystemTypeScripts {
+            eoa: self
+                .system_type_script_config
+                .allowed_eoa_scripts
+                .clone()
+                .into_iter()
+                .map(|s| (s.hash().into(), s))
+                .collect(),
+            contract: self
+                .system_type_script_config
+                .allowed_contract_scripts
+                .clone()
+                .into_iter()
+                .map(|s| (s.hash().into(), s))
+                .collect(),
+        };
+
         Ok(Self {
             mem_pool,
             store,
@@ -295,13 +342,14 @@ impl Registry {
             send_tx_rate_limit_config,
             server_config,
             chain_config,
-            consensus_config,
+            fee_config,
             gasless_tx_support_config,
-            dynamic_config_manager,
+            system_type_script_config,
             mem_pool_state,
             in_queue_request_map,
             polyjuice_sender_recover,
             debug_generator,
+            system_type_scripts,
         }
         .into())
     }
@@ -342,7 +390,7 @@ struct RequestSubmitter {
     mem_pool: Arc<Mutex<gw_mem_pool::pool::MemPool>>,
     submit_rx: mpsc::Receiver<(Request, RequestContext)>,
     queue: FeeQueue<RequestContext>,
-    dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
+    fee_config: FeeConfig,
     generator: Arc<Generator>,
     mem_pool_state: Arc<MemPoolState>,
     store: Store,
@@ -436,9 +484,6 @@ impl RequestSubmitter {
         loop {
             // check mem block empty slots
             loop {
-                let dynamic_config_manager = self.dynamic_config_manager.load();
-                let fee_config = dynamic_config_manager.get_fee_config();
-
                 log::debug!("[Mem-pool background job] check mem-pool acquire mem_pool",);
                 let t = Instant::now();
                 let mem_pool = self.mem_pool.lock().await;
@@ -449,7 +494,7 @@ impl RequestSubmitter {
                 // continue to batch process if we have enough mem block slots
                 if !mem_pool.is_mem_txs_full(Self::MAX_BATCH_SIZE)
                     && mem_pool.cycles_pool().available_cycles()
-                        >= fee_config.minimal_tx_cycles_limit()
+                        >= self.fee_config.minimal_tx_cycles_limit()
                 {
                     break;
                 }
@@ -480,10 +525,8 @@ impl RequestSubmitter {
 
                 let kind = req.kind();
                 let hash = req.hash();
-                let dynamic_config_manager = self.dynamic_config_manager.load();
-                let fee_config = dynamic_config_manager.get_fee_config();
                 match req_to_entry(
-                    fee_config,
+                    &self.fee_config,
                     self.gasless_tx_support_config.as_ref(),
                     self.generator.clone(),
                     req,
@@ -521,10 +564,8 @@ impl RequestSubmitter {
 
                 let kind = req.kind();
                 let hash = req.hash();
-                let dynamic_config_manager = self.dynamic_config_manager.load();
-                let fee_config = dynamic_config_manager.get_fee_config();
                 match req_to_entry(
-                    fee_config,
+                    &self.fee_config,
                     self.gasless_tx_support_config.as_ref(),
                     self.generator.clone(),
                     req,
@@ -953,8 +994,12 @@ impl GwRpc for Arc<Registry> {
         let mode = to_rpc_node_mode(&self.node_mode);
         let node_rollup_config = to_node_rollup_config(&self.rollup_config);
         let rollup_cell = to_rollup_cell(&self.chain_config);
-        let gw_scripts = to_gw_scripts(&self.rollup_config, &self.consensus_config);
-        let eoa_scripts = to_eoa_scripts(&self.rollup_config, &self.consensus_config);
+        let gw_scripts = to_gw_scripts(
+            &self.rollup_config,
+            &self.system_type_script_config,
+            &self.system_type_scripts,
+        );
+        let eoa_scripts = to_eoa_scripts(&self.rollup_config, &self.system_type_scripts);
 
         Ok(NodeInfo {
             mode,
@@ -1967,8 +2012,7 @@ fn get_backend_info(generator: Arc<Generator>) -> Vec<BackendInfo> {
         .backends
         .values()
         .map(|b| BackendInfo {
-            validator_code_hash: ckb_fixed_hash::H256(b.checksum.validator),
-            generator_code_hash: ckb_fixed_hash::H256(b.checksum.generator),
+            generator_checksum: ckb_fixed_hash::H256(b.generator_checksum),
             validator_script_type_hash: ckb_fixed_hash::H256(b.validator_script_type_hash),
             backend_type: to_rpc_backend_type(&b.backend_type),
         })
@@ -2020,14 +2064,12 @@ pub fn to_rollup_cell(chain_config: &ChainConfig) -> RollupCell {
 
 pub fn to_gw_scripts(
     rollup_config: &RollupConfig,
-    consensus_config: &ConsensusConfig,
+    system_type_script_config: &SystemTypeScriptConfig,
+    system_type_scripts: &SystemTypeScripts,
 ) -> Vec<GwScript> {
     let mut vec = Vec::new();
 
-    let script = consensus_config
-        .contract_type_scripts
-        .state_validator
-        .to_owned();
+    let script = system_type_script_config.state_validator.to_owned();
     let state_validator = GwScript {
         type_hash: script.hash(),
         script,
@@ -2036,10 +2078,7 @@ pub fn to_gw_scripts(
     vec.push(state_validator);
 
     let type_hash: ckb_types::H256 = rollup_config.deposit_script_type_hash().unpack();
-    let script = consensus_config
-        .contract_type_scripts
-        .deposit_lock
-        .to_owned();
+    let script = system_type_script_config.deposit_lock.to_owned();
     let deposit = GwScript {
         type_hash,
         script,
@@ -2048,10 +2087,7 @@ pub fn to_gw_scripts(
     vec.push(deposit);
 
     let type_hash: ckb_types::H256 = rollup_config.withdrawal_script_type_hash().unpack();
-    let script = consensus_config
-        .contract_type_scripts
-        .withdrawal_lock
-        .to_owned();
+    let script = system_type_script_config.withdrawal_lock.to_owned();
     let withdraw = GwScript {
         type_hash,
         script,
@@ -2060,7 +2096,7 @@ pub fn to_gw_scripts(
     vec.push(withdraw);
 
     let type_hash: ckb_types::H256 = rollup_config.stake_script_type_hash().unpack();
-    let script = consensus_config.contract_type_scripts.stake_lock.to_owned();
+    let script = system_type_script_config.stake_lock.to_owned();
     let stake_lock = GwScript {
         type_hash,
         script,
@@ -2069,10 +2105,7 @@ pub fn to_gw_scripts(
     vec.push(stake_lock);
 
     let type_hash: ckb_types::H256 = rollup_config.custodian_script_type_hash().unpack();
-    let script = consensus_config
-        .contract_type_scripts
-        .custodian_lock
-        .to_owned();
+    let script = system_type_script_config.custodian_lock.to_owned();
     let custodian = GwScript {
         type_hash,
         script,
@@ -2081,10 +2114,7 @@ pub fn to_gw_scripts(
     vec.push(custodian);
 
     let type_hash: ckb_types::H256 = rollup_config.withdrawal_script_type_hash().unpack();
-    let script = consensus_config
-        .contract_type_scripts
-        .challenge_lock
-        .to_owned();
+    let script = system_type_script_config.challenge_lock.to_owned();
     let challenge = GwScript {
         type_hash,
         script,
@@ -2093,7 +2123,7 @@ pub fn to_gw_scripts(
     vec.push(challenge);
 
     let type_hash: ckb_types::H256 = rollup_config.l1_sudt_script_type_hash().unpack();
-    let script = consensus_config.contract_type_scripts.l1_sudt.to_owned();
+    let script = system_type_script_config.l1_sudt.to_owned();
     let l1_sudt = GwScript {
         type_hash,
         script,
@@ -2101,19 +2131,16 @@ pub fn to_gw_scripts(
     };
     vec.push(l1_sudt);
 
-    let type_hash: ckb_types::H256 = rollup_config.l2_sudt_validator_script_type_hash().unpack();
-    let script = consensus_config
-        .contract_type_scripts
-        .allowed_contract_scripts[&type_hash]
-        .to_owned();
+    let type_hash: H256 = rollup_config.l2_sudt_validator_script_type_hash().unpack();
+    let script = system_type_scripts.contract[&type_hash].to_owned();
     let l2_sudt = GwScript {
-        type_hash,
+        type_hash: type_hash.into(),
         script,
         script_type: GwScriptType::L2Sudt,
     };
     vec.push(l2_sudt);
 
-    let script = consensus_config.contract_type_scripts.omni_lock.to_owned();
+    let script = system_type_script_config.omni_lock.to_owned();
     let type_hash: ckb_types::H256 = script.hash();
     let omni_lock = GwScript {
         type_hash,
@@ -2127,7 +2154,7 @@ pub fn to_gw_scripts(
 
 pub fn to_eoa_scripts(
     rollup_config: &RollupConfig,
-    consensus_config: &ConsensusConfig,
+    system_type_scripts: &SystemTypeScripts,
 ) -> Vec<EoaScript> {
     let mut vec = Vec::new();
 
@@ -2137,14 +2164,13 @@ pub fn to_eoa_scripts(
         .expect("idx 0 not exits in allowed_eoa_type_hashes");
     let a_type_hash_value = a_type_hash.hash();
 
-    let mut hash: [u8; 32] = [0; 32];
+    let mut type_hash: [u8; 32] = [0; 32];
     let source = a_type_hash_value.as_slice();
-    hash.copy_from_slice(source);
-    let type_hash: JsonH256 = hash.into();
+    type_hash.copy_from_slice(source);
 
-    let script = consensus_config.contract_type_scripts.allowed_eoa_scripts[&type_hash].to_owned();
+    let script = system_type_scripts.eoa[&type_hash].to_owned();
     let eth_eoa_script = EoaScript {
-        type_hash,
+        type_hash: type_hash.into(),
         script,
         eoa_type: EoaScriptType::Eth,
     };

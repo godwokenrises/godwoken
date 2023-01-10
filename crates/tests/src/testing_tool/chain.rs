@@ -3,6 +3,7 @@
 use gw_block_producer::produce_block::{
     generate_produce_block_param, produce_block, ProduceBlockParam, ProduceBlockResult,
 };
+use gw_builtin_binaries::Resource;
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
 use gw_common::blake2b::new_blake2b;
 use gw_config::{
@@ -30,7 +31,7 @@ use gw_types::{
     },
     prelude::*,
 };
-use gw_utils::RollupContext;
+use gw_utils::{checksum::file_checksum, RollupContext};
 use lazy_static::lazy_static;
 use tokio::sync::{Mutex, MutexGuard};
 
@@ -39,7 +40,7 @@ use std::{fs, path::PathBuf, sync::Arc};
 
 use super::mem_pool_provider::DummyMemPoolProvider;
 
-const SCRIPT_DIR: &str = "../../.tmp/binaries/godwoken-scripts";
+const SCRIPT_DIR: &str = "../../crates/builtin-binaries/builtin/godwoken-scripts";
 const ALWAYS_SUCCESS_PATH: &str = "always-success";
 const WITHDRAWAL_LOCK_PATH: &str = "withdrawal-lock";
 const STATE_VALIDATOR_TYPE_PATH: &str = "state-validator";
@@ -167,28 +168,30 @@ lazy_static! {
 }
 
 // meta contract
-pub const META_VALIDATOR_PATH: &str =
-    "../../.tmp/binaries/godwoken-scripts/meta-contract-validator";
 pub const META_GENERATOR_PATH: &str =
-    "../../.tmp/binaries/godwoken-scripts/meta-contract-generator";
+    "../../crates/builtin-binaries/builtin/godwoken-scripts/meta-contract-generator";
 pub const META_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [1u8; 32];
 pub const ETH_REGISTRY_SCRIPT_TYPE_HASH: [u8; 32] = [2u8; 32];
 #[cfg(feature = "scripts")]
 pub const SUDT_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [3u8; 32];
 
 // simple UDT
-pub const SUDT_VALIDATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/sudt-validator";
-pub const SUDT_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/sudt-generator";
+pub const SUDT_VALIDATOR_PATH: &str =
+    "../../crates/builtin-binaries/builtin/godwoken-scripts/sudt-validator";
+pub const SUDT_GENERATOR_PATH: &str =
+    "../../crates/builtin-binaries/builtin/godwoken-scripts/sudt-generator";
 
 // eth eoa mapping registry
 pub const ETH_REGISTRY_VALIDATOR_PATH: &str =
-    "../../.tmp/binaries/godwoken-scripts/eth-addr-reg-generator";
+    "../../crates/builtin-binaries/builtin/godwoken-scripts/eth-addr-reg-generator";
 pub const ETH_REGISTRY_GENERATOR_PATH: &str =
-    "../../.tmp/binaries/godwoken-scripts/eth-addr-reg-validator";
+    "../../crates/builtin-binaries/builtin/godwoken-scripts/eth-addr-reg-validator";
 
 // polyjuice
-pub const POLYJUICE_VALIDATOR_PATH: &str = "../../.tmp/binaries/godwoken-polyjuice/validator";
-pub const POLYJUICE_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-polyjuice/generator";
+pub const POLYJUICE_VALIDATOR_PATH: &str =
+    "../../crates/builtin-binaries/builtin/godwoken-polyjuice/validator";
+pub const POLYJUICE_GENERATOR_PATH: &str =
+    "../../crates/builtin-binaries/builtin/godwoken-polyjuice/generator";
 
 pub const DEFAULT_FINALITY_BLOCKS: u64 = 6;
 
@@ -321,36 +324,36 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
         rollup_config.l2_sudt_validator_script_type_hash().unpack();
     let backends = vec![
         BackendConfig {
-            validator_path: META_VALIDATOR_PATH.into(),
-            generator_path: META_GENERATOR_PATH.into(),
+            generator: Resource::file_system(META_GENERATOR_PATH.into()),
+            generator_checksum: file_checksum(&META_GENERATOR_PATH).unwrap().into(),
             validator_script_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
             backend_type: gw_config::BackendType::Meta,
         },
         BackendConfig {
-            validator_path: SUDT_VALIDATOR_PATH.into(),
-            generator_path: SUDT_GENERATOR_PATH.into(),
+            generator: Resource::file_system(SUDT_GENERATOR_PATH.into()),
+            generator_checksum: file_checksum(&SUDT_GENERATOR_PATH).unwrap().into(),
             validator_script_type_hash: sudt_validator_script_type_hash.into(),
             backend_type: gw_config::BackendType::Sudt,
         },
         BackendConfig {
-            validator_path: ETH_REGISTRY_VALIDATOR_PATH.into(),
-            generator_path: ETH_REGISTRY_GENERATOR_PATH.into(),
+            generator: Resource::file_system(ETH_REGISTRY_GENERATOR_PATH.into()),
+            generator_checksum: file_checksum(&ETH_REGISTRY_GENERATOR_PATH).unwrap().into(),
             validator_script_type_hash: (*ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH).into(),
             backend_type: gw_config::BackendType::EthAddrReg,
         },
         BackendConfig {
-            validator_path: POLYJUICE_VALIDATOR_PATH.into(),
-            generator_path: POLYJUICE_GENERATOR_PATH.into(),
+            generator: Resource::file_system(POLYJUICE_GENERATOR_PATH.into()),
+            generator_checksum: file_checksum(&POLYJUICE_GENERATOR_PATH).unwrap().into(),
             validator_script_type_hash: (*POLYJUICE_VALIDATOR_CODE_HASH).into(),
             backend_type: gw_config::BackendType::Polyjuice,
         },
     ];
     BackendManage::from_config(vec![BackendForkConfig {
         fork_height: 0,
-        sudt_proxy: SUDTProxyConfig {
+        sudt_proxy: Some(SUDTProxyConfig {
             permit_sudt_transfer_from_dangerous_contract: false,
             address_list: Vec::new(),
-        },
+        }),
         backends,
     }])
     .expect("default backend")
@@ -522,7 +525,6 @@ pub async fn setup_chain_with_account_lock_manage(
         provider: Box::new(provider),
         config: mem_pool_config,
         node_mode: gw_config::NodeMode::FullNode,
-        dynamic_config_manager: Default::default(),
         sync_server: None,
         account_creator: None,
     };

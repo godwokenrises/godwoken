@@ -14,13 +14,12 @@ use gw_common::{
     state::State,
 };
 use gw_config::{MemBlockConfig, MemPoolConfig, NodeMode, SyscallCyclesConfig};
-use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_generator::{
     error::TransactionError,
     generator::CyclesPool,
     traits::StateExt,
     verification::{transaction::TransactionVerifier, withdrawal::WithdrawalVerifier},
-    ArcSwap, Generator,
+    Generator,
 };
 use gw_store::{
     chain_view::ChainView,
@@ -31,6 +30,10 @@ use gw_store::{
     Store,
 };
 use gw_traits::CodeStore;
+use gw_tx_filter::{
+    erc20_creator_allowlist::SUDTProxyAccountAllowlist,
+    polyjuice_contract_creator_allowlist::PolyjuiceContractCreatorAllowList,
+};
 use gw_types::packed::GlobalState;
 use gw_types::{
     h256::*,
@@ -98,7 +101,8 @@ pub struct MemPool {
     restore_manager: RestoreManager,
     /// Restored txs to finalize
     pending_restored_tx_hashes: VecDeque<H256>,
-    dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
+    polyjuice_contract_creator_allowlist: Option<PolyjuiceContractCreatorAllowList>,
+    sudt_proxy_account_allowlist: SUDTProxyAccountAllowlist,
     sync_server: Option<Arc<std::sync::Mutex<BlockSyncServerState>>>,
     mem_block_config: MemBlockConfig,
     /// Cycles Pool
@@ -114,7 +118,6 @@ pub struct MemPoolCreateArgs {
     pub provider: Box<dyn MemPoolProvider + Send + Sync>,
     pub config: MemPoolConfig,
     pub node_mode: NodeMode,
-    pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     pub sync_server: Option<Arc<std::sync::Mutex<BlockSyncServerState>>>,
     pub account_creator: Option<AccountCreator>,
 }
@@ -138,7 +141,6 @@ impl MemPool {
             provider,
             config,
             node_mode,
-            dynamic_config_manager,
             sync_server,
             account_creator,
         } = args;
@@ -186,6 +188,18 @@ impl MemPool {
             config.mem_block.syscall_cycles.clone(),
         );
 
+        let polyjuice_contract_creator_allowlist =
+            PolyjuiceContractCreatorAllowList::from_config(&config.extra);
+        let sudt_proxy_account_allowlist = SUDTProxyAccountAllowlist::new(
+            config.extra.allowed_sudt_proxy_creator_account_id,
+            config
+                .extra
+                .sudt_proxy_code_hashes
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        );
+
         let mut mem_pool = MemPool {
             store,
             current_tip: tip,
@@ -197,11 +211,12 @@ impl MemPool {
             restore_manager: restore_manager.clone(),
             pending_restored_tx_hashes,
             mem_pool_state,
-            dynamic_config_manager,
             sync_server,
             mem_block_config: config.mem_block,
             cycles_pool,
             account_creator,
+            polyjuice_contract_creator_allowlist,
+            sudt_proxy_account_allowlist,
         };
         mem_pool.restore_pending_withdrawals().await?;
         mem_pool.remove_reinjected_failed_txs()?;
@@ -1195,10 +1210,8 @@ impl MemPool {
         let block_info = self.mem_block.block_info();
 
         // check allow list
-        if let Some(polyjuice_contract_creator_allowlist) = self
-            .dynamic_config_manager
-            .load()
-            .get_polyjuice_contract_creator_allowlist()
+        if let Some(polyjuice_contract_creator_allowlist) =
+            self.polyjuice_contract_creator_allowlist.as_ref()
         {
             use gw_tx_filter::polyjuice_contract_creator_allowlist::Error;
 
@@ -1244,9 +1257,7 @@ impl MemPool {
         {
             let from_id = raw_tx.from_id().unpack();
             if !self
-                .dynamic_config_manager
-                .load()
-                .get_sudt_proxy_account_whitelist()
+                .sudt_proxy_account_allowlist
                 .validate(&run_result, from_id)
             {
                 // revert state

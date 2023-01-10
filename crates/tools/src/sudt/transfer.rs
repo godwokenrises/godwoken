@@ -35,7 +35,8 @@ pub async fn transfer(
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
     let config = read_config(config_path)?;
-    let rollup_type_hash = &config.genesis.rollup_type_hash;
+    let consensus = config.consensus.get_config();
+    let rollup_type_hash = &consensus.genesis.rollup_type_hash;
 
     let privkey = read_privkey(privkey_path)?;
 
@@ -47,7 +48,7 @@ pub async fn transfer(
         .await?;
     let from_id = from_id.expect("from id not found!");
 
-    let chain_id: u64 = config.genesis.rollup_config.chain_id.into();
+    let chain_id: u64 = consensus.genesis.rollup_config.chain_id.into();
 
     let nonce = godwoken_rpc_client.get_nonce(from_id).await?;
 

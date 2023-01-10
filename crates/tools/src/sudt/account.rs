@@ -71,7 +71,8 @@ pub async fn create_sudt_account(
     registry_id: u32,
     quiet: bool,
 ) -> Result<u32> {
-    let rollup_type_hash = &config.genesis.rollup_type_hash;
+    let consensus = config.consensus.get_config();
+    let rollup_type_hash = &consensus.genesis.rollup_type_hash;
 
     let from_id = pk_to_account_id(rpc_client, rollup_type_hash, deployment, pk).await?;
     let nonce = rpc_client
@@ -81,7 +82,7 @@ pub async fn create_sudt_account(
 
     // sudt contract
     let l2_script = {
-        let l2_validator_script_hash = &config.fork.backend_forks[0]
+        let l2_validator_script_hash = &consensus.backend_forks[0]
             .backends
             .iter()
             .find(|b| b.backend_type == BackendType::Sudt)
@@ -116,7 +117,7 @@ pub async fn create_sudt_account(
         .build();
 
     let args = MetaContractArgs::new_builder().set(create_account).build();
-    let chain_id: u64 = config.genesis.rollup_config.chain_id.into();
+    let chain_id: u64 = consensus.genesis.rollup_config.chain_id.into();
 
     let account_raw_l2_transaction = RawL2Transaction::new_builder()
         .from_id(from_id.pack())

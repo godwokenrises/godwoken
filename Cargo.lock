@@ -1733,6 +1733,7 @@ version = "1.8.0-rc3"
 dependencies = [
  "anyhow",
  "criterion",
+ "gw-builtin-binaries",
  "gw-common",
  "gw-config",
  "gw-generator",
@@ -1762,7 +1763,6 @@ dependencies = [
  "gw-challenge",
  "gw-common",
  "gw-config",
- "gw-dynamic-config",
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
@@ -1787,6 +1787,19 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "gw-builtin-binaries"
+version = "1.8.0-rc1"
+dependencies = [
+ "anyhow",
+ "ckb-fixed-hash",
+ "includedir",
+ "includedir_codegen",
+ "phf",
+ "serde",
+ "sha2",
 ]
 
 [[package]]
@@ -1864,23 +1877,11 @@ name = "gw-config"
 version = "1.8.0-rc3"
 dependencies = [
  "ckb-fixed-hash",
+ "gw-builtin-binaries",
  "gw-jsonrpc-types",
- "reqwest",
- "serde",
- "toml",
-]
-
-[[package]]
-name = "gw-dynamic-config"
-version = "1.8.0-rc3"
-dependencies = [
- "anyhow",
- "arc-swap",
- "ckb-fixed-hash",
- "gw-config",
- "gw-jsonrpc-types",
- "gw-tx-filter",
- "reqwest",
+ "gw-utils",
+ "hex",
+ "lazy_static",
  "serde",
  "toml",
 ]
@@ -1895,6 +1896,7 @@ dependencies = [
  "ckb-vm",
  "ckb-vm-aot",
  "ethabi",
+ "gw-builtin-binaries",
  "gw-common",
  "gw-config",
  "gw-smt",
@@ -1947,7 +1949,6 @@ dependencies = [
  "gw-challenge",
  "gw-common",
  "gw-config",
- "gw-dynamic-config",
  "gw-generator",
  "gw-p2p-network",
  "gw-rpc-client",
@@ -2090,7 +2091,6 @@ dependencies = [
  "gw-challenge",
  "gw-common",
  "gw-config",
- "gw-dynamic-config",
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
@@ -2186,10 +2186,10 @@ dependencies = [
  "env_logger 0.8.4",
  "godwoken-bin",
  "gw-block-producer",
+ "gw-builtin-binaries",
  "gw-chain",
  "gw-common",
  "gw-config",
- "gw-dynamic-config",
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
@@ -2234,6 +2234,7 @@ dependencies = [
  "clap 3.2.22",
  "csv",
  "faster-hex 0.5.0",
+ "gw-builtin-binaries",
  "gw-common",
  "gw-config",
  "gw-generator",
@@ -2316,6 +2317,7 @@ dependencies = [
  "log",
  "rand 0.8.5",
  "secp256k1 0.24.1",
+ "sha2",
  "sha3",
  "tokio",
  "zstd",
@@ -4269,9 +4271,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.10.2"
+version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55deaec60f81eefe3cce0dc50bda92d6d8e88f2a27df7c5033b42afeb1ed2676"
+checksum = "82e6b795fe2e3b1e845bafcb27aa35405c4d47cdfc92af5fc8d3002f76cebdc0"
 dependencies = [
  "cfg-if 1.0.0",
  "cpufeatures",

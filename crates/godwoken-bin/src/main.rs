@@ -13,7 +13,7 @@ use godwoken_bin::subcommand::rewind_to_last_valid_block::{
     RewindToLastValidBlockCommand, COMMAND_REWIND_TO_LAST_VALID_BLOCK,
 };
 use gw_block_producer::runner;
-use gw_config::{BackendForkConfig, Config, SUDTProxyConfig};
+use gw_config::{BackendForkConfig, Config, Consensus, ForkConfig, SUDTProxyConfig};
 use gw_telemetry::trace;
 use gw_version::Version;
 use std::{env, fs, path::Path};
@@ -42,14 +42,18 @@ fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
 
 fn generate_example_config<P: AsRef<Path>>(path: P) -> Result<()> {
     let mut config = Config::default();
-    config.fork.backend_forks.push(BackendForkConfig {
+    let mut fork = ForkConfig::default();
+    fork.backend_forks.push(BackendForkConfig {
         fork_height: 0,
         backends: Default::default(),
-        sudt_proxy: SUDTProxyConfig {
+        sudt_proxy: Some(SUDTProxyConfig {
             permit_sudt_transfer_from_dangerous_contract: false,
             address_list: Vec::new(),
-        },
+        }),
     });
+    config.consensus = Consensus::Config {
+        config: Box::new(fork),
+    };
     config.block_producer = Some(Default::default());
     let content = toml::to_string_pretty(&config)?;
     fs::write(path, content)?;

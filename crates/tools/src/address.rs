@@ -26,7 +26,7 @@ pub fn to_godwoken_script_hash(
     )?);
 
     let config = read_config(&config_path)?;
-    let rollup_type_hash = &config.genesis.rollup_type_hash;
+    let rollup_type_hash = &config.consensus.get_config().genesis.rollup_type_hash;
 
     let scripts_deployment_content = std::fs::read_to_string(scripts_deployment_path)?;
     let scripts_deployment: ScriptsDeploymentResult =

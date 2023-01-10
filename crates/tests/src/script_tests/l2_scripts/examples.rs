@@ -7,6 +7,7 @@ use super::{
     ACCOUNT_OP_PROGRAM_PATH, GW_LOG_SUDT_TRANSFER, RECOVER_PROGRAM_CODE_HASH, RECOVER_PROGRAM_PATH,
     SUDT_TOTAL_SUPPLY_PROGRAM_CODE_HASH, SUM_PROGRAM_CODE_HASH, SUM_PROGRAM_PATH,
 };
+use gw_builtin_binaries::Resource;
 use gw_common::{
     builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, state::State,
 };
@@ -39,6 +40,7 @@ use gw_types::{
     prelude::*,
     U256,
 };
+use gw_utils::checksum::file_checksum;
 use gw_utils::RollupContext;
 
 fn new_state(store: StoreSnapshot) -> MemStateDB {
@@ -84,8 +86,8 @@ fn test_example_sum() {
             fork_height: 0,
             sudt_proxy: Default::default(),
             backends: vec![BackendConfig {
-                validator_path: SUM_PROGRAM_PATH.to_path_buf(),
-                generator_path: SUM_PROGRAM_PATH.to_path_buf(),
+                generator: Resource::file_system(SUM_PROGRAM_PATH.to_path_buf()),
+                generator_checksum: file_checksum(&*SUM_PROGRAM_PATH).unwrap().into(),
                 validator_script_type_hash: (*SUM_PROGRAM_CODE_HASH).into(),
                 backend_type: BackendType::Unknown,
             }],
@@ -223,8 +225,8 @@ fn test_example_account_operation() {
         fork_height: 0,
         sudt_proxy: Default::default(),
         backends: vec![BackendConfig {
-            validator_path: ACCOUNT_OP_PROGRAM_PATH.clone(),
-            generator_path: ACCOUNT_OP_PROGRAM_PATH.clone(),
+            generator: Resource::file_system(ACCOUNT_OP_PROGRAM_PATH.clone()),
+            generator_checksum: file_checksum(&*ACCOUNT_OP_PROGRAM_PATH).unwrap().into(),
             validator_script_type_hash: (*ACCOUNT_OP_PROGRAM_CODE_HASH).into(),
             backend_type: BackendType::Unknown,
         }],
@@ -461,8 +463,8 @@ fn test_example_recover_account() {
         fork_height: 0,
         sudt_proxy: Default::default(),
         backends: vec![BackendConfig {
-            validator_path: RECOVER_PROGRAM_PATH.clone(),
-            generator_path: RECOVER_PROGRAM_PATH.clone(),
+            generator: Resource::file_system(RECOVER_PROGRAM_PATH.clone()),
+            generator_checksum: file_checksum(&*RECOVER_PROGRAM_PATH).unwrap().into(),
             validator_script_type_hash: (*RECOVER_PROGRAM_CODE_HASH).into(),
             backend_type: BackendType::Unknown,
         }],
@@ -642,8 +644,10 @@ fn test_sudt_total_supply() {
             fork_height: 0,
             sudt_proxy: Default::default(),
             backends: vec![BackendConfig {
-                validator_path: SUDT_TOTAL_SUPPLY_PROGRAM_PATH.clone(),
-                generator_path: SUDT_TOTAL_SUPPLY_PROGRAM_PATH.clone(),
+                generator: Resource::file_system(SUDT_TOTAL_SUPPLY_PROGRAM_PATH.clone()),
+                generator_checksum: file_checksum(&*SUDT_TOTAL_SUPPLY_PROGRAM_PATH)
+                    .unwrap()
+                    .into(),
                 validator_script_type_hash: (*SUDT_TOTAL_SUPPLY_PROGRAM_CODE_HASH).into(),
                 backend_type: BackendType::Unknown,
             }],

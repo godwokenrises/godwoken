@@ -1,5 +1,6 @@
 pub mod abort_on_drop;
 mod calc_finalizing_range;
+pub mod checksum;
 pub mod compression;
 pub mod exponential_backoff;
 pub mod export_block;

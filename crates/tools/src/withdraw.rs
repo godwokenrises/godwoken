@@ -49,9 +49,15 @@ pub async fn withdraw(
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
     let config = read_config(&config_path)?;
-    let rollup_type_hash = &config.genesis.rollup_type_hash;
+    let rollup_type_hash = &config.consensus.get_config().genesis.rollup_type_hash;
 
-    let chain_id: u64 = config.genesis.rollup_config.chain_id.into();
+    let chain_id: u64 = config
+        .consensus
+        .get_config()
+        .genesis
+        .rollup_config
+        .chain_id
+        .into();
 
     let is_sudt = sudt_script_hash != H256([0u8; 32]);
     let minimal_capacity = minimal_withdrawal_capacity(is_sudt)?;
