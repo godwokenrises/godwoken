@@ -8,12 +8,11 @@ use anyhow::{anyhow, Context, Result};
 use ckb_jsonrpc_types::{CellDep, JsonBytes};
 use ckb_types::prelude::{Builder, Entity};
 use gw_builtin_binaries::Resource;
-use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_config::{
     BackendConfig, BackendForkConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config,
     Consensus, ForkConfig, GenesisConfig, NodeMode, P2PNetworkConfig, RPCClientConfig,
-    RPCServerConfig, RegistryAddressConfig, SUDTProxyConfig, StoreConfig, SystemTypeScriptConfig,
-    WalletConfig,
+    RPCServerConfig, RegistryAddressConfig, RegistryType, SUDTProxyConfig, StoreConfig,
+    SystemTypeScriptConfig, WalletConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 use gw_rpc_client::ckb_client::CkbClient;
@@ -255,7 +254,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
     };
     let block_producer: Option<BlockProducerConfig> = Some(BlockProducerConfig {
         block_producer: RegistryAddressConfig {
-            registry_id: ETH_REGISTRY_ACCOUNT_ID,
+            address_type: RegistryType::Eth,
             address: JsonBytes::from_vec(block_producer_address),
         },
         challenger_config,
