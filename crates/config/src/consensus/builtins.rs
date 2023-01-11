@@ -21,6 +21,7 @@ pub fn mainnet() -> ForkConfig {
     CONFIG.clone()
 }
 
+#[cfg(not(feature = "no-builtin"))]
 #[cfg(test)]
 mod tests {
     use ckb_fixed_hash::H256;

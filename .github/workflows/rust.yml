@@ -26,6 +26,22 @@ jobs:
         env:
           RUSTFLAGS: -D warnings
         run: cargo clippy --tests --all-features --all-targets
+
+      - name: Cache of component.gwos-evm
+        id: godwoken-polyjuice-cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            gwos-evm/build/*generator*
+            gwos-evm/build/*validator*
+          key: component.gwos-evm-${{ hashFiles('gwos-evm/**') }}
+      - name: Build godwoken-polyjuice
+        if: steps.godwoken-polyjuice-cache.outputs.cache-hit != 'true'
+        working-directory: gwos-evm
+        run: |
+          git submodule update --init --recursive --depth=1
+          make all-via-docker
+
       - name: Copy contracts from prebuild docker images
         run: devtools/fetch-binaries.sh
       - name: Tests

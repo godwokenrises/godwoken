@@ -10,6 +10,10 @@ include = ["src/**/*", "Cargo.toml", "build.rs", "builtin/**/*", "README.md"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = []
+no-builtin = []
+
 [dependencies]
 phf = "0.8.0"
 includedir = "0.6.0"

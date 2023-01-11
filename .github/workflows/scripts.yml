@@ -73,4 +73,4 @@ jobs:
     - name: Test C Uint256
       run: cargo test -p c-uint256-tests
     - name: Script tests
-      run: cargo test --features scripts script_tests
+      run: cargo test --features scripts --features gw-config/no-builtin script_tests

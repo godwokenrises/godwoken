@@ -4,7 +4,7 @@
 //!
 //! The bundled files can be read via `Resource::Bundled`, for example:
 //!
-//! ```
+//! ```no_run
 //! // Read bundled godwoken binaries
 //! use gw_builtin_binaries::Resource;
 //!
