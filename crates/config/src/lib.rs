@@ -6,3 +6,4 @@ mod fork_config;
 pub use config::*;
 pub use consensus::*;
 pub use fork_config::*;
+pub use gw_builtin_binaries::Resource;

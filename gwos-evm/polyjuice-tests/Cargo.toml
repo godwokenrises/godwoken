@@ -14,7 +14,7 @@ gw-types     = { path = "../../gwos/crates/types/" }
 gw-smt     = { path = "../../crates/smt/" }
 gw-store     = { path = "../../crates/store/" }
 gw-utils     = { path = "../../crates/utils/" }
-gw-config    = { path = "../../crates/config/", features = "no-builtin" }
+gw-config    = { path = "../../crates/config/", features = ["no-builtin"] }
 gw-traits    = { path = "../../crates/traits/" }
 gw-generator = { path = "../../crates/generator/" }
 
