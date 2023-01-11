@@ -34,9 +34,9 @@ fn main() {
 
 #[cfg(not(feature = "no-builtin"))]
 fn main() {
-    // Copy polyjuice v1.5.1 files
+    // Copy polyjuice v1.5.2 files
     {
-        let path = Path::new(BINARIES_DIR).join("godwoken-polyjuice-v1.5.1/generator");
+        let path = Path::new(BINARIES_DIR).join("godwoken-polyjuice-v1.5.2/generator");
         if !path.exists() {
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             let src = Path::new(GWOS_EVM_DIR).join("generator");
@@ -88,7 +88,7 @@ fn main() {
             h256!("0xf89d4eb312fa4b8df9a3acc0a25f870201106825d9a609612c61aa8263cda1b8"),
         ),
         (
-            "godwoken-polyjuice-v1.5.1/generator",
+            "godwoken-polyjuice-v1.5.2/generator",
             h256!("0x9589669de5cb1b7a1b97bd5679f9e480be264a34958e4aea8f15504cab19f61d"),
         ),
     ] {

@@ -143,7 +143,7 @@ backend_type = 'Polyjuice'
 [[backend_forks]]
 fork_height = 304440
 [[backend_forks.backends]]
-generator = { bundled = 'builtin/godwoken-polyjuice-v1.5.1/generator' }
+generator = { bundled = 'builtin/godwoken-polyjuice-v1.5.2/generator' }
 generator_checksum = '0x9589669de5cb1b7a1b97bd5679f9e480be264a34958e4aea8f15504cab19f61d'
 validator_script_type_hash = '0x83d5d8841518e8db686909d27c821398491f475ed5f1cd392c36e83f4252c4ac'
 backend_type = 'Polyjuice'
