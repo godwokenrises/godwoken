@@ -34,8 +34,6 @@ exclude = [
  # other godwoken crates. This also makes rust-analyzer and cargo faster when
  # working on godwoken.
  "crates/autorocks",
- # gw-builtin-binaries is separate released, so we put it in its own workspace
- "crates/builtin-binaries",
  "gwos-evm/polyjuice-tests",
  "gwos/contracts",
 ]

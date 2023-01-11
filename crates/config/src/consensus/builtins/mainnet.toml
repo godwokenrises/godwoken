@@ -101,17 +101,17 @@ sudt_proxy.address_list = [
 ]
 
 [[backend_forks.backends]]
-generator = { bundled = 'builtin/godwoken-scripts/meta-contract-generator' }
+generator = { bundled = 'builtin/gwos-v1.3.0-rc1/meta-contract-generator' }
 generator_checksum = '0xb1544a9736a1f47c00b1509f9a0b16d001c3c1e3ed7eafecd6f669f96398ef8e'
 validator_script_type_hash = '0x2c0b586137cb942f92cc3f84f62d77924b560e4088667f6f47012ecfa828e184'
 backend_type = 'Meta'
 [[backend_forks.backends]]
-generator = { bundled = 'builtin/godwoken-scripts/sudt-generator' }
+generator = { bundled = 'builtin/gwos-v1.3.0-rc1/sudt-generator' }
 generator_checksum = '0xf543d621e9e1655b0f4c9291114e1680dfe25a2364637a9e67f3a0bc5a7c8054'
 validator_script_type_hash = '0x990027acd7058ec1b45df9d7448c0c5407fc17dde4b9b769f594d613c8053084'
 backend_type = 'Sudt'
 [[backend_forks.backends]]
-generator = { bundled = 'builtin/godwoken-scripts/eth-addr-reg-generator' }
+generator = { bundled = 'builtin/gwos-v1.3.0-rc1/eth-addr-reg-generator' }
 generator_checksum = '0x2aa7b75eb466b754cff54463702860f8477c266c2446cea98cd26b82bf67d5dd'
 validator_script_type_hash = '0xc55c5ede907d13ac1e744cff8ce4386b9dc5aad905d8f3badfd9419efe49eeb2'
 backend_type = 'EthAddrReg'
@@ -143,7 +143,7 @@ backend_type = 'Polyjuice'
 [[backend_forks]]
 fork_height = 304440
 [[backend_forks.backends]]
-generator = { bundled = 'builtin/godwoken-polyjuice/generator' }
+generator = { bundled = 'builtin/godwoken-polyjuice-v1.5.1/generator' }
 generator_checksum = '0x9589669de5cb1b7a1b97bd5679f9e480be264a34958e4aea8f15504cab19f61d'
 validator_script_type_hash = '0x83d5d8841518e8db686909d27c821398491f475ed5f1cd392c36e83f4252c4ac'
 backend_type = 'Polyjuice'

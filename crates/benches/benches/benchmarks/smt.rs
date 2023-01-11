@@ -47,12 +47,12 @@ use pprof::criterion::{Output, PProfProfiler};
 
 // meta contract
 const META_GENERATOR_PATH: &str =
-    "../../crates/builtin-binaries/builtin/godwoken-scripts/meta-contract-generator";
+    "../../crates/builtin-binaries/builtin/gwos-v1.3.0-rc1/meta-contract-generator";
 const META_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [1u8; 32];
 
 // sudt contract
 const SUDT_GENERATOR_PATH: &str =
-    "../../crates/builtin-binaries/builtin/godwoken-scripts/sudt-generator";
+    "../../crates/builtin-binaries/builtin/gwos-v1.3.0-rc1/sudt-generator";
 const SUDT_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [2u8; 32];
 
 // always success lock

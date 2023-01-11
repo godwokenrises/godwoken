@@ -246,7 +246,7 @@ dependencies = [
 
 [[package]]
 name = "gw-common"
-version = "1.8.0-rc2"
+version = "1.8.0-rc3"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
@@ -256,7 +256,7 @@ dependencies = [
 
 [[package]]
 name = "gw-hash"
-version = "1.8.0-rc2"
+version = "1.8.0-rc3"
 dependencies = [
  "blake2b-ref",
 ]
@@ -271,7 +271,7 @@ dependencies = [
 
 [[package]]
 name = "gw-types"
-version = "1.8.0-rc2"
+version = "1.8.0-rc3"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
