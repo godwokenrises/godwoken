@@ -81,29 +81,25 @@ mockRpc.getNodeInfo = async () => {
   const nodeInfo: NodeInfo = {
     backends: [
       {
-        validator_code_hash: "",
-        generator_code_hash: "",
+        generator_checksum: "",
         validator_script_type_hash:
           "0x32923ebad8e5417ae072decc89774324ec4a623f57af5cee6e2901d29d8e6691",
         backend_type: BackendType.Meta,
       },
       {
-        validator_code_hash: "",
-        generator_code_hash: "",
+        generator_checksum: "",
         validator_script_type_hash:
           "0x9b599c7df5d7b813f7f9542a5c8a0c12b65261a081b1dba02c2404802f772a15",
         backend_type: BackendType.Polyjuice,
       },
       {
-        validator_code_hash: "",
-        generator_code_hash: "",
+        generator_checksum: "",
         validator_script_type_hash:
           "0x696447c51fdb84d0e59850b26bc431425a74daaac070f2b14f5602fbb469912a",
         backend_type: BackendType.Sudt,
       },
       {
-        validator_code_hash: "",
-        generator_code_hash: "",
+        generator_checksum: "",
         validator_script_type_hash:
           "0x59ecd45fc257a761d992507ef2e1acccf43221567f6cf3b1fc6fb9352a7a0ca3",
         backend_type: BackendType.EthAddrReg,

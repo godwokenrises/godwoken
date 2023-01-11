@@ -10,12 +10,12 @@ edition = "2021"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 reqwest = { version = "0.11", features = ["json", "blocking"] }
-ckb-jsonrpc-types = "0.100.0"
-ckb-types = "0.100.0"
-gw-jsonrpc-types = { git = "https://github.com/nervosnetwork/godwoken.git", rev = "6a24f9accd8f4463f122ebe1286412d1f8476247" }
-gw-types = { git = "https://github.com/nervosnetwork/godwoken.git", rev = "6a24f9accd8f4463f122ebe1286412d1f8476247" }
-gw-common = { git = "https://github.com/nervosnetwork/godwoken.git", rev = "6a24f9accd8f4463f122ebe1286412d1f8476247" }
-jsonrpc-core = "17"
+ckb-jsonrpc-types = "0.105.1"
+ckb-types = "0.105.1"
+gw-types = { path = "../../../gwos/crates/types" }
+gw-common = { path = "../../../gwos/crates/common" }
+gw-jsonrpc-types = { path = "../../../crates/jsonrpc-types" }
+jsonrpc-core = "18"
 rand = "0.8"
 anyhow = "1.0"
 thiserror = "1.0"
