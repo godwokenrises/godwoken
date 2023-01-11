@@ -1,6 +1,6 @@
 [package]
 name = "gw-benches"
-version = "1.7.3"
+version = "1.7.4"
 authors = ["Nervos Network"]
 edition = "2018"
 description = "Godwoken benchmarks."

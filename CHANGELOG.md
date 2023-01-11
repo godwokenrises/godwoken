@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.7.4] - 2022-11-27
+
+- Fix community reported security issues. [#932](https://github.com/godwokenrises/godwoken/pull/932)  [#937](https://github.com/godwokenrises/godwoken/pull/937)
+
 ## [v1.7.3] - 2022-11-27
 
 - config: deny unknown fields in the config toml file [#862](https://github.com/godwokenrises/godwoken/pull/862)
