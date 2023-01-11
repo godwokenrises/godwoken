@@ -1,6 +1,6 @@
 # Historical versions refer to checksum.txt
-# https://github.com/godwokenrises/godwoken-docker-prebuilds/pkgs/container/godwoken-prebuilds/49615211?tag=dev-poly1.5.0-202211091419
-FROM ghcr.io/godwokenrises/godwoken-prebuilds:dev-poly1.5.0 as historical-versions
+# https://github.com/godwokenrises/godwoken/pkgs/container/godwoken/62869296?tag=v1.7.4
+FROM ghcr.io/godwokenrises/godwoken:v1.7.4 as historical-versions
 
 ################################################################################
 
@@ -46,8 +46,10 @@ COPY --from=historical-versions /scripts/godwoken-polyjuice-v1.4.4/ \
                                 /scripts/godwoken-polyjuice-v1.4.4/
 COPY --from=historical-versions /scripts/godwoken-polyjuice-v1.4.5/ \
                                 /scripts/godwoken-polyjuice-v1.4.5/
-COPY --from=historical-versions /scripts/godwoken-polyjuice/* \
+COPY --from=historical-versions /scripts/godwoken-polyjuice-v1.5.0/ \
                                 /scripts/godwoken-polyjuice-v1.5.0/
+COPY --from=historical-versions /scripts/godwoken-polyjuice/* \
+                                /scripts/godwoken-polyjuice-v1.5.1/
 
 #################################### latest ####################################
 # COPY [--chown=<user>:<group>] ["<src>",... "<dest>"]
