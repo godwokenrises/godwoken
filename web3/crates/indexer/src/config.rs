@@ -7,7 +7,7 @@ use gw_jsonrpc_types::godwoken::{BackendType, EoaScriptType, GwScriptType};
 use gw_web3_rpc_client::godwoken_rpc_client::GodwokenRpcClient;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IndexerConfig {
     pub l2_sudt_type_script_hash: H256,
     pub polyjuice_type_script_hash: H256,

@@ -270,7 +270,7 @@ pub fn parse_log(item: &LogItem, tx_hash: &H256) -> Result<GwLog> {
                 let mut topic = [0u8; 32];
                 topic.copy_from_slice(&data[offset..offset + 32]);
                 offset += 32;
-                topics.push(topic.into());
+                topics.push(topic);
             }
             if offset != data.len() {
                 return Err(anyhow!(

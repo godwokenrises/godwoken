@@ -125,7 +125,7 @@ impl Web3Indexer {
         block_hash: gw_types::h256::H256,
         id_script_map: &std::collections::HashMap<u32, Option<Script>>,
     ) -> Result<Option<Web3TransactionWithLogs>> {
-        let gw_tx_hash: gw_types::h256::H256 = l2_transaction.hash().into();
+        let gw_tx_hash: gw_types::h256::H256 = l2_transaction.hash();
         let from_id: u32 = l2_transaction.raw().from_id().unpack();
 
         let mock_tx_index: u32 = 0;
@@ -464,7 +464,7 @@ impl Web3Indexer {
         is_update: bool,
     ) -> Result<(usize, usize)> {
         let block_number = l2_block.raw().number().unpack();
-        let block_hash: gw_types::h256::H256 = blake2b_256(l2_block.raw().as_slice()).into();
+        let block_hash: gw_types::h256::H256 = blake2b_256(l2_block.raw().as_slice());
         // let mut cumulative_gas_used: u128 = 0;
         let l2_transactions = l2_block.transactions();
         let l2_transactions_vec: Vec<L2Transaction> = l2_transactions.into_iter().collect();
@@ -604,7 +604,7 @@ impl Web3Indexer {
         gas_used: u128,
     ) -> Result<Web3Block> {
         let block_number = l2_block.raw().number().unpack();
-        let block_hash: gw_types::h256::H256 = l2_block.hash().into();
+        let block_hash: gw_types::h256::H256 = l2_block.hash();
         let parent_hash: gw_types::h256::H256 = l2_block.raw().parent_block_hash().unpack();
         let block_producer: Bytes = l2_block.raw().block_producer().unpack();
         let block_producer_registry_address = RegistryAddress::from_slice(&block_producer);
