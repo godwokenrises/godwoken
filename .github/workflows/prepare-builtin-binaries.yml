@@ -8,6 +8,7 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-20.04
+    if: github.event.pull_request.merged == true
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
@@ -43,20 +44,20 @@ jobs:
         && rm -rf capsule_${CAPSULE_VERSION}_x86_64-linux/
         capsule --version
 
-    - name: Cache of component.gwos
-      id: gwos-cache
-      uses: actions/cache@v3
-      with:
-        path: |
-          gwos/build/release/*
-          gwos/c/build/*-generator
-          gwos/c/build/*-validator
-          gwos/c/build/account_locks/*
-        key: component.gwos-${{ hashFiles('gwos/**') }}
-    - name: Build gwos binaries
-      if: steps.gwos-cache.outputs.cache-hit != 'true'
-      working-directory: gwos
-      run: cd c && make && cd .. && capsule build --release --debug-output
+    # - name: Cache of component.gwos
+    #   id: gwos-cache
+    #   uses: actions/cache@v3
+    #   with:
+    #     path: |
+    #       gwos/build/release/*
+    #       gwos/c/build/*-generator
+    #       gwos/c/build/*-validator
+    #       gwos/c/build/account_locks/*
+    #     key: component.gwos-${{ hashFiles('gwos/**') }}
+    # - name: Build gwos binaries
+    #   if: steps.gwos-cache.outputs.cache-hit != 'true'
+    #   working-directory: gwos
+    #   run: cd c && make && cd .. && capsule build --release --debug-output
 
     - name: Cache of component.gwos-evm
       id: godwoken-polyjuice-cache
@@ -82,7 +83,7 @@ jobs:
     
     - name: Checksum
       working-directory: crates/builtin-binaries/builtin
-      run: find . -not -path checksum.txt -type f -exec sha256sum {} \; > checksum.txt
+      run: bash -c 'sha256sum `find . -not -path checksum.txt -type f | sort` > checksum.txt'
 
     # commit to submodule repo
     - name: Push to godwoken-builtin-binaries repo
@@ -91,8 +92,3 @@ jobs:
         repository: crates/builtin-binaries/builtin
         branch: master
         commit_message: Commit from CI ${{ github.sha }}
-    # update submodule commit
-    - name: Push to godwoken-builtin-binaries repo
-      uses: stefanzweifel/git-auto-commit-action@v4
-      with:
-        commit_message: 'chore: Update godwoken-builtin-binaries ref from ${{ github.sha }}'

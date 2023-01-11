@@ -1,3 +1,4 @@
+#![cfg_attr(feature = "no-builtin", allow(dead_code), allow(unused_imports))]
 //! Build script for crate `gw-builtin-binaries` to bundle the resources.
 use anyhow::{bail, Result};
 use ckb_fixed_hash::{h256, H256};
@@ -25,6 +26,13 @@ fn verify_checksum<P: AsRef<Path> + Debug>(expected_checksum: H256, path: P) -> 
     Ok(())
 }
 
+#[cfg(feature = "no-builtin")]
+fn main() {
+    let bundled = includedir_codegen::start("BUNDLED");
+    bundled.build("bundled.rs").expect("build resource bundle");
+}
+
+#[cfg(not(feature = "no-builtin"))]
 fn main() {
     // Copy polyjuice v1.5.1 files
     {
