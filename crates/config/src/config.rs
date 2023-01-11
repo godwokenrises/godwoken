@@ -125,8 +125,14 @@ pub struct ContractsCellDep {
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RegistryType {
+    #[default]
+    Eth,
+}
+
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RegistryAddressConfig {
-    pub registry_id: u32,
+    pub address_type: RegistryType,
     pub address: JsonBytes,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

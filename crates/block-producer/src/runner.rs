@@ -13,8 +13,10 @@ use anyhow::{anyhow, bail, Context, Result};
 use futures::future::OptionFuture;
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainMockContextBuildArgs};
-use gw_common::{blake2b::new_blake2b, registry_address::RegistryAddress};
-use gw_config::{BlockProducerConfig, Config, ForkConfig, NodeMode};
+use gw_common::{
+    blake2b::new_blake2b, builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress,
+};
+use gw_config::{BlockProducerConfig, Config, ForkConfig, NodeMode, RegistryType};
 use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
     backend_manage::BackendManage,
@@ -489,8 +491,11 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 config.mem_pool.mem_block.clone(),
             );
             let mem_pool = {
+                let registry_id = match block_producer_config.block_producer.address_type {
+                    RegistryType::Eth => ETH_REGISTRY_ACCOUNT_ID,
+                };
                 let block_producer = RegistryAddress::new(
-                    block_producer_config.block_producer.registry_id,
+                    registry_id,
                     block_producer_config
                         .block_producer
                         .address
