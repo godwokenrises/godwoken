@@ -135,7 +135,7 @@ impl Transaction {
         let buf = hasher.finalize();
         let mut tx_hash = [0u8; 32];
         tx_hash.copy_from_slice(&buf);
-        tx_hash.into()
+        tx_hash
     }
 }
 
