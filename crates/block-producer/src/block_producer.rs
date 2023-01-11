@@ -221,9 +221,14 @@ impl BlockProducer {
             .cell_deps_mut()
             .push(contracts_dep.rollup_cell_type.clone().into());
         // rollup config cell
-        tx_skeleton
-            .cell_deps_mut()
-            .push(self.config.rollup_config_cell_dep.clone().into());
+        tx_skeleton.cell_deps_mut().push(
+            rollup_context
+                .fork_config
+                .chain
+                .rollup_config_cell_dep
+                .clone()
+                .into(),
+        );
         // deposit lock dep
         if !deposit_cells.is_empty() {
             let cell_dep: CellDep = contracts_dep.deposit_cell_lock.clone().into();

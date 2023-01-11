@@ -127,11 +127,6 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
             let lock = gw_types::packed::Script::new_unchecked(lock.as_bytes());
             lock.into()
         },
-        burn_lock: {
-            let lock: ckb_types::packed::Script = user_rollup_config.burn_lock.clone().into();
-            let lock = gw_types::packed::Script::new_unchecked(lock.as_bytes());
-            lock.into()
-        },
     };
 
     let wallet_config: WalletConfig = WalletConfig {
@@ -218,6 +213,13 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         genesis_committed_info,
         rollup_type_script,
         skipped_invalid_block_list: Default::default(),
+        burn_lock: {
+            let lock: ckb_types::packed::Script = user_rollup_config.burn_lock.clone().into();
+            let lock = gw_types::packed::Script::new_unchecked(lock.as_bytes());
+            lock.into()
+        },
+        // cell deps
+        rollup_config_cell_dep,
     };
 
     let genesis: GenesisConfig = GenesisConfig {
@@ -256,8 +258,6 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
             registry_id: ETH_REGISTRY_ACCOUNT_ID,
             address: JsonBytes::from_vec(block_producer_address),
         },
-        // cell deps
-        rollup_config_cell_dep,
         challenger_config,
         wallet_config: Some(wallet_config),
         ..Default::default()

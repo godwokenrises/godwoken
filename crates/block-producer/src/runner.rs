@@ -14,7 +14,7 @@ use futures::future::OptionFuture;
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainMockContextBuildArgs};
 use gw_common::{blake2b::new_blake2b, registry_address::RegistryAddress};
-use gw_config::{BlockProducerConfig, Config, NodeMode};
+use gw_config::{BlockProducerConfig, Config, ForkConfig, NodeMode};
 use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
     backend_manage::BackendManage,
@@ -263,7 +263,7 @@ pub struct BaseInitComponents {
     pub rpc_client: RPCClient,
     pub store: Store,
     pub generator: Arc<Generator>,
-    pub contracts_dep_manager: Option<ContractsCellDepManager>,
+    pub contracts_dep_manager: ContractsCellDepManager,
 }
 
 impl BaseInitComponents {
@@ -293,24 +293,23 @@ impl BaseInitComponents {
             )
         };
 
-        let mut contracts_dep_manager = None;
         let opt_block_producer_config = config.block_producer.as_ref();
-        if let Some(block_producer_config) = opt_block_producer_config {
-            use gw_rpc_client::contract::check_script;
-            let script_config = consensus.system_type_scripts.clone();
-            let rollup_type_script = &consensus.chain.rollup_type_script;
-            let rollup_config_cell_dep = block_producer_config.rollup_config_cell_dep.clone();
+        use gw_rpc_client::contract::check_script;
+        let script_config = consensus.system_type_scripts.clone();
+        let rollup_type_script = consensus.chain.rollup_type_script.clone();
+        let rollup_config_cell_dep = rollup_context
+            .fork_config
+            .chain
+            .rollup_config_cell_dep
+            .clone();
 
-            check_script(&script_config, &rollup_config, rollup_type_script)?;
-            contracts_dep_manager = Some(
-                ContractsCellDepManager::build(
-                    rpc_client.clone(),
-                    script_config,
-                    rollup_config_cell_dep,
-                )
-                .await?,
-            );
-        }
+        check_script(&script_config, &rollup_config, &rollup_type_script)?;
+        let contracts_dep_manager = ContractsCellDepManager::build(
+            rpc_client.clone(),
+            script_config,
+            rollup_config_cell_dep,
+        )
+        .await?;
 
         if !skip_config_check {
             check_ckb_version(&rpc_client).await?;
@@ -318,9 +317,8 @@ impl BaseInitComponents {
             if NodeMode::ReadOnly != config.node_mode {
                 let block_producer_config =
                     opt_block_producer_config.ok_or_else(|| anyhow!("not set block producer"))?;
-                check_rollup_config_cell(block_producer_config, &rollup_config, &rpc_client)
-                    .await?;
-                check_locks(block_producer_config, &rollup_config)?;
+                check_rollup_config_cell(consensus.as_ref(), &rollup_config, &rpc_client).await?;
+                check_locks(block_producer_config, consensus.as_ref(), &rollup_config)?;
             }
         }
 
@@ -405,7 +403,7 @@ impl BaseInitComponents {
             rollup_config,
             rollup_config_hash,
             rollup_context,
-            rollup_type_script,
+            rollup_type_script: rollup_type_script.into(),
             builtin_load_data,
             ckb_genesis_info,
             rpc_client,
@@ -428,10 +426,7 @@ impl BaseInitComponents {
         let ckb_genesis_info = gw_challenge::offchain::CKBGenesisInfo {
             sighash_dep: self.ckb_genesis_info.sighash_dep(),
         };
-        let contracts_dep_manager = self
-            .contracts_dep_manager
-            .clone()
-            .ok_or_else(|| anyhow!("expect contracts dep manager"))?;
+        let contracts_dep_manager = self.contracts_dep_manager.clone();
 
         let build_args = OffChainMockContextBuildArgs {
             rpc_client: &self.rpc_client,
@@ -592,8 +587,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 .block_producer
                 .clone()
                 .ok_or_else(|| anyhow!("must provide block producer config in mode: {:?}", mode))?;
-            let contracts_dep_manager =
-                contracts_dep_manager.ok_or_else(|| anyhow!("must build contracts dep"))?;
             let wallet =
                 wallet.ok_or_else(|| anyhow!("wallet must be enabled in mode: {:?}", mode))?;
             let offchain_mock_context = {
@@ -984,13 +977,14 @@ async fn check_ckb_version(rpc_client: &RPCClient) -> Result<()> {
 }
 
 async fn check_rollup_config_cell(
-    block_producer_config: &BlockProducerConfig,
+    fork_config: &ForkConfig,
     rollup_config: &RollupConfig,
     rpc_client: &RPCClient,
 ) -> Result<()> {
     let rollup_config_cell = rpc_client
         .get_cell(
-            block_producer_config
+            fork_config
+                .chain
                 .rollup_config_cell_dep
                 .out_point
                 .clone()
@@ -1035,23 +1029,20 @@ async fn check_rollup_config_cell(
 
 fn check_locks(
     block_producer_config: &BlockProducerConfig,
+    fork_config: &ForkConfig,
     rollup_config: &RollupConfig,
 ) -> Result<()> {
     let zeros = ckb_fixed_hash::H256([0u8; 32]);
 
     // check burn lock
-    if zeros != block_producer_config.challenger_config.burn_lock.code_hash {
+    if zeros != fork_config.chain.burn_lock.code_hash {
         return Err(anyhow!(
             "[block_producer.challenger.burn_lock.code_hash] is expected to be zero"
         ));
     }
 
     let burn_lock_hash = {
-        let script: gw_types::packed::Script = block_producer_config
-            .challenger_config
-            .burn_lock
-            .clone()
-            .into();
+        let script: gw_types::packed::Script = fork_config.chain.burn_lock.clone().into();
         script.hash().pack()
     };
     if burn_lock_hash != rollup_config.burn_lock_hash() {
