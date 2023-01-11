@@ -110,7 +110,13 @@ impl OffChainMockContext {
         let rollup_deps: Vec<CellDep> = {
             let mut deps = vec![
                 mock_rollup.cell_deps().rollup_cell_type.clone().into(),
-                mock_rollup.config.rollup_config_cell_dep.clone().into(),
+                mock_rollup
+                    .rollup_context
+                    .fork_config
+                    .chain
+                    .rollup_config_cell_dep
+                    .clone()
+                    .into(),
                 mock_rollup.cell_deps().challenge_cell_lock.clone().into(),
                 mock_rollup.ckb_genesis_info.sighash_dep.clone(),
             ];

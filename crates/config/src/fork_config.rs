@@ -62,6 +62,8 @@ pub struct ChainConfig {
     pub skipped_invalid_block_list: Vec<H256>,
     pub genesis_committed_info: L2BlockCommittedInfo,
     pub rollup_type_script: Script,
+    pub rollup_config_cell_dep: CellDep,
+    pub burn_lock: Script,
 }
 
 /// Genesis config

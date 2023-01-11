@@ -228,7 +228,12 @@ impl Challenger {
         // Rollup
         let rollup_deps = vec![
             contracts_dep.rollup_cell_type.clone().into(),
-            self.config.rollup_config_cell_dep.clone().into(),
+            self.rollup_context
+                .fork_config
+                .chain
+                .rollup_config_cell_dep
+                .clone()
+                .into(),
             contracts_dep.omni_lock.clone().into(),
         ];
         let rollup_output = (
@@ -292,7 +297,13 @@ impl Challenger {
         )?;
 
         let challenge_cell = to_cell_info(challenge_cell);
-        let burn_lock = self.config.challenger_config.burn_lock.clone().into();
+        let burn_lock = self
+            .rollup_context
+            .fork_config
+            .chain
+            .burn_lock
+            .clone()
+            .into();
         let owner_lock = self.wallet.lock_script().to_owned();
         let mut cancel_output = gw_challenge::cancel_challenge::build_output(
             &self.rollup_context,
@@ -452,7 +463,13 @@ impl Challenger {
             query.await?
         };
         let prev_state = rollup_state.get_state().to_owned();
-        let burn_lock = self.config.challenger_config.burn_lock.clone().into();
+        let burn_lock = self
+            .rollup_context
+            .fork_config
+            .chain
+            .burn_lock
+            .clone()
+            .into();
         let revert = Revert::new(
             self.rollup_context.clone(),
             prev_state,
@@ -471,7 +488,12 @@ impl Challenger {
         // Rollup
         let rollup_deps = vec![
             contracts_dep.rollup_cell_type.clone().into(),
-            self.config.rollup_config_cell_dep.clone().into(),
+            self.rollup_context
+                .fork_config
+                .chain
+                .rollup_config_cell_dep
+                .clone()
+                .into(),
             contracts_dep.omni_lock.clone().into(),
         ];
         let rollup_output = (
@@ -574,7 +596,12 @@ impl Challenger {
         // Rollup
         let rollup_deps = vec![
             contracts_dep.rollup_cell_type.clone().into(),
-            self.config.rollup_config_cell_dep.clone().into(),
+            self.rollup_context
+                .fork_config
+                .chain
+                .rollup_config_cell_dep
+                .clone()
+                .into(),
             contracts_dep.omni_lock.clone().into(),
         ];
         let rollup_output = (

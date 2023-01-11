@@ -131,6 +131,18 @@ code_hash = '0x1e44736436b406f8e48a30dfbddcf044feb0c9eebfe63b0f81cb5bb727d84854'
 hash_type = 'type'
 args = '0x86c7429247beba7ddd6e4361bcdfc0510b0b644131e2afb7e486375249a01802'
 
+[chain.rollup_config_cell_dep]
+dep_type = 'code'
+
+[chain.rollup_config_cell_dep.out_point]
+tx_hash = '0xcd52d714ddea04d2917892f16d47cbd0bbbb7d9ba281233ec4021f79fc34bccc'
+index = '0x0'
+
+[chain.burn_lock]
+code_hash = '0x0000000000000000000000000000000000000000000000000000000000000000'
+hash_type = 'data'
+args = '0x'
+
 [system_type_scripts.state_validator]
 code_hash = '0x00000000000000000000000000000000000000000000000000545950455f4944'
 hash_type = 'type'

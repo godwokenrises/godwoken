@@ -107,7 +107,6 @@ pub struct WalletConfig {
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChallengerConfig {
     pub rewards_receiver_lock: Script,
-    pub burn_lock: Script,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -138,7 +137,6 @@ pub struct BlockProducerConfig {
     #[serde(flatten)]
     pub psc_config: PscConfig,
     pub block_producer: RegistryAddressConfig,
-    pub rollup_config_cell_dep: CellDep,
     pub challenger_config: ChallengerConfig,
     pub wallet_config: Option<WalletConfig>,
     pub withdrawal_unlocker_wallet_config: Option<WalletConfig>,
@@ -151,7 +149,6 @@ impl Default for BlockProducerConfig {
             fee_rate: 1000,
             psc_config: PscConfig::default(),
             block_producer: RegistryAddressConfig::default(),
-            rollup_config_cell_dep: CellDep::default(),
             challenger_config: ChallengerConfig::default(),
             wallet_config: None,
             withdrawal_unlocker_wallet_config: None,

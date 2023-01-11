@@ -53,10 +53,13 @@ pub fn mock_cancel_challenge_tx(
     context: VerifyContext,
     load_data_strategy: Option<LoadDataStrategy>,
 ) -> Result<MockOutput> {
-    let burn_lock = {
-        let challenger_config = &mock_rollup.config.challenger_config;
-        challenger_config.burn_lock.clone().into()
-    };
+    let burn_lock = mock_rollup
+        .rollup_context
+        .fork_config
+        .chain
+        .burn_lock
+        .clone()
+        .into();
     let owner_lock = mock_rollup.wallet.lock_script().to_owned();
 
     let challenge_input = mock_rollup.mock_challenge_cell(challenge_target);
@@ -94,7 +97,13 @@ pub fn mock_cancel_challenge_tx(
 
     let rollup_deps = vec![
         contracts_dep.rollup_cell_type.clone().into(),
-        mock_rollup.config.rollup_config_cell_dep.clone().into(),
+        mock_rollup
+            .rollup_context
+            .fork_config
+            .chain
+            .rollup_config_cell_dep
+            .clone()
+            .into(),
         contracts_dep.omni_lock.clone().into(),
     ];
     let rollup_output = (
