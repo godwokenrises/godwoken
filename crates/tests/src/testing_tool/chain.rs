@@ -40,7 +40,7 @@ use std::{fs, path::PathBuf, sync::Arc};
 
 use super::mem_pool_provider::DummyMemPoolProvider;
 
-const SCRIPT_DIR: &str = "../../crates/builtin-binaries/builtin/godwoken-scripts";
+const SCRIPT_DIR: &str = "../../crates/builtin-binaries/builtin/gwos-v1.3.0-rc1";
 const ALWAYS_SUCCESS_PATH: &str = "always-success";
 const WITHDRAWAL_LOCK_PATH: &str = "withdrawal-lock";
 const STATE_VALIDATOR_TYPE_PATH: &str = "state-validator";
@@ -169,7 +169,7 @@ lazy_static! {
 
 // meta contract
 pub const META_GENERATOR_PATH: &str =
-    "../../crates/builtin-binaries/builtin/godwoken-scripts/meta-contract-generator";
+    "../../crates/builtin-binaries/builtin/gwos-v1.3.0-rc1/meta-contract-generator";
 pub const META_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [1u8; 32];
 pub const ETH_REGISTRY_SCRIPT_TYPE_HASH: [u8; 32] = [2u8; 32];
 #[cfg(feature = "scripts")]
@@ -177,15 +177,15 @@ pub const SUDT_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [3u8; 32];
 
 // simple UDT
 pub const SUDT_VALIDATOR_PATH: &str =
-    "../../crates/builtin-binaries/builtin/godwoken-scripts/sudt-validator";
+    "../../crates/builtin-binaries/builtin/gwos-v1.3.0-rc1/sudt-validator";
 pub const SUDT_GENERATOR_PATH: &str =
-    "../../crates/builtin-binaries/builtin/godwoken-scripts/sudt-generator";
+    "../../crates/builtin-binaries/builtin/gwos-v1.3.0-rc1/sudt-generator";
 
 // eth eoa mapping registry
 pub const ETH_REGISTRY_VALIDATOR_PATH: &str =
-    "../../crates/builtin-binaries/builtin/godwoken-scripts/eth-addr-reg-generator";
+    "../../crates/builtin-binaries/builtin/gwos-v1.3.0-rc1/eth-addr-reg-generator";
 pub const ETH_REGISTRY_GENERATOR_PATH: &str =
-    "../../crates/builtin-binaries/builtin/godwoken-scripts/eth-addr-reg-validator";
+    "../../crates/builtin-binaries/builtin/gwos-v1.3.0-rc1/eth-addr-reg-validator";
 
 // polyjuice
 pub const POLYJUICE_VALIDATOR_PATH: &str =

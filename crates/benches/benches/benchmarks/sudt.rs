@@ -37,12 +37,12 @@ const DUMMY_SUDT_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [3u8; 32];
 
 // meta contract
 const META_GENERATOR_PATH: &str =
-    "../../crates/builtin-binaries/builtin/godwoken-scripts/meta-contract-generator";
+    "../../crates/builtin-binaries/builtin/gwos-v1.3.0-rc1/meta-contract-generator";
 const META_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [1u8; 32];
 
 // simple UDT
 const SUDT_GENERATOR_PATH: &str =
-    "../../crates/builtin-binaries/builtin/godwoken-scripts/sudt-generator";
+    "../../crates/builtin-binaries/builtin/gwos-v1.3.0-rc1/sudt-generator";
 
 fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
     let sudt_validator_script_type_hash: [u8; 32] =

@@ -7,6 +7,7 @@ use std::fmt::Debug;
 use std::path::Path;
 
 const BINARIES_DIR: &str = "builtin";
+const GWOS_EVM_DIR: &str = "../../gwos-evm/build";
 
 fn verify_checksum<P: AsRef<Path> + Debug>(expected_checksum: H256, path: P) -> Result<()> {
     let content = std::fs::read(&path)?;
@@ -25,19 +26,29 @@ fn verify_checksum<P: AsRef<Path> + Debug>(expected_checksum: H256, path: P) -> 
 }
 
 fn main() {
+    // Copy polyjuice v1.5.1 files
+    {
+        let path = Path::new(BINARIES_DIR).join("godwoken-polyjuice-v1.5.1/generator");
+        if !path.exists() {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let src = Path::new(GWOS_EVM_DIR).join("generator");
+            std::fs::copy(src, path).unwrap();
+        }
+    }
+
     let mut bundled = includedir_codegen::start("BUNDLED");
 
     for (path, checksum) in [
         (
-            "godwoken-scripts/meta-contract-generator",
+            "gwos-v1.3.0-rc1/meta-contract-generator",
             h256!("0xb1544a9736a1f47c00b1509f9a0b16d001c3c1e3ed7eafecd6f669f96398ef8e"),
         ),
         (
-            "godwoken-scripts/sudt-generator",
+            "gwos-v1.3.0-rc1/sudt-generator",
             h256!("0xf543d621e9e1655b0f4c9291114e1680dfe25a2364637a9e67f3a0bc5a7c8054"),
         ),
         (
-            "godwoken-scripts/eth-addr-reg-generator",
+            "gwos-v1.3.0-rc1/eth-addr-reg-generator",
             h256!("0x2aa7b75eb466b754cff54463702860f8477c266c2446cea98cd26b82bf67d5dd"),
         ),
         (
@@ -69,7 +80,7 @@ fn main() {
             h256!("0xf89d4eb312fa4b8df9a3acc0a25f870201106825d9a609612c61aa8263cda1b8"),
         ),
         (
-            "godwoken-polyjuice/generator",
+            "godwoken-polyjuice-v1.5.1/generator",
             h256!("0x9589669de5cb1b7a1b97bd5679f9e480be264a34958e4aea8f15504cab19f61d"),
         ),
     ] {

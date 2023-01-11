@@ -42,3 +42,6 @@
 	path = crates/autorocks/autorocks-sys/snappy
 	url = https://github.com/google/snappy.git
         shadow = true
+[submodule "crates/builtin-binaries/builtin"]
+	path = crates/builtin-binaries/builtin
+	url = https://github.com/jjyr/godwoken-builtin-binaries.git

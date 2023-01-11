@@ -28,8 +28,8 @@ pub struct Config {
     pub liveness_duration_secs: Option<u64>,
     #[serde(default)]
     pub contract_log_config: ContractLogConfig,
-    pub debug_backend_forks: Option<Vec<BackendForkConfig>>,
     pub consensus: Consensus,
+    pub debug_backend_forks: Option<Vec<BackendForkConfig>>,
     pub rpc_client: RPCClientConfig,
     pub rpc_server: RPCServerConfig,
     #[serde(default)]

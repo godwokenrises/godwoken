@@ -47,10 +47,10 @@ pub struct BackendForkConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BackendConfig {
-    pub generator: Resource,
     pub generator_checksum: H256,
     pub validator_script_type_hash: H256,
     pub backend_type: BackendType,
+    pub generator: Resource,
 }
 
 /// Onchain rollup cell config
@@ -72,14 +72,16 @@ pub struct GenesisConfig {
     pub rollup_type_hash: H256,
     pub meta_contract_validator_type_hash: H256,
     pub eth_registry_validator_type_hash: H256,
-    pub rollup_config: RollupConfig,
     // For load secp data and use in challenge transaction
     pub secp_data_dep: CellDep,
+    pub rollup_config: RollupConfig,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SystemTypeScriptConfig {
+    pub allowed_eoa_scripts: Vec<Script>,
+    pub allowed_contract_scripts: Vec<Script>,
     pub state_validator: Script,
     pub deposit_lock: Script,
     pub stake_lock: Script,
@@ -88,8 +90,6 @@ pub struct SystemTypeScriptConfig {
     pub challenge_lock: Script,
     pub l1_sudt: Script,
     pub omni_lock: Script,
-    pub allowed_eoa_scripts: Vec<Script>,
-    pub allowed_contract_scripts: Vec<Script>,
 }
 
 /// Fork changes and activation heights.

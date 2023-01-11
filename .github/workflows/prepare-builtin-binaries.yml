@@ -1,8 +1,9 @@
-name: Publish gw-builtin-binaries
+name: Prepare gw-builtin-binaries
 
 on:
   push:
-    tags: [ 'builtin-binaries-v*.*.*' ]
+    paths:
+      - 'crates/builtin-binaries/build.rs'
 
 jobs:
   publish:
@@ -12,6 +13,7 @@ jobs:
       uses: actions/checkout@v3
       with:
         submodules: true
+        token: ${{ secrets.PAT }}
 
     - uses: actions/cache@v3
       with:
@@ -36,7 +38,9 @@ jobs:
         (which capsule && test "$(capsule --version)" = "Capsule 0.7.0") \
         || curl -OL https://github.com/nervosnetwork/capsule/releases/download/${CAPSULE_VERSION}/capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz \
         && tar xf capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz \
-        && mv capsule_${CAPSULE_VERSION}_x86_64-linux/capsule ~/.cargo/bin/
+        && mv capsule_${CAPSULE_VERSION}_x86_64-linux/capsule ~/.cargo/bin/ \
+        && rm capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz \
+        && rm -rf capsule_${CAPSULE_VERSION}_x86_64-linux/
         capsule --version
 
     - name: Cache of component.gwos
@@ -62,6 +66,7 @@ jobs:
           gwos-evm/build/*generator*
           gwos-evm/build/*validator*
         key: component.gwos-evm-${{ hashFiles('gwos-evm/**') }}
+
     - name: Build godwoken-polyjuice
       if: steps.godwoken-polyjuice-cache.outputs.cache-hit != 'true'
       working-directory: gwos-evm
@@ -70,10 +75,24 @@ jobs:
         make all-via-docker
     - name: Copy contracts from prebuild docker images
       run: devtools/fetch-binaries.sh
-    - name: cargo login
-      run: cargo login $CRATES_IO_TOKEN
-      env:
-        CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
-    - name: cargo publish
-      working-directory: crates/builtin-binaries
-      run: cargo publish --allow-dirty
+
+    - name: Run build script of gw-builtin-binaries
+      run: |
+        cargo build -p gw-builtin-binaries
+    
+    - name: Checksum
+      working-directory: crates/builtin-binaries/builtin
+      run: find . -not -path checksum.txt -type f -exec sha256sum {} \; > checksum.txt
+
+    # commit to submodule repo
+    - name: Push to godwoken-builtin-binaries repo
+      uses: stefanzweifel/git-auto-commit-action@v4
+      with:
+        repository: crates/builtin-binaries/builtin
+        branch: master
+        commit_message: Commit from CI ${{ github.sha }}
+    # update submodule commit
+    - name: Push to godwoken-builtin-binaries repo
+      uses: stefanzweifel/git-auto-commit-action@v4
+      with:
+        commit_message: 'chore: Update godwoken-builtin-binaries ref from ${{ github.sha }}'
