@@ -1,4 +1,4 @@
-# Run command in ghcr.io/godwokenrises/godwoken-prebuilds:dev-poly1.5.0
+# Run command in ghcr.io/godwokenrises/godwoken:1.7.4-poly.1.5.1
 # ```bash
 # find /scripts -type f -exec sha1sum {} \;
 # ```
@@ -21,6 +21,21 @@ cb92414b9d489115880bb09c8d0a2df60839d471  /scripts/godwoken-scripts/tron-account
 0f2d54a4b0c016404f8f6e80b5d538ee0f4411e8  /scripts/godwoken-scripts/withdrawal-lock
 0f22b0f4249504a01d9eb615ae03176f5a1d5ac3  /scripts/godwoken-scripts/challenge-lock
 dab522b3b5a7c6fd179915f9059dac92891756eb  /scripts/godwoken-scripts/omni_lock
+
+############################## polyjuice-v1.5.1 ################################
+# https://github.com/godwokenrises/godwoken/tree/v1.7.4/gwos-evm
+6ae81c9d2218cd44cc8281332bdb8d8cf158e958  /scripts/godwoken-polyjuice-v1.5.1/generator
+57e33d6e9b70d40c2f7c28279f054c8da2034bdc  /scripts/godwoken-polyjuice-v1.5.1/generator.asm
+681b8ae765449fa8b7fe2e1db033b067b9003e23  /scripts/godwoken-polyjuice-v1.5.1/generator_log
+352de638e353651dcb40f0b8def95b9589804934  /scripts/godwoken-polyjuice-v1.5.1/generator_log.asm
+835f3cf6313a37a212a47b3741c628c6c41e8222  /scripts/godwoken-polyjuice-v1.5.1/validator
+be7aa2bf11d437dcfec1c2682dee36e8aa8d4e5e  /scripts/godwoken-polyjuice-v1.5.1/validator_log
+6ae81c9d2218cd44cc8281332bdb8d8cf158e958  /scripts/godwoken-polyjuice-v1.5.1/generator.aot
+eddb699820956ca01a05a10195dafff8d039697a  /scripts/godwoken-polyjuice-v1.5.1/validator.debug
+681b8ae765449fa8b7fe2e1db033b067b9003e23  /scripts/godwoken-polyjuice-v1.5.1/generator_log.aot
+fdd89112a1219ba4b3b6639bdc119aba670c4102  /scripts/godwoken-polyjuice-v1.5.1/validator_log.debug
+9335c87f73afa1cf9886d0c6b063e4f03d7c35cb  /scripts/godwoken-polyjuice-v1.5.1/generator.debug
+e17d04ff044f05d41cf4940ed410ded3d74abfe1  /scripts/godwoken-polyjuice-v1.5.1/generator_log.debug
 
 ############################## polyjuice-v1.5.0 ################################
 # https://github.com/godwokenrises/godwoken-polyjuice/releases/tag/1.5.0
