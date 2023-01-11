@@ -69,3 +69,9 @@ jobs:
         MANUAL_BUILD_POLYJUICE=true
         POLYJUICE_GIT_URL=https://github.com/${{ github.repository }}
         POLYJUICE_GIT_CHECKOUT=${{ github.ref }}
+        MANUAL_BUILD_WEB3=true
+        MANUAL_BUILD_WEB3_INDEXER=true
+        WEB3_GIT_URL="https://github.com/${{ github.repository }}"
+        WEB3_GIT_CHECKOUT=${{ github.ref }}
+        GODWOKEN_KICKER_REPO=jjyr/godwoken-kicker
+        GODWOKEN_KICKER_REF=build-web3-indexer-in-monorepo
