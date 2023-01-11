@@ -6,7 +6,7 @@ pub use gw_common::{
 };
 use gw_types::h256::*;
 
-use gw_config::{BackendConfig, BackendForkConfig, BackendType, ForkConfig, SUDTProxyConfig};
+use gw_config::{BackendConfig, BackendForkConfig, BackendType, ForkConfig, Resource};
 pub use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
     backend_manage::{Backend, BackendManage},
@@ -29,7 +29,7 @@ use gw_types::{
     prelude::*,
     U256,
 };
-use gw_utils::RollupContext;
+use gw_utils::{checksum::file_checksum, RollupContext};
 use rlp::RlpStream;
 use std::{convert::TryInto, fs, io::Read, path::PathBuf, sync::Arc};
 
@@ -441,33 +441,32 @@ pub fn setup() -> (Store, DummyState, Generator) {
     // ==== Build generator
     let fork_configs = vec![BackendForkConfig {
         fork_height: 0,
-        sudt_proxy: SUDTProxyConfig {
-            permit_sudt_transfer_from_dangerous_contract: false,
-            address_list: Vec::new(),
-        },
+        sudt_proxy: None,
         backends: vec![
             BackendConfig {
                 backend_type: BackendType::Meta,
-                validator_path: META_VALIDATOR_PATH.into(),
-                generator_path: META_GENERATOR_PATH.into(),
+                generator: Resource::file_system(META_GENERATOR_PATH.into()),
+                generator_checksum: file_checksum(META_GENERATOR_PATH).unwrap().into(),
                 validator_script_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
             },
             BackendConfig {
                 backend_type: BackendType::Sudt,
-                validator_path: SUDT_VALIDATOR_PATH.into(),
-                generator_path: SUDT_GENERATOR_PATH.into(),
+                generator: Resource::file_system(SUDT_GENERATOR_PATH.into()),
+                generator_checksum: file_checksum(SUDT_GENERATOR_PATH).unwrap().into(),
                 validator_script_type_hash: SUDT_VALIDATOR_SCRIPT_TYPE_HASH.into(),
             },
             BackendConfig {
                 backend_type: BackendType::Polyjuice,
-                validator_path: POLYJUICE_VALIDATOR_NAME.into(),
-                generator_path: POLYJUICE_GENERATOR_NAME.into(),
+                generator: Resource::file_system(POLYJUICE_GENERATOR_NAME.into()),
+                generator_checksum: file_checksum(POLYJUICE_GENERATOR_NAME).unwrap().into(),
                 validator_script_type_hash: (*POLYJUICE_PROGRAM_CODE_HASH).into(),
             },
             BackendConfig {
                 backend_type: BackendType::EthAddrReg,
-                validator_path: ETH_ADDRESS_REGISTRY_VALIDATOR_NAME.into(),
-                generator_path: ETH_ADDRESS_REGISTRY_GENERATOR_NAME.into(),
+                generator: Resource::file_system(ETH_ADDRESS_REGISTRY_GENERATOR_NAME.into()),
+                generator_checksum: file_checksum(ETH_ADDRESS_REGISTRY_GENERATOR_NAME)
+                    .unwrap()
+                    .into(),
                 validator_script_type_hash: (*ETH_ADDRESS_REGISTRY_PROGRAM_CODE_HASH).into(),
             },
         ],
@@ -506,6 +505,7 @@ pub fn setup() -> (Store, DummyState, Generator) {
         increase_max_l2_tx_cycles_to_500m: None,
         upgrade_global_state_version_to_v2: None,
         backend_forks: fork_configs,
+        ..Default::default()
     };
     let rollup_context = RollupContext {
         rollup_script_hash: ROLLUP_SCRIPT_HASH.into(),

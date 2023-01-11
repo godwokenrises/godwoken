@@ -13,7 +13,7 @@ use gw_common::{
     CKB_SUDT_SCRIPT_ARGS,
 };
 
-use gw_config::{BackendConfig, BackendForkConfig, BackendType, SUDTProxyConfig};
+use gw_config::{BackendConfig, BackendForkConfig, BackendType, Resource};
 use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
     backend_manage::BackendManage,
@@ -37,7 +37,7 @@ use gw_types::{
     prelude::*,
     U256,
 };
-use gw_utils::RollupContext;
+use gw_utils::{checksum::file_checksum, RollupContext};
 
 use crate::{
     helper::{
@@ -466,38 +466,45 @@ impl Config {
         let secp_data_hash = load_code_hash(&path);
         let backends = BackendForkConfig {
             fork_height: 0,
-            sudt_proxy: SUDTProxyConfig {
-                permit_sudt_transfer_from_dangerous_contract: false,
-                address_list: Vec::new(),
-            },
+            sudt_proxy: None,
             backends: vec![
-                BackendConfig {
-                    backend_type: BackendType::Meta,
-                    validator_path: [base_path, META_VALIDATOR_PATH].iter().collect(),
-                    generator_path: [base_path, META_GENERATOR_PATH].iter().collect(),
-                    validator_script_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
+                {
+                    let path: PathBuf = [base_path, META_GENERATOR_PATH].iter().collect();
+                    BackendConfig {
+                        backend_type: BackendType::Meta,
+                        generator: Resource::file_system(path.clone()),
+                        generator_checksum: file_checksum(path).unwrap().into(),
+                        validator_script_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
+                    }
                 },
-                BackendConfig {
-                    backend_type: BackendType::Sudt,
-                    validator_path: [base_path, SUDT_VALIDATOR_PATH].iter().collect(),
-                    generator_path: [base_path, SUDT_GENERATOR_PATH].iter().collect(),
-                    validator_script_type_hash: SUDT_VALIDATOR_SCRIPT_TYPE_HASH.into(),
+                {
+                    let path: PathBuf = [base_path, SUDT_GENERATOR_PATH].iter().collect();
+                    BackendConfig {
+                        backend_type: BackendType::Sudt,
+                        generator: Resource::file_system(path.clone()),
+                        generator_checksum: file_checksum(path).unwrap().into(),
+                        validator_script_type_hash: SUDT_VALIDATOR_SCRIPT_TYPE_HASH.into(),
+                    }
                 },
-                BackendConfig {
-                    backend_type: BackendType::Polyjuice,
-                    validator_path: [base_path, POLYJUICE_VALIDATOR_NAME].iter().collect(),
-                    generator_path: [base_path, POLYJUICE_GENERATOR_NAME].iter().collect(),
-                    validator_script_type_hash: polyjuice_validator_code_hash.into(),
+                {
+                    let path: PathBuf = [base_path, POLYJUICE_GENERATOR_NAME].iter().collect();
+                    BackendConfig {
+                        backend_type: BackendType::Polyjuice,
+                        generator: Resource::file_system(path.clone()),
+                        generator_checksum: file_checksum(path).unwrap().into(),
+                        validator_script_type_hash: polyjuice_validator_code_hash.into(),
+                    }
                 },
-                BackendConfig {
-                    backend_type: BackendType::EthAddrReg,
-                    validator_path: [base_path, ETH_ADDRESS_REGISTRY_VALIDATOR_NAME]
+                {
+                    let path: PathBuf = [base_path, ETH_ADDRESS_REGISTRY_GENERATOR_NAME]
                         .iter()
-                        .collect(),
-                    generator_path: [base_path, ETH_ADDRESS_REGISTRY_GENERATOR_NAME]
-                        .iter()
-                        .collect(),
-                    validator_script_type_hash: eth_addr_reg_code_hash.into(),
+                        .collect();
+                    BackendConfig {
+                        backend_type: BackendType::EthAddrReg,
+                        generator: Resource::file_system(path.clone()),
+                        generator_checksum: file_checksum(path).unwrap().into(),
+                        validator_script_type_hash: eth_addr_reg_code_hash.into(),
+                    }
                 },
             ],
         };

@@ -41,11 +41,13 @@ fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
 }
 
 fn generate_example_config<P: AsRef<Path>>(path: P) -> Result<()> {
-    let mut config = Config::default();
-    config.consensus = Consensus::Builtin {
-        builtin: BuiltinConsensus::Testnet,
+    let config = Config {
+        consensus: Consensus::Builtin {
+            builtin: BuiltinConsensus::Testnet,
+        },
+        block_producer: Some(Default::default()),
+        ..Default::default()
     };
-    config.block_producer = Some(Default::default());
     let content = toml::to_string_pretty(&config)?;
     fs::write(path, content)?;
     Ok(())
