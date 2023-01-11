@@ -26,7 +26,7 @@ members = [
   "crates/godwoken-bin",
   "crates/telemetry",
   "crates/metrics",
-  "crates/builtin-binaries",
+  "crates/builtin-binaries"
 ]
 
 exclude = [

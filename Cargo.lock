@@ -176,7 +176,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b81bfc8d2e40788066c20fb459860524cfcdb15ed8db60c0c55053678cb27847"
 dependencies = [
  "autocxx-engine",
- "env_logger 0.9.3",
+ "env_logger",
  "indexmap",
  "syn",
 ]
@@ -1339,19 +1339,6 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a19187fea3ac7e84da7dacf48de0c45d63c6a76f9490dae389aead16c243fce3"
-dependencies = [
- "atty",
- "humantime",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
-name = "env_logger"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a12e6657c4c97ebab115a42dcee77225f7f482cdd841cf7088c657a42e9e00e7"
@@ -1991,7 +1978,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bytes",
- "env_logger 0.8.4",
+ "env_logger",
  "futures-util",
  "gw-config",
  "gw-types",
@@ -2027,7 +2014,7 @@ dependencies = [
  "ckb-types",
  "clap 3.2.22",
  "crossbeam-channel",
- "env_logger 0.8.4",
+ "env_logger",
  "gw-chain",
  "gw-challenge",
  "gw-common",
@@ -2183,7 +2170,7 @@ dependencies = [
  "ckb-traits",
  "ckb-types",
  "ckb-vm",
- "env_logger 0.8.4",
+ "env_logger",
  "godwoken-bin",
  "gw-block-producer",
  "gw-builtin-binaries",

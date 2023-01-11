@@ -102,8 +102,7 @@ export enum BackendType {
   EthAddrReg = "eth_addr_reg",
 }
 export interface BackendInfo {
-  validator_code_hash: HexString;
-  generator_code_hash: HexString;
+  generator_checksum: HexString;
   validator_script_type_hash: HexString;
   backend_type: BackendType;
 }

@@ -1,4 +1,4 @@
-use gw_common::H256;
+use gw_types::h256::H256;
 use gw_types::U256;
 use sha3::{Digest, Keccak256};
 use sqlx::types::chrono::{DateTime, Utc};
@@ -127,7 +127,7 @@ impl Transaction {
         s.out().freeze().to_vec()
     }
 
-    pub fn compute_eth_tx_hash(&self) -> gw_common::H256 {
+    pub fn compute_eth_tx_hash(&self) -> gw_types::h256::H256 {
         // RLP encode
         let rlp_data = self.to_rlp();
         let mut hasher = Keccak256::new();

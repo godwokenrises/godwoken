@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
-use gw_common::{registry_address::RegistryAddress, H256};
+use gw_common::registry_address::RegistryAddress;
 use gw_types::prelude::*;
-use gw_types::{packed::LogItem, U256};
+use gw_types::{h256::*, packed::LogItem, U256};
 use std::{convert::TryInto, usize};
 
 // 128KB
