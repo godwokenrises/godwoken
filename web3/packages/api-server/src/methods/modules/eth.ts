@@ -971,7 +971,7 @@ export class Eth {
     ) {
       return [];
     } else {
-      return await this.getFilterChanges(args);
+      return await this.getLogs([filter]);
     }
   }
 
