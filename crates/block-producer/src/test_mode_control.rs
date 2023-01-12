@@ -6,7 +6,7 @@ use gw_generator::types::vm::ChallengeContext;
 use gw_jsonrpc_types::test_mode::ChallengeType;
 use gw_jsonrpc_types::{godwoken::GlobalState as JsonGlobalState, test_mode::TestModePayload};
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_rpc_server::registry::TestModeRPC;
+use gw_rpc_server::registry::TestModeRpc;
 use gw_smt::smt::{Blake2bHasher, SMTH256};
 use gw_smt::smt_h256_ext::SMTH256Ext;
 use gw_store::traits::chain_store::ChainStore;
@@ -304,8 +304,8 @@ impl TestModeControl {
 }
 
 #[async_trait]
-impl TestModeRPC for TestModeControl {
-    async fn get_global_state(&self) -> Result<JsonGlobalState> {
+impl TestModeRpc for TestModeControl {
+    async fn tests_get_global_state(&self) -> gw_rpc_server::registry::Result<JsonGlobalState> {
         let rollup_cell = {
             let opt = self.rpc_client.query_rollup_cell().await?;
             opt.ok_or_else(|| anyhow!("rollup cell not found"))?
@@ -317,7 +317,10 @@ impl TestModeRPC for TestModeControl {
         Ok(global_state.into())
     }
 
-    async fn produce_block(&self, payload: TestModePayload) -> Result<()> {
+    async fn tests_produce_block(
+        &self,
+        payload: TestModePayload,
+    ) -> gw_rpc_server::registry::Result<()> {
         log::info!("receive tests produce block payload: {:?}", payload);
 
         *self.payload.lock().await = Some(payload);

@@ -14,3 +14,4 @@ gw-common = { path = "../../gwos/crates/common" }
 ckb-jsonrpc-types = "0.105.1"
 ckb-fixed-hash = "0.105.1"
 anyhow = "1.0"
+serde_repr = "0.1.10"

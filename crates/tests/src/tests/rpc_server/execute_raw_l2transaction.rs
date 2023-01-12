@@ -521,7 +521,7 @@ async fn test_invalid_registry_address() {
         .unwrap_err();
 
     eprintln!("err {}", err);
-    assert!(err.to_string().contains("Invalid params"));
+    assert!(err.to_string().contains("no registry address"));
 
     // Invalid registry address
     let err = rpc_server

@@ -45,8 +45,6 @@ csv = "1.1.6"
 bech32 = "0.8.1"
 tracing-subscriber = { version = "0.3.11", default-features = false, features = ["tracing-log"] }
 parking_lot = "0.12"
-lru = "0.8"
-dashmap = "5.4"
 
 [dev-dependencies]
 ckb-chain-spec = "0.105.1"

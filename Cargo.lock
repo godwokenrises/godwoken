@@ -1364,15 +1364,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "erased-serde"
-version = "0.3.22"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "003000e712ad0f95857bd4d2ef8d1890069e06554101697d12050668b2f6f020"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "errno"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1435,15 +1426,6 @@ name = "event-listener"
 version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
-
-[[package]]
-name = "extensions"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "258f70bd2b060d448403a66d420e81dcac3e5247a4928a887404a5e03715e2e0"
-dependencies = [
- "fxhash",
-]
 
 [[package]]
 name = "faster-hex"
@@ -1642,15 +1624,6 @@ dependencies = [
  "pin-project-lite",
  "pin-utils",
  "slab",
-]
-
-[[package]]
-name = "fxhash"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
-dependencies = [
- "byteorder",
 ]
 
 [[package]]
@@ -1960,6 +1933,7 @@ dependencies = [
  "gw-common",
  "gw-types",
  "serde",
+ "serde_repr",
 ]
 
 [[package]]
@@ -2104,6 +2078,7 @@ version = "1.8.0-rc3"
 dependencies = [
  "anyhow",
  "async-trait",
+ "axum",
  "bytes",
  "ckb-crypto",
  "ckb-fixed-hash",
@@ -2130,14 +2105,14 @@ dependencies = [
  "gw-utils",
  "gw-version",
  "hyper",
- "jsonrpc-v2",
+ "jsonrpc-core",
+ "jsonrpc-utils",
  "log",
- "lru 0.7.8",
+ "lru",
  "once_cell",
  "pprof",
  "serde",
  "serde_json",
- "socket2",
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
  "tokio",
@@ -2227,7 +2202,7 @@ dependencies = [
  "gw-types",
  "gw-utils",
  "hex",
- "jsonrpc-v2",
+ "jsonrpc-core",
  "lazy_static",
  "rand 0.8.5",
  "secp256k1 0.24.1",
@@ -2258,7 +2233,6 @@ dependencies = [
  "ckb-types",
  "clap 3.2.22",
  "csv",
- "dashmap",
  "faster-hex 0.5.0",
  "gw-common",
  "gw-config",
@@ -2272,7 +2246,6 @@ dependencies = [
  "jsonrpc-core",
  "lazy_static",
  "log",
- "lru 0.8.1",
  "parking_lot 0.12.1",
  "rand 0.8.5",
  "reqwest",
@@ -2767,9 +2740,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-utils"
-version = "0.2.0-preview.3"
+version = "0.2.0-preview.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1c253344ac8b67b5a8bceb24a1cd7a9b8e3d3494988d523320c2997131f80c6"
+checksum = "54dd93f34cfc767ad3680d69b8a3e62c9e92e3163f2d65a5bc83fa7f57b4db7b"
 dependencies = [
  "anyhow",
  "axum",
@@ -2787,30 +2760,13 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-utils-macros"
-version = "0.2.0-preview.3"
+version = "0.2.0-preview.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e576f36c2a03d4b38d0744a43ef384158121d43635c4ada1ec03eed0b25c006a"
+checksum = "1d4da84a65ec88023b2cebc0f08273bb4db8affcf187eec7c078b560e58a630d"
 dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "jsonrpc-v2"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a5b309ff4f83be463974f916218283e4d9e04798ae856dd6f6968ce67654db6"
-dependencies = [
- "async-trait",
- "bytes",
- "erased-serde",
- "extensions",
- "futures",
- "hyper",
- "serde",
- "serde_json",
- "tower-service",
 ]
 
 [[package]]
@@ -2892,15 +2848,6 @@ name = "lru"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e999beba7b6e8345721bd280141ed958096a2e4abdf74f67ff4ce49b4b54e47a"
-dependencies = [
- "hashbrown",
-]
-
-[[package]]
-name = "lru"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6e8aaa3f231bb4bd57b84b2d5dc3ae7f350265df8aa96492e0bc394a1571909"
 dependencies = [
  "hashbrown",
 ]
@@ -4284,6 +4231,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26b04f22b563c91331a10074bda3dd5492e3cc39d56bd557e91c0af42b6c7341"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "serde_repr"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a5ec9fa74a20ebbe5d9ac23dac1fc96ba0ecfe9f50f2843b52e537b10fbcb4e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
