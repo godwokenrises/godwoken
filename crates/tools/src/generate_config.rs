@@ -180,7 +180,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
     let backend_forks = vec![BackendForkConfig {
         fork_height: 0,
         sudt_proxy: SUDTProxyConfig {
-            permit_sudt_transfer_from_dangerous_contract: false,
+            permit_sudt_transfer_from_dangerous_contract: true,
             address_list: Vec::new(),
         },
         backends,
