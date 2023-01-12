@@ -59,11 +59,6 @@ use lru::LruCache;
 use once_cell::sync::Lazy;
 use pprof::ProfilerGuard;
 use std::collections::HashMap;
-use std::{
-    convert::{TryFrom, TryInto},
-    sync::Arc,
-    time::{Duration, Instant},
-};
 use tokio::sync::{mpsc, Mutex};
 use tracing::instrument;
 
@@ -169,25 +164,6 @@ impl Drop for RequestContext {
     fn drop(&mut self) {
         let _drop = self.trace.new_span(tracing::info_span!("drop")).entered();
     }
-}
-
-pub struct ExecutionTransactionContext {
-    mem_pool: MemPool,
-    generator: Arc<Generator>,
-    store: Store,
-    mem_pool_state: Arc<MemPoolState>,
-    polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
-    mem_pool_config: MemPoolConfig,
-}
-
-pub struct SubmitTransactionContext {
-    in_queue_request_map: Option<Arc<InQueueRequestMap>>,
-    generator: Arc<Generator>,
-    submit_tx: mpsc::Sender<(Request, RequestContext)>,
-    mem_pool_state: Arc<MemPoolState>,
-    rate_limiter: Option<SendTransactionRateLimiter>,
-    rate_limit_config: Option<RPCRateLimit>,
-    polyjuice_sender_recover: Arc<PolyjuiceSenderRecover>,
 }
 
 pub struct SystemTypeScripts {
@@ -311,15 +287,13 @@ impl Registry {
         };
 
         let system_type_scripts = SystemTypeScripts {
-            eoa: self
-                .system_type_script_config
+            eoa: system_type_script_config
                 .allowed_eoa_scripts
                 .clone()
                 .into_iter()
                 .map(|s| (s.hash().into(), s))
                 .collect(),
-            contract: self
-                .system_type_script_config
+            contract: system_type_script_config
                 .allowed_contract_scripts
                 .clone()
                 .into_iter()
@@ -818,7 +792,6 @@ pub trait GwRpc {
     async fn gw_get_fee_config(&self) -> Result<gw_jsonrpc_types::godwoken::FeeConfig>;
     async fn gw_get_mem_pool_state_root(&self) -> Result<JsonH256>;
     async fn gw_get_mem_pool_state_ready(&self) -> Result<bool>;
-    async fn gw_reload_config(&self) -> Result<DynamicConfigReloadResponse>;
 
     async fn gw_start_profiler(&self) -> Result<()>;
     async fn gw_report_pprof(&self) -> Result<()>;
@@ -1030,12 +1003,10 @@ impl GwRpc for Arc<Registry> {
     }
     #[instrument(skip_all)]
     async fn gw_get_fee_config(&self) -> Result<gw_jsonrpc_types::godwoken::FeeConfig> {
-        let config = self.dynamic_config_manager.load();
-        let fee = config.get_fee_config();
         let fee_config = gw_jsonrpc_types::godwoken::FeeConfig {
-            meta_cycles_limit: fee.meta_cycles_limit.into(),
-            sudt_cycles_limit: fee.sudt_cycles_limit.into(),
-            withdraw_cycles_limit: fee.withdraw_cycles_limit.into(),
+            meta_cycles_limit: self.fee_config.meta_cycles_limit.into(),
+            sudt_cycles_limit: self.fee_config.sudt_cycles_limit.into(),
+            withdraw_cycles_limit: self.fee_config.withdraw_cycles_limit.into(),
         };
         Ok(fee_config)
     }
@@ -1139,10 +1110,6 @@ impl GwRpc for Arc<Registry> {
         }
 
         Ok(())
-    }
-    #[instrument(skip_all)]
-    async fn gw_reload_config(&self) -> Result<DynamicConfigReloadResponse> {
-        Ok(gw_dynamic_config::reload(self.dynamic_config_manager.clone()).await?)
     }
 
     #[instrument(skip_all)]
