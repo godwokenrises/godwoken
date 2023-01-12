@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use serde::{Deserialize, Serialize};
 
 use crate::ForkConfig;
@@ -30,13 +28,13 @@ pub enum Consensus {
 }
 
 impl Consensus {
-    pub fn get_config(&self) -> Cow<ForkConfig> {
+    pub fn get_config(&self) -> &ForkConfig {
         match self {
             Consensus::Builtin { builtin } => match builtin {
-                BuiltinConsensus::Mainnet => Cow::Owned(builtins::mainnet()),
-                BuiltinConsensus::Testnet => Cow::Owned(builtins::testnet()),
+                BuiltinConsensus::Mainnet => builtins::mainnet(),
+                BuiltinConsensus::Testnet => builtins::testnet(),
             },
-            Consensus::Config { config } => Cow::Borrowed(config),
+            Consensus::Config { config } => config,
         }
     }
 }

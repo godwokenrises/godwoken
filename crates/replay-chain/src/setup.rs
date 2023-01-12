@@ -54,7 +54,7 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
     let rollup_context = RollupContext {
         rollup_config: rollup_config.clone(),
         rollup_script_hash: consensus.genesis.rollup_type_hash.clone().into(),
-        fork_config: consensus.clone().into_owned(),
+        fork_config: consensus.clone(),
     };
     let secp_data: Bytes = {
         let rpc_client = {
