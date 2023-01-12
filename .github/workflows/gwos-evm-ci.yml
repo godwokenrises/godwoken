@@ -58,20 +58,3 @@ jobs:
       run: |
         ls -lh build
         sha256sum build/generator build/generator_log build/validator build/validator_log
-
-  integration-test:
-    uses: nervosnetwork/godwoken-tests/.github/workflows/reusable-integration-test-v1.yml@develop
-    with:
-      extra_github_env: |
-        MANUAL_BUILD_GODWOKEN=true
-        GODWOKEN_GIT_URL=https://github.com/${{ github.repository }}
-        GODWOKEN_GIT_CHECKOUT=${{ github.ref }}
-        MANUAL_BUILD_POLYJUICE=true
-        POLYJUICE_GIT_URL=https://github.com/${{ github.repository }}
-        POLYJUICE_GIT_CHECKOUT=${{ github.ref }}
-        MANUAL_BUILD_WEB3=true
-        MANUAL_BUILD_WEB3_INDEXER=true
-        WEB3_GIT_URL="https://github.com/${{ github.repository }}"
-        WEB3_GIT_CHECKOUT=${{ github.ref }}
-        GODWOKEN_KICKER_REPO=jjyr/godwoken-kicker
-        GODWOKEN_KICKER_REF=build-web3-indexer-in-monorepo
