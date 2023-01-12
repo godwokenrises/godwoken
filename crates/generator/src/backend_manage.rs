@@ -23,7 +23,7 @@ impl Backend {
         generator: Bytes,
         generator_checksum: H256,
     ) -> Result<Self> {
-        let checksum: H256 = content_checksum(&generator)?;
+        let checksum: H256 = content_checksum(&generator);
 
         if generator_checksum != checksum {
             bail!(
@@ -258,7 +258,7 @@ mod tests {
                     generator: Resource::file_system(
                         format!("{}/sudt_v0", dir.to_string_lossy()).into(),
                     ),
-                    generator_checksum: content_checksum(b"sudt_v0").unwrap().into(),
+                    generator_checksum: content_checksum(b"sudt_v0").into(),
                 },
                 BackendConfig {
                     validator_script_type_hash: [43u8; 32].into(),
@@ -266,7 +266,7 @@ mod tests {
                     generator: Resource::file_system(
                         format!("{}/addr_v0", dir.to_string_lossy()).into(),
                     ),
-                    generator_checksum: content_checksum(b"addr_v0").unwrap().into(),
+                    generator_checksum: content_checksum(b"addr_v0").into(),
                 },
             ],
         };
@@ -319,7 +319,7 @@ mod tests {
                     generator: Resource::file_system(
                         format!("{}/meta_v0", dir.to_string_lossy()).into(),
                     ),
-                    generator_checksum: content_checksum(b"meta_v0").unwrap().into(),
+                    generator_checksum: content_checksum(b"meta_v0").into(),
                 },
                 BackendConfig {
                     validator_script_type_hash: [42u8; 32].into(),
@@ -327,7 +327,7 @@ mod tests {
                     generator: Resource::file_system(
                         format!("{}/sudt_v1", dir.to_string_lossy()).into(),
                     ),
-                    generator_checksum: content_checksum(b"sudt_v1").unwrap().into(),
+                    generator_checksum: content_checksum(b"sudt_v1").into(),
                 },
             ],
         };

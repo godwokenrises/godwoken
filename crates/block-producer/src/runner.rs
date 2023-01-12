@@ -275,7 +275,7 @@ impl BaseInitComponents {
         let rollup_context = RollupContext {
             rollup_config: rollup_config.clone(),
             rollup_script_hash: consensus.genesis.rollup_type_hash.clone().into(),
-            fork_config: consensus.clone().into_owned(),
+            fork_config: consensus.clone(),
         };
         let rollup_type_script: Script = consensus.chain.rollup_type_script.clone().into();
         let rpc_client = {
@@ -319,8 +319,8 @@ impl BaseInitComponents {
             if NodeMode::ReadOnly != config.node_mode {
                 let block_producer_config =
                     opt_block_producer_config.ok_or_else(|| anyhow!("not set block producer"))?;
-                check_rollup_config_cell(consensus.as_ref(), &rollup_config, &rpc_client).await?;
-                check_locks(block_producer_config, consensus.as_ref(), &rollup_config)?;
+                check_rollup_config_cell(consensus, &rollup_config, &rpc_client).await?;
+                check_locks(block_producer_config, consensus, &rollup_config)?;
             }
         }
 
