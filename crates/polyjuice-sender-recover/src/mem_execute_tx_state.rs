@@ -6,6 +6,7 @@ use gw_store::state::traits::JournalDB;
 use gw_traits::CodeStore;
 use gw_types::h256::*;
 use gw_types::packed::Script;
+use gw_types::prelude::*;
 
 pub fn mock_account<S: State + CodeStore + JournalDB>(
     state: &mut S,

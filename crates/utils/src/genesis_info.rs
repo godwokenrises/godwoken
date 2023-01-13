@@ -1,11 +1,10 @@
 use anyhow::{anyhow, Result};
-use gw_common::blake2b::new_blake2b;
-use gw_types::{
+use ckb_types::{
     core::DepType,
-    h256::*,
     packed::{Block, CellDep, Header, OutPoint},
-    prelude::*,
 };
+use gw_common::blake2b::new_blake2b;
+use gw_types::{h256::*, prelude::*};
 
 #[derive(Debug, Clone)]
 pub struct CKBGenesisInfo {

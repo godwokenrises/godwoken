@@ -8,7 +8,7 @@ use gw_types::{
     bytes::Bytes,
     h256::*,
     packed::{L2Transaction, RawL2Transaction, Script},
-    prelude::{Pack, Unpack},
+    prelude::*,
 };
 use tracing::instrument;
 

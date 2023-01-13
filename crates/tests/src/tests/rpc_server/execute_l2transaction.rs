@@ -1,5 +1,4 @@
 use anyhow::anyhow;
-use ckb_types::prelude::{Builder, Entity};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, registry_address::RegistryAddress, state::State};
 use gw_polyjuice_sender_recover::recover::error::PolyjuiceTxSenderRecoverError;
 use gw_store::state::traits::JournalDB;
@@ -7,7 +6,7 @@ use gw_types::{
     bytes::Bytes,
     h256::*,
     packed::{RawL2Transaction, Script},
-    prelude::{Pack, Unpack},
+    prelude::*,
     U256,
 };
 

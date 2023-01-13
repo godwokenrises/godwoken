@@ -3,13 +3,6 @@ import godwoken;
 
 vector OutPointVec <OutPoint>;
 
-struct NumberHash {
-    number:         Uint64,
-    block_hash:     Byte32,
-}
-
-array TransactionKey [byte; 36];
-
 struct TransactionInfo {
     block_number:   Uint64,
     key:            TransactionKey,
@@ -31,7 +24,10 @@ table TxReceipt {
     exit_code: byte,
 }
 
-array WithdrawalKey [byte; 36];
+struct WithdrawalKey {
+    block_hash: Byte32,
+    index: BeUint32,
+}
 
 struct WithdrawalInfo {
     block_number:   Uint64,

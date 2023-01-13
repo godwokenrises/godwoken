@@ -14,7 +14,7 @@ use gw_types::offchain::{CellInfo, InputCellInfo};
 use gw_types::packed::{
     CellDep, CellInput, L2Block, OutPoint, OutPointVec, WithdrawalRequestExtra,
 };
-use gw_types::prelude::{Builder, Entity, Unpack};
+use gw_types::prelude::*;
 use gw_utils::wallet::Wallet;
 use gw_utils::RollupContext;
 

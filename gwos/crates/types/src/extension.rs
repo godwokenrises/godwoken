@@ -1,18 +1,16 @@
+use core::mem::size_of_val;
+
+use gw_hash::blake2b::hash;
+
 /// extension methods
 use crate::packed;
 use crate::prelude::*;
-use core::mem::size_of_val;
-use gw_hash::blake2b::new_blake2b;
 
 macro_rules! impl_hash {
     ($struct:ident) => {
         impl<'a> packed::$struct<'a> {
             pub fn hash(&self) -> [u8; 32] {
-                let mut hasher = new_blake2b();
-                hasher.update(self.as_slice());
-                let mut hash = [0u8; 32];
-                hasher.finalize(&mut hash);
-                hash
+                hash(self.as_slice())
             }
         }
     };
@@ -26,26 +24,18 @@ macro_rules! impl_witness_hash {
             }
 
             pub fn witness_hash(&self) -> [u8; 32] {
-                let mut hasher = new_blake2b();
-                hasher.update(self.as_slice());
-                let mut hash = [0u8; 32];
-                hasher.finalize(&mut hash);
-                hash
+                hash(self.as_slice())
             }
         }
     };
 }
 
 impl_hash!(RollupConfigReader);
-impl_hash!(ScriptReader);
 impl_hash!(RawL2BlockReader);
 impl_hash!(RawL2TransactionReader);
 impl_witness_hash!(L2TransactionReader);
 impl_hash!(RawWithdrawalRequestReader);
 impl_witness_hash!(WithdrawalRequestReader);
-impl_hash!(RawTransactionReader);
-impl_witness_hash!(TransactionReader);
-impl_hash!(HeaderReader);
 
 impl packed::RawL2Transaction {
     pub fn hash(&self) -> [u8; 32] {
@@ -94,12 +84,6 @@ impl packed::L2Block {
     }
 }
 
-impl packed::Script {
-    pub fn hash(&self) -> [u8; 32] {
-        self.as_reader().hash()
-    }
-}
-
 impl packed::RawWithdrawalRequest {
     pub fn hash(&self) -> [u8; 32] {
         self.as_reader().hash()
@@ -113,18 +97,6 @@ impl packed::WithdrawalRequest {
 
     pub fn witness_hash(&self) -> [u8; 32] {
         self.as_reader().witness_hash()
-    }
-}
-
-impl packed::Header {
-    pub fn hash(&self) -> [u8; 32] {
-        self.as_reader().hash()
-    }
-}
-
-impl packed::Transaction {
-    pub fn hash(&self) -> [u8; 32] {
-        self.as_reader().hash()
     }
 }
 

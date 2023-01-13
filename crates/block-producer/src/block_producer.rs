@@ -14,7 +14,7 @@ use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
 use gw_chain::chain::Chain;
 use gw_config::BlockProducerConfig;
 use gw_generator::Generator;
-use gw_jsonrpc_types::test_mode::TestModePayload;
+use gw_jsonrpc_types::{test_mode::TestModePayload, JsonCalcHash};
 use gw_mem_pool::{
     custodian::to_custodian_cell,
     pool::{MemPool, OutputParam},
@@ -22,7 +22,6 @@ use gw_mem_pool::{
 use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
 use gw_smt::smt::SMTH256;
 use gw_store::Store;
-use gw_types::offchain::{global_state_from_slice, CompatibleFinalizedTimepoint};
 use gw_types::{
     bytes::Bytes,
     h256::*,
@@ -32,6 +31,10 @@ use gw_types::{
         RollupSubmitBlock, Transaction, WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::*,
+};
+use gw_types::{
+    conversion::cap_bytes,
+    offchain::{global_state_from_slice, CompatibleFinalizedTimepoint},
 };
 use gw_utils::{
     fee::fill_tx_fee_with_local, finalized_timepoint, genesis_info::CKBGenesisInfo,
@@ -232,9 +235,7 @@ impl BlockProducer {
         // deposit lock dep
         if !deposit_cells.is_empty() {
             let cell_dep: CellDep = contracts_dep.deposit_cell_lock.clone().into();
-            tx_skeleton
-                .cell_deps_mut()
-                .push(CellDep::new_unchecked(cell_dep.as_bytes()));
+            tx_skeleton.cell_deps_mut().push(cell_dep);
         }
         // secp256k1 lock, used for unlock tx fee payment cells
         tx_skeleton
@@ -309,9 +310,12 @@ impl BlockProducer {
         let output = {
             let dummy = rollup_cell.output.clone();
             let capacity = dummy
-                .occupied_capacity(output_data.len())
+                .occupied_capacity(cap_bytes(output_data.len()))
                 .expect("capacity overflow");
-            dummy.as_builder().capacity(capacity.pack()).build()
+            dummy
+                .as_builder()
+                .capacity(capacity.as_u64().pack())
+                .build()
         };
         tx_skeleton.outputs_mut().push((output, output_data));
 

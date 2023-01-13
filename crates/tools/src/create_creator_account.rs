@@ -16,7 +16,7 @@ use crate::{
     types::ScriptsDeploymentResult,
     utils::transaction::{read_config, wait_for_l2_tx},
 };
-use gw_types::{bytes::Bytes as GwBytes, prelude::Pack as GwPack};
+use gw_types::{bytes::Bytes as GwBytes, prelude::*};
 
 pub async fn create_creator_account(
     godwoken_rpc_url: &str,
@@ -57,7 +57,7 @@ pub async fn create_creator_account(
 
     let mut l2_args_vec = rollup_type_hash.as_bytes().to_vec();
     l2_args_vec.append(&mut sudt_id.to_le_bytes().to_vec());
-    let l2_script_args = GwPack::pack(&GwBytes::from(l2_args_vec));
+    let l2_script_args = Pack::pack(&GwBytes::from(l2_args_vec));
     let l2_script = Script::new_builder()
         .code_hash(polyjuice_validator_script_hash.pack())
         .hash_type(ScriptHashType::Type.into())

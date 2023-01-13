@@ -1,43 +1,11 @@
-use core::convert::TryInto;
-
+use super::RunResult;
 use crate::h256::H256;
 use crate::packed::{
-    AccountMerkleState, Byte32, CompactMemBlock, DeprecatedCompactMemBlock, GlobalState,
-    GlobalStateV0, MemBlock, RawWithdrawalRequest, TransactionKey, TxReceipt, WithdrawalKey,
-    WithdrawalRequestExtra,
+    AccountMerkleState, CompactMemBlock, DeprecatedCompactMemBlock, GlobalState, GlobalStateV0,
+    MemBlock, RawWithdrawalRequest, TxReceipt, WithdrawalRequestExtra,
 };
 use crate::prelude::*;
 use ckb_types::error::VerificationError;
-
-use super::RunResult;
-
-impl TransactionKey {
-    pub fn build_transaction_key(block_hash: Byte32, index: u32) -> Self {
-        let mut key = [0u8; 36];
-        key[..32].copy_from_slice(block_hash.as_slice());
-        // use BE, so we have a sorted bytes representation
-        key[32..].copy_from_slice(&index.to_be_bytes());
-        key.pack()
-    }
-
-    pub fn block_hash(&self) -> H256 {
-        self.as_slice()[..32].try_into().unwrap()
-    }
-
-    pub fn index(&self) -> u32 {
-        u32::from_be_bytes(self.as_slice()[32..].try_into().unwrap())
-    }
-}
-
-impl WithdrawalKey {
-    pub fn build_withdrawal_key(block_hash: Byte32, index: u32) -> Self {
-        let mut key = [0u8; 36];
-        key[..32].copy_from_slice(block_hash.as_slice());
-        // use BE, so we have a sorted bytes representation
-        key[32..].copy_from_slice(&index.to_be_bytes());
-        key.pack()
-    }
-}
 
 impl TxReceipt {
     pub fn build_receipt(

@@ -16,10 +16,7 @@ use crate::testing_tool::chain::into_deposit_info_cell;
 use crate::testing_tool::chain::{
     apply_block_result, construct_block, setup_chain_with_account_lock_manage,
 };
-use ckb_types::{
-    packed::{CellInput, CellOutput},
-    prelude::{Pack as CKBPack, Unpack as CKBUnpack},
-};
+use ckb_types::packed::{CellInput, CellOutput};
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::state::State;
 use gw_generator::account_lock_manage::{
@@ -38,7 +35,7 @@ use gw_types::h256::*;
 use gw_types::packed::AllowedTypeHash;
 use gw_types::packed::CCWithdrawalWitness;
 use gw_types::packed::WithdrawalRequestExtra;
-use gw_types::prelude::*;
+use gw_types::prelude::{Pack, *};
 use gw_types::{
     bytes::Bytes,
     core::{ChallengeTargetType, ScriptHashType, Status},
@@ -64,9 +61,8 @@ async fn test_cancel_withdrawal() {
     let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
     let challenge_lock_type = named_always_success_script(b"challenge_lock_type_id");
     let eoa_lock_type = named_always_success_script(b"eoa_lock_type_id");
-    let challenge_script_type_hash: [u8; 32] =
-        challenge_lock_type.calc_script_hash().unpack().into();
-    let eoa_lock_type_hash: [u8; 32] = eoa_lock_type.calc_script_hash().unpack().into();
+    let challenge_script_type_hash: [u8; 32] = challenge_lock_type.hash();
+    let eoa_lock_type_hash: [u8; 32] = eoa_lock_type.hash();
     let allowed_eoa_type_hashes: Vec<AllowedTypeHash> = vec![AllowedTypeHash::new(
         AllowedEoaType::Eth,
         eoa_lock_type_hash,
@@ -75,7 +71,7 @@ async fn test_cancel_withdrawal() {
     let eth_registry_id = gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
     let rollup_config = RollupConfig::new_builder()
         .challenge_script_type_hash(Pack::pack(&challenge_script_type_hash))
-        .allowed_eoa_type_hashes(PackVec::pack(allowed_eoa_type_hashes))
+        .allowed_eoa_type_hashes(allowed_eoa_type_hashes.pack())
         .finality_blocks(Pack::pack(&finality_blocks))
         .build();
     // setup chain
@@ -100,12 +96,7 @@ async fn test_cancel_withdrawal() {
         .set_completed_initial_syncing();
     // create a rollup cell
     let capacity = 1000_00000000u64;
-    let rollup_cell = build_always_success_cell(
-        capacity,
-        Some(ckb_types::packed::Script::new_unchecked(
-            rollup_type_script.as_bytes(),
-        )),
-    );
+    let rollup_cell = build_always_success_cell(capacity, Some(rollup_type_script.clone()));
     // produce a block so we can challenge it
     let rollup_script_hash = rollup_type_script.hash();
 
@@ -270,7 +261,7 @@ async fn test_cancel_withdrawal() {
             ))
             .build();
         ckb_types::packed::WitnessArgs::new_builder()
-            .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
+            .output_type(Some(rollup_action.as_bytes()).pack())
             .build()
     };
     let withdrawal = challenged_block
@@ -329,15 +320,13 @@ async fn test_cancel_withdrawal() {
                 .build()
         };
         ckb_types::packed::WitnessArgs::new_builder()
-            .lock(CKBPack::pack(&Some(witness.as_bytes())))
+            .lock(Some(witness.as_bytes()).pack())
             .build()
     };
     let input_unlock_cell = {
         let cell = CellOutput::new_builder()
-            .lock(ckb_types::packed::Script::new_unchecked(
-                sender_script.as_bytes(),
-            ))
-            .capacity(CKBPack::pack(&42u64))
+            .lock(sender_script)
+            .capacity(42u64.pack())
             .build();
         let owner_lock_hash = vec![42u8; 32];
 
@@ -375,9 +364,9 @@ async fn test_cancel_withdrawal() {
         (rollup_cell, rollup_cell_data),
     )
     .as_advanced_builder()
-    .witness(CKBPack::pack(&witness.as_bytes()))
+    .witness(witness.as_bytes().pack())
     .input(input_challenge_cell)
-    .witness(CKBPack::pack(&challenge_witness.as_bytes()))
+    .witness(challenge_witness.as_bytes().pack())
     .input(input_unlock_cell)
     .witness(Default::default())
     .cell_dep(ctx.challenge_lock_dep.clone())

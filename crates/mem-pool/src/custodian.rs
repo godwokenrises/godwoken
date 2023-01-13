@@ -8,7 +8,6 @@ use gw_rpc_client::{
     rpc_client::{QueryResult, RPCClient},
 };
 use gw_store::traits::chain_store::ChainStore;
-use gw_types::core::Timepoint;
 use gw_types::offchain::CompatibleFinalizedTimepoint;
 use gw_types::{
     bytes::Bytes,
@@ -21,6 +20,7 @@ use gw_types::{
     },
     prelude::*,
 };
+use gw_types::{conversion::cap_bytes, core::Timepoint};
 use gw_utils::local_cells::{
     collect_local_and_indexer_cells, CollectLocalAndIndexerCursor, LocalCellsManager,
 };
@@ -67,9 +67,9 @@ pub fn to_custodian_cell(
     let data = deposit_info.cell.data.clone();
 
     // Check capacity
-    match output.occupied_capacity(data.len()) {
-        Ok(capacity) if capacity > deposit_info.cell.output.capacity().unpack() => {
-            return Err(capacity as u128);
+    match output.occupied_capacity(cap_bytes(data.len())) {
+        Ok(capacity) if capacity.as_u64() > deposit_info.cell.output.capacity().unpack() => {
+            return Err(capacity.as_u64() as u128);
         }
         // Overflow
         Err(err) => {
@@ -140,7 +140,10 @@ pub fn calc_ckb_custodian_min_capacity(rollup_context: &RollupContext) -> u64 {
         .capacity(1u64.pack())
         .lock(lock)
         .build();
-    dummy.occupied_capacity(0).expect("overflow")
+    dummy
+        .occupied_capacity(cap_bytes(0))
+        .expect("overflow")
+        .as_u64()
 }
 
 pub fn build_finalized_custodian_lock(rollup_context: &RollupContext) -> Script {
@@ -172,8 +175,13 @@ pub fn generate_finalized_custodian(
         .type_(Some(type_).pack())
         .lock(lock)
         .build();
-    let capacity = output.occupied_capacity(data.len()).expect("overflow");
-    let output = output.as_builder().capacity(capacity.pack()).build();
+    let capacity = output
+        .occupied_capacity(cap_bytes(data.len()))
+        .expect("overflow");
+    let output = output
+        .as_builder()
+        .capacity(capacity.as_u64().pack())
+        .build();
 
     (output, data)
 }
@@ -383,7 +391,7 @@ mod tests {
     use gw_types::packed::{
         CellOutput, CustodianLockArgs, OutPoint, RollupConfig, Script, Uint128,
     };
-    use gw_types::prelude::{Builder, Entity, Pack, Unpack};
+    use gw_types::prelude::*;
     use gw_utils::local_cells::LocalCellsManager;
     use gw_utils::RollupContext;
 

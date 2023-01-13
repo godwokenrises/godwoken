@@ -45,7 +45,7 @@ pub struct ChainUpdater {
     chain: Arc<Mutex<Chain>>,
     rpc_client: RPCClient,
     rollup_context: RollupContext,
-    rollup_type_script: ckb_types::packed::Script,
+    rollup_type_script: Script,
 }
 
 impl ChainUpdater {
@@ -55,9 +55,6 @@ impl ChainUpdater {
         rollup_context: RollupContext,
         rollup_type_script: Script,
     ) -> ChainUpdater {
-        let rollup_type_script =
-            ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
-
         ChainUpdater {
             chain,
             rpc_client,
@@ -124,10 +121,7 @@ impl ChainUpdater {
 
     #[instrument(skip_all)]
     fn extract_rollup_action(&self, tx: &Transaction) -> Result<RollupAction> {
-        let rollup_type_hash: [u8; 32] = {
-            let hash = self.rollup_type_script.calc_script_hash();
-            ckb_types::prelude::Unpack::unpack(&hash).0
-        };
+        let rollup_type_hash: [u8; 32] = self.rollup_type_script.hash();
 
         // find rollup state cell from outputs
         let (i, _) = {
@@ -186,7 +180,7 @@ impl ChainUpdater {
 
             let input = {
                 let out_point = OutPoint::new_builder()
-                    .tx_hash(tx.hash().pack())
+                    .tx_hash(tx.calc_tx_hash())
                     .index((index as u32).pack())
                     .build();
 

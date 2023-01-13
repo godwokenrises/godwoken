@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use ckb_types::prelude::{Builder, Entity};
 use gw_common::merkle_utils::{calculate_ckb_merkle_root, ckb_merkle_leaf_hash};
 use gw_generator::types::vm::ChallengeContext;
 use gw_jsonrpc_types::test_mode::ChallengeType;
@@ -11,14 +10,14 @@ use gw_smt::smt::{Blake2bHasher, SMTH256};
 use gw_smt::smt_h256_ext::SMTH256Ext;
 use gw_store::traits::chain_store::ChainStore;
 use gw_store::Store;
+use gw_types::bytes::Bytes;
 use gw_types::core::{ChallengeTargetType, Status};
 use gw_types::offchain::global_state_from_slice;
 use gw_types::packed::{
     BlockMerkleState, ChallengeTarget, ChallengeWitness, GlobalState, L2Block, L2Transaction,
     SubmitWithdrawals, WithdrawalRequest,
 };
-use gw_types::prelude::{Pack, PackVec};
-use gw_types::{bytes::Bytes, prelude::Unpack};
+use gw_types::prelude::*;
 use tokio::sync::Mutex;
 
 use std::sync::Arc;

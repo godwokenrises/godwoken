@@ -1,7 +1,5 @@
 import blockchain;
 
-vector Uint32Vec <Uint32>;
-
 struct BlockMerkleState {
     merkle_root: Byte32,
     count: Uint64,

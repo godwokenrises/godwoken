@@ -17,7 +17,6 @@ use crate::testing_tool::chain::{
 use ckb_error::assert_error_eq;
 use ckb_script::ScriptError;
 use ckb_types::packed::CellOutput;
-use ckb_types::prelude::{Pack as CKBPack, Unpack};
 use gw_chain::chain::Chain;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State};
@@ -27,7 +26,7 @@ use gw_types::core::AllowedContractType;
 use gw_types::core::AllowedEoaType;
 use gw_types::packed::AllowedTypeHash;
 use gw_types::packed::Fee;
-use gw_types::prelude::*;
+use gw_types::prelude::{Pack, *};
 use gw_types::U256;
 use gw_types::{
     bytes::Bytes,
@@ -48,20 +47,19 @@ async fn test_enter_challenge() {
     let type_id = calculate_type_id(input_out_point.clone());
     let rollup_type_script = {
         Script::new_builder()
-            .code_hash(Pack::pack(&*STATE_VALIDATOR_CODE_HASH))
+            .code_hash(STATE_VALIDATOR_CODE_HASH.pack())
             .hash_type(ScriptHashType::Data.into())
-            .args(Pack::pack(&Bytes::from(type_id.to_vec())))
+            .args(type_id[..].pack())
             .build()
     };
     // rollup lock & config
     let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
     let challenge_lock_type = named_always_success_script(b"challenge_lock_type_id");
-    let challenge_script_type_hash: [u8; 32] =
-        challenge_lock_type.calc_script_hash().unpack().into();
+    let challenge_script_type_hash: [u8; 32] = challenge_lock_type.hash();
     let finality_blocks = 10;
     let rollup_config = RollupConfig::new_builder()
-        .challenge_script_type_hash(Pack::pack(&challenge_script_type_hash))
-        .finality_blocks(Pack::pack(&finality_blocks))
+        .challenge_script_type_hash(challenge_script_type_hash.pack())
+        .finality_blocks(finality_blocks.pack())
         .allowed_eoa_type_hashes(
             vec![AllowedTypeHash::new(
                 AllowedEoaType::Eth,
@@ -77,12 +75,7 @@ async fn test_enter_challenge() {
     let mut chain = setup_chain_with_config(rollup_type_script.clone(), rollup_config).await;
     // create a rollup cell
     let capacity = 1000_00000000u64;
-    let rollup_cell = build_always_success_cell(
-        capacity,
-        Some(ckb_types::packed::Script::new_unchecked(
-            rollup_type_script.as_bytes(),
-        )),
-    );
+    let rollup_cell = build_always_success_cell(capacity, Some(rollup_type_script.clone()));
     // produce a block so we can challenge it
     {
         // deposit two account
@@ -245,7 +238,7 @@ async fn test_enter_challenge() {
             ))
             .build();
         ckb_types::packed::WitnessArgs::new_builder()
-            .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
+            .output_type(Some(rollup_action.as_bytes()).pack())
             .build()
     };
     let rollup_cell_data = global_state
@@ -262,12 +255,12 @@ async fn test_enter_challenge() {
     )
     .as_advanced_builder()
     .output(challenge_cell)
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .output_data(Bytes::default().pack())
     .cell_dep(ctx.stake_lock_dep.clone())
     .cell_dep(ctx.always_success_dep.clone())
     .cell_dep(ctx.state_validator_dep.clone())
     .cell_dep(ctx.rollup_config_dep.clone())
-    .witness(CKBPack::pack(&witness.as_bytes()))
+    .witness(witness.as_bytes().pack())
     .build();
     ctx.verify_tx(tx).expect("return success");
 }
@@ -287,8 +280,7 @@ async fn test_enter_challenge_finalized_block() {
     // rollup lock & config
     let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
     let challenge_lock_type = named_always_success_script(b"challenge_lock_type_id");
-    let challenge_script_type_hash: [u8; 32] =
-        challenge_lock_type.calc_script_hash().unpack().into();
+    let challenge_script_type_hash: [u8; 32] = challenge_lock_type.hash();
     let finality_blocks = 1;
     let rollup_config = RollupConfig::new_builder()
         .challenge_script_type_hash(Pack::pack(&challenge_script_type_hash))
@@ -308,12 +300,7 @@ async fn test_enter_challenge_finalized_block() {
     let mut chain = setup_chain_with_config(rollup_type_script.clone(), rollup_config).await;
     // create a rollup cell
     let capacity = 1000_00000000u64;
-    let rollup_cell = build_always_success_cell(
-        capacity,
-        Some(ckb_types::packed::Script::new_unchecked(
-            rollup_type_script.as_bytes(),
-        )),
-    );
+    let rollup_cell = build_always_success_cell(capacity, Some(rollup_type_script.clone()));
 
     let eth_registry_id = gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 
@@ -454,7 +441,7 @@ async fn test_enter_challenge_finalized_block() {
             ))
             .build();
         ckb_types::packed::WitnessArgs::new_builder()
-            .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
+            .output_type(Some(rollup_action.as_bytes()).pack())
             .build()
     };
     let rollup_cell_data = global_state
@@ -471,12 +458,12 @@ async fn test_enter_challenge_finalized_block() {
     )
     .as_advanced_builder()
     .output(challenge_cell)
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .output_data(Bytes::default().pack())
     .cell_dep(ctx.stake_lock_dep.clone())
     .cell_dep(ctx.always_success_dep.clone())
     .cell_dep(ctx.state_validator_dep.clone())
     .cell_dep(ctx.rollup_config_dep.clone())
-    .witness(CKBPack::pack(&witness.as_bytes()))
+    .witness(witness.as_bytes().pack())
     .build();
 
     let err = ctx.verify_tx(tx).unwrap_err();

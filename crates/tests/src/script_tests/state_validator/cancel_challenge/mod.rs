@@ -14,10 +14,7 @@ use crate::script_tests::utils::rollup::{
 use crate::testing_tool::chain::into_deposit_info_cell;
 use crate::testing_tool::chain::setup_chain_with_account_lock_manage;
 use crate::testing_tool::chain::{apply_block_result, construct_block};
-use ckb_types::{
-    packed::{CellInput, CellOutput},
-    prelude::{Pack as CKBPack, Unpack as CKBUnpack},
-};
+use ckb_types::packed::{CellInput, CellOutput};
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::merkle_utils::ckb_merkle_leaf_hash;
 use gw_common::merkle_utils::CBMT;
@@ -37,8 +34,7 @@ use gw_types::h256::*;
 use gw_types::packed::AllowedTypeHash;
 use gw_types::packed::CCWithdrawalWitness;
 use gw_types::packed::WithdrawalRequestExtra;
-use gw_types::prelude::Pack as GWPack;
-use gw_types::prelude::*;
+use gw_types::prelude::{Pack as CKBPack, *};
 use gw_types::{
     bytes::Bytes,
     core::{ChallengeTargetType, ScriptHashType, Status},
@@ -57,7 +53,7 @@ pub(crate) fn build_merkle_proof(leaves: &[H256], indices: &[u32]) -> CKBMerkleP
     let proof = CBMT::build_merkle_proof(leaves, indices).unwrap();
     CKBMerkleProof::new_builder()
         .lemmas(proof.lemmas().pack())
-        .indices(GWPack::pack(proof.indices()))
+        .indices(Pack::pack(proof.indices()))
         .build()
 }
 
@@ -79,13 +75,12 @@ async fn test_burn_challenge_capacity() {
         .args(CKBPack::pack(&Bytes::from(b"reward_burned_lock".to_vec())))
         .code_hash(CKBPack::pack(&[0u8; 32]))
         .build();
-    let reward_burn_lock_hash: [u8; 32] = reward_burn_lock.calc_script_hash().unpack().into();
+    let reward_burn_lock_hash: [u8; 32] = reward_burn_lock.hash();
     let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
     let challenge_lock_type = named_always_success_script(b"challenge_lock_type_id");
     let eoa_lock_type = named_always_success_script(b"eoa_lock_type_id");
-    let challenge_script_type_hash: [u8; 32] =
-        challenge_lock_type.calc_script_hash().unpack().into();
-    let eoa_lock_type_hash: [u8; 32] = eoa_lock_type.calc_script_hash().unpack().into();
+    let challenge_script_type_hash: [u8; 32] = challenge_lock_type.hash();
+    let eoa_lock_type_hash: [u8; 32] = eoa_lock_type.hash();
     let allowed_eoa_type_hashes: Vec<AllowedTypeHash> = vec![AllowedTypeHash::new(
         AllowedEoaType::Eth,
         eoa_lock_type_hash,
@@ -120,12 +115,7 @@ async fn test_burn_challenge_capacity() {
         .set_completed_initial_syncing();
     // create a rollup cell
     let capacity = 1000_00000000u64;
-    let rollup_cell = build_always_success_cell(
-        capacity,
-        Some(ckb_types::packed::Script::new_unchecked(
-            rollup_type_script.as_bytes(),
-        )),
-    );
+    let rollup_cell = build_always_success_cell(capacity, Some(rollup_type_script.clone()));
     let eth_registry_id = gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
     let withdrawal_extra;
     // produce a block so we can challenge it
@@ -374,9 +364,7 @@ async fn test_burn_challenge_capacity() {
     };
     let input_unlock_cell = {
         let cell = CellOutput::new_builder()
-            .lock(ckb_types::packed::Script::new_unchecked(
-                sender_script.as_bytes(),
-            ))
+            .lock(sender_script)
             .capacity(CKBPack::pack(&42u64))
             .build();
         let owner_lock_hash = vec![42u8; 32];

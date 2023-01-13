@@ -1880,6 +1880,7 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "blake2b-rs",
+ "ckb-types",
  "ckb-vm",
  "ckb-vm-aot",
  "ethabi",
@@ -2276,7 +2277,7 @@ dependencies = [
 name = "gw-types"
 version = "1.8.0-rc3"
 dependencies = [
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "ckb-fixed-hash",
  "ckb-types",
  "gw-hash",

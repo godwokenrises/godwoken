@@ -14,10 +14,7 @@ use crate::script_tests::utils::rollup::{
 use crate::testing_tool::chain::into_deposit_info_cell;
 use crate::testing_tool::chain::setup_chain_with_account_lock_manage;
 use crate::testing_tool::chain::{apply_block_result, construct_block};
-use ckb_types::{
-    packed::{CellInput, CellOutput},
-    prelude::{Pack as CKBPack, Unpack as CKBUnpack},
-};
+use ckb_types::packed::{CellInput, CellOutput};
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::merkle_utils::ckb_merkle_leaf_hash;
 use gw_common::registry_address::RegistryAddress;
@@ -40,7 +37,7 @@ use gw_types::h256::*;
 use gw_types::packed::AllowedTypeHash;
 use gw_types::packed::CCTransactionSignatureWitness;
 use gw_types::packed::Fee;
-use gw_types::prelude::*;
+use gw_types::prelude::{Pack, Pack as CKBPack, *};
 use gw_types::U256;
 use gw_types::{
     bytes::Bytes,
@@ -69,10 +66,9 @@ async fn test_cancel_tx_signature() {
     let challenge_lock_type = named_always_success_script(b"challenge_lock_type_id");
     let eoa_lock_type = named_always_success_script(b"eoa_lock_type_id");
     let l2_sudt_type = named_always_success_script(b"l2_sudt_type_id");
-    let challenge_script_type_hash: [u8; 32] =
-        challenge_lock_type.calc_script_hash().unpack().into();
-    let eoa_lock_type_hash: [u8; 32] = eoa_lock_type.calc_script_hash().unpack().into();
-    let l2_sudt_type_hash: [u8; 32] = l2_sudt_type.calc_script_hash().unpack().into();
+    let challenge_script_type_hash: [u8; 32] = challenge_lock_type.hash();
+    let eoa_lock_type_hash: [u8; 32] = eoa_lock_type.hash();
+    let l2_sudt_type_hash: [u8; 32] = l2_sudt_type.hash();
 
     let allowed_eoa_type_hashes: Vec<AllowedTypeHash> = vec![AllowedTypeHash::new(
         AllowedEoaType::Eth,
@@ -117,12 +113,7 @@ async fn test_cancel_tx_signature() {
         .set_completed_initial_syncing();
     // create a rollup cell
     let capacity = 1000_00000000u64;
-    let rollup_cell = build_always_success_cell(
-        capacity,
-        Some(ckb_types::packed::Script::new_unchecked(
-            rollup_type_script.as_bytes(),
-        )),
-    );
+    let rollup_cell = build_always_success_cell(capacity, Some(rollup_type_script.clone()));
     // CKB built-in account id
     let sudt_id = 1;
     let rollup_script_hash = rollup_type_script.hash();
@@ -377,9 +368,7 @@ async fn test_cancel_tx_signature() {
 
     let input_unlock_cell = {
         let cell = CellOutput::new_builder()
-            .lock(ckb_types::packed::Script::new_unchecked(
-                sender_script.as_bytes(),
-            ))
+            .lock(sender_script)
             .capacity(CKBPack::pack(&42u64))
             .build();
         let owner_lock_hash = vec![42u8; 32];

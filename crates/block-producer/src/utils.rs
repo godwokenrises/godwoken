@@ -2,7 +2,7 @@ use crate::debugger;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::core::Timepoint;
 use gw_types::packed::{GlobalState, Transaction};
-use gw_types::prelude::Unpack;
+use gw_types::prelude::*;
 use gw_utils::since::Since;
 use std::path::Path;
 

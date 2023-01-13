@@ -1,4 +1,3 @@
-use ckb_types::prelude::{Builder, Entity};
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
     ckb_decimal::CKBCapacity,
@@ -14,7 +13,7 @@ use gw_types::{
         CreateAccount, DepositInfoVec, DepositRequest, Fee, L2Transaction, MetaContractArgs,
         RawL2Transaction, Script,
     },
-    prelude::{Pack, Unpack},
+    prelude::*,
     U256,
 };
 

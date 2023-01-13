@@ -1,7 +1,12 @@
-use crate::h256::H256;
-use crate::offchain::{CellInfo, DepositInfo, FinalizedCustodianCapacity, SudtCustodian};
-use crate::registry_address::RegistryAddress;
-use crate::{packed, prelude::*, vec::Vec};
+use alloc::vec::Vec;
+
+use crate::{
+    h256::H256,
+    offchain::{CellInfo, DepositInfo, FinalizedCustodianCapacity, SudtCustodian},
+    packed,
+    prelude::*,
+    registry_address::RegistryAddress,
+};
 
 impl Pack<packed::CellInfo> for CellInfo {
     fn pack(&self) -> packed::CellInfo {

@@ -1,12 +1,10 @@
-use std::convert::{TryFrom, TryInto};
-
 use anyhow::{anyhow, bail, Result};
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_types::{
     core::ScriptHashType,
     h256::*,
     packed::{RawL2Transaction, RawWithdrawalRequest},
-    prelude::Unpack,
+    prelude::*,
 };
 use sha3::{Digest, Keccak256};
 
@@ -244,6 +242,7 @@ impl Withdrawal {
             .map_err(|hash_type| anyhow!("Invalid hash type: {}", hash_type))?
         {
             ScriptHashType::Data => "data",
+            ScriptHashType::Data1 => "data1",
             ScriptHashType::Type => "type",
         };
         let address = RegistryAddress::from_address(address)?;

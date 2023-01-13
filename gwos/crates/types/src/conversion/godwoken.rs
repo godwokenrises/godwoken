@@ -1,8 +1,8 @@
-use core::convert::TryInto;
+use alloc::vec::Vec;
 
 use primitive_types::U256;
 
-use crate::{core::H256, packed, prelude::*, vec::Vec};
+use crate::{core::H256, packed, prelude::*};
 
 impl Pack<packed::KVPair> for (H256, H256) {
     fn pack(&self) -> packed::KVPair {

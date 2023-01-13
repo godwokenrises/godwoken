@@ -12,20 +12,17 @@ use crate::testing_tool::chain::ALWAYS_SUCCESS_PROGRAM;
 use ckb_error::assert_error_eq;
 use ckb_script::ScriptError;
 use ckb_types::core::TransactionView;
-use ckb_types::prelude::{Builder, Entity};
 use gw_common::blake2b::new_blake2b;
 use gw_types::bytes::Bytes;
 use gw_types::core::{ScriptHashType, Timepoint};
 use gw_types::packed::{
-    BlockMerkleState, Byte32, CellDep, CellInput, CellOutput, GlobalState, OutPoint, RollupConfig,
-    Script, UnlockWithdrawalViaFinalize, UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion,
+    BlockMerkleState, CellDep, CellInput, CellOutput, GlobalState, RollupConfig, Script,
+    UnlockWithdrawalViaFinalize, UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion,
     WithdrawalLockArgs, WitnessArgs,
 };
-use gw_types::prelude::{Pack, Unpack};
+use gw_types::prelude::*;
 use secp256k1::rand::rngs::ThreadRng;
 use secp256k1::{Message, Secp256k1, SecretKey};
-
-pub use conversion::{ToCKBType, ToGWType};
 
 const OWNER_CELL_NOT_FOUND_EXIT_CODE: i8 = 8;
 
@@ -35,7 +32,7 @@ fn test_unlock_withdrawal_via_finalize_by_input_owner_cell() {
 
     const DEFAULT_CAPACITY: u64 = 1000 * 10u64.pow(8);
 
-    let rollup_type_script = random_always_success_script().to_gw();
+    let rollup_type_script = random_always_success_script();
     let rollup_type_hash = rollup_type_script.hash();
     let (mut verify_ctx, script_ctx) = build_verify_context();
 
@@ -54,7 +51,7 @@ fn test_unlock_withdrawal_via_finalize_by_input_owner_cell() {
             .build();
 
         let output = CellOutput::new_builder()
-            .lock(random_always_success_script().to_gw())
+            .lock(random_always_success_script())
             .type_(Some(rollup_type_script).pack())
             .capacity(DEFAULT_CAPACITY.pack())
             .build();
@@ -62,8 +59,8 @@ fn test_unlock_withdrawal_via_finalize_by_input_owner_cell() {
         (output, global_state.as_bytes())
     };
     let rollup_dep = {
-        let out_point = verify_ctx.insert_cell(rollup_cell.0.to_ckb(), rollup_cell.1);
-        CellDep::new_builder().out_point(out_point.to_gw()).build()
+        let out_point = verify_ctx.insert_cell(rollup_cell.0, rollup_cell.1);
+        CellDep::new_builder().out_point(out_point).build()
     };
 
     let (sk, pk) = {
@@ -94,8 +91,8 @@ fn test_unlock_withdrawal_via_finalize_by_input_owner_cell() {
     };
     let finalized_withdrawal_cell = {
         let lock_args = WithdrawalLockArgs::new_builder()
-            .account_script_hash(random_always_success_script().to_gw().hash().pack())
-            .withdrawal_block_hash(random_always_success_script().to_gw().hash().pack())
+            .account_script_hash(random_always_success_script().hash().pack())
+            .withdrawal_block_hash(random_always_success_script().hash().pack())
             .withdrawal_finalized_timepoint(withdrawal_finalized_timepoint.full_value().pack())
             .owner_lock_hash(owner_lock.hash().pack())
             .build();
@@ -116,9 +113,7 @@ fn test_unlock_withdrawal_via_finalize_by_input_owner_cell() {
     let finalized_withdrawal_input = {
         let out_point =
             verify_ctx.insert_cell(finalized_withdrawal_cell.0.clone(), 0u128.pack().as_bytes());
-        CellInput::new_builder()
-            .previous_output(out_point.to_gw())
-            .build()
+        CellInput::new_builder().previous_output(out_point).build()
     };
     let owner_input = {
         let output = CellOutput::new_builder()
@@ -126,10 +121,8 @@ fn test_unlock_withdrawal_via_finalize_by_input_owner_cell() {
             .lock(owner_lock.clone())
             .build();
 
-        let out_point = verify_ctx.insert_cell(output.to_ckb(), 0u128.pack().as_bytes());
-        CellInput::new_builder()
-            .previous_output(out_point.to_gw())
-            .build()
+        let out_point = verify_ctx.insert_cell(output, 0u128.pack().as_bytes());
+        CellInput::new_builder().previous_output(out_point).build()
     };
     let output_cell = {
         let output = CellOutput::new_builder()
@@ -137,7 +130,7 @@ fn test_unlock_withdrawal_via_finalize_by_input_owner_cell() {
             .lock(owner_lock)
             .build();
 
-        (output.to_ckb(), 0u128.pack().as_bytes())
+        (output, 0u128.pack().as_bytes())
     };
     let unlock_via_finalize_witness = {
         let unlock_args = UnlockWithdrawalViaFinalize::new_builder().build();
@@ -154,17 +147,17 @@ fn test_unlock_withdrawal_via_finalize_by_input_owner_cell() {
     let tx = build_simple_tx_with_out_point(
         &mut verify_ctx.inner,
         finalized_withdrawal_cell,
-        finalized_withdrawal_input.to_ckb().previous_output(),
+        finalized_withdrawal_input.previous_output(),
         output_cell,
     )
     .as_advanced_builder()
-    .witness(unlock_via_finalize_witness.as_bytes().to_ckb())
-    .input(owner_input.to_ckb())
+    .witness(unlock_via_finalize_witness.as_bytes().pack())
+    .input(owner_input)
     .witness(Default::default())
-    .cell_dep(script_ctx.withdrawal.dep.to_ckb())
-    .cell_dep(script_ctx.acp.dep.to_ckb())
-    .cell_dep(script_ctx.secp256k1_data.dep.to_ckb())
-    .cell_dep(rollup_dep.to_ckb())
+    .cell_dep(script_ctx.withdrawal.dep)
+    .cell_dep(script_ctx.acp.dep)
+    .cell_dep(script_ctx.secp256k1_data.dep)
+    .cell_dep(rollup_dep)
     .cell_dep(verify_ctx.rollup_config_dep.clone())
     .build();
 
@@ -183,7 +176,7 @@ fn test_unlock_withdrawal_via_finalize_by_switch_indexed_output_to_owner_lock() 
 
     const DEFAULT_CAPACITY: u64 = 1000 * 10u64.pow(8);
 
-    let rollup_type_script = random_always_success_script().to_gw();
+    let rollup_type_script = random_always_success_script();
     let rollup_type_hash = rollup_type_script.hash();
     let (mut verify_ctx, script_ctx) = build_verify_context();
 
@@ -202,7 +195,7 @@ fn test_unlock_withdrawal_via_finalize_by_switch_indexed_output_to_owner_lock() 
             .build();
 
         let output = CellOutput::new_builder()
-            .lock(random_always_success_script().to_gw())
+            .lock(random_always_success_script())
             .type_(Some(rollup_type_script).pack())
             .capacity(DEFAULT_CAPACITY.pack())
             .build();
@@ -210,15 +203,15 @@ fn test_unlock_withdrawal_via_finalize_by_switch_indexed_output_to_owner_lock() 
         (output, global_state.as_bytes())
     };
     let rollup_dep = {
-        let out_point = verify_ctx.insert_cell(rollup_cell.0.to_ckb(), rollup_cell.1);
-        CellDep::new_builder().out_point(out_point.to_gw()).build()
+        let out_point = verify_ctx.insert_cell(rollup_cell.0, rollup_cell.1);
+        CellDep::new_builder().out_point(out_point).build()
     };
 
-    let owner_lock = random_always_success_script().to_gw();
+    let owner_lock = random_always_success_script();
     let finalized_withdrawal_cell = {
         let lock_args = WithdrawalLockArgs::new_builder()
-            .account_script_hash(random_always_success_script().to_gw().hash().pack())
-            .withdrawal_block_hash(random_always_success_script().to_gw().hash().pack())
+            .account_script_hash(random_always_success_script().hash().pack())
+            .withdrawal_block_hash(random_always_success_script().hash().pack())
             .withdrawal_finalized_timepoint(withdrawal_finalized_timepoint.full_value().pack())
             .owner_lock_hash(owner_lock.hash().pack())
             .build();
@@ -240,16 +233,12 @@ fn test_unlock_withdrawal_via_finalize_by_switch_indexed_output_to_owner_lock() 
     let finalized_withdrawal_input_1 = {
         let out_point =
             verify_ctx.insert_cell(finalized_withdrawal_cell.0.clone(), 0u128.pack().as_bytes());
-        CellInput::new_builder()
-            .previous_output(out_point.to_gw())
-            .build()
+        CellInput::new_builder().previous_output(out_point).build()
     };
     let finalized_withdrawal_input_2 = {
         let out_point =
             verify_ctx.insert_cell(finalized_withdrawal_cell.0.clone(), 0u128.pack().as_bytes());
-        CellInput::new_builder()
-            .previous_output(out_point.to_gw())
-            .build()
+        CellInput::new_builder().previous_output(out_point).build()
     };
     let output_cell = {
         let output = CellOutput::new_builder()
@@ -257,7 +246,7 @@ fn test_unlock_withdrawal_via_finalize_by_switch_indexed_output_to_owner_lock() 
             .lock(owner_lock)
             .build();
 
-        (output.to_ckb(), 0u128.pack().as_bytes())
+        (output, 0u128.pack().as_bytes())
     };
     let unlock_via_finalize_witness = {
         let unlock_args = UnlockWithdrawalViaFinalize::new_builder().build();
@@ -275,13 +264,13 @@ fn test_unlock_withdrawal_via_finalize_by_switch_indexed_output_to_owner_lock() 
     let tx = build_simple_tx_with_out_point(
         &mut verify_ctx.inner,
         finalized_withdrawal_cell,
-        finalized_withdrawal_input_1.to_ckb().previous_output(),
+        finalized_withdrawal_input_1.previous_output(),
         output_cell.clone(),
     )
     .as_advanced_builder()
-    .witness(unlock_via_finalize_witness.as_bytes().to_ckb())
-    .cell_dep(script_ctx.withdrawal.dep.to_ckb())
-    .cell_dep(rollup_dep.to_ckb())
+    .witness(unlock_via_finalize_witness.as_bytes().pack())
+    .cell_dep(script_ctx.withdrawal.dep)
+    .cell_dep(rollup_dep)
     .cell_dep(verify_ctx.rollup_config_dep.clone())
     .build();
 
@@ -290,7 +279,7 @@ fn test_unlock_withdrawal_via_finalize_by_switch_indexed_output_to_owner_lock() 
     // Try multiple withdrawals without indexed output
     let tx = tx
         .as_advanced_builder()
-        .input(finalized_withdrawal_input_2.to_ckb())
+        .input(finalized_withdrawal_input_2)
         .witness(Default::default())
         .build();
 
@@ -309,7 +298,7 @@ fn test_unlock_withdrawal_via_finalize_by_switch_indexed_output_to_owner_lock() 
     let err_tx = tx
         .as_advanced_builder()
         .output(output_cell.0.clone())
-        .output_data(1u128.pack().as_bytes().to_ckb()) // ERROR: change output data
+        .output_data(1u128.pack().as_bytes().pack()) // ERROR: change output data
         .build();
 
     let err = verify_ctx.verify_tx(err_tx).unwrap_err();
@@ -326,12 +315,12 @@ fn test_unlock_withdrawal_via_finalize_by_switch_indexed_output_to_owner_lock() 
     // Fill incorrect output lock
     let err_output = CellOutput::new_builder()
         .capacity(DEFAULT_CAPACITY.pack())
-        .lock(random_always_success_script().to_gw()) // ERROR: dirrerent output lock
+        .lock(random_always_success_script()) // ERROR: dirrerent output lock
         .build();
     let err_tx = tx
         .as_advanced_builder()
-        .output(err_output.to_ckb())
-        .output_data(output_cell.1.to_ckb())
+        .output(err_output)
+        .output_data(output_cell.1.pack())
         .build();
 
     let err = verify_ctx.verify_tx(err_tx).unwrap_err();
@@ -349,7 +338,7 @@ fn test_unlock_withdrawal_via_finalize_by_switch_indexed_output_to_owner_lock() 
     let tx = tx
         .as_advanced_builder()
         .output(output_cell.0)
-        .output_data(output_cell.1.to_ckb())
+        .output_data(output_cell.1.pack())
         .build();
 
     verify_ctx.verify_tx(tx).expect("success");
@@ -361,7 +350,7 @@ fn test_unlock_withdrawal_via_finalize_fallback_to_input_owner_cell() {
 
     const DEFAULT_CAPACITY: u64 = 1000 * 10u64.pow(8);
 
-    let rollup_type_script = random_always_success_script().to_gw();
+    let rollup_type_script = random_always_success_script();
     let rollup_type_hash = rollup_type_script.hash();
     let (mut verify_ctx, script_ctx) = build_verify_context();
 
@@ -380,7 +369,7 @@ fn test_unlock_withdrawal_via_finalize_fallback_to_input_owner_cell() {
             .build();
 
         let output = CellOutput::new_builder()
-            .lock(random_always_success_script().to_gw())
+            .lock(random_always_success_script())
             .type_(Some(rollup_type_script).pack())
             .capacity(DEFAULT_CAPACITY.pack())
             .build();
@@ -388,8 +377,8 @@ fn test_unlock_withdrawal_via_finalize_fallback_to_input_owner_cell() {
         (output, global_state.as_bytes())
     };
     let rollup_dep = {
-        let out_point = verify_ctx.insert_cell(rollup_cell.0.to_ckb(), rollup_cell.1);
-        CellDep::new_builder().out_point(out_point.to_gw()).build()
+        let out_point = verify_ctx.insert_cell(rollup_cell.0, rollup_cell.1);
+        CellDep::new_builder().out_point(out_point).build()
     };
 
     let (sk, pk) = {
@@ -415,8 +404,8 @@ fn test_unlock_withdrawal_via_finalize_fallback_to_input_owner_cell() {
     };
     let finalized_withdrawal_cell = {
         let lock_args = WithdrawalLockArgs::new_builder()
-            .account_script_hash(random_always_success_script().to_gw().hash().pack())
-            .withdrawal_block_hash(random_always_success_script().to_gw().hash().pack())
+            .account_script_hash(random_always_success_script().hash().pack())
+            .withdrawal_block_hash(random_always_success_script().hash().pack())
             .withdrawal_finalized_timepoint(withdrawal_finalized_timepoint.full_value().pack())
             .owner_lock_hash(owner_lock.hash().pack())
             .build();
@@ -438,9 +427,7 @@ fn test_unlock_withdrawal_via_finalize_fallback_to_input_owner_cell() {
     let finalized_withdrawal_input = {
         let out_point =
             verify_ctx.insert_cell(finalized_withdrawal_cell.0.clone(), 0u128.pack().as_bytes());
-        CellInput::new_builder()
-            .previous_output(out_point.to_gw())
-            .build()
+        CellInput::new_builder().previous_output(out_point).build()
     };
     let owner_input = {
         let output = CellOutput::new_builder()
@@ -448,10 +435,8 @@ fn test_unlock_withdrawal_via_finalize_fallback_to_input_owner_cell() {
             .lock(owner_lock.clone())
             .build();
 
-        let out_point = verify_ctx.insert_cell(output.to_ckb(), 0u128.pack().as_bytes());
-        CellInput::new_builder()
-            .previous_output(out_point.to_gw())
-            .build()
+        let out_point = verify_ctx.insert_cell(output, 0u128.pack().as_bytes());
+        CellInput::new_builder().previous_output(out_point).build()
     };
     // ERROR: wrong output capacity, can only unlock by input owner cell
     let output_cell = {
@@ -460,7 +445,7 @@ fn test_unlock_withdrawal_via_finalize_fallback_to_input_owner_cell() {
             .lock(owner_lock)
             .build();
 
-        (output.to_ckb(), 0u128.pack().as_bytes())
+        (output, 0u128.pack().as_bytes())
     };
     let unlock_via_finalize_witness = witness_unlock_withdrawal_via_finalize();
 
@@ -468,13 +453,13 @@ fn test_unlock_withdrawal_via_finalize_fallback_to_input_owner_cell() {
     let tx = build_simple_tx_with_out_point(
         &mut verify_ctx.inner,
         finalized_withdrawal_cell,
-        finalized_withdrawal_input.to_ckb().previous_output(),
+        finalized_withdrawal_input.previous_output(),
         output_cell,
     )
     .as_advanced_builder()
-    .witness(unlock_via_finalize_witness.as_bytes().to_ckb())
-    .cell_dep(script_ctx.withdrawal.dep.to_ckb())
-    .cell_dep(rollup_dep.to_ckb())
+    .witness(unlock_via_finalize_witness.as_bytes().pack())
+    .cell_dep(script_ctx.withdrawal.dep)
+    .cell_dep(rollup_dep.clone())
     .cell_dep(verify_ctx.rollup_config_dep.clone())
     .build();
 
@@ -492,11 +477,11 @@ fn test_unlock_withdrawal_via_finalize_fallback_to_input_owner_cell() {
     // Try input owner cell
     let tx = tx
         .as_advanced_builder()
-        .input(owner_input.to_ckb())
+        .input(owner_input)
         .witness(Default::default())
-        .cell_dep(script_ctx.acp.dep.to_ckb())
-        .cell_dep(script_ctx.secp256k1_data.dep.to_ckb())
-        .cell_dep(rollup_dep.to_ckb())
+        .cell_dep(script_ctx.acp.dep)
+        .cell_dep(script_ctx.secp256k1_data.dep)
+        .cell_dep(rollup_dep)
         .cell_dep(verify_ctx.rollup_config_dep.clone())
         .build();
 
@@ -517,10 +502,10 @@ struct ScriptContext {
 }
 
 fn build_verify_context() -> (CellContext, ScriptContext) {
-    let withdrawal_lock_type = random_always_success_script().to_gw();
-    let sudt_type = random_always_success_script().to_gw();
-    let acp_lock_type = random_always_success_script().to_gw();
-    let secp256k1_data_type = random_always_success_script().to_gw();
+    let withdrawal_lock_type = random_always_success_script();
+    let sudt_type = random_always_success_script();
+    let acp_lock_type = random_always_success_script();
+    let secp256k1_data_type = random_always_success_script();
 
     let config = RollupConfig::new_builder()
         .withdrawal_script_type_hash(withdrawal_lock_type.hash().pack())
@@ -530,41 +515,40 @@ fn build_verify_context() -> (CellContext, ScriptContext) {
     let mut ctx = CellContext::new(&config, Default::default());
 
     let withdrawal_output = CellOutput::new_builder()
-        .lock(random_always_success_script().to_gw())
+        .lock(random_always_success_script())
         .type_(Some(withdrawal_lock_type.clone()).pack())
         .build();
     let withdrawal_cell_dep = {
-        let out_point =
-            ctx.insert_cell(withdrawal_output.to_ckb(), WITHDRAWAL_LOCK_PROGRAM.clone());
-        CellDep::new_builder().out_point(out_point.to_gw()).build()
+        let out_point = ctx.insert_cell(withdrawal_output, WITHDRAWAL_LOCK_PROGRAM.clone());
+        CellDep::new_builder().out_point(out_point).build()
     };
-    ctx.withdrawal_lock_dep = withdrawal_cell_dep.to_ckb();
+    ctx.withdrawal_lock_dep = withdrawal_cell_dep.clone();
 
     let sudt_output = CellOutput::new_builder()
-        .lock(random_always_success_script().to_gw())
+        .lock(random_always_success_script())
         .type_(Some(sudt_type.clone()).pack())
         .build();
     let sudt_cell_dep = {
-        let out_point = ctx.insert_cell(sudt_output.to_ckb(), ALWAYS_SUCCESS_PROGRAM.clone());
-        CellDep::new_builder().out_point(out_point.to_gw()).build()
+        let out_point = ctx.insert_cell(sudt_output, ALWAYS_SUCCESS_PROGRAM.clone());
+        CellDep::new_builder().out_point(out_point).build()
     };
 
     let acp_output = CellOutput::new_builder()
-        .lock(random_always_success_script().to_gw())
+        .lock(random_always_success_script())
         .type_(Some(acp_lock_type.clone()).pack())
         .build();
     let acp_cell_dep = {
-        let out_point = ctx.insert_cell(acp_output.to_ckb(), ANYONE_CAN_PAY_LOCK_PROGRAM.clone());
-        CellDep::new_builder().out_point(out_point.to_gw()).build()
+        let out_point = ctx.insert_cell(acp_output, ANYONE_CAN_PAY_LOCK_PROGRAM.clone());
+        CellDep::new_builder().out_point(out_point).build()
     };
 
     let secp256k1_data_output = CellOutput::new_builder()
-        .lock(random_always_success_script().to_gw())
+        .lock(random_always_success_script())
         .type_(Some(secp256k1_data_type.clone()).pack())
         .build();
     let secp256k1_data_dep = {
-        let out_point = ctx.insert_cell(secp256k1_data_output.to_ckb(), SECP256K1_DATA.clone());
-        CellDep::new_builder().out_point(out_point.to_gw()).build()
+        let out_point = ctx.insert_cell(secp256k1_data_output, SECP256K1_DATA.clone());
+        CellDep::new_builder().out_point(out_point).build()
     };
 
     let script_ctx = ScriptContext {
@@ -623,7 +607,7 @@ fn sign_tx(tx: TransactionView, witness_idx: usize, sk: &SecretKey) -> Transacti
 
     let mut signed_witnesses: Vec<_> = tx.witnesses().into_iter().collect();
     let witness = WitnessArgs::new_builder().lock(Some(sig).pack()).build();
-    *signed_witnesses.get_mut(witness_idx).unwrap() = witness.as_bytes().to_ckb();
+    *signed_witnesses.get_mut(witness_idx).unwrap() = witness.as_bytes().pack();
 
     tx.as_advanced_builder()
         .set_witnesses(signed_witnesses)
@@ -661,58 +645,4 @@ fn witness_unlock_withdrawal_via_finalize() -> WitnessArgs {
     WitnessArgs::new_builder()
         .lock(Some(unlock_witness.as_bytes()).pack())
         .build()
-}
-
-mod conversion {
-    use ckb_types::packed::{
-        Byte32, Bytes, CellDep, CellInput, CellOutput, OutPoint, Script, WitnessArgs,
-    };
-    use ckb_types::prelude::{Entity, Pack};
-
-    pub trait ToCKBType<T> {
-        fn to_ckb(&self) -> T;
-    }
-
-    macro_rules! impl_to_ckb {
-        ($type_:tt) => {
-            impl ToCKBType<$type_> for super::$type_ {
-                fn to_ckb(&self) -> $type_ {
-                    $type_::new_unchecked(self.as_bytes())
-                }
-            }
-        };
-    }
-    impl_to_ckb!(Script);
-    impl_to_ckb!(CellInput);
-    impl_to_ckb!(CellOutput);
-    impl_to_ckb!(WitnessArgs);
-    impl_to_ckb!(CellDep);
-    impl_to_ckb!(Byte32);
-    impl_to_ckb!(OutPoint);
-
-    impl ToCKBType<Bytes> for super::Bytes {
-        fn to_ckb(&self) -> Bytes {
-            self.pack()
-        }
-    }
-
-    pub trait ToGWType<T> {
-        fn to_gw(&self) -> T;
-    }
-
-    macro_rules! impl_to_gw {
-        ($type_:tt) => {
-            impl ToGWType<super::$type_> for $type_ {
-                fn to_gw(&self) -> super::$type_ {
-                    super::$type_::new_unchecked(self.as_bytes())
-                }
-            }
-        };
-    }
-
-    impl_to_gw!(OutPoint);
-    impl_to_gw!(CellOutput);
-    impl_to_gw!(CellInput);
-    impl_to_gw!(Script);
-    impl_to_gw!(Byte32);
 }

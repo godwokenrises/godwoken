@@ -506,21 +506,15 @@ impl MemBlock {
             return Diff("touched keys");
         }
 
-        if self.withdrawal_post_states.clone().pack().as_slice()
-            != other.withdrawal_post_states.clone().pack().as_slice()
-        {
+        if self.withdrawal_post_states != other.withdrawal_post_states {
             return Diff("withdrawal merkle_states");
         }
 
-        if self.deposit_post_states.clone().pack().as_slice()
-            != other.deposit_post_states.clone().pack().as_slice()
-        {
+        if self.deposit_post_states != other.deposit_post_states {
             return Diff("deposit merkle_states");
         }
 
-        if self.tx_post_states.clone().pack().as_slice()
-            != other.tx_post_states.clone().pack().as_slice()
-        {
+        if self.tx_post_states != other.tx_post_states {
             return Diff("tx merkle_states");
         }
 
@@ -553,7 +547,7 @@ mod test {
     use gw_common::registry_address::RegistryAddress;
     use gw_types::h256::*;
     use gw_types::packed::{AccountMerkleState, BlockInfo};
-    use gw_types::prelude::{Builder, Entity, Pack, Unpack};
+    use gw_types::prelude::*;
 
     use super::MemBlock;
 

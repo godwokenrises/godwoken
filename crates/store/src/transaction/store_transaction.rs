@@ -188,7 +188,10 @@ impl StoreTransaction {
             .zip(tx_receipts.iter())
             .enumerate()
         {
-            let key = TransactionKey::build_transaction_key(block_hash.pack(), index as u32);
+            let key = TransactionKey::new_builder()
+                .block_hash(block_hash.pack())
+                .index(index.pack())
+                .build();
             self.insert_raw(COLUMN_TRANSACTION, key.as_slice(), tx.as_slice())?;
             self.insert_raw(
                 COLUMN_TRANSACTION_RECEIPT,
@@ -197,7 +200,10 @@ impl StoreTransaction {
             )?;
         }
         for (index, withdrawal) in withdrawals.into_iter().enumerate() {
-            let key = WithdrawalKey::build_withdrawal_key(block_hash.pack(), index as u32);
+            let key = WithdrawalKey::new_builder()
+                .block_hash(block_hash.pack())
+                .index(index.pack())
+                .build();
             self.insert_raw(COLUMN_WITHDRAWAL, key.as_slice(), withdrawal.as_slice())?;
         }
 
@@ -223,9 +229,7 @@ impl StoreTransaction {
     // TODO: prune db state
     pub fn get_reverted_block_hashes(&self) -> Result<HashSet<H256>> {
         let iter = self.get_iter(COLUMN_REVERTED_BLOCK_SMT_LEAF, Direction::Backward);
-        let to_h256 = iter.map(|(key, _value)| {
-            packed::Byte32Reader::from_slice_should_be_ok(key.as_ref()).unpack()
-        });
+        let to_h256 = iter.map(|(key, _value)| (&*key).try_into().unwrap());
 
         Ok(to_h256.collect())
     }
@@ -290,7 +294,11 @@ impl StoreTransaction {
     ) -> Result<()> {
         let k = block_number.to_be_bytes();
         self.insert_raw(COLUMN_BLOCK_SUBMIT_TX, &k, tx.as_slice())?;
-        self.insert_raw(COLUMN_BLOCK_SUBMIT_TX_HASH, &k, &tx.hash())?;
+        self.insert_raw(
+            COLUMN_BLOCK_SUBMIT_TX_HASH,
+            &k,
+            tx.calc_tx_hash().as_slice(),
+        )?;
         Ok(())
     }
 
@@ -431,7 +439,10 @@ impl StoreTransaction {
 
         // build tx info
         for (index, tx) in block.transactions().into_iter().enumerate() {
-            let key = TransactionKey::build_transaction_key(block_hash.pack(), index as u32);
+            let key = TransactionKey::new_builder()
+                .block_hash(block_hash.pack())
+                .index(index.pack())
+                .build();
             let info = packed::TransactionInfo::new_builder()
                 .key(key)
                 .block_number(raw_number.clone())
@@ -442,7 +453,10 @@ impl StoreTransaction {
 
         // build withdrawal info
         for (index, withdrawal) in block.withdrawals().into_iter().enumerate() {
-            let key = WithdrawalKey::build_withdrawal_key(block_hash.pack(), index as u32);
+            let key = WithdrawalKey::new_builder()
+                .block_hash(block_hash.pack())
+                .index(index.pack())
+                .build();
             let info = packed::WithdrawalInfo::new_builder()
                 .key(key)
                 .block_number(raw_number.clone())
@@ -626,7 +640,7 @@ impl StoreTransaction {
         self.get_iter(COLUMN_MEM_POOL_WITHDRAWAL, Direction::Backward)
             .map(|(key, val)| {
                 (
-                    packed::Byte32Reader::from_slice_should_be_ok(key.as_ref()).unpack(),
+                    key.as_ref().try_into().unwrap(),
                     from_box_should_be_ok!(packed::WithdrawalRequestExtraReader, val),
                 )
             })
@@ -638,7 +652,7 @@ impl StoreTransaction {
         self.get_iter(COLUMN_MEM_POOL_TRANSACTION, Direction::Backward)
             .map(|(key, val)| {
                 (
-                    packed::Byte32Reader::from_slice_should_be_ok(key.as_ref()).unpack(),
+                    key.as_ref().try_into().unwrap(),
                     from_box_should_be_ok!(packed::L2TransactionReader, val),
                 )
             })

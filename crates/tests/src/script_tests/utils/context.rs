@@ -3,7 +3,6 @@ use crate::testing_tool::chain::{
     ALWAYS_SUCCESS_CODE_HASH, ETH_REGISTRY_SCRIPT_TYPE_HASH, META_VALIDATOR_SCRIPT_TYPE_HASH,
     SUDT_VALIDATOR_SCRIPT_TYPE_HASH,
 };
-use ckb_types::prelude::{Builder, Entity};
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
     registry_address::RegistryAddress,

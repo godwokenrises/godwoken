@@ -1,5 +1,5 @@
 use crate::packed::RollupConfig;
-use crate::prelude::Unpack;
+use crate::prelude::*;
 
 // Rollup_config.finality_blocks on Godwoken mainnet is set to 16800, and it is
 // expected to be equal to ~7 days. So we estimate the average block interval

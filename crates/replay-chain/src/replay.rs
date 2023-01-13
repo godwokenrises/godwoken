@@ -6,11 +6,7 @@ use gw_store::{
     state::{history::history_state::RWConfig, BlockStateDB},
     traits::chain_store::ChainStore,
 };
-use gw_types::{
-    core::ChallengeTargetType,
-    packed::Byte32,
-    prelude::{Pack, Unpack},
-};
+use gw_types::{core::ChallengeTargetType, packed::Byte32, prelude::*};
 
 pub fn replay_chain(ctx: ChainContext) -> Result<()> {
     let ChainContext {

@@ -5,7 +5,6 @@ use crate::test_mode_control::TestModeControl;
 use crate::types::ChainEvent;
 use crate::utils;
 use anyhow::{anyhow, bail, Context, Result};
-use ckb_types::prelude::{Builder, Entity, Reader};
 use gw_chain::chain::{Chain, ChallengeCell, SyncEvent};
 use gw_challenge::cancel_challenge::{
     CancelChallengeOutput, LoadData, LoadDataContext, LoadDataStrategy, RecoverAccounts,
@@ -19,6 +18,7 @@ use gw_challenge::types::{RevertContext, VerifyContext};
 use gw_config::{BlockProducerConfig, DebugConfig};
 use gw_generator::types::vm::ChallengeContext;
 use gw_jsonrpc_types::test_mode::TestModePayload;
+use gw_jsonrpc_types::JsonCalcHash;
 use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::bytes::Bytes;
@@ -29,7 +29,7 @@ use gw_types::packed::{
     CellDep, CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, ChallengeTarget,
     GlobalState, OutPoint, Script, Transaction, WitnessArgs,
 };
-use gw_types::prelude::{Pack, Unpack};
+use gw_types::prelude::*;
 use gw_utils::fee::fill_tx_fee;
 use gw_utils::genesis_info::CKBGenesisInfo;
 use gw_utils::transaction_skeleton::TransactionSkeleton;
@@ -727,11 +727,11 @@ impl Challenger {
     async fn dry_run_transaction(&self, tx: &Transaction, action: &str) -> Result<()> {
         match self.rpc_client.dry_run_transaction(tx).await {
             Ok(cycles) => {
-                log::info!("tx({}) {} cycles: {}", action, tx.hash().pack(), cycles);
+                log::info!("tx({}) {} cycles: {}", action, tx.calc_tx_hash(), cycles);
                 Ok(())
             }
             Err(err) => {
-                log::error!("dry run {} tx {} failed", action, tx.hash().pack());
+                log::error!("dry run {} tx {} failed", action, tx.calc_tx_hash());
 
                 let err_str = err.to_string();
                 if err_str.contains(TRANSACTION_FAILED_TO_RESOLVE_ERROR) {

@@ -56,7 +56,7 @@ impl LocalCellsManager {
             let out_point = input.previous_output().to_entity();
             self.lock_cell(out_point);
         }
-        let tx_hash = tx.hash().pack();
+        let tx_hash = tx.calc_tx_hash();
         for (idx, (output, output_data)) in tx
             .raw()
             .outputs()

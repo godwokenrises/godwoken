@@ -1,24 +1,19 @@
-use crate::godwoken_rpc::GodwokenRpcClient;
-use crate::hasher::CkbHasher;
-use crate::types::ScriptsDeploymentResult;
+use std::{fs, path::Path, str::FromStr};
+
 use anyhow::{anyhow, Result};
-use ckb_crypto::secp::Privkey;
-use ckb_crypto::secp::SECP256K1;
+use ckb_crypto::secp::{Privkey, SECP256K1};
 use ckb_fixed_hash::H256;
-use ckb_types::{
-    bytes::Bytes as CKBBytes, core::ScriptHashType, prelude::Builder as CKBBuilder,
-    prelude::Entity as CKBEntity,
-};
 use gw_types::{
-    bytes::Bytes as GwBytes,
+    bytes::Bytes,
+    core::ScriptHashType,
     packed::{Byte32, Script},
-    prelude::Pack as GwPack,
+    prelude::*,
 };
 use sha3::{Digest, Keccak256};
-use std::str::FromStr;
-use std::{fs, path::Path};
 
-pub fn privkey_to_eth_address(privkey: &H256) -> Result<CKBBytes> {
+use crate::{godwoken_rpc::GodwokenRpcClient, hasher::CkbHasher, types::ScriptsDeploymentResult};
+
+pub fn privkey_to_eth_address(privkey: &H256) -> Result<Bytes> {
     let privkey = secp256k1::SecretKey::from_slice(privkey.as_bytes())
         .map_err(|err| anyhow!("Invalid secp256k1 secret key format, error: {}", err))?;
     let pubkey = secp256k1::PublicKey::from_secret_key(&SECP256K1, &privkey);
@@ -30,7 +25,7 @@ pub fn privkey_to_eth_address(privkey: &H256) -> Result<CKBBytes> {
         pubkey_hash.copy_from_slice(&buf[12..]);
         pubkey_hash
     };
-    let s = CKBBytes::from(pubkey_hash.to_vec());
+    let s = Bytes::from(pubkey_hash.to_vec());
     Ok(s)
 }
 
@@ -67,7 +62,7 @@ pub fn privkey_to_l2_script_hash(
 
     let mut args_vec = rollup_type_hash.as_bytes().to_vec();
     args_vec.append(&mut eth_address.to_vec());
-    let args = GwPack::pack(&GwBytes::from(args_vec));
+    let args = Pack::pack(&Bytes::from(args_vec));
 
     let script = Script::new_builder()
         .code_hash(code_hash)

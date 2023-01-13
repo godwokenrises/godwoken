@@ -1,16 +1,16 @@
-use ckb_fixed_hash::{H160, H256};
-pub use gw_jsonrpc_types::godwoken::GaslessTxSupportConfig;
-use gw_jsonrpc_types::{
-    blockchain::{CellDep, Script},
-    ckb_jsonrpc_types::JsonBytes,
-    godwoken::ChallengeTargetType,
-};
-use serde::{Deserialize, Serialize};
 use std::{
     cmp::min,
     collections::{HashMap, HashSet},
     path::PathBuf,
 };
+
+use ckb_fixed_hash::{H160, H256};
+pub use gw_jsonrpc_types::godwoken::GaslessTxSupportConfig;
+use gw_jsonrpc_types::{
+    ckb_jsonrpc_types::{CellDep, JsonBytes, Script},
+    godwoken::ChallengeTargetType,
+};
+use serde::{Deserialize, Serialize};
 
 use crate::{consensus::Consensus, fork_config::BackendForkConfig};
 

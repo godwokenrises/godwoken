@@ -12,7 +12,6 @@ use crate::testing_tool::chain::{
     ETH_ACCOUNT_LOCK_CODE_HASH,
 };
 
-use ckb_types::prelude::{Builder, Entity};
 use godwoken_bin::subcommand::{export_block::ExportBlock, import_block::ImportBlock};
 use gw_block_producer::produce_block::ProduceBlockResult;
 use gw_chain::chain::{Chain, ChallengeCell, L1Action, L1ActionContext, SyncEvent, SyncParam};
@@ -24,6 +23,7 @@ use gw_store::{readonly::StoreReadonly, schema::COLUMNS, traits::chain_store::Ch
 use gw_types::core::{Status, Timepoint};
 use gw_types::h256::*;
 use gw_types::packed::DepositInfoVec;
+use gw_types::prelude::*;
 use gw_types::{
     bytes::Bytes,
     core::{AllowedEoaType, ScriptHashType},
@@ -32,7 +32,6 @@ use gw_types::{
         AllowedTypeHash, CellInput, CellOutput, DepositRequest, GlobalState, OutPoint,
         RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest, WithdrawalRequestExtra,
     },
-    prelude::{Pack, PackVec, Unpack},
 };
 use gw_utils::export_block::check_block_post_state;
 

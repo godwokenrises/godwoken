@@ -288,7 +288,8 @@ fn try_assemble_polyjuice_args(
 mod tests {
     use super::*;
     use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
-    use gw_types::{core::ScriptHashType, packed::RollupConfig};
+    use gw_types::core::ScriptHashType;
+    use gw_types::packed::RollupConfig;
 
     #[test]
     fn test_secp256k1_eth_polyjuice_call() {

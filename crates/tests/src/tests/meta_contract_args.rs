@@ -1,4 +1,3 @@
-use ckb_types::prelude::{Builder, Entity};
 use gw_common::{
     builtins::{ETH_REGISTRY_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
     state::State,
@@ -9,7 +8,7 @@ use gw_types::{
     packed::{
         CreateAccount, DeprecatedMetaContractArgs, Fee, L2Transaction, RawL2Transaction, Script,
     },
-    prelude::Pack,
+    prelude::*,
 };
 
 use crate::testing_tool::{chain::TestChain, eth_wallet::EthWallet};

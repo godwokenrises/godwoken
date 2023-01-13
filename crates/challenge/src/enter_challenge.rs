@@ -1,4 +1,4 @@
-use ckb_types::prelude::{Builder, Entity};
+use ckb_types::core::Capacity;
 use gw_generator::types::vm::ChallengeContext;
 use gw_types::core::{ScriptHashType, Status};
 use gw_types::h256::*;
@@ -6,7 +6,7 @@ use gw_types::packed::{
     Byte32, CellOutput, ChallengeLockArgs, ChallengeTarget, ChallengeWitness, GlobalState,
     RollupAction, RollupActionUnion, RollupEnterChallenge, Script, WitnessArgs,
 };
-use gw_types::{bytes::Bytes, prelude::Pack};
+use gw_types::{bytes::Bytes, prelude::*};
 use gw_utils::RollupContext;
 
 pub struct EnterChallenge {
@@ -71,9 +71,12 @@ impl EnterChallenge {
                 .build();
 
             let capacity = dummy
-                .occupied_capacity(0)
+                .occupied_capacity(Capacity::zero())
                 .expect("challenge cell capacity overflow");
-            dummy.as_builder().capacity(capacity.pack()).build()
+            dummy
+                .as_builder()
+                .capacity(capacity.as_u64().pack())
+                .build()
         };
         let challenge_cell = (challenge, Bytes::default());
 

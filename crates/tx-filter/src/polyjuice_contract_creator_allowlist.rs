@@ -1,12 +1,9 @@
+use std::collections::HashSet;
+
 use gw_common::state::State;
 use gw_config::MemPoolExtraConfig;
 use gw_traits::CodeStore;
-use gw_types::bytes::Bytes;
-use gw_types::h256::*;
-use gw_types::packed::RawL2Transaction;
-use gw_types::prelude::Unpack;
-
-use std::collections::HashSet;
+use gw_types::{bytes::Bytes, h256::*, packed::RawL2Transaction, prelude::*};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -126,19 +123,24 @@ impl PolyjuiceArgs {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
-    use std::iter::FromIterator;
+    use std::{
+        collections::{HashMap, HashSet},
+        iter::FromIterator,
+    };
 
-    use gw_common::error::Error;
-    use gw_common::state::State;
-    use gw_smt::smt::{SMT, SMTH256};
-    use gw_smt::sparse_merkle_tree::default_store::DefaultStore;
+    use gw_common::{error::Error, state::State};
+    use gw_smt::{
+        smt::{SMT, SMTH256},
+        sparse_merkle_tree::default_store::DefaultStore,
+    };
     use gw_traits::CodeStore;
-    use gw_types::bytes::Bytes;
-    use gw_types::core::ScriptHashType;
-    use gw_types::h256::*;
-    use gw_types::packed::{RawL2Transaction, Script};
-    use gw_types::prelude::{Builder, Entity, Pack};
+    use gw_types::{
+        bytes::Bytes,
+        core::ScriptHashType,
+        h256::*,
+        packed::{RawL2Transaction, Script},
+        prelude::*,
+    };
 
     use super::PolyjuiceContractCreatorAllowList;
 

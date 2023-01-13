@@ -521,11 +521,12 @@ async fn submit_block(
         // Restore Vec<WithdrawalRequestExtras> from store.
         let mut withdrawal_extras = Vec::with_capacity(block.withdrawals().len());
         for (idx, w) in block.withdrawals().into_iter().enumerate() {
+            let key = WithdrawalKey::new_builder()
+                .block_hash(block_hash.pack())
+                .index(idx.pack())
+                .build();
             let extra = snap
-                .get_withdrawal_by_key(&WithdrawalKey::build_withdrawal_key(
-                    block_hash.pack(),
-                    idx as u32,
-                ))?
+                .get_withdrawal_by_key(&key)?
                 .context("get withdrawal")?;
             ensure!(extra.hash() == w.hash());
             withdrawal_extras.push(extra);
@@ -614,7 +615,10 @@ async fn submit_block(
         }
     }
 
-    log::info!("sending transaction 0x{}", hex::encode(tx.hash()));
+    log::info!(
+        "sending transaction 0x{}",
+        hex::encode(tx.calc_tx_hash().as_slice())
+    );
     if let Err(e) = send_transaction_or_check_inputs(&ctx.rpc_client, &tx).await {
         if e.is::<UnknownCellError>() {
             if is_first {

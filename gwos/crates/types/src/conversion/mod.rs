@@ -12,3 +12,5 @@ mod mem_block;
 mod primitive;
 #[cfg(feature = "std")]
 mod store;
+
+pub use blockchain::*;

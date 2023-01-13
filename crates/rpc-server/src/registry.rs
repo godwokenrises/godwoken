@@ -7,7 +7,6 @@ use std::{
 
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
-use ckb_types::prelude::{Builder, Entity};
 use gw_common::blake2b::new_blake2b;
 use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
 use gw_common::state::State;
@@ -23,11 +22,11 @@ use gw_generator::{
     verification::transaction::TransactionVerifier, Generator,
 };
 use gw_jsonrpc_types::{
-    blockchain::Script,
-    ckb_jsonrpc_types::{JsonBytes, Uint32, Uint64},
+    ckb_jsonrpc_types::{JsonBytes, Script, Uint32, Uint64},
     debug::DebugRunResult,
     godwoken::*,
     test_mode::TestModePayload,
+    JsonCalcHash,
 };
 use gw_mem_pool::fee::{
     queue::FeeQueue,

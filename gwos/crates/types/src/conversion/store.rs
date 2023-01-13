@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use crate::{packed, prelude::*};
 
 impl Pack<packed::TransactionKey> for [u8; 36] {

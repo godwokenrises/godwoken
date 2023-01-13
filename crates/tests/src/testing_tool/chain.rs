@@ -556,7 +556,7 @@ pub fn build_sync_tx(
             .build()
     };
     let witness = WitnessArgs::new_builder()
-        .output_type(Pack::<_>::pack(&Some(rollup_action.as_bytes())))
+        .output_type(Some(rollup_action.as_bytes()).pack())
         .build();
     let raw = RawTransaction::new_builder()
         .outputs(vec![rollup_cell].pack())

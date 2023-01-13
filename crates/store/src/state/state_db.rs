@@ -18,7 +18,7 @@ use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     packed::{self, LogItem},
-    prelude::{Pack, Unpack},
+    prelude::*,
 };
 
 use gw_common::{error::Error as StateError, state::State};

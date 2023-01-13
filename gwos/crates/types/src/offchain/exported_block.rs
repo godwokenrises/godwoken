@@ -1,7 +1,7 @@
 use crate::{
     h256::H256,
     packed::{DepositInfoVec, GlobalState, L2Block, Script, WithdrawalRequestExtra},
-    prelude::{Entity, Unpack},
+    prelude::*,
 };
 
 #[derive(Debug)]

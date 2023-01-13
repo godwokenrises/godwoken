@@ -52,6 +52,7 @@ fn main() {
     {
         build::check_molecule_version();
         build::generate_molecule(&[
+            // Note: this one is only used for no-std.
             "blockchain",
             "godwoken",
             "store",

@@ -8,7 +8,7 @@ use gw_types::h256::*;
 use gw_types::packed::{
     BatchCreateEthAccounts, Fee, L2Transaction, MetaContractArgs, RawL2Transaction, ScriptVec,
 };
-use gw_types::prelude::{Builder, Entity, Pack};
+use gw_types::prelude::*;
 use gw_utils::wallet::Wallet;
 use tracing::instrument;
 

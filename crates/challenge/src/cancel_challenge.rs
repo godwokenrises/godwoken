@@ -1,8 +1,9 @@
 use crate::types::{VerifyContext, VerifyWitness};
 
 use anyhow::{anyhow, Result};
-use ckb_types::prelude::{Builder, Entity};
 use gw_config::ContractsCellDep;
+use gw_types::bytes::Bytes;
+use gw_types::conversion::cap_bytes;
 use gw_types::core::{DepType, SigningType, Status};
 use gw_types::h256::*;
 use gw_types::offchain::{CellInfo, InputCellInfo, RecoverAccount};
@@ -11,8 +12,7 @@ use gw_types::packed::{
     CellOutput, GlobalState, OutPoint, RollupAction, RollupActionUnion, RollupCancelChallenge,
     Script, WitnessArgs,
 };
-use gw_types::prelude::Unpack;
-use gw_types::{bytes::Bytes, prelude::Pack as GWPack};
+use gw_types::prelude::{Builder, CalcHash, Entity, Pack, Unpack};
 use gw_utils::RollupContext;
 use std::collections::{HashMap, HashSet};
 
@@ -541,10 +541,13 @@ fn build_cell(data: Bytes, lock: Script) -> (CellOutput, Bytes) {
         .build();
 
     let capacity = dummy_output
-        .occupied_capacity(data.len())
+        .occupied_capacity(cap_bytes(data.len()))
         .expect("impossible cancel challenge verify cell overflow");
 
-    let output = dummy_output.as_builder().capacity(capacity.pack()).build();
+    let output = dummy_output
+        .as_builder()
+        .capacity(capacity.as_u64().pack())
+        .build();
 
     (output, data)
 }

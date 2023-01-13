@@ -1,9 +1,5 @@
-use crate::deploy_genesis::get_secp_data;
-use crate::setup::get_wallet_info;
-use crate::types::{
-    BuildScriptsResult, OmniLockConfig, RollupDeploymentResult, ScriptsDeploymentResult,
-    UserRollupConfig,
-};
+use std::path::Path;
+
 use anyhow::{anyhow, Context, Result};
 use ckb_jsonrpc_types::{CellDep, JsonBytes};
 use ckb_types::prelude::{Builder, Entity};
@@ -14,11 +10,19 @@ use gw_config::{
     RPCServerConfig, RegistryAddressConfig, RegistryType, SUDTProxyConfig, StoreConfig,
     SystemTypeScriptConfig, WalletConfig,
 };
-use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
+use gw_jsonrpc_types::{godwoken::L2BlockCommittedInfo, JsonCalcHash};
 use gw_rpc_client::ckb_client::CkbClient;
 use gw_types::{core::ScriptHashType, packed::Script, prelude::*};
 use gw_utils::checksum::file_checksum;
-use std::path::Path;
+
+use crate::{
+    deploy_genesis::get_secp_data,
+    setup::get_wallet_info,
+    types::{
+        BuildScriptsResult, OmniLockConfig, RollupDeploymentResult, ScriptsDeploymentResult,
+        UserRollupConfig,
+    },
+};
 
 pub struct GenerateNodeConfigArgs<'a> {
     pub rollup_result: &'a RollupDeploymentResult,
@@ -100,15 +104,8 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         .eth_addr_reg_validator
         .script_type_hash
         .clone();
-    let rollup_type_script = {
-        let script: ckb_types::packed::Script = rollup_result.rollup_type_script.clone().into();
-        gw_types::packed::Script::new_unchecked(script.as_bytes()).into()
-    };
-    let rollup_config_cell_dep = {
-        let cell_dep: ckb_types::packed::CellDep =
-            rollup_result.rollup_config_cell_dep.clone().into();
-        gw_types::packed::CellDep::new_unchecked(cell_dep.as_bytes()).into()
-    };
+    let rollup_type_script = rollup_result.rollup_type_script.clone();
+    let rollup_config_cell_dep = rollup_result.rollup_config_cell_dep.clone();
     let (_data, secp_data_dep) = get_secp_data(&rpc_client).await.context("get secp data")?;
 
     let system_type_scripts = query_contracts_script(
@@ -121,11 +118,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
     .map_err(|err| anyhow!("query contracts script {}", err))?;
 
     let challenger_config = ChallengerConfig {
-        rewards_receiver_lock: {
-            let lock: ckb_types::packed::Script = user_rollup_config.reward_lock.clone().into();
-            let lock = gw_types::packed::Script::new_unchecked(lock.as_bytes());
-            lock.into()
-        },
+        rewards_receiver_lock: user_rollup_config.reward_lock.clone(),
     };
 
     let wallet_config: WalletConfig = WalletConfig {
@@ -294,7 +287,7 @@ async fn query_contracts_script(
     omni_lock_config: &OmniLockConfig,
 ) -> Result<SystemTypeScriptConfig> {
     let query = |contract: &'static str, cell_dep: CellDep| -> _ {
-        ckb_client.query_type_script(contract, cell_dep.into())
+        ckb_client.query_type_script(contract, cell_dep)
     };
 
     let state_validator = query(

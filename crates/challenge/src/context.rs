@@ -26,7 +26,7 @@ use gw_types::packed::{
     KVPairVec, L2Block, L2Transaction, RawL2Block, RawL2BlockVec, RawL2Transaction, Script,
     ScriptReader, ScriptVec, Uint32, WithdrawalKey,
 };
-use gw_types::prelude::{Builder, Entity, FromSliceShouldBeOk, Pack, Reader, Unpack};
+use gw_types::prelude::*;
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -147,14 +147,15 @@ fn build_verify_withdrawal_witness(
         .enumerate()
         .map(|(idx, withdrawal)| {
             let hash: H256 = withdrawal.witness_hash().into();
+            let withdrawal_key = WithdrawalKey::new_builder()
+                .block_hash(block_hash.pack())
+                .index(idx.pack())
+                .build();
             if idx == withdrawal_index as usize {
                 target = Some(
-                    db.get_withdrawal_by_key(&WithdrawalKey::build_withdrawal_key(
-                        block_hash.pack(),
-                        idx as u32,
-                    ))
-                    .expect("get withdrawal from db")
-                    .expect("must exist"),
+                    db.get_withdrawal_by_key(&withdrawal_key)
+                        .expect("get withdrawal from db")
+                        .expect("must exist"),
                 );
             }
             ckb_merkle_leaf_hash(idx as u32, &hash)

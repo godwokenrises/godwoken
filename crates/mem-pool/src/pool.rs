@@ -8,6 +8,15 @@
 //! txs & withdrawals again.
 //!
 
+use std::{
+    cmp::{max, min},
+    collections::{HashMap, HashSet, VecDeque},
+    iter::FromIterator,
+    ops::Shr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
 use anyhow::{anyhow, Context, Result};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, ckb_decimal::CKBCapacity, registry_address::RegistryAddress,
@@ -34,26 +43,16 @@ use gw_tx_filter::{
     erc20_creator_allowlist::SUDTProxyAccountAllowlist,
     polyjuice_contract_creator_allowlist::PolyjuiceContractCreatorAllowList,
 };
-use gw_types::packed::GlobalState;
 use gw_types::{
     h256::*,
     offchain::{DepositInfo, FinalizedCustodianCapacity},
     packed::{
-        AccountMerkleState, BlockInfo, L2Block, L2Transaction, NextMemBlock, Script, TxReceipt,
-        WithdrawalKey, WithdrawalRequest, WithdrawalRequestExtra,
+        AccountMerkleState, BlockInfo, GlobalState, L2Block, L2Transaction, NextMemBlock, Script,
+        TxReceipt, WithdrawalKey, WithdrawalRequest, WithdrawalRequestExtra,
     },
-    prelude::{Builder, Entity, Pack, PackVec, Unpack},
+    prelude::*,
 };
-use gw_utils::calc_finalizing_range;
-use gw_utils::local_cells::LocalCellsManager;
-use std::{
-    cmp::{max, min},
-    collections::{HashMap, HashSet, VecDeque},
-    iter::FromIterator,
-    ops::Shr,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use gw_utils::{calc_finalizing_range, local_cells::LocalCellsManager};
 use tokio::task::block_in_place;
 use tracing::instrument;
 
@@ -653,8 +652,10 @@ impl MemPool {
                     let block_hash = rem.hash();
                     // reverse push, so we can keep withdrawals in block's order
                     for index in (0..rem.withdrawals().len()).rev() {
-                        let key =
-                            WithdrawalKey::build_withdrawal_key(block_hash.pack(), index as u32);
+                        let key = WithdrawalKey::new_builder()
+                            .block_hash(block_hash.pack())
+                            .index(index.pack())
+                            .build();
                         let withdrawal = rem.withdrawals().get(index).unwrap();
                         let withdrawal_extra = self
                             .store
@@ -1451,15 +1452,18 @@ pub(crate) fn repackage_count(
 mod test {
     use std::ops::Shr;
 
-    use gw_common::merkle_utils::calculate_state_checkpoint;
-    use gw_common::registry_address::RegistryAddress;
-    use gw_types::h256::*;
-    use gw_types::offchain::{DepositInfo, FinalizedCustodianCapacity};
-    use gw_types::packed::{AccountMerkleState, BlockInfo, DepositRequest};
-    use gw_types::prelude::{Builder, Entity, Pack, Unpack};
+    use gw_common::{merkle_utils::calculate_state_checkpoint, registry_address::RegistryAddress};
+    use gw_types::{
+        h256::*,
+        offchain::{DepositInfo, FinalizedCustodianCapacity},
+        packed::{AccountMerkleState, BlockInfo, DepositRequest},
+        prelude::*,
+    };
 
-    use crate::mem_block::{MemBlock, MemBlockCmp};
-    use crate::pool::{repackage_count, MemPool, OutputParam};
+    use crate::{
+        mem_block::{MemBlock, MemBlockCmp},
+        pool::{repackage_count, MemPool, OutputParam},
+    };
 
     #[test]
     fn test_package_mem_block() {

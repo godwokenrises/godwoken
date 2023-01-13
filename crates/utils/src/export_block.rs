@@ -10,7 +10,7 @@ use gw_types::{
     h256::*,
     offchain::ExportedBlock,
     packed::{self, GlobalState},
-    prelude::{Builder, Entity, Pack, Reader, Unpack},
+    prelude::*,
 };
 
 pub fn export_block(snap: &StoreReadonly, block_number: u64) -> Result<ExportedBlock> {

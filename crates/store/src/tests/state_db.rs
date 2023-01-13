@@ -4,7 +4,7 @@ use gw_types::{
     packed::{
         AccountMerkleState, L2Block, NumberHash, RawL2Block, SubmitTransactions, Transaction,
     },
-    prelude::{Builder, Entity, Pack, Unpack},
+    prelude::*,
 };
 
 use crate::{

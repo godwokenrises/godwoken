@@ -10,7 +10,7 @@ use gw_types::{
     core::{AllowedContractType, AllowedEoaType, ScriptHashType},
     h256::*,
     packed::{L2Transaction, RawL2Transaction, Script},
-    prelude::{Builder, Entity, Pack, Unpack},
+    prelude::*,
 };
 use gw_utils::wallet::Wallet;
 use gw_utils::RollupContext;

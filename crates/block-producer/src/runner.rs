@@ -127,7 +127,7 @@ impl ChainTask {
         if let Some(block) = self.rpc_client.get_block_by_number(tip_number + 1).await? {
             let raw_header = block.header().raw();
             let new_block_number = raw_header.number().unpack();
-            let new_block_hash = block.header().hash();
+            let new_block_hash: [u8; 32] = block.header().calc_header_hash().unpack();
             assert_eq!(
                 new_block_number,
                 tip_number + 1,
@@ -204,7 +204,10 @@ impl ChainTask {
             }
 
             // update tip
-            Ok(Some((new_block_number, block.header().hash())))
+            Ok(Some((
+                new_block_number,
+                block.header().calc_header_hash().unpack(),
+            )))
         } else {
             log::debug!(
                 "Not found layer1 block #{} sleep {}s then retry",
@@ -285,10 +288,8 @@ impl BaseInitComponents {
             } else {
                 CkbIndexerClient::from(ckb_client.clone())
             };
-            let rollup_type_script =
-                ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
             RPCClient::new(
-                rollup_type_script,
+                rollup_type_script.clone(),
                 rollup_context.rollup_config.clone(),
                 ckb_client,
                 indexer_client,

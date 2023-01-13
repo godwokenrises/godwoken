@@ -14,7 +14,7 @@ use gw_types::{
         BatchCreateEthAccounts, Fee, L2Transaction, LogItemReader, MetaContractArgs,
         RawL2Transaction, Script, ScriptVec,
     },
-    prelude::{Builder, Entity, Pack, Reader, Unpack},
+    prelude::*,
     U256,
 };
 use gw_utils::{

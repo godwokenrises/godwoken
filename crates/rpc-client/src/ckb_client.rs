@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use crate::utils::{JsonH256, TracingHttpClient};
 use anyhow::{anyhow, bail, Result};
-use gw_jsonrpc_types::{blockchain::CellDep, ckb_jsonrpc_types::*};
+use gw_jsonrpc_types::ckb_jsonrpc_types::*;
 use gw_types::{h256::H256, packed, prelude::*};
 use jsonrpc_utils::rpc_client;
 use tracing::instrument;
@@ -99,8 +99,7 @@ impl CkbClient {
                     Either::Left(tv) => tv,
                     Either::Right(_) => bail!("unexpected bytes response for get_transaction"),
                 };
-                let tx = ckb_types::packed::Transaction::from(tv.inner);
-                Ok(packed::Transaction::new_unchecked(tx.as_bytes()))
+                Ok(tv.inner.into())
             })
             .transpose()
     }
@@ -162,11 +161,7 @@ impl CkbClient {
     }
 
     #[instrument(skip_all)]
-    pub async fn query_type_script(
-        &self,
-        contract: &str,
-        cell_dep: CellDep,
-    ) -> Result<gw_jsonrpc_types::blockchain::Script> {
+    pub async fn query_type_script(&self, contract: &str, cell_dep: CellDep) -> Result<Script> {
         let tx_hash = cell_dep.out_point.tx_hash;
         let tx_with_status: Option<TransactionWithStatusResponse> =
             self.get_transaction(tx_hash.clone(), 2.into()).await?;
@@ -187,7 +182,7 @@ impl CkbClient {
             .get(cell_dep.out_point.index.value() as usize)
         {
             Some(output) => match output.type_.as_ref() {
-                Some(script) => Ok(script.to_owned().into()),
+                Some(script) => Ok(script.clone()),
                 None => Err(anyhow!("{} {} tx hasn't type script", contract, tx_hash)),
             },
             None => Err(anyhow!("{} {} tx index not found", contract, tx_hash)),

@@ -1,12 +1,12 @@
-use crate::{builtins::ETH_REGISTRY_ACCOUNT_ID, vec::Vec};
-use core::convert::TryInto;
-
 use gw_types::{
     core::AllowedEoaType,
     packed::{AllowedTypeHash, Byte32},
+    prelude::*,
 };
 
-use crate::{error::Error, registry_address::RegistryAddress};
+use crate::{
+    builtins::ETH_REGISTRY_ACCOUNT_ID, error::Error, registry_address::RegistryAddress, vec::Vec,
+};
 
 pub struct RegistryContext {
     allowed_eoa_type_hashes: Vec<AllowedTypeHash>,
@@ -21,7 +21,7 @@ impl RegistryContext {
     fn find_eoa_type_by_hash(&self, code_hash: &Byte32) -> Option<&AllowedTypeHash> {
         self.allowed_eoa_type_hashes
             .iter()
-            .find(|type_hash| &type_hash.hash() == code_hash)
+            .find(|type_hash| type_hash.hash().as_slice() == code_hash.as_slice())
     }
 
     /// Extract EOA registry address from deposit request

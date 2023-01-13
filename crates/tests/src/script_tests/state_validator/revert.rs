@@ -14,10 +14,7 @@ use crate::testing_tool::chain::{
     apply_block_result, construct_block, into_deposit_info_cell, setup_chain_with_config,
     ALWAYS_SUCCESS_CODE_HASH,
 };
-use ckb_types::{
-    packed::{CellInput, CellOutput},
-    prelude::{Pack as CKBPack, Unpack as CKBUnpack},
-};
+use ckb_types::packed::{CellInput, CellOutput};
 use gw_common::registry_address::RegistryAddress;
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State};
 use gw_smt::smt::SMTH256;
@@ -27,7 +24,9 @@ use gw_store::state::history::history_state::RWConfig;
 use gw_store::state::BlockStateDB;
 use gw_store::traits::chain_store::ChainStore;
 use gw_types::core::{AllowedContractType, AllowedEoaType, Timepoint};
+use gw_types::packed::StakeLockArgs;
 use gw_types::packed::{AllowedTypeHash, Fee};
+use gw_types::prelude::{Pack, *};
 use gw_types::U256;
 use gw_types::{
     bytes::Bytes,
@@ -39,7 +38,6 @@ use gw_types::{
         SUDTTransfer, Script,
     },
 };
-use gw_types::{packed::StakeLockArgs, prelude::*};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_revert() {
@@ -56,18 +54,17 @@ async fn test_revert() {
     // rollup lock & config
     let reward_receive_lock = always_success_script()
         .as_builder()
-        .args(CKBPack::pack(&Bytes::from(b"reward_receive_lock".to_vec())))
+        .args(Bytes::from(b"reward_receive_lock".to_vec()).pack())
         .build();
     let reward_burn_lock = ckb_types::packed::Script::new_builder()
-        .args(CKBPack::pack(&Bytes::from(b"reward_burned_lock".to_vec())))
-        .code_hash(CKBPack::pack(&[0u8; 32]))
+        .args(Pack::pack(&Bytes::from(b"reward_burned_lock".to_vec())))
+        .code_hash(Pack::pack(&[0u8; 32]))
         .build();
-    let reward_burn_lock_hash: [u8; 32] = reward_burn_lock.calc_script_hash().unpack().into();
+    let reward_burn_lock_hash: [u8; 32] = reward_burn_lock.hash();
     let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
-    let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack().into();
+    let stake_script_type_hash: [u8; 32] = stake_lock_type.hash();
     let challenge_lock_type = named_always_success_script(b"challenge_lock_type_id");
-    let challenge_script_type_hash: [u8; 32] =
-        challenge_lock_type.calc_script_hash().unpack().into();
+    let challenge_script_type_hash: [u8; 32] = challenge_lock_type.hash();
     let finality_blocks = 10;
 
     let rollup_config = RollupConfig::new_builder()
@@ -92,12 +89,7 @@ async fn test_revert() {
     let mut chain = setup_chain_with_config(rollup_type_script.clone(), rollup_config).await;
     // create a rollup cell
     let capacity = 1000_00000000u64;
-    let rollup_cell = build_always_success_cell(
-        capacity,
-        Some(ckb_types::packed::Script::new_unchecked(
-            rollup_type_script.as_bytes(),
-        )),
-    );
+    let rollup_cell = build_always_success_cell(capacity, Some(rollup_type_script.clone()));
     let rollup_script_hash = rollup_type_script.hash();
     let eth_registry_id = gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
     // produce a block so we can challenge it
@@ -233,9 +225,7 @@ async fn test_revert() {
                     .block_hash(Pack::pack(&challenged_block.hash()))
                     .build(),
             )
-            .rewards_receiver_lock(gw_types::packed::Script::new_unchecked(
-                reward_receive_lock.as_bytes(),
-            ))
+            .rewards_receiver_lock(reward_receive_lock.clone())
             .build();
         let cell = build_rollup_locked_cell(
             &rollup_type_script.hash(),
@@ -255,7 +245,7 @@ async fn test_revert() {
             since
         };
         CellInput::new_builder()
-            .since(CKBPack::pack(&since))
+            .since(Pack::pack(&since))
             .previous_output(out_point)
             .build()
     };
@@ -269,11 +259,11 @@ async fn test_revert() {
     let received_capacity: u64 = reward_capacity + challenge_capacity;
     let burned_capacity: u64 = stake_capacity - reward_capacity;
     let receive_cell = CellOutput::new_builder()
-        .capacity(CKBPack::pack(&received_capacity))
+        .capacity(Pack::pack(&received_capacity))
         .lock(reward_receive_lock)
         .build();
     let reward_burned_cell = CellOutput::new_builder()
-        .capacity(CKBPack::pack(&burned_capacity))
+        .capacity(Pack::pack(&burned_capacity))
         .lock(reward_burn_lock)
         .build();
     let global_state = chain
@@ -326,7 +316,7 @@ async fn test_revert() {
             ))
             .build();
         ckb_types::packed::WitnessArgs::new_builder()
-            .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
+            .output_type(Pack::pack(&Some(rollup_action.as_bytes())))
             .build()
     };
     let post_reverted_block_root: H256 = {
@@ -374,8 +364,8 @@ async fn test_revert() {
     .cell_dep(ctx.always_success_dep.clone())
     .cell_dep(ctx.state_validator_dep.clone())
     .cell_dep(ctx.rollup_config_dep.clone())
-    .witness(CKBPack::pack(&witness.as_bytes()))
-    .witness(CKBPack::pack(&Bytes::new()))
+    .witness(Pack::pack(&witness.as_bytes()))
+    .witness(Pack::pack(&Bytes::new()))
     .build();
     ctx.verify_tx(tx).expect("return success");
 }

@@ -12,6 +12,7 @@ use ckb_types::{
     packed,
     prelude::*,
 };
+use gw_types::prelude::CalcHash;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;

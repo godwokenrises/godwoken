@@ -6,12 +6,14 @@ use crate::ckb_client::CkbClient;
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter, Tx};
 use crate::utils::{TracingHttpClient, DEFAULT_QUERY_LIMIT};
 use anyhow::Result;
-use ckb_types::prelude::Entity;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{JsonBytes, Uint32};
+use gw_jsonrpc_types::number_hash::NumberHash;
 use gw_types::core::Timepoint;
 use gw_types::offchain::{CompatibleFinalizedTimepoint, CustodianStat, SUDTStat};
-use gw_types::packed::CustodianLockArgs;
-use gw_types::{packed::Script, prelude::*};
+use gw_types::{
+    packed::{CustodianLockArgs, Script},
+    prelude::*,
+};
 use jsonrpc_utils::rpc_client;
 use tracing::instrument;
 
@@ -24,8 +26,8 @@ pub struct CkbIndexerClient {
 
 #[rpc_client]
 impl CkbIndexerClient {
-    async fn get_tip(&self) -> Result<gw_jsonrpc_types::blockchain::NumberHash>;
-    async fn get_indexer_tip(&self) -> Result<gw_jsonrpc_types::blockchain::NumberHash>;
+    async fn get_tip(&self) -> Result<NumberHash>;
+    async fn get_indexer_tip(&self) -> Result<NumberHash>;
     pub async fn get_cells(
         &self,
         search_key: &SearchKey,
@@ -61,7 +63,7 @@ impl CkbIndexerClient {
         })
     }
 
-    pub async fn get_indexer_tip1(&self) -> Result<gw_jsonrpc_types::blockchain::NumberHash> {
+    pub async fn get_indexer_tip1(&self) -> Result<NumberHash> {
         if self.is_standalone {
             self.get_tip().await
         } else {
@@ -85,10 +87,7 @@ impl CkbIndexerClient {
             output_data_len_range: None,
         });
         let search_key = SearchKey {
-            script: {
-                let lock = ckb_types::packed::Script::new_unchecked(lock.as_bytes());
-                lock.into()
-            },
+            script: lock.into(),
             script_type: ScriptType::Lock,
             filter,
         };
