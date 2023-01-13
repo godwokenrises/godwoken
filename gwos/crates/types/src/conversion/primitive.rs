@@ -1,6 +1,5 @@
-use core::convert::TryInto;
+use alloc::{borrow::ToOwned, str, string::String, vec::Vec};
 
-use crate::{borrow::ToOwned, str, string::String, vec::Vec};
 use crate::{bytes::Bytes, packed, prelude::*};
 
 impl Pack<packed::Uint16> for u16 {
@@ -12,6 +11,12 @@ impl Pack<packed::Uint16> for u16 {
 impl Pack<packed::Uint32> for u32 {
     fn pack(&self) -> packed::Uint32 {
         packed::Uint32::new_unchecked(Bytes::from(self.to_le_bytes().to_vec()))
+    }
+}
+
+impl Pack<packed::BeUint32> for u32 {
+    fn pack(&self) -> packed::BeUint32 {
+        packed::BeUint32::new_unchecked(Bytes::from(self.to_be_bytes().to_vec()))
     }
 }
 
@@ -33,6 +38,12 @@ impl Pack<packed::Uint32> for usize {
     }
 }
 
+impl Pack<packed::BeUint32> for usize {
+    fn pack(&self) -> packed::BeUint32 {
+        (*self as u32).pack()
+    }
+}
+
 impl<'r> Unpack<u16> for packed::Uint16Reader<'r> {
     // Inline so that the panic branch can be optimized out.
     #[inline]
@@ -49,6 +60,14 @@ impl<'r> Unpack<u32> for packed::Uint32Reader<'r> {
     }
 }
 impl_conversion_for_entity_unpack!(u32, Uint32);
+
+impl<'r> Unpack<u32> for packed::BeUint32Reader<'r> {
+    #[inline]
+    fn unpack(&self) -> u32 {
+        u32::from_be_bytes(self.as_slice().try_into().expect("unpack BeUint32Reader"))
+    }
+}
+impl_conversion_for_entity_unpack!(u32, BeUint32);
 
 impl<'r> Unpack<u64> for packed::Uint64Reader<'r> {
     #[inline]
@@ -94,21 +113,6 @@ impl_conversion_for_entity_unpack!(Vec<u8>, Bytes);
 impl Pack<packed::Bytes> for str {
     fn pack(&self) -> packed::Bytes {
         self.as_bytes().pack()
-    }
-}
-
-impl<'r> packed::BytesReader<'r> {
-    pub fn as_utf8(&self) -> Result<&str, str::Utf8Error> {
-        str::from_utf8(self.raw_data())
-    }
-
-    #[allow(clippy::missing_safety_doc)]
-    pub unsafe fn as_utf8_unchecked(&self) -> &str {
-        str::from_utf8_unchecked(self.raw_data())
-    }
-
-    pub fn is_utf8(&self) -> bool {
-        self.as_utf8().is_ok()
     }
 }
 

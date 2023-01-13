@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use anyhow::{anyhow, Context as AnyHowContext, Result};
-use ckb_types::{bytes::Bytes, prelude::Entity};
+use ckb_types::bytes::Bytes;
 use gw_chain::chain::Chain;
 use gw_config::{Config, StoreConfig};
 use gw_generator::{
@@ -64,10 +64,8 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
             } else {
                 CkbIndexerClient::from(ckb_client.clone())
             };
-            let rollup_type_script =
-                ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
             RPCClient::new(
-                rollup_type_script,
+                rollup_type_script.clone(),
                 rollup_context.rollup_config.clone(),
                 ckb_client,
                 indexer_client,

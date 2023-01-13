@@ -1,7 +1,6 @@
 #![allow(clippy::mutable_key_type)]
 
 use anyhow::Result;
-use ckb_types::prelude::{Builder, Entity};
 use gw_common::state::State;
 use gw_polyjuice_sender_recover::recover::{
     eth_account_creator::EthAccountCreator, eth_recover::EthAccountContext,
@@ -10,7 +9,7 @@ use gw_polyjuice_sender_recover::recover::{
 use gw_store::state::traits::JournalDB;
 use gw_types::{
     packed::{RawL2Transaction, Script},
-    prelude::Pack,
+    prelude::*,
 };
 
 use crate::testing_tool::{

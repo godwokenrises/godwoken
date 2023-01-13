@@ -41,8 +41,6 @@ impl RPCServer {
         let rpc_client = {
             let ckb_client = CkbClient::with_url(&RPCClientConfig::default().ckb_url).unwrap();
             let indexer_client = CkbIndexerClient::from(ckb_client.clone());
-            let rollup_type_script =
-                ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
             RPCClient::new(
                 rollup_type_script,
                 rollup_context.rollup_config,

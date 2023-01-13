@@ -2,7 +2,6 @@ use std::{convert::TryInto, sync::Arc, time::Instant};
 
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256 as JsonH256;
-use ckb_types::prelude::{Builder, Entity};
 use gw_jsonrpc_types::{ckb_jsonrpc_types::Uint64, debug::DebugRunResult};
 use gw_store::{
     chain_view::ChainView,
@@ -14,7 +13,8 @@ use gw_store::{
     },
     traits::chain_store::ChainStore,
 };
-use gw_types::{packed::BlockInfo, prelude::Unpack};
+use gw_types::packed::BlockInfo;
+use gw_types::prelude::*;
 
 use crate::{registry::Registry, utils::to_h256};
 
@@ -39,9 +39,9 @@ pub(crate) async fn replay_transaction(
             .get_transaction_info(&tx_hash)?
             .ok_or_else(|| anyhow!("can't find tx on the chain"))?;
         let block_number = info.block_number().unpack();
-        let tx_index = info.key().index();
+        let tx_index = info.key().index().unpack();
         let block = db
-            .get_block(&info.key().block_hash())?
+            .get_block(&info.key().block_hash().unpack())?
             .ok_or_else(|| anyhow!("can't find block"))?;
         let tip_block_hash = db.get_last_valid_tip_block_hash()?;
         let snap = db.snapshot();

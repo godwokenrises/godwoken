@@ -7,18 +7,18 @@ use crate::utils::transaction::read_config;
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
-use ckb_types::{prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity};
 use gw_common::{builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress};
 use gw_generator::account_lock_manage::{
     eip712::{traits::EIP712Encode, types::Withdrawal},
     secp256k1::Secp256k1Eth,
 };
+use gw_types::conversion::cap_bytes;
 use gw_types::core::{ScriptHashType, Timepoint};
 use gw_types::packed::{CellOutput, Script, WithdrawalLockArgs, WithdrawalRequestExtra};
 use gw_types::U256;
 use gw_types::{
     packed::{Byte32, RawWithdrawalRequest, WithdrawalRequest},
-    prelude::Pack as GwPack,
+    prelude::*,
 };
 use std::str::FromStr;
 use std::time::{Duration, Instant};
@@ -113,7 +113,7 @@ pub async fn withdraw(
 
     let message = generate_withdrawal_message_to_sign(
         raw_request.clone(),
-        Script::new_unchecked(owner_lock_script.as_bytes()),
+        owner_lock_script.clone(),
         from_addr.clone(),
         chain_id,
     )?;
@@ -123,10 +123,9 @@ pub async fn withdraw(
         .raw(raw_request)
         .signature(signature.pack())
         .build();
-    let owner_lock = gw_types::packed::Script::new_unchecked(owner_lock_script.as_bytes());
     let withdrawal_request_extra = WithdrawalRequestExtra::new_builder()
         .request(withdrawal_request)
-        .owner_lock(owner_lock)
+        .owner_lock(owner_lock_script)
         .build();
 
     log::info!("withdrawal_request_extra: {}", withdrawal_request_extra);
@@ -154,9 +153,9 @@ fn create_raw_withdrawal_request(
     owner_lock_hash: &H256,
 ) -> Result<RawWithdrawalRequest> {
     let raw = RawWithdrawalRequest::new_builder()
-        .nonce(GwPack::pack(&nonce))
-        .capacity(GwPack::pack(&capacity))
-        .amount(GwPack::pack(&amount))
+        .nonce(Pack::pack(&nonce))
+        .capacity(Pack::pack(&capacity))
+        .amount(Pack::pack(&amount))
         .sudt_script_hash(h256_to_byte32(sudt_script_hash)?)
         .account_script_hash(h256_to_byte32(account_script_hash)?)
         .owner_lock_hash(h256_to_byte32(owner_lock_hash)?)
@@ -266,6 +265,6 @@ fn minimal_withdrawal_capacity(is_sudt: bool) -> Result<u64> {
 
     let data_capacity = if is_sudt { 16 } else { 0 };
 
-    let capacity = output.occupied_capacity(data_capacity)?;
-    Ok(capacity)
+    let capacity = output.occupied_capacity(cap_bytes(data_capacity))?;
+    Ok(capacity.as_u64())
 }

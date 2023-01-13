@@ -1,8 +1,5 @@
 use anyhow::Result;
-use ckb_types::{
-    bytes::Bytes,
-    prelude::{Builder, Entity},
-};
+use ckb_types::bytes::Bytes;
 use gw_config::ContractsCellDep;
 use gw_rpc_client::{
     indexer_client::CkbIndexerClient,

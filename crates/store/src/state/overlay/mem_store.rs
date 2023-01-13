@@ -7,13 +7,7 @@ use std::{
 
 use anyhow::Result;
 use gw_traits::CodeStore;
-use gw_types::{
-    bytes::Bytes,
-    from_box_should_be_ok,
-    h256::H256,
-    packed,
-    prelude::{Entity, FromSliceShouldBeOk},
-};
+use gw_types::{bytes::Bytes, from_box_should_be_ok, h256::H256, packed, prelude::*};
 use im::HashMap;
 
 use crate::{

@@ -15,7 +15,6 @@ use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 use crate::testing_tool::verify_tx::{verify_tx, TxWithContext};
 
 use async_trait::async_trait;
-use ckb_types::prelude::{Builder, Entity};
 use gw_block_producer::produce_block::ProduceBlockResult;
 use gw_block_producer::withdrawal_unlocker::{BuildUnlockWithdrawalToOwner, Guard};
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
@@ -36,7 +35,7 @@ use gw_types::packed::{
     RollupConfig, RollupSubmitBlock, Script, StakeLockArgs, WithdrawalRequest,
     WithdrawalRequestExtra, WitnessArgs,
 };
-use gw_types::prelude::{Pack, PackVec, Unpack};
+use gw_types::prelude::*;
 use gw_utils::local_cells::LocalCellsManager;
 use gw_utils::transaction_skeleton::TransactionSkeleton;
 use gw_utils::RollupContext;

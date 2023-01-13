@@ -1,11 +1,12 @@
 use anyhow::{anyhow, Result};
 use ckb_jsonrpc_types::{Either, OutputsValidator};
-use ckb_types::prelude::{Entity, Unpack as CKBUnpack};
+use ckb_types::{packed, prelude::Entity};
 use gw_config::WalletConfig;
 use gw_rpc_client::{ckb_client::CkbClient, indexer_client::CkbIndexerClient};
 use gw_types::{
+    conversion::cap_bytes,
     offchain::{CellInfo, InputCellInfo},
-    packed::{CellInput, CellOutput, OutPoint},
+    packed::{CellInput, OutPoint},
     prelude::*,
 };
 use gw_utils::{
@@ -71,7 +72,7 @@ pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_, P>) -> Result<
         .type_
         .ok_or_else(|| anyhow!("can't found type_id from existed cell"))?
         .into();
-    let existed_cell_type_id: [u8; 32] = type_.calc_script_hash().unpack().0;
+    let existed_cell_type_id: [u8; 32] = type_.hash();
     assert_eq!(
         hex::encode(existed_cell_type_id),
         hex::encode(type_id),
@@ -80,15 +81,12 @@ pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_, P>) -> Result<
     // read new cell data
     let new_cell_data = std::fs::read(&cell_data_path)?;
     // generate new cell
-    let existed_cell = {
-        let existed_cell: ckb_types::packed::CellOutput = existed_cell.to_owned().into();
-        CellOutput::new_unchecked(existed_cell.as_bytes())
-    };
-    let new_cell_capacity = existed_cell.occupied_capacity(new_cell_data.len())?;
+    let existed_cell = packed::CellOutput::from(existed_cell.clone());
+    let new_cell_capacity = existed_cell.occupied_capacity(cap_bytes(new_cell_data.len()))?;
     let new_cell = existed_cell
         .clone()
         .as_builder()
-        .capacity(new_cell_capacity.pack())
+        .capacity(new_cell_capacity.as_u64().pack())
         .build();
     // get genesis info
     let ckb_genesis_info = {
@@ -97,7 +95,7 @@ pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_, P>) -> Result<
             .await?
             .ok_or_else(|| anyhow!("can't found CKB genesis block"))?;
         let block: ckb_types::core::BlockView = ckb_genesis.into();
-        let block = gw_types::packed::Block::new_unchecked(block.data().as_bytes());
+        let block = block.data();
         CKBGenesisInfo::from_block(&block)?
     };
     // build tx
@@ -149,10 +147,7 @@ pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_, P>) -> Result<
     // send transaction
     println!("Unlock cell {}", existed_cell.lock());
     let tx_hash = rpc_client
-        .send_transaction(
-            ckb_types::packed::Transaction::new_unchecked(tx.as_bytes()).into(),
-            Some(OutputsValidator::Passthrough),
-        )
+        .send_transaction(tx.into(), Some(OutputsValidator::Passthrough))
         .await?;
     println!("Send tx...");
     rpc_client

@@ -1,9 +1,10 @@
-/* ckb v0.100.0-rc2 */
+// CKB v0.105.1 blockchain.mol
+// Only in no_std are the generated types actually used. In std we re-export ckb-types types.
+
 /* Basic Types */
 
 // The `UintN` is used to store a `N` bits unsigned integer
 // as a byte array in little endian.
-array Uint16 [byte; 2];
 array Uint32 [byte; 4];
 array Uint64 [byte; 8];
 array Uint128 [byte; 16];
@@ -117,4 +118,22 @@ table WitnessArgs {
     lock:                   BytesOpt,          // Lock args
     input_type:             BytesOpt,          // Type args for input
     output_type:            BytesOpt,          // Type args for output
+}
+
+// Some types from extensions.mol
+
+array Uint16 [byte; 2];
+
+array BeUint32 [byte; 4];
+
+vector Uint32Vec <Uint32>;
+
+struct TransactionKey {
+    block_hash:     Byte32,
+    index:          BeUint32,
+}
+
+struct NumberHash {
+    number:         Uint64,
+    block_hash:     Byte32,
 }

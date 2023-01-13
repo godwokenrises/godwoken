@@ -2,7 +2,7 @@
 name = "gw-generator"
 version = "1.8.0-rc3"
 authors = ["Nervos Network"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -19,6 +19,7 @@ gw-config = { path = "../config" }
 gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
 gw-utils = { path = "../utils"}
+ckb-types = "0.105.1"
 anyhow = "1.0"
 blake2b-rs = "0.2"
 ckb-vm = { version = "=0.22.0", default-features = false }

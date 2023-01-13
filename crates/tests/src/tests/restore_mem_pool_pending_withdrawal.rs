@@ -8,14 +8,13 @@ use crate::testing_tool::chain::{
 use crate::testing_tool::common::random_always_success_script;
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 
-use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
 use gw_types::h256::*;
 use gw_types::packed::{
     CellOutput, DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest,
     WithdrawalRequestExtra,
 };
-use gw_types::prelude::{Pack, PackVec};
+use gw_types::prelude::*;
 use gw_utils::local_cells::LocalCellsManager;
 
 const ACCOUNTS_COUNT: usize = 21;

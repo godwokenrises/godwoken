@@ -6,7 +6,7 @@ use gw_smt::{
 };
 use gw_types::{
     packed::{BlockMerkleState, GlobalState, L2Block, SubmitWithdrawals, WithdrawalRequest},
-    prelude::{Builder, Entity, Pack, PackVec, Unpack},
+    prelude::*,
 };
 
 pub fn generate_bad_block_using_first_withdrawal(

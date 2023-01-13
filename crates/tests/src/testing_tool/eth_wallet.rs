@@ -1,6 +1,5 @@
 use anyhow::{anyhow, bail, Result};
 use ckb_crypto::secp::Privkey;
-use ckb_types::prelude::{Builder, Entity};
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     registry::eth_registry::extract_eth_address_from_eoa,
@@ -9,11 +8,11 @@ use gw_common::{
 };
 use gw_generator::{account_lock_manage::secp256k1::Secp256k1Eth, traits::StateExt};
 use gw_traits::CodeStore;
+use gw_types::prelude::*;
 use gw_types::{
     bytes::Bytes,
     h256::*,
     packed::{L2Transaction, RawL2Transaction, Script},
-    prelude::{Pack, Unpack},
     U256,
 };
 use gw_utils::wallet::{privkey_to_eth_account_script, Wallet};

@@ -1,12 +1,11 @@
 use anyhow::{bail, Result};
-use ckb_types::prelude::{Entity, Reader};
-use gw_types::bytes::Bytes;
-use gw_types::core::{ScriptHashType, Timepoint};
-use gw_types::offchain::{CellInfo, CompatibleFinalizedTimepoint};
-use gw_types::packed::{
-    Byte32, Script, ScriptReader, WithdrawalLockArgs, WithdrawalLockArgsReader,
+use gw_types::{
+    bytes::Bytes,
+    core::{ScriptHashType, Timepoint},
+    offchain::{CellInfo, CompatibleFinalizedTimepoint},
+    packed::{Byte32, Script, ScriptReader, WithdrawalLockArgs, WithdrawalLockArgsReader},
+    prelude::*,
 };
-use gw_types::prelude::{Pack, Unpack};
 
 pub fn verify_unlockable_to_owner(
     info: &CellInfo,
@@ -68,7 +67,7 @@ fn verify_finalized_owner_lock(
         Err(_) => bail!("invalid owner lock"),
     };
 
-    if owner_lock.hash().pack() != lock_args.owner_lock_hash() {
+    if owner_lock.calc_script_hash() != lock_args.owner_lock_hash() {
         bail!("owner lock not match");
     }
 
@@ -77,11 +76,14 @@ fn verify_finalized_owner_lock(
 
 #[cfg(test)]
 mod test {
-    use gw_types::core::{ScriptHashType, Timepoint};
-    use gw_types::h256::{H256Ext, H256};
-    use gw_types::offchain::{CellInfo, CompatibleFinalizedTimepoint};
-    use gw_types::packed::{CellOutput, Script, WithdrawalLockArgs};
-    use gw_types::prelude::{Builder, Entity, Pack};
+    use ckb_types::{core::ScriptHashType, packed::Uint64};
+    use gw_types::{
+        core::Timepoint,
+        h256::{H256Ext, H256},
+        offchain::{CellInfo, CompatibleFinalizedTimepoint},
+        packed::{CellOutput, Script, WithdrawalLockArgs},
+        prelude::*,
+    };
 
     use super::{verify_finalized_owner_lock, verify_l1_sudt_script};
 
@@ -100,7 +102,7 @@ mod test {
         let compatible_finalized_timepoint =
             CompatibleFinalizedTimepoint::from_block_number(finalized_block_number, 0);
         let lock_args = WithdrawalLockArgs::new_builder()
-            .owner_lock_hash(owner_lock.hash().pack())
+            .owner_lock_hash(owner_lock.calc_script_hash())
             .withdrawal_finalized_timepoint(last_finalized_timepoint.full_value().pack())
             .build();
 
@@ -218,7 +220,7 @@ mod test {
 
         let last_finalized_timepoint = Timepoint::from_block_number(100);
         let lock_args = WithdrawalLockArgs::new_builder()
-            .owner_lock_hash(owner_lock.hash().pack())
+            .owner_lock_hash(owner_lock.calc_script_hash())
             .withdrawal_finalized_timepoint(last_finalized_timepoint.full_value().pack())
             .build();
 
@@ -239,9 +241,10 @@ mod test {
         verify_l1_sudt_script(&info, &l1_sudt.code_hash()).expect("pass");
 
         // # invalid data len
+        let data: Uint64 = 100u64.pack();
         let err_info = CellInfo {
             output: info.output.clone(),
-            data: 100u64.pack().as_bytes(),
+            data: data.as_bytes(),
             out_point: info.out_point.clone(),
         };
         let err = verify_l1_sudt_script(&err_info, &l1_sudt.code_hash()).unwrap_err();
@@ -266,7 +269,7 @@ mod test {
             out_point: info.out_point,
         };
 
-        let err = verify_l1_sudt_script(&info, &err_l1_sudt.hash().pack()).unwrap_err();
+        let err = verify_l1_sudt_script(&info, &err_l1_sudt.calc_script_hash()).unwrap_err();
         assert!(err.to_string().contains("invalid l1 sudt script"));
     }
 }

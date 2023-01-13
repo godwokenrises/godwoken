@@ -196,11 +196,11 @@ mod tests {
         traits::chain_store::ChainStore,
         Store,
     };
-    use gw_types::h256::*;
     use gw_types::{
         bytes::Bytes,
+        h256::*,
         packed::{AllowedTypeHash, L2Transaction, RawL2Transaction, RollupConfig},
-        prelude::{Builder, Entity, Pack, PackVec, Unpack},
+        prelude::*,
     };
 
     use crate::fee::{

@@ -12,7 +12,7 @@ use gw_types::{
     core::ScriptHashType,
     h256::*,
     packed::{LogItem, Script},
-    prelude::{Builder, Entity, Pack},
+    prelude::*,
 };
 use gw_utils::script_log::{parse_log, GwLog};
 

@@ -15,7 +15,7 @@ use crate::{
         transaction::{read_config, wait_for_l2_tx},
     },
 };
-use gw_types::{bytes::Bytes as GwBytes, prelude::Pack as GwPack};
+use gw_types::{bytes::Bytes as GwBytes, prelude::*};
 
 const GW_LOG_POLYJUICE_SYSTEM: u8 = 0x2;
 

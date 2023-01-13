@@ -1,11 +1,10 @@
-use ckb_types::prelude::{Builder, Entity};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, registry_address::RegistryAddress};
 use gw_config::{MemBlockConfig, MemPoolConfig};
 use gw_store::state::traits::JournalDB;
 use gw_types::{
     bytes::Bytes,
     packed::{RawL2Transaction, Script},
-    prelude::{Pack, Unpack},
+    prelude::*,
 };
 
 use crate::testing_tool::{

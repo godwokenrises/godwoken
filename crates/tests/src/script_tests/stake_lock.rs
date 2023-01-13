@@ -11,7 +11,7 @@ use ckb_types::{
     packed::{CellDep, CellOutput, OutPoint, Script},
 };
 use gw_types::core::Timepoint;
-use gw_types::packed::{BlockMerkleState, Byte32, GlobalState, StakeLockArgs};
+use gw_types::packed::{BlockMerkleState, GlobalState, StakeLockArgs};
 use gw_types::prelude::*;
 use rand::random;
 
@@ -135,7 +135,7 @@ fn run_case(case: CaseParam) {
                 .hash_type(ScriptHashType::Type.into())
                 .args({
                     let stake_lock_args = StakeLockArgs::new_builder()
-                        .owner_lock_hash(Byte32::new_unchecked(stake_owner_lock_hash.as_bytes()))
+                        .owner_lock_hash(stake_owner_lock_hash)
                         .stake_finalized_timepoint(stake_finalized_timepoint.full_value().pack())
                         .build();
                     let mut args = Vec::new();

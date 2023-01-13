@@ -8,7 +8,7 @@ use gw_types::{
         ETHAddrRegArgs, ETHAddrRegArgsUnion, L2Transaction, MetaContractArgs,
         MetaContractArgsUnion, SUDTArgs, SUDTArgsUnion, WithdrawalRequestExtra,
     },
-    prelude::{Entity, Unpack},
+    prelude::*,
 };
 use gw_utils::{
     gasless::{gasless_tx_fee, is_gasless_tx},

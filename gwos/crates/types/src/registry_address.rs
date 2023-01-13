@@ -1,5 +1,4 @@
-use crate::vec::Vec;
-use core::convert::TryInto;
+use alloc::vec::Vec;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct RegistryAddress {

@@ -6,11 +6,10 @@ use crate::utils::transaction::{read_config, wait_for_l2_tx};
 use anyhow::Result;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_types::bytes::Bytes;
-use ckb_types::{prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity};
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::registry_address::RegistryAddress;
 use gw_types::packed::{Fee, L2Transaction, RawL2Transaction, SUDTArgs, SUDTTransfer};
-use gw_types::prelude::Pack as GwPack;
+use gw_types::prelude::*;
 use gw_types::U256;
 use std::path::Path;
 
@@ -55,14 +54,14 @@ pub async fn transfer(
     let to_addr = hex::decode(to.trim_start_matches("0x"))?;
     assert_eq!(to_addr.len(), 20);
     let sudt_transfer = SUDTTransfer::new_builder()
-        .to_address(GwPack::pack(&Bytes::from(
+        .to_address(Pack::pack(&Bytes::from(
             RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, to_addr).to_bytes(),
         )))
-        .amount(GwPack::pack(&amount))
+        .amount(Pack::pack(&amount))
         .fee(
             Fee::new_builder()
-                .registry_id(GwPack::pack(&ETH_REGISTRY_ACCOUNT_ID))
-                .amount(GwPack::pack(&fee))
+                .registry_id(Pack::pack(&ETH_REGISTRY_ACCOUNT_ID))
+                .amount(Pack::pack(&fee))
                 .build(),
         )
         .build();
@@ -70,10 +69,10 @@ pub async fn transfer(
     let sudt_args = SUDTArgs::new_builder().set(sudt_transfer).build();
 
     let raw_l2transaction = RawL2Transaction::new_builder()
-        .from_id(GwPack::pack(&from_id))
-        .to_id(GwPack::pack(&sudt_id))
-        .nonce(GwPack::pack(&nonce))
-        .args(GwPack::pack(&sudt_args.as_bytes()))
+        .from_id(Pack::pack(&from_id))
+        .to_id(Pack::pack(&sudt_id))
+        .nonce(Pack::pack(&nonce))
+        .args(Pack::pack(&sudt_args.as_bytes()))
         .chain_id(chain_id.pack())
         .build();
 

@@ -8,7 +8,6 @@ use crate::testing_tool::common::random_always_success_script;
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 use crate::testing_tool::rpc_server::RPCServer;
 
-use ckb_types::prelude::{Builder, Entity};
 use ckb_vm::Bytes;
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_common::registry_address::RegistryAddress;

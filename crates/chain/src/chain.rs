@@ -29,7 +29,7 @@ use gw_types::{
         DepositInfoVec, GlobalState, L2Block, NumberHash, RawL2Block, RollupConfig, Script,
         Transaction, WithdrawalRequestExtra,
     },
-    prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
+    prelude::*,
 };
 use gw_utils::calc_finalizing_range;
 use std::{collections::HashSet, convert::TryFrom, sync::Arc, time::Instant};

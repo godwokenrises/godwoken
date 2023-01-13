@@ -1,16 +1,13 @@
 use std::path::Path;
 
+use anyhow::{anyhow, Result};
+use ckb_fixed_hash::H256;
+use gw_types::{bytes::Bytes as GwBytes, core::ScriptHashType, packed::Script, prelude::*};
+
 use crate::{
     godwoken_rpc::GodwokenRpcClient, types::ScriptsDeploymentResult,
     utils::transaction::read_config,
 };
-use anyhow::{anyhow, Result};
-use ckb_fixed_hash::H256;
-use ckb_types::{
-    core::ScriptHashType,
-    prelude::{Builder, Entity},
-};
-use gw_types::{bytes::Bytes as GwBytes, packed::Script, prelude::Pack as GwPack};
 
 pub fn to_godwoken_script_hash(
     eth_eoa_address: &str,

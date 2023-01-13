@@ -2,7 +2,7 @@ use std::fmt::{self, Display};
 
 use gw_types::{
     packed::{Block, NumberHash},
-    prelude::Unpack,
+    prelude::*,
 };
 
 #[derive(Debug, Clone)]
@@ -25,7 +25,7 @@ impl Display for ChainEvent {
                     f,
                     "block: <number: {}, hash: {}>",
                     block.header().raw().number().unpack(),
-                    hex::encode(block.header().hash())
+                    hex::encode(block.header().calc_header_hash().as_slice())
                 )?;
                 write!(f, "}}")
             }
@@ -41,7 +41,7 @@ impl Display for ChainEvent {
                     f,
                     "new_block: <number: {}, hash: {}>",
                     new_block.header().raw().number().unpack(),
-                    hex::encode(new_block.header().hash())
+                    hex::encode(new_block.header().calc_header_hash().as_slice())
                 )?;
                 write!(f, "}}")
             }

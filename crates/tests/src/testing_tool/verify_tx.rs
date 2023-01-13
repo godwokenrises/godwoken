@@ -9,7 +9,7 @@ use ckb_types::core::{
 };
 use ckb_types::{
     bytes::Bytes,
-    packed::{Byte32, CellOutput, OutPoint, OutPointVec, Transaction},
+    packed::{Byte32, CellOutput, OutPoint, OutPointVec},
     prelude::Entity,
 };
 use gw_types::offchain::InputCellInfo;
@@ -63,7 +63,7 @@ impl TxDataLoader {
                 .ok_or_else(|| anyhow!("resolve tx failed, unknown out point {}", out_point))
         };
 
-        let tx = Transaction::new_unchecked(tx.as_bytes());
+        let tx = tx.clone();
         let mut resolved_dep_groups = vec![];
         let mut resolved_cell_deps = vec![];
 
@@ -146,9 +146,9 @@ struct CellInfo {
 }
 
 fn into_info(input_cell_info: gw_types::offchain::InputCellInfo) -> (OutPoint, CellInfo) {
-    let out_point = OutPoint::new_unchecked(input_cell_info.cell.out_point.as_bytes());
+    let out_point = input_cell_info.cell.out_point;
     let cell_info = CellInfo {
-        output: CellOutput::new_unchecked(input_cell_info.cell.output.as_bytes()),
+        output: input_cell_info.cell.output,
         data_hash: CellOutput::calc_data_hash(&input_cell_info.cell.data),
         data: input_cell_info.cell.data,
     };

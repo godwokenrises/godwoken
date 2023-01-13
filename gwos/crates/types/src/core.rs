@@ -1,37 +1,43 @@
+use cfg_if::cfg_if;
+#[cfg(feature = "std")]
+pub use ckb_types::core::ScriptHashType;
 use molecule::prelude::Byte;
 
-use crate::packed::{self, GlobalState, GlobalStateV0};
-use crate::prelude::{Builder, Entity, Pack};
-use core::convert::TryFrom;
-use core::convert::TryInto;
+cfg_if! {
+    if #[cfg(not(feature = "std"))] {
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        pub enum ScriptHashType {
+            Data = 0,
+            Type = 1,
+        }
 
-// re-export H256
-pub use crate::h256::H256;
+        impl From<ScriptHashType> for packed::Byte {
+            #[inline]
+            fn from(type_: ScriptHashType) -> Self {
+                (type_ as u8).into()
+            }
+        }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum ScriptHashType {
-    Data = 0,
-    Type = 1,
-}
+        impl TryFrom<packed::Byte> for ScriptHashType {
+            type Error = u8;
 
-impl From<ScriptHashType> for packed::Byte {
-    #[inline]
-    fn from(type_: ScriptHashType) -> Self {
-        (type_ as u8).into()
-    }
-}
-
-impl TryFrom<packed::Byte> for ScriptHashType {
-    type Error = u8;
-
-    fn try_from(v: packed::Byte) -> Result<Self, Self::Error> {
-        match Into::<u8>::into(v) {
-            0 => Ok(ScriptHashType::Data),
-            1 => Ok(ScriptHashType::Type),
-            n => Err(n),
+            fn try_from(v: packed::Byte) -> Result<Self, Self::Error> {
+                match Into::<u8>::into(v) {
+                    0 => Ok(ScriptHashType::Data),
+                    1 => Ok(ScriptHashType::Type),
+                    n => Err(n),
+                }
+            }
         }
     }
 }
+
+// re-export H256
+pub use crate::h256::H256;
+use crate::{
+    packed::{self, GlobalState, GlobalStateV0},
+    prelude::*,
+};
 
 /// Rollup status
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]

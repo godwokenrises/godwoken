@@ -27,7 +27,6 @@ pub use crate::utils::sdk;
 use crate::utils::sdk::constants::ONE_CKB;
 use account::read_privkey;
 use anyhow::{anyhow, Result};
-use ckb_types::prelude::Unpack;
 use clap::{value_t, App, Arg, SubCommand};
 use deploy_genesis::DeployRollupCellArgs;
 use dump_tx::ChallengeBlock;
@@ -37,6 +36,7 @@ use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType;
 use gw_rpc_client::indexer_client::CkbIndexerClient;
 use gw_types::offchain::CompatibleFinalizedTimepoint;
+use gw_types::prelude::*;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},

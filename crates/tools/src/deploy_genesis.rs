@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 use anyhow::{anyhow, Context, Result};
 use ckb_types::bytes::{BufMut, BytesMut};
+use gw_jsonrpc_types::JsonCalcHash;
 use gw_rpc_client::ckb_client::CkbClient;
 use tempfile::NamedTempFile;
 
@@ -23,9 +24,6 @@ use ckb_types::{
     bytes::Bytes,
     core::{BlockView, Capacity, DepType, ScriptHashType, TransactionBuilder, TransactionView},
     packed as ckb_packed,
-    prelude::Builder as CKBBuilder,
-    prelude::Pack as CKBPack,
-    prelude::Unpack as CKBUnpack,
 };
 use gw_config::GenesisConfig;
 use gw_generator::genesis::build_genesis;
@@ -33,9 +31,7 @@ use gw_types::{
     core::{AllowedContractType, AllowedEoaType},
     packed as gw_packed,
     packed::RollupConfig,
-    prelude::Entity as GwEntity,
-    prelude::Pack as GwPack,
-    prelude::PackVec as GwPackVec,
+    prelude::{Pack as CKBPack, Unpack as CKBUnpack, *},
 };
 
 use crate::types::{
@@ -195,17 +191,14 @@ pub async fn deploy_rollup_cell(args: DeployRollupCellArgs<'_>) -> Result<Rollup
         skip_config_check,
     } = args;
 
-    let burn_lock_hash = {
-        let lock: ckb_types::packed::Script = user_rollup_config.burn_lock.clone().into();
-        lock.calc_script_hash().unpack()
-    };
+    let burn_lock_hash: H256 = user_rollup_config.burn_lock.hash();
     // check config
     if !skip_config_check {
         let expected_burn_lock_script = ckb_packed::Script::new_builder()
             .code_hash(CKBPack::pack(&[0u8; 32]))
             .hash_type(ScriptHashType::Data.into())
             .build();
-        let expected_burn_lock_hash = expected_burn_lock_script.calc_script_hash().unpack();
+        let expected_burn_lock_hash: H256 = expected_burn_lock_script.calc_script_hash().unpack();
         if expected_burn_lock_hash != burn_lock_hash {
             return Err(anyhow!(
                 "The burn lock hash: 0x{:x} is not default, we suggest to use default burn lock \
@@ -242,25 +235,25 @@ pub async fn deploy_rollup_cell(args: DeployRollupCellArgs<'_>) -> Result<Rollup
 
     // deploy rollup config cell
     let allowed_contract_type_hashes: Vec<gw_packed::AllowedTypeHash> = {
-        let meta_hash = GwPack::pack(&scripts_result.meta_contract_validator.script_type_hash);
+        let meta_hash = Pack::pack(&scripts_result.meta_contract_validator.script_type_hash);
         let meta = gw_packed::AllowedTypeHash::new_builder()
             .type_(AllowedContractType::Meta.into())
             .hash(meta_hash)
             .build();
 
-        let sudt_hash = GwPack::pack(&scripts_result.l2_sudt_validator.script_type_hash);
+        let sudt_hash = Pack::pack(&scripts_result.l2_sudt_validator.script_type_hash);
         let sudt = gw_packed::AllowedTypeHash::new_builder()
             .type_(AllowedContractType::Sudt.into())
             .hash(sudt_hash)
             .build();
 
-        let polyjuice_hash = GwPack::pack(&scripts_result.polyjuice_validator.script_type_hash);
+        let polyjuice_hash = Pack::pack(&scripts_result.polyjuice_validator.script_type_hash);
         let polyjuice = gw_packed::AllowedTypeHash::new_builder()
             .type_(AllowedContractType::Polyjuice.into())
             .hash(polyjuice_hash)
             .build();
         let eth_addr_reg_validator_hash =
-            GwPack::pack(&scripts_result.eth_addr_reg_validator.script_type_hash);
+            Pack::pack(&scripts_result.eth_addr_reg_validator.script_type_hash);
         let eth_addr_reg_validator = gw_packed::AllowedTypeHash::new_builder()
             .type_(AllowedContractType::EthAddrReg.into())
             .hash(eth_addr_reg_validator_hash)
@@ -288,7 +281,7 @@ pub async fn deploy_rollup_cell(args: DeployRollupCellArgs<'_>) -> Result<Rollup
 
     // EOA scripts
     let allowed_eoa_type_hashes: Vec<gw_packed::AllowedTypeHash> = {
-        let eth_hash = GwPack::pack(&scripts_result.eth_account_lock.script_type_hash);
+        let eth_hash = Pack::pack(&scripts_result.eth_account_lock.script_type_hash);
         let eth = gw_packed::AllowedTypeHash::new_builder()
             .type_(AllowedEoaType::Eth.into())
             .hash(eth_hash)
@@ -311,29 +304,23 @@ pub async fn deploy_rollup_cell(args: DeployRollupCellArgs<'_>) -> Result<Rollup
 
     // composite rollup config
     let rollup_config = RollupConfig::new_builder()
-        .l1_sudt_script_type_hash(GwPack::pack(&user_rollup_config.l1_sudt_script_type_hash))
-        .custodian_script_type_hash(GwPack::pack(
-            &scripts_result.custodian_lock.script_type_hash,
-        ))
-        .deposit_script_type_hash(GwPack::pack(&scripts_result.deposit_lock.script_type_hash))
-        .withdrawal_script_type_hash(GwPack::pack(
-            &scripts_result.withdrawal_lock.script_type_hash,
-        ))
-        .challenge_script_type_hash(GwPack::pack(
-            &scripts_result.challenge_lock.script_type_hash,
-        ))
-        .stake_script_type_hash(GwPack::pack(&scripts_result.stake_lock.script_type_hash))
-        .l2_sudt_validator_script_type_hash(GwPack::pack(
+        .l1_sudt_script_type_hash(Pack::pack(&user_rollup_config.l1_sudt_script_type_hash))
+        .custodian_script_type_hash(Pack::pack(&scripts_result.custodian_lock.script_type_hash))
+        .deposit_script_type_hash(Pack::pack(&scripts_result.deposit_lock.script_type_hash))
+        .withdrawal_script_type_hash(Pack::pack(&scripts_result.withdrawal_lock.script_type_hash))
+        .challenge_script_type_hash(Pack::pack(&scripts_result.challenge_lock.script_type_hash))
+        .stake_script_type_hash(Pack::pack(&scripts_result.stake_lock.script_type_hash))
+        .l2_sudt_validator_script_type_hash(Pack::pack(
             &scripts_result.l2_sudt_validator.script_type_hash,
         ))
-        .burn_lock_hash(GwPack::pack(&burn_lock_hash))
-        .required_staking_capacity(GwPack::pack(&user_rollup_config.required_staking_capacity))
-        .challenge_maturity_blocks(GwPack::pack(&user_rollup_config.challenge_maturity_blocks))
-        .finality_blocks(GwPack::pack(&user_rollup_config.finality_blocks))
+        .burn_lock_hash(Pack::pack(&burn_lock_hash))
+        .required_staking_capacity(Pack::pack(&user_rollup_config.required_staking_capacity))
+        .challenge_maturity_blocks(Pack::pack(&user_rollup_config.challenge_maturity_blocks))
+        .finality_blocks(Pack::pack(&user_rollup_config.finality_blocks))
         .reward_burn_rate(user_rollup_config.reward_burn_rate.into())
-        .chain_id(GwPack::pack(&user_rollup_config.chain_id))
-        .allowed_eoa_type_hashes(GwPackVec::pack(allowed_eoa_type_hashes))
-        .allowed_contract_type_hashes(GwPackVec::pack(allowed_contract_type_hashes))
+        .chain_id(Pack::pack(&user_rollup_config.chain_id))
+        .allowed_eoa_type_hashes(PackVec::pack(allowed_eoa_type_hashes))
+        .allowed_contract_type_hashes(PackVec::pack(allowed_contract_type_hashes))
         .build();
     let (secp_data, secp_data_dep) = get_secp_data(&ckb_client).await?;
     let mut deploy_context = DeployContext {
@@ -687,7 +674,7 @@ pub fn is_mature(number: u64, tx_index: u64, max_mature_number: u64) -> bool {
 
 pub async fn get_secp_data(
     rpc_client: &CkbClient,
-) -> Result<(Bytes, gw_jsonrpc_types::blockchain::CellDep)> {
+) -> Result<(Bytes, gw_jsonrpc_types::ckb_jsonrpc_types::CellDep)> {
     let mut cell_dep = None;
     rpc_client
         .get_block_by_number(0.into())

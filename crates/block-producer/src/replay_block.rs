@@ -1,6 +1,5 @@
 use anyhow::{anyhow, bail, Result};
 use ckb_types::bytes::Bytes;
-use ckb_types::prelude::{Builder, Entity};
 use gw_common::registry_address::RegistryAddress;
 use gw_common::state::State;
 use gw_generator::traits::StateExt;
@@ -12,7 +11,7 @@ use gw_store::traits::chain_store::ChainStore;
 use gw_store::Store;
 use gw_types::h256::*;
 use gw_types::packed::{BlockInfo, DepositRequest, L2Block, RawL2Block, WithdrawalRequestExtra};
-use gw_types::prelude::Unpack;
+use gw_types::prelude::*;
 
 pub struct ReplayBlock;
 

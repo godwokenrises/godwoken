@@ -1,13 +1,14 @@
 use std::convert::TryInto;
 
 use anyhow::{Context, Result};
+use ckb_types::core::{Capacity, ScriptHashType};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State};
 use gw_config::BackendType;
 use gw_traits::CodeStore;
-use gw_types::core::Timepoint;
 use gw_types::{
     bytes::Bytes,
-    core::{AllowedContractType, ScriptHashType},
+    conversion::cap_bytes,
+    core::{AllowedContractType, Timepoint},
     h256::*,
     packed::{CellOutput, RawL2Transaction, Script, WithdrawalLockArgs, WithdrawalRequestExtra},
     prelude::*,
@@ -66,9 +67,9 @@ pub fn build_withdrawal_cell_output(
         args.extend_from_slice(rollup_context.rollup_script_hash.as_slice());
         args.extend_from_slice(withdrawal_lock_args.as_slice());
         let owner_lock = req.owner_lock();
-        let owner_lock_hash: [u8; 32] = req.raw().owner_lock_hash().unpack();
-        if owner_lock_hash != owner_lock.hash() {
-            return Err(WithdrawalCellError::OwnerLock(owner_lock_hash));
+        let owner_lock_hash = req.raw().owner_lock_hash();
+        if owner_lock_hash != owner_lock.calc_script_hash() {
+            return Err(WithdrawalCellError::OwnerLock(owner_lock_hash.unpack()));
         }
         args.extend_from_slice(&(owner_lock.as_slice().len() as u32).to_be_bytes());
         args.extend_from_slice(owner_lock.as_slice());
@@ -93,10 +94,10 @@ pub fn build_withdrawal_cell_output(
         .lock(lock)
         .build();
 
-    match output.occupied_capacity(data.len()) {
-        Ok(min_capacity) if min_capacity > withdrawal_capacity => {
+    match output.occupied_capacity(cap_bytes(data.len())) {
+        Ok(min_capacity) if min_capacity > Capacity::shannons(withdrawal_capacity) => {
             Err(WithdrawalCellError::MinCapacity {
-                min: min_capacity as u128,
+                min: min_capacity.as_u64().into(),
                 req: req.raw().capacity().unpack(),
             })
         }
@@ -143,12 +144,13 @@ pub fn get_polyjuice_creator_id<S: State + CodeStore>(
 #[cfg(test)]
 mod test {
     use gw_types::bytes::Bytes;
-    use gw_types::core::{ScriptHashType, Timepoint};
+    use gw_types::core::ScriptHashType;
+    use gw_types::core::Timepoint;
     use gw_types::h256::*;
     use gw_types::packed::{
         RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest, WithdrawalRequestExtra,
     };
-    use gw_types::prelude::{Builder, Entity, Pack, Unpack};
+    use gw_types::prelude::*;
     use gw_utils::RollupContext;
 
     use crate::generator::WithdrawalCellError;
@@ -179,9 +181,9 @@ mod test {
                 .nonce(1u32.pack())
                 .capacity((500 * 10u64.pow(8)).pack())
                 .amount(20u128.pack())
-                .sudt_script_hash(sudt_script.hash().pack())
+                .sudt_script_hash(sudt_script.calc_script_hash())
                 .account_script_hash(H256::from_u32(10).pack())
-                .owner_lock_hash(owner_lock.hash().pack())
+                .owner_lock_hash(owner_lock.calc_script_hash())
                 .fee(fee.pack())
                 .build();
             WithdrawalRequest::new_builder()
@@ -206,7 +208,10 @@ mod test {
         .unwrap();
 
         // Basic check
-        assert_eq!(output.capacity().unpack(), req.raw().capacity().unpack());
+        assert_eq!(
+            output.capacity().as_slice(),
+            req.raw().capacity().as_slice()
+        );
         assert_eq!(
             output.type_().as_slice(),
             Some(sudt_script.clone()).pack().as_slice()
@@ -225,7 +230,7 @@ mod test {
             parsed_args.rollup_type_hash.pack(),
             rollup_context.rollup_script_hash.pack()
         );
-        assert_eq!(parsed_args.owner_lock.hash(), owner_lock.hash());
+        assert_eq!(parsed_args.owner_lock, owner_lock);
 
         let lock_args = parsed_args.lock_args;
         assert_eq!(
@@ -237,7 +242,7 @@ mod test {
             lock_args.withdrawal_finalized_timepoint().unpack(),
             block_timepoint.full_value()
         );
-        assert_eq!(lock_args.owner_lock_hash(), owner_lock.hash().pack());
+        assert_eq!(lock_args.owner_lock_hash(), owner_lock.calc_script_hash());
 
         // ## None asset script
         let (output2, data2) = build_withdrawal_cell_output(
@@ -252,8 +257,8 @@ mod test {
         assert!(output2.type_().to_opt().is_none());
         assert_eq!(data2, Bytes::new());
 
-        assert_eq!(output2.capacity().unpack(), output.capacity().unpack());
-        assert_eq!(output2.lock().hash(), output.lock().hash());
+        assert_eq!(output2.capacity().as_slice(), output.capacity().as_slice());
+        assert_eq!(output2.lock(), output.lock());
 
         // ## Min capacity error
         let err_req = {

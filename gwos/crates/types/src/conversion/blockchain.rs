@@ -1,6 +1,5 @@
-use core::convert::TryInto;
+use alloc::vec::Vec;
 
-use crate::vec::Vec;
 use crate::{bytes::Bytes, packed, prelude::*};
 
 impl Pack<packed::Byte32> for [u8; 32] {
@@ -60,11 +59,18 @@ impl_conversion_for_vector!(Bytes, BytesVec, BytesVecReader);
 impl_conversion_for_vector!([u8; 32], Byte32Vec, Byte32VecReader);
 impl_conversion_for_packed_optional_pack!(Script, ScriptOpt);
 impl_conversion_for_packed_optional_pack!(Bytes, BytesOpt);
-impl_conversion_for_packed_iterator_pack!(ProposalShortId, ProposalShortIdVec);
+// impl_conversion_for_packed_iterator_pack!(ProposalShortId, ProposalShortIdVec);
 impl_conversion_for_packed_iterator_pack!(Bytes, BytesVec);
-impl_conversion_for_packed_iterator_pack!(Transaction, TransactionVec);
+// impl_conversion_for_packed_iterator_pack!(Transaction, TransactionVec);
 impl_conversion_for_packed_iterator_pack!(CellDep, CellDepVec);
 impl_conversion_for_packed_iterator_pack!(CellOutput, CellOutputVec);
 impl_conversion_for_packed_iterator_pack!(CellInput, CellInputVec);
-impl_conversion_for_packed_iterator_pack!(UncleBlock, UncleBlockVec);
+// impl_conversion_for_packed_iterator_pack!(UncleBlock, UncleBlockVec);
 impl_conversion_for_packed_iterator_pack!(Byte32, Byte32Vec);
+
+#[cfg(feature = "std")]
+pub fn cap_bytes(len: usize) -> ckb_types::core::Capacity {
+    use ckb_types::core::Capacity;
+
+    Capacity::bytes(len).unwrap_or_else(|_| Capacity::shannons(u64::MAX))
+}

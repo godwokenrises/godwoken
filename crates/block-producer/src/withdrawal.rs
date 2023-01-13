@@ -355,7 +355,7 @@ mod test {
         UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion, WithdrawalLockArgs,
         WithdrawalRequest, WithdrawalRequestExtra, WitnessArgs,
     };
-    use gw_types::prelude::{Builder, Entity, Pack, PackVec, Unpack};
+    use gw_types::prelude::*;
     use gw_utils::{global_state_finalized_timepoint, RollupContext};
 
     use super::unlock_to_owner;

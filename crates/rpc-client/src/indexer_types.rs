@@ -1,11 +1,10 @@
 // This file contains types that are copied over from ckb-indexer project.
 
 use ckb_fixed_hash::H256;
-use ckb_types::prelude::Entity;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{
     BlockNumber, CellOutput, JsonBytes, OutPoint, Script, Uint32, Uint64,
 };
-use gw_types::offchain::CellInfo;
+use gw_types::{offchain::CellInfo, packed, prelude::*};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
@@ -17,18 +16,18 @@ pub struct SearchKey {
 
 impl SearchKey {
     /// Build a SearchKey to search for cells with this lock script prefix.
-    pub fn with_lock(script: gw_types::packed::Script) -> Self {
+    pub fn with_lock(script: packed::Script) -> Self {
         Self {
-            script: ckb_types::packed::Script::new_unchecked(script.as_bytes()).into(),
+            script: script.into(),
             script_type: ScriptType::Lock,
             filter: None,
         }
     }
 
     /// Build a SearchKey to search for cells with this type script prefix.
-    pub fn with_type(script: gw_types::packed::Script) -> Self {
+    pub fn with_type(script: packed::Script) -> Self {
         Self {
-            script: ckb_types::packed::Script::new_unchecked(script.as_bytes()).into(),
+            script: script.into(),
             script_type: ScriptType::Type,
             filter: None,
         }
@@ -82,13 +81,9 @@ pub struct Cell {
 impl Cell {
     pub fn info(self) -> CellInfo {
         CellInfo {
-            out_point: gw_types::packed::OutPoint::new_unchecked(
-                ckb_types::packed::OutPoint::from(self.out_point).as_bytes(),
-            ),
+            out_point: self.out_point.into(),
             data: self.output_data.into_bytes(),
-            output: gw_types::packed::CellOutput::new_unchecked(
-                ckb_types::packed::CellOutput::from(self.output).as_bytes(),
-            ),
+            output: self.output.into(),
         }
     }
 }

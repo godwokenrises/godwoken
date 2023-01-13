@@ -14,7 +14,7 @@ use crate::{
     types::ScriptsDeploymentResult,
     utils::{message::generate_eip712_message_to_sign, transaction::wait_for_l2_tx},
 };
-use gw_types::prelude::Pack as GwPack;
+use gw_types::prelude::*;
 
 pub fn build_l1_sudt_type_script(
     l1_sudt_script_args: &H256,
@@ -39,7 +39,7 @@ fn build_l2_sudt_script(
         args
     };
     Script::new_builder()
-        .args(args.pack())
+        .args(args[..].pack())
         .code_hash(l2_sudt_type_hash.pack())
         .hash_type(ScriptHashType::Type.into())
         .build()

@@ -4,23 +4,23 @@
 //! once the challenge gets resolved, others need to be able to consume thier
 //! challenge resolve cell and get CKB back.
 
-use crate::script_tests::utils::layer1::build_resolved_tx;
-use crate::script_tests::utils::layer1::build_simple_tx_with_out_point;
-use crate::script_tests::utils::layer1::random_out_point;
-use crate::script_tests::utils::layer1::DummyDataLoader;
-use crate::script_tests::utils::layer1::MAX_CYCLES;
-use crate::testing_tool::chain::ALWAYS_SUCCESS_CODE_HASH;
-use crate::testing_tool::chain::ALWAYS_SUCCESS_PROGRAM;
 use ckb_script::TransactionScriptsVerifier;
-use ckb_types::packed::CellDep;
-use ckb_types::{
-    packed::{CellInput, CellOutput},
-    prelude::{Pack as CKBPack, Unpack},
+use gw_types::{
+    bytes::Bytes,
+    packed::{CellDep, CellInput, CellOutput},
+    prelude::*,
 };
-use gw_types::bytes::Bytes;
-use gw_types::prelude::*;
 
-use crate::script_tests::programs::{META_CONTRACT_CODE_HASH, META_CONTRACT_VALIDATOR_PROGRAM};
+use crate::{
+    script_tests::{
+        programs::{META_CONTRACT_CODE_HASH, META_CONTRACT_VALIDATOR_PROGRAM},
+        utils::layer1::{
+            build_resolved_tx, build_simple_tx_with_out_point, random_out_point, DummyDataLoader,
+            MAX_CYCLES,
+        },
+    },
+    testing_tool::chain::{ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM},
+};
 
 #[test]
 fn test_consume_challenge_resolve_cell() {
@@ -45,13 +45,13 @@ fn test_consume_challenge_resolve_cell() {
         let cell = CellOutput::new_builder()
             .lock(
                 ckb_types::packed::Script::new_builder()
-                    .code_hash(CKBPack::pack(&*ALWAYS_SUCCESS_CODE_HASH))
-                    .hash_type(ckb_types::core::ScriptHashType::Data.into())
+                    .code_hash(Pack::pack(&*ALWAYS_SUCCESS_CODE_HASH))
+                    .hash_type(gw_types::core::ScriptHashType::Data.into())
                     .build(),
             )
-            .capacity(CKBPack::pack(&42u64))
+            .capacity(Pack::pack(&42u64))
             .build();
-        let owner_lock_hash: [u8; 32] = cell.lock().calc_script_hash().unpack().into();
+        let owner_lock_hash: [u8; 32] = cell.lock().calc_script_hash().unpack();
         let owner_lock_out_point = random_out_point();
         ctx.cells
             .insert(owner_lock_out_point.clone(), (cell, Bytes::default()));
@@ -65,12 +65,12 @@ fn test_consume_challenge_resolve_cell() {
         let cell = CellOutput::new_builder()
             .lock(
                 ckb_types::packed::Script::new_builder()
-                    .code_hash(CKBPack::pack(&*META_CONTRACT_CODE_HASH))
-                    .hash_type(ckb_types::core::ScriptHashType::Data.into())
-                    .args(CKBPack::pack(&args))
+                    .code_hash(Pack::pack(&*META_CONTRACT_CODE_HASH))
+                    .hash_type(gw_types::core::ScriptHashType::Data.into())
+                    .args(Pack::pack(&args))
                     .build(),
             )
-            .capacity(CKBPack::pack(&42u64))
+            .capacity(Pack::pack(&42u64))
             .build();
         (cell, Bytes::from(owner_lock_hash.to_vec()))
     };
@@ -83,13 +83,13 @@ fn test_consume_challenge_resolve_cell() {
         (CellOutput::default(), Bytes::default()),
     )
     .as_advanced_builder()
-    .witness(CKBPack::pack(&Bytes::default()))
+    .witness(Pack::pack(&Bytes::default()))
     .input(
         CellInput::new_builder()
             .previous_output(owner_lock_out_point)
             .build(),
     )
-    .witness(CKBPack::pack(&Bytes::default()))
+    .witness(Pack::pack(&Bytes::default()))
     .cell_dep(CellDep::new_builder().out_point(script_out_point).build())
     .cell_dep(CellDep::new_builder().out_point(lock_out_point).build())
     .build();

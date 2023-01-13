@@ -11,17 +11,15 @@ use crate::testing_tool::chain::DEFAULT_FINALITY_BLOCKS;
 use ckb_error::assert_error_eq;
 use ckb_script::ScriptError;
 use ckb_types::packed::Uint64;
-use ckb_types::prelude::{Builder, Entity};
 use gw_types::core::{ScriptHashType, Timepoint};
 use gw_types::packed::{
-    BlockMerkleState, Byte32, CellDep, CellInput, CellOutput, GlobalState, OutPoint, Script,
+    BlockMerkleState, CellDep, CellInput, CellOutput, GlobalState, OutPoint, Script,
     WithdrawalLockArgs,
 };
-use gw_types::prelude::Pack;
+use gw_types::prelude::*;
 use rand::random;
 
 use super::witness_unlock_withdrawal_via_finalize;
-use super::{ToCKBType, ToGWType};
 
 const OWNER_CELL_NOT_FOUND_EXIT_CODE: i8 = 8;
 const NOT_FINALIZED_EXIT_CODE: i8 = 45;
@@ -165,29 +163,17 @@ fn run_case(case: CaseParam) {
         deploy_context(&prev_global_state);
 
     let rollup_state_type_hash = {
-        let (rollup_state_cell, _) = ctx
-            .inner
-            .cells
-            .get(&rollup_state_out_point.to_ckb())
-            .unwrap();
+        let (rollup_state_cell, _) = ctx.inner.cells.get(&rollup_state_out_point).unwrap();
         let rollup_state_type_script = rollup_state_cell.type_().to_opt().unwrap();
         rollup_state_type_script.calc_script_hash()
     };
     let withdrawal_code_type_hash = {
-        let (withdrawal_code_cell, _) = ctx
-            .inner
-            .cells
-            .get(&withdrawal_code_out_point.to_ckb())
-            .unwrap();
+        let (withdrawal_code_cell, _) = ctx.inner.cells.get(&withdrawal_code_out_point).unwrap();
         let withdrawal_code_type_script = withdrawal_code_cell.type_().to_opt().unwrap();
         withdrawal_code_type_script.calc_script_hash()
     };
     let withdrawal_owner_lock_script = {
-        let (withdrawal_owner_cell, _) = ctx
-            .inner
-            .cells
-            .get(&withdrawal_owner_out_point.to_ckb())
-            .unwrap();
+        let (withdrawal_owner_cell, _) = ctx.inner.cells.get(&withdrawal_owner_out_point).unwrap();
         withdrawal_owner_cell.lock()
     };
 
@@ -196,15 +182,11 @@ fn run_case(case: CaseParam) {
     let withdrawal_state_cell = CellOutput::new_builder()
         .lock(
             Script::new_builder()
-                .code_hash(withdrawal_code_type_hash.to_gw())
+                .code_hash(withdrawal_code_type_hash.clone())
                 .hash_type(ScriptHashType::Type.into())
                 .args({
-                    let withdrawal_owner_lock_hash =
-                        withdrawal_owner_lock_script.calc_script_hash();
                     let withdrawal_lock_args = WithdrawalLockArgs::new_builder()
-                        .owner_lock_hash(Byte32::new_unchecked(
-                            withdrawal_owner_lock_hash.as_bytes(),
-                        ))
+                        .owner_lock_hash(withdrawal_owner_lock_script.calc_script_hash())
                         .withdrawal_finalized_timepoint(
                             withdrawal_finalized_timepoint.full_value().pack(),
                         )
@@ -228,12 +210,9 @@ fn run_case(case: CaseParam) {
     // Build transaction
     let mut tx = build_simple_tx_with_out_point_and_since(
         &mut ctx.inner,
-        (withdrawal_state_cell.to_ckb(), Default::default()),
+        (withdrawal_state_cell.clone(), Default::default()),
         (withdrawal_state_out_point, since),
-        (
-            CellOutput::new_builder().build().to_ckb(),
-            Default::default(),
-        ),
+        (CellOutput::new_builder().build(), Default::default()),
     )
     .as_advanced_builder()
     .cell_dep(ctx.rollup_config_dep.clone())
@@ -241,16 +220,14 @@ fn run_case(case: CaseParam) {
     .cell_dep(
         CellDep::new_builder()
             .out_point(withdrawal_code_out_point)
-            .build()
-            .to_ckb(),
+            .build(),
     )
     .cell_dep(
         CellDep::new_builder()
             .out_point(rollup_state_out_point)
-            .build()
-            .to_ckb(),
+            .build(),
     )
-    .witness(witness_args.as_bytes().to_ckb())
+    .witness(witness_args.as_bytes().pack())
     .build();
 
     if unlock_path_include_one_owner_input {
@@ -259,8 +236,7 @@ fn run_case(case: CaseParam) {
             .input(
                 CellInput::new_builder()
                     .previous_output(withdrawal_owner_out_point)
-                    .build()
-                    .to_ckb(),
+                    .build(),
             )
             .build();
     }
@@ -271,9 +247,8 @@ fn run_case(case: CaseParam) {
             .set_outputs(vec![CellOutput::new_builder()
                 .capacity(withdrawal_state_cell.capacity())
                 .type_(withdrawal_state_cell.type_())
-                .lock(withdrawal_owner_lock_script.to_gw())
-                .build()
-                .to_ckb()])
+                .lock(withdrawal_owner_lock_script)
+                .build()])
             .set_outputs_data(vec![Default::default()])
             .build();
     }
@@ -329,10 +304,9 @@ fn deploy_context(global_state: &GlobalState) -> (CellContext, OutPoint, OutPoin
 
 fn deploy_withdrawal_owner_cell(ctx: &mut CellContext) -> OutPoint {
     let withdrawal_owner_cell = CellOutput::new_builder()
-        .lock(random_always_success_script().to_gw())
+        .lock(random_always_success_script())
         .build();
-    ctx.insert_cell(withdrawal_owner_cell.to_ckb(), Default::default())
-        .to_gw()
+    ctx.insert_cell(withdrawal_owner_cell, Default::default())
 }
 
 fn deploy_always_success_rollup_state_cell(
@@ -341,19 +315,17 @@ fn deploy_always_success_rollup_state_cell(
 ) -> OutPoint {
     let rollup_state_data = global_state.as_bytes();
     let rollup_state_cell = CellOutput::new_builder()
-        .lock(random_always_success_script().to_gw())
-        .type_(Some(random_always_success_script().to_gw()).pack())
+        .lock(random_always_success_script())
+        .type_(Some(random_always_success_script()).pack())
         .build();
-    ctx.insert_cell(rollup_state_cell.to_ckb(), rollup_state_data)
-        .to_gw()
+    ctx.insert_cell(rollup_state_cell, rollup_state_data)
 }
 
 fn deploy_withdrawal_code_cell(ctx: &mut CellContext) -> OutPoint {
     let withdrawal_code_data = WITHDRAWAL_LOCK_PROGRAM.clone();
     let withdrawal_code_cell = CellOutput::new_builder()
-        .lock(random_always_success_script().to_gw())
-        .type_(Some(random_always_success_script().to_gw()).pack())
+        .lock(random_always_success_script())
+        .type_(Some(random_always_success_script()).pack())
         .build();
-    ctx.insert_cell(withdrawal_code_cell.to_ckb(), withdrawal_code_data)
-        .to_gw()
+    ctx.insert_cell(withdrawal_code_cell, withdrawal_code_data)
 }

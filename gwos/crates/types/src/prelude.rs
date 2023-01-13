@@ -1,4 +1,4 @@
-pub use molecule::prelude::{Builder, Entity, Reader};
+pub use molecule::prelude::*;
 
 pub trait Unpack<T> {
     fn unpack(&self) -> T;
@@ -10,6 +10,23 @@ pub trait Pack<T: Entity> {
 
 pub trait PackVec<T: Entity, I: Entity>: IntoIterator<Item = I> {
     fn pack(self) -> T;
+}
+
+// Make migrating to using ckb-types easier.
+pub trait CalcHash {
+    fn hash(&self) -> crate::h256::H256;
+}
+
+impl CalcHash for crate::packed::Script {
+    fn hash(&self) -> crate::h256::H256 {
+        gw_hash::blake2b::hash(self.as_slice())
+    }
+}
+
+impl CalcHash for crate::packed::Transaction {
+    fn hash(&self) -> crate::h256::H256 {
+        gw_hash::blake2b::hash(self.as_reader().raw().as_slice())
+    }
 }
 
 /// An alias of `from_slice(..)` to mark where we are really have confidence to do unwrap on the result of `from_slice(..)`.

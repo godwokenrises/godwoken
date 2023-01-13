@@ -6,11 +6,8 @@ use crate::utils::sdk::{Address, AddressPayload, HumanCapacity, SECP256K1};
 use crate::utils::transaction::{get_network_type, read_config, run_cmd};
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
-use ckb_types::{
-    bytes::Bytes as CKBBytes, core::ScriptHashType, packed::Script as CKBScript,
-    prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity, prelude::Pack as CKBPack,
-    prelude::Unpack as CKBUnpack,
-};
+use ckb_types::core::Capacity;
+use ckb_types::{bytes::Bytes as CKBBytes, core::ScriptHashType, packed::Script as CKBScript};
 use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
 use gw_rpc_client::ckb_client::CkbClient;
 use gw_types::core::Timepoint;
@@ -19,7 +16,7 @@ use gw_types::U256;
 use gw_types::{
     bytes::Bytes as GwBytes,
     packed::{Byte32, DepositLockArgs, Script},
-    prelude::Pack as GwPack,
+    prelude::*,
 };
 use std::path::Path;
 use std::str::FromStr;
@@ -63,7 +60,7 @@ pub async fn deposit_ckb(
 
     let mut l2_args_vec = rollup_type_hash.as_bytes().to_vec();
     l2_args_vec.append(&mut eth_address_bytes.to_vec());
-    let l2_lock_args = GwPack::pack(&GwBytes::from(l2_args_vec));
+    let l2_lock_args = Pack::pack(&GwBytes::from(l2_args_vec));
 
     let l2_lock = Script::new_builder()
         .code_hash(Byte32::from_slice(l2_code_hash.as_bytes())?)
@@ -79,9 +76,9 @@ pub async fn deposit_ckb(
     // cancel_timeout default to 20 minutes
     let deposit_lock_args = DepositLockArgs::new_builder()
         .owner_lock_hash(owner_lock_hash)
-        .cancel_timeout(GwPack::pack(&0xc0000000000004b0u64))
+        .cancel_timeout(Pack::pack(&0xc0000000000004b0u64))
         .layer2_lock(l2_lock)
-        .registry_id(GwPack::pack(&ETH_REGISTRY_ACCOUNT_ID))
+        .registry_id(Pack::pack(&ETH_REGISTRY_ACCOUNT_ID))
         .build();
 
     let minimal_capacity = minimal_deposit_capacity(&deposit_lock_args)?;
@@ -104,7 +101,7 @@ pub async fn deposit_ckb(
     let network_type = get_network_type(&rpc_client).await?;
     let address_payload = AddressPayload::new_full(
         ScriptHashType::Type,
-        CKBPack::pack(deposit_lock_code_hash),
+        Pack::pack(deposit_lock_code_hash),
         GwBytes::from(l1_lock_args),
     );
     let address: Address = Address::new(network_type, address_payload, true);
@@ -247,8 +244,8 @@ fn minimal_deposit_capacity(deposit_lock_args: &DepositLockArgs) -> Result<u64> 
     let dummy_rollup_type_hash = dummy_hash;
 
     let custodian_lock_args = CustodianLockArgs::new_builder()
-        .deposit_block_hash(gw_types::prelude::Pack::pack(&dummy_hash))
-        .deposit_finalized_timepoint(gw_types::prelude::Pack::pack(&dummy_timepoint.full_value()))
+        .deposit_block_hash(Pack::pack(&dummy_hash))
+        .deposit_finalized_timepoint(Pack::pack(&dummy_timepoint.full_value()))
         .deposit_lock_args(deposit_lock_args.clone())
         .build();
 
@@ -260,19 +257,19 @@ fn minimal_deposit_capacity(deposit_lock_args: &DepositLockArgs) -> Result<u64> 
         .collect();
 
     let lock_script = Script::new_builder()
-        .code_hash(gw_types::prelude::Pack::pack(&dummy_hash))
+        .code_hash(Pack::pack(&dummy_hash))
         .hash_type(ScriptHashType::Type.into())
-        .args(gw_types::prelude::Pack::pack(&args))
+        .args(Pack::pack(&args))
         .build();
 
     // no type / data when deposit CKB
     let output = CellOutput::new_builder()
-        .capacity(gw_types::prelude::Pack::pack(&0))
+        .capacity(Pack::pack(&0))
         .lock(lock_script)
         .build();
 
-    let capacity = output.occupied_capacity(0)?;
-    Ok(capacity)
+    let capacity = output.occupied_capacity(Capacity::zero())?;
+    Ok(capacity.as_u64())
 }
 
 fn parse_capacity(capacity: &str) -> Result<u64> {

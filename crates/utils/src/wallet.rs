@@ -8,7 +8,7 @@ use gw_types::{
     core::ScriptHashType,
     h256::*,
     packed::{Script, Transaction},
-    prelude::{Builder, Entity, Pack, Unpack},
+    prelude::*,
 };
 use sha3::{Digest, Keccak256};
 
@@ -142,7 +142,7 @@ pub fn privkey_to_eth_account_script(
     let script = Script::new_builder()
         .code_hash(eth_account_lock_code_hash.pack())
         .hash_type(ScriptHashType::Type.into())
-        .args(args.pack())
+        .args(args[..].pack())
         .build();
 
     Ok(script)

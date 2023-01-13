@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use gw_types::bytes::Bytes;
 use gw_types::packed::{Script, ScriptReader, WithdrawalLockArgs, WithdrawalLockArgsReader};
-use gw_types::prelude::{Entity, Reader, Unpack};
+use gw_types::prelude::*;
 
 pub struct ParsedWithdrawalLockArgs {
     pub rollup_type_hash: [u8; 32],

@@ -5,7 +5,9 @@ use crate::cancel_challenge::{
 use crate::enter_challenge::EnterChallenge;
 use crate::offchain::CKBGenesisInfo;
 use crate::types::VerifyContext;
+use gw_jsonrpc_types::JsonCalcHash;
 use gw_rpc_client::contract::ContractsCellDepManager;
+use gw_types::conversion::cap_bytes;
 use gw_utils::transaction_skeleton::TransactionSkeleton;
 use gw_utils::wallet::Wallet;
 
@@ -21,7 +23,7 @@ use gw_types::packed::{
     Byte32, CellDep, CellInput, CellOutput, ChallengeTarget, ChallengeWitness, GlobalState,
     OutPoint, Script, ScriptOpt, Transaction, WitnessArgs,
 };
-use gw_types::prelude::{Builder, Entity, Pack, Unpack};
+use gw_types::prelude::*;
 use gw_utils::RollupContext;
 
 use std::collections::{HashMap, HashSet};
@@ -287,10 +289,13 @@ impl MockRollup {
                 .build();
 
             let capacity = rollup_output
-                .occupied_capacity(global_state.as_bytes().len())
+                .occupied_capacity(cap_bytes(global_state.as_slice().len()))
                 .expect("rollup capacity overflow");
 
-            rollup_output.as_builder().capacity(capacity.pack()).build()
+            rollup_output
+                .as_builder()
+                .capacity(capacity.as_u64().pack())
+                .build()
         };
 
         let cell = CellInfo {

@@ -1,8 +1,6 @@
 use crate::types::{RevertContext, RevertWitness};
 
 use anyhow::{anyhow, Result};
-use ckb_types::prelude::Reader;
-use ckb_types::prelude::{Builder, Entity};
 use gw_smt::smt::{Blake2bHasher, SMTH256};
 use gw_types::core::Status;
 use gw_types::h256::H256;
@@ -15,10 +13,7 @@ use gw_types::packed::{
     CellOutput, ChallengeLockArgs, GlobalState, RollupAction, RollupActionUnion, Script,
     WitnessArgs,
 };
-use gw_types::{
-    bytes::Bytes,
-    prelude::{Pack, Unpack},
-};
+use gw_types::{bytes::Bytes, prelude::*};
 use gw_utils::{global_state_finalized_timepoint, RollupContext};
 
 pub struct Revert<'a> {

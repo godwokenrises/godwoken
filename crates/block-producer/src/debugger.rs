@@ -4,7 +4,6 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use ckb_types::prelude::Entity;
 use gw_jsonrpc_types::{
     ckb_jsonrpc_types,
     debugger::{ReprMockCellDep, ReprMockInfo, ReprMockInput, ReprMockTransaction},
@@ -25,7 +24,7 @@ pub async fn dump_transaction<P: AsRef<Path>>(
     // ensure dir is exist
     create_dir_all(&dir)?;
 
-    let tx_hash: ckb_types::H256 = tx.hash().into();
+    let tx_hash: ckb_types::H256 = tx.calc_tx_hash().unpack();
     log::info!("Build mock transaction {}", tx_hash);
 
     let mut dump_path = PathBuf::new();
@@ -43,8 +42,7 @@ pub async fn dump_transaction<P: AsRef<Path>>(
             );
             log::error!("Fallback to raw tx...");
             dump_path.push(format!("{}-raw-tx.json", tx_hash));
-            let json_tx: ckb_jsonrpc_types::Transaction =
-                { ckb_types::packed::Transaction::new_unchecked(tx.as_bytes()).into() };
+            let json_tx: ckb_jsonrpc_types::Transaction = tx.clone().into();
             serde_json::to_string_pretty(&json_tx)?
         }
     };
@@ -119,15 +117,8 @@ pub async fn build_mock_transaction(
             _ => None,
         };
         let mock_input = ReprMockInput {
-            input: {
-                let ckb_input = ckb_types::packed::CellInput::new_unchecked(input.as_bytes());
-                ckb_input.into()
-            },
-            output: {
-                let ckb_output =
-                    ckb_types::packed::CellOutput::new_unchecked(input_cell.output.as_bytes());
-                ckb_output.into()
-            },
+            input: input.into(),
+            output: input_cell.output.into(),
             data: ckb_jsonrpc_types::JsonBytes::from_bytes(input_cell.data),
             header: input_block_hash.map(|h| h.into()),
         };
@@ -176,15 +167,8 @@ pub async fn build_mock_transaction(
             _ => None,
         };
         let mock_cell_dep = ReprMockCellDep {
-            cell_dep: {
-                let ckb_cell_dep = ckb_types::packed::CellDep::new_unchecked(cell_dep.as_bytes());
-                ckb_cell_dep.into()
-            },
-            output: {
-                let ckb_output =
-                    ckb_types::packed::CellOutput::new_unchecked(dep_cell.output.as_bytes());
-                ckb_output.into()
-            },
+            cell_dep: cell_dep.into(),
+            output: dep_cell.output.into(),
             data: { ckb_jsonrpc_types::JsonBytes::from_bytes(dep_cell.data) },
             header: dep_cell_block_hash.map(|h| h.into()),
         };
@@ -220,10 +204,7 @@ pub async fn build_mock_transaction(
 
     let mock_tx = ReprMockTransaction {
         mock_info,
-        tx: {
-            let ckb_tx = ckb_types::packed::Transaction::new_unchecked(tx.as_bytes());
-            ckb_tx.into()
-        },
+        tx: tx.clone().into(),
     };
     Ok(mock_tx)
 }

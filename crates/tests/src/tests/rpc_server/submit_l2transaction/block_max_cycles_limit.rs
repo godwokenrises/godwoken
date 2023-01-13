@@ -1,19 +1,18 @@
 use std::time::Duration;
 
-use ckb_types::prelude::{Builder, Entity};
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
     state::State,
 };
 use gw_config::{MemBlockConfig, MemPoolConfig, SyscallCyclesConfig};
 use gw_generator::{account_lock_manage::secp256k1::Secp256k1Eth, error::TransactionError};
+use gw_types::prelude::*;
 use gw_types::{
     h256::*,
     packed::{
         CreateAccount, DepositInfoVec, DepositRequest, Fee, L2Transaction, MetaContractArgs,
         RawL2Transaction, Script,
     },
-    prelude::Pack,
 };
 
 use crate::{

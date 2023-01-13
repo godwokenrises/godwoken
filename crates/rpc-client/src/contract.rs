@@ -1,19 +1,20 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Instant;
+use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use anyhow::{anyhow, bail, Result};
 use arc_swap::ArcSwap;
+pub use arc_swap::Guard;
 use gw_config::{ContractsCellDep, SystemTypeScriptConfig};
-use gw_jsonrpc_types::blockchain::{CellDep, Script};
-use gw_types::packed::RollupConfig;
-use gw_types::prelude::Pack;
+use gw_jsonrpc_types::{
+    ckb_jsonrpc_types::{CellDep, Script},
+    JsonCalcHash,
+};
+use gw_types::{packed::RollupConfig, prelude::*};
 use tracing::instrument;
 
-use crate::indexer_types::{Order, ScriptType, SearchKey};
-use crate::rpc_client::RPCClient;
-
-pub use arc_swap::Guard;
+use crate::{
+    indexer_types::{Order, ScriptType, SearchKey},
+    rpc_client::RPCClient,
+};
 
 // Used in block producer and challenge
 #[derive(Clone)]
@@ -170,10 +171,10 @@ async fn query_by_type_script(
     contract: &'static str,
     type_script: Script,
 ) -> Result<CellDep> {
-    use gw_jsonrpc_types::ckb_jsonrpc_types::{CellDep, DepType, Uint32};
+    use gw_jsonrpc_types::ckb_jsonrpc_types::{DepType, Uint32};
 
     let search_key = SearchKey {
-        script: type_script.clone().into(),
+        script: type_script.clone(),
         script_type: ScriptType::Type,
         filter: None,
     };

@@ -1,41 +1,35 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::ckb_client::CkbClient;
-use crate::indexer_client::CkbIndexerClient;
-use crate::indexer_types::{Cell, Order, ScriptType, SearchKey, SearchKeyFilter};
-use crate::utils::DEFAULT_QUERY_LIMIT;
+use std::{collections::HashSet, time::Duration};
+
 use anyhow::{anyhow, Result};
-use ckb_types::prelude::Entity;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, OutputsValidator, Uint32};
-use gw_types::offchain::{CellStatus, CellWithStatus, CompatibleFinalizedTimepoint, DepositInfo};
 use gw_types::{
     bytes::Bytes,
-    core::ScriptHashType,
+    core::{ScriptHashType, Timepoint},
     h256::H256,
-    offchain::CellInfo,
+    offchain::{CellInfo, CellStatus, CellWithStatus, CompatibleFinalizedTimepoint, DepositInfo},
     packed::{
         Block, CellOutput, CustodianLockArgs, CustodianLockArgsReader, DepositLockArgs,
         DepositLockArgsReader, DepositRequest, NumberHash, OutPoint, RollupConfig, Script,
         StakeLockArgs, StakeLockArgsReader, Transaction, WithdrawalLockArgs,
         WithdrawalLockArgsReader,
     },
-    prelude::*,
+    prelude::{Entity, *},
 };
 use rand::prelude::*;
 use tracing::instrument;
 
-use gw_types::core::Timepoint;
-use std::{collections::HashSet, time::Duration};
+use crate::{
+    ckb_client::CkbClient,
+    indexer_client::CkbIndexerClient,
+    indexer_types::{Cell, Order, ScriptType, SearchKey, SearchKeyFilter},
+    utils::DEFAULT_QUERY_LIMIT,
+};
 
 fn to_cell_info(cell: Cell) -> CellInfo {
-    let out_point = {
-        let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
-        OutPoint::new_unchecked(out_point.as_bytes())
-    };
-    let output = {
-        let output: ckb_types::packed::CellOutput = cell.output.into();
-        CellOutput::new_unchecked(output.as_bytes())
-    };
+    let out_point = cell.out_point.into();
+    let output = cell.output.into();
     let data = cell.output_data.into_bytes();
 
     CellInfo {
@@ -149,21 +143,7 @@ impl RPCClient {
             .get_cells(&search_key, &order, limit, &None)
             .await?;
         if let Some(cell) = cells.objects.pop() {
-            let out_point = {
-                let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
-                OutPoint::new_unchecked(out_point.as_bytes())
-            };
-            let output = {
-                let output: ckb_types::packed::CellOutput = cell.output.into();
-                CellOutput::new_unchecked(output.as_bytes())
-            };
-            let data = cell.output_data.into_bytes();
-            let cell_info = CellInfo {
-                out_point,
-                output,
-                data,
-            };
-            return Ok(Some(cell_info));
+            return Ok(Some(cell.info()));
         }
         Ok(None)
     }
@@ -176,10 +156,7 @@ impl RPCClient {
         filter_inputs: Option<HashSet<OutPoint>>,
     ) -> Result<Option<CellInfo>> {
         let search_key = SearchKey {
-            script: {
-                let lock = ckb_types::packed::Script::new_unchecked(lock.as_bytes());
-                lock.into()
-            },
+            script: lock.into(),
             script_type: ScriptType::Lock,
             filter: None,
         };
@@ -203,10 +180,7 @@ impl RPCClient {
                 if !cell.output_data.is_empty() || cell.output.type_.is_some() {
                     return None;
                 }
-                let out_point = {
-                    let out_point: ckb_types::packed::OutPoint = cell.out_point.clone().into();
-                    OutPoint::new_unchecked(out_point.as_bytes())
-                };
+                let out_point = cell.out_point.clone().into();
                 match filter_inputs {
                     Some(ref filter_inputs) if filter_inputs.contains(&out_point) => None,
                     _ => Some(to_cell_info(cell)),
@@ -218,19 +192,16 @@ impl RPCClient {
 
     #[instrument(skip_all, fields(tx_hash = %out_point.tx_hash(), index = Unpack::<u32>::unpack(&out_point.index())))]
     pub async fn get_cell(&self, out_point: OutPoint) -> Result<Option<CellWithStatus>> {
-        let json_out_point: ckb_jsonrpc_types::OutPoint = {
-            let out_point = ckb_types::packed::OutPoint::new_unchecked(out_point.as_bytes());
-            out_point.into()
-        };
-        let cell_with_status = self.ckb.get_live_cell(json_out_point, true).await?;
+        let cell_with_status = self
+            .ckb
+            .get_live_cell(out_point.clone().into(), true)
+            .await?;
         let cell_info = cell_with_status.cell.map(|cell| {
             let output: ckb_types::packed::CellOutput = cell.output.into();
-            let output = CellOutput::new_unchecked(output.as_bytes());
             let data = cell
                 .data
                 .map(|cell_data| cell_data.content.into_bytes())
                 .unwrap_or_else(Bytes::new);
-            let out_point = out_point.to_owned();
             CellInfo {
                 output,
                 data,
@@ -292,7 +263,7 @@ impl RPCClient {
         let block_opt = self.ckb.get_block_by_number(number.into()).await?;
         Ok(block_opt.map(|b| {
             let block: ckb_types::core::BlockView = b.into();
-            Block::new_unchecked(block.data().as_bytes())
+            block.data()
         }))
     }
 
@@ -309,7 +280,7 @@ impl RPCClient {
     ) -> Result<Vec<DepositInfo>> {
         const BLOCKS_TO_SEARCH: u64 = 2000;
 
-        let tip_number = self.get_tip().await?.number().unpack();
+        let tip_number: u64 = self.get_tip().await?.number().unpack();
         let mut deposit_infos = Vec::new();
 
         let script = Script::new_builder()
@@ -318,10 +289,6 @@ impl RPCClient {
             .args(self.rollup_type_script.calc_script_hash().as_bytes().pack())
             .build();
 
-        let script = {
-            let lock = ckb_types::packed::Script::new_unchecked(script.as_bytes());
-            lock.into()
-        };
         let from_block = tip_number.saturating_sub(BLOCKS_TO_SEARCH);
         let to_block = tip_number.saturating_sub(deposit_minimal_blocks);
 
@@ -329,7 +296,7 @@ impl RPCClient {
              from_block, to_block, count, min_ckb_deposit_capacity, min_sudt_deposit_capacity);
 
         let search_key = SearchKey {
-            script,
+            script: script.into(),
             script_type: ScriptType::Lock,
             filter: Some(SearchKeyFilter {
                 script: None,
@@ -357,22 +324,7 @@ impl RPCClient {
             }
             cursor = Some(cells.last_cursor);
 
-            let cells = cells.objects.into_iter().map(|cell| {
-                let out_point = {
-                    let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
-                    OutPoint::new_unchecked(out_point.as_bytes())
-                };
-                let output = {
-                    let output: ckb_types::packed::CellOutput = cell.output.into();
-                    CellOutput::new_unchecked(output.as_bytes())
-                };
-                let data = cell.output_data.into_bytes();
-                CellInfo {
-                    out_point,
-                    output,
-                    data,
-                }
-            });
+            let cells = cells.objects.into_iter().map(|cell| cell.info());
 
             for cell in cells {
                 // Ensure finalized ckb custodians are clearly mergeable
@@ -402,7 +354,7 @@ impl RPCClient {
                     }
                 };
 
-                let cell_capacity = cell.output.capacity().unpack();
+                let cell_capacity: u64 = cell.output.capacity().unpack();
                 if cell.output.type_().is_some() && cell_capacity < min_sudt_deposit_capacity {
                     log::debug!(
                         target: "collect-deposit-cells",
@@ -435,10 +387,7 @@ impl RPCClient {
             .build();
 
         let search_key = SearchKey {
-            script: {
-                let lock = ckb_types::packed::Script::new_unchecked(lock.as_bytes());
-                lock.into()
-            },
+            script: lock.into(),
             script_type: ScriptType::Lock,
             filter: Some(SearchKeyFilter {
                 script: None,
@@ -497,7 +446,7 @@ impl RPCClient {
             .build();
 
         let search_key = SearchKey {
-            script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
+            script: custodian_lock.into(),
             script_type: ScriptType::Lock,
             filter: None,
         };
@@ -557,12 +506,10 @@ impl RPCClient {
             .build();
 
         let search_key = SearchKey {
-            script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
+            script: custodian_lock.into(),
             script_type: ScriptType::Lock,
             filter: Some(SearchKeyFilter {
-                script: Some(
-                    ckb_types::packed::Script::new_unchecked(l1_sudt_type.as_bytes()).into(),
-                ),
+                script: Some(l1_sudt_type.into()),
                 output_data_len_range: None,
                 output_capacity_range: None,
                 block_range: None,
@@ -589,11 +536,8 @@ impl RPCClient {
                     continue;
                 }
 
-                let sudt_type_script = match cell.output.type_.clone() {
-                    Some(json_script) => {
-                        let script = ckb_types::packed::Script::from(json_script);
-                        Script::new_unchecked(script.as_bytes())
-                    }
+                let sudt_type_script: Script = match cell.output.type_.clone() {
+                    Some(json_script) => json_script.into(),
                     None => continue,
                 };
 
@@ -616,7 +560,7 @@ impl RPCClient {
             .build();
 
         let search_key = SearchKey {
-            script: ckb_types::packed::Script::new_unchecked(withdrawal_lock.as_bytes()).into(),
+            script: withdrawal_lock.into(),
             script_type: ScriptType::Lock,
             filter: None,
         };
@@ -673,10 +617,7 @@ impl RPCClient {
             .build();
 
         let search_key = SearchKey {
-            script: {
-                let lock = ckb_types::packed::Script::new_unchecked(lock.as_bytes());
-                lock.into()
-            },
+            script: lock.into(),
             script_type: ScriptType::Lock,
             filter: Some(SearchKeyFilter {
                 script: None,
@@ -733,11 +674,7 @@ impl RPCClient {
             .args(self.rollup_type_script.calc_script_hash().as_bytes().pack())
             .build();
 
-        let search_key = SearchKey {
-            script: ckb_types::packed::Script::new_unchecked(withdrawal_lock.as_bytes()).into(),
-            script_type: ScriptType::Lock,
-            filter: None,
-        };
+        let search_key = SearchKey::with_lock(withdrawal_lock);
         let order = Order::Asc;
         let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
 
@@ -796,11 +733,7 @@ impl RPCClient {
     }
 
     pub async fn send_transaction(&self, tx: &Transaction) -> Result<H256> {
-        let tx: ckb_jsonrpc_types::Transaction = {
-            let tx = ckb_types::packed::Transaction::new_unchecked(tx.as_bytes());
-            tx.into()
-        };
-
+        let tx = tx.clone().into();
         let tx_hash = self
             .ckb
             .send_transaction(tx, Some(OutputsValidator::Passthrough))
@@ -814,10 +747,7 @@ impl RPCClient {
     }
 
     pub async fn dry_run_transaction(&self, tx: &Transaction) -> Result<u64> {
-        let tx: ckb_jsonrpc_types::Transaction = {
-            let tx = ckb_types::packed::Transaction::new_unchecked(tx.as_bytes());
-            tx.into()
-        };
+        let tx = tx.clone().into();
         let cycles = self.ckb.estimate_cycles(tx).await?;
         Ok(cycles.cycles.into())
     }
@@ -838,13 +768,13 @@ impl RPCClient {
             .hash_type(ScriptHashType::Type.into())
             .build();
         let filter = Some(SearchKeyFilter {
-            script: Some(ckb_types::packed::Script::new_unchecked(l1_sudt_type.as_bytes()).into()),
+            script: Some(l1_sudt_type.into()),
             block_range: None,
             output_data_len_range: Some([16.into(), u64::MAX.into()]),
             output_capacity_range: None,
         });
         let search_key = SearchKey {
-            script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
+            script: custodian_lock.into(),
             script_type: ScriptType::Lock,
             filter,
         };
@@ -932,15 +862,13 @@ impl RPCClient {
             .args(self.rollup_type_script.calc_script_hash().as_bytes().pack())
             .build();
         let filter = Some(SearchKeyFilter {
-            script: Some(
-                ckb_types::packed::Script::new_unchecked(sudt_type_script.as_bytes()).into(),
-            ),
+            script: Some(sudt_type_script.clone().into()),
             block_range: None,
             output_data_len_range: Some([16.into(), u64::MAX.into()]),
             output_capacity_range: None,
         });
         let search_key = SearchKey {
-            script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
+            script: custodian_lock.into(),
             script_type: ScriptType::Lock,
             filter,
         };
@@ -980,7 +908,7 @@ impl RPCClient {
                 }
 
                 match info.output.type_().to_opt() {
-                    Some(type_script) if type_script.hash() != sudt_type_script.hash() => continue,
+                    Some(type_script) if type_script != *sudt_type_script => continue,
                     None => continue,
                     _ => (),
                 };

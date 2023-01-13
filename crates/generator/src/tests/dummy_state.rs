@@ -11,12 +11,7 @@ use gw_store::{
     Store,
 };
 use gw_traits::CodeStore;
-use gw_types::{
-    h256::*,
-    packed::Script,
-    prelude::{Builder, Entity, Pack},
-    U256,
-};
+use gw_types::{h256::*, packed::Script, prelude::*, U256};
 
 use crate::{traits::StateExt, Error};
 

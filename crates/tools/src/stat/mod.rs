@@ -1,9 +1,8 @@
 use anyhow::Result;
-use ckb_types::prelude::{Builder, Entity};
 use gw_rpc_client::indexer_client::CkbIndexerClient;
 use gw_types::h256::*;
 use gw_types::offchain::CompatibleFinalizedTimepoint;
-use gw_types::{core::ScriptHashType, offchain::CustodianStat, packed::Script, prelude::Pack};
+use gw_types::{core::ScriptHashType, offchain::CustodianStat, packed::Script, prelude::*};
 
 /// Query custodian ckb from ckb-indexer
 pub async fn stat_custodian_cells(

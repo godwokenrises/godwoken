@@ -8,8 +8,8 @@ use ckb_types::{
         cell::{CellMeta, CellMetaBuilder, ResolvedTransaction},
         DepType, HeaderView,
     },
-    packed::{Byte32, CellDep, CellInput, CellOutput, OutPoint, OutPointVec, Transaction},
-    prelude::{Builder, Entity, Unpack},
+    packed::{Byte32, CellDep, CellOutput, OutPoint, OutPointVec},
+    prelude::*,
 };
 use gw_jsonrpc_types::{
     ckb_jsonrpc_types,
@@ -97,8 +97,8 @@ pub fn dump_tx(
 ) -> Result<ReprMockTransaction> {
     let to_repr_input = |info: &InputCellInfo| -> ReprMockInput {
         ReprMockInput {
-            input: CellInput::new_unchecked(info.input.as_bytes()).into(),
-            output: CellOutput::new_unchecked(info.cell.output.as_bytes()).into(),
+            input: info.input.clone().into(),
+            output: info.cell.output.clone().into(),
             data: ckb_jsonrpc_types::JsonBytes::from_bytes(info.cell.data.clone()),
             header: None,
         }
@@ -141,7 +141,7 @@ pub fn dump_tx(
 
     let mock_tx = ReprMockTransaction {
         mock_info,
-        tx: Transaction::new_unchecked(tx_with_context.tx.as_bytes()).into(),
+        tx: tx_with_context.tx.into(),
     };
 
     Ok(mock_tx)
@@ -178,7 +178,6 @@ impl TxDataLoader {
                 .ok_or_else(|| anyhow!("resolve tx failed, unknown out point {}", out_point))
         };
 
-        let tx = Transaction::new_unchecked(tx.as_bytes());
         let mut resolved_dep_groups = vec![];
         let mut resolved_cell_deps = vec![];
 
@@ -211,7 +210,7 @@ impl TxDataLoader {
         };
 
         Ok(ResolvedTransaction {
-            transaction: tx.into_view(),
+            transaction: tx.clone().into_view(),
             resolved_cell_deps,
             resolved_inputs,
             resolved_dep_groups,
@@ -266,9 +265,9 @@ struct CellInfo {
 }
 
 fn into_info(input_cell_info: gw_types::offchain::InputCellInfo) -> (OutPoint, CellInfo) {
-    let out_point = OutPoint::new_unchecked(input_cell_info.cell.out_point.as_bytes());
+    let out_point = input_cell_info.cell.out_point;
     let cell_info = CellInfo {
-        output: CellOutput::new_unchecked(input_cell_info.cell.output.as_bytes()),
+        output: input_cell_info.cell.output,
         data_hash: CellOutput::calc_data_hash(&input_cell_info.cell.data),
         data: input_cell_info.cell.data,
     };

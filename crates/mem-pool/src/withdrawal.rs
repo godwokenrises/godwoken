@@ -324,7 +324,7 @@ mod test {
         L2Block, RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest,
         WithdrawalRequestExtra,
     };
-    use gw_types::prelude::{Builder, Entity, Pack, Unpack};
+    use gw_types::prelude::*;
     use gw_utils::RollupContext;
 
     use crate::withdrawal::Generator;

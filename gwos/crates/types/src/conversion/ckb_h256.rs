@@ -1,7 +1,6 @@
-use std::convert::TryInto;
+use ckb_fixed_hash::H256;
 
 use crate::{packed, prelude::*};
-use ckb_fixed_hash::H256;
 
 impl Pack<packed::Byte32> for H256 {
     fn pack(&self) -> packed::Byte32 {

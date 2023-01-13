@@ -4,7 +4,6 @@ use std::{collections::VecDeque, sync::Arc, time::Duration};
 
 use anyhow::{ensure, Context, Result};
 use bytes::Bytes;
-use ckb_types::prelude::{Builder, Entity, Reader};
 use futures::TryStreamExt;
 use gw_chain::chain::Chain;
 use gw_generator::generator::CyclesPool;
@@ -21,7 +20,7 @@ use gw_types::{
         BlockSync, BlockSyncReader, BlockSyncUnion, NumberHash, P2PSyncRequest,
         P2PSyncResponseReader, P2PSyncResponseUnionReader, Script,
     },
-    prelude::Unpack,
+    prelude::*,
 };
 use gw_utils::{compression::StreamDecoder, liveness::Liveness};
 

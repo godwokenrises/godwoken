@@ -1,7 +1,6 @@
 use crate::bytes::Bytes;
 use crate::h256::H256;
-use crate::packed::{CellOutput, LogItem, Script};
-use crate::prelude::*;
+use crate::packed::{LogItem, Script};
 use std::collections::HashSet;
 
 use super::CycleMeter;
@@ -34,19 +33,4 @@ pub struct RunResult {
     pub read_data_hashes: HashSet<H256>,
     pub write_data_hashes: HashSet<H256>,
     pub debug_log_buf: Vec<u8>,
-}
-
-impl CellOutput {
-    pub fn occupied_capacity(&self, data_capacity: usize) -> ckb_types::core::CapacityResult<u64> {
-        let output = ckb_types::packed::CellOutput::new_unchecked(self.as_bytes());
-        output
-            .occupied_capacity(ckb_types::core::Capacity::bytes(data_capacity)?)
-            .map(|c| c.as_u64())
-    }
-}
-
-impl std::hash::Hash for Script {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.as_reader().as_slice().hash(state)
-    }
 }

@@ -1,17 +1,16 @@
 use std::time::Duration;
 
-use ckb_types::prelude::{Builder, Entity};
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     state::State,
 };
 use gw_smt::blake2b::new_blake2b;
 use gw_store::state::traits::JournalDB;
+use gw_types::prelude::*;
 use gw_types::{
     bytes::Bytes,
     h256::*,
     packed::{Fee, RawL2Transaction, SUDTArgs, SUDTTransfer, Script},
-    prelude::{Pack, Unpack},
     U256,
 };
 

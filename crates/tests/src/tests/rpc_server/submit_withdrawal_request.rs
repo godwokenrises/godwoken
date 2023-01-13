@@ -12,7 +12,7 @@ use gw_types::{
         DepositInfoVec, DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest,
         WithdrawalRequestExtra,
     },
-    prelude::{Builder, Entity, Pack},
+    prelude::*,
 };
 
 use crate::testing_tool::{

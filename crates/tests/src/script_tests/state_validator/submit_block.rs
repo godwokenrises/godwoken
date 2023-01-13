@@ -17,10 +17,7 @@ use crate::script_tests::utils::rollup::{
 };
 use ckb_error::assert_error_eq;
 use ckb_script::ScriptError;
-use ckb_types::{
-    packed::CellInput,
-    prelude::{Entity as CKBEntity, Pack as CKBPack, Unpack as CKBUnpack},
-};
+use ckb_types::packed::CellInput;
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
 use gw_store::traits::chain_store::ChainStore;
 use gw_types::core::AllowedEoaType;
@@ -28,7 +25,7 @@ use gw_types::packed::{
     AllowedTypeHash, DepositRequest, RawWithdrawalRequest, WithdrawalRequest,
     WithdrawalRequestExtra,
 };
-use gw_types::prelude::{Pack as GWPack, Unpack as GWUnpack, *};
+use gw_types::prelude::*;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -65,8 +62,7 @@ async fn test_submit_block() {
     };
     // rollup lock & config
     let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
-    let stake_script_type_hash: [u8; 32] =
-        CKBUnpack::<ckb_types::H256>::unpack(&stake_lock_type.calc_script_hash()).into();
+    let stake_script_type_hash: [u8; 32] = stake_lock_type.hash();
     let rollup_config = RollupConfig::new_builder()
         .stake_script_type_hash(Pack::pack(&stake_script_type_hash))
         .build();
@@ -101,12 +97,7 @@ async fn test_submit_block() {
         )
     };
     // create a rollup cell
-    let rollup_cell = build_always_success_cell(
-        capacity,
-        Some(ckb_types::packed::Script::new_unchecked(
-            rollup_type_script.as_bytes(),
-        )),
-    );
+    let rollup_cell = build_always_success_cell(capacity, Some(rollup_type_script.clone()));
     let global_state = chain.local_state().last_global_state();
     let initial_rollup_cell_data = global_state.as_bytes();
     let tx = build_simple_tx_with_out_point(
@@ -147,24 +138,24 @@ async fn test_submit_block() {
             ))
             .build();
         ckb_types::packed::WitnessArgs::new_builder()
-            .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
+            .output_type(Pack::pack(&Some(rollup_action.as_bytes())))
             .build()
     };
     let tx = build_simple_tx(
         &mut ctx.inner,
         (rollup_cell.clone(), initial_rollup_cell_data),
-        since_timestamp(GWUnpack::unpack(&tip_block_timestamp)),
+        since_timestamp(Unpack::unpack(&tip_block_timestamp)),
         (rollup_cell, rollup_cell_data),
     )
     .as_advanced_builder()
     .input(input_stake_cell)
     .output(output_stake_cell)
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .output_data(Pack::pack(&Bytes::default()))
     .cell_dep(ctx.stake_lock_dep.clone())
     .cell_dep(ctx.always_success_dep.clone())
     .cell_dep(ctx.state_validator_dep.clone())
     .cell_dep(ctx.rollup_config_dep.clone())
-    .witness(CKBPack::pack(&witness.as_bytes()))
+    .witness(Pack::pack(&witness.as_bytes()))
     .build();
     ctx.verify_tx(tx).expect("return success");
 }
@@ -185,8 +176,7 @@ async fn test_replace_rollup_cell_lock() {
     };
     // rollup lock & config
     let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
-    let stake_script_type_hash: [u8; 32] =
-        CKBUnpack::<ckb_types::H256>::unpack(&stake_lock_type.calc_script_hash()).into();
+    let stake_script_type_hash: [u8; 32] = stake_lock_type.hash();
     let rollup_config = RollupConfig::new_builder()
         .stake_script_type_hash(Pack::pack(&stake_script_type_hash))
         .build();
@@ -221,12 +211,7 @@ async fn test_replace_rollup_cell_lock() {
         )
     };
     // create a rollup cell
-    let rollup_cell = build_always_success_cell(
-        capacity,
-        Some(ckb_types::packed::Script::new_unchecked(
-            rollup_type_script.as_bytes(),
-        )),
-    );
+    let rollup_cell = build_always_success_cell(capacity, Some(rollup_type_script.clone()));
     let global_state = chain.local_state().last_global_state();
     let initial_rollup_cell_data = global_state.as_bytes();
     let tx = build_simple_tx_with_out_point(
@@ -267,12 +252,12 @@ async fn test_replace_rollup_cell_lock() {
             ))
             .build();
         ckb_types::packed::WitnessArgs::new_builder()
-            .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
+            .output_type(Pack::pack(&Some(rollup_action.as_bytes())))
             .build()
     };
     let new_lock = always_success_script()
         .as_builder()
-        .args(CKBPack::pack(&Bytes::from(vec![42u8])))
+        .args(Pack::pack(&Bytes::from(vec![42u8])))
         .build();
     let tx = build_simple_tx(
         &mut ctx.inner,
@@ -280,18 +265,18 @@ async fn test_replace_rollup_cell_lock() {
             rollup_cell.clone().as_builder().lock(new_lock).build(),
             initial_rollup_cell_data,
         ),
-        since_timestamp(GWUnpack::unpack(&tip_block_timestamp)),
+        since_timestamp(Unpack::unpack(&tip_block_timestamp)),
         (rollup_cell, rollup_cell_data),
     )
     .as_advanced_builder()
     .input(input_stake_cell)
     .output(output_stake_cell)
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .output_data(Pack::pack(&Bytes::default()))
     .cell_dep(ctx.stake_lock_dep.clone())
     .cell_dep(ctx.always_success_dep.clone())
     .cell_dep(ctx.state_validator_dep.clone())
     .cell_dep(ctx.rollup_config_dep.clone())
-    .witness(CKBPack::pack(&witness.as_bytes()))
+    .witness(Pack::pack(&witness.as_bytes()))
     .build();
     let err = ctx.verify_tx(tx).unwrap_err();
     let expected_err = ScriptError::ValidationFailure(
@@ -321,7 +306,7 @@ async fn test_downgrade_rollup_cell() {
     };
     // rollup lock & config
     let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
-    let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack().into();
+    let stake_script_type_hash: [u8; 32] = stake_lock_type.hash();
     let rollup_config = RollupConfig::new_builder()
         .stake_script_type_hash(Pack::pack(&stake_script_type_hash))
         .build();
@@ -356,12 +341,7 @@ async fn test_downgrade_rollup_cell() {
         )
     };
     // create a rollup cell
-    let rollup_cell = build_always_success_cell(
-        capacity,
-        Some(ckb_types::packed::Script::new_unchecked(
-            rollup_type_script.as_bytes(),
-        )),
-    );
+    let rollup_cell = build_always_success_cell(capacity, Some(rollup_type_script.clone()));
     let global_state = chain.local_state().last_global_state();
     let initial_rollup_cell_data = global_state
         .clone()
@@ -407,24 +387,24 @@ async fn test_downgrade_rollup_cell() {
             ))
             .build();
         ckb_types::packed::WitnessArgs::new_builder()
-            .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
+            .output_type(Pack::pack(&Some(rollup_action.as_bytes())))
             .build()
     };
     let tx = build_simple_tx(
         &mut ctx.inner,
         (rollup_cell.clone(), initial_rollup_cell_data),
-        since_timestamp(GWUnpack::unpack(&tip_block_timestamp)),
+        since_timestamp(Unpack::unpack(&tip_block_timestamp)),
         (rollup_cell, rollup_cell_data),
     )
     .as_advanced_builder()
     .input(input_stake_cell)
     .output(output_stake_cell)
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .output_data(Pack::pack(&Bytes::default()))
     .cell_dep(ctx.stake_lock_dep.clone())
     .cell_dep(ctx.always_success_dep.clone())
     .cell_dep(ctx.state_validator_dep.clone())
     .cell_dep(ctx.rollup_config_dep.clone())
-    .witness(CKBPack::pack(&witness.as_bytes()))
+    .witness(Pack::pack(&witness.as_bytes()))
     .build();
 
     let err = ctx.verify_tx(tx).unwrap_err();
@@ -455,7 +435,7 @@ async fn test_v1_block_timestamp_smaller_or_equal_than_previous_block_in_submit_
     };
     // rollup lock & config
     let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
-    let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack().into();
+    let stake_script_type_hash: [u8; 32] = stake_lock_type.hash();
     let rollup_config = RollupConfig::new_builder()
         .stake_script_type_hash(Pack::pack(&stake_script_type_hash))
         .build();
@@ -490,12 +470,7 @@ async fn test_v1_block_timestamp_smaller_or_equal_than_previous_block_in_submit_
         )
     };
     // create a rollup cell
-    let rollup_cell = build_always_success_cell(
-        capacity,
-        Some(ckb_types::packed::Script::new_unchecked(
-            rollup_type_script.as_bytes(),
-        )),
-    );
+    let rollup_cell = build_always_success_cell(capacity, Some(rollup_type_script.clone()));
     let global_state = chain.local_state().last_global_state();
     let initial_timestamp = {
         let timestamp = timestamp_now();
@@ -505,7 +480,7 @@ async fn test_v1_block_timestamp_smaller_or_equal_than_previous_block_in_submit_
     let initial_rollup_cell_data = global_state
         .clone()
         .as_builder()
-        .tip_block_timestamp(GWPack::pack(&initial_timestamp))
+        .tip_block_timestamp(Pack::pack(&initial_timestamp))
         .version(1u8.into())
         .build()
         .as_bytes();
@@ -534,10 +509,10 @@ async fn test_v1_block_timestamp_smaller_or_equal_than_previous_block_in_submit_
             .unwrap()
     };
     // verify submit block
-    let block_timestamp = GWUnpack::unpack(&block_result.block.raw().timestamp());
+    let block_timestamp = Unpack::unpack(&block_result.block.raw().timestamp());
     assert!(block_timestamp == tip_block_timestamp.saturating_sub(100));
     let rollup_cell_data = {
-        let block_timestamp = GWPack::pack(&block_timestamp);
+        let block_timestamp = Pack::pack(&block_timestamp);
         let builder = block_result.global_state.clone().as_builder();
         builder
             .tip_block_timestamp(block_timestamp)
@@ -553,7 +528,7 @@ async fn test_v1_block_timestamp_smaller_or_equal_than_previous_block_in_submit_
             ))
             .build();
         ckb_types::packed::WitnessArgs::new_builder()
-            .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
+            .output_type(Pack::pack(&Some(rollup_action.as_bytes())))
             .build()
     };
     let tx = build_simple_tx(
@@ -565,12 +540,12 @@ async fn test_v1_block_timestamp_smaller_or_equal_than_previous_block_in_submit_
     .as_advanced_builder()
     .input(input_stake_cell.clone())
     .output(output_stake_cell.clone())
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .output_data(Pack::pack(&Bytes::default()))
     .cell_dep(ctx.stake_lock_dep.clone())
     .cell_dep(ctx.always_success_dep.clone())
     .cell_dep(ctx.state_validator_dep.clone())
     .cell_dep(ctx.rollup_config_dep.clone())
-    .witness(CKBPack::pack(&witness.as_bytes()))
+    .witness(Pack::pack(&witness.as_bytes()))
     .build();
 
     let err = ctx.verify_tx(tx).unwrap_err();
@@ -617,7 +592,7 @@ async fn test_v1_block_timestamp_smaller_or_equal_than_previous_block_in_submit_
             ))
             .build();
         ckb_types::packed::WitnessArgs::new_builder()
-            .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
+            .output_type(Pack::pack(&Some(rollup_action.as_bytes())))
             .build()
     };
     let tx = build_simple_tx(
@@ -629,12 +604,12 @@ async fn test_v1_block_timestamp_smaller_or_equal_than_previous_block_in_submit_
     .as_advanced_builder()
     .input(input_stake_cell)
     .output(output_stake_cell)
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .output_data(Pack::pack(&Bytes::default()))
     .cell_dep(ctx.stake_lock_dep.clone())
     .cell_dep(ctx.always_success_dep.clone())
     .cell_dep(ctx.state_validator_dep.clone())
     .cell_dep(ctx.rollup_config_dep.clone())
-    .witness(CKBPack::pack(&witness.as_bytes()))
+    .witness(Pack::pack(&witness.as_bytes()))
     .build();
 
     let err = ctx.verify_tx(tx).unwrap_err();
@@ -665,7 +640,7 @@ async fn test_v1_block_timestamp_bigger_than_rollup_input_since_in_submit_block(
     };
     // rollup lock & config
     let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
-    let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack().into();
+    let stake_script_type_hash: [u8; 32] = stake_lock_type.hash();
     let rollup_config = RollupConfig::new_builder()
         .stake_script_type_hash(Pack::pack(&stake_script_type_hash))
         .build();
@@ -700,12 +675,7 @@ async fn test_v1_block_timestamp_bigger_than_rollup_input_since_in_submit_block(
         )
     };
     // create a rollup cell
-    let rollup_cell = build_always_success_cell(
-        capacity,
-        Some(ckb_types::packed::Script::new_unchecked(
-            rollup_type_script.as_bytes(),
-        )),
-    );
+    let rollup_cell = build_always_success_cell(capacity, Some(rollup_type_script.clone()));
     let global_state = chain.local_state().last_global_state();
     let initial_rollup_cell_data = global_state
         .clone()
@@ -740,11 +710,11 @@ async fn test_v1_block_timestamp_bigger_than_rollup_input_since_in_submit_block(
         .unwrap()
     };
     // verify submit block
-    let tip_block_timestamp = GWUnpack::unpack(&block_result.block.raw().timestamp());
+    let tip_block_timestamp = Unpack::unpack(&block_result.block.raw().timestamp());
     let rollup_cell_data = block_result
         .global_state
         .as_builder()
-        .tip_block_timestamp(GWPack::pack(&tip_block_timestamp))
+        .tip_block_timestamp(Pack::pack(&tip_block_timestamp))
         .version(1u8.into())
         .build()
         .as_bytes();
@@ -757,7 +727,7 @@ async fn test_v1_block_timestamp_bigger_than_rollup_input_since_in_submit_block(
             ))
             .build();
         ckb_types::packed::WitnessArgs::new_builder()
-            .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
+            .output_type(Pack::pack(&Some(rollup_action.as_bytes())))
             .build()
     };
     // NOTE: since_timestamp() will increase tip_block_timestamp by 1 second, so we have have to minus 2 seconds
@@ -770,12 +740,12 @@ async fn test_v1_block_timestamp_bigger_than_rollup_input_since_in_submit_block(
     .as_advanced_builder()
     .input(input_stake_cell)
     .output(output_stake_cell)
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .output_data(Pack::pack(&Bytes::default()))
     .cell_dep(ctx.stake_lock_dep.clone())
     .cell_dep(ctx.always_success_dep.clone())
     .cell_dep(ctx.state_validator_dep.clone())
     .cell_dep(ctx.rollup_config_dep.clone())
-    .witness(CKBPack::pack(&witness.as_bytes()))
+    .witness(Pack::pack(&witness.as_bytes()))
     .build();
 
     let err = ctx.verify_tx(tx).unwrap_err();
@@ -806,7 +776,7 @@ async fn test_v0_v1_wrong_global_state_tip_block_timestamp_in_submit_block() {
     };
     // rollup lock & config
     let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
-    let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack().into();
+    let stake_script_type_hash: [u8; 32] = stake_lock_type.hash();
     let rollup_config = RollupConfig::new_builder()
         .stake_script_type_hash(Pack::pack(&stake_script_type_hash))
         .build();
@@ -841,17 +811,12 @@ async fn test_v0_v1_wrong_global_state_tip_block_timestamp_in_submit_block() {
         )
     };
     // create a rollup cell
-    let rollup_cell = build_always_success_cell(
-        capacity,
-        Some(ckb_types::packed::Script::new_unchecked(
-            rollup_type_script.as_bytes(),
-        )),
-    );
+    let rollup_cell = build_always_success_cell(capacity, Some(rollup_type_script.clone()));
     let global_state = chain.local_state().last_global_state();
     let initial_rollup_cell_data = global_state
         .clone()
         .as_builder()
-        .tip_block_timestamp(GWPack::pack(&0u64))
+        .tip_block_timestamp(Pack::pack(&0u64))
         .build()
         .as_bytes();
     let tx = build_simple_tx_with_out_point(
@@ -882,12 +847,12 @@ async fn test_v0_v1_wrong_global_state_tip_block_timestamp_in_submit_block() {
         .unwrap()
     };
     // verify submit block
-    let tip_block_timestamp = GWUnpack::unpack(&block_result.block.raw().timestamp());
+    let tip_block_timestamp = Unpack::unpack(&block_result.block.raw().timestamp());
     let rollup_cell_data = block_result
         .global_state
         .clone()
         .as_builder()
-        .tip_block_timestamp(GWPack::pack(&tip_block_timestamp.saturating_sub(100)))
+        .tip_block_timestamp(Pack::pack(&tip_block_timestamp.saturating_sub(100)))
         .version(0.into())
         .build()
         .as_bytes();
@@ -900,7 +865,7 @@ async fn test_v0_v1_wrong_global_state_tip_block_timestamp_in_submit_block() {
             ))
             .build();
         ckb_types::packed::WitnessArgs::new_builder()
-            .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
+            .output_type(Pack::pack(&Some(rollup_action.as_bytes())))
             .build()
     };
     let tx = build_simple_tx(
@@ -912,12 +877,12 @@ async fn test_v0_v1_wrong_global_state_tip_block_timestamp_in_submit_block() {
     .as_advanced_builder()
     .input(input_stake_cell.clone())
     .output(output_stake_cell.clone())
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .output_data(Pack::pack(&Bytes::default()))
     .cell_dep(ctx.stake_lock_dep.clone())
     .cell_dep(ctx.always_success_dep.clone())
     .cell_dep(ctx.state_validator_dep.clone())
     .cell_dep(ctx.rollup_config_dep.clone())
-    .witness(CKBPack::pack(&witness.as_bytes()))
+    .witness(Pack::pack(&witness.as_bytes()))
     .build();
 
     let err = ctx.verify_tx(tx).unwrap_err();
@@ -937,7 +902,7 @@ async fn test_v0_v1_wrong_global_state_tip_block_timestamp_in_submit_block() {
         .global_state
         .clone()
         .as_builder()
-        .tip_block_timestamp(GWPack::pack(&tip_block_timestamp.saturating_sub(100)))
+        .tip_block_timestamp(Pack::pack(&tip_block_timestamp.saturating_sub(100)))
         .version(1u8.into())
         .build()
         .as_bytes();
@@ -950,12 +915,12 @@ async fn test_v0_v1_wrong_global_state_tip_block_timestamp_in_submit_block() {
     .as_advanced_builder()
     .input(input_stake_cell.clone())
     .output(output_stake_cell.clone())
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .output_data(Pack::pack(&Bytes::default()))
     .cell_dep(ctx.stake_lock_dep.clone())
     .cell_dep(ctx.always_success_dep.clone())
     .cell_dep(ctx.state_validator_dep.clone())
     .cell_dep(ctx.rollup_config_dep.clone())
-    .witness(CKBPack::pack(&witness.as_bytes()))
+    .witness(Pack::pack(&witness.as_bytes()))
     .build();
 
     let err = ctx.verify_tx(tx).unwrap_err();
@@ -985,12 +950,12 @@ async fn test_v0_v1_wrong_global_state_tip_block_timestamp_in_submit_block() {
     .as_advanced_builder()
     .input(input_stake_cell)
     .output(output_stake_cell)
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .output_data(Pack::pack(&Bytes::default()))
     .cell_dep(ctx.stake_lock_dep.clone())
     .cell_dep(ctx.always_success_dep.clone())
     .cell_dep(ctx.state_validator_dep.clone())
     .cell_dep(ctx.rollup_config_dep.clone())
-    .witness(CKBPack::pack(&witness.as_bytes()))
+    .witness(Pack::pack(&witness.as_bytes()))
     .build();
 
     let err = ctx.verify_tx(tx).unwrap_err();
@@ -1019,15 +984,13 @@ async fn test_check_reverted_cells_in_submit_block() {
     };
     // rollup lock & config
     let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
-    let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack().into();
+    let stake_script_type_hash: [u8; 32] = stake_lock_type.hash();
     let deposit_lock_type = named_always_success_script(b"deposit_lock_type_id");
-    let deposit_script_type_hash: [u8; 32] = deposit_lock_type.calc_script_hash().unpack().into();
+    let deposit_script_type_hash: [u8; 32] = deposit_lock_type.hash();
     let custodian_lock_type = named_always_success_script(b"custodian_lock_type_id");
-    let custodian_script_type_hash: [u8; 32] =
-        custodian_lock_type.calc_script_hash().unpack().into();
+    let custodian_script_type_hash: [u8; 32] = custodian_lock_type.hash();
     let withdrawal_lock_type = named_always_success_script(b"withdrawal_lock_type_id");
-    let withdrawal_script_type_hash: [u8; 32] =
-        withdrawal_lock_type.calc_script_hash().unpack().into();
+    let withdrawal_script_type_hash: [u8; 32] = withdrawal_lock_type.hash();
     let rollup_config = RollupConfig::new_builder()
         .stake_script_type_hash(Pack::pack(&stake_script_type_hash))
         .deposit_script_type_hash(Pack::pack(&deposit_script_type_hash))
@@ -1068,12 +1031,7 @@ async fn test_check_reverted_cells_in_submit_block() {
         )
     };
     // create a rollup cell
-    let rollup_cell = build_always_success_cell(
-        capacity,
-        Some(ckb_types::packed::Script::new_unchecked(
-            rollup_type_script.as_bytes(),
-        )),
-    );
+    let rollup_cell = build_always_success_cell(capacity, Some(rollup_type_script.clone()));
 
     let global_state = chain.local_state().last_global_state();
     let initial_rollup_cell_data = global_state
@@ -1220,7 +1178,7 @@ async fn test_check_reverted_cells_in_submit_block() {
             ))
             .build();
         ckb_types::packed::WitnessArgs::new_builder()
-            .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
+            .output_type(Pack::pack(&Some(rollup_action.as_bytes())))
             .build()
     };
     let tx = build_simple_tx_with_out_point_and_since(
@@ -1228,26 +1186,26 @@ async fn test_check_reverted_cells_in_submit_block() {
         (rollup_cell.clone(), initial_rollup_cell_data),
         (
             input_out_point,
-            since_timestamp(GWUnpack::unpack(&tip_block_timestamp)),
+            since_timestamp(Unpack::unpack(&tip_block_timestamp)),
         ),
         (rollup_cell, rollup_cell_data),
     )
     .as_advanced_builder()
     .input(input_stake_cell)
     .output(output_stake_cell)
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .output_data(Pack::pack(&Bytes::default()))
     .input(input_reverted_custodian_cell)
     .output(output_reverted_deposit_cell)
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .output_data(Pack::pack(&Bytes::default()))
     .input(input_reverted_withdrawal_cell)
     .output(output_reverted_custodian_cell)
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .output_data(Pack::pack(&Bytes::default()))
     .inputs(input_finalized_cells)
     .outputs(output_finalized_cells.clone())
     .outputs_data(
         (0..output_finalized_cells.len())
             .into_iter()
-            .map(|_| CKBPack::pack(&Bytes::new())),
+            .map(|_| Pack::pack(&Bytes::new())),
     )
     .cell_dep(ctx.stake_lock_dep.clone())
     .cell_dep(ctx.deposit_lock_dep.clone())
@@ -1256,7 +1214,7 @@ async fn test_check_reverted_cells_in_submit_block() {
     .cell_dep(ctx.always_success_dep.clone())
     .cell_dep(ctx.state_validator_dep.clone())
     .cell_dep(ctx.rollup_config_dep.clone())
-    .witness(CKBPack::pack(&witness.as_bytes()))
+    .witness(Pack::pack(&witness.as_bytes()))
     .build();
     ctx.verify_tx(tx).expect("return success");
 }
@@ -1278,13 +1236,11 @@ async fn test_withdrawal_cell_lock_args_with_owner_lock_in_submit_block() {
 
     // rollup lock & config
     let stake_lock_type = named_always_success_script(b"stake_lock_type_id");
-    let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack().into();
+    let stake_script_type_hash: [u8; 32] = stake_lock_type.hash();
     let custodian_lock_type = named_always_success_script(b"custodian_lock_type_id");
-    let custodian_script_type_hash: [u8; 32] =
-        custodian_lock_type.calc_script_hash().unpack().into();
+    let custodian_script_type_hash: [u8; 32] = custodian_lock_type.hash();
     let withdrawal_lock_type = named_always_success_script(b"withdrawal_lock_type_id");
-    let withdrawal_script_type_hash: [u8; 32] =
-        withdrawal_lock_type.calc_script_hash().unpack().into();
+    let withdrawal_script_type_hash: [u8; 32] = withdrawal_lock_type.hash();
     let rollup_config = RollupConfig::new_builder()
         .stake_script_type_hash(Pack::pack(&stake_script_type_hash))
         .custodian_script_type_hash(Pack::pack(&custodian_script_type_hash))
@@ -1300,12 +1256,7 @@ async fn test_withdrawal_cell_lock_args_with_owner_lock_in_submit_block() {
         setup_chain_with_config(rollup_type_script.clone(), rollup_config.clone()).await;
 
     // create a rollup cell
-    let rollup_cell = build_always_success_cell(
-        capacity,
-        Some(ckb_types::packed::Script::new_unchecked(
-            rollup_type_script.as_bytes(),
-        )),
-    );
+    let rollup_cell = build_always_success_cell(capacity, Some(rollup_type_script.clone()));
     let eth_registry_id = gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 
     // Deposit account
@@ -1350,10 +1301,7 @@ async fn test_withdrawal_cell_lock_args_with_owner_lock_in_submit_block() {
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
-        transaction: build_sync_tx(
-            gw_types::packed::CellOutput::new_unchecked(rollup_cell.as_bytes()),
-            block_result,
-        ),
+        transaction: build_sync_tx(rollup_cell.clone(), block_result),
     };
     let param = SyncParam {
         updates: vec![apply_deposits],
@@ -1397,10 +1345,7 @@ async fn test_withdrawal_cell_lock_args_with_owner_lock_in_submit_block() {
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },
-        transaction: build_sync_tx(
-            gw_types::packed::CellOutput::new_unchecked(rollup_cell.as_bytes()),
-            block_result,
-        ),
+        transaction: build_sync_tx(rollup_cell.clone(), block_result),
     };
     let param = SyncParam {
         updates: vec![apply_deposits],
@@ -1555,7 +1500,7 @@ async fn test_withdrawal_cell_lock_args_with_owner_lock_in_submit_block() {
             ))
             .build();
         ckb_types::packed::WitnessArgs::new_builder()
-            .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
+            .output_type(Pack::pack(&Some(rollup_action.as_bytes())))
             .build()
     };
     let tx = build_simple_tx_with_out_point_and_since(
@@ -1563,26 +1508,26 @@ async fn test_withdrawal_cell_lock_args_with_owner_lock_in_submit_block() {
         (rollup_cell.clone(), initial_rollup_cell_data),
         (
             input_out_point,
-            since_timestamp(GWUnpack::unpack(&tip_block_timestamp)),
+            since_timestamp(Unpack::unpack(&tip_block_timestamp)),
         ),
         (rollup_cell, rollup_cell_data),
     )
     .as_advanced_builder()
     .input(input_stake_cell)
     .output(output_stake_cell)
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .output_data(Pack::pack(&Bytes::default()))
     .input(input_custodian_cell)
     .output(output_withdrawal_cell)
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .output_data(Pack::pack(&Bytes::default()))
     .output(output_custodian_cell)
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .output_data(Pack::pack(&Bytes::default()))
     .cell_dep(ctx.stake_lock_dep.clone())
     .cell_dep(ctx.custodian_lock_dep.clone())
     .cell_dep(ctx.withdrawal_lock_dep.clone())
     .cell_dep(ctx.always_success_dep.clone())
     .cell_dep(ctx.state_validator_dep.clone())
     .cell_dep(ctx.rollup_config_dep.clone())
-    .witness(CKBPack::pack(&witness.as_bytes()))
+    .witness(Pack::pack(&witness.as_bytes()))
     .build();
     ctx.verify_tx(tx).expect("return success");
 }

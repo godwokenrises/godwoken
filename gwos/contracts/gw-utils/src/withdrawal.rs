@@ -2,7 +2,7 @@ use ckb_std::debug;
 use gw_types::{
     bytes::Bytes,
     packed::{Script, ScriptReader, WithdrawalLockArgs, WithdrawalLockArgsReader},
-    prelude::{Entity, Reader, Unpack},
+    prelude::{CalcHash, Entity, Reader, Unpack},
 };
 
 use crate::error::Error;

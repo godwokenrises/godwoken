@@ -2,12 +2,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use autorocks::{moveit::slot, DbOptions, ReadOnlyDb};
-use gw_types::{
-    from_box_should_be_ok,
-    h256::H256,
-    packed,
-    prelude::{Entity, FromSliceShouldBeOk, Unpack},
-};
+use gw_types::{from_box_should_be_ok, h256::H256, packed, prelude::*};
 
 use crate::{
     schema::{Col, COLUMN_REVERTED_BLOCK_SMT_ROOT},
