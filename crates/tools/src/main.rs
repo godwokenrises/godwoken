@@ -14,6 +14,7 @@ mod hasher;
 mod polyjuice;
 mod prepare_scripts;
 mod report_accounts;
+mod scan_eth_address;
 mod setup;
 mod stat;
 mod sudt;
@@ -863,6 +864,7 @@ async fn main() -> Result<()> {
                         .required(true)
                         .help("input file"),
                 ))
+        .subcommand(scan_eth_address::command())
         ;
 
     let matches = app.clone().get_matches();
@@ -1558,6 +1560,9 @@ async fn main() -> Result<()> {
                 log::error!("Error: {}", err);
                 std::process::exit(-1);
             };
+        }
+        Some((scan_eth_address::COMMAND, m)) => {
+            scan_eth_address::run(m).await.unwrap();
         }
         _ => {
             app.print_help().expect("print help");
