@@ -112,7 +112,7 @@ where
 // Read config.toml
 pub fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
     let content = fs::read(&path)?;
-    let config = toml::from_slice(&content)?;
+    let config = toml_edit::easy::from_slice(&content)?;
     Ok(config)
 }
 
