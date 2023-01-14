@@ -351,6 +351,8 @@ fn default_syscall_cycles() -> SyscallCyclesConfig {
 // Workaround: https://github.com/alexcrichton/toml-rs/issues/256
 // Serialize to string instead
 mod toml_u64_serde_workaround {
+    use std::borrow::Cow;
+
     use serde::{Deserialize, Deserializer, Serializer};
 
     pub fn serialize<S: Serializer>(val: &u64, s: S) -> Result<S::Ok, S::Error> {
@@ -361,7 +363,7 @@ mod toml_u64_serde_workaround {
     where
         D: Deserializer<'de>,
     {
-        let s: &str = Deserialize::deserialize(deserializer)?;
+        let s: Cow<str> = Deserialize::deserialize(deserializer)?;
         s.parse::<u64>().map_err(serde::de::Error::custom)
     }
 }
