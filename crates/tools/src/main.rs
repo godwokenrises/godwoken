@@ -23,11 +23,14 @@ mod update_cell;
 mod utils;
 mod withdraw;
 
-pub use crate::utils::sdk;
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
-use crate::utils::sdk::constants::ONE_CKB;
 use account::read_privkey;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::{value_t, App, Arg, SubCommand};
 use deploy_genesis::DeployRollupCellArgs;
 use dump_tx::ChallengeBlock;
@@ -36,22 +39,19 @@ use godwoken_rpc::GodwokenRpcClient;
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType;
 use gw_rpc_client::indexer_client::CkbIndexerClient;
-use gw_types::offchain::CompatibleFinalizedTimepoint;
-use gw_types::prelude::*;
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use gw_types::{offchain::CompatibleFinalizedTimepoint, prelude::*};
 use tracing_subscriber::prelude::*;
 use types::{
     BuildScriptsResult, RollupDeploymentResult, ScriptsDeploymentResult, UserRollupConfig,
 };
 use utils::{cli_args, transaction::read_config};
 
-use crate::{setup::SetupArgs, sudt::account::build_l1_sudt_type_script};
-
 use self::types::OmniLockConfig;
+// So rust don't complain about unused items.
+pub use crate::utils::sdk;
+use crate::{
+    setup::SetupArgs, sudt::account::build_l1_sudt_type_script, utils::sdk::constants::ONE_CKB,
+};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
@@ -1000,17 +1000,10 @@ async fn main() -> Result<()> {
                 p2p_dial,
             };
 
-            match generate_config::generate_node_config(args).await {
-                Ok(config) => {
-                    let content = toml::to_string_pretty(&config).unwrap();
-                    std::fs::write(output_path, content).unwrap();
-                    log::info!("Generate file {:?}", output_path);
-                }
-                Err(err) => {
-                    log::error!("Generate config error: {}", err);
-                    std::process::exit(-1);
-                }
-            }
+            let config = generate_config::generate_node_config(args).await?;
+            let content = toml_edit::easy::to_string_pretty(&config)?;
+            std::fs::write(output_path, content).context("writing config file")?;
+            log::info!("Generate file {:?}", output_path);
         }
         Some(("prepare-scripts", m)) => {
             let mode = value_t!(m, "mode", prepare_scripts::ScriptsBuildMode).unwrap();

@@ -177,7 +177,8 @@ pub async fn setup(args: SetupArgs<'_>) {
             p2p_dial: vec![],
         };
         let config = generate_node_config(args).await.expect("generate_config");
-        let output_content = toml::to_string_pretty(&config).expect("serde toml to string pretty");
+        let output_content =
+            toml_edit::easy::to_string_pretty(&config).expect("serde toml to string pretty");
         fs::write(output_file_path, output_content.as_bytes()).unwrap();
     }
 
