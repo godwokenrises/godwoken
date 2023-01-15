@@ -4,8 +4,6 @@ on:
   push:
     branches: [develop, master, ci, 'v1*']
     tags: ["v*.*.*"]
-    paths:
-      - 'gwos-evm/**'
   pull_request:
 
 jobs:
