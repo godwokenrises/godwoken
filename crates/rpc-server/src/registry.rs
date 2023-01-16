@@ -260,6 +260,7 @@ impl Registry {
                 mem_pool: Arc::clone(mem_pool),
                 submit_rx,
                 queue: FeeQueue::new(),
+                queue_order: QueueOrder(0),
                 fee_config: fee_config.clone(),
                 generator: generator.clone(),
                 mem_pool_state: mem_pool_state.clone(),
@@ -360,10 +361,26 @@ impl Request {
     }
 }
 
+struct QueueOrder(usize);
+
+impl QueueOrder {
+    fn next(&mut self, queue: &FeeQueue<RequestContext>) -> usize {
+        // Reuse order only when queue is empty
+        if queue.is_empty() {
+            self.0 = 0;
+        }
+
+        let next = self.0;
+        self.0 = self.0.saturating_add(1);
+        next
+    }
+}
+
 struct RequestSubmitter {
     mem_pool: Arc<Mutex<gw_mem_pool::pool::MemPool>>,
     submit_rx: mpsc::Receiver<(Request, RequestContext)>,
     queue: FeeQueue<RequestContext>,
+    queue_order: QueueOrder,
     fee_config: FeeConfig,
     generator: Arc<Generator>,
     mem_pool_state: Arc<MemPoolState>,
@@ -479,6 +496,7 @@ impl RequestSubmitter {
 
             // mem-pool can process more txs
             let queue = &mut self.queue;
+            let queue_order = &mut self.queue_order;
 
             // wait next tx if queue is empty
             if queue.is_empty() {
@@ -505,7 +523,7 @@ impl RequestSubmitter {
                     self.generator.clone(),
                     req,
                     &state,
-                    queue.len(),
+                    queue_order.next(queue),
                 ) {
                     Ok(entry) => {
                         if entry.cycles_limit > self.mem_pool_config.mem_block.max_cycles_limit {
@@ -544,7 +562,7 @@ impl RequestSubmitter {
                     self.generator.clone(),
                     req,
                     &state,
-                    queue.len(),
+                    queue_order.next(queue),
                 ) {
                     Ok(entry) => {
                         if entry.cycles_limit > self.mem_pool_config.mem_block.max_cycles_limit {
