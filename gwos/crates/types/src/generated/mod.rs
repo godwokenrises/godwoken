@@ -1,5 +1,4 @@
 #![allow(warnings)]
-#![allow(unused_imports)]
 
 // Re-export ckb-types instead of using types in blockchain.rs.
 #[cfg(feature = "std")]
@@ -20,38 +19,56 @@ mod blockchain {
 
 // Use generated types.
 #[cfg(not(feature = "std"))]
-mod blockchain;
+mod blockchain {
+    include!(concat!(env!("OUT_DIR"), "/blockchain.rs"));
+}
 
 #[allow(clippy::all)]
-mod godwoken;
-
-#[cfg(feature = "std")]
-#[allow(clippy::all)]
-mod store;
-
-#[cfg(feature = "std")]
-#[allow(clippy::all)]
-mod mem_block;
+mod godwoken {
+    include!(concat!(env!("OUT_DIR"), "/godwoken.rs"));
+}
 
 #[cfg(feature = "std")]
 #[allow(clippy::all)]
-mod omni_lock;
+mod store {
+    include!(concat!(env!("OUT_DIR"), "/store.rs"));
+}
 
 #[cfg(feature = "std")]
 #[allow(clippy::all)]
-mod xudt_rce;
+mod mem_block {
+    include!(concat!(env!("OUT_DIR"), "/mem_block.rs"));
+}
+
+#[cfg(feature = "std")]
+#[allow(clippy::all)]
+mod omni_lock {
+    include!(concat!(env!("OUT_DIR"), "/omni_lock.rs"));
+}
+
+#[cfg(feature = "std")]
+#[allow(clippy::all)]
+mod xudt_rce {
+    include!(concat!(env!("OUT_DIR"), "/xudt_rce.rs"));
+}
 
 #[cfg(feature = "deprecated")]
 #[allow(clippy::all)]
-mod deprecated;
+mod deprecated {
+    include!(concat!(env!("OUT_DIR"), "/deprecated.rs"));
+}
 
 #[cfg(feature = "std")]
 #[allow(clippy::all)]
-mod exported_block;
+mod exported_block {
+    include!(concat!(env!("OUT_DIR"), "/exported_block.rs"));
+}
 
 #[cfg(feature = "std")]
 #[allow(clippy::all)]
-mod block_sync;
+mod block_sync {
+    include!(concat!(env!("OUT_DIR"), "/block_sync.rs"));
+}
 
 pub mod packed {
     pub use molecule::prelude::*;
