@@ -31,8 +31,6 @@ jobs:
           ~/.cargo/git
           target
         key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
-    - name: Install moleculec v0.7.2
-      run: CARGO_TARGET_DIR=target/ cargo install moleculec --locked --version 0.7.2
     - name: Build
       run: cargo build --verbose
     - name: Check format
