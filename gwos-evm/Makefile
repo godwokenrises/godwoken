@@ -102,21 +102,21 @@ patch-generator_log: install/ckb-binary-patcher
 
 build/generator: c/generator.c $(GENERATOR_DEPS)
 	cd $(SECP_DIR) && (git apply workaround-fix-g++-linking.patch || true) && cd - # apply patch
-	$(CXX) $(CFLAGS) $(LDFLAGS) -Ibuild -o $@ c/generator.c $(ALL_OBJS)
+	$(CXX) -Ibuild $(CFLAGS) $(LDFLAGS) -o $@ c/generator.c $(ALL_OBJS)
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
 	cd $(SECP_DIR) && (git apply -R workaround-fix-g++-linking.patch || true) && cd - # revert patch
 
 build/validator: c/validator.c $(VALIDATOR_DEPS)
 	cd $(SECP_DIR) && (git apply workaround-fix-g++-linking.patch || true) && cd - # apply patch
-	$(CXX) $(CFLAGS) $(LDFLAGS) -Ibuild -o $@ c/validator.c $(ALL_OBJS)
+	$(CXX) -Ibuild $(CFLAGS) $(LDFLAGS) -o $@ c/validator.c $(ALL_OBJS)
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
 	cd $(SECP_DIR) && (git apply -R workaround-fix-g++-linking.patch || true) && cd - # revert patch
 
 build/generator_log: c/generator.c $(GENERATOR_DEPS)
 	cd $(SECP_DIR) && (git apply workaround-fix-g++-linking.patch || true) && cd - # apply patch
-	$(CXX) $(CFLAGS) $(LDFLAGS) -Ibuild -o $@ c/generator.c $(ALL_OBJS) -DPOLYJUICE_DEBUG_LOG
+	$(CXX) -Ibuild $(CFLAGS) $(LDFLAGS) -o $@ c/generator.c $(ALL_OBJS) -DPOLYJUICE_DEBUG_LOG
 #	If we need the whole one for performance analysis, don't separate the executable here
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
@@ -124,7 +124,7 @@ build/generator_log: c/generator.c $(GENERATOR_DEPS)
 
 build/validator_log: c/validator.c $(VALIDATOR_DEPS)
 	cd $(SECP_DIR) && (git apply workaround-fix-g++-linking.patch || true) && cd - # apply patch
-	$(CXX) $(CFLAGS) $(LDFLAGS) -Ibuild -o $@ c/validator.c $(ALL_OBJS) -DPOLYJUICE_DEBUG_LOG
+	$(CXX) -Ibuild $(CFLAGS) $(LDFLAGS) -o $@ c/validator.c $(ALL_OBJS) -DPOLYJUICE_DEBUG_LOG
 #	If we need the whole one for performance analysis, don't separate the executable here
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
@@ -132,23 +132,23 @@ build/validator_log: c/validator.c $(VALIDATOR_DEPS)
 
 build/test_contracts: c/tests/test_contracts.c $(VALIDATOR_DEPS)
 	cd $(SECP_DIR) && (git apply workaround-fix-g++-linking.patch || true) && cd - # apply patch
-	$(CXX) $(CFLAGS) $(LDFLAGS) -Ibuild -o $@ c/tests/test_contracts.c $(ALL_OBJS)
+	$(CXX) -Ibuild $(CFLAGS) $(LDFLAGS) -o $@ c/tests/test_contracts.c $(ALL_OBJS)
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
 	cd $(SECP_DIR) && (git apply -R workaround-fix-g++-linking.patch || true) && cd - # revert patch
 
 build/test_rlp: c/tests/test_rlp.c $(VALIDATOR_DEPS)
 	cd $(SECP_DIR) && (git apply workaround-fix-g++-linking.patch || true) && cd - # apply patch
-	$(CXX) $(CFLAGS) $(LDFLAGS) -Ibuild -o $@ c/tests/test_rlp.c $(ALL_OBJS)
+	$(CXX) -Ibuild $(CFLAGS) $(LDFLAGS) -o $@ c/tests/test_rlp.c $(ALL_OBJS)
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
 	cd $(SECP_DIR) && (git apply -R workaround-fix-g++-linking.patch || true) && cd - # revert patch
 
 build/test_calc_fee: c/tests/test_calc_fee.c $(VALIDATOR_DEPS)
-	$(CXX) $(CFLAGS) $(LDFLAGS) -Ibuild -o $@ c/tests/test_calc_fee.c $(ALL_OBJS)
+	$(CXX) -Ibuild $(CFLAGS) $(LDFLAGS) -o $@ c/tests/test_calc_fee.c $(ALL_OBJS)
 
 build/test_ripemd160: c/ripemd160/test_ripemd160.c c/ripemd160/ripemd160.h c/ripemd160/memzero.h $(ALL_OBJS)
-	$(CXX) $(CFLAGS) $(LDFLAGS) -Ibuild -o $@ c/ripemd160/test_ripemd160.c $(ALL_OBJS)
+	$(CXX) -Ibuild $(CFLAGS) $(LDFLAGS) -o $@ c/ripemd160/test_ripemd160.c $(ALL_OBJS)
 	riscv64-unknown-elf-run build/test_ripemd160
 
 build/execution_state.o: deps/evmone/lib/evmone/execution_state.cpp
