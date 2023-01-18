@@ -31,9 +31,9 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
     - name: Install moleculec
       run: |
-        export MOLC_VERSION=$(cat deps/godwoken-scripts/c/Makefile | egrep "MOLC_VERSION :=" | awk '{print $3}')
+        export MOLC_VERSION=$(cat ../gwos/c/Makefile | egrep "MOLC_VERSION :=" | awk '{print $3}')
         test "$(moleculec --version)" = "Moleculec $MOLC_VERSION" \
-        || CARGO_TARGET_DIR=target/ cargo install moleculec --version $MOLC_VERSION --force
+        || CARGO_TARGET_DIR=target/ cargo install moleculec --version $MOLC_VERSION
     - name: Cache LLVM and Clang
       id: cache-llvm
       uses: actions/cache@v2
@@ -47,7 +47,7 @@ jobs:
       uses: actions/cache@v2
       with:
         path: |
-          polyjuice-tests/fuzz/corpus-cache
+          gwos-evm/polyjuice-tests/fuzz/corpus-cache
         key: corpus-${{ env.DATETIME }}
         restore-keys: |
           corpus
@@ -57,13 +57,6 @@ jobs:
       with:
         version: "11.0"
         cached: ${{ steps.cache-llvm.outputs.cache-hit }}
-
-    - name: test_rlp on x86 with sanitizers
-      working-directory: ./gwos-evm/polyjuice-tests/fuzz
-      run: make build/test_rlp && ./build/test_rlp
-    - name: test_contracts on x86 with sanitizers
-      working-directory: ./gwos-evm/polyjuice-tests/fuzz
-      run: make build/test_contracts && ./build/test_contracts
 
     - name: Set MAX_FUZZ_TIME for different branches
       run: |
@@ -80,8 +73,8 @@ jobs:
       run: |
         mkdir -p corpus-cache
         ls corpus-cache
-        make build/polyjuice_generator_fuzzer && \
-        ./build/polyjuice_generator_fuzzer corpus corpus-cache \
+        make build/fuzzer && \
+        ./build/fuzzer corpus corpus-cache \
           -max_total_time=$MAX_FUZZ_TIME -timeout=120 \
           -max_len=25000 -rss_limit_mb=0
       # Max data buffer size: 24KB < 25000 bytes
@@ -90,7 +83,7 @@ jobs:
       working-directory: gwos-evm/polyjuice-tests/fuzz
       run: |
         mkdir -p corpus-new
-        ./build/polyjuice_generator_fuzzer -merge=1 corpus-new corpus-cache corpus
+        ./build/fuzzer -merge=1 corpus-new corpus-cache corpus
         rm -rf corpus-cache
         mv corpus-new corpus-cache
 

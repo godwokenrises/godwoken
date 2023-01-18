@@ -35,7 +35,7 @@ use self::error_codes::{
     GW_SUDT_ERROR_UNPERMITTED_ADDRESS, SUCCESS,
 };
 
-mod bn;
+pub mod bn;
 pub mod error_codes;
 
 /// Max buffer size: 4MB
