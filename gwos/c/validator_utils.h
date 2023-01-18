@@ -71,9 +71,9 @@ typedef struct gw_context_t {
   gw_recover_account_fn sys_recover_account;
   gw_log_fn sys_log;
   gw_pay_fee_fn sys_pay_fee;
-  gw_bn_add sys_bn_add;
-  gw_bn_mul sys_bn_mul;
-  gw_bn_pairing sys_bn_pairing;
+  gw_bn_add_fn sys_bn_add;
+  gw_bn_mul_fn sys_bn_mul;
+  gw_bn_pairing_fn sys_bn_pairing;
   gw_get_registry_address_by_script_hash_fn
       sys_get_registry_address_by_script_hash;
   gw_get_script_hash_by_registry_address_fn

@@ -35,6 +35,7 @@ exclude = [
  # working on godwoken.
  "crates/autorocks",
  "gwos-evm/polyjuice-tests",
+ "gwos-evm/polyjuice-tests/fuzz2",
  "gwos/contracts",
 ]
 

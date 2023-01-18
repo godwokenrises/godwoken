@@ -10,36 +10,40 @@ ifeq ($(OS),Unknown)
 endif
 
 NPROC?=4
-CC=clang
 CXX=clang++
+CC=clang
 LLVM_PROFDATA=llvm-profdata
 LLVM_COV=llvm-cov
 
 DEPS := ../../deps
+GW_SCRIPTS := ../../../gwos/c
 BUILD := build
 
 SECP_DIR := $(DEPS)/secp256k1-fix
 SECP256K1_SRC := $(SECP_DIR)/src/ecmult_static_pre_context.h
 
 CFLAGS_SECP := -isystem $(SECP_DIR)/src -isystem $(SECP_DIR)
-CFLAGS_CKB_STD = -I./ -I$(DEPS)/ckb-c-stdlib -I$(DEPS)/ckb-c-stdlib/molecule
+CFLAGS_CKB_STD = -I./ -I$(DEPS)/ckb-c-stdlib -I$(DEPS)/ckb-c-stdlib/molecule -Wno-incompatible-pointer-types
 CFLAGS_ETHASH := -I$(DEPS)/ethash/include -I$(DEPS)/ethash/lib/ethash -I$(DEPS)/ethash/lib/keccak -I$(DEPS)/ethash/lib/support
 CFLAGS_EVMONE := -I$(DEPS)/evmone/lib/evmone -I$(DEPS)/evmone/include -I$(DEPS)/evmone/evmc/include -I$(DEPS)/evmone/evmc/tools/
-CFLAGS_SMT := -I$(DEPS)/godwoken-scripts/c/deps/sparse-merkle-tree/c
-CFLAGS_GODWOKEN := -I$(DEPS)/godwoken-scripts/c
+CFLAGS_SMT := -I$(GW_SCRIPTS)/deps/sparse-merkle-tree/c
+CFLAGS_GODWOKEN := -I$(GW_SCRIPTS)
 CFLAGS_MBEDTLS := -I$(DEPS)/mbedtls/include
 CFLAGS_CRYPTO_ALGORITHMS := -I$(DEPS)/crypto-algorithms
 CFLAGS_INTX := -I$(DEPS)/intx/lib/intx -I$(DEPS)/intx/include
-CFLAGS := -Wall -O2 -I../../c -I../../c/ripemd160 $(CFLAGS_CKB_STD) $(CFLAGS_ETHASH) $(CFLAGS_EVMONE) $(CFLAGS_SMT) $(CFLAGS_GODWOKEN) $(CFLAGS_SECP) $(CFLAGS_MBEDTLS) $(CFLAGS_CRYPTO_ALGORITHMS) $(CFLAGS_INTX)
-CXXFLAGS := $(CFLAGS) -std=c++1z
-LDFLAGS := -Wl,--gc-sections
-SANITIZER_FLAGS := -g -O1 -fsanitize=address,undefined -Wno-incompatible-pointer-types
-LIMIT_ERROR := -ferror-limit=1
+CFLAGS_BN128 := -I$(DEPS)/bn128/include
+CFLAGS_GW_SIM := -Igw-syscall-simulator/include
+CFLAGS := -Wall -O3 -I../../c -I../../c/ripemd160 $(CFLAGS_CKB_STD) $(CFLAGS_ETHASH) $(CFLAGS_EVMONE) $(CFLAGS_SMT) $(CFLAGS_GODWOKEN) $(CFLAGS_SECP) $(CFLAGS_MBEDTLS) $(CFLAGS_CRYPTO_ALGORITHMS) $(CFLAGS_INTX) $(CFLAGS_BN128) $(CFLAGS_GW_SIM)
+CXXFLAGS := $(CFLAGS) -std=c++1z 
+LDFLAGS := -Wl,--gc-sections,-rpath,./gw-syscall-simulator/target/debug
+SANITIZER_FLAGS := -g -O1 -fsanitize=fuzzer,address,undefined,leak -Wno-incompatible-pointer-types
+LIMIT_ERROR := -ferror-limit=10
 
 # TODO: read PROTOCOL_VERSION from deps/godwoken-scripts/c/Makefile
 MOLC := moleculec
-MOLC_VERSION := $(shell cat $(DEPS)/godwoken-scripts/c/Makefile | egrep "MOLC_VERSION :=" | awk '{print $$3}')
-PROTOCOL_VERSION := $(shell cat $(DEPS)/godwoken-scripts/c/Makefile | egrep "PROTOCOL_VERSION :=" | awk '{print $$3}')
+
+MOLC_VERSION := $(shell cat $(GW_SCRIPTS)/Makefile | egrep "MOLC_VERSION :=" | awk '{print $$3}')
+PROTOCOL_VERSION := $(shell cat $(GW_SCRIPTS)/Makefile | egrep "PROTOCOL_VERSION :=" | awk '{print $$3}')
 PROTOCOL_SCHEMA_URL := https://raw.githubusercontent.com/nervosnetwork/godwoken/${PROTOCOL_VERSION}/crates/types/schemas
 
 ALL_OBJS := $(BUILD)/keccak.o $(BUILD)/keccakf800.o \
@@ -57,37 +61,18 @@ ifeq ($(OS),MacOS)
 	COVERAGE_FLAGS+=-Wl,-U,_LLVMFuzzerCustomMutator -Wl,-U,_LLVMFuzzerInitialize
 endif
 
-EXTERNAL_HEADERS := $(DEPS)/ckb-c-stdlib-simulator-only/ckb_consts.h
+EXTERNAL_HEADERS := $(DEPS)/ckb-c-stdlib-simulator/ckb_consts.hckb-c-stdlib-simulator-only
 
-#TODO: coverage
-all: generate-protocol build/polyjuice_generator_fuzzer
+build-gw-syscall-simulator:
+	cd gw-syscall-simulator/ && cargo build
 
-build/polyjuice_generator_fuzzer: generate-protocol $(GENERATOR_DEPS)
-	$(CXX) $(CFLAGS) $(LDFLAGS) $(SANITIZER_FLAGS) $(LIMIT_ERROR) -fsanitize=fuzzer -Ibuild -o $@ polyjuice_generator_fuzzer.cc $(ALL_OBJS)
-build/polyjuice_generator_fuzzer_log: generate-protocol $(GENERATOR_DEPS)
-	$(CXX) $(CFLAGS) $(LDFLAGS) $(SANITIZER_FLAGS) $(LIMIT_ERROR) -fsanitize=fuzzer -Ibuild -o $@ polyjuice_generator_fuzzer.cc $(ALL_OBJS) -DPOLYJUICE_DEBUG_LOG
-
-###
-# TODO:
-show: $(COVERAGE_DIR)/fuzzer.profdata
-	$(LLVM_COV) show --instr-profile=$(COVERAGE_DIR)/fuzzer.profdata smt_coverage
-# TODO: report
-report: $(COVERAGE_DIR)/fuzzer.profdata coverage $(EXTERNAL_HEADERS)
-	$(LLVM_COV) report --show-functions --instr-profile=$(COVERAGE_DIR)/fuzzer.profdata smt_coverage $(EXTERNAL_HEADERS)
-# TODO:
-coverage: $(EXTERNAL_HEADERS)
-	clang $(COVERAGE_FLAGS) smt_coverage.c smt_fuzzer.c -o smt_coverage
-
-# start-fuzzer: fuzzer
-# 	./smt_fuzzer -max_len=800000 -workers=$(NPROC) -jobs=$(NPROC) corpus
-
-# start-fuzzer2: fuzzer
-# 	./smt_fuzzer -max_len=800000 corpus
+build/fuzzer: generate-protocol $(GENERATOR_DEPS) build-gw-syscall-simulator
+	$(CXX) $(CFLAGS) $(LDFLAGS) $(SANITIZER_FLAGS) $(LIMIT_ERROR) -fprofile-instr-generate -fcoverage-mapping -L ./gw-syscall-simulator/target/debug -l gw_syscall_simulator -Ibuild -o $@ polyjuice_fuzzer.cc $(ALL_OBJS)
+build/fuzzer_log: generate-protocol $(GENERATOR_DEPS) build-gw-syscall-simulator
+	$(CXX) $(CFLAGS) $(LDFLAGS) $(SANITIZER_FLAGS) $(LIMIT_ERROR) -L ./gw-syscall-simulator/target/debug -l gw_syscall_simulator -Ibuild -o $@ polyjuice_fuzzer.cc $(ALL_OBJS) -DPOLYJUICE_DEBUG_LOG
 
 clean:
 	rm -rf $(BUILD)/*
-
-###
 
 build/generator: ../../c/generator.c $(GENERATOR_DEPS)
 	cd $(SECP_DIR) && (git apply workaround-fix-g++-linking.patch || true) && cd - # apply patch
@@ -170,7 +155,7 @@ build/platform_util.o: $(DEPS)/mbedtls/library/platform_util.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -c -o $@ $<
 build/bignum.o: $(DEPS)/mbedtls/library/bignum.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -c -o $@ $<
-	
+
 build/sha256.o: $(DEPS)/crypto-algorithms/sha256.c
 	$(CXX) $(CFLAGS) $(LDFLAGS) -c -o $@ $<
 
@@ -178,8 +163,8 @@ build/sha256.o: $(DEPS)/crypto-algorithms/sha256.c
 build/secp256k1_data_info.h: build/dump_secp256k1_data
 	$<
 build/dump_secp256k1_data: ../../c/dump_secp256k1_data.c $(SECP256K1_SRC)
-	mkdir -p build
-	gcc $(CFLAGS) -o $@ $<
+	#mkdir -p build
+	$(CC) $(CFLAGS) -o $@ $<
 $(SECP256K1_SRC):
 	cd $(SECP_DIR) && (git apply -R workaround-fix-g++-linking.patch || true) && \
 	chmod +x autogen.sh && ./autogen.sh && \
@@ -196,22 +181,8 @@ build/godwoken.h: build/godwoken.mol
 	${MOLC} --language c --schema-file $< > $@
 build/blockchain.mol:
 	mkdir -p build
-	curl -L -o $@ ${PROTOCOL_SCHEMA_URL}/blockchain.mol
+	cp ../../../gwos/crates/types/schemas/blockchain.mol $@
 build/godwoken.mol:
 	mkdir -p build
-	curl -L -o $@ ${PROTOCOL_SCHEMA_URL}/godwoken.mol
+	cp ../../../gwos/crates/types/schemas/godwoken.mol $@
 
-
-#TODO:
-#%.h:
-#	ln -s $(CURDIR)/../$@ $(CURDIR)/$@
-
-# %.profraw: coverage
-# 	LLVM_PROFILE_FILE=$@ ./smt_coverage $(CORPUS_DIR)/*
-
-%.profdata: %.profraw
-	$(LLVM_PROFDATA) merge --sparse $< -o $@
-
-.PHONY: all fuzzer coverage report
-
-.PRECIOUS: $(COVERAGE_DIR)/fuzzer.profraw $(COVERAGE_DIR)/fuzzer.profdata
