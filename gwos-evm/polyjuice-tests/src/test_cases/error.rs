@@ -3,7 +3,7 @@ use gw_store::{chain_view::ChainView, traits::chain_store::ChainStore};
 use gw_types::{
     bytes::Bytes,
     packed::RawL2Transaction,
-    prelude::{Builder, Entity, Pack},
+    prelude::{Builder, Entity, Pack, CalcHash},
 };
 
 use crate::helper::{self, L2TX_MAX_CYCLES};
@@ -37,7 +37,7 @@ fn test_error_handling() {
     let contract_script =
         helper::new_contract_account_script(&state, from_id, &from_eth_address, false);
     let contract_account_id = state
-        .get_account_id_by_script_hash(&contract_script.hash().into())
+        .get_account_id_by_script_hash(&contract_script.hash())
         .unwrap()
         .expect("get_account_id_by_script_hash");
 

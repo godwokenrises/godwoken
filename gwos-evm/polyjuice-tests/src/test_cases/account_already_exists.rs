@@ -7,6 +7,7 @@ use crate::helper::{
 };
 use gw_common::state::State;
 use gw_generator::traits::StateExt;
+use gw_types::prelude::CalcHash;
 
 const SS_INIT_CODE: &str = include_str!("./evm-contracts/SimpleStorage.bin");
 
@@ -39,7 +40,7 @@ fn test_account_already_exists() {
     );
     let ss_account_script = new_contract_account_script(&state, from_id, &from_eth_address, false);
     let ss_account_id = state
-        .get_account_id_by_script_hash(&ss_account_script.hash().into())
+        .get_account_id_by_script_hash(&ss_account_script.hash())
         .unwrap()
         .unwrap();
     assert_eq!(created_ss_account_id, ss_account_id);
