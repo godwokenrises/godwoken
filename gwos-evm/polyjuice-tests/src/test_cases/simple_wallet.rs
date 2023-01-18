@@ -3,6 +3,7 @@
 
 use crate::helper::{self, new_contract_account_script, CREATOR_ACCOUNT_ID};
 use gw_common::state::State;
+use gw_types::prelude::CalcHash;
 
 const BIN_CODE: &str = include_str!("./evm-contracts/SimpleWallet.bin");
 
@@ -34,7 +35,7 @@ fn test_simple_wallet() {
 
     let account_script = new_contract_account_script(&state, from_id, &from_eth_address, false);
     let contract_id = state
-        .get_account_id_by_script_hash(&account_script.hash().into())
+        .get_account_id_by_script_hash(&account_script.hash())
         .unwrap()
         .unwrap();
     assert_eq!(contract_id, 6);
