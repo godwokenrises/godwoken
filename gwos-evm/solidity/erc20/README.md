@@ -2,7 +2,10 @@
 
 The [sUDT-ERC20 Proxy Contract](./SudtERC20Proxy_UserDefinedDecimals.sol) is a special smart contract written in Solidity, which is designed to utilize the Godwoken and Polyjuice frameworks. This contract provides a way for EVM code to interact with ERC20 standard interface that is interfacing directly with Polyjuice to control sUDT tokens on Layer 2 as if they were ERC20 tokens.
 
-For security reason, developers should only use this [SudtERC20Proxy_UserDefinedDecimals bytecode](./SudtERC20Proxy_UserDefinedDecimals.bin) which code hash will be checked in `transfer_to_any_sudt` pre-compiled contract.
+<del>For security reason, developers should only use this [SudtERC20Proxy_UserDefinedDecimals bytecode](./SudtERC20Proxy_UserDefinedDecimals.bin) which code hash will be checked in `transfer_to_any_sudt` pre-compiled contract.</del>
+
+**Check code hash of `SudtERC20Proxy_UserDefinedDecimals` was deprecated due to a security issue.**
+To avoid such security issues, we create a [whitelist](https://github.com/godwokenrises/godwoken/blob/develop/crates/generator/src/backend_manage.rs#L52) and only contracts from the whitelist can make calls to transfer. Find more in the [pull request](https://github.com/godwokenrises/godwoken/pull/921).
 
 ## Compile Solidity Contract in ethereum/solc:0.8.7 docker image
 Here is the method that we compile SudtERC20Proxy_UserDefinedDecimals.sol.
@@ -28,4 +31,3 @@ The content of `SudtERC20Proxy_UserDefinedDecimals.ContractCode.hex` is copied f
 0xde4542f5a5bd32c09cd98e9752281f88900a059aab7ac103edd9df214f136c52
 ```
 
-The code hash above will be checked in `transfer_to_any_sudt` pre-compiled contract.
