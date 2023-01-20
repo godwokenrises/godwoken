@@ -1,13 +1,7 @@
 #![allow(clippy::mutable_key_type)]
 //! Block producing and block submit tx composing.
 
-use crate::{
-    custodian::query_mergeable_custodians,
-    produce_block::{
-        generate_produce_block_param, produce_block, ProduceBlockParam, ProduceBlockResult,
-    },
-    test_mode_control::TestModeControl,
-};
+use std::{collections::HashSet, sync::Arc, time::Instant};
 
 use anyhow::{bail, ensure, Context, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
@@ -25,25 +19,28 @@ use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     h256::*,
-    offchain::{DepositInfo, InputCellInfo},
+    offchain::{global_state_from_slice, CompatibleFinalizedTimepoint, DepositInfo, InputCellInfo},
     packed::{
         CellDep, CellInput, CellOutput, GlobalState, L2Block, RollupAction, RollupActionUnion,
         RollupSubmitBlock, Transaction, WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::*,
 };
-use gw_types::{
-    conversion::cap_bytes,
-    offchain::{global_state_from_slice, CompatibleFinalizedTimepoint},
-};
 use gw_utils::{
     fee::fill_tx_fee_with_local, finalized_timepoint, genesis_info::CKBGenesisInfo,
     local_cells::LocalCellsManager, query_rollup_cell, since::Since,
     transaction_skeleton::TransactionSkeleton, wallet::Wallet, RollupContext,
 };
-use std::{collections::HashSet, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
 use tracing::instrument;
+
+use crate::{
+    custodian::query_mergeable_custodians,
+    produce_block::{
+        generate_produce_block_param, produce_block, ProduceBlockParam, ProduceBlockResult,
+    },
+    test_mode_control::TestModeControl,
+};
 
 /// 524_288 we choose this value because it is smaller than the MAX_BLOCK_BYTES which is 597K
 const MAX_ROLLUP_WITNESS_SIZE: usize = 1 << 19;
@@ -310,12 +307,9 @@ impl BlockProducer {
         let output = {
             let dummy = rollup_cell.output.clone();
             let capacity = dummy
-                .occupied_capacity(cap_bytes(output_data.len()))
+                .occupied_capacity_bytes(output_data.len())
                 .expect("capacity overflow");
-            dummy
-                .as_builder()
-                .capacity(capacity.as_u64().pack())
-                .build()
+            dummy.as_builder().capacity(capacity.pack()).build()
         };
         tx_skeleton.outputs_mut().push((output, output_data));
 

@@ -67,10 +67,3 @@ impl_conversion_for_packed_iterator_pack!(CellOutput, CellOutputVec);
 impl_conversion_for_packed_iterator_pack!(CellInput, CellInputVec);
 // impl_conversion_for_packed_iterator_pack!(UncleBlock, UncleBlockVec);
 impl_conversion_for_packed_iterator_pack!(Byte32, Byte32Vec);
-
-#[cfg(feature = "std")]
-pub fn cap_bytes(len: usize) -> ckb_types::core::Capacity {
-    use ckb_types::core::Capacity;
-
-    Capacity::bytes(len).unwrap_or_else(|_| Capacity::shannons(u64::MAX))
-}

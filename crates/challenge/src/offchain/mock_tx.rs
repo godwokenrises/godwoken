@@ -1,33 +1,37 @@
-use crate::cancel_challenge::{
-    build_output, CancelChallengeOutput, LoadData, LoadDataContext, LoadDataStrategy,
-    RecoverAccounts, RecoverAccountsContext,
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Duration,
 };
-use crate::enter_challenge::EnterChallenge;
-use crate::offchain::CKBGenesisInfo;
-use crate::types::VerifyContext;
-use gw_jsonrpc_types::JsonCalcHash;
-use gw_rpc_client::contract::ContractsCellDepManager;
-use gw_types::conversion::cap_bytes;
-use gw_utils::transaction_skeleton::TransactionSkeleton;
-use gw_utils::wallet::Wallet;
 
 use anyhow::Result;
 use arc_swap::Guard;
 use gw_common::blake2b::new_blake2b;
 use gw_config::{BlockProducerConfig, ContractsCellDep};
 use gw_generator::types::vm::ChallengeContext;
-use gw_types::bytes::Bytes;
-use gw_types::h256::*;
-use gw_types::offchain::{CellInfo, InputCellInfo};
-use gw_types::packed::{
-    Byte32, CellDep, CellInput, CellOutput, ChallengeTarget, ChallengeWitness, GlobalState,
-    OutPoint, Script, ScriptOpt, Transaction, WitnessArgs,
+use gw_jsonrpc_types::JsonCalcHash;
+use gw_rpc_client::contract::ContractsCellDepManager;
+use gw_types::{
+    bytes::Bytes,
+    h256::*,
+    offchain::{CellInfo, InputCellInfo},
+    packed::{
+        Byte32, CellDep, CellInput, CellOutput, ChallengeTarget, ChallengeWitness, GlobalState,
+        OutPoint, Script, ScriptOpt, Transaction, WitnessArgs,
+    },
+    prelude::*,
 };
-use gw_types::prelude::*;
-use gw_utils::RollupContext;
+use gw_utils::{transaction_skeleton::TransactionSkeleton, wallet::Wallet, RollupContext};
 
-use std::collections::{HashMap, HashSet};
-use std::{sync::Arc, time::Duration};
+use crate::{
+    cancel_challenge::{
+        build_output, CancelChallengeOutput, LoadData, LoadDataContext, LoadDataStrategy,
+        RecoverAccounts, RecoverAccountsContext,
+    },
+    enter_challenge::EnterChallenge,
+    offchain::CKBGenesisInfo,
+    types::VerifyContext,
+};
 
 pub struct MockRollup {
     pub rollup_type_script: ScriptOpt,
@@ -289,13 +293,10 @@ impl MockRollup {
                 .build();
 
             let capacity = rollup_output
-                .occupied_capacity(cap_bytes(global_state.as_slice().len()))
+                .occupied_capacity_bytes(global_state.as_slice().len())
                 .expect("rollup capacity overflow");
 
-            rollup_output
-                .as_builder()
-                .capacity(capacity.as_u64().pack())
-                .build()
+            rollup_output.as_builder().capacity(capacity.pack()).build()
         };
 
         let cell = CellInfo {
