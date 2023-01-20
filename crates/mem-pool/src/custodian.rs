@@ -8,23 +8,26 @@ use gw_rpc_client::{
     rpc_client::{QueryResult, RPCClient},
 };
 use gw_store::traits::chain_store::ChainStore;
-use gw_types::offchain::CompatibleFinalizedTimepoint;
 use gw_types::{
     bytes::Bytes,
-    core::ScriptHashType,
+    core::{ScriptHashType, Timepoint},
     h256::*,
-    offchain::{CellInfo, CollectedCustodianCells, DepositInfo, WithdrawalsAmount},
+    offchain::{
+        CellInfo, CollectedCustodianCells, CompatibleFinalizedTimepoint, DepositInfo,
+        WithdrawalsAmount,
+    },
     packed::{
         CellOutput, CustodianLockArgs, CustodianLockArgsReader, DepositLockArgs, Script,
         WithdrawalRequest,
     },
     prelude::*,
 };
-use gw_types::{conversion::cap_bytes, core::Timepoint};
-use gw_utils::local_cells::{
-    collect_local_and_indexer_cells, CollectLocalAndIndexerCursor, LocalCellsManager,
+use gw_utils::{
+    local_cells::{
+        collect_local_and_indexer_cells, CollectLocalAndIndexerCursor, LocalCellsManager,
+    },
+    RollupContext,
 };
-use gw_utils::RollupContext;
 use tracing::instrument;
 
 use crate::constants::MAX_CUSTODIANS;
@@ -67,9 +70,9 @@ pub fn to_custodian_cell(
     let data = deposit_info.cell.data.clone();
 
     // Check capacity
-    match output.occupied_capacity(cap_bytes(data.len())) {
-        Ok(capacity) if capacity.as_u64() > deposit_info.cell.output.capacity().unpack() => {
-            return Err(capacity.as_u64() as u128);
+    match output.occupied_capacity_bytes(data.len()) {
+        Ok(capacity) if capacity > deposit_info.cell.output.capacity().unpack() => {
+            return Err(capacity as u128);
         }
         // Overflow
         Err(err) => {
@@ -140,10 +143,7 @@ pub fn calc_ckb_custodian_min_capacity(rollup_context: &RollupContext) -> u64 {
         .capacity(1u64.pack())
         .lock(lock)
         .build();
-    dummy
-        .occupied_capacity(cap_bytes(0))
-        .expect("overflow")
-        .as_u64()
+    dummy.occupied_capacity_bytes(0).expect("overflow")
 }
 
 pub fn build_finalized_custodian_lock(rollup_context: &RollupContext) -> Script {
@@ -176,12 +176,9 @@ pub fn generate_finalized_custodian(
         .lock(lock)
         .build();
     let capacity = output
-        .occupied_capacity(cap_bytes(data.len()))
+        .occupied_capacity_bytes(data.len())
         .expect("overflow");
-    let output = output
-        .as_builder()
-        .capacity(capacity.as_u64().pack())
-        .build();
+    let output = output.as_builder().capacity(capacity.pack()).build();
 
     (output, data)
 }
@@ -383,17 +380,15 @@ async fn query_finalized_custodian_cells(
 mod tests {
     use std::collections::HashMap;
 
-    use gw_rpc_client::indexer_client::CkbIndexerClient;
-    use gw_rpc_client::rpc_client::QueryResult;
-    use gw_types::bytes::Bytes;
-    use gw_types::core::{ScriptHashType, Timepoint};
-    use gw_types::offchain::{CellInfo, CompatibleFinalizedTimepoint, WithdrawalsAmount};
-    use gw_types::packed::{
-        CellOutput, CustodianLockArgs, OutPoint, RollupConfig, Script, Uint128,
+    use gw_rpc_client::{indexer_client::CkbIndexerClient, rpc_client::QueryResult};
+    use gw_types::{
+        bytes::Bytes,
+        core::{ScriptHashType, Timepoint},
+        offchain::{CellInfo, CompatibleFinalizedTimepoint, WithdrawalsAmount},
+        packed::{CellOutput, CustodianLockArgs, OutPoint, RollupConfig, Script, Uint128},
+        prelude::*,
     };
-    use gw_types::prelude::*;
-    use gw_utils::local_cells::LocalCellsManager;
-    use gw_utils::RollupContext;
+    use gw_utils::{local_cells::LocalCellsManager, RollupContext};
 
     const CKB: u64 = 100_000_000;
 

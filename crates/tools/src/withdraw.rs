@@ -1,9 +1,11 @@
-use crate::account::{eth_sign, privkey_to_l2_script_hash, read_privkey};
-use crate::godwoken_rpc::GodwokenRpcClient;
-use crate::hasher::CkbHasher;
-use crate::types::ScriptsDeploymentResult;
-use crate::utils::sdk::{Address, HumanCapacity};
-use crate::utils::transaction::read_config;
+use std::{
+    fs,
+    path::Path,
+    str::FromStr,
+    time::{Duration, Instant},
+    u128,
+};
+
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
@@ -12,18 +14,26 @@ use gw_generator::account_lock_manage::{
     eip712::{traits::EIP712Encode, types::Withdrawal},
     secp256k1::Secp256k1Eth,
 };
-use gw_types::conversion::cap_bytes;
-use gw_types::core::{ScriptHashType, Timepoint};
-use gw_types::packed::{CellOutput, Script, WithdrawalLockArgs, WithdrawalRequestExtra};
-use gw_types::U256;
 use gw_types::{
-    packed::{Byte32, RawWithdrawalRequest, WithdrawalRequest},
+    core::{ScriptHashType, Timepoint},
+    packed::{
+        Byte32, CellOutput, RawWithdrawalRequest, Script, WithdrawalLockArgs, WithdrawalRequest,
+        WithdrawalRequestExtra,
+    },
     prelude::*,
+    U256,
 };
-use std::str::FromStr;
-use std::time::{Duration, Instant};
-use std::u128;
-use std::{fs, path::Path};
+
+use crate::{
+    account::{eth_sign, privkey_to_l2_script_hash, read_privkey},
+    godwoken_rpc::GodwokenRpcClient,
+    hasher::CkbHasher,
+    types::ScriptsDeploymentResult,
+    utils::{
+        sdk::{Address, HumanCapacity},
+        transaction::read_config,
+    },
+};
 
 #[allow(clippy::too_many_arguments)]
 pub async fn withdraw(
@@ -265,6 +275,6 @@ fn minimal_withdrawal_capacity(is_sudt: bool) -> Result<u64> {
 
     let data_capacity = if is_sudt { 16 } else { 0 };
 
-    let capacity = output.occupied_capacity(cap_bytes(data_capacity))?;
-    Ok(capacity.as_u64())
+    let capacity = output.occupied_capacity_bytes(data_capacity)?;
+    Ok(capacity)
 }

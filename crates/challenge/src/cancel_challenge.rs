@@ -1,20 +1,22 @@
-use crate::types::{VerifyContext, VerifyWitness};
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, Result};
 use gw_config::ContractsCellDep;
-use gw_types::bytes::Bytes;
-use gw_types::conversion::cap_bytes;
-use gw_types::core::{DepType, SigningType, Status};
-use gw_types::h256::*;
-use gw_types::offchain::{CellInfo, InputCellInfo, RecoverAccount};
-use gw_types::packed::{
-    CCTransactionSignatureWitness, CCTransactionWitness, CCWithdrawalWitness, CellDep, CellInput,
-    CellOutput, GlobalState, OutPoint, RollupAction, RollupActionUnion, RollupCancelChallenge,
-    Script, WitnessArgs,
+use gw_types::{
+    bytes::Bytes,
+    core::{DepType, SigningType, Status},
+    h256::*,
+    offchain::{CellInfo, InputCellInfo, RecoverAccount},
+    packed::{
+        CCTransactionSignatureWitness, CCTransactionWitness, CCWithdrawalWitness, CellDep,
+        CellInput, CellOutput, GlobalState, OutPoint, RollupAction, RollupActionUnion,
+        RollupCancelChallenge, Script, WitnessArgs,
+    },
+    prelude::{Builder, CalcHash, Entity, OccupiedCapacityBytes, Pack, Unpack},
 };
-use gw_types::prelude::{Builder, CalcHash, Entity, Pack, Unpack};
 use gw_utils::RollupContext;
-use std::collections::{HashMap, HashSet};
+
+use crate::types::{VerifyContext, VerifyWitness};
 
 pub struct CancelChallenge<'a, W: Entity> {
     rollup_type_hash: H256,
@@ -541,13 +543,10 @@ fn build_cell(data: Bytes, lock: Script) -> (CellOutput, Bytes) {
         .build();
 
     let capacity = dummy_output
-        .occupied_capacity(cap_bytes(data.len()))
+        .occupied_capacity_bytes(data.len())
         .expect("impossible cancel challenge verify cell overflow");
 
-    let output = dummy_output
-        .as_builder()
-        .capacity(capacity.as_u64().pack())
-        .build();
+    let output = dummy_output.as_builder().capacity(capacity.pack()).build();
 
     (output, data)
 }

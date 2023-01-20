@@ -29,6 +29,20 @@ impl CalcHash for crate::packed::Transaction {
     }
 }
 
+#[cfg(feature = "std")]
+pub trait OccupiedCapacityBytes {
+    fn occupied_capacity_bytes(&self, len: usize) -> Result<u64, ckb_types::core::CapacityError>;
+}
+
+#[cfg(feature = "std")]
+impl OccupiedCapacityBytes for crate::packed::CellOutput {
+    fn occupied_capacity_bytes(&self, len: usize) -> Result<u64, ckb_types::core::CapacityError> {
+        Ok(self
+            .occupied_capacity(ckb_types::core::Capacity::bytes(len)?)?
+            .as_u64())
+    }
+}
+
 /// An alias of `from_slice(..)` to mark where we are really have confidence to do unwrap on the result of `from_slice(..)`.
 pub trait FromSliceShouldBeOk<'r>: Reader<'r> {
     /// Unwraps the result of `from_slice(..)` with confidence and we assume that it's impossible to fail.

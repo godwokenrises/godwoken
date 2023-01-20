@@ -1,10 +1,11 @@
+use std::path::{Path, PathBuf};
+
 use anyhow::{anyhow, Result};
 use ckb_jsonrpc_types::{Either, OutputsValidator};
 use ckb_types::{packed, prelude::Entity};
 use gw_config::WalletConfig;
 use gw_rpc_client::{ckb_client::CkbClient, indexer_client::CkbIndexerClient};
 use gw_types::{
-    conversion::cap_bytes,
     offchain::{CellInfo, InputCellInfo},
     packed::{CellInput, OutPoint},
     prelude::*,
@@ -13,7 +14,6 @@ use gw_utils::{
     fee::fill_tx_fee, genesis_info::CKBGenesisInfo, transaction_skeleton::TransactionSkeleton,
     wallet::Wallet,
 };
-use std::path::{Path, PathBuf};
 
 pub struct UpdateCellArgs<'a, P> {
     pub ckb_rpc_url: &'a str,
@@ -82,11 +82,11 @@ pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_, P>) -> Result<
     let new_cell_data = std::fs::read(&cell_data_path)?;
     // generate new cell
     let existed_cell = packed::CellOutput::from(existed_cell.clone());
-    let new_cell_capacity = existed_cell.occupied_capacity(cap_bytes(new_cell_data.len()))?;
+    let new_cell_capacity = existed_cell.occupied_capacity_bytes(new_cell_data.len())?;
     let new_cell = existed_cell
         .clone()
         .as_builder()
-        .capacity(new_cell_capacity.as_u64().pack())
+        .capacity(new_cell_capacity.pack())
         .build();
     // get genesis info
     let ckb_genesis_info = {

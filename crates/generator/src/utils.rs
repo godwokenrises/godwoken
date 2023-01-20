@@ -1,13 +1,12 @@
 use std::convert::TryInto;
 
 use anyhow::{Context, Result};
-use ckb_types::core::{Capacity, ScriptHashType};
+use ckb_types::core::ScriptHashType;
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State};
 use gw_config::BackendType;
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
-    conversion::cap_bytes,
     core::{AllowedContractType, Timepoint},
     h256::*,
     packed::{CellOutput, RawL2Transaction, Script, WithdrawalLockArgs, WithdrawalRequestExtra},
@@ -94,10 +93,10 @@ pub fn build_withdrawal_cell_output(
         .lock(lock)
         .build();
 
-    match output.occupied_capacity(cap_bytes(data.len())) {
-        Ok(min_capacity) if min_capacity > Capacity::shannons(withdrawal_capacity) => {
+    match output.occupied_capacity_bytes(data.len()) {
+        Ok(min_capacity) if min_capacity > withdrawal_capacity => {
             Err(WithdrawalCellError::MinCapacity {
-                min: min_capacity.as_u64().into(),
+                min: min_capacity.into(),
                 req: req.raw().capacity().unpack(),
             })
         }
@@ -143,18 +142,18 @@ pub fn get_polyjuice_creator_id<S: State + CodeStore>(
 
 #[cfg(test)]
 mod test {
-    use gw_types::bytes::Bytes;
-    use gw_types::core::ScriptHashType;
-    use gw_types::core::Timepoint;
-    use gw_types::h256::*;
-    use gw_types::packed::{
-        RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest, WithdrawalRequestExtra,
+    use gw_types::{
+        bytes::Bytes,
+        core::{ScriptHashType, Timepoint},
+        h256::*,
+        packed::{
+            RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest, WithdrawalRequestExtra,
+        },
+        prelude::*,
     };
-    use gw_types::prelude::*;
     use gw_utils::RollupContext;
 
-    use crate::generator::WithdrawalCellError;
-    use crate::utils::build_withdrawal_cell_output;
+    use crate::{generator::WithdrawalCellError, utils::build_withdrawal_cell_output};
 
     #[test]
     fn test_build_withdrawal_cell_output() {
