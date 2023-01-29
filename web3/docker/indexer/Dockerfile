@@ -3,8 +3,9 @@ FROM rust:1-bullseye as builder
 RUN apt-get update
 RUN apt-get -y install --no-install-recommends llvm-dev clang libclang-dev libssl-dev
 
-COPY . /godwoken-web3
-RUN cd /godwoken-web3 && rustup component add rustfmt && cargo build --release
+COPY . /godwoken
+WORKDIR /godwoken/web3
+RUN rustup component add rustfmt && cargo build --release
 
 FROM ubuntu:focal
 

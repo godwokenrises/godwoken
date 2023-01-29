@@ -60,7 +60,7 @@ jobs:
         if: ${{ github.ref_type != 'tag' }}
         uses: docker/build-push-action@v2
         with:
-          context: ./web3
+          file: ./web3/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}-${{ steps.commit.outputs.sha_short }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -79,7 +79,7 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/tags') }}
         uses: docker/build-push-action@v2
         with:
-          context: ./web3 
+          file: ./web3/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.split.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
