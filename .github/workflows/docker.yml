@@ -5,6 +5,19 @@ on:
     branches: [ 'main', 'dev*', 'v1*', '1.*' ]
     # Publish semver tags as releases.
     tags: [ 'v*.*.*', '1.*' ]
+  # This event occurs when a GitHub Actions workflow is manually triggered.
+  # For more information, see
+  # https://docs.github.com/en/actions/managing-workflow-runs/manually-running-a-workflow
+  workflow_dispatch:
+    inputs:
+      runner_type:
+        description: 'Choose an appropriate runner'
+        required: true
+        default: ubuntu-20.04
+        type: choice
+        options:
+        - ubuntu-20.04
+        - self-hosted
 
 env:
   # Use docker.io for Docker Hub if empty
@@ -14,7 +27,7 @@ env:
 
 jobs:
   docker-build-push:
-    runs-on: ubuntu-20.04
+    runs-on: ${{ inputs.runner_type || 'ubuntu-20.04' }}
     # Map the meta step outputs to this job outputs
     outputs:
       image_name: ${{ steps.result.outputs.image_name }}
