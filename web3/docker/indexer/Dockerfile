@@ -17,7 +17,7 @@ RUN apt-get update \
  && echo 'Finished installing OS updates'
 
 # godwoken-web3 indexer
-COPY --from=builder /godwoken-web3/target/release/gw-web3-indexer /bin/gw-web3-indexer
+COPY --from=builder /godwoken/web3/target/release/gw-web3-indexer /bin/gw-web3-indexer
 
 RUN mkdir -p /web3
 WORKDIR /web3
