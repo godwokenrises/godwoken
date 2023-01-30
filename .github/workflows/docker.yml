@@ -39,50 +39,128 @@ jobs:
       packages: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          submodules: true
+      # - name: Checkout repository
+      #   uses: actions/checkout@v3
+      #   with:
+      #     submodules: true
 
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
-      # - name: Install rustup from https://rustup.rs
-      #   run: |
-      #     which rustup \
-      #     || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-      #      | sh -s -- --profile minimal --default-toolchain none -y \
-      #     && source "$HOME/.cargo/env"
-      #     rustup --version
-      #     which rustup
+      # - uses: actions/cache@v3
+      #   with:
+      #     path: |
+      #       ~/.cargo/bin/
+      #       ~/.cargo/registry/index/
+      #       ~/.cargo/registry/cache/
+      #       ~/.cargo/git/db/
+      #     key: ${{ runner.os }}-cargo-${{ github.sha }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-cargo-
           
-      # https://github.com/ATiltedTree/setup-rust
-      - uses: ATiltedTree/setup-rust@v1
-        with:
-          rust-version: nightly
-          components: rustfmt clippy
+      # # https://github.com/ATiltedTree/setup-rust
+      # - uses: ATiltedTree/setup-rust@v1
+      #   with:
+      #     rust-version: nightly
+      #     components: rustfmt clippy
 
-      - name: Install moleculec
-        run: |
-          test "$(moleculec --version)" = "Moleculec 0.7.2" \
-          || cargo install moleculec --version 0.7.2 --force
-      - name: Install capsule
-        env:
-          CAPSULE_VERSION: v0.7.0
-        run: |
-          (which capsule && test "$(capsule --version)" = "Capsule 0.7.0") \
-          || curl -OL https://github.com/nervosnetwork/capsule/releases/download/${CAPSULE_VERSION}/capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz \
-          && tar xf capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz \
-          && mv capsule_${CAPSULE_VERSION}_x86_64-linux/capsule ~/.cargo/bin/
-          capsule --version
+      # - name: Install moleculec
+      #   run: |
+      #     test "$(moleculec --version)" = "Moleculec 0.7.2" \
+      #     || cargo install moleculec --version 0.7.2 --force
+      # - name: Install capsule
+      #   env:
+      #     CAPSULE_VERSION: v0.7.0
+      #   run: |
+      #     (which capsule && test "$(capsule --version)" = "Capsule 0.7.0") \
+      #     || curl -OL https://github.com/nervosnetwork/capsule/releases/download/${CAPSULE_VERSION}/capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz \
+      #     && tar xf capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz \
+      #     && mv capsule_${CAPSULE_VERSION}_x86_64-linux/capsule ~/.cargo/bin/
+      #     capsule --version
+
+      # - name: Prepare components
+      #   id: prepare
+      #   working-directory: docker
+      #   run: |
+      #     make prepare-repos
+      #     echo "Record the component's reference to the outputs of this step"
+      #     cat build/versions >> $GITHUB_OUTPUT
+
+      # - name: Print the references of components
+      #   run: |
+      #     echo ref.component.godwoken=${{ steps.prepare.outputs.GODWOKEN_REF }}
+      #     echo ref.component.gwos=${{ steps.prepare.outputs.GODWOKEN_REF }}
+      #     echo ref.component.gwos-evm=${{ steps.prepare.outputs.GODWOKEN_REF }}
+      #     echo ref.component.ckb-production-scripts=${{ steps.prepare.outputs.OMNI_LOCK_REF }}
+
+      # - name: Cache of component.ckb-production-scripts
+      #   id: ckb-production-scripts-cache
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: docker/build/ckb-production-scripts/build/omni_lock
+      #     key: component.ckb-production-scripts-${{ steps.prepare.outputs.ckb-production-scripts-sha1 }}
+      # - name: Build omni_lock
+      #   if: steps.ckb-production-scripts-cache.outputs.cache-hit != 'true'
+      #   working-directory: docker/build/ckb-production-scripts
+      #   run: make all-via-docker
+
+      # - name: Cache of component.gwos
+      #   id: gwos-cache
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: |
+      #       gwos/build/release/*
+      #       gwos/c/build/*-generator
+      #       gwos/c/build/*-validator
+      #       gwos/c/build/account_locks/*
+      #     key: component.gwos-${{ hashFiles('gwos/**') }}
+      # - name: Build gwos binaries
+      #   if: steps.gwos-cache.outputs.cache-hit != 'true'
+      #   working-directory: gwos
+      #   run: cd c && make && cd .. && capsule build --release --debug-output
+
+      # - name: Cache of component.gwos-evm
+      #   id: godwoken-polyjuice-cache
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: |
+      #       gwos-evm/build/*generator*
+      #       gwos-evm/build/*validator*
+      #     key: component.gwos-evm-${{ hashFiles('gwos-evm/**') }}
+      # - name: Build godwoken-polyjuice
+      #   if: steps.godwoken-polyjuice-cache.outputs.cache-hit != 'true'
+      #   working-directory: gwos-evm
+      #   run: |
+      #     git submodule update --init --recursive --depth=1
+      #     make all-via-docker
+
+      # - name: Cache of component.godwoken
+      #   id: godwoken-cache
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: |
+      #       target/release/godwoken
+      #       target/release/gw-tools
+      #     key: component.godwoken-crates-${{ hashFiles('crates/**') }}
+      # - name: Cache Godwoken target directory
+      #   if: steps.godwoken-cache.outputs.cache-hit != 'true'
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: |
+      #       target
+      #     key: ${{ runner.os }}-focal-cargo-${{ github.sha }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-focal-cargo-
+      # - name: Build godwoken
+      #   if: steps.godwoken-cache.outputs.cache-hit != 'true'
+      #   # Use SSE4.2, POPCNT, etc. These are available on almost all x86 CPUs in use today, including rosetta 2.
+      #   run: |
+      #     rustup component add rustfmt
+      #     RUSTFLAGS="-C target-cpu=x86-64-v2" CARGO_PROFILE_RELEASE_LTO=true cargo build --release
+
+      - name: Create a context for current environment
+        run: docker context create current-context
+      # Docker buildx is required by docker/build-push-action
+      # see https://github.com/docker/setup-buildx-action
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
       # Login against a Docker registry except on PR
       # https://github.com/docker/login-action
@@ -94,86 +172,6 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Prepare components
-        id: prepare
-        working-directory: docker
-        run: |
-          make prepare-repos
-          echo "Record the component's reference to the outputs of this step"
-          cat build/versions >> $GITHUB_OUTPUT
-
-      - name: Print the references of components
-        run: |
-          echo ref.component.godwoken=${{ steps.prepare.outputs.GODWOKEN_REF }}
-          echo ref.component.gwos=${{ steps.prepare.outputs.GODWOKEN_REF }}
-          echo ref.component.gwos-evm=${{ steps.prepare.outputs.GODWOKEN_REF }}
-          echo ref.component.ckb-production-scripts=${{ steps.prepare.outputs.OMNI_LOCK_REF }}
-
-      - name: Cache of component.ckb-production-scripts
-        id: ckb-production-scripts-cache
-        uses: actions/cache@v3
-        with:
-          path: docker/build/ckb-production-scripts/build/omni_lock
-          key: component.ckb-production-scripts-${{ steps.prepare.outputs.ckb-production-scripts-sha1 }}
-      - name: Build omni_lock
-        if: steps.ckb-production-scripts-cache.outputs.cache-hit != 'true'
-        working-directory: docker/build/ckb-production-scripts
-        run: make all-via-docker
-
-      - name: Cache of component.gwos
-        id: gwos-cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            gwos/build/release/*
-            gwos/c/build/*-generator
-            gwos/c/build/*-validator
-            gwos/c/build/account_locks/*
-          key: component.gwos-${{ hashFiles('gwos/**') }}
-      - name: Build gwos binaries
-        if: steps.gwos-cache.outputs.cache-hit != 'true'
-        working-directory: gwos
-        run: cd c && make && cd .. && capsule build --release --debug-output
-
-      - name: Cache of component.gwos-evm
-        id: godwoken-polyjuice-cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            gwos-evm/build/*generator*
-            gwos-evm/build/*validator*
-          key: component.gwos-evm-${{ hashFiles('gwos-evm/**') }}
-      - name: Build godwoken-polyjuice
-        if: steps.godwoken-polyjuice-cache.outputs.cache-hit != 'true'
-        working-directory: gwos-evm
-        run: |
-          git submodule update --init --recursive --depth=1
-          make all-via-docker
-
-      - name: Cache of component.godwoken
-        id: godwoken-cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            target/release/godwoken
-            target/release/gw-tools
-          key: component.godwoken-crates-${{ hashFiles('crates/**') }}
-      - name: Cache Godwoken target directory
-        if: steps.godwoken-cache.outputs.cache-hit != 'true'
-        uses: actions/cache@v3
-        with:
-          path: |
-            target
-          key: ${{ runner.os }}-focal-cargo-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-focal-cargo-
-      - name: Build godwoken
-        if: steps.godwoken-cache.outputs.cache-hit != 'true'
-        # Use SSE4.2, POPCNT, etc. These are available on almost all x86 CPUs in use today, including rosetta 2.
-        run: |
-          rustup component add rustfmt
-          RUSTFLAGS="-C target-cpu=x86-64-v2" CARGO_PROFILE_RELEASE_LTO=true cargo build --release
 
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
@@ -230,6 +228,12 @@ jobs:
         run: |
           echo "image_name=`echo ${{ fromJSON(steps.meta.outputs.json).tags[0] }} | awk -F ':' '{print $1}'`" >> $GITHUB_OUTPUT
           echo "image_tag=`echo ${{ fromJSON(steps.meta.outputs.json).tags[0] }} | awk -F ':' '{print $NF}'`" >> $GITHUB_OUTPUT
+
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ failure() }}
+        # with:
+        #   limit-access-to-actor: true
 
   integration-test:
     needs: docker-build-push
