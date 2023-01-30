@@ -147,7 +147,7 @@ impl Runner {
                     // Sleep and try again, wait for indexer to deal with revert
                     log::info!("block {}'s parent_block_hash: {} not match prev block's hash {}, sleep and try again", current_block_number, hex(l2_block_parent_hash.as_slice())?, hex(prev_block_hash.as_bytes())?);
                     let sleep_time = std::time::Duration::from_secs(3);
-                    smol::Timer::after(sleep_time).await;
+                    tokio::time::sleep(sleep_time).await;
                 }
             }
         } else {
@@ -234,7 +234,7 @@ impl Runner {
                 Ok(result) => {
                     if !result {
                         let sleep_time = std::time::Duration::from_secs(1);
-                        smol::Timer::after(sleep_time).await;
+                        tokio::time::sleep(sleep_time).await;
                     }
                 }
                 Err(err) => {
@@ -243,7 +243,7 @@ impl Runner {
                         log::error!("{}", err);
                         // wait for 1s
                         let sleep_time = std::time::Duration::from_secs(1);
-                        smol::Timer::after(sleep_time).await;
+                        tokio::time::sleep(sleep_time).await;
                         continue;
                     };
                     return Err(err);
@@ -309,7 +309,7 @@ impl Runner {
                         log::error!("{}", err);
                         // wait for 1s
                         let sleep_time = std::time::Duration::from_secs(1);
-                        smol::Timer::after(sleep_time).await;
+                        tokio::time::sleep(sleep_time).await;
                         continue;
                     };
                     return Err(err);

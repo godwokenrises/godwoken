@@ -1,6 +1,6 @@
 use std::{convert::TryFrom, str::FromStr};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use gw_types::U256;
 use rust_decimal::Decimal;
 use sqlx::{
@@ -408,23 +408,22 @@ pub async fn update_web3_txs_and_logs(
             }
         };
 
-        let logs_query_slice = logs_querys
+        let mut logs_query_slice = logs_querys
             .into_iter()
             .chunks(logs_slice_size)
             .into_iter()
             .map(|chunk| chunk.collect())
             .collect::<Vec<Vec<_>>>();
 
-        for mut query_builder_vec in logs_query_slice {
-            query_builder_vec
-                .par_iter_mut()
-                .map(|query_builder| {
-                    let query = query_builder.build();
-                    smol::block_on(query.execute(&*POOL_FOR_UPDATE)).map_err(|err| anyhow!(err))
-                })
-                .collect::<Vec<_>>()
-                .into_iter()
-                .collect::<Result<Vec<_>>>()?;
+        let mut futs = Vec::new();
+        for query_builder_vec in &mut logs_query_slice {
+            for query_builder in query_builder_vec {
+                let query = query_builder.build();
+                futs.push(query.execute(&*POOL_FOR_UPDATE));
+            }
+        }
+        for fut in futs {
+            fut.await?;
         }
     }
 
