@@ -10,7 +10,7 @@ on:
 
 jobs:
   build-and-run-fuzzing:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     defaults:
       run:
         working-directory: gwos-evm
