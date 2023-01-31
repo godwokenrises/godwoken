@@ -30,7 +30,10 @@ function getMethods(argsList: ModConstructorArgs = {}) {
     const args = argsList[modName.toLowerCase()] || [];
     const mod = new (modules as any)[modName](...args);
     getMethodNames((modules as any)[modName])
-      .filter((methodName: string) => methodName !== "constructor")
+      .filter(
+        (methodName: string) =>
+          methodName !== "constructor" && !methodName.startsWith("_") // exclude private method
+      )
       .forEach((methodName: string) => {
         const concatedMethodName = `${modName.toLowerCase()}_${methodName}`;
         methods[concatedMethodName] = async (args: any[], cb: Callback) => {

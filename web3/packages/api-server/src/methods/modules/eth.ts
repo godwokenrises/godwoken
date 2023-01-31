@@ -351,7 +351,7 @@ export class Eth {
       const address = args[0];
       const blockParameter = args[1];
       const blockNumber: GodwokenBlockParameter =
-        await this.parseBlockParameter(blockParameter);
+        await this._parseBlockParameter(blockParameter);
       const registryAddress: EthRegistryAddress = new EthRegistryAddress(
         address
       );
@@ -374,7 +374,7 @@ export class Eth {
       const storagePosition = args[1];
       const blockParameter = args[2];
       const blockNumber: GodwokenBlockParameter =
-        await this.parseBlockParameter(blockParameter);
+        await this._parseBlockParameter(blockParameter);
       const accountId: U32 | undefined = await ethAddressToAccountId(
         address,
         this.rpc
@@ -401,7 +401,7 @@ export class Eth {
       const address = args[0];
       const blockParameter = args[1];
       const blockNumber: GodwokenBlockParameter =
-        await this.parseBlockParameter(blockParameter);
+        await this._parseBlockParameter(blockParameter);
       const accountId: number | undefined = await ethAddressToAccountId(
         address,
         this.rpc
@@ -429,7 +429,7 @@ export class Eth {
       }
 
       const blockNumber: GodwokenBlockParameter =
-        await this.parseBlockParameter(blockParameter);
+        await this._parseBlockParameter(blockParameter);
       const accountId: number | undefined = await ethAddressToAccountId(
         address,
         this.rpc
@@ -459,7 +459,7 @@ export class Eth {
       );
       const blockParameter = args[1] || "latest";
       const blockNumber: GodwokenBlockParameter =
-        await this.parseBlockParameter(blockParameter);
+        await this._parseBlockParameter(blockParameter);
 
       const executeCallResult = async () => {
         let runResult: RunResult | undefined = await doEthCall(
@@ -523,7 +523,7 @@ export class Eth {
       );
       const blockParameter = args[1] || "latest";
       const blockNumber: GodwokenBlockParameter =
-        await this.parseBlockParameter(blockParameter);
+        await this._parseBlockParameter(blockParameter);
 
       const extraGas: bigint = BigInt(envConfig.extraEstimateGas || "0");
 
@@ -632,7 +632,7 @@ export class Eth {
     let blockNumber: U64 | undefined;
 
     try {
-      blockNumber = await this.blockParameterToBlockNumber(blockParameter);
+      blockNumber = await this._blockParameterToBlockNumber(blockParameter);
     } catch (error: any) {
       return null;
     }
@@ -677,9 +677,8 @@ export class Eth {
    */
   async getBlockTransactionCountByNumber(args: [string]): Promise<HexNumber> {
     const blockParameter = args[0];
-    const blockNumber: U64 | undefined = await this.blockParameterToBlockNumber(
-      blockParameter
-    );
+    const blockNumber: U64 | undefined =
+      await this._blockParameterToBlockNumber(blockParameter);
 
     const txCount = await this.query.getBlockTransactionCountByNumber(
       blockNumber
@@ -784,7 +783,7 @@ export class Eth {
       // Convert polyjuice tx to api transaction
       const { tx, fromAddress }: AutoCreateAccountCacheValue =
         JSON.parse(polyjuiceRawTx);
-      const isAcaTxExist: boolean = await this.isAcaTxExist(
+      const isAcaTxExist: boolean = await this._isAcaTxExist(
         ethTxHash,
         tx,
         fromAddress
@@ -838,7 +837,7 @@ export class Eth {
   ): Promise<EthTransaction | null> {
     const blockParameter = args[0];
     const index: U32 = +args[1];
-    const blockNumber: U64 = await this.blockParameterToBlockNumber(
+    const blockNumber: U64 = await this._blockParameterToBlockNumber(
       blockParameter
     );
 
@@ -928,7 +927,7 @@ export class Eth {
   }
 
   async newBlockFilter(args: []): Promise<HexString> {
-    const tipBlockNum = await this.getTipNumber();
+    const tipBlockNum = await this._getTipNumber();
     const filter_id = await this.filterManager.install(
       FilterFlag.blockFilter,
       tipBlockNum
@@ -937,7 +936,7 @@ export class Eth {
   }
 
   async newPendingTransactionFilter(args: []): Promise<HexString> {
-    const tipBlockNum = await this.getTipNumber();
+    const tipBlockNum = await this._getTipNumber();
     const filter_id = await this.filterManager.install(
       FilterFlag.pendingTransaction,
       tipBlockNum
@@ -1072,7 +1071,7 @@ export class Eth {
 
       // save the tx hash mapping for instant finality
       if (gwTxHash != null) {
-        await this.cacheTxHashMapping(ethTxHash, gwTxHash);
+        await this._cacheTxHashMapping(ethTxHash, gwTxHash);
       }
 
       return ethTxHash;
@@ -1085,7 +1084,7 @@ export class Eth {
     }
   }
 
-  private async cacheTxHashMapping(ethTxHash: Hash, gwTxHash: Hash) {
+  private async _cacheTxHashMapping(ethTxHash: Hash, gwTxHash: Hash) {
     const ethTxHashKey = ethTxHashCacheKey(ethTxHash);
     await this.cacheStore.insert(
       ethTxHashKey,
@@ -1100,7 +1099,7 @@ export class Eth {
     );
   }
 
-  private async getTipNumber(): Promise<U64> {
+  private async _getTipNumber(): Promise<U64> {
     const num = await this.query.getTipBlockNumber();
     if (num == null) {
       throw new Error("tip block number not found!!");
@@ -1108,7 +1107,7 @@ export class Eth {
     return num;
   }
 
-  private async parseBlockParameter(
+  private async _parseBlockParameter(
     blockParameter: BlockParameter
   ): Promise<GodwokenBlockParameter> {
     switch (blockParameter) {
@@ -1117,7 +1116,7 @@ export class Eth {
           // under instant-finality hack, we treat latest as pending
           return undefined;
         }
-        return await this.getTipNumber();
+        return await this._getTipNumber();
       case "earliest":
         return 0n;
       // It's supposed to be filtered in the validator, so throw an error if matched
@@ -1149,7 +1148,7 @@ export class Eth {
     }
 
     // handle block number
-    const tipNumber: bigint = await this.getTipNumber();
+    const tipNumber: bigint = await this._getTipNumber();
     const blockHexNum =
       typeof blockParameter === "object" && blockParameter.blockNumber != null
         ? blockParameter.blockNumber
@@ -1164,14 +1163,14 @@ export class Eth {
   // Some RPCs does not support pending parameter
   // eth_getBlockByNumber/eth_getBlockTransactionCountByNumber/eth_getTransactionByBlockNumberAndIndex
   // TODO: maybe we should support for those as well?
-  private async blockParameterToBlockNumber(
+  private async _blockParameterToBlockNumber(
     blockParameter: BlockParameter
   ): Promise<U64> {
-    const blockNumber: GodwokenBlockParameter = await this.parseBlockParameter(
+    const blockNumber: GodwokenBlockParameter = await this._parseBlockParameter(
       blockParameter
     );
     if (blockNumber === undefined) {
-      return await this.getTipNumber();
+      return await this._getTipNumber();
     }
     return blockNumber;
   }
@@ -1215,16 +1214,16 @@ export class Eth {
   ): Promise<[bigint, bigint]> {
     let normalizedFromBlock: bigint;
     let normalizedToBlock: bigint;
-    const latestBlockNumber = await this.getTipNumber();
+    const latestBlockNumber = await this._getTipNumber();
     // See also:
     // - https://github.com/nervosnetwork/godwoken-web3/pull/427#discussion_r918904239
     // - https://github.com/nervosnetwork/godwoken-web3/pull/300/files/131542bd5cc272279d27760e258fb5fa5de6fc9a#r861541728
-    const _fromBlock: bigint | undefined = await this.parseBlockParameter(
+    const _fromBlock: bigint | undefined = await this._parseBlockParameter(
       fromBlock ?? "earliest"
     );
     normalizedFromBlock = _fromBlock ?? latestBlockNumber;
 
-    const _toBlock: bigint | undefined = await this.parseBlockParameter(
+    const _toBlock: bigint | undefined = await this._parseBlockParameter(
       toBlock ?? "latest"
     );
     normalizedToBlock = _toBlock ?? latestBlockNumber;
@@ -1249,7 +1248,7 @@ export class Eth {
   //                               |-> found!
   //                         |->  `txWithStatus.transaction` == null
   //                               |-> not found!
-  private async isAcaTxExist(
+  private async _isAcaTxExist(
     ethTxHash: Hash,
     rawTx: HexString,
     fromAddress: HexString
