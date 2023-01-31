@@ -72,6 +72,7 @@ jobs:
       working-directory: gwos-evm/polyjuice-tests/fuzz
       run: |
         mkdir -p corpus-cache
+        mkdir -p corpus
         ls corpus-cache
         make build/fuzzer && \
         ./build/fuzzer corpus corpus-cache \
