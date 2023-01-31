@@ -701,6 +701,25 @@ pub fn build_eth_l2_script(args: &[u8; 20]) -> Script {
         .build()
 }
 
+pub(crate) fn create_block_producer_with_coinbase(
+    state: &mut DummyState,
+    coinbase: Option<&str>,
+) -> RegistryAddress {
+    // This eth_address is hardcoded in src/test_cases/evm-contracts/BlockInfo.sol
+    let coinbase = coinbase.unwrap_or("a1ad227Ad369f593B5f3d0Cc934A681a50811CB2");
+    let eth_address: [u8; 20] = hex::decode(coinbase)
+        .expect("decode hex eth_address")
+        .try_into()
+        .unwrap();
+    let block_producer_script = build_eth_l2_script(&eth_address);
+    let block_producer_script_hash = block_producer_script.hash();
+    let _block_producer_id = state
+        .create_account_from_script(block_producer_script)
+        .expect("create_block_producer");
+    register_eoa_account(state, &eth_address, &block_producer_script_hash);
+    RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, eth_address.to_vec())
+}
+
 pub(crate) fn create_block_producer(state: &mut DummyState) -> RegistryAddress {
     // This eth_address is hardcoded in src/test_cases/evm-contracts/BlockInfo.sol
     let eth_address: [u8; 20] = hex::decode("a1ad227Ad369f593B5f3d0Cc934A681a50811CB2")

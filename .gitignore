@@ -4,6 +4,7 @@ build/
 crates/benches/smt_data/db/
 crates/tests/mem_block/
 gwos-evm/deps/ckb-binary-patcher/
+gwos-evm/polyjuice-tests/Cargo.lock
 
 node_modules
 web3/node_modules/
@@ -17,3 +18,4 @@ web3/*.sql
 web3/*.log
 web3/*.cpuprofile
 web3/*.heapsnapshot
+
