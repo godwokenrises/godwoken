@@ -31,7 +31,6 @@ jsonrpc-core = "18.0"
 gw-web3-rpc-client = { path = "../rpc-client" }
 lazy_static = "1.4"
 dotenv = "0.15.0"
-rayon = "1.5.3"
 futures = "0.3.21"
 itertools = "0.10.3"
 num_cpus = "1.0"

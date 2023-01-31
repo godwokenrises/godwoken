@@ -17,6 +17,7 @@ use crate::{
 use anyhow::{anyhow, Result};
 use ckb_hash::blake2b_256;
 use ckb_types::H256;
+use futures::*;
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, registry_address::RegistryAddress};
 use gw_types::{
     bytes::Bytes,
@@ -29,7 +30,6 @@ use gw_web3_rpc_client::{
     convertion, godwoken_async_client::GodwokenAsyncClient, godwoken_rpc_client::GodwokenRpcClient,
 };
 use itertools::Itertools;
-use rayon::prelude::*;
 use rust_decimal::{prelude::ToPrimitive, Decimal};
 use sqlx::types::chrono::{DateTime, NaiveDateTime, Utc};
 
@@ -491,12 +491,14 @@ impl Web3Indexer {
         let mut cumulative_gas_used: u128 = 0;
         let mut total_gas_limit: u128 = 0;
         for txs in txs_slice {
-            let l2_transaction_with_logs_vec = txs
-                .into_par_iter()
+            let l2_transaction_with_logs_vec = futures::stream::iter(txs.into_iter())
                 .map(|tx| {
                     self.filter_single_transaction(tx, block_number, block_hash, &id_script_hashmap)
                 })
-                .collect::<Result<Vec<Option<Web3TransactionWithLogs>>>>()?;
+                .collect::<Vec<Result<Option<Web3TransactionWithLogs>>>>()
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>>>()?;
 
             let txs_vec = l2_transaction_with_logs_vec
                 .into_iter()

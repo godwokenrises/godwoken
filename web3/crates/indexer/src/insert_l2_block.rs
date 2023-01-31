@@ -1,7 +1,9 @@
 use std::{convert::TryFrom, str::FromStr};
 
 use anyhow::Result;
+use futures::StreamExt;
 use gw_types::U256;
+use itertools::Itertools;
 use rust_decimal::Decimal;
 use sqlx::{
     postgres::PgRow,
@@ -14,13 +16,9 @@ use sqlx::{
 use sqlx::{Postgres, QueryBuilder};
 
 use crate::{
-    cpu_count::CPU_COUNT,
     pool::POOL_FOR_UPDATE,
     types::{Block, Log, Transaction, TransactionWithLogs},
 };
-
-use itertools::Itertools;
-use rayon::prelude::*;
 
 extern crate num_cpus;
 
@@ -178,32 +176,22 @@ pub async fn insert_web3_txs_and_logs(
         return Ok((0, 0));
     }
 
-    let (txs, logs) = web3_tx_with_logs_vec
-        .into_par_iter()
-        .enumerate()
-        .map(|(i, web3_tx_with_logs)| {
-            // Set transaction_id to txs' index
-            let db_logs: Result<Vec<DbLog>> = web3_tx_with_logs
-                .logs
-                .into_par_iter()
-                .map(|l| DbLog::try_from_log(l, i as i64))
-                .collect();
-            (DbTransaction::try_from(web3_tx_with_logs.tx), db_logs)
-        })
-        .collect::<(Vec<_>, Vec<_>)>();
-    let txs = txs.into_iter().collect::<Result<Vec<_>>>()?;
-    let logs = logs.into_iter().collect::<Result<Vec<_>>>()?;
-    let logs = logs.into_iter().flatten().collect::<Vec<_>>();
+    let mut txs = Vec::with_capacity(web3_tx_with_logs_vec.len());
+    let mut logs = Vec::with_capacity(txs.len() * 2);
+    for (i, web3_tx_with_logs) in web3_tx_with_logs_vec.into_iter().enumerate() {
+        // Set transaction_id to txs' index
+        let db_logs: Vec<DbLog> = web3_tx_with_logs
+            .logs
+            .into_iter()
+            .map(|l| DbLog::try_from_log(l, i as i64))
+            .collect::<Result<Vec<_>>>()?;
+        let tx = DbTransaction::try_from(web3_tx_with_logs.tx)?;
+        txs.push(tx);
+        logs.extend(db_logs);
+    }
 
     let logs_len = logs.len();
     let txs_len = txs.len();
-
-    let logs_slice = logs
-        .into_iter()
-        .chunks(INSERT_LOGS_BATCH_SIZE)
-        .into_iter()
-        .map(|chunk| chunk.collect())
-        .collect::<Vec<Vec<_>>>();
 
     let mut txs_query_builder: QueryBuilder<Postgres> = QueryBuilder::new(
                 "INSERT INTO transactions
@@ -245,37 +233,36 @@ pub async fn insert_web3_txs_and_logs(
         .collect::<Vec<i64>>();
     tx_ids.append(&mut ids);
 
-    let logs_querys = logs_slice
-            .into_par_iter()
-            .map(|db_logs| {
-                let mut logs_query_builder: QueryBuilder<Postgres> = QueryBuilder::new(
+    let mut queries = logs.into_iter().chunks(INSERT_LOGS_BATCH_SIZE).into_iter().map(|logs|{
+
+    let mut logs_query_builder: QueryBuilder<Postgres> = QueryBuilder::new(
                     "INSERT INTO logs
                     (transaction_id, transaction_hash, transaction_index, block_number, block_hash, address, data, log_index, topics)"
                 );
+    // Get transaction id from preview insert returning
+    logs_query_builder.push_values(logs, |mut b, log| {
+        // transaction_id in log is transaction_id_index now
+        let transaction_id = tx_ids[log.transaction_id as usize];
 
-                // Get transaction id from preview insert returning
-                logs_query_builder.push_values(db_logs, |mut b, log| {
-                    // transaction_id in log is transaction_id_index now
-                    let transaction_id = tx_ids[log.transaction_id as usize];
+        b.push_bind(transaction_id)
+            .push_bind(log.transaction_hash)
+            .push_bind(log.transaction_index)
+            .push_bind(log.block_number)
+            .push_bind(log.block_hash)
+            .push_bind(log.address)
+            .push_bind(log.data)
+            .push_bind(log.log_index)
+            .push_bind(log.topics);
+    });
+    logs_query_builder
+    }).collect::<Vec<_>>();
 
-                    b.push_bind(transaction_id)
-                        .push_bind(log.transaction_hash)
-                        .push_bind(log.transaction_index)
-                        .push_bind(log.block_number)
-                        .push_bind(log.block_hash)
-                        .push_bind(log.address)
-                        .push_bind(log.data)
-                        .push_bind(log.log_index)
-                        .push_bind(log.topics);
-                });
-                logs_query_builder
-            }).collect::<Vec<_>>();
+    let mut results_stream = futures::stream::iter(queries.iter_mut())
+        .map(|query| query.build().execute(&*POOL_FOR_UPDATE))
+        .buffer_unordered(POOL_FOR_UPDATE.size() as usize);
 
-    if logs_len != 0 {
-        for mut query_builder in logs_querys {
-            let query = query_builder.build();
-            query.execute(&mut (*pg_tx)).await?;
-        }
+    while let Some(r) = results_stream.next().await {
+        r?;
     }
 
     Ok((txs_len, logs_len))
@@ -312,38 +299,22 @@ pub async fn update_web3_txs_and_logs(
         return Ok((0, 0));
     }
 
-    let (txs, logs) = web3_tx_with_logs_vec
-        .into_par_iter()
-        .enumerate()
-        .map(|(i, web3_tx_with_logs)| {
-            let db_logs: Result<Vec<DbLog>> = web3_tx_with_logs
-                .logs
-                .into_par_iter()
-                .map(|l| DbLog::try_from_log(l, i as i64))
-                .collect();
-            (DbTransaction::try_from(web3_tx_with_logs.tx), db_logs)
-        })
-        .collect::<(Vec<_>, Vec<_>)>();
-    let txs = txs.into_iter().collect::<Result<Vec<_>>>()?;
-    let logs = logs.into_iter().collect::<Result<Vec<_>>>()?;
-    let logs = logs.into_iter().flatten().collect::<Vec<_>>();
+    let mut txs = Vec::with_capacity(web3_tx_with_logs_vec.len());
+    let mut logs = Vec::with_capacity(txs.len() * 2);
 
-    let logs_len = logs.len();
+    for (i, web3_tx_with_logs) in web3_tx_with_logs_vec.into_iter().enumerate() {
+        let db_logs: Vec<DbLog> = web3_tx_with_logs
+            .logs
+            .into_iter()
+            .map(|l| DbLog::try_from_log(l, i as i64))
+            .collect::<Result<_>>()?;
+        let tx = DbTransaction::try_from(web3_tx_with_logs.tx)?;
+        txs.push(tx);
+        logs.extend(db_logs);
+    }
+
     let txs_len = txs.len();
-
-    let size = logs_len / 4;
-    let final_size = if size > INSERT_LOGS_BATCH_SIZE || size == 0 {
-        INSERT_LOGS_BATCH_SIZE
-    } else {
-        size
-    };
-
-    let logs_slice = logs
-        .into_iter()
-        .chunks(final_size)
-        .into_iter()
-        .map(|chunk| chunk.collect())
-        .collect::<Vec<Vec<_>>>();
+    let logs_len = logs.len();
 
     futures::future::join_all(
         txs.into_iter().map(|tx| {
@@ -376,15 +347,12 @@ pub async fn update_web3_txs_and_logs(
     .into_iter()
     .collect::<Result<Vec<_>, sqlx::Error>>()?;
 
-    if logs_len != 0 {
-        let logs_querys = logs_slice
-        .into_par_iter()
-        .map(|db_logs| {
-            let mut logs_query_builder: QueryBuilder<Postgres> = QueryBuilder::new(
+    let mut queries = logs.into_iter().chunks(INSERT_LOGS_BATCH_SIZE).into_iter().map(|logs|{
+        let mut logs_query_builder: QueryBuilder<Postgres> = QueryBuilder::new(
                 "UPDATE logs SET transaction_hash = data_table.transaction_hash, address = data_table.address, data = data_table.data, topics = data_table.topics FROM ( "
             );
 
-            logs_query_builder.push_values(db_logs, |mut b, log| {
+        logs_query_builder.push_values(logs, |mut b, log| {
                 b.push_bind(log.transaction_hash)
                     .push_bind(log.address)
                     .push_bind(log.data)
@@ -393,38 +361,16 @@ pub async fn update_web3_txs_and_logs(
                     .push_bind(log.log_index);
             })
             .push(" ) AS data_table(transaction_hash, address, data, topics, block_number, log_index) WHERE logs.block_number = data_table.block_number AND logs.log_index = data_table.log_index");
-            logs_query_builder
-        }).collect::<Vec<_>>();
 
-        let logs_slice_size: usize = if let Some(cpu_num) = *CPU_COUNT {
-            cpu_num
-        } else {
-            let cpu_count = num_cpus::get();
-            let size = cpu_count / 2;
-            if size > 0 {
-                size
-            } else {
-                1
-            }
-        };
+       logs_query_builder
+    }).collect::<Vec<_>>();
 
-        let mut logs_query_slice = logs_querys
-            .into_iter()
-            .chunks(logs_slice_size)
-            .into_iter()
-            .map(|chunk| chunk.collect())
-            .collect::<Vec<Vec<_>>>();
+    let mut results_stream = futures::stream::iter(queries.iter_mut())
+        .map(|query| query.build().execute(&*POOL_FOR_UPDATE))
+        .buffer_unordered(POOL_FOR_UPDATE.size() as usize);
 
-        let mut futs = Vec::new();
-        for query_builder_vec in &mut logs_query_slice {
-            for query_builder in query_builder_vec {
-                let query = query_builder.build();
-                futs.push(query.execute(&*POOL_FOR_UPDATE));
-            }
-        }
-        for fut in futs {
-            fut.await?;
-        }
+    while let Some(r) = results_stream.next().await {
+        r?;
     }
 
     Ok((txs_len, logs_len))
