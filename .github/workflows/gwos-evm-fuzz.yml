@@ -76,7 +76,7 @@ jobs:
         ls corpus-cache
         make build/fuzzer && \
         ./build/fuzzer corpus corpus-cache \
-          -max_total_time=$MAX_FUZZ_TIME -timeout=120 \
+          -max_total_time=$MAX_FUZZ_TIME -timeout=10 \
           -max_len=25000 -rss_limit_mb=0
       # Max data buffer size: 24KB < 25000 bytes
         
