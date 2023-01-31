@@ -1,8 +1,16 @@
 import { envConfig } from "../base/env-config";
 import { logger } from "../base/logger";
-import { METHOD_NOT_FOUND } from "../methods/error-code";
+import { INVALID_PARAMS, METHOD_NOT_FOUND } from "../methods/error-code";
 import { methods } from "../methods/index";
-import { JSONRPCVersionTwoRequest } from "jayson";
+import { JSONRPCVersionTwoRequest, Utils } from "jayson";
+
+const jsonVersion = 2;
+interface JsonRpcRequestResult {
+  id: any;
+  jsonrpc: "2.0";
+  error?: any;
+  result?: any;
+}
 
 const wsRpcMethods = Object.keys(methods).concat(
   "eth_subscribe",
@@ -16,6 +24,22 @@ export function middleware(ws: any) {
   function dispatch(msg: string) {
     try {
       const obj = JSON.parse(msg.toString());
+
+      // validate json request
+      if (!Utils.Request.isValidRequest(obj, jsonVersion)) {
+        const err = {
+          code: INVALID_PARAMS,
+          message: "Invalid request",
+        };
+        return Array.isArray(obj)
+          ? batchResponder(
+              obj,
+              obj.map((_o) => {
+                return { err: err };
+              })
+            )
+          : responder(obj, err, null);
+      }
 
       logRequest(obj);
 
@@ -45,7 +69,7 @@ export function middleware(ws: any) {
     }
   }
 
-  function responder(obj: any, err: any, result: any) {
+  function responder(obj: JsonRpcRequestResult, err: any, result: any) {
     const respObj: JsonRpcRequestResult = {
       id: obj.id,
       jsonrpc: "2.0",
@@ -59,7 +83,10 @@ export function middleware(ws: any) {
     ws.send(resp);
   }
 
-  function batchResponder(objs: any[], info: any[]) {
+  function batchResponder(
+    objs: JsonRpcRequestResult[],
+    info: { err?: any; result?: any }[]
+  ) {
     const respObjs = objs.map((o, i) => {
       const { err, result } = info[i];
       const respObj: JsonRpcRequestResult = {
@@ -94,11 +121,4 @@ export function middleware(ws: any) {
 
     return logger.info("websocket request.method:", obj.method);
   }
-}
-
-interface JsonRpcRequestResult {
-  id: any;
-  jsonrpc: "2.0";
-  error?: any;
-  result?: any;
 }
