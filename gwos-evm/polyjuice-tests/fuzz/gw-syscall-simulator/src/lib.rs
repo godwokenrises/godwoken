@@ -222,12 +222,9 @@ pub extern "C" fn gw_create(
         Err(_err) => return GW_ERROR_INVALID_ACCOUNT_SCRIPT.into(),
     };
     let script_hash = script.hash();
+    let mut host = HOST.lock().unwrap();
     // check exists
-    match HOST
-        .lock()
-        .unwrap()
-        .get_account_id_by_script_hash(&script_hash.into())
-    {
+    match host.get_account_id_by_script_hash(&script_hash.into()) {
         Ok(Some(_)) => return GW_ERROR_DUPLICATED_SCRIPT_HASH.into(),
         Ok(None) => {}
         Err(_err) => {
@@ -235,25 +232,25 @@ pub extern "C" fn gw_create(
         }
     }
     // TODO: valide script
-    let id = match HOST.lock().unwrap().get_account_count() {
+    let id = match host.get_account_count() {
         Ok(id) => id,
         Err(_err) => {
             return ERROR;
         }
     };
 
-    let state = &mut HOST.lock().unwrap().state;
-    let result = &mut HOST.lock().unwrap().run_result;
     let account_nonce_key = build_account_field_key(id, GW_ACCOUNT_NONCE_TYPE);
-    state
+    host.state
         .update_raw(account_nonce_key, H256::zero())
         .expect("account nonce key");
-    result.write_data_hashes.insert(account_nonce_key);
+    host.run_result.write_data_hashes.insert(account_nonce_key);
     let account_script_hash_key = build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH_TYPE);
-    state
+    host.state
         .update_raw(account_script_hash_key, script_hash)
         .expect("account script hash key");
-    result.write_data_hashes.insert(account_script_hash_key);
+    host.run_result
+        .write_data_hashes
+        .insert(account_script_hash_key);
     // script hash to id
     let script_hash_to_id_value: H256 = {
         let mut buf: [u8; 32] = H256::from_u32(id).into();
@@ -262,15 +259,17 @@ pub extern "C" fn gw_create(
         buf.into()
     };
     let script_hash_to_account_id_key = build_script_hash_to_account_id_key(&script_hash[..]);
-    state
+    host.state
         .update_raw(script_hash_to_account_id_key, script_hash_to_id_value)
         .expect("write script hash to account id key");
-    result
+    host.run_result
         .write_data_hashes
         .insert(script_hash_to_account_id_key);
     // insert script
-    state.insert_script(script_hash, script);
-    state.set_account_count(id + 1).expect("set account count");
+    host.state.insert_script(script_hash, script);
+    host.state
+        .set_account_count(id + 1)
+        .expect("set account count");
 
     let size_ptr = unsafe { account_id_addr.as_mut().expect("casting pointer") };
     *size_ptr = id;
@@ -304,15 +303,14 @@ pub extern "C" fn gw_store_data(data_addr: *const u8, len: u64) -> c_int {
     hasher.finalize(&mut data_hash);
     // insert data hash into SMT
     let data_hash_key = build_data_hash_key(&data_hash);
-    let state = &mut HOST.lock().unwrap().state;
-    state
+    let mut host = HOST.lock().unwrap();
+    host.state
         .update_raw(data_hash_key, H256::one())
         .expect("gw store data");
-    state.insert_data(data_hash.into(), data);
+    host.state.insert_data(data_hash.into(), data);
 
-    let result = &mut HOST.lock().unwrap().run_result;
-    result.write_data_hashes.insert(data_hash_key);
-    result.write_data_hashes.insert(data_hash.into());
+    host.run_result.write_data_hashes.insert(data_hash_key);
+    host.run_result.write_data_hashes.insert(data_hash.into());
     SUCCESS
 }
 
