@@ -1,8 +1,11 @@
-use std::path::Path;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{anyhow, Context, Result};
 use ckb_jsonrpc_types::{CellDep, JsonBytes};
-use ckb_types::prelude::{Builder, Entity};
+use clap::{Parser, ValueEnum};
 use gw_builtin_binaries::{file_checksum, Resource};
 use gw_config::{
     BackendConfig, BackendForkConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config,
@@ -12,51 +15,125 @@ use gw_config::{
 };
 use gw_jsonrpc_types::{godwoken::L2BlockCommittedInfo, JsonCalcHash};
 use gw_rpc_client::ckb_client::CkbClient;
-use gw_types::{core::ScriptHashType, packed::Script, prelude::*};
+use gw_types::prelude::*;
+use serde::de::DeserializeOwned;
 
 use crate::{
     deploy_genesis::get_secp_data,
-    setup::get_wallet_info,
     types::{
         BuildScriptsResult, OmniLockConfig, RollupDeploymentResult, ScriptsDeploymentResult,
         UserRollupConfig,
     },
+    utils::cli_args::H160Arg,
 };
 
-pub struct GenerateNodeConfigArgs<'a> {
-    pub rollup_result: &'a RollupDeploymentResult,
-    pub scripts_deployment: &'a ScriptsDeploymentResult,
-    pub privkey_path: &'a Path,
-    pub ckb_url: String,
-    pub indexer_url: Option<String>,
-    pub build_scripts_result: &'a BuildScriptsResult,
-    pub server_url: String,
-    pub user_rollup_config: &'a UserRollupConfig,
-    pub omni_lock_config: &'a OmniLockConfig,
-    pub node_mode: NodeMode,
-    pub block_producer_address: Vec<u8>,
-    pub p2p_listen: Option<String>,
-    pub p2p_dial: Vec<String>,
+pub const GENERATE_CONFIG_COMMAND: &str = "generate-config";
+
+#[derive(ValueEnum, Clone)]
+enum NodeModeV {
+    Readonly,
+    Fullnode,
 }
 
-pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Config> {
-    let GenerateNodeConfigArgs {
-        rollup_result,
-        scripts_deployment,
-        privkey_path,
-        ckb_url,
-        indexer_url,
-        build_scripts_result,
-        server_url,
-        user_rollup_config,
-        omni_lock_config,
-        node_mode,
-        block_producer_address,
-        p2p_listen,
-        p2p_dial,
-    } = args;
+impl From<NodeModeV> for NodeMode {
+    fn from(m: NodeModeV) -> Self {
+        match m {
+            NodeModeV::Fullnode => Self::FullNode,
+            NodeModeV::Readonly => Self::ReadOnly,
+        }
+    }
+}
 
-    let rpc_client = CkbClient::with_url(&ckb_url)?;
+/// Generate config
+#[derive(Parser)]
+#[clap(name = GENERATE_CONFIG_COMMAND)]
+pub struct GenerateConfigCommand {
+    // Output.
+    /// Output config file path
+    #[clap(short = 'o', long)]
+    output_path: PathBuf,
+    /// Output withdrawal to v1 config path
+    #[clap(long)]
+    output_withdrawal_to_v1_config: Option<PathBuf>,
+
+    // Input.
+    /// The scripts deployment results json file path
+    #[clap(long)]
+    scripts_deployment_path: PathBuf,
+    /// The genesis deployment results json file path
+    #[clap(short = 'g', long)]
+    genesis_deployment_path: PathBuf,
+    /// The user rollup config json file path
+    #[clap(short, long)]
+    rollup_config: PathBuf,
+    /// The omni lock config json file path
+    #[clap(long)]
+    omni_lock_config_path: Option<PathBuf>,
+    /// Scripts deployment config json file path
+    #[clap(short = 'c', long)]
+    scripts_deployment_config_path: PathBuf,
+
+    /// CKB jsonrpc URL
+    #[clap(long, default_value = "http://127.0.0.1:8114")]
+    ckb_rpc: String,
+    /// CKB indexer jsonrpc URL
+    #[clap(long)]
+    ckb_indexer_rpc: Option<String>,
+
+    #[clap(value_enum, long, default_value_t = NodeModeV::Readonly)]
+    node_mode: NodeModeV,
+    /// The private key file path
+    #[clap(short = 'k', long)]
+    privkey_path: Option<PathBuf>,
+    /// Store path.
+    #[clap(long)]
+    store_path: Option<PathBuf>,
+    /// Block producer address
+    #[clap(long)]
+    block_producer_address: Option<H160Arg>,
+    /// RPC server listening address
+    ///
+    /// RPC server listening address in the generated config file.
+    #[clap(long, default_value = "localhost:8119")]
+    rpc_server_url: String,
+    /// P2P network listen multiaddr
+    ///
+    /// E.g. /ip4/1.2.3.4/tcp/443
+    #[clap(long)]
+    p2p_listen: Option<String>,
+    /// P2P network dial addresses
+    ///
+    /// E.g. /dns4/godwoken/tcp/443
+    #[clap(long)]
+    p2p_dial: Vec<String>,
+}
+
+impl GenerateConfigCommand {
+    pub async fn run(self) -> Result<()> {
+        generate_node_config(self).await?;
+        Ok(())
+    }
+}
+
+fn read_json<T: DeserializeOwned>(p: &Path) -> Result<T> {
+    let ctx = || format!("read file {}", p.to_string_lossy());
+    let c = fs::read(p).with_context(ctx)?;
+    let r = serde_json::from_slice(&c).with_context(ctx)?;
+    Ok(r)
+}
+
+pub async fn generate_node_config(cmd: GenerateConfigCommand) -> Result<()> {
+    let rpc_client = CkbClient::with_url(&cmd.ckb_rpc)?;
+    let scripts: BuildScriptsResult = read_json(&cmd.scripts_deployment_config_path)?;
+    let scripts_deployment: ScriptsDeploymentResult = read_json(&cmd.scripts_deployment_path)?;
+    let rollup_result: RollupDeploymentResult = read_json(&cmd.genesis_deployment_path)?;
+    let user_rollup_config: UserRollupConfig = read_json(&cmd.rollup_config)?;
+    let omni_lock_config: Option<OmniLockConfig> = if let Some(ref o) = cmd.omni_lock_config_path {
+        Some(read_json(o)?)
+    } else {
+        None
+    };
+
     let tx_with_status = rpc_client
         .get_transaction(rollup_result.tx_hash.clone(), 2.into())
         .await?
@@ -74,25 +151,6 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         .number;
 
     // build configuration
-    let node_wallet_info = get_wallet_info(privkey_path);
-    let code_hash: [u8; 32] = {
-        let mut hash = [0u8; 32];
-        hex::decode_to_slice(
-            node_wallet_info
-                .block_assembler_code_hash
-                .trim_start_matches("0x"),
-            &mut hash as &mut [u8],
-        )?;
-        hash
-    };
-    let args = hex::decode(node_wallet_info.lock_arg.trim_start_matches("0x"))?;
-    let lock = Script::new_builder()
-        .code_hash(code_hash.pack())
-        .hash_type(ScriptHashType::Type.into())
-        .args(args.pack())
-        .build()
-        .into();
-
     let rollup_config = rollup_result.rollup_config.clone();
     let rollup_type_hash = rollup_result.rollup_type_hash.clone();
     let meta_contract_validator_type_hash = scripts_deployment
@@ -109,9 +167,9 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
 
     let system_type_scripts = query_contracts_script(
         &rpc_client,
-        scripts_deployment,
-        user_rollup_config,
-        omni_lock_config,
+        &scripts_deployment,
+        &user_rollup_config,
+        &omni_lock_config,
         rollup_result.delegate_cell_type_script.clone(),
     )
     .await
@@ -121,15 +179,11 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         rewards_receiver_lock: user_rollup_config.reward_lock.clone(),
     };
 
-    let wallet_config: WalletConfig = WalletConfig {
-        privkey_path: privkey_path.into(),
-        lock,
-    };
+    let wallet_config = cmd.privkey_path.map(|p| WalletConfig { privkey_path: p });
 
     let backends: Vec<BackendConfig> = vec![
         {
-            let generator_path =
-                build_scripts_result.built_scripts["meta_contract_generator"].clone();
+            let generator_path = scripts.built_scripts["meta_contract_generator"].clone();
             let generator = Resource::file_system(generator_path.clone());
             let generator_checksum = file_checksum(&generator_path)?.into();
             BackendConfig {
@@ -143,7 +197,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
             }
         },
         {
-            let generator_path = build_scripts_result.built_scripts["l2_sudt_generator"].clone();
+            let generator_path = scripts.built_scripts["l2_sudt_generator"].clone();
             let generator = Resource::file_system(generator_path.clone());
             let generator_checksum = file_checksum(&generator_path)?.into();
             BackendConfig {
@@ -157,7 +211,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
             }
         },
         {
-            let generator_path = build_scripts_result.built_scripts["polyjuice_generator"].clone();
+            let generator_path = scripts.built_scripts["polyjuice_generator"].clone();
             let generator = Resource::file_system(generator_path.clone());
             let generator_checksum = file_checksum(&generator_path)?.into();
             BackendConfig {
@@ -171,8 +225,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
             }
         },
         {
-            let generator_path =
-                build_scripts_result.built_scripts["eth_addr_reg_generator"].clone();
+            let generator_path = scripts.built_scripts["eth_addr_reg_generator"].clone();
             let generator = Resource::file_system(generator_path.clone());
             let generator_checksum = file_checksum(&generator_path)?.into();
             BackendConfig {
@@ -205,18 +258,14 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         genesis_committed_info,
         rollup_type_script,
         skipped_invalid_block_list: Default::default(),
-        burn_lock: {
-            let lock: ckb_types::packed::Script = user_rollup_config.burn_lock.clone().into();
-            let lock = gw_types::packed::Script::new_unchecked(lock.as_bytes());
-            lock.into()
-        },
+        burn_lock: user_rollup_config.burn_lock,
         // cell deps
         rollup_config_cell_dep,
     };
 
     let genesis: GenesisConfig = GenesisConfig {
         timestamp: rollup_result.timestamp,
-        rollup_type_hash,
+        rollup_type_hash: rollup_type_hash.clone(),
         meta_contract_validator_type_hash,
         eth_registry_validator_type_hash,
         rollup_config,
@@ -234,31 +283,37 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
     };
 
     let store = StoreConfig {
-        path: "./gw-db".into(),
+        path: cmd.store_path.unwrap_or_else(|| "./gw-db".into()),
         options_file: None,
         cache_size: None,
     };
     let rpc_client: RPCClientConfig = RPCClientConfig {
-        indexer_url,
-        ckb_url,
+        indexer_url: cmd.ckb_indexer_rpc,
+        ckb_url: cmd.ckb_rpc,
     };
     let rpc_server = RPCServerConfig {
-        listen: server_url,
+        listen: cmd.rpc_server_url,
         ..Default::default()
     };
-    let block_producer: Option<BlockProducerConfig> = Some(BlockProducerConfig {
+    let block_producer = Some(BlockProducerConfig {
         block_producer: RegistryAddressConfig {
             address_type: RegistryType::Eth,
-            address: JsonBytes::from_vec(block_producer_address),
+            address: JsonBytes::from_vec(
+                cmd.block_producer_address
+                    .unwrap_or_default()
+                    .0
+                    .as_bytes()
+                    .to_vec(),
+            ),
         },
         challenger_config,
-        wallet_config: Some(wallet_config),
+        wallet_config,
         ..Default::default()
     });
-    let p2p_network_config = if !p2p_dial.is_empty() || p2p_listen.is_some() {
+    let p2p_network_config = if !cmd.p2p_dial.is_empty() || cmd.p2p_listen.is_some() {
         Some(P2PNetworkConfig {
-            listen: p2p_listen,
-            dial: p2p_dial,
+            listen: cmd.p2p_listen,
+            dial: cmd.p2p_dial,
             ..Default::default()
         })
     } else {
@@ -272,138 +327,84 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         rpc_client,
         rpc_server,
         block_producer,
-        node_mode,
+        node_mode: cmd.node_mode.into(),
         store,
         p2p_network_config,
         ..Default::default()
     };
 
-    Ok(config)
+    if let Some(p) = cmd.output_path.parent() {
+        fs::create_dir_all(p)?;
+    }
+    fs::write(cmd.output_path, toml::to_string_pretty(&config)?)?;
+    if let Some(w) = cmd.output_withdrawal_to_v1_config {
+        let rollup_type_hash = format!("0x{rollup_type_hash}");
+        let deposit_lock_code_hash =
+            format!("0x{}", scripts_deployment.deposit_lock.script_type_hash);
+        let eth_lock_code_hash =
+            format!("0x{}", scripts_deployment.eth_account_lock.script_type_hash);
+        if let Some(p) = w.parent() {
+            fs::create_dir_all(p)?;
+        }
+        fs::write(
+            w,
+            toml::to_string_pretty(&toml::toml! {
+                [withdrawal_to_v1_config]
+                v1_rollup_type_hash = rollup_type_hash
+                v1_deposit_lock_code_hash = deposit_lock_code_hash
+                v1_eth_lock_code_hash = eth_lock_code_hash
+                v1_deposit_minimal_cancel_timeout_msecs = 604800000
+            })?,
+        )?;
+    }
+
+    Ok(())
 }
 
 async fn query_contracts_script(
     ckb_client: &CkbClient,
     deployment: &ScriptsDeploymentResult,
     user_rollup_config: &UserRollupConfig,
-    omni_lock_config: &OmniLockConfig,
+    omni_lock_config: &Option<OmniLockConfig>,
     delegate_cell_type_script: gw_jsonrpc_types::blockchain::Script,
 ) -> Result<SystemTypeScriptConfig> {
     let query = |contract: &'static str, cell_dep: CellDep| -> _ {
         ckb_client.query_type_script(contract, cell_dep)
     };
 
-    let state_validator = query(
-        "state validator",
-        deployment.state_validator.cell_dep.clone(),
-    )
-    .await?;
-    assert_eq!(
-        state_validator.hash(),
-        deployment.state_validator.script_type_hash
-    );
-
-    let deposit_lock = query("deposit", deployment.deposit_lock.cell_dep.clone()).await?;
-    assert_eq!(
-        deposit_lock.hash(),
-        deployment.deposit_lock.script_type_hash
-    );
-
-    let stake_lock = query("stake", deployment.stake_lock.cell_dep.clone()).await?;
-    assert_eq!(stake_lock.hash(), deployment.stake_lock.script_type_hash);
-
-    let custodian_lock = query("custodian", deployment.custodian_lock.cell_dep.clone()).await?;
-    assert_eq!(
-        custodian_lock.hash(),
-        deployment.custodian_lock.script_type_hash
-    );
-
-    let withdrawal_lock = query("withdrawal", deployment.withdrawal_lock.cell_dep.clone()).await?;
-    assert_eq!(
-        withdrawal_lock.hash(),
-        deployment.withdrawal_lock.script_type_hash
-    );
-
-    let challenge_lock = query("challenge", deployment.challenge_lock.cell_dep.clone()).await?;
-    assert_eq!(
-        challenge_lock.hash(),
-        deployment.challenge_lock.script_type_hash
-    );
-
     let l1_sudt = query("l1 sudt", user_rollup_config.l1_sudt_cell_dep.clone()).await?;
     assert_eq!(l1_sudt.hash(), user_rollup_config.l1_sudt_script_type_hash);
 
-    let delegate_cell_lock = query(
-        "delegate_cell_lock",
-        deployment.delegate_cell_lock.cell_dep.clone(),
-    )
-    .await?;
-    assert_eq!(
-        delegate_cell_lock.hash(),
-        deployment.delegate_cell_lock.script_type_hash
-    );
-
-    // Allowed eoa script deps
-    let eth_account_lock =
-        query("eth account", deployment.eth_account_lock.cell_dep.clone()).await?;
-    assert_eq!(
-        eth_account_lock.hash(),
-        deployment.eth_account_lock.script_type_hash
-    );
-
-    // Allowed contract script deps
-    let meta_validator = query("meta", deployment.meta_contract_validator.cell_dep.clone()).await?;
-    assert_eq!(
-        meta_validator.hash(),
-        deployment.meta_contract_validator.script_type_hash
-    );
-
-    let l2_sudt_validator = query("l2 sudt", deployment.l2_sudt_validator.cell_dep.clone()).await?;
-    assert_eq!(
-        l2_sudt_validator.hash(),
-        deployment.l2_sudt_validator.script_type_hash
-    );
-
-    let polyjuice_validator =
-        query("polyjuice", deployment.polyjuice_validator.cell_dep.clone()).await?;
-    assert_eq!(
-        polyjuice_validator.hash(),
-        deployment.polyjuice_validator.script_type_hash
-    );
-
-    let eth_addr_reg_validator = query(
-        "eth_addr_reg_validator",
-        deployment.eth_addr_reg_validator.cell_dep.clone(),
-    )
-    .await?;
-    assert_eq!(
-        eth_addr_reg_validator.hash(),
-        deployment.eth_addr_reg_validator.script_type_hash
-    );
-
-    let allowed_eoa_scripts = vec![eth_account_lock];
+    let d = deployment;
+    let allowed_eoa_scripts = vec![d.eth_account_lock.type_script.clone()];
 
     let allowed_contract_scripts = vec![
-        meta_validator,
-        l2_sudt_validator,
-        polyjuice_validator,
-        eth_addr_reg_validator,
+        d.meta_contract_validator.type_script.clone(),
+        d.l2_sudt_validator.type_script.clone(),
+        d.polyjuice_validator.type_script.clone(),
+        d.eth_addr_reg_validator.type_script.clone(),
     ];
 
-    let omni_lock = query("omni lock", omni_lock_config.cell_dep.clone()).await?;
-    assert_eq!(omni_lock.hash(), omni_lock_config.script_type_hash);
+    let omni_lock = if let Some(o) = omni_lock_config {
+        let omni_lock = query("omni lock", o.cell_dep.clone()).await?;
+        assert_eq!(omni_lock.hash(), o.script_type_hash);
+        omni_lock
+    } else {
+        d.omni_lock.type_script.clone()
+    };
 
     Ok(SystemTypeScriptConfig {
-        state_validator,
-        deposit_lock,
-        stake_lock,
-        custodian_lock,
-        withdrawal_lock,
-        challenge_lock,
+        state_validator: d.state_validator.type_script.clone(),
+        deposit_lock: d.deposit_lock.type_script.clone(),
+        stake_lock: d.stake_lock.type_script.clone(),
+        custodian_lock: d.custodian_lock.type_script.clone(),
+        withdrawal_lock: d.withdrawal_lock.type_script.clone(),
+        challenge_lock: d.challenge_lock.type_script.clone(),
         l1_sudt,
         omni_lock,
         allowed_eoa_scripts,
         allowed_contract_scripts,
-        delegate_cell_lock: Some(delegate_cell_lock),
+        delegate_cell_lock: Some(d.delegate_cell_lock.type_script.clone()),
         delegate_cell: Some(delegate_cell_type_script),
     })
 }

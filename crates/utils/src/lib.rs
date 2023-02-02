@@ -15,6 +15,7 @@ pub mod script_log;
 pub mod since;
 pub mod timepoint;
 pub mod transaction_skeleton;
+pub mod type_id;
 pub mod wallet;
 pub mod withdrawal;
 

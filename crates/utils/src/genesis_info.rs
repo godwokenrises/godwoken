@@ -1,9 +1,11 @@
-use anyhow::{anyhow, Result};
-use ckb_types::{
-    core::DepType,
-    packed::{Block, CellDep, Header, OutPoint},
-};
+use anyhow::{anyhow, Context, Result};
+use ckb_types::{core::BlockView, packed::Header};
 use gw_common::blake2b::new_blake2b;
+use gw_rpc_client::ckb_client::CkbClient;
+use gw_types::{
+    core::DepType,
+    packed::{Block, CellDep, OutPoint},
+};
 use gw_types::{h256::*, prelude::*};
 
 #[derive(Debug, Clone)]
@@ -25,6 +27,15 @@ impl CKBGenesisInfo {
     pub const DAO_OUTPUT_LOC: (usize, usize) = (0, 2);
     pub const SIGHASH_GROUP_OUTPUT_LOC: (usize, usize) = (1, 0);
     pub const MULTISIG_GROUP_OUTPUT_LOC: (usize, usize) = (1, 1);
+
+    pub async fn get(client: &CkbClient) -> Result<Self> {
+        let genesis = client
+            .get_block_by_number(0.into())
+            .await?
+            .context("no genesis block")?;
+        let genesis = BlockView::from(genesis).data();
+        Self::from_block(&genesis)
+    }
 
     pub fn from_block(genesis_block: &Block) -> Result<Self> {
         let raw_header = genesis_block.header().raw();

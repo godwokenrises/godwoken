@@ -1,9 +1,10 @@
-use crate::packed::{DepositRequest, Script};
+use std::collections::HashMap;
+
 use crate::{
     bytes::Bytes,
-    packed::{CellInput, CellOutput, OutPoint},
+    packed::{CellInput, CellOutput, DepositRequest, OutPoint, Script},
+    prelude::*,
 };
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CellInfo {
@@ -35,6 +36,29 @@ pub struct CellWithStatus {
 pub struct InputCellInfo {
     pub input: CellInput,
     pub cell: CellInfo,
+}
+
+impl From<CellInfo> for InputCellInfo {
+    fn from(cell: CellInfo) -> Self {
+        Self {
+            input: CellInput::new_builder()
+                .previous_output(cell.out_point.clone())
+                .build(),
+            cell,
+        }
+    }
+}
+
+impl InputCellInfo {
+    pub fn with_since(cell: CellInfo, since: u64) -> Self {
+        Self {
+            input: CellInput::new_builder()
+                .previous_output(cell.out_point.clone())
+                .since(since.pack())
+                .build(),
+            cell,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]

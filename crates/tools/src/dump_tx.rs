@@ -1,10 +1,10 @@
-use crate::godwoken_rpc::GodwokenRpcClient;
+use std::{fs::write, path::Path, str::FromStr};
 
 use anyhow::Result;
 use ckb_fixed_hash::H256;
 use gw_jsonrpc_types::{debugger::DumpChallengeTarget, godwoken::ChallengeTargetType};
 
-use std::{fs::write, path::Path, str::FromStr};
+use crate::godwoken_rpc::GodwokenRpcClient;
 
 pub enum ChallengeBlock {
     Number(u64),

@@ -4,13 +4,12 @@ use gw_utils::transaction_skeleton::TransactionSkeleton;
 use gw_utils::{fee::fill_tx_fee, wallet::Wallet};
 
 use anyhow::{anyhow, Result};
-use ckb_types::prelude::{Builder, Entity};
 use gw_challenge::cancel_challenge::RecoverAccountsContext;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::core::Status;
 use gw_types::h256::*;
-use gw_types::offchain::{global_state_from_slice, CellInfo, InputCellInfo};
-use gw_types::packed::{CellDep, CellInput, Transaction, WitnessArgs};
+use gw_types::offchain::{global_state_from_slice, InputCellInfo};
+use gw_types::packed::{CellDep, Transaction, WitnessArgs};
 use gw_types::prelude::Unpack;
 use tracing::instrument;
 
@@ -237,9 +236,7 @@ impl Cleaner {
 
         let owner_lock_dep = self.ckb_genesis_info.sighash_dep();
         tx_skeleton.cell_deps_mut().push(owner_lock_dep);
-        tx_skeleton
-            .inputs_mut()
-            .push(to_input_cell_info(owner_input));
+        tx_skeleton.inputs_mut().push(owner_input.into());
 
         let owner_lock = self.wallet.lock_script().to_owned();
         fill_tx_fee(
@@ -250,14 +247,5 @@ impl Cleaner {
         )
         .await?;
         self.wallet.sign_tx_skeleton(tx_skeleton)
-    }
-}
-
-fn to_input_cell_info(cell_info: CellInfo) -> InputCellInfo {
-    InputCellInfo {
-        input: CellInput::new_builder()
-            .previous_output(cell_info.out_point.clone())
-            .build(),
-        cell: cell_info,
     }
 }

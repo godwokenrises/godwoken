@@ -12,7 +12,7 @@ use gw_types::{
     core::{DepType, ScriptHashType},
     offchain::{global_state_from_slice, CellInfo, CollectedCustodianCells, InputCellInfo},
     packed::{
-        CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, L2Block, Script,
+        CellDep, CellOutput, CustodianLockArgs, DepositLockArgs, L2Block, Script,
         UnlockWithdrawalViaFinalize, UnlockWithdrawalViaRevert, UnlockWithdrawalWitness,
         UnlockWithdrawalWitnessUnion, WithdrawalRequestExtra, WitnessArgs,
     },
@@ -67,16 +67,9 @@ pub fn generate(
         cell_deps.push(sudt_type_dep.into());
     }
 
-    let custodian_inputs = cells_info.into_iter().map(|cell| {
-        let input = CellInput::new_builder()
-            .previous_output(cell.out_point.clone())
-            .build();
-        InputCellInfo { input, cell }
-    });
-
     let generated_withdrawals = GeneratedWithdrawals {
         deps: cell_deps,
-        inputs: custodian_inputs.collect(),
+        inputs: cells_info.into_iter().map(Into::into).collect(),
         outputs: generator.finish(),
     };
 
@@ -143,17 +136,6 @@ pub fn revert(
             output_builder.lock(custodian_lock.clone()).build()
         };
 
-        let withdrawal_input = {
-            let input = CellInput::new_builder()
-                .previous_output(withdrawal.out_point.clone())
-                .build();
-
-            InputCellInfo {
-                input,
-                cell: withdrawal.clone(),
-            }
-        };
-
         let unlock_withdrawal_witness = {
             let unlock_withdrawal_via_revert = UnlockWithdrawalViaRevert::new_builder()
                 .custodian_lock_hash(custodian_lock.hash().pack())
@@ -169,9 +151,9 @@ pub fn revert(
             .lock(Some(unlock_withdrawal_witness.as_bytes()).pack())
             .build();
 
-        withdrawal_inputs.push(withdrawal_input);
-        withdrawal_witness.push(withdrawal_witness_args);
         custodian_outputs.push((custodian_output, withdrawal.data.clone()));
+        withdrawal_inputs.push(InputCellInfo::from(withdrawal));
+        withdrawal_witness.push(withdrawal_witness_args);
     }
 
     let withdrawal_lock_dep = contracts_dep.withdrawal_cell_lock.clone();
@@ -260,17 +242,8 @@ pub fn unlock_to_owner(
             }
         };
 
-        let withdrawal_input = {
-            let input = CellInput::new_builder()
-                .previous_output(withdrawal_cell.out_point.clone())
-                .since(global_state_since.pack())
-                .build();
-
-            InputCellInfo {
-                input,
-                cell: withdrawal_cell.clone(),
-            }
-        };
+        let withdrawal_input =
+            InputCellInfo::with_since(withdrawal_cell.clone(), global_state_since);
 
         // Switch to owner lock
         let output = withdrawal_cell.output.as_builder().lock(owner_lock).build();
@@ -350,8 +323,8 @@ mod test {
         CellInfo, CollectedCustodianCells, CompatibleFinalizedTimepoint, InputCellInfo,
     };
     use gw_types::packed::{
-        BlockMerkleState, CellDep, CellInput, CellOutput, GlobalState, L2Block, OutPoint,
-        RawL2Block, RawWithdrawalRequest, RollupConfig, Script, UnlockWithdrawalViaFinalize,
+        BlockMerkleState, CellDep, CellOutput, GlobalState, L2Block, OutPoint, RawL2Block,
+        RawWithdrawalRequest, RollupConfig, Script, UnlockWithdrawalViaFinalize,
         UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion, WithdrawalLockArgs,
         WithdrawalRequest, WithdrawalRequestExtra, WitnessArgs,
     };
@@ -592,16 +565,7 @@ mod test {
         assert_eq!(expected_output.as_slice(), output.as_slice());
         assert_eq!(withdrawal_with_owner_lock.data, data);
 
-        let expected_input = {
-            let input = CellInput::new_builder()
-                .previous_output(withdrawal_with_owner_lock.out_point.clone())
-                .build();
-
-            InputCellInfo {
-                input,
-                cell: withdrawal_with_owner_lock,
-            }
-        };
+        let expected_input = InputCellInfo::from(withdrawal_with_owner_lock);
         let input = unlocked.inputs.first().unwrap().to_owned();
         assert_eq!(expected_input.input.as_slice(), input.input.as_slice());
         assert_eq!(

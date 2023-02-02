@@ -97,7 +97,6 @@ pub struct RPCRateLimit {
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WalletConfig {
     pub privkey_path: PathBuf,
-    pub lock: Script,
 }
 
 // NOTE: Rewards receiver lock must be different than lock in WalletConfig,

@@ -1,6 +1,4 @@
-use std::fmt;
-use std::ops::Deref;
-use std::str::FromStr;
+use std::{fmt, ops::Deref, str::FromStr};
 
 use crate::utils::sdk::constants::ONE_CKB;
 
