@@ -18,7 +18,7 @@ mod scan_eth_address;
 mod setup;
 mod stat;
 mod sudt;
-pub(crate) mod types;
+mod types;
 mod update_cell;
 mod utils;
 mod withdraw;
@@ -30,27 +30,24 @@ use std::{
 };
 
 use account::read_privkey;
-use anyhow::{anyhow, Context, Result};
-use clap::{value_t, App, Arg, SubCommand};
+use anyhow::{anyhow, Result};
+use clap::{value_t, App, Arg, CommandFactory, FromArgMatches, SubCommand};
 use deploy_genesis::DeployRollupCellArgs;
+use deploy_scripts::{DeployScriptsCommand, DEPLOY_SCRIPTS_COMMAND};
 use dump_tx::ChallengeBlock;
-use generate_config::GenerateNodeConfigArgs;
+use generate_config::{GenerateConfigCommand, GENERATE_CONFIG_COMMAND};
 use godwoken_rpc::GodwokenRpcClient;
 use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType;
 use gw_rpc_client::indexer_client::CkbIndexerClient;
 use gw_types::{offchain::CompatibleFinalizedTimepoint, prelude::*};
 use tracing_subscriber::prelude::*;
-use types::{
-    BuildScriptsResult, RollupDeploymentResult, ScriptsDeploymentResult, UserRollupConfig,
-};
-use utils::{cli_args, transaction::read_config};
 
-use self::types::OmniLockConfig;
-// So rust don't complain about unused items.
-pub use crate::utils::sdk;
 use crate::{
-    setup::SetupArgs, sudt::account::build_l1_sudt_type_script, utils::sdk::constants::ONE_CKB,
+    setup::SetupArgs,
+    sudt::account::build_l1_sudt_type_script,
+    types::{ScriptsDeploymentResult, UserRollupConfig},
+    utils::{cli_args, sdk::constants::ONE_CKB, transaction::read_config},
 };
 
 #[tokio::main(flavor = "current_thread")]
@@ -99,31 +96,13 @@ async fn main() -> Result<()> {
     let mut app = App::new("godwoken tools")
         .about("Godwoken cli tools")
         .version(version)
-        .subcommand(
-            SubCommand::with_name("deploy-scripts")
-                .about("Deploy scripts used by godwoken")
-                .arg(arg_privkey_path.clone())
-                .arg(arg_ckb_rpc.clone())
-                .arg(
-                    Arg::with_name("input-path")
-                        .short('i')
-                        .takes_value(true)
-                        .required(true)
-                        .help("The input json file path"),
-                )
-                .arg(
-                    Arg::with_name("output-path")
-                        .short('o')
-                        .takes_value(true)
-                        .required(true)
-                        .help("The output json file path"),
-                ),
-        )
+        .subcommand(DeployScriptsCommand::command())
         .subcommand(
             SubCommand::with_name("deploy-genesis")
                 .about("Deploy genesis block of godwoken")
                 .arg(arg_privkey_path.clone())
                 .arg(arg_ckb_rpc.clone())
+                .arg(arg_indexer_rpc.clone())
                 .arg(
                     arg_deployment_results_path.clone()
                 )
@@ -142,16 +121,6 @@ async fn main() -> Result<()> {
                         .required(true)
                         .help("The user rollup config json file path"),
                 )
-                // This is unused but kept for compatibility for now.
-                // TODO: remove.
-                .arg(
-                    Arg::with_name("omni-lock-config-path")
-                        .long("omni-lock-config-path")
-                        .short('l')
-                        .takes_value(true)
-                        .required(false)
-                        .help("The omni lock config json file path"),
-                )
                 .arg(
                     Arg::with_name("output-path")
                         .short('o')
@@ -165,83 +134,7 @@ async fn main() -> Result<()> {
                         .help("Force to accept unsafe config file"),
                 ),
         )
-        .subcommand(
-            SubCommand::with_name("generate-config")
-                .about("Generate configure")
-                .arg(arg_ckb_rpc.clone())
-                .arg(
-                    arg_indexer_rpc.clone()
-                )
-                .arg(
-                    arg_deployment_results_path.clone()
-                )
-                .arg(
-                    Arg::with_name("genesis-deployment-path")
-                        .short('g')
-                        .takes_value(true)
-                        .required(true)
-                        .help("The genesis deployment results json file path"),
-                )
-                .arg(
-                    Arg::with_name("user-rollup-config-path")
-                        .long("rollup-config")
-                        .short('r')
-                        .takes_value(true)
-                        .required(true)
-                        .help("The user rollup config json file path"),
-                )
-                .arg(
-                    Arg::with_name("omni-lock-config-path")
-                        .long("omni-lock-config-path")
-                        .short('l')
-                        .takes_value(true)
-                        .required(true)
-                        .help("The omni lock config json file path"),
-                )
-                .arg(arg_privkey_path.clone())
-                .arg(
-                    Arg::with_name("block-producer-address")
-                        .long("block-producer-address")
-                        .takes_value(true)
-                        .default_value("0x0000000000000000000000000000000000000000")
-                        .help("Block producer address"),
-                )
-                .arg(
-                    Arg::with_name("output-path")
-                        .short('o')
-                        .takes_value(true)
-                        .required(true)
-                        .help("The output json file path"),
-                )
-                .arg(
-                    Arg::with_name("scripts-deployment-config-path")
-                        .short('c')
-                        .takes_value(true)
-                        .required(true)
-                        .help("Scripts deployment config json file path"),
-                )
-                .arg(
-                    Arg::with_name("rpc-server-url")
-                        .long("rpc-server-url")
-                        .takes_value(true)
-                        .default_value("localhost:8119")
-                        .required(true)
-                        .help("The URL of rpc server"),
-                )
-                .arg(
-                    Arg::with_name("p2p-listen")
-                        .long("p2p-listen")
-                        .takes_value(true)
-                        .help("P2P network listen multiaddr, e.g. /ip4/1.2.3.4/tcp/443")
-                )
-                .arg(
-                    Arg::with_name("p2p-dial")
-                        .long("p2p-dial")
-                        .takes_value(true)
-                        .multiple(true)
-                        .help("P2P network dial addresses, e.g. /dns4/godwoken/tcp/443")
-                ),
-        )
+        .subcommand(GenerateConfigCommand::command())
         .subcommand(
             SubCommand::with_name("prepare-scripts")
                 .about("Prepare scripts used by godwoken")
@@ -300,6 +193,7 @@ async fn main() -> Result<()> {
             SubCommand::with_name("deposit-ckb")
                 .about("Deposit CKB to godwoken")
                 .arg(arg_ckb_rpc.clone())
+                .arg(arg_indexer_rpc.clone())
                 .arg(arg_privkey_path.clone())
                 .arg(arg_deployment_results_path.clone())
                 .arg(arg_config_path.clone())
@@ -871,31 +765,13 @@ async fn main() -> Result<()> {
 
     let matches = app.clone().get_matches();
     match matches.subcommand() {
-        Some(("deploy-scripts", m)) => {
-            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
-            let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
-            let input_path = Path::new(m.value_of("input-path").unwrap());
-            let output_path = Path::new(m.value_of("output-path").unwrap());
-            let build_script_result: BuildScriptsResult = {
-                let content = std::fs::read(input_path)?;
-                serde_json::from_slice(&content)?
-            };
-            let result =
-                deploy_scripts::deploy_scripts(privkey_path, ckb_rpc_url, &build_script_result)
-                    .await;
-            match result {
-                Ok(script_deployment) => {
-                    output_json_file(&script_deployment, output_path);
-                }
-                Err(err) => {
-                    log::error!("Deploy scripts error: {}", err);
-                    std::process::exit(-1);
-                }
-            };
+        Some((DEPLOY_SCRIPTS_COMMAND, m)) => {
+            DeployScriptsCommand::from_arg_matches(m)?.run().await?;
         }
         Some(("deploy-genesis", m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
+            let ckb_indexer_rpc_url = m.value_of("indexer-rpc-url");
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let user_rollup_path = Path::new(m.value_of("user-rollup-config-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
@@ -917,6 +793,7 @@ async fn main() -> Result<()> {
                 skip_config_check,
                 privkey_path,
                 ckb_rpc_url,
+                ckb_indexer_rpc_url,
                 scripts_result: &script_results,
                 user_rollup_config: &user_rollup_config,
                 timestamp,
@@ -927,79 +804,13 @@ async fn main() -> Result<()> {
                     output_json_file(&rollup_deployment, output_path);
                 }
                 Err(err) => {
-                    log::error!("Deploy genesis error: {}", err);
+                    log::error!("Deploy genesis error: {:#}", err);
                     std::process::exit(-1);
                 }
             }
         }
-        Some(("generate-config", m)) => {
-            let ckb_url = m.value_of("ckb-rpc-url").unwrap().to_string();
-            let indexer_url = m.value_of("indexer-rpc-url").map(Into::into);
-            let scripts_results_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
-            let genesis_path = Path::new(m.value_of("genesis-deployment-path").unwrap());
-            let user_rollup_config_path = Path::new(m.value_of("user-rollup-config-path").unwrap());
-            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
-            let output_path = Path::new(m.value_of("output-path").unwrap());
-            let scripts_config_path =
-                Path::new(m.value_of("scripts-deployment-config-path").unwrap());
-            let server_url = m.value_of("rpc-server-url").unwrap().to_string();
-            let omni_lock_config_path = Path::new(m.value_of("omni-lock-config-path").unwrap());
-            let block_producer_address = hex::decode(
-                m.value_of("block-producer-address")
-                    .unwrap()
-                    .to_string()
-                    .trim_start_matches("0x"),
-            )?;
-            let p2p_listen = m.value_of("p2p-listen").map(|l| l.to_string());
-            let p2p_dial = m
-                .values_of("p2p-dial")
-                .into_iter()
-                .flatten()
-                .map(|v| v.to_string())
-                .collect();
-
-            let rollup_result: RollupDeploymentResult = {
-                let content = std::fs::read(genesis_path)?;
-                serde_json::from_slice(&content)?
-            };
-            let scripts_deployment: ScriptsDeploymentResult = {
-                let content = std::fs::read(scripts_results_path)?;
-                serde_json::from_slice(&content)?
-            };
-            let build_scripts_result: BuildScriptsResult = {
-                let content = std::fs::read(scripts_config_path)?;
-                serde_json::from_slice(&content)?
-            };
-            let user_rollup_config: UserRollupConfig = {
-                let content = std::fs::read(user_rollup_config_path)?;
-                serde_json::from_slice(&content)?
-            };
-            let omni_lock_config: OmniLockConfig = {
-                let content = std::fs::read(omni_lock_config_path)?;
-                let json: serde_json::Value = serde_json::from_slice(&content)?;
-                serde_json::from_value(json["omni_lock"].clone())?
-            };
-
-            let args = GenerateNodeConfigArgs {
-                rollup_result: &rollup_result,
-                scripts_deployment: &scripts_deployment,
-                build_scripts_result: &build_scripts_result,
-                privkey_path,
-                ckb_url,
-                indexer_url,
-                server_url,
-                user_rollup_config: &user_rollup_config,
-                omni_lock_config: &omni_lock_config,
-                node_mode: gw_config::NodeMode::ReadOnly,
-                block_producer_address,
-                p2p_listen,
-                p2p_dial,
-            };
-
-            let config = generate_config::generate_node_config(args).await?;
-            let content = toml_edit::ser::to_string_pretty(&config)?;
-            std::fs::write(output_path, content).context("writing config file")?;
-            log::info!("Generate file {:?}", output_path);
+        Some((GENERATE_CONFIG_COMMAND, m)) => {
+            GenerateConfigCommand::from_arg_matches(m)?.run().await?;
         }
         Some(("prepare-scripts", m)) => {
             let mode = value_t!(m, "mode", prepare_scripts::ScriptsBuildMode).unwrap();
@@ -1050,7 +861,8 @@ async fn main() -> Result<()> {
             .await?;
         }
         Some(("deposit-ckb", m)) => {
-            let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap().to_string();
+            let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
+            let ckb_indexer_rpc_url = m.value_of("indexer-rpc-url");
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let capacity = m.value_of("capacity").unwrap();
             let fee = m.value_of("fee").unwrap();
@@ -1065,13 +877,14 @@ async fn main() -> Result<()> {
                 config_path,
                 capacity,
                 fee,
-                ckb_rpc_url.as_str(),
+                ckb_rpc_url,
+                ckb_indexer_rpc_url,
                 eth_address,
                 godwoken_rpc_url,
             )
             .await
             {
-                log::error!("Deposit CKB error: {}", err);
+                log::error!("Deposit CKB error: {:#}", err);
                 std::process::exit(-1);
             };
         }

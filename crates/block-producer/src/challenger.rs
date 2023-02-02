@@ -33,8 +33,8 @@ use gw_types::{
     h256::*,
     offchain::{global_state_from_slice, CellInfo, InputCellInfo},
     packed::{
-        CellDep, CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader,
-        ChallengeTarget, GlobalState, OutPoint, Script, Transaction, WitnessArgs,
+        CellDep, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, ChallengeTarget,
+        GlobalState, OutPoint, Script, Transaction, WitnessArgs,
     },
     prelude::*,
 };
@@ -350,7 +350,7 @@ impl Challenger {
         .with_context(|| format!("waiting for tx proposed 0x{}", to_hex(&verifier_tx_hash)))??;
 
         // Build cancellation transaction
-        let challenge_input = to_input_cell_info(challenge_cell);
+        let challenge_input = challenge_cell.into();
         let verifier_context = {
             let contracts_dep = self.contracts_dep_manager.load();
             let cell_dep = cancel_output.verifier_dep(&contracts_dep)?;
@@ -523,13 +523,13 @@ impl Challenger {
         tx_skeleton.witnesses_mut().push(rollup_witness);
 
         // Challenge
-        let challenge_input = to_input_cell_info_with_since(challenge_cell, since);
+        let challenge_input = InputCellInfo::with_since(challenge_cell, since);
         let challenge_dep = contracts_dep.challenge_cell_lock.clone().into();
         tx_skeleton.cell_deps_mut().push(challenge_dep);
         tx_skeleton.inputs_mut().push(challenge_input);
 
         // Stake
-        let stake_inputs = stake_cells.into_iter().map(to_input_cell_info);
+        let stake_inputs = stake_cells.into_iter().map(Into::into);
         let stake_dep = contracts_dep.stake_cell_lock.clone().into();
         tx_skeleton.cell_deps_mut().push(stake_dep);
         tx_skeleton.inputs_mut().extend(stake_inputs);
@@ -722,7 +722,7 @@ impl Challenger {
         let owner_lock = self.wallet.lock_script().to_owned();
 
         if let Ok(Some(cell)) = rpc_client.query_owner_cell(owner_lock, spent_inputs).await {
-            return Ok(to_input_cell_info(cell));
+            return Ok(cell.into());
         }
 
         log::debug!("can't find a owner cell for verifier, try wait verifier tx committed");
@@ -739,7 +739,7 @@ impl Challenger {
             query.ok_or_else(|| anyhow!("can't find an owner cell for verifier"))?
         };
 
-        Ok(to_input_cell_info(cell))
+        Ok(cell.into())
     }
 
     async fn dry_run_transaction(&self, tx: &Transaction, action: &str) -> Result<()> {
@@ -784,7 +784,7 @@ impl RollupState {
     }
 
     fn rollup_input(&self) -> InputCellInfo {
-        to_input_cell_info(self.rollup_cell.clone())
+        self.rollup_cell.clone().into()
     }
 
     fn rollup_output(&self) -> CellOutput {
@@ -850,25 +850,6 @@ fn to_tip_number(event: &ChainEvent) -> u64 {
         ChainEvent::NewBlock { block } => block,
     };
     tip_block.header().raw().number().unpack()
-}
-
-fn to_input_cell_info(cell_info: CellInfo) -> InputCellInfo {
-    InputCellInfo {
-        input: CellInput::new_builder()
-            .previous_output(cell_info.out_point.clone())
-            .build(),
-        cell: cell_info,
-    }
-}
-
-fn to_input_cell_info_with_since(cell_info: CellInfo, since: u64) -> InputCellInfo {
-    InputCellInfo {
-        input: CellInput::new_builder()
-            .previous_output(cell_info.out_point.clone())
-            .since(since.pack())
-            .build(),
-        cell: cell_info,
-    }
 }
 
 fn to_hex(hash: &H256) -> String {

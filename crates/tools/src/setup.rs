@@ -12,7 +12,7 @@ use rand::Rng;
 use crate::{
     deploy_genesis::{deploy_rollup_cell, DeployRollupCellArgs},
     deploy_scripts::deploy_scripts,
-    generate_config::{generate_node_config, GenerateNodeConfigArgs},
+    generate_config::generate_node_config,
     prepare_scripts::{self, prepare_scripts, ScriptsBuildMode},
     types::{SetupConfig, UserRollupConfig},
     utils,
@@ -67,7 +67,7 @@ pub async fn setup(args: SetupArgs<'_>) {
         build_scripts_config_path,
         privkey_path,
         nodes_count,
-        server_url,
+        server_url: _server_url,
         output_dir,
         setup_config_path,
         wallet_network,
@@ -102,9 +102,13 @@ pub async fn setup(args: SetupArgs<'_>) {
     // deploy scripts
     let deploy_scripts_result = {
         let scripts_deploy_result = output_dir.join("scripts-result.json");
-        let deploy_result = deploy_scripts(privkey_path, ckb_rpc_url, &build_scripts_result)
-            .await
-            .expect("deploy scripts");
+        let deploy_result = deploy_scripts(
+            // TODO.
+            None.unwrap(),
+            &build_scripts_result,
+        )
+        .await
+        .expect("deploy scripts");
         let output_content =
             serde_json::to_string_pretty(&deploy_result).expect("serde json to string pretty");
         fs::write(scripts_deploy_result, output_content.as_bytes())
@@ -135,11 +139,12 @@ pub async fn setup(args: SetupArgs<'_>) {
     };
 
     // deploy rollup cell
-    let rollup_result = {
+    let _rollup_result = {
         let rollup_result_path = output_dir.join("rollup-result.json");
         let args = DeployRollupCellArgs {
             privkey_path,
             ckb_rpc_url,
+            ckb_indexer_rpc_url: indexer_url,
             scripts_result: &deploy_scripts_result,
             user_rollup_config: &rollup_config,
             timestamp: None,
@@ -156,33 +161,17 @@ pub async fn setup(args: SetupArgs<'_>) {
 
     // generate node config
     for (index, (node_name, _node_wallet)) in nodes.iter().enumerate() {
-        let privkey_path = output_dir.join(&node_name).join("pk");
-        let output_file_path = output_dir.join(node_name).join("config.toml");
+        let _privkey_path = output_dir.join(&node_name).join("pk");
+        let _output_file_path = output_dir.join(node_name).join("config.toml");
         // set the first node to fullnode
-        let node_mode = if index == 0 {
+        let _node_mode = if index == 0 {
             NodeMode::FullNode
         } else {
             NodeMode::ReadOnly
         };
-        let args = GenerateNodeConfigArgs {
-            rollup_result: &rollup_result,
-            scripts_deployment: &deploy_scripts_result,
-            privkey_path: &privkey_path,
-            ckb_url: ckb_rpc_url.to_string(),
-            indexer_url: indexer_url.map(Into::into),
-            build_scripts_result: &build_scripts_result,
-            server_url: server_url.to_string(),
-            user_rollup_config: &rollup_config,
-            omni_lock_config: &setup_config.omni_lock_config,
-            node_mode,
-            block_producer_address: vec![0u8; 20],
-            p2p_listen: None,
-            p2p_dial: vec![],
-        };
-        let config = generate_node_config(args).await.expect("generate_config");
-        let output_content =
-            toml_edit::ser::to_string_pretty(&config).expect("serde toml to string pretty");
-        fs::write(output_file_path, output_content.as_bytes()).unwrap();
+        // TODO.
+        let args = None.unwrap();
+        generate_node_config(args).await.expect("generate_config");
     }
 
     log::info!("Finish");

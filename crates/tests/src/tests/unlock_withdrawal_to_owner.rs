@@ -30,7 +30,7 @@ use gw_types::offchain::{
     InputCellInfo,
 };
 use gw_types::packed::{
-    self, AllowedTypeHash, BlockMerkleState, CellDep, CellInput, CellOutput, CustodianLockArgs,
+    self, AllowedTypeHash, BlockMerkleState, CellDep, CellOutput, CustodianLockArgs,
     DepositRequest, GlobalState, OutPoint, RawWithdrawalRequest, RollupAction, RollupActionUnion,
     RollupConfig, RollupSubmitBlock, Script, StakeLockArgs, WithdrawalRequest,
     WithdrawalRequestExtra, WitnessArgs,
@@ -447,11 +447,11 @@ async fn test_build_unlock_to_owner_tx() {
     };
 
     let input_cell_deps = vec![
-        into_input_cell(always_cell.clone()),
-        into_input_cell(stake_lock_cell.clone()),
-        into_input_cell(state_validator_cell.clone()),
-        into_input_cell(custodian_lock_cell),
-        into_input_cell(rollup_config_cell.clone()),
+        InputCellInfo::from(always_cell.clone()),
+        stake_lock_cell.clone().into(),
+        state_validator_cell.clone().into(),
+        custodian_lock_cell.into(),
+        rollup_config_cell.clone().into(),
     ];
     let cell_deps = {
         let deps = input_cell_deps.iter();
@@ -470,9 +470,9 @@ async fn test_build_unlock_to_owner_tx() {
         SINCE_BLOCK_TIMESTAMP_FLAG | input_timestamp
     };
     let inputs = vec![
-        into_input_cell_since(input_rollup_cell, block_since),
-        into_input_cell(input_stake_cell.clone()),
-        into_input_cell(input_custodian_cell),
+        InputCellInfo::with_since(input_rollup_cell, block_since),
+        input_stake_cell.clone().into(),
+        input_custodian_cell.clone().into(),
     ];
     let mut outputs = vec![output_rollup_cell, output_stake];
     outputs.extend(generated_withdrawals.outputs.clone());
@@ -512,10 +512,10 @@ async fn test_build_unlock_to_owner_tx() {
         withdrawals: random_withdrawal_cells.clone(),
     };
     let cell_deps = vec![
-        into_input_cell(rollup_config_cell.clone()),
-        into_input_cell(rollup_cell.clone()),
-        into_input_cell(always_cell.clone()),
-        into_input_cell(withdrawal_lock_cell.clone()),
+        rollup_config_cell.clone().into(),
+        rollup_cell.clone().into(),
+        always_cell.clone().into(),
+        withdrawal_lock_cell.clone().into(),
     ];
 
     let unlocked = Default::default();
@@ -526,10 +526,11 @@ async fn test_build_unlock_to_owner_tx() {
         .expect("skip no owner lock");
     assert_eq!(to_unlock.len(), accounts.len());
 
-    let inputs = {
-        let cells = random_withdrawal_cells.clone().into_iter();
-        cells.map(into_input_cell).collect()
-    };
+    let inputs = random_withdrawal_cells
+        .iter()
+        .cloned()
+        .map(Into::into)
+        .collect();
     let tx_with_context = TxWithContext {
         tx,
         cell_deps: cell_deps.clone(),
@@ -565,9 +566,9 @@ async fn test_build_unlock_to_owner_tx() {
         .expect("some withdrawals tx");
 
     let inputs = unlockable_random_withdrawals
-        .clone()
-        .into_iter()
-        .map(into_input_cell)
+        .iter()
+        .cloned()
+        .map(Into::into)
         .collect();
 
     let tx_with_context = TxWithContext {
@@ -689,11 +690,11 @@ async fn test_build_unlock_to_owner_tx() {
     .expect("one custodian");
 
     let input_cell_deps = vec![
-        into_input_cell(always_cell),
-        into_input_cell(stake_lock_cell),
-        into_input_cell(state_validator_cell),
-        into_input_cell(withdrawal_lock_cell),
-        into_input_cell(rollup_config_cell),
+        InputCellInfo::from(always_cell),
+        stake_lock_cell.into(),
+        state_validator_cell.into(),
+        withdrawal_lock_cell.into(),
+        rollup_config_cell.into(),
     ];
     let cell_deps = {
         let deps = input_cell_deps.iter();
@@ -710,8 +711,8 @@ async fn test_build_unlock_to_owner_tx() {
         SINCE_BLOCK_TIMESTAMP_FLAG | input_timestamp
     };
     let mut inputs = vec![
-        into_input_cell_since(input_rollup_cell, block_since),
-        into_input_cell(input_stake_cell),
+        InputCellInfo::with_since(input_rollup_cell, block_since),
+        input_stake_cell.into(),
     ];
     inputs.extend(reverted_withdrawals.inputs);
 
@@ -791,25 +792,6 @@ impl BuildUnlockWithdrawalToOwner for DummyUnlocker {
         tx_skeleton: TransactionSkeleton,
     ) -> anyhow::Result<gw_types::packed::Transaction> {
         Ok(tx_skeleton.seal(&[], vec![])?.transaction)
-    }
-}
-
-fn into_input_cell(cell: CellInfo) -> InputCellInfo {
-    InputCellInfo {
-        input: CellInput::new_builder()
-            .previous_output(cell.out_point.clone())
-            .build(),
-        cell,
-    }
-}
-
-fn into_input_cell_since(cell: CellInfo, since: u64) -> InputCellInfo {
-    InputCellInfo {
-        input: CellInput::new_builder()
-            .previous_output(cell.out_point.clone())
-            .since(since.pack())
-            .build(),
-        cell,
     }
 }
 

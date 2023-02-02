@@ -22,7 +22,7 @@ use gw_types::{
     h256::*,
     offchain::{global_state_from_slice, CompatibleFinalizedTimepoint, DepositInfo, InputCellInfo},
     packed::{
-        CellDep, CellInput, CellOutput, GlobalState, L2Block, RollupAction, RollupActionUnion,
+        CellDep, CellOutput, GlobalState, L2Block, RollupAction, RollupActionUnion,
         RollupSubmitBlock, Script, Transaction, WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::*,
@@ -233,13 +233,10 @@ impl BlockProducer {
             .map(|d| d.clone().into());
 
         // rollup cell
-        tx_skeleton.inputs_mut().push(InputCellInfo {
-            input: CellInput::new_builder()
-                .previous_output(rollup_cell.out_point.clone())
-                .since(since.as_u64().pack())
-                .build(),
-            cell: rollup_cell.clone(),
-        });
+        tx_skeleton.inputs_mut().push(InputCellInfo::with_since(
+            rollup_cell.clone(),
+            since.as_u64(),
+        ));
         // rollup deps
         tx_skeleton.cell_deps_mut().extend(rollup_deps);
         // deposit lock dep
@@ -361,13 +358,7 @@ impl BlockProducer {
         // deposit cells
         for deposit in &deposit_cells {
             log::info!("using deposit cell {:?}", deposit.cell.out_point);
-            let input = CellInput::new_builder()
-                .previous_output(deposit.cell.out_point.clone())
-                .build();
-            tx_skeleton.inputs_mut().push(InputCellInfo {
-                input,
-                cell: deposit.cell.clone(),
-            });
+            tx_skeleton.inputs_mut().push(deposit.cell.clone().into());
         }
 
         // custodian cells

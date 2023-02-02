@@ -1,7 +1,10 @@
-use anyhow::{anyhow, Context, Result};
+use std::path::Path;
+
+use anyhow::{anyhow, ensure, Context, Result};
 use ckb_crypto::secp::Privkey;
+use ckb_types::h256;
 use faster_hex::hex_decode;
-use gw_common::blake2b::new_blake2b;
+use gw_common::blake2b::{self, new_blake2b};
 use gw_config::WalletConfig;
 use gw_types::{
     bytes::Bytes,
@@ -14,9 +17,29 @@ use sha3::{Digest, Keccak256};
 
 use crate::transaction_skeleton::{Signature, TransactionSkeleton};
 
+pub const SIGHASH_TYPE_HASH: H256 =
+    h256!("0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8").0;
+
 pub struct Wallet {
     privkey: Privkey,
     lock: Script,
+}
+
+impl TryFrom<Privkey> for Wallet {
+    type Error = ckb_crypto::secp::Error;
+
+    fn try_from(privkey: Privkey) -> Result<Self, Self::Error> {
+        let pk = privkey.pubkey()?.serialize();
+        let pk160 = &blake2b::hash(&pk)[..20];
+        Ok(Self {
+            lock: Script::new_builder()
+                .code_hash(SIGHASH_TYPE_HASH.pack())
+                .hash_type(ScriptHashType::Type.into())
+                .args(pk160.pack())
+                .build(),
+            privkey,
+        })
+    }
 }
 
 impl Wallet {
@@ -24,19 +47,21 @@ impl Wallet {
         Wallet { privkey, lock }
     }
 
-    pub fn from_config(config: &WalletConfig) -> Result<Self> {
-        let lock = config.lock.clone().into();
+    pub fn from_privkey_path(p: &Path) -> Result<Self> {
         let privkey = {
-            let content = std::fs::read_to_string(&config.privkey_path)
-                .with_context(|| "read wallet privkey")?;
+            let content = std::fs::read_to_string(p).context("read wallet privkey")?;
             let content = content.trim_start_matches("0x").trim();
-            assert_eq!(content.as_bytes().len(), 64, "invalid privkey length");
+            ensure!(content.as_bytes().len() == 64, "invalid privkey length");
             let mut decoded = [0u8; 32];
             hex_decode(content.as_bytes(), &mut decoded)?;
             Privkey::from_slice(&decoded)
         };
-        let wallet = Self::new(privkey, lock);
+        let wallet = Self::try_from(privkey)?;
         Ok(wallet)
+    }
+
+    pub fn from_config(config: &WalletConfig) -> Result<Self> {
+        Self::from_privkey_path(&config.privkey_path)
     }
 
     pub fn lock_script(&self) -> &Script {

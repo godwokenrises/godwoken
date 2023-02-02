@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use anyhow::{anyhow, Result};
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_types::prelude::{Builder, Entity};
@@ -7,8 +9,8 @@ use gw_generator::account_lock_manage::eip712::{self, traits::EIP712Encode};
 use gw_types::{
     core::ScriptHashType,
     packed::{CreateAccount, Fee, L2Transaction, MetaContractArgs, RawL2Transaction, Script},
+    prelude::*,
 };
-use std::path::Path;
 
 use crate::{
     account::{eth_sign, privkey_to_eth_address, privkey_to_l2_script_hash, read_privkey},
@@ -16,7 +18,6 @@ use crate::{
     types::ScriptsDeploymentResult,
     utils::transaction::{read_config, wait_for_l2_tx},
 };
-use gw_types::{bytes::Bytes as GwBytes, prelude::*};
 
 pub async fn create_creator_account(
     godwoken_rpc_url: &str,
@@ -57,7 +58,7 @@ pub async fn create_creator_account(
 
     let mut l2_args_vec = rollup_type_hash.as_bytes().to_vec();
     l2_args_vec.append(&mut sudt_id.to_le_bytes().to_vec());
-    let l2_script_args = Pack::pack(&GwBytes::from(l2_args_vec));
+    let l2_script_args = l2_args_vec.pack();
     let l2_script = Script::new_builder()
         .code_hash(polyjuice_validator_script_hash.pack())
         .hash_type(ScriptHashType::Type.into())

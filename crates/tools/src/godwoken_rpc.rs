@@ -1,3 +1,11 @@
+use std::{
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    u32,
+};
+
 use anyhow::{anyhow, Result};
 use ckb_jsonrpc_types::Script;
 use ckb_types::H256;
@@ -8,13 +16,6 @@ use gw_jsonrpc_types::{
     godwoken::{RunResult, TxReceipt},
 };
 use gw_types::U256;
-use std::{
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    u32,
-};
 
 type AccountID = Uint32;
 

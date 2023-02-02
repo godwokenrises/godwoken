@@ -1,10 +1,15 @@
+use std::path::Path;
+
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress};
-use gw_types::packed::{L2Transaction, RawL2Transaction};
-use std::path::Path;
+use gw_types::{
+    bytes::Bytes,
+    packed::{L2Transaction, RawL2Transaction},
+    prelude::*,
+};
 
 use crate::{
     account::{eth_sign, parse_account_from_str, privkey_to_l2_script_hash, read_privkey},
@@ -15,7 +20,6 @@ use crate::{
         transaction::{read_config, wait_for_l2_tx},
     },
 };
-use gw_types::{bytes::Bytes as GwBytes, prelude::*};
 
 const GW_LOG_POLYJUICE_SYSTEM: u8 = 0x2;
 
@@ -31,7 +35,7 @@ pub async fn deploy(
     data: &str,
     value: u128,
 ) -> Result<()> {
-    let data = GwBytes::from(hex::decode(data.trim_start_matches("0x").as_bytes())?);
+    let data = Bytes::from(hex::decode(data.trim_start_matches("0x").as_bytes())?);
 
     let scripts_deployment_string = std::fs::read_to_string(scripts_deployment_path)?;
     let scripts_deployment: ScriptsDeploymentResult =
@@ -74,7 +78,7 @@ pub async fn send_transaction(
     value: u128,
     to_address: &str,
 ) -> Result<()> {
-    let data = GwBytes::from(hex::decode(data.trim_start_matches("0x").as_bytes())?);
+    let data = Bytes::from(hex::decode(data.trim_start_matches("0x").as_bytes())?);
 
     let scripts_deployment_string = std::fs::read_to_string(scripts_deployment_path)?;
     let scripts_deployment: ScriptsDeploymentResult =
@@ -116,7 +120,7 @@ pub async fn polyjuice_call(
     to_address: &str,
     from: &str,
 ) -> Result<()> {
-    let data = GwBytes::from(hex::decode(data.trim_start_matches("0x").as_bytes())?);
+    let data = Bytes::from(hex::decode(data.trim_start_matches("0x").as_bytes())?);
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
@@ -174,7 +178,7 @@ async fn send(
     privkey: &H256,
     gas_limit: u64,
     gas_price: u128,
-    data: GwBytes,
+    data: Bytes,
     value: u128,
     rollup_type_hash: &H256,
     scripts_deployment: &ScriptsDeploymentResult,
@@ -259,10 +263,10 @@ fn encode_polyjuice_args(
     gas_limit: u64,
     gas_price: u128,
     value: u128,
-    data: GwBytes,
+    data: Bytes,
     to_id: u32,
     creator_account_id: u32,
-) -> GwBytes {
+) -> Bytes {
     let mut args = vec![0u8; 52];
     args[0..7].copy_from_slice(b"\xFF\xFF\xFFPOLY");
     args[7] = if to_id == 0 || to_id == creator_account_id {
@@ -277,5 +281,5 @@ fn encode_polyjuice_args(
     args[48..52].copy_from_slice(&data_length.to_le_bytes());
     args.append(&mut data.to_vec());
 
-    GwBytes::from(args)
+    Bytes::from(args)
 }
