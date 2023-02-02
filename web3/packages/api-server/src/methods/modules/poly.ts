@@ -120,7 +120,7 @@ export class Poly {
       this.rpc.pingFullNode(),
       globalClient.PING(),
       this.query.isConnected(),
-      this.syncBlocksDiff(),
+      this._syncBlocksDiff(),
       envConfig.enablePriceOracle == "true"
         ? readonlyPriceOracle.price()
         : "PriceOracleNotEnabled",
@@ -146,7 +146,7 @@ export class Poly {
   }
 
   // get block data sync status
-  private async syncBlocksDiff(): Promise<Number> {
+  private async _syncBlocksDiff(): Promise<Number> {
     const blockNum = await this.query.getTipBlockNumber();
     if (blockNum == null) {
       throw new Error("db tipBlockNumber is null");

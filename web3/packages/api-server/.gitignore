@@ -3,3 +3,5 @@ newrelic_agent.log
 rate-limit-config.json
 
 *.log
+
+.env*

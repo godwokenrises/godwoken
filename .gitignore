@@ -7,7 +7,7 @@ gwos-evm/deps/ckb-binary-patcher/
 
 node_modules
 web3/node_modules/
-web3/lib/
+web3/**/*/lib
 web3/*.env
 web3/packages/api-server/allowed-addresses.json
 web3/crates/**/target

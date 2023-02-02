@@ -48,7 +48,6 @@
 - eth_getFilterLogs
 - eth_getFilterChanges
 - eth_getLogs
-- eth_getTipNumber
 - eth_subscribe (only for WebSocket)
 - eth_unsubscribe (only for WebSocket)
 
