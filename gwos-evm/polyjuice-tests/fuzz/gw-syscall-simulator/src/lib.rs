@@ -166,25 +166,25 @@ impl GodwokenHost {
 static HOST: Lazy<Mutex<GodwokenHost>> = Lazy::new(|| Mutex::new(GodwokenHost::new()));
 
 #[no_mangle]
-pub extern "C" fn ckb_exit(code: i8) -> i32 {
+pub unsafe extern "C" fn ckb_exit(code: i8) -> i32 {
     std::process::exit(code.into());
 }
 
 #[no_mangle]
-pub extern "C" fn ckb_debug(s: *const c_char) {
-    let message = unsafe { CStr::from_ptr(s) }.to_str().expect("UTF8 error!");
+pub unsafe extern "C" fn ckb_debug(s: *const c_char) {
+    let message = CStr::from_ptr(s).to_str().expect("UTF8 error!");
     println!("Debug message: {}", message);
 }
 
 #[no_mangle]
-pub extern "C" fn gw_load_rollup_config(addr: *mut c_void, len: *mut u64) -> c_int {
+pub unsafe extern "C" fn gw_load_rollup_config(addr: *mut c_void, len: *mut u64) -> c_int {
     let data = HOST.lock().unwrap().rollup_config.as_slice().to_vec();
     store_data(addr, len, 0, &data);
     SUCCESS
 }
 
 #[no_mangle]
-pub extern "C" fn gw_store(key_addr: *const u8, value_addr: *const u8) -> c_int {
+pub unsafe extern "C" fn gw_store(key_addr: *const u8, value_addr: *const u8) -> c_int {
     let key = load_data_h256(key_addr);
     let value = load_data_h256(value_addr);
     HOST.lock()
@@ -196,7 +196,7 @@ pub extern "C" fn gw_store(key_addr: *const u8, value_addr: *const u8) -> c_int 
 }
 
 #[no_mangle]
-pub extern "C" fn gw_load(key_addr: *const u8, value_addr: *mut u8) -> c_int {
+pub unsafe extern "C" fn gw_load(key_addr: *const u8, value_addr: *mut u8) -> c_int {
     let key = load_data_h256(key_addr);
     let val = HOST.lock().unwrap().state.get_raw(&key).expect("gw_load");
     store_h256(value_addr, &val);
@@ -204,14 +204,14 @@ pub extern "C" fn gw_load(key_addr: *const u8, value_addr: *mut u8) -> c_int {
 }
 
 #[no_mangle]
-pub extern "C" fn gw_set_return_data(addr: *const u8, len: u64) -> c_int {
+pub unsafe extern "C" fn gw_set_return_data(addr: *const u8, len: u64) -> c_int {
     let buf = load_bytes(addr, len);
     HOST.lock().unwrap().run_result.return_data = buf;
     SUCCESS
 }
 
 #[no_mangle]
-pub extern "C" fn gw_create(
+pub unsafe extern "C" fn gw_create(
     script_addr: *const u8,
     script_len: u64,
     account_id_addr: *mut u32,
@@ -271,14 +271,14 @@ pub extern "C" fn gw_create(
         .set_account_count(id + 1)
         .expect("set account count");
 
-    let size_ptr = unsafe { account_id_addr.as_mut().expect("casting pointer") };
+    let size_ptr = account_id_addr.as_mut().expect("casting pointer");
     *size_ptr = id;
 
     SUCCESS
 }
 
 #[no_mangle]
-pub extern "C" fn gw_load_tx(addr: *mut c_void, len: *mut u64) -> c_int {
+pub unsafe extern "C" fn gw_load_tx(addr: *mut c_void, len: *mut u64) -> c_int {
     if let Some(tx) = &HOST.lock().unwrap().tx {
         store_data(addr, len, 0, tx);
         SUCCESS
@@ -288,14 +288,14 @@ pub extern "C" fn gw_load_tx(addr: *mut c_void, len: *mut u64) -> c_int {
 }
 
 #[no_mangle]
-pub extern "C" fn gw_load_block_info(addr: *mut c_void, len: *mut u64) -> c_int {
+pub unsafe extern "C" fn gw_load_block_info(addr: *mut c_void, len: *mut u64) -> c_int {
     let data = HOST.lock().unwrap().block_info.as_slice().to_vec();
     store_data(addr, len, 0, &data);
     SUCCESS
 }
 
 #[no_mangle]
-pub extern "C" fn gw_store_data(data_addr: *const u8, len: u64) -> c_int {
+pub unsafe extern "C" fn gw_store_data(data_addr: *const u8, len: u64) -> c_int {
     let data = load_bytes(data_addr, len);
     let mut data_hash = [0u8; 32];
     let mut hasher = new_blake2b();
@@ -315,7 +315,7 @@ pub extern "C" fn gw_store_data(data_addr: *const u8, len: u64) -> c_int {
 }
 
 #[no_mangle]
-pub extern "C" fn gw_load_data(
+pub unsafe extern "C" fn gw_load_data(
     data_addr: &mut c_void,
     len: *mut u64,
     offset: u64,
@@ -333,7 +333,7 @@ pub extern "C" fn gw_load_data(
 }
 
 #[no_mangle]
-pub extern "C" fn gw_load_account_script(
+pub unsafe extern "C" fn gw_load_account_script(
     script_addr: *mut c_void,
     len: *mut u64,
     offset: u64,
@@ -360,13 +360,13 @@ pub extern "C" fn gw_load_account_script(
 }
 
 #[no_mangle]
-pub extern "C" fn gw_get_block_hash(block_hash_addr: *mut u8, _number: u64) -> c_int {
+pub unsafe extern "C" fn gw_get_block_hash(block_hash_addr: *mut u8, _number: u64) -> c_int {
     store_h256(block_hash_addr, &H256::from(BLOCK_HASH));
     SUCCESS
 }
 
 #[no_mangle]
-pub extern "C" fn gw_pay_fee(
+pub unsafe extern "C" fn gw_pay_fee(
     reg_addr_buf: *const u8,
     len: u64,
     _sudt_id: u32,
@@ -384,7 +384,12 @@ pub extern "C" fn gw_pay_fee(
 }
 
 #[no_mangle]
-pub extern "C" fn gw_log(account_id: u32, service_flag: u8, len: u64, data: *const u8) -> c_int {
+pub unsafe extern "C" fn gw_log(
+    account_id: u32,
+    service_flag: u8,
+    len: u64,
+    data: *const u8,
+) -> c_int {
     let data = load_bytes(data, len);
     let log_item = LogItem::new_builder()
         .account_id(account_id.pack())
@@ -396,7 +401,7 @@ pub extern "C" fn gw_log(account_id: u32, service_flag: u8, len: u64, data: *con
 }
 
 #[no_mangle]
-pub extern "C" fn gw_bn_add(
+pub unsafe extern "C" fn gw_bn_add(
     output: &mut c_void,
     output_len: *mut u64,
     offset: u64,
@@ -418,7 +423,7 @@ pub extern "C" fn gw_bn_add(
 }
 
 #[no_mangle]
-pub extern "C" fn gw_bn_mul(
+pub unsafe extern "C" fn gw_bn_mul(
     output: &mut c_void,
     output_len: *mut u64,
     offset: u64,
@@ -440,7 +445,7 @@ pub extern "C" fn gw_bn_mul(
 }
 
 #[no_mangle]
-pub extern "C" fn gw_bn_pairing(
+pub unsafe extern "C" fn gw_bn_pairing(
     output: &mut c_void,
     output_len: *mut u64,
     offset: u64,
@@ -462,17 +467,17 @@ pub extern "C" fn gw_bn_pairing(
 }
 
 #[no_mangle]
-pub extern "C" fn gw_snapshot(snapshot_id: *mut u32) -> c_int {
+pub unsafe extern "C" fn gw_snapshot(snapshot_id: *mut u32) -> c_int {
     let host = &mut HOST.lock().unwrap();
     let id = host.state.snapshot() as u32;
 
-    let snapshot_id_ptr = unsafe { snapshot_id.as_mut().expect("casting pointer") };
+    let snapshot_id_ptr = snapshot_id.as_mut().expect("casting pointer");
     *snapshot_id_ptr = id;
     SUCCESS
 }
 
 #[no_mangle]
-pub extern "C" fn gw_revert(snapshot_id: u32) -> c_int {
+pub unsafe extern "C" fn gw_revert(snapshot_id: u32) -> c_int {
     let host = &mut HOST.lock().unwrap();
     host.state
         .revert(snapshot_id as usize)
@@ -481,12 +486,12 @@ pub extern "C" fn gw_revert(snapshot_id: u32) -> c_int {
 }
 
 #[no_mangle]
-pub extern "C" fn gw_check_sudt_addr_permission(_addr: *const u8) -> c_int {
+pub unsafe extern "C" fn gw_check_sudt_addr_permission(_addr: *const u8) -> c_int {
     SUCCESS
 }
 
 #[no_mangle]
-pub extern "C" fn gw_reset() -> c_int {
+pub unsafe extern "C" fn gw_reset() -> c_int {
     let host = &mut HOST.lock().unwrap();
 
     let store = Store::open_tmp().expect("open store");
@@ -533,8 +538,8 @@ pub extern "C" fn gw_reset() -> c_int {
 }
 
 #[no_mangle]
-pub extern "C" fn gw_set_tx(addr: *const u8, len: u64) -> c_int {
-    let slice = unsafe { std::slice::from_raw_parts(addr, len as usize) };
+pub unsafe extern "C" fn gw_set_tx(addr: *const u8, len: u64) -> c_int {
+    let slice = std::slice::from_raw_parts(addr, len as usize);
     let mut buf = Vec::with_capacity(len as usize);
     buf.extend_from_slice(slice);
     HOST.lock().unwrap().tx = Some(buf);
@@ -542,12 +547,12 @@ pub extern "C" fn gw_set_tx(addr: *const u8, len: u64) -> c_int {
 }
 
 #[no_mangle]
-pub extern "C" fn gw_create_eoa_account(
+pub unsafe extern "C" fn gw_create_eoa_account(
     eth_address: *const u8,
     mint_ckb: *const u8,
     account_id_addr: *mut u32,
 ) -> c_int {
-    let slice = unsafe { std::slice::from_raw_parts(eth_address, 20) };
+    let slice = std::slice::from_raw_parts(eth_address, 20);
     let mut eth_address = [0u8; 20];
     eth_address.copy_from_slice(slice);
     let script = build_eth_l2_script(&eth_address);
@@ -566,7 +571,7 @@ pub extern "C" fn gw_create_eoa_account(
         return ERROR;
     }
 
-    let slice = unsafe { std::slice::from_raw_parts(mint_ckb, 16) };
+    let slice = std::slice::from_raw_parts(mint_ckb, 16);
     let mut mint_array = [0u8; 16];
     mint_array.copy_from_slice(slice);
     let mint_ckb = U256::from(u128::from_le_bytes(mint_array));
@@ -575,13 +580,13 @@ pub extern "C" fn gw_create_eoa_account(
         return ERROR;
     }
 
-    let size_ptr = unsafe { account_id_addr.as_mut().expect("casting pointer") };
+    let size_ptr = account_id_addr.as_mut().expect("casting pointer");
     *size_ptr = account_id;
     SUCCESS
 }
 
 #[no_mangle]
-pub extern "C" fn gw_create_contract_account(
+pub unsafe extern "C" fn gw_create_contract_account(
     eth_address: *const u8,
     mint: *const u8,
     code: *const u8,
@@ -591,7 +596,7 @@ pub extern "C" fn gw_create_contract_account(
     let mut new_script_args = vec![0u8; 32 + 4 + 20];
     new_script_args[0..32].copy_from_slice(&ROLLUP_SCRIPT_HASH);
     new_script_args[32..36].copy_from_slice(&CREATOR_ACCOUNT_ID.to_le_bytes()[..]);
-    let slice = unsafe { std::slice::from_raw_parts(eth_address, 20) };
+    let slice = std::slice::from_raw_parts(eth_address, 20);
     let mut eth_address = [0u8; 20];
     eth_address.copy_from_slice(slice);
     new_script_args[36..36 + 20].copy_from_slice(&eth_address);
@@ -616,7 +621,7 @@ pub extern "C" fn gw_create_contract_account(
         return ERROR;
     }
 
-    let slice = unsafe { std::slice::from_raw_parts(mint, 16) };
+    let slice = std::slice::from_raw_parts(mint, 16);
     let mut mint_array = [0u8; 16];
     mint_array.copy_from_slice(slice);
     let mint_ckb = U256::from(u128::from_le_bytes(mint_array));
@@ -631,7 +636,7 @@ pub extern "C" fn gw_create_contract_account(
     key[4] = 0xFF;
     key[5] = 0x01;
 
-    let code_slice = unsafe { std::slice::from_raw_parts(code, code_size as usize) };
+    let code_slice = std::slice::from_raw_parts(code, code_size as usize);
     let mut data_hash = [0u8; 32];
     let mut hasher = new_blake2b();
     hasher.update(code_slice);
@@ -651,7 +656,7 @@ pub extern "C" fn gw_create_contract_account(
     let code = Bytes::copy_from_slice(code_slice);
     state.insert_data(data_hash, code);
 
-    let size_ptr = unsafe { account_id_addr.as_mut().expect("casting pointer") };
+    let size_ptr = account_id_addr.as_mut().expect("casting pointer");
     *size_ptr = account_id;
     SUCCESS
 }
