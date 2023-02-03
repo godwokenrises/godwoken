@@ -41,10 +41,11 @@ use gw_utils::{checksum::file_checksum, RollupContext};
 
 use crate::{
     helper::{
-        build_eth_l2_script, build_l2_sudt_script, create_block_producer, load_program,
-        PolyjuiceArgsBuilder, CHAIN_ID, CREATOR_ACCOUNT_ID, ETH_ACCOUNT_LOCK_CODE_HASH,
-        L2TX_MAX_CYCLES, META_VALIDATOR_SCRIPT_TYPE_HASH, POLYJUICE_PROGRAM_CODE_HASH,
-        ROLLUP_SCRIPT_HASH, SECP_LOCK_CODE_HASH, SUDT_VALIDATOR_SCRIPT_TYPE_HASH,
+        build_eth_l2_script, build_l2_sudt_script, create_block_producer_with_coinbase,
+        load_program, PolyjuiceArgsBuilder, CHAIN_ID, CREATOR_ACCOUNT_ID,
+        ETH_ACCOUNT_LOCK_CODE_HASH, L2TX_MAX_CYCLES, META_VALIDATOR_SCRIPT_TYPE_HASH,
+        POLYJUICE_PROGRAM_CODE_HASH, ROLLUP_SCRIPT_HASH, SECP_LOCK_CODE_HASH,
+        SUDT_VALIDATOR_SCRIPT_TYPE_HASH,
     },
     new_dummy_state, DummyState,
 };
@@ -91,13 +92,9 @@ pub struct MockChain {
 }
 
 impl MockChain {
-    /**
-     * Setup with a base path. The base path is where we can find the **build**
-     * directory.
-     */
-    pub fn setup(base_path: &str) -> anyhow::Result<Self> {
+    pub fn setup_with_coinbase(base_path: &str, coinbase: Option<&str>) -> anyhow::Result<Self> {
         let mut ctx = Context::setup(base_path)?;
-        let block_producer = create_block_producer(&mut ctx.state);
+        let block_producer = create_block_producer_with_coinbase(&mut ctx.state, coinbase);
         let timestamp = SystemTime::now();
         Ok(Self {
             ctx,
@@ -106,6 +103,19 @@ impl MockChain {
             timestamp,
             l2tx_cycle_limit: L2TX_MAX_CYCLES,
         })
+    }
+    /**
+     * Setup with a base path. The base path is where we can find the **build**
+     * directory.
+     */
+    pub fn setup(base_path: &str) -> anyhow::Result<Self> {
+        Self::setup_with_coinbase(base_path, None)
+    }
+
+    pub fn get_storage(&self, account_id: u32, key: &H256) -> anyhow::Result<H256> {
+        let key = build_account_key(account_id, key.as_slice());
+        let val = self.ctx.state.get_raw(&key)?;
+        Ok(val)
     }
 
     pub fn set_max_cycles(&mut self, max_cycles: u64) {

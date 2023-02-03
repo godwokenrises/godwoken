@@ -52,7 +52,7 @@ jobs:
 
     - name: Run Ethereum Test
       working-directory: gwos-evm/polyjuice-tests
-      run: RUST_LOG=info,gw_generator=debug cargo test --release --test ethereum_test -- ethereum_test --nocapture
+      run: RUST_LOG=info,gw_generator=debug cargo test --release --test ethereum_test -- ethereum_vm_test --nocapture
 
     - name: Checksums of generator and validator
       run: |
