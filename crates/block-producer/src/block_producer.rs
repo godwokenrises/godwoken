@@ -134,6 +134,10 @@ impl BlockProducer {
         Ok(block_producer)
     }
 
+    pub fn generator(&self) -> &Generator {
+        &self.generator
+    }
+
     #[instrument(skip_all, fields(retry_count = retry_count))]
     pub async fn produce_next_block(
         &self,

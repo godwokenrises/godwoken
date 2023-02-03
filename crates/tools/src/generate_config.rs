@@ -230,6 +230,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         genesis,
         chain,
         system_type_scripts,
+        pending_l1_upgrades: Default::default(),
     };
 
     let store = StoreConfig {

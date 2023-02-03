@@ -1,4 +1,5 @@
 increase_max_l2_tx_cycles_to_500m = 825000
+
 [[backend_forks]]
 fork_height = 0
 sudt_proxy.permit_sudt_transfer_from_dangerous_contract = true

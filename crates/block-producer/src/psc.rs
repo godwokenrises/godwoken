@@ -23,7 +23,7 @@ use gw_types::{
 };
 use gw_utils::{
     abort_on_drop::spawn_abort_on_drop, liveness::Liveness, local_cells::LocalCellsManager,
-    since::Since,
+    since::Since, RollupContext,
 };
 use tokio::{
     signal::unix::{signal, SignalKind},
@@ -81,6 +81,12 @@ pub struct PSCContext {
     pub psc_config: PscConfig,
     pub block_sync_server_state: Option<Arc<std::sync::Mutex<BlockSyncServerState>>>,
     pub liveness: Arc<Liveness>,
+}
+
+impl PSCContext {
+    fn rollup_context(&self) -> &RollupContext {
+        self.block_producer.generator().rollup_context()
+    }
 }
 
 impl SyncL1Context for PSCContext {
@@ -252,6 +258,18 @@ async fn run(state: &mut ProduceSubmitConfirm) -> Result<()> {
             let context = state.context.clone();
             submit_handle.replace_with(tokio::spawn(async move {
                 loop {
+                    match submit_pending_l1_upgrade(&context).await {
+                        Ok(()) => (),
+                        Err(err) => {
+                            if err.is::<ShouldResyncError>() || err.is::<ShouldRevertError>() {
+                                bail!(err);
+                            }
+                            log::warn!("failed to submit pending l1 upgrade: {:#}", err);
+                            // TOOO: backoff.
+                            tokio::time::sleep(Duration::from_secs(20)).await;
+                        }
+                    }
+
                     match submit_next_block(&context).await {
                         Ok(nh) => return Ok(nh),
                         Err(err) => {
@@ -271,6 +289,18 @@ async fn run(state: &mut ProduceSubmitConfirm) -> Result<()> {
             let context = state.context.clone();
             confirm_handle.replace_with(tokio::spawn(async move {
                 loop {
+                    match confirm_pending_l1_upgrade(&context).await {
+                        Ok(()) => (),
+                        Err(err) => {
+                            if err.is::<ShouldResyncError>() || err.is::<ShouldRevertError>() {
+                                bail!(err);
+                            }
+                            log::warn!("failed to confirm pending l1 upgrade: {:#}", err);
+                            // TOOO: backoff.
+                            tokio::time::sleep(Duration::from_secs(3)).await;
+                        }
+                    }
+
                     match confirm_next_block(&context).await {
                         Ok(nh) => break Ok(nh),
                         Err(err) => {
@@ -733,6 +763,73 @@ async fn median_gte(rpc_client: &RPCClient, timestamp_millis: u64) -> Result<()>
         .get_block_median_time(tip.block_hash().unpack())
         .await?;
     ensure!(median >= Some(Duration::from_millis(timestamp_millis)));
+    Ok(())
+}
+
+/// Submit next pending l1 upgrade
+async fn submit_pending_l1_upgrade(ctx: &PSCContext) -> Result<()> {
+    let snap = ctx.store.get_snapshot();
+    let block_number = snap
+        .get_last_confirmed_block_number_hash()
+        .expect("last confirmed")
+        .number()
+        .unpack()
+        + 1;
+    drop(snap);
+
+    // find next l1 upgrade by block number
+    if let Some(l1_upgrade) = ctx
+        .rollup_context()
+        .fork_config
+        .pending_l1_upgrades
+        .iter()
+        .find(|l1_upgrade| l1_upgrade.height == block_number)
+    {
+        let tx: Transaction = l1_upgrade.signed_transaction.clone().into();
+        // update local cell and status
+        ctx.local_cells_manager
+            .lock()
+            .await
+            .apply_tx(&tx.as_reader());
+
+        log::info!(
+            "sending l1 upgrade transaction 0x{}",
+            hex::encode(tx.calc_tx_hash().as_slice())
+        );
+
+        // We can't recover from errors when sending l1 upgrade tx, so we just throw it
+        send_transaction_or_check_inputs(&ctx.rpc_client, &tx).await?;
+        log::info!("tx sent");
+    }
+    Ok(())
+}
+
+/// Confirm next pending l1 upgrade
+async fn confirm_pending_l1_upgrade(ctx: &PSCContext) -> Result<()> {
+    let snap = ctx.store.get_snapshot();
+    let block_number = snap
+        .get_last_confirmed_block_number_hash()
+        .expect("last confirmed")
+        .number()
+        .unpack()
+        + 1;
+    drop(snap);
+
+    // find next l1 upgrade by block number
+    if let Some(l1_upgrade) = ctx
+        .rollup_context()
+        .fork_config
+        .pending_l1_upgrades
+        .iter()
+        .find(|l1_upgrade| l1_upgrade.height == block_number)
+    {
+        let tx: Transaction = l1_upgrade.signed_transaction.clone().into();
+        // We can't recover from errors when confirming l1 upgrade tx,
+        // both deadcell error and unknwown cell is unacceptable, so we just throw it
+        poll_tx_confirmed(&ctx.rpc_client, &tx).await?;
+        log::info!("l1 upgrade tx confirmed");
+        ctx.local_cells_manager.lock().await.confirm_tx(&tx);
+    }
     Ok(())
 }
 
