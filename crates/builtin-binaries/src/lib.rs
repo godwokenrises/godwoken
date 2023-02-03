@@ -27,6 +27,7 @@ pub use bundled::BUNDLED;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 /// Represents a resource, which is either bundled in the GW binary or resident in the local file
 /// system.
@@ -125,4 +126,13 @@ fn join_bundled_key(mut root_dir: PathBuf, key: &str) -> PathBuf {
     key.split('/')
         .for_each(|component| root_dir.push(component));
     root_dir
+}
+
+pub fn content_checksum(content: &[u8]) -> [u8; 32] {
+    Sha256::digest(content).into()
+}
+
+pub fn file_checksum<P: AsRef<Path>>(path: P) -> Result<[u8; 32]> {
+    let content = std::fs::read(path)?;
+    Ok(content_checksum(&content))
 }

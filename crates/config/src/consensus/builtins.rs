@@ -25,7 +25,7 @@ pub fn mainnet() -> &'static ForkConfig {
 #[cfg(test)]
 mod tests {
     use ckb_fixed_hash::H256;
-    use gw_utils::checksum::content_checksum;
+    use gw_builtin_binaries::content_checksum;
 
     #[test]
     fn test_builtin_testnet_config() {
