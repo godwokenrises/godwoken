@@ -21,7 +21,7 @@ jobs:
         submodules: 'recursive'
 
     - name: Cache Rust - Cargo
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
         path: |
           ~/.cargo/bin/
@@ -36,7 +36,7 @@ jobs:
         || CARGO_TARGET_DIR=target/ cargo install moleculec --version $MOLC_VERSION --force
     - name: Cache LLVM and Clang
       id: cache-llvm
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
         path: ./llvm
         key: clang-11
@@ -44,7 +44,7 @@ jobs:
       run: echo "DATETIME=$(date +%F_%H:%M)" >> $GITHUB_ENV
     - name: Cache corpus
       id: cache-corpus
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
         path: |
           polyjuice-tests/fuzz/corpus-cache
