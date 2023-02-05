@@ -19,7 +19,7 @@ jobs:
     - uses: actions/checkout@v1
     - name: Install Rust components
       run: rustup component add rustfmt && rustup component add clippy
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       with:
         path: |
           ~/.cargo/registry
@@ -50,7 +50,7 @@ jobs:
     #  env:
     #    RUSTFLAGS: -D warnings
     #  run: cd contracts && cargo clippy
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       id: fetch-capsule-cache
       with:
         path: |
