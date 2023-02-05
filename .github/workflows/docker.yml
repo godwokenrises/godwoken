@@ -265,9 +265,8 @@ jobs:
       with:
         name: component.godwoken-${{ hashFiles('crates/**') }}
         path: target/release/
-    
-    - name: Display structure of downloaded files
-      run: ls -R
+    - name: Add executable permission to Godwoken binaries
+      run: chmod +x godwoken gw-tools
       working-directory: target/release/
 
     # Extract metadata (tags, labels) for Docker
@@ -328,14 +327,6 @@ jobs:
       run: |
         echo "image_name=`echo ${{ fromJSON(steps.meta.outputs.json).tags[0] }} | awk -F ':' '{print $1}'`" >> $GITHUB_OUTPUT
         echo "image_tag=`echo ${{ fromJSON(steps.meta.outputs.json).tags[0] }} | awk -F ':' '{print $NF}'`" >> $GITHUB_OUTPUT
-
-    # TODO: remove this step
-    - name: Setup tmate session
-      uses: mxschmitt/action-tmate@v3
-      if: ${{ failure() }}
-      timeout-minutes: 15
-      # with:
-      #   limit-access-to-actor: true
 
     # Map the meta step outputs to this job outputs
     outputs:
