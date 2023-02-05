@@ -27,213 +27,304 @@ env:
   IMAGE_NAME: godwoken
 
 jobs:
-  docker-build-push:
+  build-components:
     runs-on: ${{ inputs.runner_type || 'ubuntu-20.04' }}
-    # Map the meta step outputs to this job outputs
-    outputs:
-      image_name: ${{ steps.result.outputs.image_name }}
-      image_tag: ${{ steps.result.outputs.image_tag }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        submodules: true
+
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.runner_type || 'ubuntu-20.04' }}-cargo-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-${{ inputs.runner_type || 'ubuntu-20.04' }}-cargo-
+        
+    # https://github.com/ATiltedTree/setup-rust
+    - uses: ATiltedTree/setup-rust@v1
+      with:
+        rust-version: nightly
+        components: rustfmt clippy
+    - name: Install moleculec
+      run: |
+        test "$(moleculec --version)" = "Moleculec 0.7.2" \
+        || cargo install moleculec --version 0.7.2 --force
+    - name: Install capsule
+      env:
+        CAPSULE_VERSION: v0.7.0
+      run: |
+        (which capsule && test "$(capsule --version)" = "Capsule 0.7.0") \
+        || curl -OL https://github.com/nervosnetwork/capsule/releases/download/${CAPSULE_VERSION}/capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz \
+        && tar xf capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz \
+        && mv capsule_${CAPSULE_VERSION}_x86_64-linux/capsule ~/.cargo/bin/
+        capsule --version
+
+    - name: Prepare components
+      id: prepare
+      working-directory: docker
+      run: |
+        make prepare-repos
+        echo "Record the component's reference to the outputs of this step"
+        cat build/versions
+        cat build/versions >> $GITHUB_OUTPUT
+
+    - name: Cache of component.ckb-production-scripts
+      id: ckb-production-scripts-cache
+      uses: actions/cache@v3
+      with:
+        path: docker/build/ckb-production-scripts/build/omni_lock
+        key: component.omni_lock-${{ steps.prepare.outputs.ckb-production-scripts-sha1 }}
+    - name: Build omni_lock
+      if: steps.ckb-production-scripts-cache.outputs.cache-hit != 'true'
+      working-directory: docker/build/ckb-production-scripts
+      run: make all-via-docker
+    - name: Archive omni_lock binary
+      # TODO: upload only once
+      # if: steps.ckb-production-scripts-cache.outputs.cache-hit != 'true'
+      uses: actions/upload-artifact@v3
+      with:
+        name: component.omni_lock
+        path: |
+          docker/build/ckb-production-scripts/build/omni_lock
+          docker/build/versions
+
+    - name: Cache of component.gwos
+      id: gwos-cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          gwos/build/release/*
+          gwos/c/build/*-generator
+          gwos/c/build/*-validator
+          gwos/c/build/account_locks/*
+        key: component.gwos-${{ hashFiles('gwos/**') }}
+    - name: Build gwos
+      if: steps.gwos-cache.outputs.cache-hit != 'true'
+      working-directory: gwos
+      run: cd c && make && cd .. && capsule build --release --debug-output
+    - name: Archive gwos binaries
+      # TODO: upload only once
+      # if: steps.gwos-cache.outputs.cache-hit != 'true'
+      uses: actions/upload-artifact@v3
+      with:
+        name: component.gwos-${{ hashFiles('gwos/**') }}
+        path: |
+          gwos/build/release/*
+          gwos/c/build/*-generator
+          gwos/c/build/*-validator
+          gwos/c/build/account_locks/*
+
+    - name: Cache of component.gwos-evm
+      id: godwoken-polyjuice-cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          gwos-evm/build/*generator*
+          gwos-evm/build/*validator*
+        key: component.gwos-evm-${{ hashFiles('gwos-evm/**') }}
+    - name: Build godwoken-polyjuice
+      if: steps.godwoken-polyjuice-cache.outputs.cache-hit != 'true'
+      working-directory: gwos-evm
+      run: |
+        git submodule update --init --recursive --depth=1
+        make all-via-docker
+    - name: Archive godwoken-polyjuice binaries
+      # TODO: upload only once
+      # if: steps.godwoken-polyjuice-cache.outputs.cache-hit != 'true'
+      uses: actions/upload-artifact@v3
+      with:
+        name: component.gwos-evm-${{ hashFiles('gwos-evm/**') }}
+        path: |
+          gwos-evm/build/*generator*
+          gwos-evm/build/*validator*
+
+    # TODO: build godwoken in a single job
+    # TODO: build for alphanet
+    # see https://github.com/godwokenrises/godwoken/pull/946#discussion_r1068149031
+    - name: Cache of component.godwoken
+      id: godwoken-cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          target/release/godwoken
+          target/release/gw-tools
+        key: godwoken-${{ hashFiles('crates/**') }}
+    - name: Cache Godwoken target directory
+      if: steps.godwoken-cache.outputs.cache-hit != 'true'
+      uses: actions/cache@v3
+      with:
+        path: |
+          target
+        key: ${{ runner.os }}-focal-cargo-godwoken-${{ hashFiles('crates/**') }}
+        restore-keys: |
+          ${{ runner.os }}-focal-cargo-godwoken
+    - name: Build godwoken
+      if: steps.godwoken-cache.outputs.cache-hit != 'true'
+      # Use SSE4.2, POPCNT, etc. These are available on almost all x86 CPUs in use today, including rosetta 2.
+      run: |
+        echo "install libclang required by autorocks-sys"
+        sudo apt update && sudo apt install -y libclang-dev
+        RUSTFLAGS="-C target-cpu=x86-64-v2" CARGO_PROFILE_RELEASE_LTO=true cargo build --release
+    - name: Archive godwoken binaries
+      # TODO: upload only once
+      # if: steps.godwoken-cache.outputs.cache-hit != 'true'
+      uses: actions/upload-artifact@v3
+      with:
+        # TODO: just upload one time
+        name: component.godwoken-${{ hashFiles('crates/**') }}
+        path: |
+          target/release/godwoken
+          target/release/gw-tools
+
+
+    # Note: only enable tmate while debugging
+    # https://github.com/mxschmitt/action-tmate
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+      if: ${{ failure() }}
+      timeout-minutes: 15
+      # with:
+      #   limit-access-to-actor: true
+
+
+  # https://github.com/docker/build-push-action has a warning:
+  # > Subdirectory for Git context is available from BuildKit v0.9.0. If you're using the docker
+  # > builder (default if setup-buildx-action not used), then BuildKit in Docker Engine will be
+  # > used. As Docker Engine < v22.x.x embeds Buildkit 0.8.2 at the moment, it does not support
+  # > this feature. It's therefore required to use the setup-buildx-action at the moment.
+  #
+  # But there is an error while using setup-buildx-action in self-hosted runner:
+  # `ERROR: could not create a builder instance`
+  #
+  # So the `docker-build-push` step was simply moved to a separate job.
+  docker-build-push:
+    needs: build-components
+    runs-on: 'ubuntu-20.04'
     # If you specify the access for any of these scopes, all of those that are not specified are set to none.
     permissions:
       contents: read
       packages: write
-
+    # Map the meta step outputs to this job outputs
+    outputs:
+      image_name: ${{ steps.result.outputs.image_name }}
+      image_tag: ${{ steps.result.outputs.image_tag }}
+    
     steps:
-      # - name: Checkout repository
-      #   uses: actions/checkout@v3
-      #   with:
-      #     submodules: true
+    # Docker buildx is required by docker/build-push-action
+    # see https://github.com/docker/setup-buildx-action
+    # Note: By default, build-push-action uses the Git context, so you don't need to use the
+    # actions/checkout action to check out the repository as this will be done directly by BuildKit.
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@v2
 
-      # - uses: actions/cache@v3
-      #   with:
-      #     path: |
-      #       ~/.cargo/bin/
-      #       ~/.cargo/registry/index/
-      #       ~/.cargo/registry/cache/
-      #       ~/.cargo/git/db/
-      #     key: ${{ runner.os }}-cargo-${{ github.sha }}
-      #     restore-keys: |
-      #       ${{ runner.os }}-cargo-
-          
-      # # https://github.com/ATiltedTree/setup-rust
-      # - uses: ATiltedTree/setup-rust@v1
-      #   with:
-      #     rust-version: nightly
-      #     components: rustfmt clippy
+    # https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
+    - name: Download omni_lock
+      uses: actions/download-artifact@v3
+      with:
+        name: component.omni_lock
+        path: docker/build/
 
-      # - name: Install moleculec
-      #   run: |
-      #     test "$(moleculec --version)" = "Moleculec 0.7.2" \
-      #     || cargo install moleculec --version 0.7.2 --force
-      # - name: Install capsule
-      #   env:
-      #     CAPSULE_VERSION: v0.7.0
-      #   run: |
-      #     (which capsule && test "$(capsule --version)" = "Capsule 0.7.0") \
-      #     || curl -OL https://github.com/nervosnetwork/capsule/releases/download/${CAPSULE_VERSION}/capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz \
-      #     && tar xf capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz \
-      #     && mv capsule_${CAPSULE_VERSION}_x86_64-linux/capsule ~/.cargo/bin/
-      #     capsule --version
+    - name: Display structure of downloaded files
+      run: ls -R
+      working-directory: docker
 
-      # - name: Prepare components
-      #   id: prepare
-      #   working-directory: docker
-      #   run: |
-      #     make prepare-repos
-      #     echo "Record the component's reference to the outputs of this step"
-      #     cat build/versions >> $GITHUB_OUTPUT
+    # TODO: assert version 
+    # 1. github.sha == godwoken-sha1
+    # 2. OMNI_LOCK_REF
 
-      # - name: Print the references of components
-      #   run: |
-      #     echo ref.component.godwoken=${{ steps.prepare.outputs.GODWOKEN_REF }}
-      #     echo ref.component.gwos=${{ steps.prepare.outputs.GODWOKEN_REF }}
-      #     echo ref.component.gwos-evm=${{ steps.prepare.outputs.GODWOKEN_REF }}
-      #     echo ref.component.ckb-production-scripts=${{ steps.prepare.outputs.OMNI_LOCK_REF }}
+    - name: Download component.gwos
+      uses: actions/download-artifact@v3
+      with:
+        name: component.gwos-${{ hashFiles('gwos/**') }}
+        path: gwos/
 
-      # - name: Cache of component.ckb-production-scripts
-      #   id: ckb-production-scripts-cache
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: docker/build/ckb-production-scripts/build/omni_lock
-      #     key: component.ckb-production-scripts-${{ steps.prepare.outputs.ckb-production-scripts-sha1 }}
-      # - name: Build omni_lock
-      #   if: steps.ckb-production-scripts-cache.outputs.cache-hit != 'true'
-      #   working-directory: docker/build/ckb-production-scripts
-      #   run: make all-via-docker
+    - name: Display structure of downloaded files
+      run: ls -R
+      working-directory: gwos
 
-      # - name: Cache of component.gwos
-      #   id: gwos-cache
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: |
-      #       gwos/build/release/*
-      #       gwos/c/build/*-generator
-      #       gwos/c/build/*-validator
-      #       gwos/c/build/account_locks/*
-      #     key: component.gwos-${{ hashFiles('gwos/**') }}
-      # - name: Build gwos binaries
-      #   if: steps.gwos-cache.outputs.cache-hit != 'true'
-      #   working-directory: gwos
-      #   run: cd c && make && cd .. && capsule build --release --debug-output
+    - name: Download component.gwos-evm
+      uses: actions/download-artifact@v3
+      with:
+        name: component.gwos-evm-${{ hashFiles('gwos-evm/**') }}
+        path: gwos-evm/build/
 
-      # - name: Cache of component.gwos-evm
-      #   id: godwoken-polyjuice-cache
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: |
-      #       gwos-evm/build/*generator*
-      #       gwos-evm/build/*validator*
-      #     key: component.gwos-evm-${{ hashFiles('gwos-evm/**') }}
-      # - name: Build godwoken-polyjuice
-      #   if: steps.godwoken-polyjuice-cache.outputs.cache-hit != 'true'
-      #   working-directory: gwos-evm
-      #   run: |
-      #     git submodule update --init --recursive --depth=1
-      #     make all-via-docker
+    - name: Display structure of downloaded files
+      run: ls -R
+      working-directory: gwos-evm/build/
 
-      # - name: Cache of component.godwoken
-      #   id: godwoken-cache
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: |
-      #       target/release/godwoken
-      #       target/release/gw-tools
-      #     key: component.godwoken-crates-${{ hashFiles('crates/**') }}
-      # - name: Cache Godwoken target directory
-      #   if: steps.godwoken-cache.outputs.cache-hit != 'true'
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: |
-      #       target
-      #     key: ${{ runner.os }}-focal-cargo-${{ github.sha }}
-      #     restore-keys: |
-      #       ${{ runner.os }}-focal-cargo-
-      # - name: Build godwoken
-      #   if: steps.godwoken-cache.outputs.cache-hit != 'true'
-      #   # Use SSE4.2, POPCNT, etc. These are available on almost all x86 CPUs in use today, including rosetta 2.
-      #   run: |
-      #     rustup component add rustfmt
-      #     RUSTFLAGS="-C target-cpu=x86-64-v2" CARGO_PROFILE_RELEASE_LTO=true cargo build --release
+    # Extract metadata (tags, labels) for Docker
+    # https://github.com/docker/metadata-action
+    - name: Extract Docker metadata
+      id: meta
+      uses: docker/metadata-action@v4
+      with:
+        images: ${{ env.REGISTRY }}${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+        # dynamically set date as a suffix
+        tags: |
+          type=ref,event=tag
+          type=ref,event=branch,suffix=-{{date 'YYYYMMDDHHmm'}}
+          type=ref,event=branch
+        labels: |
+          maintainer=Godwoken Core Dev
+          org.opencontainers.image.authors=Godwoken Core Dev
+          source.component.godwoken=https://github.com/godwokenrises/godwoken/tree/${{ github.sha }}
+          source.component.gwos=https://github.com/godwokenrises/godwoken/tree/${{ github.sha }}/gwos
+          source.component.gwos-evm=https://github.com/godwokenrises/godwoken/tree/${{ github.sha }}/gwos-evm
+          source.component.omni_lock=https://github.com/nervosnetwork/ckb-production-scripts/tree/rc_lock
 
-      - name: Create a context for current environment
-        run: docker context create current-context
-      # Docker buildx is required by docker/build-push-action
-      # see https://github.com/docker/setup-buildx-action
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v2
+    # Login against a Docker registry except on PR
+    # https://github.com/docker/login-action
+    # GitHub automatically creates a unique GITHUB_TOKEN secret to use in this workflow.
+    - name: Log into registry ${{ env.REGISTRY }}
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v2
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Login against a Docker registry except on PR
-      # https://github.com/docker/login-action
-      # GitHub automatically creates a unique GITHUB_TOKEN secret to use in this workflow.
-      - name: Log into registry ${{ env.REGISTRY }}
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v2
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+    # Build and push Docker image with Buildx (don't push on PR)
+    # https://github.com/docker/build-push-action
+    - name: Build and push Docker image to ${{ env.REGISTRY }}${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+      uses: docker/build-push-action@v3
+      with:
+        # context: .
+        file: docker/Dockerfile
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
 
-      # Extract metadata (tags, labels) for Docker
-      # https://github.com/docker/metadata-action
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          images: ${{ env.REGISTRY }}${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
-          # dynamically set date as a suffix
-          tags: |
-            type=ref,event=tag
-            type=ref,event=branch,suffix=-{{date 'YYYYMMDDHHmm'}}
-            type=ref,event=branch
-          labels: |
-            maintainer=Godwoken Core Dev
-            org.opencontainers.image.authors=Godwoken Core Dev
-            source.component.godwoken=https://github.com/godwokenrises/godwoken/tree/${{steps.prepare.outputs.godwoken-sha1 }}
-            source.component.gwos=https://github.com/godwokenrises/godwoken/tree/${{steps.prepare.outputs.godwoken-sha1 }}/gwos
-            source.component.gwos-evm=https://github.com/godwokenrises/godwoken/tree/${{steps.prepare.outputs.godwoken-sha1 }}/gwos-evm
-            source.component.ckb-production-scripts=https://github.com/nervosnetwork/ckb-production-scripts/tree/${{steps.prepare.outputs.OMNI_LOCK_REF }}
-            ref.component.godwoken=${{ steps.prepare.outputs.GODWOKEN_REF }}
-            ref.component.godwoken-sha1=${{ steps.prepare.outputs.godwoken-sha1 }}
-            ref.component.gwos=${{ steps.prepare.outputs.GODWOKEN_REF }}
-            ref.component.gwos-sha1=${{ steps.prepare.outputs.godwoken-sha1 }}
-            ref.component.gwos-evm=${{ steps.prepare.outputs.GODWOKEN_REF }}
-            ref.component.gwos-evm-sha1=${{ steps.prepare.outputs.godwoken-sha1 }}
-            ref.component.ckb-production-scripts=${{ steps.prepare.outputs.OMNI_LOCK_REF }}
-            ref.component.ckb-production-scripts-sha1=${{ steps.prepare.outputs.ckb-production-scripts-sha1 }}
+    - name: Check versions of the binaries in ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+      if: ${{ github.event_name != 'pull_request' }}
+      env:
+        IMAGE: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+      run: |
+        docker run --rm ${{ env.IMAGE }} godwoken --version
+        docker run --rm ${{ env.IMAGE }} gw-tools --version
+        docker run --rm ${{ env.IMAGE }} ckb --version
+        docker run --rm ${{ env.IMAGE }} ckb-cli --version
+        docker run --rm ${{ env.IMAGE }} find /scripts -type f -exec sha256sum {} \;
 
-      # Build and push Docker image with Buildx (don't push on PR)
-      # https://github.com/docker/build-push-action
-      - name: Build and push Docker image to ${{ env.REGISTRY }}${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
-        uses: docker/build-push-action@v3
-        with:
-          context: .
-          file: docker/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+    - name: Record image info to the outputs of this jobs
+      id: result
+      run: |
+        echo "image_name=`echo ${{ fromJSON(steps.meta.outputs.json).tags[0] }} | awk -F ':' '{print $1}'`" >> $GITHUB_OUTPUT
+        echo "image_tag=`echo ${{ fromJSON(steps.meta.outputs.json).tags[0] }} | awk -F ':' '{print $NF}'`" >> $GITHUB_OUTPUT
 
-      - name: Check versions of the binaries in ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
-        if: ${{ github.event_name != 'pull_request' }}
-        env:
-          IMAGE: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
-        run: |
-          docker run --rm ${{ env.IMAGE }} godwoken --version
-          docker run --rm ${{ env.IMAGE }} gw-tools --version
-          docker run --rm ${{ env.IMAGE }} ckb --version
-          docker run --rm ${{ env.IMAGE }} ckb-cli --version
-          docker run --rm ${{ env.IMAGE }} find /scripts -type f -exec sha256sum {} \;
-
-      - name: Record image info to the outputs of this jobs
-        id: result
-        run: |
-          echo "image_name=`echo ${{ fromJSON(steps.meta.outputs.json).tags[0] }} | awk -F ':' '{print $1}'`" >> $GITHUB_OUTPUT
-          echo "image_tag=`echo ${{ fromJSON(steps.meta.outputs.json).tags[0] }} | awk -F ':' '{print $NF}'`" >> $GITHUB_OUTPUT
-
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-        if: ${{ failure() }}
-        # with:
-        #   limit-access-to-actor: true
+    # TODO: remove this step
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+      if: ${{ failure() }}
+      timeout-minutes: 15
+      # with:
+      #   limit-access-to-actor: true
 
   integration-test:
     needs: docker-build-push
