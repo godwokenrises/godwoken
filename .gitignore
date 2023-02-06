@@ -5,6 +5,7 @@ crates/benches/smt_data/db/
 crates/tests/mem_block/
 gwos-evm/deps/ckb-binary-patcher/
 gwos-evm/polyjuice-tests/Cargo.lock
+gwos-evm/polyjuice-tests/fuzz/gw-syscall-simulator/Cargo.lock
 
 node_modules
 web3/node_modules/
