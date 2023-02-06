@@ -126,7 +126,6 @@ impl GodwokenHost {
             .state
             .get_raw(key)
             .map_err(|err| anyhow!(err.to_string()))?;
-        self.run_result.read_data_hashes.insert(*key);
         Ok(tree_value)
     }
     fn get_account_id_by_script_hash(&mut self, script_hash: &H256) -> Result<Option<u32>> {
@@ -243,14 +242,10 @@ pub unsafe extern "C" fn gw_create(
     host.state
         .update_raw(account_nonce_key, H256::zero())
         .expect("account nonce key");
-    host.run_result.write_data_hashes.insert(account_nonce_key);
     let account_script_hash_key = build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH_TYPE);
     host.state
         .update_raw(account_script_hash_key, script_hash)
         .expect("account script hash key");
-    host.run_result
-        .write_data_hashes
-        .insert(account_script_hash_key);
     // script hash to id
     let script_hash_to_id_value: H256 = {
         let mut buf: [u8; 32] = H256::from_u32(id).into();
@@ -262,9 +257,6 @@ pub unsafe extern "C" fn gw_create(
     host.state
         .update_raw(script_hash_to_account_id_key, script_hash_to_id_value)
         .expect("write script hash to account id key");
-    host.run_result
-        .write_data_hashes
-        .insert(script_hash_to_account_id_key);
     // insert script
     host.state.insert_script(script_hash, script);
     host.state
@@ -309,8 +301,6 @@ pub unsafe extern "C" fn gw_store_data(data_addr: *const u8, len: u64) -> c_int 
         .expect("gw store data");
     host.state.insert_data(data_hash.into(), data);
 
-    host.run_result.write_data_hashes.insert(data_hash_key);
-    host.run_result.write_data_hashes.insert(data_hash.into());
     SUCCESS
 }
 
