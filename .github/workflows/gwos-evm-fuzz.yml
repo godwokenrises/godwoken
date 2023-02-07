@@ -103,4 +103,4 @@ jobs:
       with:
         name: corpus
         path: |
-          polyjuice-tests/fuzz/corpus-cache/*
+          gwos-evm/polyjuice-tests/fuzz/corpus-cache/*
