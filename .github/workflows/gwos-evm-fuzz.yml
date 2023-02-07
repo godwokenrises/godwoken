@@ -7,6 +7,8 @@ on:
   pull_request:
     paths:
       - 'gwos-evm/**'
+  schedule:
+    - cron: 0 * * * *
 
 jobs:
   build-and-run-fuzzing:
@@ -61,11 +63,9 @@ jobs:
     - name: Set MAX_FUZZ_TIME for different branches
       run: |
         if [[ ${{ github.event_name == 'pull_request' }} ]]; then
-          echo "MAX_FUZZ_TIME=6" >> $GITHUB_ENV
-        elif [[ ${{ startsWith(github.base_ref, 'fuzz') }} ]]; then
-          echo "MAX_FUZZ_TIME=3600" >> $GITHUB_ENV
-        else
           echo "MAX_FUZZ_TIME=60" >> $GITHUB_ENV
+        else
+          echo "MAX_FUZZ_TIME=3600" >> $GITHUB_ENV
         fi
 
     - name: Fuzzing Polyjuice Generator 1 hour
