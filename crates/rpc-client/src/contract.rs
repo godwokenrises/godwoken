@@ -3,8 +3,10 @@ use std::{collections::HashMap, sync::Arc, time::Instant};
 use anyhow::{anyhow, bail, Result};
 use arc_swap::ArcSwap;
 pub use arc_swap::Guard;
+use ckb_types::packed::Transaction;
 use gw_config::{ContractsCellDep, SystemTypeScriptConfig};
 use gw_jsonrpc_types::{
+    blockchain::OutPoint,
     ckb_jsonrpc_types::{CellDep, Script},
     JsonCalcHash,
 };
@@ -31,7 +33,7 @@ impl ContractsCellDepManager {
         rollup_config_cell_dep: CellDep,
     ) -> Result<Self> {
         let now = Instant::now();
-        let deps = query_cell_deps(&rpc_client, &scripts, rollup_config_cell_dep).await?;
+        let deps = query_cell_deps(&rpc_client, &scripts, rollup_config_cell_dep, None).await?;
         log::trace!("[contracts dep] build {}ms", now.elapsed().as_millis());
 
         Ok(Self {
@@ -50,14 +52,20 @@ impl ContractsCellDepManager {
     }
 
     #[instrument(skip_all)]
-    pub async fn refresh(&self) -> Result<()> {
+    pub async fn refresh(&self, local_tx: Option<Transaction>) -> Result<()> {
         log::info!("[contracts dep] refresh");
 
         // rollup_config_cell is identify by data_hash but not type_hash
         let rollup_config_cell_dep = self.load().rollup_config.clone();
 
         let now = Instant::now();
-        let deps = query_cell_deps(&self.rpc_client, &self.scripts, rollup_config_cell_dep).await?;
+        let deps = query_cell_deps(
+            &self.rpc_client,
+            &self.scripts,
+            rollup_config_cell_dep,
+            local_tx,
+        )
+        .await?;
         log::trace!("[contracts dep] refresh {}ms", now.elapsed().as_millis());
 
         self.deps.store(Arc::new(deps));
@@ -118,13 +126,14 @@ pub fn check_script(
     Ok(())
 }
 
-pub async fn query_cell_deps(
+async fn query_cell_deps(
     rpc_client: &RPCClient,
     script_config: &SystemTypeScriptConfig,
     rollup_config_cell_dep: CellDep,
+    local_tx: Option<Transaction>,
 ) -> Result<ContractsCellDep> {
     let query = |contract, type_script: Script| -> _ {
-        query_by_type_script(rpc_client, contract, type_script)
+        query_by_type_script(rpc_client, contract, type_script, local_tx.clone())
     };
 
     let rollup_cell_type = query("state validator", script_config.state_validator.clone()).await?;
@@ -170,9 +179,37 @@ async fn query_by_type_script(
     rpc_client: &RPCClient,
     contract: &'static str,
     type_script: Script,
+    local_tx: Option<Transaction>,
 ) -> Result<CellDep> {
     use gw_jsonrpc_types::ckb_jsonrpc_types::{DepType, Uint32};
 
+    // try to query cell from local tx
+    if let Some(local_tx) = local_tx {
+        let type_: ckb_types::packed::Script = type_script.clone().into();
+        if let Some((index, _cell)) =
+            local_tx
+                .raw()
+                .outputs()
+                .into_iter()
+                .enumerate()
+                .find(|(_i, cell)| {
+                    cell.type_()
+                        .to_opt()
+                        .map(|script| script == type_)
+                        .unwrap_or(false)
+                })
+        {
+            return Ok(CellDep {
+                dep_type: DepType::Code,
+                out_point: OutPoint {
+                    tx_hash: local_tx.hash().into(),
+                    index: (index as u32).into(),
+                },
+            });
+        }
+    }
+
+    // search from CKB indexer API
     let search_key = SearchKey {
         script: type_script.clone(),
         script_type: ScriptType::Type,

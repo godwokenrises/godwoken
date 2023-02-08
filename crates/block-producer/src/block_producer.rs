@@ -138,6 +138,10 @@ impl BlockProducer {
         &self.generator
     }
 
+    pub fn contracts_dep_manager(&self) -> &ContractsCellDepManager {
+        &self.contracts_dep_manager
+    }
+
     #[instrument(skip_all, fields(retry_count = retry_count))]
     pub async fn produce_next_block(
         &self,
