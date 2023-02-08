@@ -22,7 +22,7 @@ jobs:
       run:
         working-directory: web3
 
-   steps:
+    steps:
 
     # Godwoken-Kicker
     - uses: actions/checkout@v3
