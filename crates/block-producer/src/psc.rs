@@ -800,6 +800,12 @@ async fn submit_pending_l1_upgrade(ctx: &PSCContext) -> Result<()> {
         // We can't recover from errors when sending l1 upgrade tx, so we just throw it
         send_transaction_or_check_inputs(&ctx.rpc_client, &tx).await?;
         log::info!("tx sent");
+
+        // Refresh block producer's contracts deps
+        ctx.block_producer
+            .contracts_dep_manager()
+            .refresh(Some(tx))
+            .await?;
     }
     Ok(())
 }
