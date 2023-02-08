@@ -1,6 +1,6 @@
 [package]
 name = "gw-web3-indexer"
-version = "0.1.0"
+version = "1.12.0-rc1"
 authors = ["Nervos Network"]
 edition = "2021"
 
