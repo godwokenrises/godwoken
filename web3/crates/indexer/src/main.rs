@@ -3,8 +3,12 @@ use std::env;
 
 use anyhow::Result;
 
-fn main() -> Result<()> {
-    init_log();
+fn main() {
+    run().unwrap();
+}
+
+fn run() -> Result<()> {
+    env_logger::init();
     let indexer_config = load_indexer_config("./indexer-config.toml")?;
 
     if indexer_config.sentry_dsn.is_some() {
@@ -55,14 +59,4 @@ fn main() -> Result<()> {
     }
 
     Ok(())
-}
-
-fn init_log() {
-    let logger = env_logger::builder()
-        .parse_env(env_logger::Env::default().default_filter_or("info"))
-        .build();
-    let level = logger.filter();
-    log::set_boxed_logger(Box::new(logger))
-        .map(|()| log::set_max_level(level))
-        .expect("set log");
 }
