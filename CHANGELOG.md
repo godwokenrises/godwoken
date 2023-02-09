@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 The `web3` and `web3-indexer` components have been added to the monorepo since this release, and we bumped the version from `v1.8.x` to `v1.12.x` to unify the version.
 
-We introduce a breaking change of the config file in [#946](https://github.com/godwokenrises/godwoken/pull/946). The consensus-related options are moved into option `consensus`, and we put the `testnet` and `mainnet` consensus builtin into the godwoken program. This change reduces the operation works of node maintainers.
+We introduced a breaking change of the config file in [#946](https://github.com/godwokenrises/godwoken/pull/946). The consensus-related options are moved into option `consensus`, and we put the builtin `testnet` and `mainnet` consensus into the godwoken program. This change reduces the operation works of node maintainers.
 
 Highlights:
 
