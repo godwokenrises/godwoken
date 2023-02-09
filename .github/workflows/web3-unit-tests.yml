@@ -3,10 +3,8 @@ name: Web3 Unit Tests
 on:
   push:
     paths:
-      - 'web3/**'
+    - 'web3/**'
   pull_request:
-    paths:
-      - 'web3/**'
 
 env:
   # Environment variables propagated to godwoken-kicker
@@ -16,11 +14,8 @@ env:
   WEB3_GIT_CHECKOUT: "${{ github.sha }}"
 
 jobs:
-  unit-tests:
+  web3-unit-tests:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web3
 
     steps:
 
@@ -38,9 +33,7 @@ jobs:
         (echo " == kicker start attempt: 2 == " && ./kicker stop && ./kicker start) || \
         (echo " == kicker start failed == " && docker-compose --file docker/docker-compose.yml logs --tail 6 && exit 1)
         docker-compose --file docker/docker-compose.yml logs --tail 6
-      # FIXME: Sometimes, Godwoken service is not running
-      # https://github.com/Flouse/godwoken/runs/3639382192?check_suite_focus=true#step:8:667
-    - name: Kicker ps
+    - name: Kicker ps and logs
       run: sleep 60 && ./kicker ps && ./kicker logs web3
     - name: Store kicker network information as environment variables
       run: |
@@ -51,9 +44,19 @@ jobs:
     # Godwoken-Web3
     - uses: actions/checkout@v3
       with:
-        path: godwoken-web3
-    - name: Yarn run test
-      working-directory: godwoken-web3
+        path: godwoken-monorepo
+    - name: Get yarn cache directory path
+      id: yarn-cache-dir-path
+      run: echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT
+    - uses: actions/cache@v3
+      id: yarn-cache # use this to check for `cache-hit` (`steps.yarn-cache.outputs.cache-hit != 'true'`)
+      with:
+        path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+        key: ${{ runner.os }}-yarn-${{ hashFiles('godwoken-monorepo/**/yarn.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-yarn-
+    - name: Godwoken Web3 | yarn run test
+      working-directory: godwoken-monorepo/web3
       run: yarn && yarn run build && yarn run test
 
     - name: Kicker logs if failure
