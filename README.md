@@ -2,7 +2,7 @@
 
 Welcome to the Godwoken Monorepo! This repository is the home of the Godwoken project.
 
-Godwoken is a key component of Nervos' layer-2, working in conjunction with the Rollup technique to create a scalable, EVM-compatible layer for the Nervos network. With Godwoken, developers can build decentralized applications (dapps) on the Ethereum Virtual Machine (EVM) and run them on the Nervos network, increasing the scalability and efficiency of the network.
+Godwoken is a key component of Nervos' layer-2, working in conjunction with the Rollup technique to create a scalable, EVM-compatible layer for the Nervos network. With Godwoken, developers can build decentralized applications (dApps) on the Ethereum Virtual Machine (EVM) and run them on the Nervos network, increasing the scalability and efficiency of the network.
 
 Godwoken provides a solution for dApp builders who seek the advantages of Ethereum - Like its community, good tools, and documentation - but not the drawbacks that Ethereum faces, such as network congestion, high gas fees, oversaturation and scalability issues.
 
