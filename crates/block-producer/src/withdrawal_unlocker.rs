@@ -1,33 +1,29 @@
 #![allow(clippy::mutable_key_type)]
 
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use gw_config::{ContractsCellDep, DebugConfig};
-use gw_rpc_client::contract::ContractsCellDepManager;
-use gw_rpc_client::rpc_client::RPCClient;
-use gw_types::h256::*;
-use gw_types::offchain::{global_state_from_slice, CellInfo, CompatibleFinalizedTimepoint};
-use gw_types::packed::{OutPoint, RollupConfig, Transaction};
-use gw_types::prelude::*;
-use gw_utils::fee::fill_tx_fee;
-use gw_utils::genesis_info::CKBGenesisInfo;
-use gw_utils::local_cells::LocalCellsManager;
-use gw_utils::query_rollup_cell;
-use gw_utils::transaction_skeleton::TransactionSkeleton;
-use gw_utils::wallet::Wallet;
+pub use gw_rpc_client::contract::Guard;
+use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
+use gw_types::{
+    h256::*,
+    offchain::{global_state_from_slice, CellInfo, CompatibleFinalizedTimepoint},
+    packed::{OutPoint, RollupConfig, Transaction},
+    prelude::*,
+};
+use gw_utils::{
+    fee::fill_tx_fee, genesis_info::CKBGenesisInfo, local_cells::LocalCellsManager,
+    query_rollup_cell, transaction_skeleton::TransactionSkeleton, wallet::Wallet,
+};
 use tokio::sync::Mutex;
 use tracing::instrument;
 
-use crate::types::ChainEvent;
-use crate::utils;
-
-use crate::utils::global_state_last_finalized_timepoint_to_since;
-pub use gw_rpc_client::contract::Guard;
-
-const TRANSACTION_FAILED_TO_RESOLVE_ERROR: &str = "TransactionFailedToResolve";
+use crate::{types::ChainEvent, utils, utils::global_state_last_finalized_timepoint_to_since};
 
 pub struct FinalizedWithdrawalUnlocker {
     unlocker: DefaultUnlocker,
@@ -68,25 +64,12 @@ impl FinalizedWithdrawalUnlocker {
         let unlocked = &self.unlocked_set;
         let rpc_client = &self.unlocker.rpc_client;
         if let Some((tx, to_unlock)) = self.unlocker.query_and_unlock_to_owner(unlocked).await? {
-            if let Err(err) = rpc_client.dry_run_transaction(&tx).await {
-                let err_string = err.to_string();
-                if err_string.contains(TRANSACTION_FAILED_TO_RESOLVE_ERROR) {
-                    // NOTE: Maybe unlocked withdrawals are included, this happens after restart.
-                    // Wait indexer remove these cells.
-                    log::info!(
-                        "[unlock withdrawal] failed to resolve, wait unlocked become committed"
-                    );
-                    return Ok(());
-                }
-                bail!("dry unlock tx failed {}", err);
-            }
-
             let tx_hash = match rpc_client.send_transaction(&tx).await {
                 Ok(tx_hash) => tx_hash,
                 Err(err) => {
                     let debug_tx_dump_path = &self.debug_config.debug_tx_dump_path;
                     utils::dump_transaction(debug_tx_dump_path, rpc_client, &tx).await;
-                    bail!("send tx failed {}", err);
+                    bail!(err);
                 }
             };
 
@@ -106,7 +89,10 @@ impl FinalizedWithdrawalUnlocker {
             match rpc_client.ckb.get_transaction_status(*tx_hash).await {
                 Err(err) => {
                     // Always drop this unlock tx and retry to avoid "lock" withdrawal cell
-                    log::info!("[unlock withdrawal] get unlock tx failed {}, drop it", err);
+                    log::info!(
+                        "[unlock withdrawal] get unlock tx failed {:#}, drop it",
+                        err
+                    );
                     drop_txs.push(*tx_hash);
                 }
                 Ok(None) => {
