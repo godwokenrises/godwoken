@@ -30,7 +30,7 @@ impl TracingHttpClient {
         self.inner.url()
     }
 
-    #[instrument(target = "gw-rpc-client", skip_all, err, fields(method, params = field::Empty))]
+    #[instrument(target = "gw-rpc-client", skip_all, fields(method, params = field::Empty))]
     pub async fn rpc(
         &self,
         method: &str,
