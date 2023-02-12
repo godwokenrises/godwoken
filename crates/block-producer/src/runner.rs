@@ -1,14 +1,10 @@
-use crate::{
-    block_producer::{BlockProducer, BlockProducerCreateArgs},
-    block_sync_client::{block_sync_client_protocol, BlockSyncClient, P2PStream},
-    chain_updater::ChainUpdater,
-    challenger::{Challenger, ChallengerNewArgs},
-    cleaner::Cleaner,
-    psc::{PSCContext, ProduceSubmitConfirm},
-    test_mode_control::TestModeControl,
-    types::ChainEvent,
-    withdrawal_unlocker::FinalizedWithdrawalUnlocker,
+use std::{
+    collections::HashMap,
+    net::{SocketAddr, ToSocketAddrs},
+    sync::Arc,
+    time::{Duration, Instant},
 };
+
 use anyhow::{anyhow, bail, Context, Result};
 use futures::future::OptionFuture;
 use gw_chain::chain::Chain;
@@ -39,8 +35,10 @@ use gw_rpc_server::{
     registry::{BoxedTestModeRpc, Registry, RegistryArgs},
     server::start_jsonrpc_server,
 };
-use gw_store::migrate::{init_migration_factory, open_or_create_db};
-use gw_store::Store;
+use gw_store::{
+    migrate::{init_migration_factory, open_or_create_db},
+    Store,
+};
 use gw_types::{
     bytes::Bytes,
     core::AllowedEoaType,
@@ -48,24 +46,29 @@ use gw_types::{
     packed::{Byte32, CellDep, NumberHash, RollupConfig, Script},
     prelude::*,
 };
-use gw_utils::RollupContext;
 use gw_utils::{
     exponential_backoff::ExponentialBackoff, genesis_info::CKBGenesisInfo, liveness::Liveness,
-    local_cells::LocalCellsManager, wallet::Wallet,
+    local_cells::LocalCellsManager, wallet::Wallet, RollupContext,
 };
 use semver::Version;
-use std::{
-    collections::HashMap,
-    net::{SocketAddr, ToSocketAddrs},
-    sync::Arc,
-    time::{Duration, Instant},
-};
 use tentacle::service::ProtocolMeta;
 use tokio::{
     spawn,
     sync::{broadcast, mpsc, Mutex},
 };
 use tracing::{info_span, instrument};
+
+use crate::{
+    block_producer::{BlockProducer, BlockProducerCreateArgs},
+    block_sync_client::{block_sync_client_protocol, BlockSyncClient, P2PStream},
+    chain_updater::ChainUpdater,
+    challenger::{Challenger, ChallengerNewArgs},
+    cleaner::Cleaner,
+    psc::{PSCContext, ProduceSubmitConfirm},
+    test_mode_control::TestModeControl,
+    types::ChainEvent,
+    withdrawal_unlocker::FinalizedWithdrawalUnlocker,
+};
 
 const MIN_CKB_VERSION: &str = "0.40.0";
 const EVENT_TIMEOUT_SECONDS: u64 = 30;
@@ -167,7 +170,7 @@ impl ChainTask {
 
             if let Some(ref mut withdrawal_unlocker) = ctx.withdrawal_unlocker {
                 if let Err(err) = withdrawal_unlocker.handle_event(&event).await {
-                    log::error!("[unlock withdrawal] {}", err);
+                    log::error!("[unlock withdrawal] {:#}", err);
                 }
             }
 
