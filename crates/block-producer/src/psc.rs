@@ -258,17 +258,9 @@ async fn run(state: &mut ProduceSubmitConfirm) -> Result<()> {
             let context = state.context.clone();
             submit_handle.replace_with(tokio::spawn(async move {
                 loop {
-                    match submit_pending_l1_upgrade(&context).await {
-                        Ok(()) => (),
-                        Err(err) => {
-                            if err.is::<ShouldResyncError>() || err.is::<ShouldRevertError>() {
-                                bail!(err);
-                            }
-                            log::warn!("failed to submit pending l1 upgrade: {:#}", err);
-                            // TOOO: backoff.
-                            tokio::time::sleep(Duration::from_secs(20)).await;
-                        }
-                    }
+                    submit_pending_l1_upgrade(&context)
+                        .await
+                        .with_context(|| "failed to submit pending l1 upgrade")?;
 
                     match submit_next_block(&context).await {
                         Ok(nh) => return Ok(nh),
@@ -289,17 +281,9 @@ async fn run(state: &mut ProduceSubmitConfirm) -> Result<()> {
             let context = state.context.clone();
             confirm_handle.replace_with(tokio::spawn(async move {
                 loop {
-                    match confirm_pending_l1_upgrade(&context).await {
-                        Ok(()) => (),
-                        Err(err) => {
-                            if err.is::<ShouldResyncError>() || err.is::<ShouldRevertError>() {
-                                bail!(err);
-                            }
-                            log::warn!("failed to confirm pending l1 upgrade: {:#}", err);
-                            // TOOO: backoff.
-                            tokio::time::sleep(Duration::from_secs(3)).await;
-                        }
-                    }
+                    confirm_pending_l1_upgrade(&context)
+                        .await
+                        .with_context(|| "failed to confirm pending l1 upgrade")?;
 
                     match confirm_next_block(&context).await {
                         Ok(nh) => break Ok(nh),
@@ -770,8 +754,8 @@ async fn median_gte(rpc_client: &RPCClient, timestamp_millis: u64) -> Result<()>
 async fn submit_pending_l1_upgrade(ctx: &PSCContext) -> Result<()> {
     let snap = ctx.store.get_snapshot();
     let block_number = snap
-        .get_last_confirmed_block_number_hash()
-        .expect("last confirmed")
+        .get_last_submitted_block_number_hash()
+        .expect("last submitted")
         .number()
         .unpack()
         + 1;
@@ -786,12 +770,6 @@ async fn submit_pending_l1_upgrade(ctx: &PSCContext) -> Result<()> {
         .find(|l1_upgrade| l1_upgrade.height == block_number)
     {
         let tx: Transaction = l1_upgrade.signed_transaction.clone().into();
-        // update local cell and status
-        ctx.local_cells_manager
-            .lock()
-            .await
-            .apply_tx(&tx.as_reader());
-
         log::info!(
             "sending l1 upgrade transaction 0x{}",
             hex::encode(tx.calc_tx_hash().as_slice())
@@ -834,7 +812,6 @@ async fn confirm_pending_l1_upgrade(ctx: &PSCContext) -> Result<()> {
         // both deadcell error and unknwown cell is unacceptable, so we just throw it
         poll_tx_confirmed(&ctx.rpc_client, &tx).await?;
         log::info!("l1 upgrade tx confirmed");
-        ctx.local_cells_manager.lock().await.confirm_tx(&tx);
     }
     Ok(())
 }
