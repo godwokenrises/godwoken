@@ -60,13 +60,12 @@ jobs:
         version: "11.0"
         cached: ${{ steps.cache-llvm.outputs.cache-hit }}
 
+    - name: Set fuzzing duration for 1h
+      run: echo "MAX_FUZZ_TIME=3600" >> $GITHUB_ENV
+
     - name: Set fuzzing duration for 1m
       if: github.event_name == 'pull_request'
       run: echo "MAX_FUZZ_TIME=60" >> $GITHUB_ENV
-
-    - name: Set fuzzing duration for 1h
-      if: github.event_name == 'pull_request'
-      run: echo "MAX_FUZZ_TIME=3600" >> $GITHUB_ENV
 
     - name: Fuzzing Polyjuice
       working-directory: gwos-evm/polyjuice-tests/fuzz
