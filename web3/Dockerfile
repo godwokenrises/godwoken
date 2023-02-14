@@ -1,11 +1,9 @@
 
 FROM node:14-bullseye
 
-COPY . /godwoken/.
+COPY ./web3 /godwoken-web3
 
-WORKDIR /godwoken/web3
-
-RUN yarn && yarn build
+RUN cd /godwoken-web3 && yarn && yarn build
 
 RUN npm install pm2 -g
 

@@ -5,6 +5,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.12.0-rc1] - 2023-02-08
+
+The `web3` and `web3-indexer` components have been added to the monorepo since this release, and we bumped the version from `v1.8.x` to `v1.12.x` to unify the version.
+
+We introduced a breaking change of the config file in [#946](https://github.com/godwokenrises/godwoken/pull/946). The consensus-related options are moved into option `consensus`, and we put the builtin `testnet` and `mainnet` consensus into the godwoken program. This change reduces the operation works of node maintainers.
+
+Highlights:
+
+- Builtin mainnet and testnet consensus config [#946](https://github.com/godwokenrises/godwoken/pull/946)
+- Add web3 and web3-indexer into the monorepo [#910](https://github.com/godwokenrises/godwoken/pull/910)
+
+Bug fixes:
+
+- gwos-evm: fix big mod exp [#932](https://github.com/godwokenrises/godwoken/pull/932)
+- fix(web3): eth_getFilterLogs should return all matched logs [#947](https://github.com/godwokenrises/godwoken/pull/947)
+
+Enhenchment:
+
+- chore: use TransactionDB and refactor store [#903](https://github.com/godwokenrises/godwoken/pull/903)
+- chore: refactor rpc server [#927](https://github.com/godwokenrises/godwoken/pull/927)
+- Improve the error code of API when executing transactions [#930](https://github.com/godwokenrises/godwoken/pull/930)
+
 ## [v1.8.0-rc2] - 2022-12-19
 
 A major change in this release is re-interpreting the meaning of the `xxx_timepoint` field to `finalized timestamp`. 
