@@ -1773,6 +1773,8 @@ dependencies = [
  "lazy_static",
  "log",
  "openssl",
+ "pid",
+ "rand 0.8.5",
  "semver 1.0.13",
  "serde",
  "serde_json",
@@ -1874,6 +1876,7 @@ dependencies = [
  "gw-jsonrpc-types",
  "hex",
  "lazy_static",
+ "pid",
  "serde",
  "toml 0.5.9",
 ]
@@ -3529,6 +3532,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c00cf8b9eafe68dde5e9eaa2cef8ee84a9336a47d566ec55ca16589633b65af7"
 dependencies = [
  "siphasher",
+]
+
+[[package]]
+name = "pid"
+version = "4.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7c931ef9756cd5e3fa3d395bfe09df4dfa6f0612c6ca8f6b12927d17ca34e36"
+dependencies = [
+ "num-traits",
+ "serde",
 ]
 
 [[package]]
