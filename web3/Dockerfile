@@ -1,5 +1,4 @@
-
-FROM node:14-bullseye
+FROM node:18-bullseye
 
 COPY ./web3 /godwoken-web3
 

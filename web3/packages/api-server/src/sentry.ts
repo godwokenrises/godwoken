@@ -10,7 +10,7 @@ export function initSentry() {
       environment: envConfig.sentryEnvironment || "development",
       ignoreErrors: [/^invalid nonce of account/, /^query returned more than/],
     });
-    const processType = cluster.isMaster ? "master" : "cluster";
+    const processType = cluster.isPrimary ? "primary" : "cluster";
     logger.info(`Sentry init in ${processType} !!!`);
   }
 }

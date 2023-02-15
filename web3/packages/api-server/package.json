@@ -2,6 +2,9 @@
   "name": "@godwoken-web3/api-server",
   "version": "1.12.0-rc1",
   "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "concurrently \"tsc -w\" \"nodemon ./bin/cluster\"",
     "start:prod": "NODE_ENV=production node ./bin/cluster",

@@ -14,8 +14,8 @@ const numCPUs = cpus().length;
 const clusterCount = +(envConfig.clusterCount || 0);
 const numOfCluster = clusterCount || numCPUs;
 
-if (cluster.isMaster) {
-  logger.info(`Master ${process.pid} is running`);
+if (cluster.isPrimary) {
+  logger.info(`Primary ${process.pid} is running`);
 
   initSentry();
 
