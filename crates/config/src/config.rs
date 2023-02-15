@@ -10,6 +10,7 @@ use gw_jsonrpc_types::{
     ckb_jsonrpc_types::{CellDep, JsonBytes, Script},
     godwoken::ChallengeTargetType,
 };
+use pid::Pid;
 use serde::{Deserialize, Serialize};
 
 use crate::{consensus::Consensus, fork_config::BackendForkConfig};
@@ -21,7 +22,7 @@ pub enum Trace {
     TokioConsole,
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub node_mode: NodeMode,
@@ -136,7 +137,7 @@ pub struct RegistryAddressConfig {
     pub address_type: RegistryType,
     pub address: JsonBytes,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct BlockProducerConfig {
     pub check_mem_block_before_submit: bool,
@@ -170,7 +171,7 @@ fn test_default_block_producer_config() {
     assert!(config.fee_rate > 0);
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PscConfig {
     /// Maximum number local blocks. Local blocks are blocks that have not been
@@ -180,14 +181,25 @@ pub struct PscConfig {
     pub submitted_limit: u64,
     /// Minimum delay between blocks. Default is 8 seconds.
     pub block_interval_secs: u64,
+    pub min_fee_rate: u64,
+    pub max_fee_rate: u64,
+    pub fee_rate_pid: Option<Pid<f64>>,
+    pub fee_rate_pid_interval_secs: u64,
+    /// Bump fee rate if a transaction cannot be confirmed after the specified duration.
+    pub confirm_timeout_secs: u64,
 }
 
 impl Default for PscConfig {
     fn default() -> Self {
         Self {
-            local_limit: 5,
-            submitted_limit: 5,
+            local_limit: 2,
+            submitted_limit: 10,
             block_interval_secs: 8,
+            fee_rate_pid: None,
+            min_fee_rate: 1000,
+            max_fee_rate: 1100,
+            fee_rate_pid_interval_secs: 10,
+            confirm_timeout_secs: 120,
         }
     }
 }
