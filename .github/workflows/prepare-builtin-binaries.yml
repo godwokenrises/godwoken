@@ -2,13 +2,14 @@ name: Prepare gw-builtin-binaries
 
 on:
   push:
+    branches:
+      - develop
     paths:
       - 'crates/builtin-binaries/build.rs'
 
 jobs:
   publish:
     runs-on: ubuntu-20.04
-    if: github.event.pull_request.merged == true
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
