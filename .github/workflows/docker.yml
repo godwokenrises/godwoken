@@ -354,7 +354,7 @@ jobs:
 
   integration-test:
     needs: docker-build-push
-    uses: godwokenrises/godwoken-tests/.github/workflows/reusable-integration-test-v1.yml@yq
+    uses: godwokenrises/godwoken-tests/.github/workflows/reusable-integration-test-v1.yml@develop
     with:
       extra_github_env: |
         GODWOKEN_IMAGE="${{ needs.docker-build-push.outputs.image_name }}:${{ needs.docker-build-push.outputs.image_tag }}"
