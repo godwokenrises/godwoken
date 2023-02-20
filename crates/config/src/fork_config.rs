@@ -7,7 +7,7 @@ use crate::constants::{
     MAX_WITHDRAWAL_SIZE, MAX_WRITE_DATA_BYTES,
 };
 use gw_jsonrpc_types::{
-    blockchain::{CellDep, Script},
+    blockchain::{CellDep, Script, Transaction},
     godwoken::{L2BlockCommittedInfo, RollupConfig},
 };
 
@@ -94,6 +94,12 @@ pub struct SystemTypeScriptConfig {
     pub omni_lock: Script,
 }
 
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct L1UpgradeConfig {
+    pub height: u64,
+    pub signed_transaction: Transaction,
+}
+
 /// Fork changes and activation heights.
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -118,6 +124,10 @@ pub struct ForkConfig {
 
     /// system type scripts
     pub system_type_scripts: SystemTypeScriptConfig,
+
+    /// pending L1 upgrades
+    #[serde(default)]
+    pub pending_l1_upgrades: Vec<L1UpgradeConfig>,
 }
 
 impl ForkConfig {

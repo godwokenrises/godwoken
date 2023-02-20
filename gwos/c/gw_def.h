@@ -112,8 +112,8 @@ typedef int (*gw_create_fn)(struct gw_context_t *ctx, uint8_t *script,
  *
  * Fails on invalid input
  */
-typedef int (*gw_bn_add)(const uint8_t *input, const size_t input_size,
-                         uint8_t *output);
+typedef int (*gw_bn_add_fn)(const uint8_t *input, const size_t input_size,
+                            uint8_t *output);
 
 /**
  * @param Input  two curve points (x, y)
@@ -122,8 +122,8 @@ typedef int (*gw_bn_add)(const uint8_t *input, const size_t input_size,
  *
  * Fails on invalid input
  */
-typedef int (*gw_bn_mul)(const uint8_t *input, const size_t input_size,
-                         uint8_t *output);
+typedef int (*gw_bn_mul_fn)(const uint8_t *input, const size_t input_size,
+                            uint8_t *output);
 
 /**
  * @param input  Input: (a1, b1, a2, b2, ..., ak, bk) from (G_1 x G_2)^k
@@ -138,8 +138,8 @@ typedef int (*gw_bn_mul)(const uint8_t *input, const size_t input_size,
  *   2. any of the inputs are not elements of the respective group are not
  * encoded correctly
  */
-typedef int (*gw_bn_pairing)(const uint8_t *input, const size_t input_size,
-                             uint8_t *output);
+typedef int (*gw_bn_pairing_fn)(const uint8_t *input, const size_t input_size,
+                                uint8_t *output);
 
 /**
  * Load value by key from current contract account

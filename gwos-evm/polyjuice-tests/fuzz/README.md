@@ -1,56 +1,62 @@
-# Polyjuice Fuzz Test
+# Polyjuice fuzz testing
 
-[![FuzzTest](https://github.com/Flouse/godwoken-polyjuice/actions/workflows/fuzz.yml/badge.svg?branch=fuzz-v2)](https://github.com/Flouse/godwoken-polyjuice/actions/workflows/fuzz.yml)
+## Build
 
-These two file were created to simulate `gw_syscalls`:
-- polyjuice-tests/fuzz/ckb_syscalls.h
-- polyjuice-tests/fuzz/mock_godwoken.hpp
+### 1. normal build
 
-## Polyjuice Generator Fuzzer
-```bash
-make build/polyjuice_generator_fuzzer
-./build/polyjuice_generator_fuzzer corpus -max_total_time=6
-
-# or fuzzing in debug mode
-make build/polyjuice_generator_fuzzer_log
-./build/polyjuice_generator_fuzzer_log corpus -max_total_time=2
+```sh
+make build/fuzzer
 ```
 
-### General Algorithm
-```pseudo code
-// pseudo code
-Instrument program for code coverage
-load pre-defined transactions such as contracts deploying and then execute run_polyjuice()
-while(true) {
-  Choose random input from corpus
-  Mutate/populate input into transactions
-  Execute run_polyjuice() and collect coverage
-  If new coverage/paths are hit add it to corpus (corpus - directory with test-cases)
-}
+### 2. or build with debug log
+
+```sh
+make build/fuzzer_log
 ```
 
-## test_contracts on x86 with [sanitizers](https://github.com/google/sanitizers)
-```bash
-make build/test_contracts
-./build/test_contracts
+## Run
 
-make build/test_rlp
-./build/test_rlp
+Simply just run with:
+```sh
+build/fuzzer
 ```
 
-## How to debug Polyjuice generator on x86?
-1. Compile Polyjuice generator on x86
-    ```bash
-    cd fuzz
-    make build/polyjuice_generator_fuzzer
-    ```
-2. Construct `pre_defined_test_case` in [polyjuice_generator_fuzzer.cc](./polyjuice_generator_fuzzer.cc)
-3. Run `build/polyjuice_generator_fuzzer_log` with GDB debugger, see: [launch.json](../../.vscode/launch.json) 
+Or run `fuzzer_log`:
+```sh
+build/fuzzer_log
+```
 
-## Coverage Report[WIP]
-TBD
+### Corpus and Seed
 
-### Related materials
-- https://llvm.org/docs/LibFuzzer.html
-- [What makes a good fuzz target](https://github.com/google/fuzzing/blob/master/docs/good-fuzz-target.md)
-- [Clang's source-based code coverage](https://clang.llvm.org/docs/SourceBasedCodeCoverage.html)
+Feeding fuzz testing with some predefined testcases: Seed. (Optional)
+And save to `corpus` folder if any good cases are generated during running.
+
+```sh
+build/fuzzer corpus seed
+```
+
+## Coverage Profile
+
+To genreate a coverage profile, we need to set `LLVM_PROFILE_FILE` and `max_total_time` first.
+
+```sh
+LLVM_PROFILE_FILE="build/fuzzer.profraw" build/fuzzer corpus -max_total_time=10
+```
+
+### Generate .profdata
+
+```sh
+llvm-profdata merge -sparse build/fuzzer.profraw -o build/fuzzer.profdata
+```
+
+### Show coverage in detail (Optional)
+
+```sh
+llvm-cov show build/fuzzer -instr-profile=build/fuzzer.profdata --show-branches=count --show-expansions > log
+```
+
+### Report
+
+```sh
+llvm-cov report ./build/fuzzer -instr-profile=build/fuzzer.profdata
+```

@@ -996,6 +996,7 @@ int create_new_account(gw_context_t* ctx,
   uint8_t script_hash[32];
   blake2b_hash(script_hash, new_script_seg.ptr, new_script_seg.size);
   ret = ctx->sys_create(ctx, new_script_seg.ptr, new_script_seg.size, &new_account_id);
+  free(new_script_seg.ptr);
   if (ret != 0) {
     debug_print_int("sys_create error", ret);
 
@@ -1005,7 +1006,6 @@ int create_new_account(gw_context_t* ctx,
       return ret;
     }
   }
-  free(new_script_seg.ptr);
   *to_id = new_account_id;
   memcpy((uint8_t *)msg->destination.bytes, eth_addr, 20);
   debug_print_int(">> new to id", *to_id);
@@ -1152,6 +1152,7 @@ int handle_native_token_transfer(gw_context_t* ctx, uint32_t from_id,
     uint32_t new_account_id;
     ret = ctx->sys_create(ctx, new_script_seg.ptr, new_script_seg.size,
                           &new_account_id);
+    free(new_script_seg.ptr);
     if (ret != 0) {
       ckb_debug("[handle_native_token_transfer] create new account failed.");
       return ret;

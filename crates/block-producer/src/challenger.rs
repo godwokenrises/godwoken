@@ -735,7 +735,7 @@ impl Challenger {
 
                 let err_str = err.to_string();
                 if err_str.contains(TRANSACTION_FAILED_TO_RESOLVE_ERROR) {
-                    if let Err(err) = self.contracts_dep_manager.refresh().await {
+                    if let Err(err) = self.contracts_dep_manager.refresh(None).await {
                         // Lets retry on next error
                         log::error!("[contracts dep] refresh failed {}", err);
                     }
