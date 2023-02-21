@@ -470,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "c-uint256-tests"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "cc",
  "cty",
@@ -1689,7 +1689,7 @@ dependencies = [
 
 [[package]]
 name = "godwoken-bin"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "ckb-types",
@@ -1722,7 +1722,7 @@ dependencies = [
 
 [[package]]
 name = "gw-benches"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "criterion",
@@ -1741,7 +1741,7 @@ dependencies = [
 
 [[package]]
 name = "gw-block-producer"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -1784,7 +1784,7 @@ dependencies = [
 
 [[package]]
 name = "gw-builtin-binaries"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "ckb-fixed-hash",
@@ -1797,7 +1797,7 @@ dependencies = [
 
 [[package]]
 name = "gw-chain"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "ckb-fixed-hash",
@@ -1826,7 +1826,7 @@ dependencies = [
 
 [[package]]
 name = "gw-challenge"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1856,7 +1856,7 @@ dependencies = [
 
 [[package]]
 name = "gw-common"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
@@ -1867,7 +1867,7 @@ dependencies = [
 
 [[package]]
 name = "gw-config"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "ckb-fixed-hash",
  "gw-builtin-binaries",
@@ -1880,7 +1880,7 @@ dependencies = [
 
 [[package]]
 name = "gw-generator"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1912,14 +1912,14 @@ dependencies = [
 
 [[package]]
 name = "gw-hash"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "blake2b-ref 0.3.1",
 ]
 
 [[package]]
 name = "gw-jsonrpc-types"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "ckb-fixed-hash",
@@ -1933,7 +1933,7 @@ dependencies = [
 
 [[package]]
 name = "gw-mem-pool"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1962,7 +1962,7 @@ dependencies = [
 
 [[package]]
 name = "gw-metrics"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "arc-swap",
  "gw-common",
@@ -1979,7 +1979,7 @@ dependencies = [
 
 [[package]]
 name = "gw-p2p-network"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1997,7 +1997,7 @@ dependencies = [
 
 [[package]]
 name = "gw-polyjuice-sender-recover"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "gw-common",
@@ -2013,7 +2013,7 @@ dependencies = [
 
 [[package]]
 name = "gw-replay-chain"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "ckb-fixed-hash",
@@ -2043,7 +2043,7 @@ dependencies = [
 
 [[package]]
 name = "gw-rpc-client"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -2068,7 +2068,7 @@ dependencies = [
 
 [[package]]
 name = "gw-rpc-server"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2114,7 +2114,7 @@ dependencies = [
 
 [[package]]
 name = "gw-smt"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
@@ -2124,7 +2124,7 @@ dependencies = [
 
 [[package]]
 name = "gw-store"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -2142,7 +2142,7 @@ dependencies = [
 
 [[package]]
 name = "gw-telemetry"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "chrono",
  "faster-hex 0.6.1",
@@ -2163,7 +2163,7 @@ dependencies = [
 
 [[package]]
 name = "gw-tests"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2209,7 +2209,7 @@ dependencies = [
 
 [[package]]
 name = "gw-tools"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "bech32",
@@ -2257,7 +2257,7 @@ dependencies = [
 
 [[package]]
 name = "gw-traits"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "gw-common",
@@ -2266,7 +2266,7 @@ dependencies = [
 
 [[package]]
 name = "gw-tx-filter"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "gw-common",
  "gw-config",
@@ -2280,7 +2280,7 @@ dependencies = [
 
 [[package]]
 name = "gw-types"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "cfg-if 1.0.0",
  "ckb-fixed-hash",
@@ -2293,7 +2293,7 @@ dependencies = [
 
 [[package]]
 name = "gw-utils"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
  "ckb-crypto",
@@ -2319,7 +2319,7 @@ dependencies = [
 
 [[package]]
 name = "gw-version"
-version = "1.12.0-rc1"
+version = "1.12.0-rc2"
 dependencies = [
  "anyhow",
 ]
@@ -2803,12 +2803,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libm"
-version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "348108ab3fba42ec82ff6e9564fc4ca0247bdccdc68dd8af9764bbc79c3c8ffb"
-
-[[package]]
 name = "link-cplusplus"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3096,7 +3090,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "578ede34cf02f8924ab9447f50c28075b4d3e5b269972345e7e0372b38c6cdcd"
 dependencies = [
  "autocfg",
- "libm",
 ]
 
 [[package]]
@@ -3231,9 +3224,9 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "openssl-src"
-version = "111.25.0+1.1.1t"
+version = "111.22.0+1.1.1q"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3173cd3626c43e3854b1b727422a276e568d9ec5fe8cec197822cf52cfb743d6"
+checksum = "8f31f0d509d1c1ae9cada2f9539ff8f37933831fd5098879e482aa687d659853"
 dependencies = [
  "cc",
 ]
@@ -3754,9 +3747,9 @@ dependencies = [
 
 [[package]]
 name = "proptest"
-version = "1.1.0"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29f1b898011ce9595050a68e60f90bad083ff2987a695a42357134c8381fba70"
+checksum = "1e0d9cc07f18492d879586c92b485def06bc850da3118075cd45d50e9c95b0e5"
 dependencies = [
  "bit-set",
  "bitflags",
@@ -3770,7 +3763,6 @@ dependencies = [
  "regex-syntax",
  "rusty-fork",
  "tempfile",
- "unarray",
 ]
 
 [[package]]
@@ -5188,12 +5180,6 @@ dependencies = [
  "hex",
  "static_assertions",
 ]
-
-[[package]]
-name = "unarray"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
 
 [[package]]
 name = "unicode-bidi"
