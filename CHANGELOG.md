@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.12.0-rc2] - 2023-02-21
+
+* config: add new fork for testnet at block#1916000 [#993](https://github.com/godwokenrises/godwoken/pull/993)
+* fix(withdrawal_unlocker): remove dry_run_transaction and fix error display [#992](https://github.com/godwokenrises/godwoken/pull/992)
+
 ## [v1.12.0-rc1] - 2023-02-08
 
 The `web3` and `web3-indexer` components have been added to the monorepo since this release, and we bumped the version from `v1.8.x` to `v1.12.x` to unify the version.
