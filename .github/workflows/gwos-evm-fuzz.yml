@@ -8,7 +8,7 @@ on:
     paths:
       - 'gwos-evm/**'
   schedule:
-    - cron: 0 * * * *
+    - cron: 0 */2 * * *
 
 jobs:
   build-and-run-fuzzing:
