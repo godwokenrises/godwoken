@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.12.0] - 2023-02-27
+
+* config(mainnet.toml): bump Polyjuice backend to v1.5.3 [#1000](https://github.com/godwokenrises/godwoken/pull/1000)
+
 ## [v1.12.0-rc2] - 2023-02-21
 
 * config: add new fork for testnet at block#1916000 [#993](https://github.com/godwokenrises/godwoken/pull/993)
