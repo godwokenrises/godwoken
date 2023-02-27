@@ -296,7 +296,7 @@ jobs:
         # dynamically set date as a suffix
         tags: |
           type=ref,event=tag
-          type=ref,event=branch,suffix=-{{date 'YYYYMMDDHHmm'}}
+          type=ref,event=branch,suffix=${{ env.FEATURE_TAG }}-{{date 'YYYYMMDDHHmm'}}
           type=ref,event=branch
         labels: |
           maintainer=Godwoken Core Dev
