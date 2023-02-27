@@ -8,7 +8,7 @@ import Sentry from "@sentry/node";
 import { applyRateLimitByIp } from "../rate-limit";
 import { initSentry } from "../sentry";
 import { envConfig } from "../base/env-config";
-import { gwConfig } from "../base/index";
+import { gwConfig, readonlyGwConfig } from "../base/index";
 import { expressLogger, logger } from "../base/logger";
 import { Server } from "http";
 
@@ -132,6 +132,9 @@ let server: Server | undefined;
 async function startServer(port: number): Promise<void> {
   try {
     await gwConfig.init();
+    if (!!envConfig.godwokenReadonlyJsonRpc) {
+      readonlyGwConfig.init();
+    }
     logger.info("godwoken config initialized!");
   } catch (err) {
     logger.error("godwoken config initialize failed:", err);
