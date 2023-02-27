@@ -74,10 +74,15 @@ jobs:
         mkdir -p corpus
         ls corpus-cache
         make build/fuzzer && \
-        ./build/fuzzer corpus corpus-cache \
+        LLVM_PROFILE_FILE="build/fuzzer.profraw" ./build/fuzzer corpus corpus-cache \
           -max_total_time=$MAX_FUZZ_TIME -timeout=120 \
           -max_len=25000 -rss_limit_mb=0
       # Max data buffer size: 24KB < 25000 bytes
+    - name: Cov report
+      working-directory: gwos-evm/polyjuice-tests/fuzz
+      run: |
+        llvm-profdata merge -sparse build/fuzzer.profraw -o build/fuzzer.profdata
+        llvm-cov report ./build/fuzzer -instr-profile=build/fuzzer.profdata
         
     - name: merge corpus
       working-directory: gwos-evm/polyjuice-tests/fuzz
