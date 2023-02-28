@@ -26,8 +26,7 @@ export class EthNormalizer {
     const value = txCallObj.value || "0x0";
     const data = txCallObj.data || "0x";
     const toAddress = txCallObj.to;
-    const fromAddress =
-      txCallObj.from || (await getDefaultFromAddress(this.rpc));
+    const fromAddress = txCallObj.from || gwConfig.accounts.defaultFrom.address;
 
     // we should set default price to 0 instead of minGasPrice,
     // otherwise read operation might fail the balance check.
@@ -106,7 +105,7 @@ export class EthNormalizer {
     const data = txEstimateGasObj.data || "0x";
     const toAddress = txEstimateGasObj.to || "0x";
     const fromAddress =
-      txEstimateGasObj.from || (await getDefaultFromAddress(this.rpc));
+      txEstimateGasObj.from || gwConfig.accounts.defaultFrom.address;
     const gasPrice = txEstimateGasObj.gasPrice || "0x0";
     const value = txEstimateGasObj.value || "0x0";
 
@@ -167,17 +166,6 @@ export class EthNormalizer {
       gasPrice,
     };
   }
-}
-
-async function getDefaultFromAddress(rpc: GodwokenClient): Promise<HexString> {
-  const defaultFromScript = await rpc.getScript(
-    gwConfig.accounts.defaultFrom.scriptHash
-  );
-  if (defaultFromScript == null) {
-    throw new Error("default from script is null");
-  }
-  const defaultFromAddress = "0x" + defaultFromScript.args.slice(2).slice(64);
-  return defaultFromAddress;
 }
 
 export async function getMaxGasByBalance(

@@ -1,27 +1,30 @@
 import { Hash, HexString, Script, utils } from "@ckb-lumos/base";
 import { GodwokenClient } from "@godwoken-web3/godwoken";
 import { Store } from "../cache/store";
-import { COMPATIBLE_DOCS_URL } from "../methods/constant";
 import { gwConfig } from "./index";
 import { logger } from "./logger";
 import { Uint32 } from "./types/uint";
-
-const ZERO_ETH_ADDRESS = "0x" + "00".repeat(20);
 
 // the eth address vs script hash is not changeable, so we set no expire for cache
 const scriptHashCache = new Store(false);
 
 // Only support eth address now!
 export class EthRegistryAddress {
-  private registryId: number = +gwConfig.accounts.ethAddrReg.id;
+  private registryId: number;
   private addressByteSize: number = 20;
   public readonly address: HexString;
 
-  constructor(address: HexString) {
-    if (!address.startsWith("0x") || address.length != 42) {
+  // Using optional registryId when gwConfig not initialized
+  constructor(
+    address: HexString,
+    { registryId }: { registryId?: number } = {}
+  ) {
+    if (!address.startsWith("0x") || address.length !== 42) {
       throw new Error(`Eth address format error: ${address}`);
     }
     this.address = address.toLowerCase();
+
+    this.registryId = registryId || +gwConfig.accounts.ethAddrReg.id;
   }
 
   public serialize(): HexString {
@@ -35,7 +38,9 @@ export class EthRegistryAddress {
 
   public static Deserialize(hex: HexString): EthRegistryAddress {
     const hexWithoutPrefix = hex.slice(2);
-    // const registryId: number = Uint32.fromLittleEndian(hexWithoutPrefix.slice(0, 8)).getValue();
+    const registryId: number = Uint32.fromLittleEndian(
+      hexWithoutPrefix.slice(0, 8)
+    ).getValue();
     const addressByteSize: number = Uint32.fromLittleEndian(
       hexWithoutPrefix.slice(8, 16)
     ).getValue();
@@ -43,7 +48,7 @@ export class EthRegistryAddress {
     if (addressByteSize !== 20 || address.length !== 40) {
       throw new Error(`Eth address deserialize error: ${hex}`);
     }
-    return new EthRegistryAddress("0x" + address);
+    return new EthRegistryAddress("0x" + address, { registryId });
   }
 }
 
@@ -86,12 +91,6 @@ export async function ethAddressToAccountId(
 ): Promise<number | undefined> {
   if (ethAddress === "0x") {
     return +gwConfig.accounts.polyjuiceCreator.id;
-  }
-
-  if (ethAddress === ZERO_ETH_ADDRESS) {
-    throw new Error(
-      `zero address ${ZERO_ETH_ADDRESS} has no valid account_id! more info: ${COMPATIBLE_DOCS_URL}`
-    );
   }
 
   const scriptHash: Hash | undefined = await ethAddressToScriptHash(

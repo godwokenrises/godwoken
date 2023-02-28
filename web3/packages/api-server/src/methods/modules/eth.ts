@@ -26,6 +26,7 @@ import {
   SUDT_OPERATION_LOG_FLAG,
   SUDT_PAY_FEE_LOG_FLAG,
   AUTO_CREATE_ACCOUNT_FROM_ID,
+  ZERO_ETH_ADDRESS,
 } from "../constant";
 import { Query, universalizeAddress } from "../../db";
 import { envConfig } from "../../base/env-config";
@@ -86,8 +87,6 @@ const Config = require("../../../config/eth.json");
 
 type U32 = number;
 type U64 = bigint;
-
-const ZERO_ETH_ADDRESS = "0x" + "00".repeat(20);
 
 type GodwokenBlockParameter = U64 | undefined;
 

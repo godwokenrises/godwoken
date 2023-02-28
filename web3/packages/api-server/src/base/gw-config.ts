@@ -1,4 +1,4 @@
-import { utils, HexNumber, Script, HexString } from "@ckb-lumos/base";
+import { utils, HexNumber, Script, HexString, Hash } from "@ckb-lumos/base";
 import {
   BackendInfo,
   EoaScript,
@@ -15,10 +15,12 @@ import {
   GodwokenClient,
   NodeInfo as GwNodeInfo,
 } from "@godwoken-web3/godwoken";
-import { CKB_SUDT_ID } from "../methods/constant";
+import { CKB_SUDT_ID, ZERO_ETH_ADDRESS } from "../methods/constant";
 import { Uint32 } from "./types/uint";
 import { snakeToCamel } from "../util";
 import { EntryPointContract } from "../gasless/entrypoint";
+import { EthRegistryAddress } from "./address";
+import { logger } from "./logger";
 
 // source: https://github.com/nervosnetwork/godwoken/commit/d6c98d8f8a199b6ec29bc77c5065c1108220bb0a#diff-c56fda2ca3b1366049c88e633389d9b6faa8366151369fd7314c81f6e389e5c7R5
 const BUILTIN_ETH_ADDR_REG_ACCOUNT_ID = 2;
@@ -51,7 +53,10 @@ export class GwConfig {
 
     const ethAddrReg = await this.fetchEthAddrRegAccount();
     const creator = await this.fetchCreatorAccount();
-    const defaultFrom = await this.fetchDefaultFromAccount();
+    const defaultFrom = await this.fetchDefaultFromAccount(+ethAddrReg.id);
+    logger.info(
+      `Using default from: ${defaultFrom.address}, id: ${defaultFrom.id}`
+    );
 
     this.iAccounts = {
       polyjuiceCreator: creator,
@@ -227,8 +232,16 @@ export class GwConfig {
     return new Account(regIdHex, scriptHash);
   }
 
+  // Using zero address firstly
   // we search the first account id = 3, if it is eoa account, use it, otherwise continue with id + 1;
-  private async fetchDefaultFromAccount() {
+  private async fetchDefaultFromAccount(
+    registryId: number
+  ): Promise<AccountWithAddress> {
+    const zeroAddressInfo = await zeroAddressAccount(this.rpc, registryId);
+    if (zeroAddressInfo != null) {
+      return zeroAddressInfo;
+    }
+
     const ethAccountLockTypeHash = this.nodeInfo.eoaScripts.find(
       (s) => s.eoaType === EoaScriptType.Eth
     )?.typeHash;
@@ -245,7 +258,8 @@ export class GwConfig {
 
     const firstEoaAccount = await findFirstEoaAccountId(
       this.rpc,
-      ethAccountLockTypeHash
+      ethAccountLockTypeHash,
+      registryId
     );
 
     if (firstEoaAccount == null) {
@@ -266,10 +280,19 @@ export class Account {
   }
 }
 
+export class AccountWithAddress extends Account {
+  address: HexString;
+
+  constructor(id: HexNumber, scriptHash: HexString, address: HexString) {
+    super(id, scriptHash);
+    this.address = address;
+  }
+}
+
 export interface ConfigAccounts {
   polyjuiceCreator: Account;
   ethAddrReg: Account;
-  defaultFrom: Account;
+  defaultFrom: AccountWithAddress;
 }
 
 export interface ConfigBackends {
@@ -414,9 +437,36 @@ function toApiNodeInfo(nodeInfo: GwNodeInfo): NodeInfo {
   return snakeToCamel(nodeInfo, ["code_hash", "hash_type"]);
 }
 
+async function zeroAddressAccount(
+  rpc: GodwokenClient,
+  registryId: number
+): Promise<AccountWithAddress | undefined> {
+  const registryAddress = new EthRegistryAddress(ZERO_ETH_ADDRESS, {
+    registryId,
+  });
+  const scriptHash: Hash | undefined = await rpc.getScriptHashByRegistryAddress(
+    registryAddress.serialize()
+  );
+  if (scriptHash == null) {
+    return undefined;
+  }
+
+  const id = await rpc.getAccountIdByScriptHash(scriptHash);
+  if (id == null) {
+    return undefined;
+  }
+
+  return {
+    id: "0x" + id.toString(16),
+    scriptHash,
+    address: ZERO_ETH_ADDRESS,
+  };
+}
+
 async function findFirstEoaAccountId(
   rpc: GodwokenClient,
   ethAccountLockTypeHash: HexString,
+  registryId: number,
   startAccountId: number = 3,
   maxTry: number = 20
 ) {
@@ -431,7 +481,12 @@ async function findFirstEoaAccountId(
     }
     if (script.code_hash === ethAccountLockTypeHash) {
       const accountIdHex = "0x" + BigInt(id).toString(16);
-      return new Account(accountIdHex, scriptHash);
+      const registryAddress = await rpc.getRegistryAddressByScriptHash(
+        scriptHash,
+        registryId
+      );
+      const address = registryAddress!.address;
+      return new AccountWithAddress(accountIdHex, scriptHash, address);
     }
 
     await asyncSleep(500);
