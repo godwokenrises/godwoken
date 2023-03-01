@@ -10,7 +10,7 @@ env:
   # Environment variables propagated to godwoken-kicker
   MANUAL_BUILD_GODWOKEN: "true"
   GODWOKEN_GIT_URL: "https://github.com/${{ github.repository }}"
-  GODWOKEN_GIT_CHECKOUT: "${{ github.ref }}""
+  GODWOKEN_GIT_CHECKOUT: "${{ github.ref }}"
   MANUAL_BUILD_SCRIPTS: "true"
   SCRIPTS_GIT_URL: "https://github.com/${{ github.repository }}"
   SCRIPTS_GIT_CHECKOUT: "${{ github.ref }}"
