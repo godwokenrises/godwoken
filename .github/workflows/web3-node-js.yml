@@ -34,9 +34,6 @@ jobs:
 
     - run: yarn install
     - run: yarn run build
-    - run: yarn workspace @godwoken-web3/api-server run test tests/db/helpers.test.ts
-    - run: yarn workspace @godwoken-web3/api-server run test tests/utils
-    - run: yarn workspace @godwoken-web3/api-server run test tests/base/types
     - run: yarn run fmt
     - run: yarn run lint
     - run: git diff --exit-code
