@@ -11,7 +11,7 @@ use crate::{
 };
 
 #[test]
-fn native_token_transfer_test() -> anyhow::Result<()> {
+fn transfer_test() -> anyhow::Result<()> {
     let mut chain = MockChain::setup("..")?;
     let mint = 100000.into();
     let from_addr = [1u8; 20];
@@ -44,7 +44,41 @@ fn native_token_transfer_test() -> anyhow::Result<()> {
 }
 
 #[test]
-fn native_token_transfer_unregistered_address_test() -> anyhow::Result<()> {
+fn transfer_unregistered_address_insufficient_gas_test() -> anyhow::Result<()> {
+    let mut chain = MockChain::setup("..")?;
+    let mint = 100000.into();
+    let from_addr = [1u8; 20];
+    let from_id = chain.create_eoa_account(&from_addr, mint)?;
+    let to_addr = [2u8; 20];
+
+    let gas_limit = 21000;
+    let value = 400;
+    let args = PolyjuiceArgsBuilder::default()
+        .gas_price(1)
+        .gas_limit(gas_limit)
+        .value(value)
+        .to_address(to_addr)
+        .build();
+    let raw_tx = RawL2Transaction::new_builder()
+        .from_id(from_id.pack())
+        .to_id(CREATOR_ACCOUNT_ID.pack())
+        .args(ckb_vm::Bytes::from(args).pack())
+        .build();
+    let run_result = chain.execute_raw(raw_tx)?;
+    assert_eq!(
+        run_result.exit_code, -93,
+        "Gas not enough to create a new account."
+    );
+
+    let account_id = chain.get_account_id_by_eth_address(&to_addr)?;
+    assert_eq!(None, account_id);
+    let from_balance = chain.get_balance(&from_addr)?;
+    assert_eq!(mint - gas_limit, from_balance);
+    Ok(())
+}
+
+#[test]
+fn transfer_unregistered_address_test() -> anyhow::Result<()> {
     let mut chain = MockChain::setup("..")?;
     let mint = 100000.into();
     let from_addr = [1u8; 20];
@@ -83,7 +117,7 @@ fn native_token_transfer_unregistered_address_test() -> anyhow::Result<()> {
 }
 
 #[test]
-fn native_token_transfer_contract_address_test() -> anyhow::Result<()> {
+fn transfer_contract_address_test() -> anyhow::Result<()> {
     let mut chain = MockChain::setup("..")?;
     let mint = 100000.into();
     let from_addr = [1u8; 20];
@@ -119,7 +153,7 @@ fn native_token_transfer_contract_address_test() -> anyhow::Result<()> {
 }
 
 #[test]
-fn native_token_transfer_invalid_to_id_test() -> anyhow::Result<()> {
+fn transfer_invalid_to_id_test() -> anyhow::Result<()> {
     let mut chain = MockChain::setup("..")?;
     let mint = 100000.into();
     let from_addr = [1u8; 20];
@@ -162,7 +196,7 @@ fn native_token_transfer_invalid_to_id_test() -> anyhow::Result<()> {
 }
 
 #[test]
-fn native_token_transfer_invalid_to_id_and_unregistered_address_test() -> anyhow::Result<()> {
+fn transfer_invalid_to_id_and_unregistered_address_test() -> anyhow::Result<()> {
     let mut chain = MockChain::setup("..")?;
     let mint = 100000.into();
     let from_addr = [1u8; 20];
@@ -201,7 +235,7 @@ fn native_token_transfer_invalid_to_id_and_unregistered_address_test() -> anyhow
 }
 
 #[test]
-fn native_token_transfer_unregistered_zero_address_test() -> anyhow::Result<()> {
+fn transfer_unregistered_zero_address_test() -> anyhow::Result<()> {
     let mut chain = MockChain::setup("..")?;
     let mint = 100000.into();
     let from_addr = [1u8; 20];
