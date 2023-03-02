@@ -1598,6 +1598,10 @@ int run_polyjuice() {
     int transfer_ret = handle_native_token_transfer(&context, context.transaction_context.from_id,
                                                     value, &from_addr, &gas_used);
     ckb_debug("END handle_native_token_transfer");
+    if ((uint64_t)msg.gas < gas_used) {
+      debug_print_int("Insufficient gas limit for native trasnsfer, should exceed", gas_used);
+      return ERROR_INSUFFICIENT_GAS_LIMIT;
+    }
     // handle fee
     uint256_t gas_fee = calculate_fee(g_gas_price, gas_used);
     debug_print_int("[handle_native_token_transfer] gas_used", gas_used);
