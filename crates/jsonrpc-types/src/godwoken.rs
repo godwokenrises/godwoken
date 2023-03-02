@@ -1525,3 +1525,58 @@ impl GetVerbose {
         self == GetVerbose::WithStatus
     }
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BlockStateChanges {
+    pub transactions: Vec<TransactionStateChanges>,
+}
+
+impl BlockStateChanges {
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TransactionType {
+    Meta,
+    Sudt,
+    AddressRegistry,
+    Eth,
+    Deposit,
+    Withdrawal,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TransactionStateChanges {
+    pub tx_hash: H256,
+    #[serde(rename = "type")]
+    pub _type: TransactionType,
+    pub events: Vec<StateChangeEvent>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum StateChangeEvent {
+    AccountState {
+        id: u32,
+        address: Option<H160>,
+        key: JsonBytes,
+        value: H256,
+    },
+    AccountNonce {
+        address: H160,
+        nonce: u32,
+    },
+    Log {
+        content: JsonBytes,
+    },
+    Create {
+        address: H160,
+        code: Option<JsonBytes>,
+    },
+    Destroy {
+        address: H160,
+    },
+}

@@ -27,6 +27,8 @@ pub struct Config {
     pub node_mode: NodeMode,
     pub liveness_duration_secs: Option<u64>,
     #[serde(default)]
+    pub trace_generator_state: bool,
+    #[serde(default)]
     pub contract_log_config: ContractLogConfig,
     pub consensus: Consensus,
     pub debug_backend_forks: Option<Vec<BackendForkConfig>>,

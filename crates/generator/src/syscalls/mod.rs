@@ -27,7 +27,7 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::RollupContext;
-use std::{cmp, convert::TryInto};
+use std::cmp;
 
 use self::error_codes::{
     GW_ERROR_ACCOUNT_NOT_FOUND, GW_ERROR_DUPLICATED_SCRIPT_HASH, GW_ERROR_INVALID_ACCOUNT_SCRIPT,

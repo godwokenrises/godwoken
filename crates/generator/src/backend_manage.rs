@@ -10,6 +10,7 @@ use crate::types::vm::AotCode;
 #[derive(Clone)]
 pub struct Backend {
     pub generator: Bytes,
+    pub sys_store_addr: Option<u64>,
     pub validator_script_type_hash: H256,
     pub backend_type: BackendType,
     pub generator_checksum: H256,
@@ -21,6 +22,7 @@ impl Backend {
         validator_script_type_hash: H256,
         generator: Bytes,
         generator_checksum: H256,
+        generator_debug: Option<Bytes>,
     ) -> Result<Self> {
         let checksum: H256 = content_checksum(&generator);
 
@@ -33,13 +35,41 @@ impl Backend {
             );
         }
 
+        let addrs = get_symbol_addrs(
+            generator_debug.as_ref().unwrap_or(&generator),
+            &["_Z9sys_storeP12gw_context_tjPKhmS2_", "sys_store"],
+        )?;
+        let sys_store_addr = addrs.into_iter().flatten().next();
+        let g = ckb_types::H256::from(generator_checksum);
+        if let Some(a) = sys_store_addr {
+            log::info!("generator {g} sys_store addr: {:#x}", a);
+        } else {
+            log::info!("generator {g} sys_store addr not found");
+        }
+
         Ok(Self {
             generator,
+            sys_store_addr,
             validator_script_type_hash,
             backend_type,
             generator_checksum,
         })
     }
+}
+
+fn get_symbol_addrs(elf_program: &Bytes, names: &[&str]) -> Result<Vec<Option<u64>>> {
+    let elf = goblin::elf::Elf::parse(elf_program)?;
+    let mut result = vec![None; names.len()];
+
+    for sym in elf.syms.iter() {
+        if let Some(Ok(name)) = elf.strtab.get(sym.st_name) {
+            if let Some(i) = names.iter().position(|n| *n == name) {
+                result[i] = Some(sym.st_value);
+            }
+        }
+    }
+
+    Ok(result)
 }
 
 /// SUDT Proxy config
@@ -67,6 +97,14 @@ pub struct BackendManage {
 }
 
 impl BackendManage {
+    pub fn polyjuice_backends_have_sys_store_addr(&self) -> bool {
+        self.backend_forks
+            .iter()
+            .flat_map(|(_, c)| c.backends.iter())
+            .filter(|(_, b)| b.backend_type == BackendType::Polyjuice)
+            .all(|(_, b)| b.sys_store_addr.is_some())
+    }
+
     pub fn from_config(configs: Vec<BackendForkConfig>) -> Result<Self> {
         let mut backend_manage: BackendManage = Default::default();
         for config in configs {
@@ -125,17 +163,29 @@ impl BackendManage {
                 generator_checksum,
                 validator_script_type_hash,
                 backend_type,
+                generator_debug,
             } = config;
             let generator = generator
                 .get()
                 .with_context(|| format!("load generator from {}", generator))?
                 .into_owned()
                 .into();
+            let generator_debug = if let Some(d) = generator_debug {
+                Some(
+                    d.get()
+                        .with_context(|| format!("load generator debug from {}", d))?
+                        .into_owned()
+                        .into(),
+                )
+            } else {
+                None
+            };
             let backend = Backend::build(
                 backend_type,
                 validator_script_type_hash.into(),
                 generator,
                 generator_checksum.into(),
+                generator_debug,
             )?;
             #[cfg(has_asm)]
             if compile {
@@ -257,6 +307,7 @@ mod tests {
                         format!("{}/sudt_v0", dir.to_string_lossy()).into(),
                     ),
                     generator_checksum: content_checksum(b"sudt_v0").into(),
+                    generator_debug: None,
                 },
                 BackendConfig {
                     validator_script_type_hash: [43u8; 32].into(),
@@ -265,6 +316,7 @@ mod tests {
                         format!("{}/addr_v0", dir.to_string_lossy()).into(),
                     ),
                     generator_checksum: content_checksum(b"addr_v0").into(),
+                    generator_debug: None,
                 },
             ],
         };
@@ -318,6 +370,7 @@ mod tests {
                         format!("{}/meta_v0", dir.to_string_lossy()).into(),
                     ),
                     generator_checksum: content_checksum(b"meta_v0").into(),
+                    generator_debug: None,
                 },
                 BackendConfig {
                     validator_script_type_hash: [42u8; 32].into(),
@@ -326,6 +379,7 @@ mod tests {
                         format!("{}/sudt_v1", dir.to_string_lossy()).into(),
                     ),
                     generator_checksum: content_checksum(b"sudt_v1").into(),
+                    generator_debug: None,
                 },
             ],
         };

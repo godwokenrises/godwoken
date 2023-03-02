@@ -739,6 +739,10 @@ pub trait GwRpc {
         block_hash: JsonH256,
     ) -> Result<Option<L2BlockCommittedInfo>>;
     async fn gw_get_block(&self, block_hash: JsonH256) -> Result<Option<L2BlockWithStatus>>;
+    async fn gw_state_changes_by_block(
+        &self,
+        block_hash: JsonH256,
+    ) -> Result<Option<BlockStateChanges>>;
     async fn gw_get_block_by_number(&self, block_number: Uint64) -> Result<Option<L2BlockView>>;
     async fn gw_get_block_hash(&self, block_number: Uint64) -> Result<Option<JsonH256>>;
     async fn gw_get_tip_block_hash(&self) -> Result<JsonH256>;
@@ -861,6 +865,16 @@ impl GwRpc for Arc<Registry> {
     }
     async fn gw_get_block(&self, block_hash: JsonH256) -> Result<Option<L2BlockWithStatus>> {
         gw_get_block(block_hash, &self.store, &self.rollup_config).await
+    }
+    async fn gw_state_changes_by_block(
+        &self,
+        block_hash: JsonH256,
+    ) -> Result<Option<BlockStateChanges>> {
+        let changes = self
+            .store
+            .get_block_state_changes(&block_hash.into())
+            .map(|c| serde_json::from_slice(&c).unwrap());
+        Ok(changes)
     }
     async fn gw_get_block_by_number(&self, block_number: Uint64) -> Result<Option<L2BlockView>> {
         gw_get_block_by_number(self, block_number).await

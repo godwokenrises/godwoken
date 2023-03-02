@@ -26,7 +26,8 @@ use crate::error::Error;
 use crate::registry_address::RegistryAddress;
 use crate::vec::Vec;
 use crate::{blake2b::new_blake2b, merkle_utils::calculate_state_checkpoint};
-use core::mem::size_of;
+use core::{cell::RefCell, mem::size_of};
+use std::collections::HashMap;
 
 /* Account fields types */
 pub const GW_ACCOUNT_KV_TYPE: u8 = 0;
@@ -46,6 +47,22 @@ pub const REGISTRY_KEY_PREFIX: &[u8; 3] = b"reg";
 pub const REGISTRY_KEY_FLAG_SCRIPT_HASH_TO_NATIVE: u8 = 1;
 pub const REGISTRY_KEY_FLAG_NATIVE_TO_SCRIPT_HASH: u8 = 2;
 
+pub type AccountKeyMap = HashMap<H256, (u32, Vec<u8>)>;
+
+thread_local! {
+    static ACCOUNT_KEY_MAP: RefCell<Option<AccountKeyMap>> = RefCell::new(None);
+}
+
+pub fn set_account_key_map(map: AccountKeyMap) {
+    ACCOUNT_KEY_MAP.with(|m| m.replace(Some(map)));
+}
+
+pub fn take_account_key_map() -> AccountKeyMap {
+    ACCOUNT_KEY_MAP
+        .with(|m| m.replace(None))
+        .unwrap_or_default()
+}
+
 /* Generate a SMT key
  * raw_key: blake2b(id | type | key)
  *
@@ -58,6 +75,11 @@ pub fn build_account_key(id: u32, key: &[u8]) -> H256 {
     hasher.update(&[GW_ACCOUNT_KV_TYPE]);
     hasher.update(key);
     hasher.finalize(&mut raw_key);
+    ACCOUNT_KEY_MAP.with(|m| {
+        if let Some(m) = m.borrow_mut().as_mut() {
+            m.insert(raw_key, (id, key.into()));
+        }
+    });
     raw_key
 }
 

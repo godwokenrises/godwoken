@@ -143,6 +143,10 @@ pub trait ChainStore: KVStoreRead {
         ))
     }
 
+    fn get_block_state_changes(&self, block_hash: &H256) -> Option<Box<[u8]>> {
+        self.get(COLUMN_BLOCK_STATE_CHANGES, block_hash)
+    }
+
     /// Get tip block hash. It may be a bad block.
     fn get_tip_block_hash(&self) -> Result<H256> {
         let slice = self

@@ -52,7 +52,7 @@ $(SECP256K1_HELPER):
 build/meta-contract-generator: contracts/meta_contract.c sudt_utils.h gw_def.h generator_utils.h
 	$(CC) $(CFLAGS) $(GENERATOR_FLAGS) $(LDFLAGS) -o $@ $<
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
-	$(OBJCOPY) --strip-debug --strip-all $@
+	$(OBJCOPY) --strip-debug $@
 
 build/meta-contract-validator: contracts/meta_contract.c sudt_utils.h gw_def.h validator_utils.h
 	$(CC) $(CFLAGS) $(VALIDATOR_FLAGS) $(LDFLAGS) -o $@ $<
@@ -62,7 +62,7 @@ build/meta-contract-validator: contracts/meta_contract.c sudt_utils.h gw_def.h v
 build/sudt-generator: contracts/sudt.c sudt_utils.h gw_def.h generator_utils.h
 	$(CC) $(CFLAGS) $(GENERATOR_FLAGS) $(LDFLAGS) -o $@ $<
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
-	$(OBJCOPY) --strip-debug --strip-all $@
+	$(OBJCOPY) --strip-debug $@
 
 build/sudt-validator: contracts/sudt.c sudt_utils.h gw_def.h validator_utils.h
 	$(CC) $(CFLAGS) $(VALIDATOR_FLAGS) $(LDFLAGS) -o $@ $<
@@ -72,7 +72,7 @@ build/sudt-validator: contracts/sudt.c sudt_utils.h gw_def.h validator_utils.h
 build/eth-addr-reg-generator: contracts/eth_addr_reg.c sudt_utils.h gw_def.h generator_utils.h
 	$(CC) $(CFLAGS) $(GENERATOR_FLAGS) $(LDFLAGS) -o $@ $<
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
-	$(OBJCOPY) --strip-debug --strip-all $@
+	$(OBJCOPY) --strip-debug $@
 
 build/eth-addr-reg-validator: contracts/eth_addr_reg.c sudt_utils.h gw_def.h validator_utils.h
 	$(CC) $(CFLAGS) $(VALIDATOR_FLAGS) $(LDFLAGS) -o $@ $<

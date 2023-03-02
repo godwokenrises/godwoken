@@ -1889,9 +1889,11 @@ dependencies = [
  "ckb-vm",
  "ckb-vm-aot",
  "ethabi",
+ "goblin 0.4.0",
  "gw-builtin-binaries",
  "gw-common",
  "gw-config",
+ "gw-jsonrpc-types",
  "gw-smt",
  "gw-store",
  "gw-traits",
@@ -1928,6 +1930,7 @@ dependencies = [
  "gw-common",
  "gw-types",
  "serde",
+ "serde_json",
  "serde_repr",
 ]
 
@@ -4311,9 +4314,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.83"
+version = "1.0.94"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38dd04e3c8279e75b31ef29dbdceebfe5ad89f4d0937213c53f7d49d01b3d5a7"
+checksum = "1c533a59c9d8a93a09c6ab31f0fd5e5f4dd1b8fc9434804029839884765d04ea"
 dependencies = [
  "itoa 1.0.3",
  "ryu",
