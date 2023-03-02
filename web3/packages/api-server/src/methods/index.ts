@@ -57,9 +57,9 @@ function getMethods(argsList: ModConstructorArgs = {}) {
                 error.data = err.data;
               }
 
-              if (err.extra) {
-                error.extra = err.extra;
-              }
+              // if (err.extra) {
+              //   error.extra = err.extra;
+              // }
 
               cb(error);
               // NOTE: Our error responses are not automatically collected by NewRelic because we use Jayson instead of
