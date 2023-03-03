@@ -57,6 +57,7 @@ function getMethods(argsList: ModConstructorArgs = {}) {
                 error.data = err.data;
               }
 
+              // hotfix https://github.com/godwokenrises/godwoken/issues/1012
               // if (err.extra) {
               //   error.extra = err.extra;
               // }
