@@ -816,7 +816,7 @@ pub trait GwRpc {
     async fn gw_get_rocksdb_memory_stats(&self) -> Result<Vec<CfMemStat>>;
     async fn gw_dump_jemalloc_profiling(&self) -> Result<()>;
 
-    async fn gw_replay_transaction(
+    async fn debug_replay_transaction(
         &self,
         tx_hash: JsonH256,
         max_cycles: Option<Uint64>,
@@ -1130,7 +1130,7 @@ impl GwRpc for Arc<Registry> {
     }
 
     #[instrument(skip_all)]
-    async fn gw_replay_transaction(
+    async fn debug_replay_transaction(
         &self,
         tx_hash: JsonH256,
         max_cycles: Option<Uint64>,
