@@ -22,7 +22,7 @@ env:
   WEB3_GIT_URL: "https://github.com/${{ github.repository }}"
   WEB3_GIT_CHECKOUT: "${{ github.ref }}"
   GODWOKEN_KICKER_REPO: "godwokenrises/godwoken-kicker"
-  GODWOKEN_KICKER_REF: "0fe565409eff7a3bd3323b5d3411f2d6186ed478"
+  GODWOKEN_KICKER_REF: "develop"
 
 
 jobs:
@@ -30,6 +30,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+    # https://github.com/ATiltedTree/setup-rust
+    - uses: ATiltedTree/setup-rust@v1
+      with:
+        rust-version: nightly
+        components: rustfmt clippy
+    - name: Install moleculec 0.7.2
+      run: |
+        test "$(moleculec --version)" = "Moleculec 0.7.2" \
+        || cargo install moleculec --version 0.7.2 --force
 
     # Godwoken-Kicker
     - uses: actions/checkout@v3
