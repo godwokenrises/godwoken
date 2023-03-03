@@ -40,6 +40,15 @@ jobs:
       run: |
         test "$(moleculec --version)" = "Moleculec 0.7.2" \
         || cargo install moleculec --version 0.7.2 --force
+    - name: Install capsule
+      env:
+        CAPSULE_VERSION: v0.7.0
+      run: |
+        (which capsule && test "$(capsule --version)" = "Capsule 0.7.0") \
+        || curl -OL https://github.com/nervosnetwork/capsule/releases/download/${CAPSULE_VERSION}/capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz \
+        && tar xf capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz \
+        && mv capsule_${CAPSULE_VERSION}_x86_64-linux/capsule ~/.cargo/bin/
+        capsule --version
 
     # Godwoken-Kicker
     - uses: actions/checkout@v3
