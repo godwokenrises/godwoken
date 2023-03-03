@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.12.2] - 2023-03-03
+
+* fix debug_replay_transaction rpc name [#1016](https://github.com/godwokenrises/godwoken/pull/1016)
+
 ## [v1.12.0] - 2023-02-27
 
 * config(mainnet.toml): bump Polyjuice backend to v1.5.3 [#1000](https://github.com/godwokenrises/godwoken/pull/1000)
