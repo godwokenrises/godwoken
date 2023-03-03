@@ -93,7 +93,9 @@ impl LocalCellsManager {
     }
 }
 
+#[derive(Default)]
 pub enum CollectLocalAndIndexerCursor {
+    #[default]
     Local,
     Indexer(Option<JsonBytes>),
     Ended,

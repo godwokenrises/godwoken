@@ -10,10 +10,8 @@ use gw_store::state::MemStateDB;
 use gw_store::transaction::StoreTransaction;
 use gw_types::core::DepType;
 use gw_types::h256::*;
-use gw_types::offchain::{CellInfo, InputCellInfo};
-use gw_types::packed::{
-    CellDep, CellInput, L2Block, OutPoint, OutPointVec, WithdrawalRequestExtra,
-};
+use gw_types::offchain::InputCellInfo;
+use gw_types::packed::{CellDep, L2Block, OutPoint, OutPointVec, WithdrawalRequestExtra};
 use gw_types::prelude::*;
 use gw_utils::wallet::Wallet;
 use gw_utils::RollupContext;
@@ -80,9 +78,11 @@ impl OffChainMockContext {
             contracts_dep_manager,
         } = args;
 
-        let rollup_cell = {
+        let rollup_cell: InputCellInfo = {
             let query = rpc_client.query_rollup_cell().await?;
-            into_input_cell_info(query.ok_or_else(|| anyhow!("can't found rollup cell"))?)
+            query
+                .ok_or_else(|| anyhow!("can't found rollup cell"))?
+                .into()
         };
 
         let median_time = {
@@ -581,7 +581,7 @@ async fn resolve_cell_deps(
                 .and_then(|q| q.cell)
                 .ok_or_else(|| anyhow!("can't find dep cell"))?
         };
-        resolved_deps.push(into_input_cell_info(dep_cell));
+        resolved_deps.push(dep_cell.into());
     }
 
     Ok(resolved_deps)
@@ -612,15 +612,6 @@ async fn resolve_dep_group(rpc_client: &RPCClient, dep: &CellDep) -> Result<Vec<
     };
 
     Ok(out_points.into_iter().map(into_dep).collect())
-}
-
-fn into_input_cell_info(cell_info: CellInfo) -> InputCellInfo {
-    InputCellInfo {
-        input: CellInput::new_builder()
-            .previous_output(cell_info.out_point.clone())
-            .build(),
-        cell: cell_info,
-    }
 }
 
 impl From<MockOutput> for TxWithContext {

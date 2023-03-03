@@ -1,8 +1,12 @@
 use anyhow::Result;
 use gw_rpc_client::indexer_client::CkbIndexerClient;
-use gw_types::h256::*;
-use gw_types::offchain::CompatibleFinalizedTimepoint;
-use gw_types::{core::ScriptHashType, offchain::CustodianStat, packed::Script, prelude::*};
+use gw_types::{
+    core::ScriptHashType,
+    h256::*,
+    offchain::{CompatibleFinalizedTimepoint, CustodianStat},
+    packed::Script,
+    prelude::*,
+};
 
 /// Query custodian ckb from ckb-indexer
 pub async fn stat_custodian_cells(

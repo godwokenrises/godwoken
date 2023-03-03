@@ -1,9 +1,9 @@
+use std::{collections::HashMap, path::PathBuf};
+
 use ckb_fixed_hash::{H160, H256};
 use ckb_jsonrpc_types::{CellDep, Script};
 use gw_config::GenesisConfig;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::PathBuf;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
 pub struct SetupConfig {
@@ -49,6 +49,7 @@ pub struct UserRollupConfig {
 pub struct DeployItem {
     pub script_type_hash: H256,
     pub cell_dep: CellDep,
+    pub type_script: Script,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]

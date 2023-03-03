@@ -4,8 +4,7 @@ use gw_types::bytes::Bytes;
 use gw_types::core::ScriptHashType;
 use gw_types::offchain::{CellInfo, InputCellInfo};
 use gw_types::packed::{
-    CellDep, CellInput, CellOutput, CustodianLockArgs, Script, UnlockCustodianViaRevertWitness,
-    WitnessArgs,
+    CellDep, CellOutput, CustodianLockArgs, Script, UnlockCustodianViaRevertWitness, WitnessArgs,
 };
 use gw_types::prelude::*;
 use gw_utils::RollupContext;
@@ -56,16 +55,7 @@ pub fn revert(
             output_builder.lock(deposit_lock.clone()).build()
         };
 
-        let custodian_input = {
-            let input = CellInput::new_builder()
-                .previous_output(revert_custodian.out_point.clone())
-                .build();
-
-            InputCellInfo {
-                input,
-                cell: revert_custodian.clone(),
-            }
-        };
+        let custodian_input = InputCellInfo::from(revert_custodian.clone());
 
         let unlock_custodian_witness = UnlockCustodianViaRevertWitness::new_builder()
             .deposit_lock_hash(deposit_lock.hash().pack())

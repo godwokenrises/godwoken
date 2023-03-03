@@ -6,6 +6,7 @@ use gw_config::{BackendType, Config};
 use gw_types::{
     core::ScriptHashType,
     packed::{CreateAccount, Fee, L2Transaction, MetaContractArgs, RawL2Transaction, Script},
+    prelude::Pack as GwPack,
 };
 
 use crate::{

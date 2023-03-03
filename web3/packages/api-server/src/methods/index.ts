@@ -57,9 +57,10 @@ function getMethods(argsList: ModConstructorArgs = {}) {
                 error.data = err.data;
               }
 
-              if (err.extra) {
-                error.extra = err.extra;
-              }
+              // hotfix https://github.com/godwokenrises/godwoken/issues/1012
+              // if (err.extra) {
+              //   error.extra = err.extra;
+              // }
 
               cb(error);
               // NOTE: Our error responses are not automatically collected by NewRelic because we use Jayson instead of

@@ -1,16 +1,18 @@
 #![allow(clippy::mutable_key_type)]
 
-use anyhow::{anyhow, Result};
+use std::collections::{HashMap, HashSet};
+
+use anyhow::{anyhow, bail, Result};
+use ckb_types::core::Capacity;
 use gw_types::{
     bytes::Bytes,
     offchain::{CellInfo, InputCellInfo},
     packed::{
-        CellDep, CellInput, CellOutput, OmniLockWitnessLock, OutPoint, RawTransaction, Transaction,
+        CellDep, CellOutput, OmniLockWitnessLock, OutPoint, RawTransaction, Script, Transaction,
         WitnessArgs,
     },
     prelude::*,
 };
-use std::collections::{HashMap, HashSet};
 
 pub const SIGHASH_TYPE_HASH: [u8; 32] =
     ckb_types::h256!("0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8").0;
@@ -120,6 +122,32 @@ impl TransactionSkeleton {
         &mut self.cell_outputs
     }
 
+    /// Add output with the specified lock, type, and data. Output capacity will
+    /// be just enough for the data.
+    pub fn add_output(&mut self, lock: Script, type_: Option<Script>, data: Bytes) -> Result<()> {
+        let output = CellOutput::new_builder()
+            .lock(lock)
+            .type_(type_.pack())
+            .build();
+        let cap = output.occupied_capacity(Capacity::bytes(data.len())?)?;
+        let output = output.as_builder().capacity(cap.as_u64().pack()).build();
+        self.cell_outputs.push((output, data));
+        Ok(())
+    }
+
+    /// Add output with the specified lock and capacity.
+    pub fn transfer_to(&mut self, lock: Script, capacity: u64) -> Result<()> {
+        let output = CellOutput::new_builder()
+            .lock(lock)
+            .capacity(capacity.pack())
+            .build();
+        if output.occupied_capacity(Capacity::zero())?.as_u64() > capacity {
+            bail!("not enough capacity");
+        }
+        self.cell_outputs.push((output, Bytes::new()));
+        Ok(())
+    }
+
     pub fn witnesses(&self) -> &Vec<WitnessArgs> {
         &self.witnesses
     }
@@ -133,14 +161,7 @@ impl TransactionSkeleton {
     }
 
     pub fn add_owner_cell(&mut self, owner_cell: CellInfo) {
-        self.inputs_mut().push({
-            InputCellInfo {
-                input: CellInput::new_builder()
-                    .previous_output(owner_cell.out_point.clone())
-                    .build(),
-                cell: owner_cell.clone(),
-            }
-        });
+        self.inputs_mut().push(owner_cell.clone().into());
         self.outputs_mut()
             .push((owner_cell.output, owner_cell.data));
     }

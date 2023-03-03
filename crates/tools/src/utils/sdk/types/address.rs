@@ -1,7 +1,8 @@
-use serde::{Deserialize, Serialize};
-use std::convert::{TryFrom, TryInto};
-use std::fmt;
-use std::str::FromStr;
+use std::{
+    convert::{TryFrom, TryInto},
+    fmt,
+    str::FromStr,
+};
 
 use bech32::{self, convert_bits, ToBase32, Variant};
 use ckb_hash::blake2b_256;
@@ -12,12 +13,12 @@ use ckb_types::{
     prelude::*,
     H160, H256,
 };
+use serde::{Deserialize, Serialize};
 
 use super::NetworkType;
 use crate::utils::sdk::constants::{
     ACP_TYPE_HASH_AGGRON, ACP_TYPE_HASH_LINA, MULTISIG_TYPE_HASH, SIGHASH_TYPE_HASH,
 };
-pub use old_addr::{Address as OldAddress, AddressFormat as OldAddressFormat};
 
 #[derive(Hash, Eq, PartialEq, Debug, Clone, Copy, Serialize, Deserialize)]
 #[repr(u8)]
@@ -429,136 +430,11 @@ impl FromStr for Address {
     }
 }
 
-mod old_addr {
-    use super::{
-        bech32, blake2b_256, convert_bits, Deserialize, NetworkType, Script, ScriptHashType,
-        Serialize, ToBase32, H160, H256,
-    };
-    use ckb_crypto::secp::Pubkey;
-    use ckb_types::prelude::*;
-
-    // \x01 is the P2PH version
-    const P2PH_MARK: &[u8] = b"\x01P2PH";
-
-    #[derive(Hash, Eq, PartialEq, Debug, Clone, Copy, Serialize, Deserialize)]
-    pub enum AddressFormat {
-        // SECP256K1 algorithm	PK
-        #[allow(dead_code)]
-        Sp2k,
-        // SECP256R1 algorithm	PK
-        #[allow(dead_code)]
-        Sp2r,
-        // SECP256K1 + blake160	blake160(pk)
-        P2ph,
-        // Alias of SP2K	PK
-        #[allow(dead_code)]
-        P2pk,
-    }
-
-    impl Default for AddressFormat {
-        fn default() -> AddressFormat {
-            AddressFormat::P2ph
-        }
-    }
-
-    impl AddressFormat {
-        pub fn from_bytes(format: &[u8]) -> Result<AddressFormat, String> {
-            match format {
-                P2PH_MARK => Ok(AddressFormat::P2ph),
-                _ => Err(format!("Unsupported address format data: {:?}", format)),
-            }
-        }
-
-        pub fn to_bytes(self) -> Result<Vec<u8>, String> {
-            match self {
-                AddressFormat::P2ph => Ok(P2PH_MARK.to_vec()),
-                _ => Err(format!("Unsupported address format: {:?}", self)),
-            }
-        }
-    }
-
-    #[derive(Hash, Eq, PartialEq, Debug, Clone, Serialize, Deserialize)]
-    pub struct Address {
-        format: AddressFormat,
-        hash: H160,
-    }
-
-    impl Address {
-        pub fn new_default(hash: H160) -> Address {
-            let format = AddressFormat::P2ph;
-            Address { format, hash }
-        }
-
-        pub fn hash(&self) -> &H160 {
-            &self.hash
-        }
-
-        pub fn lock_script(&self, code_hash: H256) -> Script {
-            Script::new_builder()
-                .args(self.hash.as_bytes().pack())
-                .code_hash(code_hash.pack())
-                .hash_type(ScriptHashType::Data.into())
-                .build()
-        }
-
-        pub fn from_pubkey(format: AddressFormat, pubkey: &Pubkey) -> Result<Address, String> {
-            if format != AddressFormat::P2ph {
-                return Err("Only support P2PH for now".to_owned());
-            }
-            // Serialize pubkey as compressed format
-            let hash = H160::from_slice(&blake2b_256(pubkey.serialize())[0..20])
-                .expect("Generate hash(H160) from pubkey failed");
-            Ok(Address { format, hash })
-        }
-
-        pub fn from_lock_arg(bytes: &[u8]) -> Result<Address, String> {
-            let format = AddressFormat::P2ph;
-            let hash = H160::from_slice(bytes).map_err(|err| err.to_string())?;
-            Ok(Address { format, hash })
-        }
-
-        pub fn from_input(network: NetworkType, input: &str) -> Result<Address, String> {
-            let (hrp, data, _variant) = bech32::decode(input).map_err(|err| err.to_string())?;
-            if NetworkType::from_prefix(&hrp)
-                .filter(|input_network| input_network == &network)
-                .is_none()
-            {
-                return Err(format!("Invalid hrp({}) for {}", hrp, network));
-            }
-            let data = convert_bits(&data, 5, 8, false).unwrap();
-            if data.len() != 25 {
-                return Err(format!("Invalid input data length {}", data.len()));
-            }
-            let format = AddressFormat::from_bytes(&data[0..5])?;
-            let hash = H160::from_slice(&data[5..25]).map_err(|err| err.to_string())?;
-            Ok(Address { format, hash })
-        }
-
-        pub fn display_with_prefix(&self, network: NetworkType) -> String {
-            let hrp = network.to_prefix();
-            let mut data = [0; 25];
-            let format_data = self.format.to_bytes().expect("Invalid address format");
-            data[0..5].copy_from_slice(&format_data[0..5]);
-            data[5..25].copy_from_slice(self.hash.as_bytes());
-            bech32::encode(hrp, data.to_base32(), bech32::Variant::Bech32)
-                .unwrap_or_else(|_| panic!("Encode address failed: hash={:?}", self.hash))
-        }
-
-        #[allow(clippy::inherent_to_string)]
-        #[deprecated(
-            since = "0.25.0",
-            note = "Name conflicts with the inherent to_string method. Use display_with_prefix instead."
-        )]
-        pub fn to_string(&self, network: NetworkType) -> String {
-            self.display_with_prefix(network)
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use super::*;
     use ckb_types::{h160, h256};
+
+    use super::*;
 
     #[test]
     fn test_short_address() {
