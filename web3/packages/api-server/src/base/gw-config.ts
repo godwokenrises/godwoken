@@ -19,7 +19,7 @@ import { CKB_SUDT_ID, ZERO_ETH_ADDRESS } from "../methods/constant";
 import { Uint32 } from "./types/uint";
 import { snakeToCamel } from "../util";
 import { EntryPointContract } from "../gasless/entrypoint";
-import { EthRegistryAddress } from "./address";
+import { BaseEthRegistryAddress } from "./base-eth-registry-address";
 import { logger } from "./logger";
 
 // source: https://github.com/nervosnetwork/godwoken/commit/d6c98d8f8a199b6ec29bc77c5065c1108220bb0a#diff-c56fda2ca3b1366049c88e633389d9b6faa8366151369fd7314c81f6e389e5c7R5
@@ -39,7 +39,7 @@ export class GwConfig {
   private iNodeVersion: string | undefined;
   private iEntryPointContract: EntryPointContract | undefined;
 
-  constructor(rpcOrUrl: GodwokenClient | string) {
+  constructor(rpcOrUrl: string) {
     if (typeof rpcOrUrl === "string") {
       this.rpc = new GodwokenClient(rpcOrUrl);
       return;
@@ -441,9 +441,10 @@ async function zeroAddressAccount(
   rpc: GodwokenClient,
   registryId: number
 ): Promise<AccountWithAddress | undefined> {
-  const registryAddress = new EthRegistryAddress(ZERO_ETH_ADDRESS, {
-    registryId,
-  });
+  const registryAddress = new BaseEthRegistryAddress(
+    ZERO_ETH_ADDRESS,
+    registryId
+  );
   const scriptHash: Hash | undefined = await rpc.getScriptHashByRegistryAddress(
     registryAddress.serialize()
   );
