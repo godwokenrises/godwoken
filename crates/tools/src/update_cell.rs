@@ -2,12 +2,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Result};
 use ckb_jsonrpc_types::{Either, OutputsValidator};
-use ckb_types::{packed, prelude::Entity};
-use gw_config::WalletConfig;
 use gw_rpc_client::{ckb_client::CkbClient, indexer_client::CkbIndexerClient};
 use gw_types::{
-    offchain::{CellInfo, InputCellInfo},
-    packed::{CellInput, OutPoint},
+    offchain::CellInfo,
+    packed::{self, OutPoint},
     prelude::*,
 };
 use gw_utils::{
@@ -104,17 +102,12 @@ pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_, P>) -> Result<
         .tx_hash(tx_hash.pack())
         .index(index.pack())
         .build();
-    let input = InputCellInfo {
-        input: CellInput::new_builder()
-            .previous_output(out_point.clone())
-            .build(),
-        cell: CellInfo {
-            out_point,
-            output: existed_cell.clone(),
-            data: existed_cell_data.clone().into_bytes(),
-        },
+    let input = CellInfo {
+        out_point,
+        output: existed_cell.clone(),
+        data: existed_cell_data.clone().into_bytes(),
     };
-    tx_skeleton.inputs_mut().push(input);
+    tx_skeleton.inputs_mut().push(input.into());
     tx_skeleton
         .outputs_mut()
         .push((new_cell, new_cell_data.into()));
@@ -133,10 +126,7 @@ pub async fn update_cell<P: AsRef<Path>>(args: UpdateCellArgs<'_, P>) -> Result<
     )
     .await?;
     // sign
-    let wallet = Wallet::from_config(&WalletConfig {
-        privkey_path: pk_path,
-        lock: payment_lock.into(),
-    })?;
+    let wallet = Wallet::from_privkey_path(&pk_path)?;
     let tx = wallet.sign_tx_skeleton(tx_skeleton)?;
     let update_message = format!(
         "tx hash: {} cell index: 0 size: {}",

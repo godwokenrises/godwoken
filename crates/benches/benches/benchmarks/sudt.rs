@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use criterion::*;
-use gw_builtin_binaries::Resource;
+use gw_builtin_binaries::{file_checksum, Resource};
 use gw_common::{
     builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress, state::State,
 };
@@ -26,12 +26,14 @@ use gw_types::{
     core::{AllowedEoaType, ScriptHashType},
     h256::*,
     offchain::RunResult,
-    packed::{AllowedTypeHash, BlockInfo, Fee},
-    packed::{RawL2Transaction, RollupConfig, SUDTArgs, SUDTTransfer, Script},
+    packed::{
+        AllowedTypeHash, BlockInfo, Fee, RawL2Transaction, RollupConfig, SUDTArgs, SUDTTransfer,
+        Script,
+    },
     prelude::*,
     U256,
 };
-use gw_utils::{checksum::file_checksum, RollupContext};
+use gw_utils::RollupContext;
 
 const DUMMY_SUDT_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [3u8; 32];
 

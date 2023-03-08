@@ -2,21 +2,22 @@
 
 use std::collections::HashSet;
 
-use crate::{
-    local_cells::{
-        collect_local_and_indexer_cells, CollectLocalAndIndexerCursor, LocalCellsManager,
-    },
-    transaction_skeleton::TransactionSkeleton,
-};
 use anyhow::{bail, Result};
 use gw_rpc_client::{
     indexer_client::CkbIndexerClient,
     indexer_types::{Order, SearchKey},
 };
 use gw_types::{
-    offchain::{CellInfo, InputCellInfo},
-    packed::{CellInput, CellOutput, OutPoint, Script},
+    offchain::CellInfo,
+    packed::{CellOutput, OutPoint, Script},
     prelude::*,
+};
+
+use crate::{
+    local_cells::{
+        collect_local_and_indexer_cells, CollectLocalAndIndexerCursor, LocalCellsManager,
+    },
+    transaction_skeleton::TransactionSkeleton,
 };
 
 /// Calculate tx fee
@@ -25,7 +26,7 @@ fn calculate_required_tx_fee(tx_size: usize, fee_rate: u64) -> u64 {
     (tx_size as u64) * fee_rate / 1000
 }
 
-/// Add fee cell to tx skeleton
+/// Balance the transaction by adding input payment cells and a output change cell.
 pub async fn fill_tx_fee_with_local(
     tx_skeleton: &mut TransactionSkeleton,
     client: &CkbIndexerClient,
@@ -94,12 +95,7 @@ pub async fn fill_tx_fee_with_local(
         // put cells in tx skeleton
         tx_skeleton
             .inputs_mut()
-            .extend(cells.into_iter().map(|cell| {
-                let input = CellInput::new_builder()
-                    .previous_output(cell.out_point.clone())
-                    .build();
-                InputCellInfo { input, cell }
-            }));
+            .extend(cells.into_iter().map(Into::into));
 
         let tx_size = estimate_tx_size_with_change(tx_skeleton)?;
         let tx_fee = calculate_required_tx_fee(tx_size, fee_rate);
@@ -123,7 +119,7 @@ pub async fn fill_tx_fee_with_local(
     Ok(())
 }
 
-/// Add fee cell to tx skeleton
+/// Balance the transaction by adding input payment cells and a output change cell.
 pub async fn fill_tx_fee(
     tx_skeleton: &mut TransactionSkeleton,
     client: &CkbIndexerClient,

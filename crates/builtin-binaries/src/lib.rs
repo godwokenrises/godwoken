@@ -15,6 +15,7 @@ mod bundled {
     #![allow(missing_docs, clippy::unreadable_literal)]
     include!(concat!(env!("OUT_DIR"), "/bundled.rs"));
 }
+
 use std::{
     borrow::Cow,
     fmt, fs,
@@ -22,10 +23,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use anyhow::Result;
 /// Bundled resources
 pub use bundled::BUNDLED;
-
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 

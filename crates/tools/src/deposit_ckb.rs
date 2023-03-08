@@ -1,26 +1,27 @@
-use crate::account::{privkey_to_eth_address, read_privkey};
-use crate::godwoken_rpc::GodwokenRpcClient;
-use crate::hasher::CkbHasher;
-use crate::types::ScriptsDeploymentResult;
-use crate::utils::sdk::{Address, AddressPayload, HumanCapacity, SECP256K1};
-use crate::utils::transaction::{get_network_type, read_config, run_cmd};
-use anyhow::{anyhow, Result};
+use std::{
+    path::Path,
+    str::FromStr,
+    time::{Duration, Instant},
+};
+
+use anyhow::{anyhow, bail, Result};
 use ckb_fixed_hash::H256;
 use ckb_types::core::Capacity;
-use ckb_types::{bytes::Bytes as CKBBytes, core::ScriptHashType, packed::Script as CKBScript};
 use gw_common::builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID};
-use gw_rpc_client::ckb_client::CkbClient;
-use gw_types::core::Timepoint;
-use gw_types::packed::{CellOutput, CustodianLockArgs};
-use gw_types::U256;
 use gw_types::{
-    bytes::Bytes as GwBytes,
-    packed::{Byte32, DepositLockArgs, Script},
+    core::{ScriptHashType, Timepoint},
+    packed::{CellOutput, CustodianLockArgs, DepositLockArgs, Script},
     prelude::*,
+    U256,
 };
-use std::path::Path;
-use std::str::FromStr;
-use std::time::{Duration, Instant};
+use gw_utils::transaction_skeleton::TransactionSkeleton;
+
+use crate::{
+    account::{privkey_to_eth_address, read_privkey},
+    godwoken_rpc::GodwokenRpcClient,
+    types::ScriptsDeploymentResult,
+    utils::{deploy::DeployContextArgs, sdk::HumanCapacity, transaction::read_config},
+};
 
 #[allow(clippy::too_many_arguments)]
 pub async fn deposit_ckb(
@@ -28,8 +29,10 @@ pub async fn deposit_ckb(
     scripts_deployment_path: &Path,
     config_path: &Path,
     capacity: &str,
-    fee: &str,
+    // TODO: setting fee.
+    _fee: &str,
     ckb_rpc_url: &str,
+    ckb_indexer_rpc_url: Option<&str>,
     eth_address: Option<&str>,
     godwoken_rpc_url: &str,
 ) -> Result<()> {
@@ -39,57 +42,59 @@ pub async fn deposit_ckb(
 
     let config = read_config(&config_path)?;
 
+    let context = DeployContextArgs {
+        ckb_rpc: ckb_rpc_url.into(),
+        ckb_indexer_rpc: ckb_indexer_rpc_url.map(Into::into),
+        privkey_path: privkey_path.into(),
+    }
+    .build()
+    .await?;
+
     let privkey = read_privkey(privkey_path)?;
 
     // Using private key to calculate eth address when eth_address not provided.
     let eth_address_bytes = match eth_address {
-        Some(addr) => {
-            let addr_vec = hex::decode(&addr.trim_start_matches("0x").as_bytes())?;
-            CKBBytes::from(addr_vec)
-        }
+        Some(addr) => hex::decode(&addr.trim_start_matches("0x").as_bytes())?.into(),
         None => privkey_to_eth_address(&privkey)?,
     };
     log::info!("eth address: 0x{:#x}", eth_address_bytes);
 
     let rollup_type_hash = &config.consensus.get_config().genesis.rollup_type_hash;
 
-    let owner_lock_hash = Byte32::from_slice(privkey_to_lock_hash(&privkey)?.as_bytes())?;
+    let owner_lock_hash = context.wallet.lock_script().hash();
 
     // build layer2 lock
     let l2_code_hash = &scripts_deployment.eth_account_lock.script_type_hash;
 
-    let mut l2_args_vec = rollup_type_hash.as_bytes().to_vec();
-    l2_args_vec.append(&mut eth_address_bytes.to_vec());
-    let l2_lock_args = Pack::pack(&GwBytes::from(l2_args_vec));
+    let mut l2_args = rollup_type_hash.as_bytes().to_vec();
+    l2_args.append(&mut eth_address_bytes.to_vec());
 
     let l2_lock = Script::new_builder()
-        .code_hash(Byte32::from_slice(l2_code_hash.as_bytes())?)
+        .code_hash(l2_code_hash.pack())
         .hash_type(ScriptHashType::Type.into())
-        .args(l2_lock_args)
+        .args(l2_args.pack())
         .build();
 
-    let l2_lock_hash = CkbHasher::new().update(l2_lock.as_slice()).finalize();
+    let l2_lock_hash: H256 = l2_lock.hash().into();
 
-    let l2_lock_hash_str = format!("0x{}", faster_hex::hex_string(l2_lock_hash.as_bytes())?);
-    log::info!("layer2 script hash: {}", l2_lock_hash_str);
+    log::info!("layer2 script hash: 0x{}", l2_lock_hash);
 
     // cancel_timeout default to 20 minutes
     let deposit_lock_args = DepositLockArgs::new_builder()
-        .owner_lock_hash(owner_lock_hash)
-        .cancel_timeout(Pack::pack(&0xc0000000000004b0u64))
+        .owner_lock_hash(owner_lock_hash.pack())
+        .cancel_timeout(0xc0000000000004b0u64.pack())
         .layer2_lock(l2_lock)
-        .registry_id(Pack::pack(&ETH_REGISTRY_ACCOUNT_ID))
+        .registry_id(ETH_REGISTRY_ACCOUNT_ID.pack())
         .build();
 
     let minimal_capacity = minimal_deposit_capacity(&deposit_lock_args)?;
     let capacity_in_shannons = parse_capacity(capacity)?;
     if capacity_in_shannons < minimal_capacity {
-        let msg = anyhow!(
+        bail!(
             "Deposit CKB required {} CKB at least, provided {}.",
             HumanCapacity::from(minimal_capacity).to_string(),
             HumanCapacity::from(capacity_in_shannons).to_string()
         );
-        return Err(msg);
     }
 
     let mut l1_lock_args = rollup_type_hash.as_bytes().to_vec();
@@ -97,67 +102,27 @@ pub async fn deposit_ckb(
 
     let deposit_lock_code_hash = &scripts_deployment.deposit_lock.script_type_hash;
 
-    let rpc_client = CkbClient::with_url(ckb_rpc_url)?;
-    let network_type = get_network_type(&rpc_client).await?;
-    let address_payload = AddressPayload::new_full(
-        ScriptHashType::Type,
-        Pack::pack(deposit_lock_code_hash),
-        GwBytes::from(l1_lock_args),
-    );
-    let address: Address = Address::new(network_type, address_payload, true);
+    let deposit_lock = Script::new_builder()
+        .code_hash(deposit_lock_code_hash.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args(l1_lock_args.pack())
+        .build();
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
-
-    log::info!("script hash: 0x{}", hex::encode(l2_lock_hash.as_bytes()));
 
     let init_balance = get_balance_by_script_hash(&mut godwoken_rpc_client, &l2_lock_hash).await?;
     log::info!("balance before deposit: {}", init_balance);
 
-    loop {
-        let result = run_cmd(vec![
-            "--url",
-            ckb_rpc_url,
-            "wallet",
-            "transfer",
-            "--privkey-path",
-            privkey_path.to_str().expect("non-utf8 file path"),
-            "--to-address",
-            address.to_string().as_str(),
-            "--capacity",
-            capacity,
-            "--tx-fee",
-            fee,
-            "--skip-check-to-address",
-        ]);
-        let output = match result {
-            Ok(output) => output,
-            Err(e) => {
-                // Sending transaction may fail because there is another
-                // **proposed** but not committed transaction using the same
-                // input.
-                log::warn!("Running ckb-cli failed: {:?}. Retrying.", e);
-                tokio::time::sleep(Duration::from_secs(3)).await;
-                continue;
-            }
-        };
+    let mut tx = TransactionSkeleton::new([0u8; 32]);
+    tx.transfer_to(deposit_lock, capacity_in_shannons)?;
+    let tx = context.deploy(tx, &Default::default()).await?;
 
-        let tx_hash = H256::from_str(output.trim().trim_start_matches("0x"))?;
-        log::info!("tx_hash: {:#x}", tx_hash);
-
-        if let Err(e) = rpc_client
-            .wait_tx_committed_with_timeout_and_logging(tx_hash.0, 600)
-            .await
-        {
-            if e.to_string().contains("rejected") {
-                // Transaction can be rejected due to double spending. Retry.
-                log::warn!("Transaction is rejected. Retrying.");
-            } else {
-                return Err(e);
-            }
-        } else {
-            break;
-        }
-    }
+    let tx_hash: H256 = tx.hash().into();
+    log::info!("Sent transaction 0x{tx_hash}");
+    context
+        .ckb_client
+        .wait_tx_committed_with_timeout_and_logging(tx_hash.0, 600)
+        .await?;
 
     wait_for_balance_change(
         &mut godwoken_rpc_client,
@@ -168,17 +133,6 @@ pub async fn deposit_ckb(
     .await?;
 
     Ok(())
-}
-
-fn privkey_to_lock_hash(privkey: &H256) -> Result<H256> {
-    let privkey = secp256k1::SecretKey::from_slice(privkey.as_bytes())?;
-    let pubkey = secp256k1::PublicKey::from_secret_key(&SECP256K1, &privkey);
-    let address_payload = AddressPayload::from_pubkey(&pubkey);
-
-    let lock_hash: H256 = CKBScript::from(&address_payload)
-        .calc_script_hash()
-        .unpack();
-    Ok(lock_hash)
 }
 
 async fn wait_for_balance_change(

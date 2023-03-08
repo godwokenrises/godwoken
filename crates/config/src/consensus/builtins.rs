@@ -1,5 +1,6 @@
-use crate::ForkConfig;
 use lazy_static::lazy_static;
+
+use crate::ForkConfig;
 
 pub fn testnet() -> &'static ForkConfig {
     lazy_static! {

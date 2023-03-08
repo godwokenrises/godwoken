@@ -97,7 +97,6 @@ pub struct RPCRateLimit {
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WalletConfig {
     pub privkey_path: PathBuf,
-    pub lock: Script,
 }
 
 // NOTE: Rewards receiver lock must be different than lock in WalletConfig,
@@ -120,6 +119,8 @@ pub struct ContractsCellDep {
     pub challenge_cell_lock: CellDep,
     pub l1_sudt_type: CellDep,
     pub omni_lock: CellDep,
+    pub delegate_cell_lock: Option<CellDep>,
+    pub delegate_cell: Option<CellDep>,
     pub allowed_eoa_locks: HashMap<H256, CellDep>,
     pub allowed_contract_types: HashMap<H256, CellDep>,
 }

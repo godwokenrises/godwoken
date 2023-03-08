@@ -1,16 +1,18 @@
-use crate::{
-    types::{BuildScriptsResult, Programs},
-    utils,
-};
-use anyhow::Result;
-use clap::arg_enum;
-use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
 };
+
+use anyhow::Result;
+use clap::arg_enum;
+use serde::{Deserialize, Serialize};
 use url::Url;
+
+use crate::{
+    types::{BuildScriptsResult, Programs},
+    utils,
+};
 
 pub const SCRIPT_BUILD_DIR_PATH: &str = "scripts-build/";
 pub const SCRIPTS_DIR_PATH: &str = "scripts/";
@@ -275,6 +277,7 @@ fn generate_script_deploy_config(
         meta_contract_validator: get_path("meta_contract_validator"),
         polyjuice_validator: get_path("polyjuice_validator"),
         eth_addr_reg_validator: get_path("eth_addr_reg_validator"),
+        delegate_cell_lock: get_path("delegate_cell_lock"),
     };
     let build_scripts_result = BuildScriptsResult {
         programs,

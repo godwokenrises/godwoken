@@ -1,17 +1,27 @@
-use crate::account::{eth_sign, privkey_to_l2_script_hash, read_privkey};
-use crate::godwoken_rpc::GodwokenRpcClient;
-use crate::types::ScriptsDeploymentResult;
-use crate::utils::message::generate_eip712_message_to_sign;
-use crate::utils::transaction::{read_config, wait_for_l2_tx};
+use std::path::Path;
+
 use anyhow::Result;
 use ckb_jsonrpc_types::JsonBytes;
-use ckb_types::bytes::Bytes;
-use gw_common::builtins::ETH_REGISTRY_ACCOUNT_ID;
-use gw_common::registry_address::RegistryAddress;
-use gw_types::packed::{Fee, L2Transaction, RawL2Transaction, SUDTArgs, SUDTTransfer};
-use gw_types::prelude::*;
-use gw_types::U256;
-use std::path::Path;
+use ckb_types::{
+    bytes::Bytes,
+    prelude::{Builder as CKBBuilder, Entity as CKBEntity},
+};
+use gw_common::{builtins::ETH_REGISTRY_ACCOUNT_ID, registry_address::RegistryAddress};
+use gw_types::{
+    packed::{Fee, L2Transaction, RawL2Transaction, SUDTArgs, SUDTTransfer},
+    prelude::*,
+    U256,
+};
+
+use crate::{
+    account::{eth_sign, privkey_to_l2_script_hash, read_privkey},
+    godwoken_rpc::GodwokenRpcClient,
+    types::ScriptsDeploymentResult,
+    utils::{
+        message::generate_eip712_message_to_sign,
+        transaction::{read_config, wait_for_l2_tx},
+    },
+};
 
 #[allow(clippy::too_many_arguments)]
 pub async fn transfer(

@@ -6,7 +6,7 @@ version = 3
 name = "always-success"
 version = "0.1.0"
 dependencies = [
- "ckb-std",
+ "ckb-std 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -133,6 +133,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ckb-std"
+version = "0.10.0"
+source = "git+https://github.com/nervosnetwork/ckb-std.git#d0c3b5d83f126665eb80226112ffdaa9961734a9"
+dependencies = [
+ "buddy-alloc",
+ "cc",
+ "ckb-standalone-types",
+]
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -177,6 +187,13 @@ name = "custodian-lock"
 version = "0.1.0"
 dependencies = [
  "gw-utils",
+]
+
+[[package]]
+name = "delegate-cell-lock"
+version = "0.1.0"
+dependencies = [
+ "ckb-std 0.10.0 (git+https://github.com/nervosnetwork/ckb-std.git)",
 ]
 
 [[package]]
@@ -299,7 +316,7 @@ dependencies = [
 name = "gw-utils"
 version = "0.1.0"
 dependencies = [
- "ckb-std",
+ "ckb-std 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "gw-common",
  "gw-types",
 ]

@@ -1,22 +1,21 @@
 //! Transaction related utils
 //! NOTICE: Some functions should be moved to a more proper module than this.
 
-use crate::utils::sdk::NetworkType;
-use anyhow::anyhow;
-use anyhow::Result;
-use ckb_fixed_hash::{h256, H256};
+use std::{
+    env,
+    ffi::OsStr,
+    fs,
+    path::Path,
+    process::Command,
+    time::{Duration, Instant},
+};
+
+use anyhow::{anyhow, Result};
+use ckb_fixed_hash::H256;
 use gw_config::Config;
 use gw_jsonrpc_types::godwoken::TxReceipt;
-use gw_rpc_client::ckb_client::CkbClient;
-use std::fs;
-use std::path::Path;
-use std::time::{Duration, Instant};
-use std::{env, ffi::OsStr, process::Command};
 
 use crate::godwoken_rpc::GodwokenRpcClient;
-
-// "TYPE_ID" in hex
-pub const TYPE_ID_CODE_HASH: H256 = h256!("0x545950455f4944");
 
 pub fn run_in_dir<I, S>(bin: &str, args: I, target_dir: &str) -> Result<()>
 where
@@ -51,38 +50,6 @@ where
     }
 }
 
-pub fn run_cmd<I, S>(args: I) -> Result<String>
-where
-    I: IntoIterator<Item = S> + std::fmt::Debug,
-    S: AsRef<OsStr>,
-{
-    let bin = "ckb-cli";
-    log::debug!("[Execute]: {} {:?}", bin, args);
-    let init_output = Command::new(bin)
-        .env("RUST_BACKTRACE", "full")
-        .env("RUST_LOG", "warn")
-        .args(args)
-        .output()
-        .expect("Run command failed");
-
-    if !init_output.status.success() {
-        Err(anyhow!(String::from_utf8_lossy(
-            init_output.stderr.as_slice()
-        )
-        .to_string()))
-    } else {
-        let stdout = String::from_utf8_lossy(init_output.stdout.as_slice()).to_string();
-        log::debug!("stdout: {}", stdout);
-        Ok(stdout)
-    }
-}
-
-pub async fn get_network_type(rpc_client: &CkbClient) -> Result<NetworkType> {
-    let chain_info = rpc_client.get_blockchain_info().await?;
-    NetworkType::from_raw_str(chain_info.chain.as_str())
-        .ok_or_else(|| anyhow!("Unexpected network type: {}", chain_info.chain))
-}
-
 pub fn run_in_output_mode<I, S>(bin: &str, args: I) -> Result<(String, String)>
 where
     I: IntoIterator<Item = S> + std::fmt::Debug,
@@ -111,8 +78,8 @@ where
 
 // Read config.toml
 pub fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
-    let content = fs::read(&path)?;
-    let config = toml_edit::easy::from_slice(&content)?;
+    let content = fs::read_to_string(&path)?;
+    let config = toml::from_str(&content)?;
     Ok(config)
 }
 

@@ -1070,21 +1070,6 @@ fn check_locks(
         ));
     }
 
-    // check wallet lock
-    let opt_wallet_config = block_producer_config.wallet_config.as_ref();
-    if let Some(block_producer_wallet_lock) = opt_wallet_config.map(|c| &c.lock) {
-        if zeros == block_producer_wallet_lock.code_hash {
-            bail!("[block_producer.wallet.lock.code_hash] shouldn't be zero");
-        }
-
-        let challenger_rewards_receiver_lock = &block_producer_config
-            .challenger_config
-            .rewards_receiver_lock;
-        if block_producer_wallet_lock == challenger_rewards_receiver_lock {
-            bail!("[block_producer.challenger.rewards_receiver_lock] and [block_producer.wallet.lock] have the same address, which is not recommended");
-        }
-    }
-
     Ok(())
 }
 

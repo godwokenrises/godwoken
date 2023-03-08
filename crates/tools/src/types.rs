@@ -1,9 +1,9 @@
+use std::{collections::HashMap, path::PathBuf};
+
 use ckb_fixed_hash::{H160, H256};
 use ckb_jsonrpc_types::{CellDep, Script};
 use gw_config::GenesisConfig;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::PathBuf;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
 pub struct SetupConfig {
@@ -20,6 +20,7 @@ pub struct SetupConfig {
 pub struct RollupDeploymentResult {
     pub tx_hash: H256,
     pub timestamp: u64,
+    pub delegate_cell_type_script: ckb_jsonrpc_types::Script,
     pub rollup_type_hash: H256,
     pub rollup_type_script: ckb_jsonrpc_types::Script,
     pub rollup_config: gw_jsonrpc_types::godwoken::RollupConfig,
@@ -48,6 +49,7 @@ pub struct UserRollupConfig {
 pub struct DeployItem {
     pub script_type_hash: H256,
     pub cell_dep: CellDep,
+    pub type_script: Script,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
@@ -64,6 +66,7 @@ pub struct ScriptsDeploymentResult {
     pub eth_account_lock: DeployItem,
     pub polyjuice_validator: DeployItem,
     pub eth_addr_reg_validator: DeployItem,
+    pub delegate_cell_lock: DeployItem,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
@@ -94,6 +97,8 @@ pub struct Programs {
     pub stake_lock: PathBuf,
     // path: godwoken-scripts/build/release/omni_lock
     pub omni_lock: PathBuf,
+    // path: godwoken-scripts/build/release/delegate-cell-lock
+    pub delegate_cell_lock: PathBuf,
     // path: godwoken-scripts/build/release/state-validator
     pub state_validator: PathBuf,
     // path: godwoken-scripts/c/build/sudt-validator

@@ -9,8 +9,8 @@ use gw_types::{
     offchain::{CellInfo, InputCellInfo, RecoverAccount},
     packed::{
         CCTransactionSignatureWitness, CCTransactionWitness, CCWithdrawalWitness, CellDep,
-        CellInput, CellOutput, GlobalState, OutPoint, RollupAction, RollupActionUnion,
-        RollupCancelChallenge, Script, WitnessArgs,
+        CellOutput, GlobalState, OutPoint, RollupAction, RollupActionUnion, RollupCancelChallenge,
+        Script, WitnessArgs,
     },
     prelude::{Builder, CalcHash, Entity, OccupiedCapacityBytes, Pack, Unpack},
 };
@@ -75,17 +75,12 @@ impl CancelChallengeOutput {
             .index(tx_index.pack())
             .build();
 
-        let input = CellInput::new_builder()
-            .previous_output(out_point.clone())
-            .build();
-
-        let cell = CellInfo {
+        CellInfo {
             out_point,
             output,
             data,
-        };
-
-        InputCellInfo { input, cell }
+        }
+        .into()
     }
 
     pub fn verifier_dep(&self, contracts_dep: &ContractsCellDep) -> Result<CellDep> {
@@ -258,19 +253,13 @@ impl LoadData {
                 .dep_type(DepType::Code.into())
                 .build();
 
-            let input = CellInput::new_builder()
-                .previous_output(out_point.clone())
-                .build();
-
             let cell = CellInfo {
                 out_point,
                 output,
                 data,
             };
 
-            let cell_info = InputCellInfo { input, cell };
-
-            (cell_dep, cell_info)
+            (cell_dep, cell.into())
         };
 
         let (cell_deps, inputs) = {
@@ -319,17 +308,12 @@ impl RecoverAccounts {
                 .index((idx as u32).pack())
                 .build();
 
-            let input = CellInput::new_builder()
-                .previous_output(out_point.clone())
-                .build();
-
-            let cell = CellInfo {
+            CellInfo {
                 out_point,
                 output,
                 data,
-            };
-
-            InputCellInfo { input, cell }
+            }
+            .into()
         };
 
         let inputs = {

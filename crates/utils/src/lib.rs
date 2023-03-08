@@ -1,6 +1,5 @@
 pub mod abort_on_drop;
 mod calc_finalizing_range;
-pub mod checksum;
 pub mod compression;
 pub mod exponential_backoff;
 pub mod export_block;
@@ -16,6 +15,7 @@ pub mod script_log;
 pub mod since;
 pub mod timepoint;
 pub mod transaction_skeleton;
+pub mod type_id;
 pub mod wallet;
 pub mod withdrawal;
 

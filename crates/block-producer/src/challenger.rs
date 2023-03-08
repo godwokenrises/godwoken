@@ -1,47 +1,56 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::cleaner::{Cleaner, Verifier};
-use crate::test_mode_control::TestModeControl;
-use crate::types::ChainEvent;
-use crate::utils;
+use std::{
+    collections::{HashMap, HashSet},
+    convert::TryFrom,
+    sync::Arc,
+    time::Duration,
+};
+
 use anyhow::{anyhow, bail, Context, Result};
 use gw_chain::chain::{Chain, ChallengeCell, SyncEvent};
-use gw_challenge::cancel_challenge::{
-    CancelChallengeOutput, LoadData, LoadDataContext, LoadDataStrategy, RecoverAccounts,
-    RecoverAccountsContext,
+use gw_challenge::{
+    cancel_challenge::{
+        CancelChallengeOutput, LoadData, LoadDataContext, LoadDataStrategy, RecoverAccounts,
+        RecoverAccountsContext,
+    },
+    enter_challenge::EnterChallenge,
+    offchain::{
+        mock_cancel_challenge_tx,
+        verify_tx::{verify_tx, TxWithContext},
+        OffChainMockContext,
+    },
+    revert::Revert,
+    types::{RevertContext, VerifyContext},
 };
-use gw_challenge::enter_challenge::EnterChallenge;
-use gw_challenge::offchain::verify_tx::{verify_tx, TxWithContext};
-use gw_challenge::offchain::{mock_cancel_challenge_tx, OffChainMockContext};
-use gw_challenge::revert::Revert;
-use gw_challenge::types::{RevertContext, VerifyContext};
 use gw_config::{BlockProducerConfig, DebugConfig};
 use gw_generator::types::vm::ChallengeContext;
-use gw_jsonrpc_types::test_mode::TestModePayload;
-use gw_jsonrpc_types::JsonCalcHash;
-use gw_rpc_client::contract::ContractsCellDepManager;
-use gw_rpc_client::rpc_client::RPCClient;
-use gw_types::bytes::Bytes;
-use gw_types::core::{ChallengeTargetType, Status};
-use gw_types::h256::*;
-use gw_types::offchain::{global_state_from_slice, CellInfo, InputCellInfo};
-use gw_types::packed::{
-    CellDep, CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, ChallengeTarget,
-    GlobalState, OutPoint, Script, Transaction, WitnessArgs,
+use gw_jsonrpc_types::{test_mode::TestModePayload, JsonCalcHash};
+use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
+use gw_types::{
+    bytes::Bytes,
+    core::{ChallengeTargetType, Status},
+    h256::*,
+    offchain::{global_state_from_slice, CellInfo, InputCellInfo},
+    packed::{
+        CellDep, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, ChallengeTarget,
+        GlobalState, OutPoint, Script, Transaction, WitnessArgs,
+    },
+    prelude::*,
 };
-use gw_types::prelude::*;
-use gw_utils::fee::fill_tx_fee;
-use gw_utils::genesis_info::CKBGenesisInfo;
-use gw_utils::transaction_skeleton::TransactionSkeleton;
-use gw_utils::wallet::Wallet;
-use gw_utils::RollupContext;
+use gw_utils::{
+    fee::fill_tx_fee, genesis_info::CKBGenesisInfo, transaction_skeleton::TransactionSkeleton,
+    wallet::Wallet, RollupContext,
+};
 use tokio::sync::Mutex;
 use tracing::instrument;
 
-use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
-use std::sync::Arc;
-use std::time::Duration;
+use crate::{
+    cleaner::{Cleaner, Verifier},
+    test_mode_control::TestModeControl,
+    types::ChainEvent,
+    utils,
+};
 
 const MAX_CANCEL_CYCLES: u64 = 7000_0000;
 const MAX_CANCEL_TX_BYTES: u64 = ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
@@ -226,16 +235,19 @@ impl Challenger {
         let contracts_dep = self.contracts_dep_manager.load();
 
         // Rollup
-        let rollup_deps = vec![
-            contracts_dep.rollup_cell_type.clone().into(),
-            self.rollup_context
-                .fork_config
-                .chain
-                .rollup_config_cell_dep
-                .clone()
-                .into(),
-            contracts_dep.omni_lock.clone().into(),
+        let deps = [
+            &contracts_dep.rollup_cell_type,
+            self.rollup_context.rollup_config_cell_dep(),
+            &contracts_dep.omni_lock,
         ];
+        let opt_deps = [
+            contracts_dep.delegate_cell.as_ref(),
+            contracts_dep.delegate_cell_lock.as_ref(),
+        ];
+        let rollup_deps = deps
+            .into_iter()
+            .chain(opt_deps.into_iter().flatten())
+            .map(|d| d.clone().into());
         let rollup_output = (
             rollup_state.rollup_output(),
             challenge_output.post_global_state.as_bytes(),
@@ -338,7 +350,7 @@ impl Challenger {
         .with_context(|| format!("waiting for tx proposed 0x{}", to_hex(&verifier_tx_hash)))??;
 
         // Build cancellation transaction
-        let challenge_input = to_input_cell_info(challenge_cell);
+        let challenge_input = challenge_cell.into();
         let verifier_context = {
             let contracts_dep = self.contracts_dep_manager.load();
             let cell_dep = cancel_output.verifier_dep(&contracts_dep)?;
@@ -486,16 +498,19 @@ impl Challenger {
         let contracts_dep = self.contracts_dep_manager.load();
 
         // Rollup
-        let rollup_deps = vec![
-            contracts_dep.rollup_cell_type.clone().into(),
-            self.rollup_context
-                .fork_config
-                .chain
-                .rollup_config_cell_dep
-                .clone()
-                .into(),
-            contracts_dep.omni_lock.clone().into(),
+        let deps = [
+            &contracts_dep.rollup_cell_type,
+            self.rollup_context.rollup_config_cell_dep(),
+            &contracts_dep.omni_lock,
         ];
+        let opt_deps = [
+            contracts_dep.delegate_cell.as_ref(),
+            contracts_dep.delegate_cell_lock.as_ref(),
+        ];
+        let rollup_deps = deps
+            .into_iter()
+            .chain(opt_deps.into_iter().flatten())
+            .map(|d| d.clone().into());
         let rollup_output = (
             rollup_state.rollup_output(),
             revert_output.post_global_state.as_bytes(),
@@ -508,13 +523,13 @@ impl Challenger {
         tx_skeleton.witnesses_mut().push(rollup_witness);
 
         // Challenge
-        let challenge_input = to_input_cell_info_with_since(challenge_cell, since);
+        let challenge_input = InputCellInfo::with_since(challenge_cell, since);
         let challenge_dep = contracts_dep.challenge_cell_lock.clone().into();
         tx_skeleton.cell_deps_mut().push(challenge_dep);
         tx_skeleton.inputs_mut().push(challenge_input);
 
         // Stake
-        let stake_inputs = stake_cells.into_iter().map(to_input_cell_info);
+        let stake_inputs = stake_cells.into_iter().map(Into::into);
         let stake_dep = contracts_dep.stake_cell_lock.clone().into();
         tx_skeleton.cell_deps_mut().push(stake_dep);
         tx_skeleton.inputs_mut().extend(stake_inputs);
@@ -594,16 +609,19 @@ impl Challenger {
         let contracts_dep = self.contracts_dep_manager.load();
 
         // Rollup
-        let rollup_deps = vec![
-            contracts_dep.rollup_cell_type.clone().into(),
-            self.rollup_context
-                .fork_config
-                .chain
-                .rollup_config_cell_dep
-                .clone()
-                .into(),
-            contracts_dep.omni_lock.clone().into(),
+        let deps = [
+            &contracts_dep.rollup_cell_type,
+            self.rollup_context.rollup_config_cell_dep(),
+            &contracts_dep.omni_lock,
         ];
+        let opt_deps = [
+            contracts_dep.delegate_cell.as_ref(),
+            contracts_dep.delegate_cell_lock.as_ref(),
+        ];
+        let rollup_deps = deps
+            .into_iter()
+            .chain(opt_deps.into_iter().flatten())
+            .map(|d| d.clone().into());
         let rollup_output = (
             rollup_state.rollup_output(),
             cancel_output.post_global_state.as_bytes(),
@@ -704,7 +722,7 @@ impl Challenger {
         let owner_lock = self.wallet.lock_script().to_owned();
 
         if let Ok(Some(cell)) = rpc_client.query_owner_cell(owner_lock, spent_inputs).await {
-            return Ok(to_input_cell_info(cell));
+            return Ok(cell.into());
         }
 
         log::debug!("can't find a owner cell for verifier, try wait verifier tx committed");
@@ -721,7 +739,7 @@ impl Challenger {
             query.ok_or_else(|| anyhow!("can't find an owner cell for verifier"))?
         };
 
-        Ok(to_input_cell_info(cell))
+        Ok(cell.into())
     }
 
     async fn dry_run_transaction(&self, tx: &Transaction, action: &str) -> Result<()> {
@@ -766,7 +784,7 @@ impl RollupState {
     }
 
     fn rollup_input(&self) -> InputCellInfo {
-        to_input_cell_info(self.rollup_cell.clone())
+        self.rollup_cell.clone().into()
     }
 
     fn rollup_output(&self) -> CellOutput {
@@ -832,25 +850,6 @@ fn to_tip_number(event: &ChainEvent) -> u64 {
         ChainEvent::NewBlock { block } => block,
     };
     tip_block.header().raw().number().unpack()
-}
-
-fn to_input_cell_info(cell_info: CellInfo) -> InputCellInfo {
-    InputCellInfo {
-        input: CellInput::new_builder()
-            .previous_output(cell_info.out_point.clone())
-            .build(),
-        cell: cell_info,
-    }
-}
-
-fn to_input_cell_info_with_since(cell_info: CellInfo, since: u64) -> InputCellInfo {
-    InputCellInfo {
-        input: CellInput::new_builder()
-            .previous_output(cell_info.out_point.clone())
-            .since(since.pack())
-            .build(),
-        cell: cell_info,
-    }
 }
 
 fn to_hex(hash: &H256) -> String {

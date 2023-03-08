@@ -238,151 +238,276 @@ Response
   "id": 42,
   "result": {
     "versions": {
-      "web3Version": "1.0.0-rc1",
-      "web3IndexerVersion": "1.0.0-rc1",
-      "godwokenVersion": "1.1.0 f3cdd47"
+      "web3Version": "1.12.0-rc2",
+      "web3IndexerVersion": "1.12.0-rc2",
+      "godwokenVersion": "1.12.0-rc1 4d0e922"
     },
-    "nodeInfo": {
+    "fullnodeInfo": {
       "nodeMode": "fullnode",
       "rollupCell": {
-        "typeHash": "0x7bbb4c2644595552a660c8f4fe1d5f84d6a670dc6bfd594bbd1a45516c3c7068",
+        "typeHash": "0x4adf1f0e307f83227a58a16e861dae206a55a0baef8d2df7ea00b37aa032c50c",
         "typeScript": {
-          "code_hash": "0x173eac817872c19a51470a47084108226beeace276212057ff962a37a4512dc6",
-          "hash_type": "type",
-          "args": "0x193704362146e0a8b1e64f62fd9f86add359581d5c2626c8408c00bac090cd9c"
+          "args": "0xe4d3b34a9ec6d38edae15ce992ab7240699668d46598658cb991415ab5112bb1",
+          "code_hash": "0xbd8d100ab734e134e564bce85ea7d2318150e6baeabcba0a26514fa6cc4737b1",
+          "hash_type": "type"
         }
       },
       "rollupConfig": {
-        "requiredStakingCapacity": "0x2540be400",
+        "chainId": "0x116e8",
         "challengeMaturityBlocks": "0x64",
         "finalityBlocks": "0x3",
-        "rewardBurnRate": "0x32",
-        "chainId": "0x116e8"
+        "requiredStakingCapacity": "0x2540be400",
+        "rewardBurnRate": "0x32"
       },
       "gwScripts": {
         "deposit": {
           "script": {
+            "args": "0x936f1538d66cfeea24e1283dc94b49c881afd20e1f9ebba31de5d252c669771d",
             "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
-            "hash_type": "type",
-            "args": "0xe07e505668e03b34a7d941075cd48b9eca29b221dc3a8634e1ed7fd081c7a1e4"
+            "hash_type": "type"
           },
-          "typeHash": "0xcf0bcea51b7478f06581743efa64bd706ce5f87424e430ed6ab5e681c62fb0fa"
+          "typeHash": "0xd483176d9faa7278f8e05e14efd482a5eef36ec5abfb1b5a5d595d808a12579c"
         },
         "withdraw": {
           "script": {
+            "args": "0x18e5cb4de6a634a0b3aa5630730e079ca1d6915c7d4fc92283bf8941a2da7a49",
             "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
-            "hash_type": "type",
-            "args": "0xab449f20aa3235d01fd715467f1202346598e9d1ae816dad0979edeab59cd049"
+            "hash_type": "type"
           },
-          "typeHash": "0x5722b1fa3d8ba814a9a59bcc05bdbd539f28569b4a2fb446ac08828911947542"
+          "typeHash": "0xc4d713db311ab5df805675a1aa6a5f441fdf1fb2f24fc61c460cc157196cd173"
         },
         "stateValidator": {
           "script": {
+            "args": "0x1536e8048d3305177c4044853034edec50d49799b1fba261ec9161bce7dcfc49",
             "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
-            "hash_type": "type",
-            "args": "0xfc4484debef8af3d126dcb3805f46162ed1b624d9aed1d3f6fba243ff28ee26b"
+            "hash_type": "type"
           },
-          "typeHash": "0x173eac817872c19a51470a47084108226beeace276212057ff962a37a4512dc6"
+          "typeHash": "0xbd8d100ab734e134e564bce85ea7d2318150e6baeabcba0a26514fa6cc4737b1"
         },
         "stakeLock": {
           "script": {
+            "args": "0xc1844e51890afaa05158fca36b56974b6a135fa94ac739c1076b7172c9855aae",
             "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
-            "hash_type": "type",
-            "args": "0x1e2b32501e4e75fb7d55443809e71df34026ce38039b81d5a6dc7c87672036f0"
+            "hash_type": "type"
           },
-          "typeHash": "0x97b989de3fd83f28f0a35eebb61cab6f416fdc666f15ef6539f2b651fd2ca544"
+          "typeHash": "0xeedb399ce44a66d73afcf5ab07e49248c357bcdf834f840da325aa032f369cb1"
         },
         "custodianLock": {
           "script": {
+            "args": "0x18caa7562bf0c7f1135177ab4c767c80e01ae90675ba7fd8f3f2b87435c1c3f8",
             "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
-            "hash_type": "type",
-            "args": "0xe4e240a9fc8232f8200168ab7be230c108c04668e01fb15c35cd621a443f2dbe"
+            "hash_type": "type"
           },
-          "typeHash": "0xdef2218cdcda1c9b77c2a1c54dd6635eedccea507dbe5f377f8a1981d6bb6256"
+          "typeHash": "0xb67b195eaa601ccd97dc0768e87b0a9d66ad4f4db46bf858248bcf8811ec55be"
         },
         "challengeLock": {
           "script": {
+            "args": "0xad24aba105ffd04aa24bb52969a7b80cf4f99d7d07f6822940c4ba572628b656",
             "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
-            "hash_type": "type",
-            "args": "0x3d73bc2b055ffe642016be69019889bbeecf3876e2f37ae7d336326823a84452"
+            "hash_type": "type"
           },
-          "typeHash": "0x5722b1fa3d8ba814a9a59bcc05bdbd539f28569b4a2fb446ac08828911947542"
+          "typeHash": "0xc4d713db311ab5df805675a1aa6a5f441fdf1fb2f24fc61c460cc157196cd173"
         },
         "l1Sudt": {
           "script": {
+            "args": "0x57fdfd0617dcb74d1287bb78a7368a3a4bf9a790cfdcf5c1a105fd7cb406de0d",
             "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
-            "hash_type": "type",
-            "args": "0x57fdfd0617dcb74d1287bb78a7368a3a4bf9a790cfdcf5c1a105fd7cb406de0d"
+            "hash_type": "type"
           },
           "typeHash": "0x6283a479a3cf5d4276cd93594de9f1827ab9b55c7b05b3d28e4c2e0a696cfefd"
         },
         "l2Sudt": {
           "script": {
+            "args": "0x27fb0835fc0505efca480a176dd68293c6774518126f6a2dc9f7fe818ae58a1e",
             "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
-            "hash_type": "type",
-            "args": "0x9cb87271452ef0d91bf0ed4d590c12e1c50ea81aebcd763a60a57fc8ac471fea"
+            "hash_type": "type"
           },
-          "typeHash": "0x6432713bd4bb2c22eca1b8e962d712e8eccc2a740f3b5433848414591ea26fa7"
+          "typeHash": "0x7aefd62bb9d10281ba691fd933b96621ddd2ec2ce5fe11830713dc3918e75cb2"
         },
         "omniLock": {
           "script": {
+            "args": "0x7005ea754481ea7d8fbd4f59d7c6d9dbe78b4437ca9dd532434e6ad1afa21d57",
             "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
-            "hash_type": "type",
-            "args": "0xa57c8644b456c90d43cd915c5fdc15b998a320b2964033f9639771dc32df35f0"
+            "hash_type": "type"
           },
-          "typeHash": "0x8adcbae4e6f4fc21977c328965d4740cb9de91b4277920a17839aeefe9e2795a"
+          "typeHash": "0xed4cbdbe1767275eab7c15664f2fcfa22980e235fd2fa4c83de06116f06eb50c"
         }
       },
       "eoaScripts": {
         "eth": {
-          "typeHash": "0xc9b8427bee1b37f863f18562e48b8396d92733238a82fd978d3d63a911307ef8",
+          "typeHash": "0x45895f48b7cb8bb67c03b7ec4363215d01d23cf38c968ec97996782b44e12cbe",
           "script": {
+            "args": "0x71609c8c54f368ac44972216a952439cfe42feefddfbca95fd205b609c2dc9a6",
             "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
-            "hash_type": "type",
-            "args": "0x895aeebbb4a3069fb2dbecfb20b56892f3da9f49aeae68a455be2b90909f0393"
+            "hash_type": "type"
           }
         }
       },
       "backends": {
         "sudt": {
-          "validatorCodeHash": "0xb9d9375c0fd4d50ed95019d8307961238316cd18c1fb3faeb15ac0d3c6d76bda",
-          "generatorCodeHash": "0xf87824d6723b3c0be51b1213e8b35a6e8587a10f2f27734a344f201bf2ab05ef",
-          "validatorScriptTypeHash": "0x6432713bd4bb2c22eca1b8e962d712e8eccc2a740f3b5433848414591ea26fa7"
+          "validatorScriptTypeHash": "0x7aefd62bb9d10281ba691fd933b96621ddd2ec2ce5fe11830713dc3918e75cb2"
         },
         "meta": {
-          "validatorCodeHash": "0x4cf8b2b8b04dab0de276093de71f98592a5d683d42e2aa70110e904b564fc1c3",
-          "generatorCodeHash": "0x8c6c44b97d9de23dc0047356fb0b3e258a60e14a1f2bfa8f95ddc7b41985a8e0",
-          "validatorScriptTypeHash": "0x0b252876f97129e2564a8751d0c18ec73f9b93a52ce5a60ffb455cb74c678e1b"
+          "validatorScriptTypeHash": "0x2dadf58d141bbdec854136e3bb068191d6054ceaf4ac6cfc88ddc87cddb55222"
         },
         "polyjuice": {
-          "validatorCodeHash": "0xb94f8adecaa8638318fc62f609431daa225bc22143ce23c03c59c78a78653448",
-          "generatorCodeHash": "0x9c64de23b69dc8496879d18156f6e79fa7cae4a9faf67e23e0ab3e7d1687ac35",
-          "validatorScriptTypeHash": "0x3fefe20277a6e6125b253ee31c060207b2460262669628aeb16d0a337b678236"
+          "validatorScriptTypeHash": "0xc24e643cd895b1ab2570d57d7447dc2d401ecea6ad1435eb380694292ce0cb15"
         },
         "ethAddrReg": {
-          "validatorCodeHash": "0x9085bd6a550a9921b46d23ba7d9b0f9f5c5d0c9c00999988cd907ce16015e467",
-          "generatorCodeHash": "0xe2ba730569850cca7a56c9a96754bd0bfd784c8f001e997e4512edf572190c4a",
-          "validatorScriptTypeHash": "0x0af018a61a1d0aaa749603f250bd59ba1712a949089552cfa10887e0dd2fa6ee"
+          "validatorScriptTypeHash": "0x7bdd7121902e860a192ff9637f11e6605aee64001ad168d1c0b07ef3c5afbc3c"
         }
       },
       "accounts": {
         "polyjuiceCreator": {
           "id": "0x4",
-          "scriptHash": "0xb41fbe158237d2f70f0e3d006b2a5dcd804fcfade6fea9a345091794658269f6"
+          "scriptHash": "0xf22ec5de53b63396882c7bcb6d9bd1f7abc259f71202526a1eaf6c55d73f48fb"
         },
         "ethAddrReg": {
           "id": "0x2",
-          "scriptHash": "0xfb9c975120aa3545d00ddeb09b114eb4319479afa27aef5ed22089f2dff0423d"
+          "scriptHash": "0x1336e9e975e6618cd21c50eb7fc5607a8bb4599c7bdb453f3337d7d06d23b8a3"
         },
         "defaultFrom": {
           "id": "0x3",
-          "scriptHash": "0xffe2e575a9c327f160e09d142bf21bcedbf79f23d585be3b87dacde843e171a4"
+          "scriptHash": "0x111e0520015ecea97cc20043ed71e55de6615b44f9b6217f2ffccdce33fe53d6"
         }
       },
       "chainId": "0x116e8",
       "gaslessTx": {
-        "support": true,
-        "entrypointAddress": "0x954dcfc2b81446bc83254c1fa36a037613bd2481"
+        "support": false
+      }
+    },
+    "nodeInfo": {
+      "nodeMode": "readonly",
+      "rollupCell": {
+        "typeHash": "0x4adf1f0e307f83227a58a16e861dae206a55a0baef8d2df7ea00b37aa032c50c",
+        "typeScript": {
+          "args": "0xe4d3b34a9ec6d38edae15ce992ab7240699668d46598658cb991415ab5112bb1",
+          "code_hash": "0xbd8d100ab734e134e564bce85ea7d2318150e6baeabcba0a26514fa6cc4737b1",
+          "hash_type": "type"
+        }
+      },
+      "rollupConfig": {
+        "chainId": "0x116e8",
+        "challengeMaturityBlocks": "0x64",
+        "finalityBlocks": "0x3",
+        "requiredStakingCapacity": "0x2540be400",
+        "rewardBurnRate": "0x32"
+      },
+      "gwScripts": {
+        "deposit": {
+          "script": {
+            "args": "0x936f1538d66cfeea24e1283dc94b49c881afd20e1f9ebba31de5d252c669771d",
+            "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+            "hash_type": "type"
+          },
+          "typeHash": "0xd483176d9faa7278f8e05e14efd482a5eef36ec5abfb1b5a5d595d808a12579c"
+        },
+        "withdraw": {
+          "script": {
+            "args": "0x18e5cb4de6a634a0b3aa5630730e079ca1d6915c7d4fc92283bf8941a2da7a49",
+            "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+            "hash_type": "type"
+          },
+          "typeHash": "0xc4d713db311ab5df805675a1aa6a5f441fdf1fb2f24fc61c460cc157196cd173"
+        },
+        "stateValidator": {
+          "script": {
+            "args": "0x1536e8048d3305177c4044853034edec50d49799b1fba261ec9161bce7dcfc49",
+            "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+            "hash_type": "type"
+          },
+          "typeHash": "0xbd8d100ab734e134e564bce85ea7d2318150e6baeabcba0a26514fa6cc4737b1"
+        },
+        "stakeLock": {
+          "script": {
+            "args": "0xc1844e51890afaa05158fca36b56974b6a135fa94ac739c1076b7172c9855aae",
+            "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+            "hash_type": "type"
+          },
+          "typeHash": "0xeedb399ce44a66d73afcf5ab07e49248c357bcdf834f840da325aa032f369cb1"
+        },
+        "custodianLock": {
+          "script": {
+            "args": "0x18caa7562bf0c7f1135177ab4c767c80e01ae90675ba7fd8f3f2b87435c1c3f8",
+            "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+            "hash_type": "type"
+          },
+          "typeHash": "0xb67b195eaa601ccd97dc0768e87b0a9d66ad4f4db46bf858248bcf8811ec55be"
+        },
+        "challengeLock": {
+          "script": {
+            "args": "0xad24aba105ffd04aa24bb52969a7b80cf4f99d7d07f6822940c4ba572628b656",
+            "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+            "hash_type": "type"
+          },
+          "typeHash": "0xc4d713db311ab5df805675a1aa6a5f441fdf1fb2f24fc61c460cc157196cd173"
+        },
+        "l1Sudt": {
+          "script": {
+            "args": "0x57fdfd0617dcb74d1287bb78a7368a3a4bf9a790cfdcf5c1a105fd7cb406de0d",
+            "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+            "hash_type": "type"
+          },
+          "typeHash": "0x6283a479a3cf5d4276cd93594de9f1827ab9b55c7b05b3d28e4c2e0a696cfefd"
+        },
+        "l2Sudt": {
+          "script": {
+            "args": "0x27fb0835fc0505efca480a176dd68293c6774518126f6a2dc9f7fe818ae58a1e",
+            "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+            "hash_type": "type"
+          },
+          "typeHash": "0x7aefd62bb9d10281ba691fd933b96621ddd2ec2ce5fe11830713dc3918e75cb2"
+        },
+        "omniLock": {
+          "script": {
+            "args": "0x7005ea754481ea7d8fbd4f59d7c6d9dbe78b4437ca9dd532434e6ad1afa21d57",
+            "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+            "hash_type": "type"
+          },
+          "typeHash": "0xed4cbdbe1767275eab7c15664f2fcfa22980e235fd2fa4c83de06116f06eb50c"
+        }
+      },
+      "eoaScripts": {
+        "eth": {
+          "typeHash": "0x45895f48b7cb8bb67c03b7ec4363215d01d23cf38c968ec97996782b44e12cbe",
+          "script": {
+            "args": "0x71609c8c54f368ac44972216a952439cfe42feefddfbca95fd205b609c2dc9a6",
+            "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+            "hash_type": "type"
+          }
+        }
+      },
+      "backends": {
+        "sudt": {
+          "validatorScriptTypeHash": "0x7aefd62bb9d10281ba691fd933b96621ddd2ec2ce5fe11830713dc3918e75cb2"
+        },
+        "meta": {
+          "validatorScriptTypeHash": "0x2dadf58d141bbdec854136e3bb068191d6054ceaf4ac6cfc88ddc87cddb55222"
+        },
+        "polyjuice": {
+          "validatorScriptTypeHash": "0xc24e643cd895b1ab2570d57d7447dc2d401ecea6ad1435eb380694292ce0cb15"
+        },
+        "ethAddrReg": {
+          "validatorScriptTypeHash": "0x7bdd7121902e860a192ff9637f11e6605aee64001ad168d1c0b07ef3c5afbc3c"
+        }
+      },
+      "accounts": {
+        "polyjuiceCreator": {
+          "id": "0x4",
+          "scriptHash": "0xf22ec5de53b63396882c7bcb6d9bd1f7abc259f71202526a1eaf6c55d73f48fb"
+        },
+        "ethAddrReg": {
+          "id": "0x2",
+          "scriptHash": "0x1336e9e975e6618cd21c50eb7fc5607a8bb4599c7bdb453f3337d7d06d23b8a3"
+        },
+        "defaultFrom": {
+          "id": "0x3",
+          "scriptHash": "0x111e0520015ecea97cc20043ed71e55de6615b44f9b6217f2ffccdce33fe53d6"
+        }
+      },
+      "chainId": "0x116e8",
+      "gaslessTx": {
+        "support": false
       }
     }
   }
@@ -535,6 +660,8 @@ In JSONRPC, it is encoded as a 0x-prefixed hex string.
 *   `versions`: [`Versions`](#type-versions)
 
 *   `nodeInfo`: [`NodeInfo`](#type-nodeinfo)
+
+*   `fullnodeInfo`: [`NodeInfo`](#type-nodeinfo)
 
 
 ### Type `BackendInfo`

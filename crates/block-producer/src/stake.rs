@@ -11,7 +11,7 @@ use gw_types::offchain::CompatibleFinalizedTimepoint;
 use gw_types::{
     core::ScriptHashType,
     offchain::{CellInfo, InputCellInfo},
-    packed::{CellDep, CellInput, CellOutput, L2Block, Script, StakeLockArgs, StakeLockArgsReader},
+    packed::{CellDep, CellOutput, L2Block, Script, StakeLockArgs, StakeLockArgsReader},
     prelude::*,
 };
 use gw_utils::local_cells::{
@@ -81,16 +81,9 @@ pub async fn generate(
             .lock(lock)
             .build();
 
-        let input_unlocked_stake = InputCellInfo {
-            input: CellInput::new_builder()
-                .previous_output(unlocked_stake.out_point.clone())
-                .build(),
-            cell: unlocked_stake,
-        };
-
         let generated_stake = GeneratedStake {
             deps: vec![stake_lock_dep.into()],
-            inputs: vec![input_unlocked_stake],
+            inputs: vec![unlocked_stake.into()],
             output: stake_cell,
             output_data: Bytes::new(),
         };

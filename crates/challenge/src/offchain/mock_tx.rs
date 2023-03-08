@@ -16,8 +16,8 @@ use gw_types::{
     h256::*,
     offchain::{CellInfo, InputCellInfo},
     packed::{
-        Byte32, CellDep, CellInput, CellOutput, ChallengeTarget, ChallengeWitness, GlobalState,
-        OutPoint, Script, ScriptOpt, Transaction, WitnessArgs,
+        Byte32, CellDep, CellOutput, ChallengeTarget, ChallengeWitness, GlobalState, OutPoint,
+        Script, ScriptOpt, Transaction, WitnessArgs,
     },
     prelude::*,
 };
@@ -101,17 +101,20 @@ pub fn mock_cancel_challenge_tx(
     };
     inputs.push(rollup_input.clone());
 
-    let rollup_deps = vec![
-        contracts_dep.rollup_cell_type.clone().into(),
-        mock_rollup
-            .rollup_context
-            .fork_config
-            .chain
-            .rollup_config_cell_dep
-            .clone()
-            .into(),
-        contracts_dep.omni_lock.clone().into(),
+    let deps = [
+        &contracts_dep.rollup_cell_type,
+        mock_rollup.rollup_context.rollup_config_cell_dep(),
+        &contracts_dep.omni_lock,
     ];
+    let opt_deps = [
+        contracts_dep.delegate_cell.as_ref(),
+        contracts_dep.delegate_cell_lock.as_ref(),
+    ];
+    let rollup_deps = deps
+        .into_iter()
+        .chain(opt_deps.into_iter().flatten())
+        .map(|d| d.clone().into());
+
     let rollup_output = (
         rollup_input.cell.output.clone(),
         cancel_output.post_global_state.as_bytes(),
@@ -257,32 +260,23 @@ impl MockRollup {
             .index(0u32.pack())
             .build();
 
-        let input = CellInput::new_builder()
-            .previous_output(out_point.clone())
-            .build();
-
         let output = CellOutput::new_builder()
             .capacity((u64::max_value() / 2).pack())
             .lock(self.wallet.lock_script().to_owned())
             .build();
 
-        let cell = CellInfo {
+        CellInfo {
             out_point,
             output,
             data: Bytes::new(),
-        };
-
-        InputCellInfo { input, cell }
+        }
+        .into()
     }
 
     fn mock_rollup_cell(&self, global_state: GlobalState, lock: Script) -> InputCellInfo {
         let out_point = OutPoint::new_builder()
             .tx_hash(random_hash())
             .index(0u32.pack())
-            .build();
-
-        let input = CellInput::new_builder()
-            .previous_output(out_point.clone())
             .build();
 
         let output = {
@@ -299,13 +293,12 @@ impl MockRollup {
             rollup_output.as_builder().capacity(capacity.pack()).build()
         };
 
-        let cell = CellInfo {
+        CellInfo {
             out_point,
             output,
             data: global_state.as_bytes(),
-        };
-
-        InputCellInfo { input, cell }
+        }
+        .into()
     }
 
     fn mock_challenge_cell(&self, target: ChallengeTarget) -> InputCellInfo {
@@ -331,19 +324,14 @@ impl MockRollup {
             .index(0u32.pack())
             .build();
 
-        let input = CellInput::new_builder()
-            .previous_output(out_point.clone())
-            .build();
-
         let (output, data) = challenge_output.challenge_cell;
 
-        let cell = CellInfo {
+        CellInfo {
             out_point,
             output,
             data,
-        };
-
-        InputCellInfo { input, cell }
+        }
+        .into()
     }
 
     fn fill_tx_fee(

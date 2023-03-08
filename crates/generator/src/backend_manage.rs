@@ -1,9 +1,8 @@
-use anyhow::{bail, Context, Result};
-use gw_config::{BackendConfig, BackendForkConfig, BackendType};
-use gw_types::bytes::Bytes;
-use gw_types::h256::*;
-use gw_utils::checksum::content_checksum;
 use std::collections::{HashMap, HashSet};
+
+use anyhow::{bail, Context, Result};
+use gw_config::{content_checksum, BackendConfig, BackendForkConfig, BackendType};
+use gw_types::{bytes::Bytes, h256::*};
 
 #[cfg(has_asm)]
 use crate::types::vm::AotCode;
@@ -226,8 +225,7 @@ impl BackendManage {
 #[cfg(test)]
 mod tests {
     use gw_builtin_binaries::Resource;
-    use gw_config::{BackendConfig, BackendForkConfig, BackendType};
-    use gw_utils::checksum::content_checksum;
+    use gw_config::{content_checksum, BackendConfig, BackendForkConfig, BackendType};
 
     use super::BackendManage;
 

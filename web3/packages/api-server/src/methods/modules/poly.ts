@@ -2,7 +2,11 @@ import { Hash, HexNumber } from "@ckb-lumos/base";
 import { envConfig } from "../../base/env-config";
 import { MethodNotSupportError, Web3Error } from "../error";
 import { GodwokenClient } from "@godwoken-web3/godwoken";
-import { gwConfig, readonlyPriceOracle } from "../../base/index";
+import {
+  gwConfig,
+  readonlyGwConfig,
+  readonlyPriceOracle,
+} from "../../base/index";
 import { Store } from "../../cache/store";
 import { CACHE_EXPIRED_TIME_MILSECS } from "../../cache/constant";
 import { Query } from "../../db";
@@ -73,6 +77,7 @@ export class Poly {
     );
   }
 
+  // When `GODWOKEN_READONLY_JSON_RPC` not provided, nodeInfo = fullnodeInfo
   async version() {
     return {
       versions: {
@@ -80,7 +85,7 @@ export class Poly {
         web3IndexerVersion: web3Version, // indexer and api-server should use the same version
         godwokenVersion: gwConfig.nodeVersion,
       },
-      nodeInfo: {
+      fullnodeInfo: {
         nodeMode: gwConfig.nodeMode,
         rollupCell: gwConfig.rollupCell,
         rollupConfig: gwConfig.rollupConfig,
@@ -92,6 +97,20 @@ export class Poly {
         gaslessTx: {
           support: !!gwConfig.entrypointContract,
           entrypointAddress: gwConfig.entrypointContract?.address,
+        },
+      },
+      nodeInfo: {
+        nodeMode: readonlyGwConfig.nodeMode,
+        rollupCell: readonlyGwConfig.rollupCell,
+        rollupConfig: readonlyGwConfig.rollupConfig,
+        gwScripts: readonlyGwConfig.gwScripts,
+        eoaScripts: readonlyGwConfig.eoaScripts,
+        backends: readonlyGwConfig.backends,
+        accounts: readonlyGwConfig.accounts,
+        chainId: readonlyGwConfig.web3ChainId,
+        gaslessTx: {
+          support: !!readonlyGwConfig.entrypointContract,
+          entrypointAddress: readonlyGwConfig.entrypointContract?.address,
         },
       },
     };
