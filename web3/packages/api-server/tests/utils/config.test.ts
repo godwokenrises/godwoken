@@ -31,6 +31,9 @@ mockRpc.getAccountIdByScriptHash = async (scriptHash: HexString) => {
     case "0xb5f81e2d10af9600194606989583ae8cc3fcb822a24fdea95f42da5ea18606da":
       return 2;
 
+    case "0xc48e0895b9fd1af6c0770dbdc2d46a2fa93e4efc4af79e616a2bb87eebfabd84":
+      return 5;
+
     default:
       throw new Error(
         `getAccountIdByScriptHash not mock for script hash ${scriptHash}`
@@ -74,6 +77,17 @@ mockRpc.getScript = async (scriptHash: HexString) => {
 
     default:
       throw new Error(`getScript not mock for scriptHash ${scriptHash}`);
+  }
+};
+
+mockRpc.getScriptHashByRegistryAddress = async (registryAddress: HexString) => {
+  switch (registryAddress) {
+    case "0x02000000140000000000000000000000000000000000000000000000":
+      return "0xc48e0895b9fd1af6c0770dbdc2d46a2fa93e4efc4af79e616a2bb87eebfabd84";
+    default:
+      throw new Error(
+        `getScriptHashByRegistryAddress not mock for registryAddress: ${registryAddress}`
+      );
   }
 };
 
@@ -197,7 +211,8 @@ test("init gw config", async (t) => {
     },
   });
   t.is(config.accounts.polyjuiceCreator.id, "0x4");
-  t.is(config.accounts.defaultFrom.id, "0x3");
+  // Using zero address as default address
+  t.is(config.accounts.defaultFrom.id, "0x5");
   t.is(config.accounts.ethAddrReg.id, "0x2");
   t.is(config.nodeMode, NodeMode.FullNode);
   t.is(config.web3ChainId, "0x116e8");
