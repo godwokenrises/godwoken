@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-    time::Instant,
-};
+use std::{collections::HashSet, sync::Arc, time::Instant};
 
 use anyhow::{ensure, Context, Result};
 use arc_swap::ArcSwapOption;
@@ -94,6 +90,16 @@ pub enum ApplyBlockResult {
         error: Error,
     },
     Error(anyhow::Error),
+}
+
+// Like try! but for ApplyBlockResult.
+macro_rules! try_apply {
+    ($e:expr) => {
+        match $e {
+            Ok(x) => x,
+            Err(err) => return ApplyBlockResult::Error(err.into()),
+        }
+    };
 }
 
 #[derive(Debug)]
@@ -538,28 +544,31 @@ impl Generator {
             }
             check_signature_total_ms += now.elapsed().as_millis();
 
-            if self.trace_state {
-                track_state_changes(&mut state);
-            }
+            let track_point = if self.trace_state {
+                track_state_changes(&mut state)
+            } else {
+                0
+            };
 
-            let withdrawal_receipt = match state.apply_withdrawal_request(
+            try_apply!(state.apply_withdrawal_request(
                 &self.rollup_context,
                 &block_producer_address,
                 &request.request(),
-            ) {
-                Ok(receipt) => receipt,
-                Err(err) => return ApplyBlockResult::Error(err.into()),
-            };
-            withdrawal_receipts.push(withdrawal_receipt);
+            ));
 
             if self.trace_state {
-                let events = get_state_changes(&mut state);
+                let events = get_state_changes(&mut state, track_point);
                 state_changes.transactions.push(TransactionStateChanges {
                     tx_hash: request.hash().into(),
                     _type: TransactionType::Withdrawal,
                     events,
                 });
             }
+            try_apply!(state.finalise());
+            let withdrawal_receipt = WithdrawalReceipt::new_builder()
+                .post_state(try_apply!(state.calculate_merkle_state()))
+                .build();
+            withdrawal_receipts.push(withdrawal_receipt);
 
             if self
                 .fork_config()
@@ -585,15 +594,14 @@ impl Generator {
         }
 
         for deposit in args.deposit_info_vec {
+            let track_point = if self.trace_state {
+                track_state_changes(&mut state)
+            } else {
+                0
+            };
+            try_apply!(state.apply_deposit_request(&self.rollup_context, &deposit.request()));
             if self.trace_state {
-                track_state_changes(&mut state);
-            }
-            if let Err(err) = state.apply_deposit_request(&self.rollup_context, &deposit.request())
-            {
-                return ApplyBlockResult::Error(err.into());
-            }
-            if self.trace_state {
-                let events = get_state_changes(&mut state);
+                let events = get_state_changes(&mut state, track_point);
                 state_changes.transactions.push(TransactionStateChanges {
                     tx_hash: gw_common::blake2b::hash(deposit.cell().out_point().as_slice()).into(),
                     _type: TransactionType::Deposit,
@@ -674,9 +682,11 @@ impl Generator {
             // NOTICE users only allowed to send HandleMessage CallType txs
             let now = Instant::now();
 
-            if self.trace_state {
-                track_state_changes(&mut state);
-            }
+            let track_point = if self.trace_state {
+                track_state_changes(&mut state)
+            } else {
+                0
+            };
 
             // skip whitelist validate since we are validating a committed block
             let run_result = match self.execute_transaction(
@@ -715,7 +725,7 @@ impl Generator {
             execute_tx_total_ms += now.elapsed().as_millis();
 
             if self.trace_state {
-                let events = get_state_changes(&mut state);
+                let events = get_state_changes(&mut state, track_point);
                 // TODO: log
                 state_changes.transactions.push(TransactionStateChanges {
                     // TODO: actual type.
@@ -1216,18 +1226,20 @@ fn load_bytes<M: Memory>(mem: &mut M, addr: M::REG, len: u64) -> Result<Vec<u8>,
     Ok(result)
 }
 
-fn track_state_changes(state: &mut StateDB<HistoryState<&mut StoreTransaction>>) {
-    state.set_state_tracker(Default::default());
+fn track_state_changes(state: &mut StateDB<HistoryState<&mut StoreTransaction>>) -> usize {
     set_account_key_map(Default::default());
+    state.track_point()
 }
 
-fn get_state_changes<S: State + CodeStore>(state: &mut StateDB<S>) -> Vec<StateChangeEvent> {
-    let tracker = state.take_state_tracker().unwrap();
+fn get_state_changes<S: State + CodeStore>(
+    state: &mut StateDB<S>,
+    track_point: usize,
+) -> Vec<StateChangeEvent> {
     let key_map = take_account_key_map();
     let mut events = Vec::new();
-    for raw_key in tracker.touched_keys().lock().unwrap().iter() {
+    for raw_key in state.changed_keys(track_point) {
         if raw_key[4] == GW_ACCOUNT_NONCE_TYPE && raw_key[5..].iter().all(|v| *v == 0) {
-            if let Ok(new_value) = state.get_raw(raw_key) {
+            if let Ok(new_value) = state.get_raw(&raw_key) {
                 let id = u32::from_le_bytes(raw_key[..4].try_into().unwrap());
                 let nonce = u32::from_le_bytes(new_value[..4].try_into().unwrap());
                 events.push(StateChangeEvent::AccountNonce {
@@ -1239,7 +1251,7 @@ fn get_state_changes<S: State + CodeStore>(state: &mut StateDB<S>) -> Vec<StateC
             && raw_key[5] == POLYJUICE_DESTRUCTED
             && raw_key[6..].iter().all(|v| *v == 0)
         {
-            if let Ok(new_value) = state.get_raw(raw_key) {
+            if let Ok(new_value) = state.get_raw(&raw_key) {
                 if new_value == [1; 32] {
                     let id = u32::from_le_bytes(raw_key[..4].try_into().unwrap());
                     events.push(StateChangeEvent::Destroy {
@@ -1247,8 +1259,8 @@ fn get_state_changes<S: State + CodeStore>(state: &mut StateDB<S>) -> Vec<StateC
                     });
                 }
             }
-        } else if let Some((id, key)) = key_map.get(raw_key) {
-            if let Ok(new_value) = state.get_raw(raw_key) {
+        } else if let Some((id, key)) = key_map.get(&raw_key) {
+            if let Ok(new_value) = state.get_raw(&raw_key) {
                 // TODO: balance?
                 if key[4] == POLYJUICE_SYSTEM_PREFIX
                     && key[5] == POLYJUICE_CONTRACT_CODE
