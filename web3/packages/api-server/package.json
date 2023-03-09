@@ -6,7 +6,7 @@
     "start": "concurrently \"tsc -w\" \"nodemon ./bin/cluster\"",
     "start:prod": "NODE_ENV=production node ./bin/cluster",
     "start:pm2": "NODE_ENV=production pm2 start ./bin/cluster --no-daemon --name gw-web3 --max-memory-restart 1G",
-    "test": "ava",
+    "test": "ava && ava tests/cache.test.ts --serial",
     "fmt": "prettier --write \"{migrations,tests,cli}/**/*.{js,ts,tsx}\" src/* package.json tsconfig.json",
     "lint": "eslint -c ../../.eslintrc.js \"{src,tests,cli}/**/*.ts\"",
     "reset_database": "NODE_ENV=test knex migrate:down && knex migrate:up && knex seed:run",
@@ -26,7 +26,8 @@
     ],
     "files": [
       "tests/**/*",
-      "!tests/www.ts"
+      "!tests/www.ts",
+      "!tests/cache.test.ts"
     ]
   },
   "dependencies": {
