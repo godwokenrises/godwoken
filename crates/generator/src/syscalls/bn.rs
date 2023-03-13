@@ -1,27 +1,38 @@
 /// https://github.com/Flouse/bn/tree/0.6.0
 use substrate_bn::{
-    arith::U256, pairing_batch, AffineG1, AffineG2, Fq, Fq2, Fr, Group, Gt, G1, G2,
+    arith::U256, pairing_batch, AffineG1, AffineG2, FieldError, Fq, Fq2, Fr, Group, GroupError, Gt,
+    G1, G2,
 };
 
-pub struct Error(pub &'static str);
+#[derive(thiserror::Error, Debug)]
+pub enum BnError {
+    #[error("Field error: {0:?}")]
+    G1FieldError(FieldError),
+    #[error("G1 group error: {0:?}")]
+    GroupError(GroupError),
+    #[error("Invalid input length, must be multiple of 192 (3 * (32*2)), actual length: {0}")]
+    InvalidInputLength(usize),
+}
 
-fn read_pt(buf: &[u8]) -> Result<G1, Error> {
-    let px = Fq::from_slice(&buf[0..32]).map_err(|_| Error("invalid pt"))?;
-    let py = Fq::from_slice(&buf[32..64]).map_err(|_| Error("invalid pt"))?;
+type Result<T> = std::result::Result<T, BnError>;
+fn read_pt(buf: &[u8]) -> Result<G1> {
+    let map_err = |err| BnError::G1FieldError(err);
+    let px = Fq::from_slice(&buf[0..32]).map_err(map_err)?;
+    let py = Fq::from_slice(&buf[32..64]).map_err(map_err)?;
     Ok(if px == Fq::zero() && py == Fq::zero() {
         G1::zero()
     } else {
         AffineG1::new(px, py)
-            .map_err(|_| Error("invalid pt"))?
+            .map_err(|err| BnError::GroupError(err))?
             .into()
     })
 }
 
-fn read_fr(buf: &[u8]) -> Result<Fr, Error> {
-    Fr::from_slice(buf).map_err(|_| Error("invalid fr"))
+fn read_fr(buf: &[u8]) -> Result<Fr> {
+    Ok(Fr::from_slice(buf).map_err(|err| BnError::G1FieldError(err))?)
 }
 
-pub fn add(input: &[u8]) -> Result<[u8; 64], Error> {
+pub fn add(input: &[u8]) -> Result<[u8; 64]> {
     let mut buffer = [0u8; 128];
     if input.len() < 128 {
         buffer[0..input.len()].copy_from_slice(input);
@@ -39,7 +50,7 @@ pub fn add(input: &[u8]) -> Result<[u8; 64], Error> {
     Ok(buffer)
 }
 
-pub fn mul(input: &[u8]) -> Result<[u8; 64], Error> {
+pub fn mul(input: &[u8]) -> Result<[u8; 64]> {
     let mut buffer = [0u8; 96];
     if input.len() < 96 {
         buffer[0..input.len()].copy_from_slice(input);
@@ -57,11 +68,9 @@ pub fn mul(input: &[u8]) -> Result<[u8; 64], Error> {
     Ok(buffer)
 }
 
-pub fn pairing(input: &[u8]) -> Result<[u8; 32], Error> {
+pub fn pairing(input: &[u8]) -> Result<[u8; 32]> {
     if input.len() % 192 != 0 {
-        return Err(Error(
-            "Invalid input length, must be multiple of 192 (3 * (32*2))",
-        ));
+        return Err(BnError::InvalidInputLength(input.len()));
     }
     let elements = input.len() / 192; // (a, b_a, b_b - each 64-byte affine coordinates)
 
@@ -69,42 +78,33 @@ pub fn pairing(input: &[u8]) -> Result<[u8; 32], Error> {
         U256::one()
     } else {
         let mut vals = Vec::with_capacity(elements);
+        let map_err = |err| BnError::G1FieldError(err);
         for idx in 0..elements {
-            let a_x = Fq::from_slice(&input[idx * 192..idx * 192 + 32])
-                .map_err(|_| Error("Invalid a argument x coordinate"))?;
+            let a_x = Fq::from_slice(&input[idx * 192..idx * 192 + 32]).map_err(map_err)?;
 
-            let a_y = Fq::from_slice(&input[idx * 192 + 32..idx * 192 + 64])
-                .map_err(|_| Error("Invalid a argument y coordinate"))?;
+            let a_y = Fq::from_slice(&input[idx * 192 + 32..idx * 192 + 64]).map_err(map_err)?;
 
-            let b_a_y = Fq::from_slice(&input[idx * 192 + 64..idx * 192 + 96])
-                .map_err(|_| Error("Invalid b argument imaginary coeff x coordinate"))?;
+            let b_a_y = Fq::from_slice(&input[idx * 192 + 64..idx * 192 + 96]).map_err(map_err)?;
 
-            let b_a_x = Fq::from_slice(&input[idx * 192 + 96..idx * 192 + 128])
-                .map_err(|_| Error("Invalid b argument imaginary coeff y coordinate"))?;
+            let b_a_x = Fq::from_slice(&input[idx * 192 + 96..idx * 192 + 128]).map_err(map_err)?;
 
-            let b_b_y = Fq::from_slice(&input[idx * 192 + 128..idx * 192 + 160])
-                .map_err(|_| Error("Invalid b argument real coeff x coordinate"))?;
+            let b_b_y =
+                Fq::from_slice(&input[idx * 192 + 128..idx * 192 + 160]).map_err(map_err)?;
 
-            let b_b_x = Fq::from_slice(&input[idx * 192 + 160..idx * 192 + 192])
-                .map_err(|_| Error("Invalid b argument real coeff y coordinate"))?;
+            let b_b_x =
+                Fq::from_slice(&input[idx * 192 + 160..idx * 192 + 192]).map_err(map_err)?;
 
             let b_a = Fq2::new(b_a_x, b_a_y);
             let b_b = Fq2::new(b_b_x, b_b_y);
             let b = if b_a.is_zero() && b_b.is_zero() {
                 G2::zero()
             } else {
-                G2::from(
-                    AffineG2::new(b_a, b_b)
-                        .map_err(|_| Error("Invalid b argument - not on curve"))?,
-                )
+                G2::from(AffineG2::new(b_a, b_b).map_err(|err| BnError::GroupError(err))?)
             };
             let a = if a_x.is_zero() && a_y.is_zero() {
                 G1::zero()
             } else {
-                G1::from(
-                    AffineG1::new(a_x, a_y)
-                        .map_err(|_| Error("Invalid a argument - not on curve"))?,
-                )
+                G1::from(AffineG1::new(a_x, a_y).map_err(|err| BnError::GroupError(err))?)
             };
             vals.push((a, b));
         }
