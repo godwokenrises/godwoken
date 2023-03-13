@@ -21,7 +21,9 @@ use gw_common::{
 use gw_config::{ContractLogConfig, ForkConfig, SyscallCyclesConfig};
 use gw_jsonrpc_types::{
     blockchain::JsonBytes,
-    godwoken::{BlockStateChanges, StateChangeEvent, TransactionStateChanges, TransactionType},
+    godwoken::{
+        BlockStateChanges, SmtStat, StateChangeEvent, TransactionStateChanges, TransactionType,
+    },
 };
 use gw_store::{
     state::{
@@ -476,6 +478,10 @@ impl Generator {
 
         let mut state_changes = BlockStateChanges {
             transactions: Vec::new(),
+            smt_stat: SmtStat {
+                update_kvs: 0,
+                update_milliseconds: 0,
+            },
         };
 
         let mut state = match BlockStateDB::from_store(db, RWConfig::attach_block(block_number)) {
@@ -557,12 +563,13 @@ impl Generator {
             ));
 
             if self.trace_state {
-                let events = get_state_changes(&mut state, track_point);
+                let (events, update_kvs) = get_state_changes(&mut state, track_point);
                 state_changes.transactions.push(TransactionStateChanges {
                     tx_hash: request.hash().into(),
                     _type: TransactionType::Withdrawal,
                     events,
                 });
+                state_changes.smt_stat.update_kvs += update_kvs;
             }
             try_apply!(state.finalise());
             let withdrawal_receipt = WithdrawalReceipt::new_builder()
@@ -601,12 +608,13 @@ impl Generator {
             };
             try_apply!(state.apply_deposit_request(&self.rollup_context, &deposit.request()));
             if self.trace_state {
-                let events = get_state_changes(&mut state, track_point);
+                let (events, update_kvs) = get_state_changes(&mut state, track_point);
                 state_changes.transactions.push(TransactionStateChanges {
                     tx_hash: gw_common::blake2b::hash(deposit.cell().out_point().as_slice()).into(),
                     _type: TransactionType::Deposit,
                     events,
                 });
+                state_changes.smt_stat.update_kvs += update_kvs;
             }
         }
 
@@ -725,7 +733,7 @@ impl Generator {
             execute_tx_total_ms += now.elapsed().as_millis();
 
             if self.trace_state {
-                let events = get_state_changes(&mut state, track_point);
+                let (events, update_kvs) = get_state_changes(&mut state, track_point);
                 // TODO: log
                 state_changes.transactions.push(TransactionStateChanges {
                     // TODO: actual type.
@@ -733,6 +741,7 @@ impl Generator {
                     tx_hash: raw_tx.hash().into(),
                     events,
                 });
+                state_changes.smt_stat.update_kvs += update_kvs;
             }
 
             {
@@ -816,6 +825,8 @@ impl Generator {
             execute_tx_total_ms,
             apply_state_total_ms
         );
+
+        state_changes.smt_stat.update_milliseconds = apply_state_total_ms as u64;
 
         ApplyBlockResult::Success {
             withdrawal_receipts,
@@ -1234,10 +1245,12 @@ fn track_state_changes(state: &mut StateDB<HistoryState<&mut StoreTransaction>>)
 fn get_state_changes<S: State + CodeStore>(
     state: &mut StateDB<S>,
     track_point: usize,
-) -> Vec<StateChangeEvent> {
+) -> (Vec<StateChangeEvent>, u64) {
     let key_map = take_account_key_map();
     let mut events = Vec::new();
+    let mut update_kvs = 0;
     for raw_key in state.changed_keys(track_point) {
+        update_kvs += 1;
         if raw_key[4] == GW_ACCOUNT_NONCE_TYPE && raw_key[5..].iter().all(|v| *v == 0) {
             if let Ok(new_value) = state.get_raw(&raw_key) {
                 let id = u32::from_le_bytes(raw_key[..4].try_into().unwrap());
@@ -1284,7 +1297,7 @@ fn get_state_changes<S: State + CodeStore>(
             }
         }
     }
-    events
+    (events, update_kvs)
 }
 
 fn get_address_by_id<S: State + CodeStore>(state: &StateDB<S>, id: u32) -> Option<H160> {

@@ -1529,6 +1529,7 @@ impl GetVerbose {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BlockStateChanges {
     pub transactions: Vec<TransactionStateChanges>,
+    pub smt_stat: SmtStat,
 }
 
 impl BlockStateChanges {
@@ -1554,6 +1555,12 @@ pub struct TransactionStateChanges {
     #[serde(rename = "type")]
     pub _type: TransactionType,
     pub events: Vec<StateChangeEvent>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SmtStat {
+    pub update_kvs: u64,
+    pub update_milliseconds: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
