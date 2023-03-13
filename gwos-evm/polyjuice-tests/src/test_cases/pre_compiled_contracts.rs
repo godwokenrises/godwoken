@@ -1,6 +1,9 @@
-use crate::helper::{
-    create_block_producer, deploy, new_block_info, setup, MockContractInfo, PolyjuiceArgsBuilder,
-    CREATOR_ACCOUNT_ID, L2TX_MAX_CYCLES, SECP_DATA, SECP_DATA_HASH,
+use crate::{
+    ctx::MockChain,
+    helper::{
+        create_block_producer, deploy, new_block_info, setup, MockContractInfo,
+        PolyjuiceArgsBuilder, CREATOR_ACCOUNT_ID, L2TX_MAX_CYCLES, SECP_DATA, SECP_DATA_HASH,
+    },
 };
 use ckb_vm::{
     machine::asm::AsmCoreMachine,
@@ -18,7 +21,7 @@ use gw_types::{
     packed::RawL2Transaction,
     prelude::{Builder, Entity, Pack},
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, convert::TryInto};
 
 const BINARY: &[u8] = include_bytes!("../../../build/test_contracts");
 const SUCCESS: u8 = 0;
@@ -692,5 +695,101 @@ fn test_bn256_scalar_mul() -> anyhow::Result<()> {
 
         crate::helper::check_cycles(case_name, run_result.cycles, 700_000);
     }
+    Ok(())
+}
+
+#[test]
+fn test_bn256_add_invalid_input() -> anyhow::Result<()> {
+    let mut chain = MockChain::setup("..")?;
+    let eth_address = [9u8; 20];
+    let mint_ckb = u128::MAX;
+    let from_id = chain.create_eoa_account(&eth_address, mint_ckb.into())?;
+    let gas_price = 1;
+    let value = 0;
+    let code = hex::decode(PRECOMPILED_CONTRACT_CODE).expect("decode code");
+    let run_result = chain.deploy(from_id, &code, 1_000_000, gas_price, value)?;
+    assert_eq!(run_result.exit_code, 0);
+    let input = format!(
+        "4849f279{}{}{}{}",
+        "0000000000000000000000000000000000000000000000000000000000000001",
+        "0000000000000000000000000000000000000000000000000000000000000001",
+        "0000000000000000000000000000000000000000000000000000000000000001",
+        "0000000000000000000000000000000000000000000000000000000000000001"
+    );
+    let code = hex::decode(input).expect("decode code");
+
+    let contract = MockContractInfo::create(&eth_address, 0);
+
+    let eth_addr = contract.eth_addr.try_into().unwrap();
+    let to_id = chain
+        .get_account_id_by_eth_address(&eth_addr)?
+        .expect("to id");
+    let run_result = chain.execute(from_id, to_id, &code, 1_000_000, gas_price, value)?;
+    assert_eq!(
+        2, run_result.exit_code,
+        "contract failed: -83 -- ERROR_BN256_ADD"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_bn256_mul_invalid_input() -> anyhow::Result<()> {
+    let mut chain = MockChain::setup("..")?;
+    let eth_address = [9u8; 20];
+    let mint_ckb = u128::MAX;
+    let from_id = chain.create_eoa_account(&eth_address, mint_ckb.into())?;
+    let gas_price = 1;
+    let value = 0;
+    let code = hex::decode(PRECOMPILED_CONTRACT_CODE).expect("decode code");
+    let run_result = chain.deploy(from_id, &code, 1_000_000, gas_price, value)?;
+    assert_eq!(run_result.exit_code, 0);
+    let input = format!(
+        "ec8b466a{}{}{}",
+        "0000000000000000000000000000000000000000000000000000000000000001",
+        "0000000000000000000000000000000000000000000000000000000000000001",
+        "0000000000000000000000000000000000000000000000000000000000000001"
+    );
+    let code = hex::decode(input).expect("decode code");
+
+    let contract = MockContractInfo::create(&eth_address, 0);
+
+    let eth_addr = contract.eth_addr.try_into().unwrap();
+    let to_id = chain
+        .get_account_id_by_eth_address(&eth_addr)?
+        .expect("to id");
+    let run_result = chain.execute(from_id, to_id, &code, 1_000_000, gas_price, value)?;
+    assert_eq!(
+        2, run_result.exit_code,
+        "contract failed: -84 -- ERROR_BN256_SCALAR_MU"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_bn256_pairing_invalid_input() -> anyhow::Result<()> {
+    let mut chain = MockChain::setup("..")?;
+    let eth_address = [9u8; 20];
+    let mint_ckb = u128::MAX;
+    let from_id = chain.create_eoa_account(&eth_address, mint_ckb.into())?;
+    let gas_price = 1;
+    let value = 0;
+    let code = hex::decode(PRECOMPILED_CONTRACT_CODE).expect("decode code");
+    let run_result = chain.deploy(from_id, &code, 1_000_000, gas_price, value)?;
+    assert_eq!(run_result.exit_code, 0);
+    let input_hex = "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000012bb8324af6cfc93537a2ad1a445cfd0ca2a71acd7ac41fadbf933c2a51be344d120a2a4cf30c1bf9845f20c6fe39e07ea2cce61f0c9bb048165fe5e4de877550111e129f1cf1097710d41c4ac70fcdfa5ba2023c6ff1cbeac322de49d1b6df7c2032c61a830e3c17286de9462bf242fca2883585b93870a73853face6a6bf411198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c21800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa";
+    let input_len: u64 = (input_hex.len() / 2) as u64;
+    let code = hex::decode(format!("b2acd5090000000000000000000000000000000000000000000000000000000000000020{input_len:064x}{input_hex}"))?;
+
+    let contract = MockContractInfo::create(&eth_address, 0);
+
+    let eth_addr = contract.eth_addr.try_into().unwrap();
+    let to_id = chain
+        .get_account_id_by_eth_address(&eth_addr)?
+        .expect("to id");
+    let run_result = chain.execute(from_id, to_id, &code, 1_000_000, gas_price, value)?;
+    assert_eq!(
+        2, run_result.exit_code,
+        "contract failed: -85 -- EERROR_BN256_PAIRING"
+    );
     Ok(())
 }
