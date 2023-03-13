@@ -405,7 +405,7 @@ pub unsafe extern "C" fn gw_bn_add(
             SUCCESS
         }
         Err(err) => {
-            let err_msg = format!("syscall SYS_BN_ADD error: {:?}", err.0);
+            let err_msg = format!("syscall SYS_BN_ADD error: {:?}", err);
             println!("{}", err_msg);
             return ERROR;
         }
@@ -427,7 +427,7 @@ pub unsafe extern "C" fn gw_bn_mul(
             SUCCESS
         }
         Err(err) => {
-            let err_msg = format!("syscall SYS_BN_ADD error: {:?}", err.0);
+            let err_msg = format!("syscall SYS_BN_ADD error: {:?}", err);
             println!("{}", err_msg);
             return ERROR;
         }
@@ -449,7 +449,7 @@ pub unsafe extern "C" fn gw_bn_pairing(
             SUCCESS
         }
         Err(err) => {
-            let err_msg = format!("syscall SYS_BN_ADD error: {:?}", err.0);
+            let err_msg = format!("syscall SYS_BN_ADD error: {:?}", err);
             println!("{}", err_msg);
             return ERROR;
         }

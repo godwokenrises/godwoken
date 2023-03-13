@@ -16,20 +16,18 @@ pub enum BnError {
 
 type Result<T> = std::result::Result<T, BnError>;
 fn read_pt(buf: &[u8]) -> Result<G1> {
-    let map_err = |err| BnError::G1FieldError(err);
+    let map_err = BnError::G1FieldError;
     let px = Fq::from_slice(&buf[0..32]).map_err(map_err)?;
     let py = Fq::from_slice(&buf[32..64]).map_err(map_err)?;
     Ok(if px == Fq::zero() && py == Fq::zero() {
         G1::zero()
     } else {
-        AffineG1::new(px, py)
-            .map_err(|err| BnError::GroupError(err))?
-            .into()
+        AffineG1::new(px, py).map_err(BnError::GroupError)?.into()
     })
 }
 
 fn read_fr(buf: &[u8]) -> Result<Fr> {
-    Ok(Fr::from_slice(buf).map_err(|err| BnError::G1FieldError(err))?)
+    Fr::from_slice(buf).map_err(BnError::G1FieldError)
 }
 
 pub fn add(input: &[u8]) -> Result<[u8; 64]> {
@@ -78,7 +76,7 @@ pub fn pairing(input: &[u8]) -> Result<[u8; 32]> {
         U256::one()
     } else {
         let mut vals = Vec::with_capacity(elements);
-        let map_err = |err| BnError::G1FieldError(err);
+        let map_err = BnError::G1FieldError;
         for idx in 0..elements {
             let a_x = Fq::from_slice(&input[idx * 192..idx * 192 + 32]).map_err(map_err)?;
 
@@ -99,12 +97,12 @@ pub fn pairing(input: &[u8]) -> Result<[u8; 32]> {
             let b = if b_a.is_zero() && b_b.is_zero() {
                 G2::zero()
             } else {
-                G2::from(AffineG2::new(b_a, b_b).map_err(|err| BnError::GroupError(err))?)
+                G2::from(AffineG2::new(b_a, b_b).map_err(BnError::GroupError)?)
             };
             let a = if a_x.is_zero() && a_y.is_zero() {
                 G1::zero()
             } else {
-                G1::from(AffineG1::new(a_x, a_y).map_err(|err| BnError::GroupError(err))?)
+                G1::from(AffineG1::new(a_x, a_y).map_err(BnError::GroupError)?)
             };
             vals.push((a, b));
         }
