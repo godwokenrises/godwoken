@@ -37,7 +37,7 @@ use gw_store::{
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
-    core::{ChallengeTargetType, ScriptHashType},
+    core::{AllowedContractType, ChallengeTargetType, ScriptHashType},
     h256::H256Ext,
     h256::*,
     offchain::{CycleMeter, RunResult},
@@ -735,9 +735,15 @@ impl Generator {
             if self.trace_state {
                 let (events, update_kvs) = get_state_changes(&mut state, track_point);
                 // TODO: log
+                let _type = match get_tx_type(self.rollup_context(), &state, &raw_tx).unwrap() {
+                    AllowedContractType::EthAddrReg => TransactionType::AddressRegistry,
+                    AllowedContractType::Meta => TransactionType::Meta,
+                    AllowedContractType::Polyjuice => TransactionType::Eth,
+                    AllowedContractType::Sudt => TransactionType::Sudt,
+                    AllowedContractType::Unknown => panic!("unknown transaction type"),
+                };
                 state_changes.transactions.push(TransactionStateChanges {
-                    // TODO: actual type.
-                    _type: TransactionType::Eth,
+                    _type,
                     tx_hash: raw_tx.hash().into(),
                     events,
                 });
