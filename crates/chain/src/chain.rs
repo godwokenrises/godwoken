@@ -1081,7 +1081,6 @@ impl Chain {
         let block_hash = l2block.hash();
         if let Some(s) = state_changes {
             let s = s.to_json();
-            log::info!("block state changes: {}", s);
             db.set_block_state_changes(block_hash, &s)?;
         }
         db.insert_asset_scripts(deposit_asset_scripts)?;
