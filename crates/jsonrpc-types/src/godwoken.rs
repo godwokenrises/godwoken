@@ -1573,7 +1573,8 @@ pub enum StateChangeEvent {
         value: H256,
     },
     AccountNonce {
-        address: H160,
+        id: u32,
+        address: Option<H160>,
         nonce: u32,
     },
     Log {
