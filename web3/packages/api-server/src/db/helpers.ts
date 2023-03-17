@@ -282,10 +282,14 @@ export function buildQueryLogTopics(
       queryBuilder.where(`topics[${pgTopicIndex}]`, "=", hexToBuffer(topic));
     } else {
       const pgTopicIndex = index + 1;
-      queryBuilder.whereIn(
-        `topics[${pgTopicIndex}]`,
-        topic.map((subtopic) => hexToBuffer(subtopic))
-      );
+
+      // When topic includes null, this topic can be anything
+      if (!topic.includes(null)) {
+        queryBuilder.whereIn(
+          `topics[${pgTopicIndex}]`,
+          topic.map((subtopic) => hexToBuffer(subtopic as string))
+        );
+      }
     }
   });
 }
