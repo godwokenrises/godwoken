@@ -19,7 +19,7 @@ jobs:
         working-directory: web3
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Install Rust components
       run: |
         cargo fmt --version || rustup component add rustfmt
