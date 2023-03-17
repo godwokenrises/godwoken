@@ -14,7 +14,7 @@ export enum FilterFlag {
   pendingTransaction = 2,
 }
 
-export type FilterTopic = null | HexString | HexString[];
+export type FilterTopic = null | HexString | (HexString | null)[];
 
 export interface FilterParams {
   fromBlock: bigint;
