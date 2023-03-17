@@ -569,10 +569,6 @@ impl<'a, 'b, S: State + CodeStore + JournalDB, C: ChainView, Mac: SupportMachine
                 let input_size = machine.registers()[A4].to_u64();
                 let input = load_bytes(machine, input_addr, input_size as usize)?;
 
-                log::debug!("[bn256 input]: {:?}", &input[0..32]);
-                log::debug!("[bn256 input]: {:?}", &input[32..64]);
-                log::debug!("[bn256 input]: {:?}", &input[64..96]);
-                log::debug!("[bn256 input]: {:?}", &input[96..128]);
                 let ret = match bn::add(&input) {
                     Ok(output) => {
                         store_data(machine, output.as_slice())?;
