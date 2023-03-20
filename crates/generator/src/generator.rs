@@ -1262,7 +1262,7 @@ fn get_state_changes<S: State + CodeStore>(
                 let id = u32::from_le_bytes(raw_key[..4].try_into().unwrap());
                 let nonce = u32::from_le_bytes(new_value[..4].try_into().unwrap());
                 events.push(StateChangeEvent::AccountNonce {
-                    id,
+                    id: Some(id),
                     address: get_address_by_id(state, id),
                     nonce,
                 });
