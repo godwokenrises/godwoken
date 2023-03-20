@@ -34,10 +34,13 @@ use gw_mem_pool::fee::{
 };
 use gw_polyjuice_sender_recover::recover::PolyjuiceSenderRecover;
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_store::state::history::history_state::RWConfig;
-use gw_store::state::{BlockStateDB, MemStateDB};
 use gw_store::{
-    chain_view::ChainView, mem_pool_state::MemPoolState, traits::chain_store::ChainStore,
+    autorocks::Direction,
+    chain_view::ChainView,
+    mem_pool_state::MemPoolState,
+    schema::COLUMN_ACCOUNT_SMT_LEAF,
+    state::{history::history_state::RWConfig, BlockStateDB, MemStateDB},
+    traits::chain_store::ChainStore,
     CfMemStat, Store,
 };
 use gw_telemetry::traits::{TelemetryContext, TelemetryContextNewSpan, TelemetrySpanExt};
@@ -743,6 +746,7 @@ pub trait GwRpc {
         &self,
         block_hash: JsonH256,
     ) -> Result<Option<BlockStateChanges>>;
+    async fn gw_account_smt_kv_count(&self, precise: Option<bool>) -> Result<Uint64>;
     async fn gw_get_block_by_number(&self, block_number: Uint64) -> Result<Option<L2BlockView>>;
     async fn gw_get_block_hash(&self, block_number: Uint64) -> Result<Option<JsonH256>>;
     async fn gw_get_tip_block_hash(&self) -> Result<JsonH256>;
@@ -865,6 +869,22 @@ impl GwRpc for Arc<Registry> {
     }
     async fn gw_get_block(&self, block_hash: JsonH256) -> Result<Option<L2BlockWithStatus>> {
         gw_get_block(block_hash, &self.store, &self.rollup_config).await
+    }
+    async fn gw_account_smt_kv_count(&self, precise: Option<bool>) -> Result<Uint64> {
+        if precise == Some(true) {
+            let iter = self
+                .store
+                .as_inner()
+                .iter(COLUMN_ACCOUNT_SMT_LEAF, Direction::Forward);
+            Ok((iter.count() as u64).into())
+        } else {
+            let count = self
+                .store
+                .as_inner()
+                .get_int_property(COLUMN_ACCOUNT_SMT_LEAF, "rocksdb.estimate-num-keys")
+                .ok_or("failed to get estimate-num-keys")?;
+            Ok(count.into())
+        }
     }
     async fn gw_state_changes_by_block(
         &self,
