@@ -760,7 +760,7 @@ fn test_bn256_mul_invalid_input() -> anyhow::Result<()> {
         .expect("to id");
     let run_result = chain.execute(from_id, to_id, &code, 1_000_000, gas_price, value)?;
     assert_eq!(
-        crate::constant::EVMC_REVERT run_result.exit_code,
+        crate::constant::EVMC_REVERT, run_result.exit_code,
         "contract failed: -84 -- ERROR_BN256_SCALAR_MU"
     );
     Ok(())
@@ -789,7 +789,7 @@ fn test_bn256_pairing_invalid_input() -> anyhow::Result<()> {
         .expect("to id");
     let run_result = chain.execute(from_id, to_id, &code, 1_000_000, gas_price, value)?;
     assert_eq!(
-        crate::constant::EVMC_REVERT run_result.exit_code,
+        crate::constant::EVMC_REVERT, run_result.exit_code,
         "contract failed: -85 -- EERROR_BN256_PAIRING"
     );
     Ok(())
