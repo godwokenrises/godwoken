@@ -190,6 +190,42 @@ fn test_bn256_pairing() -> anyhow::Result<()> {
     let contract_account_id = state
         .get_account_id_by_script_hash(&contract_account.script_hash)?
         .unwrap();
+    
+    // call Bn256PairingIstanbul
+    {
+        block_number += 1;
+        let input = hex::decode("e840916c")?;
+        let args = PolyjuiceArgsBuilder::default()
+            .gas_limit(146049)
+            .gas_price(1u128)
+            .value(0u128)
+            .input(&input)
+            .build();
+        let raw_tx = RawL2Transaction::new_builder()
+            .from_id(from_id.pack())
+            .to_id(contract_account_id.pack())
+            .args(Bytes::from(args).pack())
+            .build();
+        let db = &store.begin_transaction();
+        let tip_block_hash = db.get_tip_block_hash().unwrap();
+        let run_result = generator
+            .execute_transaction(
+                &gw_store::chain_view::ChainView::new(&db, tip_block_hash),
+                &mut state,
+                &new_block_info(block_producer.clone(), block_number, 0),
+                &raw_tx,
+                L2TX_MAX_CYCLES,
+                None,
+            )
+            .expect("Call Bn256PairingIstanbul");
+        assert_eq!(run_result.exit_code, crate::constant::EVMC_SUCCESS);
+        assert_eq!(
+            run_result.return_data,
+            hex::decode("0000000000000000000000000000000000000000000000000000000000000001")
+                .unwrap()
+        );
+        crate::helper::check_cycles("Call Bn256PairingIstanbul", run_result.cycles, 700_000);
+    }
 
     // test data from:
     // https://github.com/ethereum/go-ethereum/blob/a3cd8a0/core/vm/testdata/precompiles/bn256Pairing.json
@@ -331,42 +367,6 @@ fn test_bn256_add() -> anyhow::Result<()> {
     let contract_account_id = state
         .get_account_id_by_script_hash(&contract_account.script_hash)?
         .unwrap();
-
-    // call Bn256PairingIstanbul
-    {
-        block_number += 1;
-        let input = hex::decode("e840916c")?;
-        let args = PolyjuiceArgsBuilder::default()
-            .gas_limit(146049)
-            .gas_price(1u128)
-            .value(0u128)
-            .input(&input)
-            .build();
-        let raw_tx = RawL2Transaction::new_builder()
-            .from_id(from_id.pack())
-            .to_id(contract_account_id.pack())
-            .args(Bytes::from(args).pack())
-            .build();
-        let db = &store.begin_transaction();
-        let tip_block_hash = db.get_tip_block_hash().unwrap();
-        let run_result = generator
-            .execute_transaction(
-                &gw_store::chain_view::ChainView::new(&db, tip_block_hash),
-                &mut state,
-                &new_block_info(block_producer.clone(), block_number, 0),
-                &raw_tx,
-                L2TX_MAX_CYCLES,
-                None,
-            )
-            .expect("Call Bn256PairingIstanbul");
-        assert_eq!(run_result.exit_code, crate::constant::EVMC_SUCCESS);
-        assert_eq!(
-            run_result.return_data,
-            hex::decode("0000000000000000000000000000000000000000000000000000000000000001")
-                .unwrap()
-        );
-        crate::helper::check_cycles("Call Bn256PairingIstanbul", run_result.cycles, 700_000);
-    }
 
     for (input_hex, expected_output_hex, bn_add_gas, case_name) in [(
         "18b18acfb4c2c30276db5411368e7185b311dd124691610c5d3b74034e093dc9063c909c4720840cb5134cb9f59fa749755796819658d32efc0d288198f3726607c2b7f58a84bd6145f00c9c2bc0bb1a187f20ff2c92963a88019e7c6a014eed06614e20c147e940f2d70da3f74c9a17df361706a4485c742bd6788478fa17d7",
@@ -710,6 +710,7 @@ fn test_bn256_add_invalid_input() -> anyhow::Result<()> {
     let run_result = chain.deploy(from_id, &code, 1_000_000, gas_price, value)?;
     assert_eq!(run_result.exit_code, 0);
     let input = format!(
+        // call callBn256Add -> function selector: 0x4849f279
         "4849f279{}{}{}{}",
         "0000000000000000000000000000000000000000000000000000000000000001",
         "0000000000000000000000000000000000000000000000000000000000000001",
@@ -726,7 +727,7 @@ fn test_bn256_add_invalid_input() -> anyhow::Result<()> {
         .expect("to id");
     let run_result = chain.execute(from_id, to_id, &code, 1_000_000, gas_price, value)?;
     assert_eq!(
-        2, run_result.exit_code,
+        crate::constant::EVMC_REVERT, run_result.exit_code,
         "contract failed: -83 -- ERROR_BN256_ADD"
     );
     Ok(())
@@ -759,7 +760,7 @@ fn test_bn256_mul_invalid_input() -> anyhow::Result<()> {
         .expect("to id");
     let run_result = chain.execute(from_id, to_id, &code, 1_000_000, gas_price, value)?;
     assert_eq!(
-        2, run_result.exit_code,
+        crate::constant::EVMC_REVERT run_result.exit_code,
         "contract failed: -84 -- ERROR_BN256_SCALAR_MU"
     );
     Ok(())
@@ -788,7 +789,7 @@ fn test_bn256_pairing_invalid_input() -> anyhow::Result<()> {
         .expect("to id");
     let run_result = chain.execute(from_id, to_id, &code, 1_000_000, gas_price, value)?;
     assert_eq!(
-        2, run_result.exit_code,
+        crate::constant::EVMC_REVERT run_result.exit_code,
         "contract failed: -85 -- EERROR_BN256_PAIRING"
     );
     Ok(())
