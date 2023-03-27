@@ -47,8 +47,8 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::{
-    exponential_backoff::ExponentialBackoff, genesis_info::CKBGenesisInfo, liveness::Liveness,
-    local_cells::LocalCellsManager, wallet::Wallet, RollupContext,
+    genesis_info::CKBGenesisInfo, liveness::Liveness, local_cells::LocalCellsManager,
+    wallet::Wallet, ExponentialBackoff, RollupContext,
 };
 use semver::Version;
 use tentacle::service::ProtocolMeta;
