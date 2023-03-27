@@ -1019,7 +1019,7 @@ export class Eth {
     } else {
       const lastPollLogId = await this.filterManager.getLastPoll(filter_id);
       const logs = await this.query.getLogsByFilter(
-        await this._rpcFilterRequestToGetLogsParams(filter),
+        await this._rpcFilterRequestToGetLogsParams(filter, false),
         lastPollLogId
       );
 
@@ -1035,9 +1035,8 @@ export class Eth {
   }
 
   async getLogs(args: [RpcFilterRequest]): Promise<EthLog[]> {
-    return await this._getLogs(
-      await this._rpcFilterRequestToGetLogsParams(args[0])
-    );
+    const params = await this._rpcFilterRequestToGetLogsParams(args[0], true);
+    return await this._getLogs(params);
   }
 
   async _getLogs(filter: FilterParams): Promise<EthLog[]> {
@@ -1175,7 +1174,8 @@ export class Eth {
   }
 
   private async _rpcFilterRequestToGetLogsParams(
-    filter: RpcFilterRequest
+    filter: RpcFilterRequest,
+    isGetLogs: boolean
   ): Promise<FilterParams> {
     if (filter.blockHash != null) {
       if (filter.fromBlock !== undefined || filter.toBlock !== undefined) {
@@ -1196,7 +1196,8 @@ export class Eth {
     const [fromBlock, toBlock] =
       await this._normalizeBlockParameterForFilterRequest(
         filter.fromBlock,
-        filter.toBlock
+        filter.toBlock,
+        isGetLogs
       );
     return {
       fromBlock,
@@ -1209,7 +1210,8 @@ export class Eth {
 
   private async _normalizeBlockParameterForFilterRequest(
     fromBlock: undefined | BlockParameter,
-    toBlock: undefined | BlockParameter
+    toBlock: undefined | BlockParameter,
+    isGetLogs: boolean
   ): Promise<[bigint, bigint]> {
     let normalizedFromBlock: bigint;
     let normalizedToBlock: bigint;
@@ -1217,8 +1219,12 @@ export class Eth {
     // See also:
     // - https://github.com/nervosnetwork/godwoken-web3/pull/427#discussion_r918904239
     // - https://github.com/nervosnetwork/godwoken-web3/pull/300/files/131542bd5cc272279d27760e258fb5fa5de6fc9a#r861541728
+    let fromBlockParam = fromBlock ?? "earliest";
+    if (isGetLogs) {
+      fromBlockParam = fromBlock ?? "latest";
+    }
     const _fromBlock: bigint | undefined = await this._parseBlockParameter(
-      fromBlock ?? "earliest"
+      fromBlockParam
     );
     normalizedFromBlock = _fromBlock ?? latestBlockNumber;
 
