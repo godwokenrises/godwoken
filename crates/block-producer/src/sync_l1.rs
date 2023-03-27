@@ -15,7 +15,7 @@ use gw_types::{
     packed::{NumberHash, Script},
     prelude::*,
 };
-use gw_utils::{exponential_backoff::ExponentialBackoff, liveness::Liveness};
+use gw_utils::{liveness::Liveness, ExponentialBackoff};
 use tokio::sync::Mutex;
 
 use crate::chain_updater::ChainUpdater;

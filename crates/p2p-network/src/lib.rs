@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use gw_config::P2PNetworkConfig;
-use gw_utils::exponential_backoff::ExponentialBackoff;
+use gw_utils::ExponentialBackoff;
 use socket2::SockRef;
 use tentacle::{
     async_trait,
