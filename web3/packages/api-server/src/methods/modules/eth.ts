@@ -1221,6 +1221,7 @@ export class Eth {
     // - https://github.com/nervosnetwork/godwoken-web3/pull/300/files/131542bd5cc272279d27760e258fb5fa5de6fc9a#r861541728
     let fromBlockParam = fromBlock ?? "earliest";
     if (isGetLogs) {
+      // https://github.com/ethereum/go-ethereum/blob/20f8eb756bdbfa6dbd94374bbad15883e23ab150/eth/filters/api.go#L388
       fromBlockParam = fromBlock ?? "latest";
     }
     const _fromBlock: bigint | undefined = await this._parseBlockParameter(
