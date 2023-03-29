@@ -1,4 +1,8 @@
-use std::{collections::HashSet, sync::Arc, time::Instant};
+use std::{
+    collections::HashSet,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use anyhow::{ensure, Context, Result};
 use arc_swap::ArcSwapOption;
@@ -524,7 +528,7 @@ impl Generator {
 
         let mut check_signature_total_ms = 0;
         let mut execute_tx_total_ms = 0;
-        let mut apply_state_total_ms = 0;
+        let mut apply_state_total_duration = Duration::ZERO;
         let mut withdrawal_receipts = Vec::with_capacity(args.withdrawals.len());
         for (wth_idx, request) in args.withdrawals.into_iter().enumerate() {
             debug_assert_eq!(
@@ -571,7 +575,11 @@ impl Generator {
                 });
                 state_changes.smt_stat.update_kvs += update_kvs;
             }
+
+            let now = Instant::now();
             try_apply!(state.finalise());
+            apply_state_total_duration += now.elapsed();
+
             let withdrawal_receipt = WithdrawalReceipt::new_builder()
                 .post_state(try_apply!(state.calculate_merkle_state()))
                 .build();
@@ -619,9 +627,9 @@ impl Generator {
         }
 
         // finalise state
-        if let Err(err) = state.finalise() {
-            return ApplyBlockResult::Error(err.into());
-        }
+        let now = Instant::now();
+        try_apply!(state.finalise());
+        apply_state_total_duration += now.elapsed();
         let prev_txs_state = match state.calculate_merkle_state() {
             Ok(s) => s,
             Err(err) => {
@@ -751,12 +759,10 @@ impl Generator {
             }
 
             {
-                let now = Instant::now();
                 // finalise tx state
-                if let Err(err) = state.finalise() {
-                    return ApplyBlockResult::Error(err.into());
-                }
-                apply_state_total_ms += now.elapsed().as_millis();
+                let now = Instant::now();
+                try_apply!(state.finalise());
+                apply_state_total_duration += now.elapsed();
 
                 if !skip_checkpoint_check
                     && self
@@ -829,10 +835,10 @@ impl Generator {
             "signature {}ms execute tx {}ms apply state {}ms",
             check_signature_total_ms,
             execute_tx_total_ms,
-            apply_state_total_ms
+            apply_state_total_duration.as_millis()
         );
 
-        state_changes.smt_stat.update_milliseconds = apply_state_total_ms as u64;
+        state_changes.smt_stat.update_milliseconds = apply_state_total_duration.as_millis() as u64;
 
         ApplyBlockResult::Success {
             withdrawal_receipts,
