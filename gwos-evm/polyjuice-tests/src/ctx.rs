@@ -13,6 +13,7 @@ use gw_common::{
     CKB_SUDT_SCRIPT_ARGS,
 };
 
+use gw_builtin_binaries::file_checksum;
 use gw_config::{BackendConfig, BackendForkConfig, BackendType, Resource};
 use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
@@ -37,7 +38,7 @@ use gw_types::{
     prelude::*,
     U256,
 };
-use gw_utils::{checksum::file_checksum, RollupContext};
+use gw_utils::RollupContext;
 
 use crate::{
     helper::{

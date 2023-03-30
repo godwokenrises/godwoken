@@ -33,3 +33,8 @@ pub const GW_ERROR_ACCOUNT_NOT_FOUND: i8 = 85;
 pub const GW_SUDT_ERROR_INSUFFICIENT_BALANCE: i8 = 92i8;
 pub const GW_SUDT_ERROR_AMOUNT_OVERFLOW: i8 = 93i8;
 pub const GW_SUDT_ERROR_UNPERMITTED_ADDRESS: i8 = 94i8;
+
+/* Bn Operations Errors*/
+pub const GW_BN_ADD_ERROR: i8 = 100i8;
+pub const GW_BN_MUL_ERROR: i8 = 101i8;
+pub const GW_BN_PARIING_ERROR: i8 = 102i8;

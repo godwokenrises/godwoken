@@ -130,9 +130,9 @@ int sys_load(gw_context_t *ctx, uint32_t account_id, const uint8_t *key,
 }
 
 // Don't inline this function so that it's traceable.
-__attribute__ ((__noinline__))
-int sys_store(gw_context_t *ctx, uint32_t account_id, const uint8_t *key,
-              const uint64_t key_len, const uint8_t value[GW_VALUE_BYTES]) {
+__attribute__((__noinline__)) int sys_store(
+    gw_context_t *ctx, uint32_t account_id, const uint8_t *key,
+    const uint64_t key_len, const uint8_t value[GW_VALUE_BYTES]) {
   if (ctx == NULL) {
     return GW_FATAL_INVALID_CONTEXT;
   }

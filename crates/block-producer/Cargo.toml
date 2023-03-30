@@ -42,3 +42,7 @@ tracing = { version = "0.1", features = ["attributes"] }
 tentacle = "0.4.0"
 gw-p2p-network = { path = "../p2p-network" }
 bytes = "1.2.0"
+pid = "4.0.0"
+rand = "0.8.5"
+
+[features]

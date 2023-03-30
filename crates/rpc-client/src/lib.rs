@@ -7,3 +7,5 @@ pub mod indexer_types;
 pub mod rpc_client;
 mod utils;
 pub mod withdrawal;
+
+pub use utils::ExponentialBackoff;

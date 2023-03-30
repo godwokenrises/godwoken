@@ -1,6 +1,10 @@
 use crate::{
-    account_lock_manage::AccountLockManage, backend_manage::BlockConsensus, generator::CyclesPool,
-    syscalls::error_codes::GW_FATAL_UNKNOWN_ARGS,
+    account_lock_manage::AccountLockManage,
+    backend_manage::BlockConsensus,
+    generator::CyclesPool,
+    syscalls::error_codes::{
+        GW_BN_ADD_ERROR, GW_BN_MUL_ERROR, GW_BN_PARIING_ERROR, GW_FATAL_UNKNOWN_ARGS,
+    },
 };
 use ckb_vm::{
     memory::Memory,
@@ -565,14 +569,17 @@ impl<'a, 'b, S: State + CodeStore + JournalDB, C: ChainView, Mac: SupportMachine
                 let input_size = machine.registers()[A4].to_u64();
                 let input = load_bytes(machine, input_addr, input_size as usize)?;
 
-                let output = bn::add(&input).map_err(|err| {
-                    let err_msg = format!("syscall SYS_BN_ADD error: {:?}", err.0);
-                    log::error!("{}", err_msg);
-                    VMError::Unexpected(err_msg)
-                })?;
-                store_data(machine, output.as_slice())?;
-
-                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                let ret = match bn::add(&input) {
+                    Ok(output) => {
+                        store_data(machine, output.as_slice())?;
+                        Mac::REG::from_u8(SUCCESS)
+                    }
+                    Err(err) => {
+                        log::error!("syscall SYS_BN_ADD error: {:?}", err);
+                        Mac::REG::from_i8(GW_BN_ADD_ERROR)
+                    }
+                };
+                machine.set_register(A0, ret);
                 Ok(true)
             }
             SYS_BN_MUL => {
@@ -580,14 +587,17 @@ impl<'a, 'b, S: State + CodeStore + JournalDB, C: ChainView, Mac: SupportMachine
                 let input_size = machine.registers()[A4].to_u64();
                 let input = load_bytes(machine, input_addr, input_size as usize)?;
 
-                let output = bn::mul(&input).map_err(|err| {
-                    let err_msg = format!("syscall SYS_BN_MUL error: {:?}", err.0);
-                    log::error!("{}", err_msg);
-                    VMError::Unexpected(err_msg)
-                })?;
-                store_data(machine, output.as_slice())?;
-
-                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                let ret = match bn::mul(&input) {
+                    Ok(output) => {
+                        store_data(machine, output.as_slice())?;
+                        Mac::REG::from_u8(SUCCESS)
+                    }
+                    Err(err) => {
+                        log::error!("syscall SYS_BN_MUL error: {:?}", err);
+                        Mac::REG::from_i8(GW_BN_MUL_ERROR)
+                    }
+                };
+                machine.set_register(A0, ret);
                 Ok(true)
             }
             SYS_BN_PAIRING => {
@@ -620,13 +630,17 @@ impl<'a, 'b, S: State + CodeStore + JournalDB, C: ChainView, Mac: SupportMachine
                     }
                 }
 
-                let output = bn::pairing(&input).map_err(|err| {
-                    let err_msg = format!("syscall SYS_BN_PAIRING error: {:?}", err.0);
-                    log::error!("{}", err_msg);
-                    VMError::Unexpected(err_msg)
-                })?;
-                store_data(machine, output.as_slice())?;
-                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                let ret = match bn::pairing(&input) {
+                    Ok(output) => {
+                        store_data(machine, output.as_slice())?;
+                        Mac::REG::from_u8(SUCCESS)
+                    }
+                    Err(err) => {
+                        log::error!("syscall SYS_BN_PAIRING error: {:?}", err);
+                        Mac::REG::from_i8(GW_BN_PARIING_ERROR)
+                    }
+                };
+                machine.set_register(A0, ret);
                 Ok(true)
             }
             SYS_SNAPSHOT => {

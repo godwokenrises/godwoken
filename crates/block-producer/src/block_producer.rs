@@ -82,7 +82,6 @@ pub struct BlockProducer {
     chain: Arc<Mutex<Chain>>,
     generator: Arc<Generator>,
     wallet: Wallet,
-    config: BlockProducerConfig,
     rpc_client: RPCClient,
     ckb_genesis_info: CKBGenesisInfo,
     tests_control: Option<TestModeControl>,
@@ -127,7 +126,6 @@ impl BlockProducer {
             rpc_client,
             wallet,
             ckb_genesis_info,
-            config,
             tests_control,
             store,
             contracts_dep_manager,
@@ -206,6 +204,7 @@ impl BlockProducer {
             since,
             withdrawal_extras,
             local_cells_manager,
+            fee_rate,
         } = args;
 
         let rollup_cell = query_rollup_cell(local_cells_manager, &self.rpc_client)
@@ -503,7 +502,7 @@ impl BlockProducer {
             &self.rpc_client.indexer,
             self.wallet.lock_script().to_owned(),
             local_cells_manager,
-            self.config.fee_rate,
+            fee_rate,
         )
         .await?;
         debug_assert_eq!(
@@ -563,6 +562,7 @@ pub struct ComposeSubmitTxArgs<'a> {
     pub since: Since,
     pub withdrawal_extras: Vec<WithdrawalRequestExtra>,
     pub local_cells_manager: &'a LocalCellsManager,
+    pub fee_rate: u64,
 }
 
 #[derive(thiserror::Error, Debug)]

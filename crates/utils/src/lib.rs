@@ -1,7 +1,6 @@
 pub mod abort_on_drop;
 mod calc_finalizing_range;
 pub mod compression;
-pub mod exponential_backoff;
 pub mod export_block;
 pub mod fee;
 pub mod gasless;
@@ -20,6 +19,7 @@ pub mod wallet;
 pub mod withdrawal;
 
 pub use calc_finalizing_range::calc_finalizing_range;
+pub use gw_rpc_client::ExponentialBackoff;
 pub use query_rollup_cell::query_rollup_cell;
 pub use rollup_context::RollupContext;
 pub use timepoint::{finalized_timepoint, global_state_finalized_timepoint};
