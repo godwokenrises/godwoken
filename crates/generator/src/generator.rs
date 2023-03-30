@@ -485,6 +485,7 @@ impl Generator {
             smt_stat: SmtStat {
                 update_kvs: 0,
                 update_milliseconds: 0,
+                commit_milliseconds: None,
             },
         };
 
