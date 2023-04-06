@@ -79,6 +79,15 @@ generator_checksum = '0x342bac1659df8b1f12201ff952efc298b17d8875bda911ca05962948
 validator_script_type_hash = '0x1629b04b49ded9e5747481f985b11cba6cdd4ffc167971a585e96729455ca736'
 backend_type = 'Polyjuice'
 
+[[backend_forks]]
+fork_height = 2430000
+# https://github.com/godwokenrises/godwoken/tree/57b9fc469f04fa7d5dadd6455a3217ffdde718da/gwos-evm
+[[backend_forks.backends]]
+generator = { bundled = 'builtin/godwoken-polyjuice-v1.5.5/generator' }
+generator_checksum = '0xe4d2fed018645548204215413c13abd24ad94398ee28822c4f8f503268fefddb'
+validator_script_type_hash = '0x1629b04b49ded9e5747481f985b11cba6cdd4ffc167971a585e96729455ca736'
+backend_type = 'Polyjuice'
+
 
 [genesis]
 timestamp = 1651979802446
