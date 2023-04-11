@@ -34,13 +34,18 @@ fn main() {
 
 #[cfg(not(feature = "no-builtin"))]
 fn main() {
-    // Copy polyjuice v1.5.3 files
+    // Copy polyjuice v1.5.5 files
     {
-        let path = Path::new(BINARIES_DIR).join("godwoken-polyjuice-v1.5.3/generator");
-        if !path.exists() {
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let target_path = Path::new(BINARIES_DIR).join("godwoken-polyjuice-v1.5.5/generator");
+        if !target_path.exists() {
+            let dir = target_path.parent().unwrap();
+            std::fs::create_dir_all(dir).unwrap();
+
             let src = Path::new(GWOS_EVM_DIR).join("generator");
-            std::fs::copy(src, path).unwrap();
+            std::fs::copy(src, dir.join("generator")).unwrap();
+
+            let src = Path::new(GWOS_EVM_DIR).join("generator.debug");
+            std::fs::copy(src, dir.join("generator.debug")).unwrap();
         }
     }
 
@@ -94,6 +99,14 @@ fn main() {
         (
             "godwoken-polyjuice-v1.5.3/generator",
             h256!("0x342bac1659df8b1f12201ff952efc298b17d8875bda911ca059629486338604c"),
+        ),
+        (
+            "godwoken-polyjuice-v1.5.5/generator",
+            h256!("0xe4d2fed018645548204215413c13abd24ad94398ee28822c4f8f503268fefddb"),
+        ),
+        (
+            "godwoken-polyjuice-v1.5.5/generator.debug",
+            h256!("0x25e8f3889c890805bc4eaca0c564fc64c1ced7b85d4592147d679de2cdf56fd4"),
         ),
     ] {
         let path = Path::new(BINARIES_DIR).join(path);

@@ -1,6 +1,6 @@
 [package]
 name = "gw-types"
-version = "1.12.2"
+version = "1.13.0-rc1"
 authors = ["Nervos Network"]
 edition = "2021"
 
