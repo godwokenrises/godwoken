@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.13.0-rc2] - 2023-04-11
+
+* config: add new fork for testnet at block#2430000 https://github.com/godwokenrises/godwoken/pull/1040
+
 ## [v1.13.0-rc1] - 2023-03-29
 
 Bug Fixes:
