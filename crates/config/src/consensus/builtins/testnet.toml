@@ -6,21 +6,25 @@ sudt_proxy.permit_sudt_transfer_from_dangerous_contract = true
 sudt_proxy.address_list = []
 [[backend_forks.backends]]
 generator = { bundled = 'builtin/gwos-v1.3.0-rc1/meta-contract-generator' }
+generator_debug = { bundled = 'builtin/gwos-v1.3.0-rc1/meta-contract-generator.debug' }
 generator_checksum = '0xb1544a9736a1f47c00b1509f9a0b16d001c3c1e3ed7eafecd6f669f96398ef8e'
 validator_script_type_hash = '0x37b25df86ca495856af98dff506e49f2380d673b0874e13d29f7197712d735e8'
 backend_type = 'Meta'
 [[backend_forks.backends]]
 generator = { bundled = 'builtin/gwos-v1.3.0-rc1/sudt-generator' }
+generator_debug = { bundled = 'builtin/gwos-v1.3.0-rc1/sudt-generator.debug' }
 generator_checksum = '0xf543d621e9e1655b0f4c9291114e1680dfe25a2364637a9e67f3a0bc5a7c8054'
 validator_script_type_hash = '0xb6176a6170ea33f8468d61f934c45c57d29cdc775bcd3ecaaec183f04b9f33d9'
 backend_type = 'Sudt'
 [[backend_forks.backends]]
 generator = { bundled = 'builtin/gwos-v1.3.0-rc1/eth-addr-reg-generator' }
+generator_debug = { bundled = 'builtin/gwos-v1.3.0-rc1/eth-addr-reg-generator.debug' }
 generator_checksum = '0x2aa7b75eb466b754cff54463702860f8477c266c2446cea98cd26b82bf67d5dd'
 validator_script_type_hash = '0xa30dcbb83ebe571f49122d8d1ce4537679ebf511261c8ffaaa6679bf9fdea3a4'
 backend_type = 'EthAddrReg'
 [[backend_forks.backends]]
 generator = { bundled = 'builtin/godwoken-polyjuice-v1.1.5-beta/generator' }
+generator_debug = { bundled = 'builtin/godwoken-polyjuice-v1.1.5-beta/generator.debug' }
 generator_checksum = '0x1829c695c91572840352794505714113025d0d55c8d318c2e013c4c2c971cf02'
 validator_script_type_hash = '0x1629b04b49ded9e5747481f985b11cba6cdd4ffc167971a585e96729455ca736'
 backend_type = 'Polyjuice'
@@ -29,6 +33,7 @@ backend_type = 'Polyjuice'
 fork_height = 110000
 [[backend_forks.backends]]
 generator = { bundled = 'builtin/godwoken-polyjuice-v1.2.0/generator' }
+generator_debug = { bundled = 'builtin/godwoken-polyjuice-v1.2.0/generator.debug' }
 generator_checksum = '0x1e48c135dcb6eb97a96295bbe7e9b104df05d7e48a8a115b4cfebc36f4555634'
 validator_script_type_hash = '0x1629b04b49ded9e5747481f985b11cba6cdd4ffc167971a585e96729455ca736'
 backend_type = 'Polyjuice'
@@ -39,6 +44,7 @@ fork_height = 180000
 # https://github.com/nervosnetwork/godwoken-polyjuice/releases/tag/1.4.0
 [[backend_forks.backends]]
 generator = { bundled = 'builtin/godwoken-polyjuice-v1.4.0/generator' }
+generator_debug = { bundled = 'builtin/godwoken-polyjuice-v1.4.0/generator.debug' }
 generator_checksum = '0xa8a7868cc051af1e61e7cee267a42d2a957beac4788653e8a335d9a72f578a9b'
 validator_script_type_hash = '0x1629b04b49ded9e5747481f985b11cba6cdd4ffc167971a585e96729455ca736'
 backend_type = 'Polyjuice'
@@ -48,6 +54,7 @@ fork_height = 380000
 # https://github.com/nervosnetwork/godwoken-polyjuice/releases/tag/1.4.1
 [[backend_forks.backends]]
 generator = { bundled = 'builtin/godwoken-polyjuice-v1.4.1/generator_log' }
+generator_debug = { bundled = 'builtin/godwoken-polyjuice-v1.4.1/generator_log.debug' }
 generator_checksum = '0xaaed6b05b36af25235c8534f5c84274c52ed6f7d8adb19641d0e8eb57972ada1'
 validator_script_type_hash = '0x1629b04b49ded9e5747481f985b11cba6cdd4ffc167971a585e96729455ca736'
 backend_type = 'Polyjuice'
@@ -57,6 +64,7 @@ fork_height = 630000
 # https://github.com/nervosnetwork/godwoken-polyjuice/releases/tag/1.4.5
 [[backend_forks.backends]]
 generator = { bundled = 'builtin/godwoken-polyjuice-v1.4.5/generator' }
+generator_debug = { bundled = 'builtin/godwoken-polyjuice-v1.4.5/generator.debug' }
 generator_checksum = '0xee766d4a0e56a4c46f8917d52847a20bf9dcc3cd38f705faceec81dc39cdd53a'
 validator_script_type_hash = '0x1629b04b49ded9e5747481f985b11cba6cdd4ffc167971a585e96729455ca736'
 backend_type = 'Polyjuice'
@@ -66,6 +74,7 @@ fork_height = 825000
 # https://github.com/nervosnetwork/godwoken-polyjuice/releases/tag/1.5.0
 [[backend_forks.backends]]
 generator = { bundled = 'builtin/godwoken-polyjuice-v1.5.0/generator' }
+generator_debug = { bundled = 'builtin/godwoken-polyjuice-v1.5.0/generator.debug' }
 generator_checksum = '0xf89d4eb312fa4b8df9a3acc0a25f870201106825d9a609612c61aa8263cda1b8'
 validator_script_type_hash = '0x1629b04b49ded9e5747481f985b11cba6cdd4ffc167971a585e96729455ca736'
 backend_type = 'Polyjuice'
@@ -75,6 +84,7 @@ fork_height = 1916000
 # https://github.com/godwokenrises/godwoken/tree/50eedc0f40c835058c0bda59b32db4bf2283d2d0/gwos-evm
 [[backend_forks.backends]]
 generator = { bundled = 'builtin/godwoken-polyjuice-v1.5.3/generator' }
+generator_debug = { bundled = 'builtin/godwoken-polyjuice-v1.5.3/generator.debug' }
 generator_checksum = '0x342bac1659df8b1f12201ff952efc298b17d8875bda911ca059629486338604c'
 validator_script_type_hash = '0x1629b04b49ded9e5747481f985b11cba6cdd4ffc167971a585e96729455ca736'
 backend_type = 'Polyjuice'
@@ -84,6 +94,7 @@ fork_height = 2430000
 # https://github.com/godwokenrises/godwoken/tree/57b9fc469f04fa7d5dadd6455a3217ffdde718da/gwos-evm
 [[backend_forks.backends]]
 generator = { bundled = 'builtin/godwoken-polyjuice-v1.5.5/generator' }
+generator_debug = { bundled = 'builtin/godwoken-polyjuice-v1.5.5/generator.debug' }
 generator_checksum = '0xe4d2fed018645548204215413c13abd24ad94398ee28822c4f8f503268fefddb'
 validator_script_type_hash = '0x1629b04b49ded9e5747481f985b11cba6cdd4ffc167971a585e96729455ca736'
 backend_type = 'Polyjuice'
