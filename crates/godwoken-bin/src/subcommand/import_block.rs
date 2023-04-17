@@ -236,7 +236,6 @@ fn insert_block(
     let block_number = exported.block_number();
 
     if let Some(_challenge_target) = chain.process_block(
-        chain.store().clone(),
         &mut tx_db,
         exported.block,
         exported.post_global_state.clone(),

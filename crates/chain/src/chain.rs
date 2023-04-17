@@ -332,7 +332,6 @@ impl Chain {
                     }
 
                     if let Some(challenge_target) = self.process_block(
-                        self.store.clone(),
                         db,
                         l2block.clone(),
                         global_state.clone(),
@@ -971,7 +970,6 @@ impl Chain {
 
         // TODO??: check bad block challenge target.
         let maybe_challenge_target = self.process_block(
-            self.store.clone(),
             store_tx,
             l2_block,
             global_state,
@@ -993,7 +991,6 @@ impl Chain {
     #[allow(clippy::too_many_arguments)]
     pub fn process_block(
         &mut self,
-        store: Store,
         mut db: &mut StoreTransaction,
         l2block: L2Block,
         global_state: GlobalState,
@@ -1082,21 +1079,12 @@ impl Chain {
             withdrawals,
         )?;
         let block_hash = l2block.hash();
-        db.insert_asset_scripts(deposit_asset_scripts)?;
-        db.attach_block(l2block.clone())?;
-
-        let t = Instant::now();
-        db.commit()?;
-        let commit_duration = t.elapsed();
-        *db = store.begin_transaction();
-
-        if let Some(mut s) = state_changes {
-            s.smt_stat.commit_milliseconds = Some(commit_duration.as_millis() as u64);
+        if let Some(s) = state_changes {
             let s = s.to_json();
             db.set_block_state_changes(block_hash, &s)?;
-            db.commit()?;
-            *db = store.begin_transaction();
         }
+        db.insert_asset_scripts(deposit_asset_scripts)?;
+        db.attach_block(l2block.clone())?;
 
         // Update metrics.
         gw_metrics::chain().block_height.set(block_number);

@@ -63,7 +63,6 @@ pub fn replay_chain(ctx: ChainContext) -> Result<()> {
         let mut db = local_store.begin_transaction();
         let now = Instant::now();
         if let Some(challenge) = chain.process_block(
-            local_store.clone(),
             &mut db,
             block,
             global_state,

@@ -1561,7 +1561,6 @@ pub struct TransactionStateChanges {
 pub struct SmtStat {
     pub update_kvs: u64,
     pub update_milliseconds: u64,
-    pub commit_milliseconds: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
