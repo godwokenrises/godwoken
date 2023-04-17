@@ -4,7 +4,9 @@ COPY ./web3 /godwoken-web3
 
 RUN cd /godwoken-web3 && yarn && yarn build
 
-RUN npm install pm2 -g
+# pm2 is no longer used.
+# RUN npm install pm2 -g
+# TODO: remove these lines in the next release
 
 RUN apt-get update \
  && apt-get dist-upgrade -y \

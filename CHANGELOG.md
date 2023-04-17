@@ -5,6 +5,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.13.0-rc2] - 2023-04-11
+
+* config: add new fork for testnet at block#2430000 https://github.com/godwokenrises/godwoken/pull/1040
+
+## [v1.13.0-rc1] - 2023-03-29
+
+Bug Fixes:
+
+* Fix GwConfig constructor issue - @classicalliu in https://github.com/godwokenrises/godwoken/pull/1019
+* Remove extra from RPC error in response - @Flouse in https://github.com/godwokenrises/godwoken/pull/1014
+* Fix web3 unit tests environment issue - @classicalliu in https://github.com/godwokenrises/godwoken/pull/1015
+* Fix Topic includes null in web3 - @classicalliu in https://github.com/godwokenrises/godwoken/pull/1024
+* Fix native transfer in polyjuice to check gas limit before pay fee - @magicalne in https://github.com/godwokenrises/godwoken/pull/1011
+* Handle invalid inputs in bn256 syscalls - @magicalne in https://github.com/godwokenrises/godwoken/pull/1022
+* Fix get logs - @classicalliu in https://github.com/godwokenrises/godwoken/pull/1034
+* Rpc-client retry on network error - @sopium in https://github.com/godwokenrises/godwoken/pull/1033
+
+Features:
+
+* Use delegate cell lock as rollup cell lock - @sopium in https://github.com/godwokenrises/godwoken/pull/940
+* Enhance gw-tools commands - @sopium in https://github.com/godwokenrises/godwoken/pull/983
+* Automatically adjust fee rate - @sopium in https://github.com/godwokenrises/godwoken/pull/999
+
+Full Changelog: https://github.com/godwokenrises/godwoken/compare/v1.12.2…v1.13.0-rc1
+
 ## [v1.12.2] - 2023-03-03
 
 * fix debug_replay_transaction rpc name [#1016](https://github.com/godwokenrises/godwoken/pull/1016)
