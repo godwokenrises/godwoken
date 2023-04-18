@@ -38,7 +38,8 @@ impl Backend {
         let addrs = get_symbol_addrs(
             generator_debug.as_ref().unwrap_or(&generator),
             &["_Z9sys_storeP12gw_context_tjPKhmS2_", "sys_store"],
-        )?;
+        )
+        .unwrap_or_default();
         let sys_store_addr = addrs.into_iter().flatten().next();
         let g = ckb_types::H256::from(generator_checksum);
         if let Some(a) = sys_store_addr {
