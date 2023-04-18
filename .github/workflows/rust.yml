@@ -42,8 +42,6 @@ jobs:
           git submodule update --init --recursive --depth=1
           make all-via-docker
 
-      - name: Copy contracts from prebuild docker images
-        run: devtools/fetch-binaries.sh
       - name: Tests
         run: RUST_BACKTRACE=1 cargo test --all-targets
       - name: Test TOML serialization
