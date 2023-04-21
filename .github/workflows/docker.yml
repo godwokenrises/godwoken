@@ -47,11 +47,9 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-${{ runner.arch }}-cargo-
         
-    # https://github.com/ATiltedTree/setup-rust
-    - uses: ATiltedTree/setup-rust@v1
-      with:
-        rust-version: nightly
-        components: rustfmt clippy
+    - name: Install Rust components
+      run: rustup component add rustfmt && rustup component add clippy
+
     - name: Install moleculec 0.7.2
       run: |
         test "$(moleculec --version)" = "Moleculec 0.7.2" \
@@ -177,11 +175,9 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-${{ runner.arch }}-${{ inputs.runner_type || 'ubuntu-20.04' }}-cargo-
     
-    # https://github.com/ATiltedTree/setup-rust
-    - uses: ATiltedTree/setup-rust@v1
-      with:
-        rust-version: nightly
-        components: rustfmt clippy
+    - name: Install Rust components
+      run: rustup component add rustfmt && rustup component add clippy
+
     - name: Install moleculec 0.7.2
       run: |
         test "$(moleculec --version)" = "Moleculec 0.7.2" \
