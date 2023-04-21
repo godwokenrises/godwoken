@@ -7,7 +7,7 @@ The maximum EVM revision supported is `EVMC_BERLIN`.
 
 ## pCKB
 
-[pCKB](https://github.com/nervosnetwork/godwoken/blob/develop/docs/life_of_a_polyjuice_transaction.md#pckb) is a new concept introduced by Polyjuice.
+[pCKB](../../docs/life_of_a_polyjuice_transaction.md#pckb) is a new concept introduced by Polyjuice.
 
 Recall that in Ethereum, the gas of each smart contract is calculated. The transaction fee is calculated then by multiplying gas with specified gas price. In Polyjuice, **pCKB** is used as the unit for calculating transaction fees. This means while the gas price in Ethereum is ETH/gas(which is denominated in wei, which is 1e-18 ether), in Polyjuice gas price is measured in pCKB/gas. When executing a transaction, Polyjuice will deduct transaction fee using the layer-2 [sUDT](https://github.com/nervosnetwork/rfcs/blob/master/rfcs/0025-simple-udt/0025-simple-udt.md) type denoted by **pCKB**.
 
@@ -20,14 +20,14 @@ When you use a sUDT token type, it will be represented in Godwoken as a layer-2 
 In other words, all bridged sUDT tokens have the same ERC20 interface thanks to the 1-to-1 sUDT-ERC20 proxy contract:
 
 ### Bridged sUDT token list
-- mainnet_v1: https://github.com/nervosnetwork/godwoken-info/blob/main/mainnet_v1/bridged-token-list.json
-- testnet_v1: https://github.com/nervosnetwork/godwoken-info/blob/main/testnet_v1_1/bridged-token-list.json
+- mainnet_v1: https://github.com/godwokenrises/godwoken-info/blob/main/mainnet_v1/bridged-token-list.json
+- testnet_v1: https://github.com/godwokenrises/godwoken-info/blob/main/testnet_v1_1/bridged-token-list.json
 
 ## Transaction structure
 
 A Polyjuice transaction is essentially just a Godwoken transaction.
 
-When you send an Ethereum transaction, the transaction is converted to Godwoken [RawL2Transaction](https://github.com/nervosnetwork/godwoken/blob/v1.5.0/crates/types/schemas/godwoken.mol#L69-L76) type which is automatically handled by [Godwoken Web3](https://github.com/nervosnetwork/godwoken-web3/tree/v1.6.4).
+When you send an Ethereum transaction, the transaction is converted to Godwoken [RawL2Transaction](https://github.com/godwokenrises/godwoken/blob/v1.5.0/crates/types/schemas/godwoken.mol#L69-L76) type which is automatically handled by [Godwoken Web3](https://github.com/godwokenrises/godwoken-web3/tree/v1.6.4).
 
 ## Behavioral differences of some opcodes
 
@@ -46,11 +46,11 @@ For some contracts that consume a lot of memory or that have deep call stacks, t
 ## Others
 
 * Transaction context
-  * `chain_id` is defined in Godwoken [RollupConfig#chain_id](https://github.com/nervosnetwork/godwoken/blob/v1.5.0/crates/types/schemas/godwoken.mol#L64).
+  * `chain_id` is defined in Godwoken [RollupConfig#chain_id](https://github.com/godwokenrises/godwoken/blob/v1.5.0/crates/types/schemas/godwoken.mol#L64).
   * the block difficulty is always `2500000000000000`
   * the gas limit for each block is 12500000; it is not a transaction-level limit. Any transaction can reach the gas limit
-  * the size limit for contract's return data is [`25KB`](https://github.com/nervosnetwork/godwoken-scripts/blob/31293d1/c/gw_def.h#L21-L22)
-  * the size limit for contract's storage is [`25KB`](https://github.com/nervosnetwork/godwoken-scripts/blob/31293d1/c/gw_def.h#L21-L22)
+  * the size limit for contract's return data is [`25KB`](https://github.com/godwokenrises/godwoken-scripts/blob/31293d1/c/gw_def.h#L21-L22)
+  * the size limit for contract's storage is [`25KB`](https://github.com/godwokenrises/godwoken-scripts/blob/31293d1/c/gw_def.h#L21-L22)
 
 * `transaction.to` MUST be a Contract Address
 

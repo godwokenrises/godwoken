@@ -72,7 +72,7 @@ EOF
 
 ### Start Indexer
 
-The default `indexer_config_path` is './indexer-config.toml'. More details about the configs refer to [struct IndexerConfig](https://github.com/nervosnetwork/godwoken-web3/blob/179a9a6ea065e78b419e692c80b331e4a7ead64d/crates/indexer/src/config.rs#L11-L22).
+The default `indexer_config_path` is './indexer-config.toml'. More details about the configs refer to [struct IndexerConfig](https://github.com/godwokenrises/godwoken-web3/blob/179a9a6ea065e78b419e692c80b331e4a7ead64d/crates/indexer/src/config.rs#L11-L22).
 
 ```bash
 cargo build --release

@@ -8,4 +8,4 @@ Godwoken limit the transaction execution resource in CKB-VM with [Cycle Limit](h
 
 ## EVM compatibility
 
-- [Godwoken-Polyjuice](https://github.com/nervosnetwork/godwoken-polyjuice/blob/compatibility-breaking-changes/docs/EVM-compatible.md)
+- [Godwoken-Polyjuice](../../gwos-evm/docs/EVM-compatible.md)

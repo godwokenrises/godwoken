@@ -1,6 +1,6 @@
 # Godwoken-scripts
 
-On-chain scripts of [Godwoken](https://github.com/nervosnetwork/godwoken) project.
+On-chain scripts of [Godwoken](https://github.com/godwokenrises/godwoken) project.
 
 ## Directory structure
 
@@ -36,14 +36,14 @@ Godwoken scripts are written in Rust and C, Rust scripts are running upon CKB to
 The Rust scripts are located in the `contracts` directory, using the command `capsule build` to build.
 The C scripts are located in the `c` directory, using the command `cd c && make` to build.
 
-All data structures are using [molecule](https://github.com/nervosnetwork/molecule) format to do the serialization, which is defined in the [godwoken.mol](https://github.com/nervosnetwork/godwoken/blob/develop/crates/types/schemas/godwoken.mol) file. 
+All data structures are using [molecule](https://github.com/nervosnetwork/molecule) format to do the serialization, which is defined in the [godwoken.mol](../gwos/crates/types/schemas/godwoken.mol) file. 
 
-Overview introduction of Godwoken mechanism: [Life of a godwoken transaction](https://github.com/nervosnetwork/godwoken/blob/develop/docs/life_of_a_godwoken_transaction.md) and [Life of a polyjuice transaction](https://github.com/nervosnetwork/godwoken/blob/develop/docs/life_of_a_polyjuice_transaction.md)
+Overview introduction of Godwoken mechanism: [Life of a godwoken transaction](../docs/life_of_a_godwoken_transaction.md) and [Life of a polyjuice transaction](../docs/life_of_a_polyjuice_transaction.md)
 
 ### State validator
 
 State validator is the major script to verify the on-chain Rollup cell.
-Rollup cell is an identity cell on CKB, it stores the structure [GlobalState](https://github.com/nervosnetwork/godwoken/blob/develop/crates/types/schemas/godwoken.mol) which represents the layer-2 state.
+Rollup cell is an identity cell on CKB, it stores the structure [GlobalState](../gwos/crates/types/schemas/godwoken.mol) which represents the layer-2 state.
 
 ```
 Rollup cell:
@@ -157,7 +157,7 @@ The built-in ETH address registry is allocated to id `2`.
 
 ### Polyjuice
 
-* Repo: https://github.com/nervosnetwork/godwoken-polyjuice
+* [Repo](../gwos-evm)
 
 The polyjuice backend for godwoken. The C scripts are located in the c directory, using the command `make all-via-docker` to build them. Using the command `bash devtools/ci/integration-test.sh` run all tests.
 
