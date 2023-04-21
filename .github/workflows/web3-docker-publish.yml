@@ -46,7 +46,7 @@ jobs:
       # https://github.com/docker/login-action
       # GitHub automatically creates a unique GITHUB_TOKEN secret to use in this workflow. 
       - name: Log into registry ${{ env.REGISTRY }}
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.repository_owner }}
