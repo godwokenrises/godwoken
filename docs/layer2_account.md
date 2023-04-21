@@ -26,7 +26,7 @@ Whether a layer2 account is an EOA or a contract is determined by its `code_hash
 
 ## Account alias
 
-We introduced the registry and Registry address since [Godwoken v1](https://github.com/nervosnetwork/godwoken/blob/develop/docs/v1-release-note.md). Registry and Registry addresses can be seen as an alias mechanism for layer 2 accounts.
+We introduced the registry and Registry address since [Godwoken v1](./v1-release-note.md). Registry and Registry addresses can be seen as an alias mechanism for layer 2 accounts.
 
 A layer2 account itself can be referenced by ID or script(normally, hash of the script). However, we also need to access an account by alias name in some environments, for example, in the EVM environment we have no concept of Godwoken's `ID` or `script`, we can only access an account by ETH address.
 
