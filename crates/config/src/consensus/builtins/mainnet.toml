@@ -150,7 +150,7 @@ backend_type = 'Polyjuice'
 
 [[backend_forks]]
 fork_height = 556000
-https://github.com/godwokenrises/godwoken/tree/57b9fc469f04fa7d5dadd6455a3217ffdde718da/gwos-evm
+# https://github.com/godwokenrises/godwoken/tree/57b9fc469f04fa7d5dadd6455a3217ffdde718da/gwos-evm
 [[backend_forks.backends]]
 generator = { bundled = 'builtin/godwoken-polyjuice-v1.5.5/generator' }
 generator_checksum = '0xe4d2fed018645548204215413c13abd24ad94398ee28822c4f8f503268fefddb'
