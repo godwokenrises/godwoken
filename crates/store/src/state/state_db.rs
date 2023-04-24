@@ -297,6 +297,27 @@ impl<S: State + CodeStore> StateDB<S> {
     }
 }
 
+impl<S: State + CodeStore> StateDB<S> {
+    pub fn track_point(&self) -> usize {
+        self.journal.len()
+    }
+
+    /// Get changed keys after track point.
+    ///
+    /// Note: this only works if dirty state hasn't been finalised.
+    pub fn changed_keys(&self, track_point: usize) -> impl Iterator<Item = H256> + '_ {
+        self.journal
+            .entries
+            .get(track_point..)
+            .into_iter()
+            .flatten()
+            .filter_map(|e| match e {
+                JournalEntry::UpdateRaw { key, .. } => Some(*key),
+                _ => None,
+            })
+    }
+}
+
 impl<S: State + CodeStore> JournalDB for StateDB<S> {
     /// create snapshot
     fn snapshot(&mut self) -> usize {

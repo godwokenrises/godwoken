@@ -287,6 +287,20 @@ impl StoreTransaction {
         )
     }
 
+    pub fn set_block_state_changes(&mut self, block_hash: H256, state_changes: &str) -> Result<()> {
+        self.insert_raw(
+            COLUMN_BLOCK_STATE_CHANGES,
+            &block_hash,
+            state_changes.as_bytes(),
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_block_state_changes(&mut self, block_hash: H256) -> Result<()> {
+        self.delete(COLUMN_BLOCK_STATE_CHANGES, &block_hash)?;
+        Ok(())
+    }
+
     pub fn set_block_submit_tx(
         &mut self,
         block_number: u64,
@@ -566,6 +580,7 @@ impl StoreTransaction {
         self.delete_submit_tx(block_number)?;
         self.delete_block_deposit_info_vec(block_number)?;
         self.delete_block_post_finalized_custodian_capacity(block_number)?;
+        self.delete_block_state_changes(block_hash)?;
 
         Ok(())
     }

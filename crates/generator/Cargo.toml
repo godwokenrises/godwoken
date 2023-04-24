@@ -19,6 +19,7 @@ gw-config = { path = "../config" }
 gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
 gw-utils = { path = "../utils"}
+gw-jsonrpc-types = { path = "../jsonrpc-types" }
 ckb-types = "0.105.1"
 anyhow = "1.0"
 blake2b-rs = "0.2"
@@ -36,6 +37,7 @@ sha3 = "0.10.6"
 arc-swap = "1.5"
 ethabi = { version = "18.0.0", default-features = false, features = ["thiserror", "std"] }
 tracing = { version = "0.1", features = ["attributes"] }
+goblin = "0.4.0"
 
 [dev-dependencies]
 gw-utils = {path = "../utils" }

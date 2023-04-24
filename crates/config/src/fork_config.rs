@@ -52,6 +52,7 @@ pub struct BackendConfig {
     pub validator_script_type_hash: H256,
     pub backend_type: BackendType,
     pub generator: Resource,
+    pub generator_debug: Option<Resource>,
 }
 
 /// Onchain rollup cell config
