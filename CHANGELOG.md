@@ -5,11 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
-## [v1.13.0-rc2] - 2023-04-11
+## [v1.13.0] - 2023-04-25
 
+Upgrades:
+
+* config: add new fork for mainnet at block#556000 https://github.com/godwokenrises/godwoken/pull/1055
 * config: add new fork for testnet at block#2430000 https://github.com/godwokenrises/godwoken/pull/1040
-
-## [v1.13.0-rc1] - 2023-03-29
 
 Bug Fixes:
 
@@ -28,7 +29,7 @@ Features:
 * Enhance gw-tools commands - @sopium in https://github.com/godwokenrises/godwoken/pull/983
 * Automatically adjust fee rate - @sopium in https://github.com/godwokenrises/godwoken/pull/999
 
-Full Changelog: https://github.com/godwokenrises/godwoken/compare/v1.12.2…v1.13.0-rc1
+Full Changelog: https://github.com/godwokenrises/godwoken/compare/v1.12.2…v1.13.0
 
 ## [v1.12.2] - 2023-03-03
 
