@@ -21,6 +21,7 @@ use tokio::{
     net::TcpListener,
     sync::{broadcast, mpsc},
 };
+use tower_http::timeout::TimeoutLayer;
 use tracing::Instrument;
 
 pub async fn start_jsonrpc_server(
@@ -46,7 +47,8 @@ pub async fn start_jsonrpc_server(
         .route("/metrics", get(serve_metrics))
         .route("/", post(handle_jsonrpc_with_tracing))
         .route("/*path", post(handle_jsonrpc_with_tracing))
-        .with_state(handler);
+        .with_state(handler)
+        .layer(TimeoutLayer::new(Duration::from_secs(30)));
 
     let server = axum::Server::builder(incoming).serve(app.into_make_service());
     let graceful = server.with_graceful_shutdown(async {
