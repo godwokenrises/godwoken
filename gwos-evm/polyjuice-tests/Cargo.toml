@@ -19,9 +19,6 @@ gw-traits    = { path = "../../crates/traits/" }
 gw-generator = { path = "../../crates/generator/" }
 gw-builtin-binaries = { path = "../../crates/builtin-binaries" }
 
-jsonrpc-utils = { version = "=0.2.0-preview.4", features = ["client"] }
-jsonrpc-utils-macros = "=0.2.0-preview.4"
-
 ####
 #Sync patch version with godwoken core.
 tracing = { version = "0.1.36", features = ["attributes"] } 
