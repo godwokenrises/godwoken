@@ -919,9 +919,30 @@ export class Eth {
 
   /* #region filter-related api methods */
   async newFilter(args: [RpcFilterRequest]): Promise<HexString> {
+    const filterRequest: RpcFilterRequest = args[0];
+
+    const fromBlock = filterRequest.fromBlock;
+    const toBlock = filterRequest.toBlock;
+
+    // https://github.com/ethereum/go-ethereum/blob/v1.11.5/eth/filters/filter_system.go#L334
+    if (
+      typeof fromBlock === "string" &&
+      fromBlock.startsWith("0x") &&
+      typeof toBlock === "string" &&
+      toBlock.startsWith("0x") &&
+      fromBlock > toBlock
+    ) {
+      throw new HeaderNotFoundError(
+        `invalid from and to block combination: from > to`
+      );
+    }
+
     const tipLog: Log | null = await this.query.getTipLog();
     const initialLogId: bigint = tipLog == null ? 0n : tipLog.id;
-    const filter_id = await this.filterManager.install(args[0], initialLogId);
+    const filter_id = await this.filterManager.install(
+      filterRequest,
+      initialLogId
+    );
     return filter_id;
   }
 
@@ -1018,8 +1039,13 @@ export class Eth {
       return [];
     } else {
       const lastPollLogId = await this.filterManager.getLastPoll(filter_id);
+      // Don't check from > tipNumber here, for Geth also returns [] here.
+      const filterParams = await this._rpcFilterRequestToGetLogsParams(
+        filter,
+        false
+      );
       const logs = await this.query.getLogsByFilter(
-        await this._rpcFilterRequestToGetLogsParams(filter, false),
+        filterParams,
         lastPollLogId
       );
 
@@ -1106,7 +1132,8 @@ export class Eth {
   }
 
   private async _parseBlockParameter(
-    blockParameter: BlockParameter
+    blockParameter: BlockParameter,
+    checkBiggerThanTipNumber: boolean = true
   ): Promise<GodwokenBlockParameter> {
     switch (blockParameter) {
       case "latest":
@@ -1152,7 +1179,7 @@ export class Eth {
         ? blockParameter.blockNumber
         : (blockParameter as HexNumber);
     const blockNumber: U64 = Uint64.fromHex(blockHexNum).getValue();
-    if (tipNumber < blockNumber) {
+    if (checkBiggerThanTipNumber && tipNumber < blockNumber) {
       throw new HeaderNotFoundError();
     }
     return blockNumber;
@@ -1225,12 +1252,14 @@ export class Eth {
       fromBlockParam = fromBlock ?? "latest";
     }
     const _fromBlock: bigint | undefined = await this._parseBlockParameter(
-      fromBlockParam
+      fromBlockParam,
+      false
     );
     normalizedFromBlock = _fromBlock ?? latestBlockNumber;
 
     const _toBlock: bigint | undefined = await this._parseBlockParameter(
-      toBlock ?? "latest"
+      toBlock ?? "latest",
+      false
     );
     normalizedToBlock = _toBlock ?? latestBlockNumber;
 

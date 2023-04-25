@@ -55,6 +55,7 @@ Technically, the layer-2 contracts can be written in any programming language th
 ## Documentation
 - https://docs.godwoken.io
 - [Ethereum Compatible Web3 RPC](web3/docs/apis.md)
+- [Ethereum Compatibility](web3/docs/compatibility.md)
 
 ## Getting Started
 

@@ -249,7 +249,7 @@ Now we can derive the signature validation rule for a layer 2 Godwoken transacti
 * Using `from_id` in the layer 2 transaction, Godwoken locates the corresponding layer 2 lock script
 * The layer 2 lock script is executed to validate the layer 2 transaction
 
-There is one quirk to the above flow here: recall that current Godwoken uses optimistic rollup design. Due to the "optimistic" nature, the layer 2 lock script is not typically executed on chain. It is only executed in the case that a challenger starts a challenge request on chain, and an aggregator proves the validity of the layer 2 transaction via a cancel challenge request. Hence the way to build a layer 2 lock script, is also slightly different here. An example for such a script, can be found [here](https://github.com/nervosnetwork/godwoken-scripts/blob/master/contracts/eth-account-lock/src/entry.rs#L24).
+There is one quirk to the above flow here: recall that current Godwoken uses optimistic rollup design. Due to the "optimistic" nature, the layer 2 lock script is not typically executed on chain. It is only executed in the case that a challenger starts a challenge request on chain, and an aggregator proves the validity of the layer 2 transaction via a cancel challenge request. Hence the way to build a layer 2 lock script, is also slightly different here. An example for such a script, can be found [here](../gwos/contracts/eth-account-lock/src/entry.rs#L26).
 
 ### Backend
 
