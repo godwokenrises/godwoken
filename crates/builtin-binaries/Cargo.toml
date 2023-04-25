@@ -1,6 +1,6 @@
 [package]
 name = "gw-builtin-binaries"
-version = "1.13.0-rc2"
+version = "1.13.0"
 edition = "2021"
 authors = ["Godwoken"]
 license = "MIT"
