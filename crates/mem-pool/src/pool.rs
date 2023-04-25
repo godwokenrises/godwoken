@@ -989,7 +989,7 @@ impl MemPool {
                 let tx_hash = tx.hash();
                 log::info!(
                     "[mem pool] fail to re-inject tx {}, error: {}",
-                    hex::encode(&tx_hash),
+                    hex::encode(tx_hash),
                     err
                 );
             }

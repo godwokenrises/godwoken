@@ -23,9 +23,9 @@ where
     S: AsRef<OsStr>,
 {
     let working_dir = env::current_dir().expect("get working dir");
-    env::set_current_dir(&target_dir).expect("set target dir");
+    env::set_current_dir(target_dir).expect("set target dir");
     let result = run(bin, args);
-    env::set_current_dir(&working_dir).expect("set working dir");
+    env::set_current_dir(working_dir).expect("set working dir");
     result
 }
 

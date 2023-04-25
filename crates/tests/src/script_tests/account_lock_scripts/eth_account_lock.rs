@@ -178,7 +178,7 @@ fn sign_message(key: &Privkey, message: [u8; 32]) -> Bytes {
     let message = {
         let mut hasher = Keccak256::new();
         hasher.update("\x19Ethereum Signed Message:\n32");
-        hasher.update(&message);
+        hasher.update(message);
         let buf = hasher.finalize();
         let mut signing_message = [0u8; 32];
         signing_message.copy_from_slice(&buf[..]);
@@ -192,7 +192,7 @@ fn sign_message(key: &Privkey, message: [u8; 32]) -> Bytes {
 
 pub fn sha3_pubkey_hash(pubkey: &Pubkey) -> Bytes {
     let mut hasher = Keccak256::new();
-    hasher.update(&pubkey.as_bytes());
+    hasher.update(pubkey.as_bytes());
     let buf = hasher.finalize();
     buf[12..].to_vec().into()
 }
@@ -253,7 +253,7 @@ fn test_submit_signing_eth_message() {
     let signing_message: [u8; 32] = {
         let mut hasher = Keccak256::new();
         hasher.update("\x19Ethereum Signed Message:\n32");
-        hasher.update(&message);
+        hasher.update(message);
         let buf = hasher.finalize();
         buf.to_vec().try_into().unwrap()
     };

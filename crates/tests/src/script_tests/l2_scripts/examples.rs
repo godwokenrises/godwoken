@@ -296,7 +296,7 @@ fn test_example_account_operation() {
             Ok(TransactionError::UnknownTxType(code)) => code,
             err => panic!("unexpected {:?}", err),
         };
-        assert_eq!(err_code, GW_ERROR_ACCOUNT_NOT_FOUND as i8);
+        assert_eq!(err_code, GW_ERROR_ACCOUNT_NOT_FOUND);
     }
 
     // Store: success
@@ -337,7 +337,7 @@ fn test_example_account_operation() {
             Ok(TransactionError::UnknownTxType(code)) => code,
             err => panic!("unexpected {:?}", err),
         };
-        assert_eq!(err_code, GW_ERROR_ACCOUNT_NOT_FOUND as i8);
+        assert_eq!(err_code, GW_ERROR_ACCOUNT_NOT_FOUND);
     }
 
     // LoadNonce: success
@@ -370,7 +370,7 @@ fn test_example_account_operation() {
             Ok(TransactionError::UnknownTxType(code)) => code,
             err => panic!("unexpected {:?}", err),
         };
-        assert_eq!(err_code, GW_ERROR_ACCOUNT_NOT_FOUND as i8);
+        assert_eq!(err_code, GW_ERROR_ACCOUNT_NOT_FOUND);
     }
 
     // Log: success
@@ -428,7 +428,7 @@ fn test_example_account_operation() {
             Ok(TransactionError::UnknownTxType(code)) => code,
             err => panic!("unexpected {:?}", err),
         };
-        assert_eq!(err_code, GW_ERROR_ACCOUNT_NOT_FOUND as i8);
+        assert_eq!(err_code, GW_ERROR_ACCOUNT_NOT_FOUND);
     }
 }
 
@@ -551,7 +551,7 @@ fn test_example_recover_account() {
             err => panic!("unexpected {:?}", err),
         };
         println!("err_code: {}", err_code);
-        assert_eq!(err_code, GW_ERROR_RECOVER as i8);
+        assert_eq!(err_code, GW_ERROR_RECOVER);
     }
 
     // Wrong code hash

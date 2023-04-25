@@ -135,7 +135,7 @@ fn load_bytes<Mac: SupportMachine>(
     addr: u64,
     len: usize,
 ) -> Result<Vec<u8>, VMError> {
-    if len > MAX_BUF_SIZE as usize {
+    if len > MAX_BUF_SIZE {
         return Err(VMError::MemOutOfBound);
     }
     let mut data = vec![0; len];

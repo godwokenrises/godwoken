@@ -19,7 +19,7 @@ pub trait EIP712Encode {
             buf
         };
         let mut hasher = Keccak256::new();
-        hasher.update(&type_hash);
+        hasher.update(type_hash);
         hasher.update(&encoded_data);
         hasher.finalize().into()
     }
@@ -27,8 +27,8 @@ pub trait EIP712Encode {
     fn eip712_message(&self, domain_separator: [u8; 32]) -> [u8; 32] {
         let mut hasher = Keccak256::new();
         hasher.update(b"\x19\x01");
-        hasher.update(&domain_separator);
-        hasher.update(&self.hash_struct());
+        hasher.update(domain_separator);
+        hasher.update(self.hash_struct());
         hasher.finalize().into()
     }
 }

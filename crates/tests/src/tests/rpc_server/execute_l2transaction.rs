@@ -313,7 +313,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     eprintln!("err {}", err);
 
     let expected_err = "check balance err";
-    assert!(err.to_string().contains(&expected_err));
+    assert!(err.to_string().contains(expected_err));
 
     // Registered to different script
     let mut state = mem_pool_state.load_state_db();

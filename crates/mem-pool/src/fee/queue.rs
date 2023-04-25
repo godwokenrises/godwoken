@@ -88,7 +88,7 @@ impl<T: TelemetryContext> FeeQueue<T> {
     #[instrument(skip_all, err(Debug), fields(count = count, remain = field::Empty))]
     pub fn fetch(&mut self, state: &impl State, count: usize) -> Result<Vec<(FeeEntry, T)>> {
         // sorted fee items
-        let mut fetched_items = Vec::with_capacity(count as usize);
+        let mut fetched_items = Vec::with_capacity(count);
         let mut fetched_senders: HashMap<FeeItemSender, u32> = Default::default();
         // future items, we will push back this queue
         let mut future_queue = Vec::default();

@@ -36,7 +36,7 @@ impl EthWallet {
         let account_script = privkey_to_eth_account_script(
             &privkey,
             &rollup_script_hash,
-            &(*ETH_ACCOUNT_LOCK_CODE_HASH),
+            &ETH_ACCOUNT_LOCK_CODE_HASH,
         )
         .expect("random wallet");
 

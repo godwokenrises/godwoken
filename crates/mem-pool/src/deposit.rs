@@ -206,8 +206,8 @@ fn check_deposit_cell(
                         return Err(anyhow!(
                             "The RegistryAddress {:?} was already occupied by script_hash {}, depositing script_hash: {}",
                             hex::encode(reg_addr.to_bytes()),
-                            hex::encode(&script_hash.as_slice()),
-                            hex::encode(&script.hash()),
+                            hex::encode(script_hash.as_slice()),
+                            hex::encode(script.hash()),
                         ));
                     }
                 }

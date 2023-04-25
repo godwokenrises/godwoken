@@ -1,7 +1,7 @@
 fn main() {
     // get commit id
     if let Some(commit_id) = std::process::Command::new("git")
-        .args(&[
+        .args([
             "describe",
             "--always",
             "--match",

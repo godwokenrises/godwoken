@@ -123,16 +123,11 @@ impl TryFrom<Byte> for ChallengeTargetType {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum DepType {
+    #[default]
     Code = 0,
     DepGroup = 1,
-}
-
-impl Default for DepType {
-    fn default() -> Self {
-        DepType::Code
-    }
 }
 
 impl TryFrom<packed::Byte> for DepType {

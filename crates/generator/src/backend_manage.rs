@@ -238,10 +238,10 @@ mod tests {
         let sudt_v1 = dir.join("sudt_v1");
         let meta_v0 = dir.join("meta_v0");
         let addr_v0 = dir.join("addr_v0");
-        std::fs::write(&sudt_v0, "sudt_v0").unwrap();
-        std::fs::write(&sudt_v1, "sudt_v1").unwrap();
-        std::fs::write(&meta_v0, "meta_v0").unwrap();
-        std::fs::write(&addr_v0, "addr_v0").unwrap();
+        std::fs::write(sudt_v0, "sudt_v0").unwrap();
+        std::fs::write(sudt_v1, "sudt_v1").unwrap();
+        std::fs::write(meta_v0, "meta_v0").unwrap();
+        std::fs::write(addr_v0, "addr_v0").unwrap();
 
         let config = BackendForkConfig {
             fork_height: 1,

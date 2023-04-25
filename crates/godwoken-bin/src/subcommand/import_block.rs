@@ -61,7 +61,7 @@ impl ImportBlock {
 
         let progress_bar = if args.show_progress {
             let metadata = fs::metadata(&args.source)?;
-            let bar = ProgressBar::new(metadata.len() as u64);
+            let bar = ProgressBar::new(metadata.len());
             bar.set_style(
                 ProgressStyle::default_bar()
                     .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
@@ -151,7 +151,7 @@ impl ImportBlock {
             }
 
             if let Some(ref progress_bar) = self.progress_bar {
-                progress_bar.inc(size as u64)
+                progress_bar.inc(size)
             }
         }
 

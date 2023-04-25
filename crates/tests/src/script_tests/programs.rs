@@ -28,8 +28,8 @@ lazy_static! {
     pub static ref CHALLENGE_LOCK_PROGRAM: Bytes = {
         let mut buf = Vec::new();
         let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&CHALLENGE_LOCK_PATH);
+        path.push(SCRIPT_DIR);
+        path.push(CHALLENGE_LOCK_PATH);
         let mut f = fs::File::open(&path).expect("load program");
         f.read_to_end(&mut buf).expect("read program");
         Bytes::from(buf.to_vec())
@@ -44,8 +44,8 @@ lazy_static! {
     pub static ref STATE_VALIDATOR_PROGRAM: Bytes = {
         let mut buf = Vec::new();
         let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&STATE_VALIDATOR);
+        path.push(SCRIPT_DIR);
+        path.push(STATE_VALIDATOR);
         let mut f = fs::File::open(&path).expect("load program");
         f.read_to_end(&mut buf).expect("read program");
         Bytes::from(buf.to_vec())
@@ -60,8 +60,8 @@ lazy_static! {
     pub static ref CUSTODIAN_LOCK_PROGRAM: Bytes = {
         let mut buf = Vec::new();
         let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&CUSTODIAN_LOCK_PATH);
+        path.push(SCRIPT_DIR);
+        path.push(CUSTODIAN_LOCK_PATH);
         let mut f = fs::File::open(&path).expect("load custodian lock program");
         f.read_to_end(&mut buf)
             .expect("read custodian lock program");
@@ -77,8 +77,8 @@ lazy_static! {
     pub static ref STAKE_LOCK_PROGRAM: Bytes = {
         let mut buf = Vec::new();
         let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&STAKE_LOCK_PATH);
+        path.push(SCRIPT_DIR);
+        path.push(STAKE_LOCK_PATH);
         let mut f = fs::File::open(&path).expect("load stake lock program");
         f.read_to_end(&mut buf).expect("read stake lock program");
         Bytes::from(buf.to_vec())
@@ -93,8 +93,8 @@ lazy_static! {
     pub static ref ETH_ACCOUNT_LOCK_PROGRAM: Bytes = {
         let mut buf = Vec::new();
         let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&ETH_LOCK_PATH);
+        path.push(SCRIPT_DIR);
+        path.push(ETH_LOCK_PATH);
         let mut f = fs::File::open(&path).expect("load program");
         f.read_to_end(&mut buf).expect("read program");
         Bytes::from(buf.to_vec())
@@ -108,7 +108,7 @@ lazy_static! {
     };
     pub static ref SECP256K1_DATA: Bytes = {
         let mut buf = Vec::new();
-        let mut f = fs::File::open(&SECP256K1_DATA_PATH).expect("load secp256k1 data");
+        let mut f = fs::File::open(SECP256K1_DATA_PATH).expect("load secp256k1 data");
         f.read_to_end(&mut buf).expect("read secp256k1 data");
         Bytes::from(buf.to_vec())
     };
@@ -121,7 +121,7 @@ lazy_static! {
     };
     pub static ref ANYONE_CAN_PAY_LOCK_PROGRAM: Bytes = {
         let mut buf = Vec::new();
-        let mut f = fs::File::open(&ANYONE_CAN_PAY_LOCK_PATH).expect("load acp lock program");
+        let mut f = fs::File::open(ANYONE_CAN_PAY_LOCK_PATH).expect("load acp lock program");
         f.read_to_end(&mut buf).expect("read acp program");
         Bytes::from(buf.to_vec())
     };
@@ -135,8 +135,8 @@ lazy_static! {
     pub static ref META_CONTRACT_VALIDATOR_PROGRAM: Bytes = {
         let mut buf = Vec::new();
         let mut path = PathBuf::new();
-        path.push(&C_SCRIPTS_DIR);
-        path.push(&META_CONTRACT_BIN_NAME);
+        path.push(C_SCRIPTS_DIR);
+        path.push(META_CONTRACT_BIN_NAME);
         let mut f = fs::File::open(&path).expect("load program");
         f.read_to_end(&mut buf).expect("read program");
         Bytes::from(buf.to_vec())
@@ -151,8 +151,8 @@ lazy_static! {
     pub static ref ETH_ADDR_REG_VALIDATOR_PROGRAM: Bytes = {
         let mut buf = Vec::new();
         let mut path = PathBuf::new();
-        path.push(&C_SCRIPTS_DIR);
-        path.push(&ETH_ADDR_REG_BIN_NAME);
+        path.push(C_SCRIPTS_DIR);
+        path.push(ETH_ADDR_REG_BIN_NAME);
         let mut f = fs::File::open(&path).expect("load program");
         f.read_to_end(&mut buf).expect("read program");
         Bytes::from(buf.to_vec())
@@ -167,8 +167,8 @@ lazy_static! {
     pub static ref WITHDRAWAL_LOCK_PROGRAM: Bytes = {
         let mut buf = Vec::new();
         let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&WITHDRAWAL_LOCK_PATH);
+        path.push(SCRIPT_DIR);
+        path.push(WITHDRAWAL_LOCK_PATH);
         let mut f = fs::File::open(&path).expect("load withdrawal lock program");
         f.read_to_end(&mut buf)
             .expect("read withdrawal lock program");

@@ -132,7 +132,7 @@ pub async fn collect_local_and_indexer_cells(
         CollectLocalAndIndexerCursor::Local => {
             let local = local_cells_manager
                 .local_live()
-                .filter(|c| satisfy_search(search_key, *c))
+                .filter(|c| satisfy_search(search_key, c))
                 .cloned()
                 .collect();
             *cursor = CollectLocalAndIndexerCursor::Indexer(None);
@@ -175,7 +175,7 @@ pub fn collect_local_cells<'a>(
 ) -> impl Iterator<Item = &'a CellInfo> + 'a {
     local_cells_manager
         .local_live()
-        .filter(move |c| satisfy_search(search_key, *c))
+        .filter(move |c| satisfy_search(search_key, c))
 }
 
 /// Check that a cell satisfy a SearchKey, in the same way as ckb-indexer,
