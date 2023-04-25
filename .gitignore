@@ -1,6 +1,7 @@
 target/
 build/
 .tmp/
+.vscode/
 crates/benches/smt_data/db/
 crates/tests/mem_block/
 gwos-evm/deps/ckb-binary-patcher/
