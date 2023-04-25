@@ -217,7 +217,7 @@ async fn run_cli() -> Result<()> {
     match matches.subcommand() {
         Some((COMMAND_RUN, m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
-            let config = read_config(&config_path)?;
+            let config = read_config(config_path)?;
             let _guard = trace::init()?;
             gw_metrics::init(&config);
             runner::run(config, m.is_present(ARG_SKIP_CONFIG_CHECK)).await?;
@@ -229,7 +229,7 @@ async fn run_cli() -> Result<()> {
         }
         Some((COMMAND_VERIFY_DB_BLOCK, m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
-            let config = read_config(&config_path)?;
+            let config = read_config(config_path)?;
             let _guard = trace::init()?;
             let from_block: Option<u64> = m.value_of(ARG_FROM_BLOCK).map(str::parse).transpose()?;
             let to_block: Option<u64> = m.value_of(ARG_TO_BLOCK).map(str::parse).transpose()?;
@@ -237,7 +237,7 @@ async fn run_cli() -> Result<()> {
         }
         Some((COMMAND_EXPORT_BLOCK, m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
-            let config = read_config(&config_path)?;
+            let config = read_config(config_path)?;
             let _guard = trace::init()?;
             let output = m.value_of(ARG_OUTPUT_PATH).unwrap().into();
             let from_block: Option<u64> = m.value_of(ARG_FROM_BLOCK).map(str::parse).transpose()?;
@@ -255,7 +255,7 @@ async fn run_cli() -> Result<()> {
         }
         Some((COMMAND_IMPORT_BLOCK, m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
-            let config = read_config(&config_path)?;
+            let config = read_config(config_path)?;
             let _guard = trace::init()?;
             let source = m.value_of(ARG_SOURCE_PATH).unwrap().into();
             let read_batch: Option<usize> =
@@ -286,7 +286,7 @@ async fn run_cli() -> Result<()> {
         _ => {
             // default command: start a Godwoken node
             let config_path = "./config.toml";
-            let config = read_config(&config_path)?;
+            let config = read_config(config_path)?;
             let _guard = trace::init()?;
             gw_metrics::init(&config);
             runner::run(config, false).await?;

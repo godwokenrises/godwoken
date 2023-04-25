@@ -196,7 +196,7 @@ fn sum_change_capacity(
                 change.capacity().unpack() as u128
             }
             _ => {
-                let hex = hex::encode(&sudt_script_hash);
+                let hex = hex::encode(sudt_script_hash);
                 log::warn!("unknown sudt script hash {:?}", hex);
                 0
             }

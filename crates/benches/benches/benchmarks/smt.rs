@@ -155,14 +155,14 @@ impl BenchExecutionEnvironment {
             let configs = vec![
                 BackendConfig {
                     generator: Resource::file_system(META_GENERATOR_PATH.into()),
-                    generator_checksum: file_checksum(&META_GENERATOR_PATH).unwrap().into(),
+                    generator_checksum: file_checksum(META_GENERATOR_PATH).unwrap().into(),
                     validator_script_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
                     backend_type: gw_config::BackendType::Meta,
                     generator_debug: None,
                 },
                 BackendConfig {
                     generator: Resource::file_system(SUDT_GENERATOR_PATH.into()),
-                    generator_checksum: file_checksum(&SUDT_GENERATOR_PATH).unwrap().into(),
+                    generator_checksum: file_checksum(SUDT_GENERATOR_PATH).unwrap().into(),
                     validator_script_type_hash: SUDT_VALIDATOR_SCRIPT_TYPE_HASH.into(),
                     backend_type: gw_config::BackendType::Sudt,
                     generator_debug: None,

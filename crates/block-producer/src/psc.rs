@@ -629,7 +629,7 @@ async fn submit_block(
             global_state,
             since,
             withdrawal_extras,
-            local_cells_manager: &*local_cells_manager,
+            local_cells_manager: &local_cells_manager,
             fee_rate,
         };
         let tx = ctx

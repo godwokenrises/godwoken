@@ -91,7 +91,7 @@ async fn run_cli() -> Result<()> {
     match matches.subcommand() {
         Some(("replay", m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
-            let config = read_config(&config_path)?;
+            let config = read_config(config_path)?;
             let from_db_store = m.value_of("from-db-store").unwrap().into();
             let from_db_columns = m
                 .value_of("from-db-columns")
@@ -110,7 +110,7 @@ async fn run_cli() -> Result<()> {
         }
         Some(("detach", m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
-            let config = read_config(&config_path)?;
+            let config = read_config(config_path)?;
             let from_db_store = m.value_of("from-db-store").unwrap().into();
             let from_db_columns = m
                 .value_of("from-db-columns")

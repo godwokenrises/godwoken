@@ -25,7 +25,7 @@ impl SudtErc20ArgsBuilder {
     }
 
     pub fn transfer(to: &RegistryAddress, amount: U256) -> PolyjuiceArgsBuilder {
-        let address = hex::encode(&abi_encode_eth_address(to));
+        let address = hex::encode(abi_encode_eth_address(to));
         let amount = {
             // U256 doesn't implement pad
             let hex_amount = format!("{:x}", amount);
@@ -44,7 +44,7 @@ impl SudtErc20ArgsBuilder {
     }
 
     pub fn balance_of(registry_address: &RegistryAddress) -> PolyjuiceArgsBuilder {
-        let address = hex::encode(&abi_encode_eth_address(registry_address));
+        let address = hex::encode(abi_encode_eth_address(registry_address));
         let data = {
             let sig = format!("70a08231{}", address);
             hex::decode(sig).unwrap()

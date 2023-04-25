@@ -99,16 +99,11 @@ impl CancelChallengeOutput {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum LoadDataStrategy {
+    #[default]
     Witness,
     CellDep,
-}
-
-impl Default for LoadDataStrategy {
-    fn default() -> Self {
-        LoadDataStrategy::Witness
-    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -192,7 +187,7 @@ pub fn build_output(
                 load_builtin.iter().map(to_dep).collect()
             };
 
-            let load_data: Vec<Bytes> = load_data.into_iter().map(|(_, v)| v.unpack()).collect();
+            let load_data: Vec<Bytes> = load_data.into_values().map(|v| v.unpack()).collect();
             let (witness, load_data_cells) = match load_data_strategy.unwrap_or_default() {
                 LoadDataStrategy::Witness => {
                     let witness = witness.as_builder().load_data(load_data.pack()).build();

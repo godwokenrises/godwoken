@@ -180,10 +180,10 @@ impl GodwokenRpcClient {
         method: &str,
         params: serde_json::Value,
     ) -> Result<SuccessResponse> {
-        self.id.fetch_add(1, Ordering::SeqCst);
+        let id = self.id.fetch_add(1, Ordering::SeqCst);
         let mut req_json = serde_json::Map::new();
-        req_json.insert("id".to_owned(), serde_json::to_value(&*self.id).unwrap());
-        req_json.insert("jsonrpc".to_owned(), serde_json::to_value(&"2.0").unwrap());
+        req_json.insert("id".to_owned(), serde_json::to_value(id).unwrap());
+        req_json.insert("jsonrpc".to_owned(), serde_json::to_value("2.0").unwrap());
         req_json.insert("method".to_owned(), serde_json::to_value(method).unwrap());
         req_json.insert("params".to_owned(), params);
 

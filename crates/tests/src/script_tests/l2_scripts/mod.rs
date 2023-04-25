@@ -35,8 +35,8 @@ const SUDT_TOTAL_SUPPLY_BIN_NAME: &str = "sudt-total-supply-generator";
 lazy_static! {
     static ref SUM_PROGRAM_PATH: PathBuf = {
         let mut path = PathBuf::new();
-        path.push(&EXAMPLES_DIR);
-        path.push(&SUM_BIN_NAME);
+        path.push(EXAMPLES_DIR);
+        path.push(SUM_BIN_NAME);
         path
     };
     static ref SUM_PROGRAM: Bytes = {
@@ -54,8 +54,8 @@ lazy_static! {
     };
     static ref ACCOUNT_OP_PROGRAM_PATH: PathBuf = {
         let mut path = PathBuf::new();
-        path.push(&EXAMPLES_DIR);
-        path.push(&ACCOUNT_OP_BIN_NAME);
+        path.push(EXAMPLES_DIR);
+        path.push(ACCOUNT_OP_BIN_NAME);
         path
     };
     static ref ACCOUNT_OP_PROGRAM: Bytes = {
@@ -73,8 +73,8 @@ lazy_static! {
     };
     static ref RECOVER_PROGRAM_PATH: PathBuf = {
         let mut path = PathBuf::new();
-        path.push(&EXAMPLES_DIR);
-        path.push(&RECOVER_BIN_NAME);
+        path.push(EXAMPLES_DIR);
+        path.push(RECOVER_BIN_NAME);
         path
     };
     static ref RECOVER_PROGRAM: Bytes = {
@@ -92,8 +92,8 @@ lazy_static! {
     };
     static ref SUDT_TOTAL_SUPPLY_PROGRAM_PATH: PathBuf = {
         let mut path = PathBuf::new();
-        path.push(&EXAMPLES_DIR);
-        path.push(&SUDT_TOTAL_SUPPLY_BIN_NAME);
+        path.push(EXAMPLES_DIR);
+        path.push(SUDT_TOTAL_SUPPLY_BIN_NAME);
         path
     };
     static ref SUDT_TOTAL_SUPPLY_PROGRAM: Bytes = {

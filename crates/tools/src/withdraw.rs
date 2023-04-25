@@ -58,7 +58,7 @@ pub async fn withdraw(
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
-    let config = read_config(&config_path)?;
+    let config = read_config(config_path)?;
     let rollup_type_hash = &config.consensus.get_config().genesis.rollup_type_hash;
 
     let chain_id: u64 = config

@@ -12,19 +12,14 @@ use crate::constants::{
     MAX_WITHDRAWAL_SIZE, MAX_WRITE_DATA_BYTES,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum BackendType {
     Meta,
     Sudt,
     Polyjuice,
     EthAddrReg,
+    #[default]
     Unknown,
-}
-
-impl Default for BackendType {
-    fn default() -> Self {
-        BackendType::Unknown
-    }
 }
 
 /// SUDT Proxy config

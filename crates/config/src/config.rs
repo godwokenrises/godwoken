@@ -415,18 +415,13 @@ impl Default for MemBlockConfig {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum NodeMode {
     FullNode,
     Test,
+    #[default]
     ReadOnly,
-}
-
-impl Default for NodeMode {
-    fn default() -> Self {
-        NodeMode::ReadOnly
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -508,17 +503,12 @@ pub struct GithubConfigUrl {
     pub token: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase", deny_unknown_fields)]
 pub enum ContractLogConfig {
+    #[default]
     Verbose,
     Error,
-}
-
-impl Default for ContractLogConfig {
-    fn default() -> Self {
-        ContractLogConfig::Verbose
-    }
 }
 
 // Cycles config for all db related syscalls
@@ -541,8 +531,8 @@ pub struct SyscallCyclesConfig {
     pub sys_revert_cycles: u64,
 }
 
-impl SyscallCyclesConfig {
-    pub fn default() -> Self {
+impl Default for SyscallCyclesConfig {
+    fn default() -> Self {
         SyscallCyclesConfig {
             sys_store_cycles: 50000,
             sys_load_cycles: 5000,

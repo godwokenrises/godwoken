@@ -1209,18 +1209,13 @@ pub struct NodeInfo {
     pub gasless_tx_support: Option<GaslessTxSupportConfig>,
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum NodeMode {
     FullNode,
     Test,
+    #[default]
     ReadOnly,
-}
-
-impl Default for NodeMode {
-    fn default() -> Self {
-        NodeMode::ReadOnly
-    }
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
@@ -1231,20 +1226,15 @@ pub struct BackendInfo {
     pub backend_type: BackendType,
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum BackendType {
+    #[default]
     Unknown,
     Meta,
     Sudt,
     Polyjuice,
     EthAddrReg,
-}
-
-impl Default for BackendType {
-    fn default() -> Self {
-        BackendType::Unknown
-    }
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
@@ -1255,9 +1245,10 @@ pub struct GwScript {
     pub script_type: GwScriptType,
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum GwScriptType {
+    #[default]
     Unknown,
     Deposit,
     Withdraw,
@@ -1268,12 +1259,6 @@ pub enum GwScriptType {
     L1Sudt,
     L2Sudt,
     OmniLock,
-}
-
-impl Default for GwScriptType {
-    fn default() -> Self {
-        GwScriptType::Unknown
-    }
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
@@ -1301,17 +1286,12 @@ pub struct EoaScript {
     pub eoa_type: EoaScriptType,
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum EoaScriptType {
+    #[default]
     Unknown,
     Eth,
-}
-
-impl Default for EoaScriptType {
-    fn default() -> Self {
-        EoaScriptType::Unknown
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, Hash)]

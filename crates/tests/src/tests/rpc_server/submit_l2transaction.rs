@@ -354,7 +354,7 @@ async fn test_invalid_polyjuice_tx_from_id_zero() {
     eprintln!("err {}", err);
 
     let expected_err = "tx from zero is disabled";
-    assert!(err.to_string().contains(&expected_err));
+    assert!(err.to_string().contains(expected_err));
 
     let state = mem_pool_state.load_state_db();
 

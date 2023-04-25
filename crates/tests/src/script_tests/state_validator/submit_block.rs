@@ -1117,7 +1117,6 @@ async fn test_check_reverted_cells_in_submit_block() {
     let input_finalized_cells: Vec<_> = {
         let capacity = 300_00000000u64;
         (0..3)
-            .into_iter()
             .map(|_| {
                 let args = CustodianLockArgs::new_builder()
                     .deposit_block_hash(Pack::pack(&[0u8; 32]))
@@ -1137,7 +1136,6 @@ async fn test_check_reverted_cells_in_submit_block() {
     let output_finalized_cells: Vec<_> = {
         let capacity = 450_00000000u64;
         (0..2)
-            .into_iter()
             .map(|_| {
                 let args = CustodianLockArgs::new_builder()
                     .deposit_block_hash(Pack::pack(&[0u8; 32]))
@@ -1202,11 +1200,7 @@ async fn test_check_reverted_cells_in_submit_block() {
     .output_data(Pack::pack(&Bytes::default()))
     .inputs(input_finalized_cells)
     .outputs(output_finalized_cells.clone())
-    .outputs_data(
-        (0..output_finalized_cells.len())
-            .into_iter()
-            .map(|_| Pack::pack(&Bytes::new())),
-    )
+    .outputs_data((0..output_finalized_cells.len()).map(|_| Pack::pack(&Bytes::new())))
     .cell_dep(ctx.stake_lock_dep.clone())
     .cell_dep(ctx.deposit_lock_dep.clone())
     .cell_dep(ctx.custodian_lock_dep.clone())

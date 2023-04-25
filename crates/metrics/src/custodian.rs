@@ -49,7 +49,7 @@ impl CustodianMetrics {
         let cal = |balance: &u128, decimal| balance.saturating_div(10u128.pow(decimal)) as u64;
         for custodian in config.custodian_map.values() {
             if custodian.type_hash == CKB_SUDT_SCRIPT_ARGS {
-                self.finalized(custodian, |g, d| g.set(cal(&(local.capacity as u128), d)));
+                self.finalized(custodian, |g, d| g.set(cal(&local.capacity, d)));
                 continue;
             }
             if let Some((balance, _)) = local.sudt.get::<[u8; 32]>(&custodian.type_hash) {

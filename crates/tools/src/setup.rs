@@ -93,7 +93,7 @@ pub async fn setup(args: SetupArgs<'_>) {
         let output_content = serde_json::to_string_pretty(&build_scripts_result)
             .expect("serde json to string pretty");
         let output_dir = output_path.parent().expect("get output dir");
-        fs::create_dir_all(&output_dir).expect("create output dir");
+        fs::create_dir_all(output_dir).expect("create output dir");
         fs::write(output_path, output_content.as_bytes()).expect("output config");
         build_scripts_result
     };
@@ -161,7 +161,7 @@ pub async fn setup(args: SetupArgs<'_>) {
 
     // generate node config
     for (index, (node_name, _node_wallet)) in nodes.iter().enumerate() {
-        let _privkey_path = output_dir.join(&node_name).join("pk");
+        let _privkey_path = output_dir.join(node_name).join("pk");
         let _output_file_path = output_dir.join(node_name).join("config.toml");
         // set the first node to fullnode
         let _node_mode = if index == 0 {
@@ -199,7 +199,7 @@ fn setup_nodes(
 }
 
 fn prepare_privkey(node_dir: &Path) -> PathBuf {
-    fs::create_dir_all(&node_dir).expect("create node dir");
+    fs::create_dir_all(node_dir).expect("create node dir");
     let privkey_file = node_dir.join("pk");
     generate_privkey_file(&privkey_file);
     privkey_file
@@ -248,7 +248,7 @@ fn generate_rollup_config(setup_config: &SetupConfig) -> Result<UserRollupConfig
 fn generate_privkey_file(privkey_file_path: &Path) {
     let key = rand::thread_rng().gen::<[u8; 32]>();
     let privkey = format!("0x{}", hex::encode(key));
-    fs::write(&privkey_file_path, &privkey).expect("create pk file");
+    fs::write(privkey_file_path, privkey).expect("create pk file");
 }
 
 pub fn get_wallet_info(privkey_path: &Path) -> NodeWalletInfo {

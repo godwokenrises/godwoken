@@ -315,7 +315,7 @@ fn collect_scripts_to_target(
     scripts_info.iter().for_each(|(_, v)| {
         let target_path = v.target_script_path(target_dir);
         let source_path = v.source_script_path(repos_dir);
-        fs::create_dir_all(&target_path.parent().expect("get dir")).expect("create scripts dir");
+        fs::create_dir_all(target_path.parent().expect("get dir")).expect("create scripts dir");
         log::debug!("copy {:?} to {:?}", source_path, target_path);
         fs::copy(source_path, target_path).expect("copy script");
     });

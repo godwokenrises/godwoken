@@ -644,7 +644,7 @@ impl Generator {
             log::warn!(
                 "skip the checkpoint check of block: #{} {}",
                 block_number,
-                hex::encode(&block_hash)
+                hex::encode(block_hash)
             );
         }
         let max_cycles = self
@@ -1028,7 +1028,6 @@ impl Generator {
                 .lock()
                 .unwrap()
                 .keys()
-                .into_iter()
                 .cloned()
                 .collect(),
             write_data_hashes: state_tracker
@@ -1036,7 +1035,6 @@ impl Generator {
                 .lock()
                 .unwrap()
                 .keys()
-                .into_iter()
                 .cloned()
                 .collect(),
             debug_log_buf: run_context.debug_log_buf,

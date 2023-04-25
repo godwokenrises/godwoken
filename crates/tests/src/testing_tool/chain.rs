@@ -51,8 +51,8 @@ pub const TEST_CHAIN_ID: u64 = 42;
 lazy_static! {
     pub static ref ALWAYS_SUCCESS_PROGRAM: Bytes = {
         let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&ALWAYS_SUCCESS_PATH);
+        path.push(SCRIPT_DIR);
+        path.push(ALWAYS_SUCCESS_PATH);
         fs::read(&path).expect("read program").into()
     };
     pub static ref ALWAYS_SUCCESS_CODE_HASH: [u8; 32] = {
@@ -64,8 +64,8 @@ lazy_static! {
     };
     pub static ref WITHDRAWAL_LOCK_PROGRAM: Bytes = {
         let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&WITHDRAWAL_LOCK_PATH);
+        path.push(SCRIPT_DIR);
+        path.push(WITHDRAWAL_LOCK_PATH);
         fs::read(&path)
             .expect("read withdrawal lock program")
             .into()
@@ -79,8 +79,8 @@ lazy_static! {
     };
     pub static ref STATE_VALIDATOR_TYPE_PROGRAM: Bytes = {
         let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&STATE_VALIDATOR_TYPE_PATH);
+        path.push(SCRIPT_DIR);
+        path.push(STATE_VALIDATOR_TYPE_PATH);
         fs::read(&path)
             .expect("read state validator type program")
             .into()
@@ -94,8 +94,8 @@ lazy_static! {
     };
     pub static ref STAKE_LOCK_PROGRAM: Bytes = {
         let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&STAKE_LOCK_PATH);
+        path.push(SCRIPT_DIR);
+        path.push(STAKE_LOCK_PATH);
         fs::read(&path).expect("read stake lock program").into()
     };
     pub static ref STAKE_LOCK_CODE_HASH: [u8; 32] = {
@@ -107,8 +107,8 @@ lazy_static! {
     };
     pub static ref CUSTODIAN_LOCK_PROGRAM: Bytes = {
         let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&CUSTODIAN_LOCK_PATH);
+        path.push(SCRIPT_DIR);
+        path.push(CUSTODIAN_LOCK_PATH);
         fs::read(&path).expect("read custodian lock program").into()
     };
     pub static ref CUSTODIAN_LOCK_CODE_HASH: [u8; 32] = {
@@ -120,8 +120,8 @@ lazy_static! {
     };
     pub static ref ETH_ACCOUNT_LOCK_PROGRAM: Bytes = {
         let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&ETH_ACCOUNT_LOCK_PATH);
+        path.push(SCRIPT_DIR);
+        path.push(ETH_ACCOUNT_LOCK_PATH);
         fs::read(&path)
             .expect("read eth account lock program")
             .into()
@@ -133,7 +133,7 @@ lazy_static! {
         hasher.finalize(&mut buf);
         buf
     };
-    pub static ref SUDT_VALIDATOR_PROGRAM: Bytes = fs::read(&SUDT_VALIDATOR_PATH)
+    pub static ref SUDT_VALIDATOR_PROGRAM: Bytes = fs::read(SUDT_VALIDATOR_PATH)
         .expect("read SUDT program")
         .into();
     pub static ref SUDT_VALIDATOR_CODE_HASH: [u8; 32] = {
@@ -144,7 +144,7 @@ lazy_static! {
         buf
     };
     pub static ref ETH_EOA_MAPPING_REGISTRY_VALIDATOR_PROGRAM: Bytes =
-        fs::read(&ETH_REGISTRY_VALIDATOR_PATH)
+        fs::read(ETH_REGISTRY_VALIDATOR_PATH)
             .expect("read eth eoa mapping registry program")
             .into();
     pub static ref ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH: [u8; 32] = {
@@ -154,7 +154,7 @@ lazy_static! {
         hasher.finalize(&mut buf);
         buf
     };
-    pub static ref POLYJUICE_VALIDATOR_PROGRAM: Bytes = fs::read(&POLYJUICE_VALIDATOR_PATH)
+    pub static ref POLYJUICE_VALIDATOR_PROGRAM: Bytes = fs::read(POLYJUICE_VALIDATOR_PATH)
         .expect("read polyjuice validator program")
         .into();
     pub static ref POLYJUICE_VALIDATOR_CODE_HASH: [u8; 32] = {
@@ -324,28 +324,28 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
     let backends = vec![
         BackendConfig {
             generator: Resource::file_system(META_GENERATOR_PATH.into()),
-            generator_checksum: file_checksum(&META_GENERATOR_PATH).unwrap().into(),
+            generator_checksum: file_checksum(META_GENERATOR_PATH).unwrap().into(),
             validator_script_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
             backend_type: gw_config::BackendType::Meta,
             generator_debug: None,
         },
         BackendConfig {
             generator: Resource::file_system(SUDT_GENERATOR_PATH.into()),
-            generator_checksum: file_checksum(&SUDT_GENERATOR_PATH).unwrap().into(),
+            generator_checksum: file_checksum(SUDT_GENERATOR_PATH).unwrap().into(),
             validator_script_type_hash: sudt_validator_script_type_hash.into(),
             backend_type: gw_config::BackendType::Sudt,
             generator_debug: None,
         },
         BackendConfig {
             generator: Resource::file_system(ETH_REGISTRY_GENERATOR_PATH.into()),
-            generator_checksum: file_checksum(&ETH_REGISTRY_GENERATOR_PATH).unwrap().into(),
+            generator_checksum: file_checksum(ETH_REGISTRY_GENERATOR_PATH).unwrap().into(),
             validator_script_type_hash: (*ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH).into(),
             backend_type: gw_config::BackendType::EthAddrReg,
             generator_debug: None,
         },
         BackendConfig {
             generator: Resource::file_system(POLYJUICE_GENERATOR_PATH.into()),
-            generator_checksum: file_checksum(&POLYJUICE_GENERATOR_PATH).unwrap().into(),
+            generator_checksum: file_checksum(POLYJUICE_GENERATOR_PATH).unwrap().into(),
             validator_script_type_hash: (*POLYJUICE_VALIDATOR_CODE_HASH).into(),
             backend_type: gw_config::BackendType::Polyjuice,
             generator_debug: None,
