@@ -10,7 +10,7 @@ use gw_types::U256;
 use gw_types::{
     core::ScriptHashType,
     h256::*,
-    packed::{AccountMerkleState, DepositRequest, Script, WithdrawalReceipt, WithdrawalRequest},
+    packed::{AccountMerkleState, DepositRequest, Script, WithdrawalRequest},
     prelude::*,
 };
 use gw_utils::RollupContext;
@@ -30,7 +30,7 @@ pub trait StateExt {
         ctx: &RollupContext,
         block_producer: &RegistryAddress,
         withdrawal_request: &WithdrawalRequest,
-    ) -> Result<WithdrawalReceipt, Error>;
+    ) -> Result<(), Error>;
 
     fn pay_fee(
         &mut self,
@@ -177,7 +177,7 @@ impl<S: State + CodeStore + JournalDB> StateExt for S {
         ctx: &RollupContext,
         block_producer_address: &RegistryAddress,
         request: &WithdrawalRequest,
-    ) -> Result<WithdrawalReceipt, Error> {
+    ) -> Result<(), Error> {
         let raw = request.raw();
         let account_script_hash: H256 = raw.account_script_hash().unpack();
         let l2_sudt_script_hash: [u8; 32] =
@@ -221,20 +221,6 @@ impl<S: State + CodeStore + JournalDB> StateExt for S {
         let new_nonce = nonce.checked_add(1).ok_or(WithdrawalError::NonceOverflow)?;
         self.set_nonce(id, new_nonce)?;
 
-        let post_state = {
-            self.finalise()?;
-            let account_root = self.calculate_root()?;
-            let account_count = self.get_account_count()?;
-            AccountMerkleState::new_builder()
-                .merkle_root(account_root.pack())
-                .count(account_count.pack())
-                .build()
-        };
-
-        let receipt = WithdrawalReceipt::new_builder()
-            .post_state(post_state)
-            .build();
-
-        Ok(receipt)
+        Ok(())
     }
 }

@@ -1038,14 +1038,18 @@ impl Chain {
         // process transactions
         // TODO: run offchain validator before send challenge, to make sure the block is bad
         let generator = &self.generator;
-        let (_withdrawal_receipts, prev_txs_state, tx_receipts) = match generator
-            .verify_and_apply_block(db, &chain_view, args, &self.skipped_invalid_block_list)
-        {
+        let (prev_txs_state, tx_receipts, state_changes) = match generator.verify_and_apply_block(
+            db,
+            &chain_view,
+            args,
+            &self.skipped_invalid_block_list,
+        ) {
             ApplyBlockResult::Success {
                 tx_receipts,
                 prev_txs_state,
-                withdrawal_receipts,
                 offchain_used_cycles,
+                state_changes,
+                ..
             } => {
                 log::debug!(
                     "Process #{} txs: {} offchain used cycles {}",
@@ -1053,7 +1057,7 @@ impl Chain {
                     tx_receipts.len(),
                     offchain_used_cycles
                 );
-                (withdrawal_receipts, prev_txs_state, tx_receipts)
+                (prev_txs_state, tx_receipts, state_changes)
             }
             ApplyBlockResult::Challenge { target, error } => {
                 log::warn!("verify #{} state transition error {}", block_number, error);
@@ -1074,6 +1078,11 @@ impl Chain {
             deposit_info_vec,
             withdrawals,
         )?;
+        let block_hash = l2block.hash();
+        if let Some(s) = state_changes {
+            let s = s.to_json();
+            db.set_block_state_changes(block_hash, &s)?;
+        }
         db.insert_asset_scripts(deposit_asset_scripts)?;
         db.attach_block(l2block.clone())?;
 

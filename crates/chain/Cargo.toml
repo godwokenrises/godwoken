@@ -30,3 +30,5 @@ toml = "0.5"
 log = "0.4"
 hex = "0.4"
 tracing = { version = "0.1", features = ["attributes"] }
+
+[features]

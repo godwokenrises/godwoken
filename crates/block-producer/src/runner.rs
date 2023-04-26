@@ -376,12 +376,16 @@ impl BaseInitComponents {
                 eth_lock_script_type_hash.hash().unpack(),
                 Arc::new(Secp256k1Eth::default()),
             );
-            Arc::new(Generator::new(
+            let mut gen = Generator::new(
                 backend_manage,
                 account_lock_manage,
                 rollup_context.clone(),
                 config.contract_log_config.clone(),
-            ))
+            );
+            if config.trace_generator_state {
+                gen.enable_trace_state()?;
+            }
+            Arc::new(gen)
         };
 
         let ckb_genesis_info = {

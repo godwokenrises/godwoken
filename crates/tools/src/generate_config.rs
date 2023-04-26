@@ -194,6 +194,7 @@ pub async fn generate_node_config(cmd: GenerateConfigCommand) -> Result<()> {
                     .script_type_hash
                     .clone(),
                 backend_type: gw_config::BackendType::Meta,
+                generator_debug: None,
             }
         },
         {
@@ -208,6 +209,7 @@ pub async fn generate_node_config(cmd: GenerateConfigCommand) -> Result<()> {
                     .script_type_hash
                     .clone(),
                 backend_type: gw_config::BackendType::Sudt,
+                generator_debug: None,
             }
         },
         {
@@ -222,6 +224,7 @@ pub async fn generate_node_config(cmd: GenerateConfigCommand) -> Result<()> {
                     .script_type_hash
                     .clone(),
                 backend_type: gw_config::BackendType::Polyjuice,
+                generator_debug: None,
             }
         },
         {
@@ -236,6 +239,7 @@ pub async fn generate_node_config(cmd: GenerateConfigCommand) -> Result<()> {
                     .script_type_hash
                     .clone(),
                 backend_type: gw_config::BackendType::EthAddrReg,
+                generator_debug: None,
             }
         },
     ];

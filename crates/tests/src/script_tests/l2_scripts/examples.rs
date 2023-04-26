@@ -90,6 +90,7 @@ fn test_example_sum() {
             sudt_proxy: Default::default(),
             backends: vec![BackendConfig {
                 generator: Resource::file_system(SUM_PROGRAM_PATH.to_path_buf()),
+                generator_debug: None,
                 generator_checksum: file_checksum(&*SUM_PROGRAM_PATH).unwrap().into(),
                 validator_script_type_hash: (*SUM_PROGRAM_CODE_HASH).into(),
                 backend_type: BackendType::Unknown,
@@ -229,6 +230,7 @@ fn test_example_account_operation() {
         sudt_proxy: Default::default(),
         backends: vec![BackendConfig {
             generator: Resource::file_system(ACCOUNT_OP_PROGRAM_PATH.clone()),
+            generator_debug: None,
             generator_checksum: file_checksum(&*ACCOUNT_OP_PROGRAM_PATH).unwrap().into(),
             validator_script_type_hash: (*ACCOUNT_OP_PROGRAM_CODE_HASH).into(),
             backend_type: BackendType::Unknown,
@@ -467,6 +469,7 @@ fn test_example_recover_account() {
         sudt_proxy: Default::default(),
         backends: vec![BackendConfig {
             generator: Resource::file_system(RECOVER_PROGRAM_PATH.clone()),
+            generator_debug: None,
             generator_checksum: file_checksum(&*RECOVER_PROGRAM_PATH).unwrap().into(),
             validator_script_type_hash: (*RECOVER_PROGRAM_CODE_HASH).into(),
             backend_type: BackendType::Unknown,
@@ -648,6 +651,7 @@ fn test_sudt_total_supply() {
             sudt_proxy: Default::default(),
             backends: vec![BackendConfig {
                 generator: Resource::file_system(SUDT_TOTAL_SUPPLY_PROGRAM_PATH.clone()),
+                generator_debug: None,
                 generator_checksum: file_checksum(&*SUDT_TOTAL_SUPPLY_PROGRAM_PATH)
                     .unwrap()
                     .into(),

@@ -1,39 +1,47 @@
-use anyhow::{Context, Result};
-use std::{collections::HashSet, sync::Arc, time::Instant};
+use std::{
+    collections::HashSet,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
-use crate::{
-    account_lock_manage::AccountLockManage,
-    backend_manage::{BackendManage, BlockConsensus},
-    error::{BlockError, TransactionValidateError, WithdrawalError},
-    syscalls::RunContext,
-    typed_transaction::types::TypedRawTransaction,
-    types::vm::VMVersion,
-    utils::{get_polyjuice_creator_id, get_tx_type},
-    vm_cost_model::instruction_cycles,
-};
-use crate::{
-    backend_manage::Backend,
-    error::{Error, TransactionError},
-};
-use crate::{error::AccountError, syscalls::L2Syscalls};
-use crate::{error::LockAlgorithmError, traits::StateExt};
+use anyhow::{ensure, Context, Result};
 use arc_swap::ArcSwapOption;
+use ckb_types::H160;
+#[cfg(not(has_asm))]
+use ckb_vm::TraceMachine;
+use ckb_vm::{
+    decoder::build_decoder, registers, CoreMachine, DefaultMachineBuilder, Memory, Register,
+    SupportMachine,
+};
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, ETH_REGISTRY_ACCOUNT_ID},
     error::Error as StateError,
     registry_address::RegistryAddress,
-    state::{build_account_key, State, SUDT_TOTAL_SUPPLY_KEY},
+    state::{
+        build_account_key, set_account_key_map, take_account_key_map, State, GW_ACCOUNT_NONCE_TYPE,
+        SUDT_TOTAL_SUPPLY_KEY,
+    },
 };
-
 use gw_config::{ContractLogConfig, ForkConfig, SyscallCyclesConfig};
+use gw_jsonrpc_types::{
+    blockchain::JsonBytes,
+    godwoken::{
+        BlockStateChanges, SmtStat, StateChangeEvent, TransactionStateChanges, TransactionType,
+    },
+};
 use gw_store::{
-    state::{history::history_state::RWConfig, traits::JournalDB, BlockStateDB},
+    state::{
+        history::history_state::{HistoryState, RWConfig},
+        state_db::StateDB,
+        traits::JournalDB,
+        BlockStateDB,
+    },
     transaction::StoreTransaction,
 };
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
-    core::{ChallengeTargetType, ScriptHashType},
+    core::{AllowedContractType, ChallengeTargetType, ScriptHashType},
     h256::H256Ext,
     h256::*,
     offchain::{CycleMeter, RunResult},
@@ -44,14 +52,30 @@ use gw_types::{
     },
     prelude::*,
 };
-use gw_utils::RollupContext;
-
-use ckb_vm::{DefaultMachineBuilder, SupportMachine};
-
-#[cfg(not(has_asm))]
-use ckb_vm::TraceMachine;
-use gw_utils::script_log::{generate_polyjuice_system_log, GW_LOG_POLYJUICE_SYSTEM};
+use gw_utils::{
+    script_log::{generate_polyjuice_system_log, GW_LOG_POLYJUICE_SYSTEM},
+    RollupContext,
+};
 use tracing::{field, instrument};
+
+use crate::{
+    account_lock_manage::AccountLockManage,
+    backend_manage::{Backend, BackendManage, BlockConsensus},
+    error::{
+        AccountError, BlockError, Error, LockAlgorithmError, TransactionError,
+        TransactionValidateError, WithdrawalError,
+    },
+    syscalls::{L2Syscalls, RunContext},
+    traits::StateExt,
+    typed_transaction::types::TypedRawTransaction,
+    types::vm::VMVersion,
+    utils::{get_polyjuice_creator_id, get_tx_type},
+    vm_cost_model::instruction_cycles,
+};
+
+const POLYJUICE_SYSTEM_PREFIX: u8 = 0xFF;
+const POLYJUICE_CONTRACT_CODE: u8 = 0x01;
+const POLYJUICE_DESTRUCTED: u8 = 0x02;
 
 pub struct ApplyBlockArgs {
     pub l2block: L2Block,
@@ -65,12 +89,23 @@ pub enum ApplyBlockResult {
         prev_txs_state: AccountMerkleState,
         tx_receipts: Vec<TxReceipt>,
         offchain_used_cycles: u64,
+        state_changes: Option<BlockStateChanges>,
     },
     Challenge {
         target: ChallengeTarget,
         error: Error,
     },
     Error(anyhow::Error),
+}
+
+// Like try! but for ApplyBlockResult.
+macro_rules! try_apply {
+    ($e:expr) => {
+        match $e {
+            Ok(x) => x,
+            Err(err) => return ApplyBlockResult::Error(err.into()),
+        }
+    };
 }
 
 #[derive(Debug)]
@@ -151,6 +186,7 @@ pub struct Generator {
     rollup_context: RollupContext,
     contract_log_config: ContractLogConfig,
     polyjuice_creator_id: ArcSwapOption<u32>,
+    trace_state: bool,
 }
 
 impl Generator {
@@ -166,7 +202,14 @@ impl Generator {
             rollup_context,
             contract_log_config,
             polyjuice_creator_id: ArcSwapOption::from(None),
+            trace_state: false,
         }
+    }
+
+    pub fn enable_trace_state(&mut self) -> Result<()> {
+        ensure!(self.backend_manage.polyjuice_backends_have_sys_store_addr());
+        self.trace_state = true;
+        Ok(())
     }
 
     pub fn clone_with_new_backends(&self, backend_manage: BackendManage) -> Self {
@@ -176,6 +219,7 @@ impl Generator {
             rollup_context: self.rollup_context.clone(),
             contract_log_config: self.contract_log_config.clone(),
             polyjuice_creator_id: ArcSwapOption::from(self.polyjuice_creator_id.load_full()),
+            trace_state: self.trace_state,
         }
     }
 
@@ -248,7 +292,34 @@ impl Generator {
             let mut machine = TraceMachine::new(default_machine);
 
             machine.load_program(&backend.generator, &[])?;
-            let maybe_ok = machine.run();
+
+            let maybe_ok = if backend.sys_store_addr.is_some() && self.trace_state {
+                // Use if let && after upgrading rust.
+                let sys_store_addr = backend.sys_store_addr.unwrap();
+                machine.machine.set_running(true);
+                let mut decoder =
+                    build_decoder::<u64>(machine.machine.isa(), machine.machine.version());
+                loop {
+                    if !machine.machine.running() {
+                        break Ok(machine.machine.exit_code());
+                    }
+                    if let Err(e) = machine.machine.step(&mut decoder) {
+                        break Err(e);
+                    }
+                    if *machine.machine.pc() == sys_store_addr {
+                        let [account_id, key_addr, key_len, _value_addr]: [u64; 4] =
+                            machine.machine.registers()[registers::A1..=registers::A4]
+                                .try_into()
+                                .unwrap();
+                        let key = load_bytes(machine.machine.memory_mut(), key_addr, key_len)?;
+                        // This records the key in the current account key map.
+                        build_account_key(account_id as u32, &key);
+                    }
+                }
+            } else {
+                machine.run()
+            };
+
             let execution_cycles = machine.machine.cycles();
             drop(machine);
 
@@ -409,6 +480,14 @@ impl Generator {
             "withdrawal count"
         );
 
+        let mut state_changes = BlockStateChanges {
+            transactions: Vec::new(),
+            smt_stat: SmtStat {
+                update_kvs: 0,
+                update_milliseconds: 0,
+            },
+        };
+
         let mut state = match BlockStateDB::from_store(db, RWConfig::attach_block(block_number)) {
             Ok(state) => state,
             Err(err) => {
@@ -449,7 +528,7 @@ impl Generator {
 
         let mut check_signature_total_ms = 0;
         let mut execute_tx_total_ms = 0;
-        let mut apply_state_total_ms = 0;
+        let mut apply_state_total_duration = Duration::ZERO;
         let mut withdrawal_receipts = Vec::with_capacity(args.withdrawals.len());
         for (wth_idx, request) in args.withdrawals.into_iter().enumerate() {
             debug_assert_eq!(
@@ -475,14 +554,35 @@ impl Generator {
             }
             check_signature_total_ms += now.elapsed().as_millis();
 
-            let withdrawal_receipt = match state.apply_withdrawal_request(
+            let track_point = if self.trace_state {
+                track_state_changes(&mut state)
+            } else {
+                0
+            };
+
+            try_apply!(state.apply_withdrawal_request(
                 &self.rollup_context,
                 &block_producer_address,
                 &request.request(),
-            ) {
-                Ok(receipt) => receipt,
-                Err(err) => return ApplyBlockResult::Error(err.into()),
-            };
+            ));
+
+            if self.trace_state {
+                let (events, update_kvs) = get_state_changes(&mut state, track_point);
+                state_changes.transactions.push(TransactionStateChanges {
+                    tx_hash: request.hash().into(),
+                    _type: TransactionType::Withdrawal,
+                    events,
+                });
+                state_changes.smt_stat.update_kvs += update_kvs;
+            }
+
+            let now = Instant::now();
+            try_apply!(state.finalise());
+            apply_state_total_duration += now.elapsed();
+
+            let withdrawal_receipt = WithdrawalReceipt::new_builder()
+                .post_state(try_apply!(state.calculate_merkle_state()))
+                .build();
             withdrawal_receipts.push(withdrawal_receipt);
 
             if self
@@ -508,16 +608,28 @@ impl Generator {
             }
         }
 
-        for req in args.deposit_info_vec.into_iter().map(|i| i.request()) {
-            if let Err(err) = state.apply_deposit_request(&self.rollup_context, &req) {
-                return ApplyBlockResult::Error(err.into());
+        for deposit in args.deposit_info_vec {
+            let track_point = if self.trace_state {
+                track_state_changes(&mut state)
+            } else {
+                0
+            };
+            try_apply!(state.apply_deposit_request(&self.rollup_context, &deposit.request()));
+            if self.trace_state {
+                let (events, update_kvs) = get_state_changes(&mut state, track_point);
+                state_changes.transactions.push(TransactionStateChanges {
+                    tx_hash: gw_common::blake2b::hash(deposit.cell().out_point().as_slice()).into(),
+                    _type: TransactionType::Deposit,
+                    events,
+                });
+                state_changes.smt_stat.update_kvs += update_kvs;
             }
         }
 
         // finalise state
-        if let Err(err) = state.finalise() {
-            return ApplyBlockResult::Error(err.into());
-        }
+        let now = Instant::now();
+        try_apply!(state.finalise());
+        apply_state_total_duration += now.elapsed();
         let prev_txs_state = match state.calculate_merkle_state() {
             Ok(s) => s,
             Err(err) => {
@@ -586,6 +698,12 @@ impl Generator {
             // NOTICE users only allowed to send HandleMessage CallType txs
             let now = Instant::now();
 
+            let track_point = if self.trace_state {
+                track_state_changes(&mut state)
+            } else {
+                0
+            };
+
             // skip whitelist validate since we are validating a committed block
             let run_result = match self.execute_transaction(
                 chain,
@@ -622,13 +740,29 @@ impl Generator {
             };
             execute_tx_total_ms += now.elapsed().as_millis();
 
+            if self.trace_state {
+                let (events, update_kvs) = get_state_changes(&mut state, track_point);
+                // TODO: log
+                let _type = match get_tx_type(self.rollup_context(), &state, &raw_tx).unwrap() {
+                    AllowedContractType::EthAddrReg => TransactionType::AddressRegistry,
+                    AllowedContractType::Meta => TransactionType::Meta,
+                    AllowedContractType::Polyjuice => TransactionType::Eth,
+                    AllowedContractType::Sudt => TransactionType::Sudt,
+                    AllowedContractType::Unknown => panic!("unknown transaction type"),
+                };
+                state_changes.transactions.push(TransactionStateChanges {
+                    _type,
+                    tx_hash: raw_tx.hash().into(),
+                    events,
+                });
+                state_changes.smt_stat.update_kvs += update_kvs;
+            }
+
             {
-                let now = Instant::now();
                 // finalise tx state
-                if let Err(err) = state.finalise() {
-                    return ApplyBlockResult::Error(err.into());
-                }
-                apply_state_total_ms += now.elapsed().as_millis();
+                let now = Instant::now();
+                try_apply!(state.finalise());
+                apply_state_total_duration += now.elapsed();
 
                 if !skip_checkpoint_check
                     && self
@@ -701,14 +835,17 @@ impl Generator {
             "signature {}ms execute tx {}ms apply state {}ms",
             check_signature_total_ms,
             execute_tx_total_ms,
-            apply_state_total_ms
+            apply_state_total_duration.as_millis()
         );
+
+        state_changes.smt_stat.update_milliseconds = apply_state_total_duration.as_millis() as u64;
 
         ApplyBlockResult::Success {
             withdrawal_receipts,
             prev_txs_state,
             tx_receipts,
             offchain_used_cycles,
+            state_changes: self.trace_state.then_some(state_changes),
         }
     }
 
@@ -1100,4 +1237,86 @@ fn read_polyjuice_gas_used(system_log: &LogItem) -> Option<u64> {
         }
     }
     None
+}
+
+fn load_bytes<M: Memory>(mem: &mut M, addr: M::REG, len: u64) -> Result<Vec<u8>, ckb_vm::Error> {
+    let mut result = vec![0u8; len as usize];
+    for (i, p) in result.iter_mut().enumerate() {
+        *p = mem
+            .load8(&addr.overflowing_add(&M::REG::from_u32(i as u32)))?
+            .to_u8();
+    }
+    Ok(result)
+}
+
+fn track_state_changes(state: &mut StateDB<HistoryState<&mut StoreTransaction>>) -> usize {
+    set_account_key_map(Default::default());
+    state.track_point()
+}
+
+fn get_state_changes<S: State + CodeStore>(
+    state: &mut StateDB<S>,
+    track_point: usize,
+) -> (Vec<StateChangeEvent>, u64) {
+    let key_map = take_account_key_map();
+    let mut events = Vec::new();
+    let mut update_kvs = 0;
+    for raw_key in state.changed_keys(track_point) {
+        update_kvs += 1;
+        if raw_key[4] == GW_ACCOUNT_NONCE_TYPE && raw_key[5..].iter().all(|v| *v == 0) {
+            if let Ok(new_value) = state.get_raw(&raw_key) {
+                let id = u32::from_le_bytes(raw_key[..4].try_into().unwrap());
+                let nonce = u32::from_le_bytes(new_value[..4].try_into().unwrap());
+                events.push(StateChangeEvent::AccountNonce {
+                    id: Some(id),
+                    address: get_address_by_id(state, id),
+                    nonce,
+                });
+            }
+        } else if raw_key[4] == POLYJUICE_SYSTEM_PREFIX
+            && raw_key[5] == POLYJUICE_DESTRUCTED
+            && raw_key[6..].iter().all(|v| *v == 0)
+        {
+            if let Ok(new_value) = state.get_raw(&raw_key) {
+                if new_value == [1; 32] {
+                    let id = u32::from_le_bytes(raw_key[..4].try_into().unwrap());
+                    events.push(StateChangeEvent::Destroy {
+                        address: get_address_by_id(state, id).unwrap(),
+                    });
+                }
+            }
+        } else if let Some((id, key)) = key_map.get(&raw_key) {
+            if let Ok(new_value) = state.get_raw(&raw_key) {
+                // TODO: balance?
+                if key[4] == POLYJUICE_SYSTEM_PREFIX
+                    && key[5] == POLYJUICE_CONTRACT_CODE
+                    && key[6..] == [0; 32 - 6]
+                {
+                    if let Some(data) = state.get_data(&new_value) {
+                        let to_id = u32::from_le_bytes(key[..4].try_into().unwrap());
+                        events.push(StateChangeEvent::Create {
+                            address: get_address_by_id(state, to_id).unwrap(),
+                            code: Some(JsonBytes::from_bytes(data)),
+                        })
+                    }
+                } else {
+                    events.push(StateChangeEvent::AccountState {
+                        id: *id,
+                        address: get_address_by_id(state, *id),
+                        key: JsonBytes::from_bytes(key.clone().into()),
+                        value: new_value.into(),
+                    });
+                }
+            }
+        }
+    }
+    (events, update_kvs)
+}
+
+fn get_address_by_id<S: State + CodeStore>(state: &StateDB<S>, id: u32) -> Option<H160> {
+    let script_hash = state.get_script_hash(id).unwrap();
+    let addr = state
+        .get_registry_address_by_script_hash(2, &script_hash)
+        .unwrap();
+    addr.map(|a| H160::from_slice(&a.address).unwrap())
 }

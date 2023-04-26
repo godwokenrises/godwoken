@@ -37,6 +37,9 @@ pub const COLUMN_ACCOUNT_SMT_LEAF: Col = 10;
 pub const COLUMN_BLOCK_SMT_BRANCH: Col = 11;
 /// Column block SMT leaf
 pub const COLUMN_BLOCK_SMT_LEAF: Col = 12;
+/// Block hash -> block state changes json.
+// TODO: migration to clear this column.
+pub const COLUMN_BLOCK_STATE_CHANGES: Col = 13;
 /// Column script
 pub const COLUMN_SCRIPT: Col = 14;
 /// Column data
