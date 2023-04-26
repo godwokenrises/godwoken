@@ -6,7 +6,7 @@ version = 3
 name = "always-success"
 version = "0.1.0"
 dependencies = [
- "ckb-std 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ckb-std",
 ]
 
 [[package]]
@@ -51,9 +51,9 @@ checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
 name = "buddy-alloc"
-version = "0.4.1"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ff9f338986406db85e2b5deb40a9255b796ca03a194c7457403d215173f3fd5"
+checksum = "1f0d2da64a6a895d5a7e0724882825d50f83c13396b1b9f1878e19a024bab395"
 
 [[package]]
 name = "byteorder"
@@ -122,20 +122,9 @@ dependencies = [
 
 [[package]]
 name = "ckb-std"
-version = "0.10.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47a6ad40455c446ad6fbb303dae24827fc309f43558f59d1f1b863a9de3e9f81"
-dependencies = [
- "buddy-alloc",
- "cc",
- "ckb-standalone-types",
- "cstr_core",
-]
-
-[[package]]
-name = "ckb-std"
-version = "0.10.0"
-source = "git+https://github.com/nervosnetwork/ckb-std.git#d0c3b5d83f126665eb80226112ffdaa9961734a9"
+checksum = "8dbb4cafeca131457738f8428ef31a7729f7914b99b5c210554433f03eb2f936"
 dependencies = [
  "buddy-alloc",
  "cc",
@@ -167,16 +156,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cstr_core"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "644828c273c063ab0d39486ba42a5d1f3a499d35529c759e763a9c6cb8a0fb08"
-dependencies = [
- "cty",
- "memchr",
-]
-
-[[package]]
 name = "cty"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -193,7 +172,7 @@ dependencies = [
 name = "delegate-cell-lock"
 version = "0.1.0"
 dependencies = [
- "ckb-std 0.10.0 (git+https://github.com/nervosnetwork/ckb-std.git)",
+ "ckb-std",
 ]
 
 [[package]]
@@ -278,7 +257,7 @@ dependencies = [
 
 [[package]]
 name = "gw-common"
-version = "1.8.0-rc3"
+version = "1.13.0"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
@@ -288,7 +267,7 @@ dependencies = [
 
 [[package]]
 name = "gw-hash"
-version = "1.8.0-rc3"
+version = "1.13.0"
 dependencies = [
  "blake2b-ref",
 ]
@@ -303,7 +282,7 @@ dependencies = [
 
 [[package]]
 name = "gw-types"
-version = "1.8.0-rc3"
+version = "1.13.0"
 dependencies = [
  "cfg-if 1.0.0",
  "gw-hash",
@@ -316,7 +295,7 @@ dependencies = [
 name = "gw-utils"
 version = "0.1.0"
 dependencies = [
- "ckb-std 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ckb-std",
  "gw-common",
  "gw-types",
 ]
@@ -356,12 +335,6 @@ name = "libc"
 version = "0.2.139"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "201de327520df007757c1f0adce6e827fe8562fbc28bfd9c15571c66ca1f5f79"
-
-[[package]]
-name = "memchr"
-version = "2.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
 
 [[package]]
 name = "merkle-cbt"
