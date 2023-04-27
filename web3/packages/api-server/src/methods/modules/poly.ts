@@ -83,7 +83,8 @@ export class Poly {
       versions: {
         web3Version,
         web3IndexerVersion: web3Version, // indexer and api-server should use the same version
-        godwokenVersion: gwConfig.nodeVersion,
+        godwokenVersion: readonlyGwConfig.nodeVersion,
+        godwokenFullnodeVersion: gwConfig.nodeVersion,
       },
       fullnodeInfo: {
         nodeMode: gwConfig.nodeMode,
