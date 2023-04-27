@@ -3,7 +3,7 @@ use gw_store::{chain_view::ChainView, traits::chain_store::ChainStore};
 use gw_types::{
     bytes::Bytes,
     packed::RawL2Transaction,
-    prelude::{Builder, Entity, Pack, CalcHash},
+    prelude::{Builder, CalcHash, Entity, Pack},
 };
 
 use crate::helper::{self, L2TX_MAX_CYCLES};

@@ -449,18 +449,21 @@ pub fn setup() -> (Store, DummyState, Generator) {
                 generator: Resource::file_system(META_GENERATOR_PATH.into()),
                 generator_checksum: file_checksum(META_GENERATOR_PATH).unwrap().into(),
                 validator_script_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
+                generator_debug: None,
             },
             BackendConfig {
                 backend_type: BackendType::Sudt,
                 generator: Resource::file_system(SUDT_GENERATOR_PATH.into()),
                 generator_checksum: file_checksum(SUDT_GENERATOR_PATH).unwrap().into(),
                 validator_script_type_hash: SUDT_VALIDATOR_SCRIPT_TYPE_HASH.into(),
+                generator_debug: None,
             },
             BackendConfig {
                 backend_type: BackendType::Polyjuice,
                 generator: Resource::file_system(POLYJUICE_GENERATOR_NAME.into()),
                 generator_checksum: file_checksum(POLYJUICE_GENERATOR_NAME).unwrap().into(),
                 validator_script_type_hash: (*POLYJUICE_PROGRAM_CODE_HASH).into(),
+                generator_debug: None,
             },
             BackendConfig {
                 backend_type: BackendType::EthAddrReg,
@@ -469,6 +472,7 @@ pub fn setup() -> (Store, DummyState, Generator) {
                     .unwrap()
                     .into(),
                 validator_script_type_hash: (*ETH_ADDRESS_REGISTRY_PROGRAM_CODE_HASH).into(),
+                generator_debug: None,
             },
         ],
     }];

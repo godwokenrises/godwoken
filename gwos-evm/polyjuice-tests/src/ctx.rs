@@ -486,6 +486,7 @@ impl Config {
                         generator: Resource::file_system(path.clone()),
                         generator_checksum: file_checksum(path).unwrap().into(),
                         validator_script_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
+                        generator_debug: None,
                     }
                 },
                 {
@@ -495,6 +496,7 @@ impl Config {
                         generator: Resource::file_system(path.clone()),
                         generator_checksum: file_checksum(path).unwrap().into(),
                         validator_script_type_hash: SUDT_VALIDATOR_SCRIPT_TYPE_HASH.into(),
+                        generator_debug: None,
                     }
                 },
                 {
@@ -504,6 +506,7 @@ impl Config {
                         generator: Resource::file_system(path.clone()),
                         generator_checksum: file_checksum(path).unwrap().into(),
                         validator_script_type_hash: polyjuice_validator_code_hash.into(),
+                        generator_debug: None,
                     }
                 },
                 {
@@ -515,6 +518,7 @@ impl Config {
                         generator: Resource::file_system(path.clone()),
                         generator_checksum: file_checksum(path).unwrap().into(),
                         validator_script_type_hash: eth_addr_reg_code_hash.into(),
+                        generator_debug: None,
                     }
                 },
             ],
