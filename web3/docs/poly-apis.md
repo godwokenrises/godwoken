@@ -240,7 +240,8 @@ Response
     "versions": {
       "web3Version": "1.12.0-rc2",
       "web3IndexerVersion": "1.12.0-rc2",
-      "godwokenVersion": "1.12.0-rc1 4d0e922"
+      "godwokenVersion": "1.12.0-rc1 4d0e922",
+      "godwokenFullnodeVersion": "1.12.2 a2c1e31"
     },
     "fullnodeInfo": {
       "nodeMode": "fullnode",
@@ -723,7 +724,8 @@ Version info of Godwoken & Web3 & Web3 Indexer.
 {
   "web3Version": "1.0.0-rc1",
   "web3IndexerVersion": "1.0.0-rc1",
-  "godwokenVersion": "1.1.0 f3cdd47"
+  "godwokenVersion": "1.1.0 f3cdd47",
+  "godwokenFullnodeVersion": "1.12.2 a2c1e31"
 }
 ```
 
