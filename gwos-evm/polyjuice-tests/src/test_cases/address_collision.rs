@@ -8,7 +8,7 @@ use gw_common::{
 use gw_store::{chain_view::ChainView, state::traits::JournalDB, traits::chain_store::ChainStore};
 use gw_types::{
     packed::RawL2Transaction,
-    prelude::{Builder, Entity, Pack, CalcHash},
+    prelude::{Builder, CalcHash, Entity, Pack},
 };
 
 use crate::helper::{
