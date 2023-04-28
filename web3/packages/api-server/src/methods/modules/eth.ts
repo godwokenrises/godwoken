@@ -930,7 +930,7 @@ export class Eth {
       fromBlock.startsWith("0x") &&
       typeof toBlock === "string" &&
       toBlock.startsWith("0x") &&
-      fromBlock > toBlock
+      BigInt(fromBlock) > BigInt(toBlock)
     ) {
       throw new HeaderNotFoundError(
         `invalid from and to block combination: from > to`
