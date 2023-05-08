@@ -15,8 +15,8 @@ deprecated = []
 molecule = { version = "0.7.3", default-features = false }
 cfg-if = "1"
 gw-hash = { path = "../hash", default-features = false }
-ckb-fixed-hash = { version = "0.105.1", optional = true }
-ckb-types = { version = "0.105.1", default-features = false, optional = true }
+ckb-fixed-hash = { version = "0.106", optional = true }
+ckb-types = { version = "0.106", default-features = false, optional = true }
 primitive-types = { version = "0.12", default-features = false, features = [ "impl-serde", "impl-rlp" ] }
 
 [build-dependencies]

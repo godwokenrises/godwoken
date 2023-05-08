@@ -23,6 +23,6 @@ sha2 = "0.10.6"
 
 [build-dependencies]
 includedir_codegen = "0.6.0"
-ckb-fixed-hash = "0.105.1"
+ckb-fixed-hash = "0.106"
 anyhow = "1.0"
 sha2 = "0.10.6"
