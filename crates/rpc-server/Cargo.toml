@@ -25,9 +25,9 @@ gw-rpc-client = { path = "../rpc-client" }
 gw-telemetry = { path = "../telemetry" }
 gw-metrics = { path = "../metrics" }
 faster-hex = "0.4"
-ckb-crypto = "0.105.1"
-ckb-fixed-hash = "0.105.1"
-ckb-types = "0.105.1"
+ckb-crypto = "0.106"
+ckb-fixed-hash = "0.106"
+ckb-types = "0.106"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 futures = "0.3.13"
