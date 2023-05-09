@@ -187,8 +187,9 @@ pub struct PscConfig {
     pub max_fee_rate: u64,
     pub fee_rate_pid: Option<Pid<f64>>,
     pub fee_rate_pid_interval_secs: u64,
-    /// Bump fee rate if a transaction cannot be confirmed after the specified duration.
-    pub confirm_timeout_secs: u64,
+    /// Reset submission txs if a tx cannot be confirmed after the specified duration.
+    /// It's not very reliable. Don't use in prod.
+    pub confirm_timeout_secs: Option<u64>,
 }
 
 impl Default for PscConfig {
@@ -201,7 +202,7 @@ impl Default for PscConfig {
             min_fee_rate: 1000,
             max_fee_rate: 1100,
             fee_rate_pid_interval_secs: 10,
-            confirm_timeout_secs: 120,
+            confirm_timeout_secs: None,
         }
     }
 }
