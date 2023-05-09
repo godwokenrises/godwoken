@@ -800,7 +800,10 @@ async fn confirm_block(
     drop(snap);
     // Use a timeout if there is room for fee rate bumping.
     let timeout = if context.psc_config.max_fee_rate > context.psc_config.min_fee_rate {
-        Some(Duration::from_secs(context.psc_config.confirm_timeout_secs))
+        context
+            .psc_config
+            .confirm_timeout_secs
+            .map(Duration::from_secs)
     } else {
         None
     };
