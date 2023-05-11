@@ -190,6 +190,27 @@ impl ProduceSubmitConfirm {
                         store_tx.commit()?;
                     }
                     if e.is::<ShouldResyncError>() || e.is::<ShouldRevertError>() {
+                        // Wait for ckb-indexer syncing ckb tip, otherwise the
+                        // next submission tx generated may use the wrong rollup
+                        // cell.
+                        let tip: u64 = self
+                            .context
+                            .rpc_client
+                            .ckb
+                            .get_tip_block_number()
+                            .await?
+                            .into();
+                        loop {
+                            let indexer_tip =
+                                self.context.rpc_client.indexer.get_indexer_tip1().await?;
+                            if u64::from(indexer_tip.block_number) >= tip {
+                                break;
+                            } else {
+                                log::debug!("waiting for ckb-indexer syncing with ckb")
+                            }
+                            tokio::time::sleep(Duration::from_millis(50)).await;
+                        }
+
                         sync_l1(&*self.context).await?;
 
                         // Reset local_count, submitted_count and local_cells_manager.
