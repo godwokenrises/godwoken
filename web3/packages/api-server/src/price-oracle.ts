@@ -10,7 +10,6 @@ import Decimal from "decimal.js";
 import { Query } from "./db/query";
 import { envConfig } from "./base/env-config";
 import { logger } from "./base/logger";
-const newrelic = require("newrelic");
 
 // ckb price const
 const PRICE_DIFF_PERCENTAGE_THRESHOLD =
@@ -252,7 +251,6 @@ export class CKBPriceOracle extends BaseWorker {
       .filter((p) => p.status === "rejected")
       .map((p) => {
         const reason = (p as PromiseRejectedResult).reason;
-        newrelic.noticeError(reason);
         return reason;
       });
     if (failedResult.length > 0) {

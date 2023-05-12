@@ -1,6 +1,5 @@
 import { handleGwError } from "../methods/gw-error";
 
-require("newrelic");
 import { createClient } from "redis";
 import { envConfig } from "../base/env-config";
 import crypto from "crypto";

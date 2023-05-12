@@ -1,17 +1,13 @@
-import { envConfig } from "./base/env-config";
 import { logger } from "./base/logger";
 import { Query } from "./db";
 import { EventEmitter } from "events";
 import { toApiNewHead } from "./db/types";
 import cluster from "cluster";
-import * as Sentry from "@sentry/node";
 import { Store } from "./cache/store";
 import {
   TIP_BLOCK_HASH_CACHE_KEY,
   TIP_BLOCK_HASH_CACHE_EXPIRED_TIME_MS,
 } from "./cache/constant";
-
-const newrelic = require("newrelic");
 
 // init cache
 const cacheStore: Store = new Store(true, TIP_BLOCK_HASH_CACHE_EXPIRED_TIME_MS);
@@ -90,9 +86,6 @@ export class BlockEmitter {
       })
       .catch((e) => {
         logger.error(`Error occurs: ${e} ${e.stack}, stopping emit newHeads!`);
-        if (envConfig.sentryDns) {
-          Sentry.captureException(e);
-        }
         this.stop();
       });
   }
@@ -140,20 +133,7 @@ export class BlockEmitter {
       return timeout;
     };
 
-    // add new relic background transaction
-    return newrelic.startBackgroundTransaction(
-      `BlockEmitter#pool`,
-      async () => {
-        newrelic.getTransaction();
-        try {
-          return await executePoll();
-        } catch (error) {
-          throw error;
-        } finally {
-          newrelic.endTransaction();
-        }
-      }
-    );
+    return await executePoll();
   }
 
   getEmitter(): EventEmitter {

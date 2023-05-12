@@ -4,41 +4,17 @@ import { jaysonMiddleware } from "../middlewares/jayson";
 import cors from "cors";
 import { wrapper } from "../ws/methods";
 import expressWs from "express-ws";
-import Sentry from "@sentry/node";
 import { applyRateLimitByIp } from "../rate-limit";
-import { initSentry } from "../sentry";
 import { envConfig } from "../base/env-config";
 import { gwConfig, readonlyGwConfig } from "../base/index";
 import { expressLogger, logger } from "../base/logger";
 import { Server } from "http";
-
-const newrelic = require("newrelic");
 
 const app: express.Express = express();
 
 const BODY_PARSER_LIMIT = "100mb";
 
 app.use(express.json({ limit: BODY_PARSER_LIMIT }));
-
-const sentryOptionRequest = [
-  "cookies",
-  "data",
-  "headers",
-  "method",
-  "query_string",
-  "url",
-  "body",
-];
-if (envConfig.sentryDns) {
-  initSentry();
-
-  // The request handler must be the first middleware on the app
-  app.use(
-    Sentry.Handlers.requestHandler({
-      request: sentryOptionRequest,
-    })
-  );
-}
 
 expressWs(app);
 
@@ -58,10 +34,6 @@ app.use(
     _res: express.Response,
     next: express.NextFunction
   ) => {
-    const transactionName = `${req.method} ${req.url}#${req.body.method}`;
-    logger.debug("#transactionName:", transactionName);
-    newrelic.setTransactionName(transactionName);
-
     // log request method / body
     if (envConfig.logRequestBody) {
       logger.debug("request.body:", req.body);
@@ -84,15 +56,6 @@ app.use(
 
 (app as any).ws("/ws", wrapper);
 app.use("/", jaysonMiddleware);
-
-if (envConfig.sentryDns) {
-  // The error handler must be before any other error middleware and after all controllers
-  app.use(
-    Sentry.Handlers.errorHandler({
-      // request: sentryOptionRequest,
-    })
-  );
-}
 
 // catch 404 and forward to error handler
 app.use(

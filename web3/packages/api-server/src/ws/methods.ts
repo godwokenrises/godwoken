@@ -23,8 +23,6 @@ import { isInstantFinalityHackMode } from "../util";
 const query = new Query();
 const cacheStore = new Store(true, CACHE_EXPIRED_TIME_MILSECS);
 
-const newrelic = require("newrelic");
-
 const blockEmitter = new BlockEmitter();
 blockEmitter.startWorker();
 
@@ -55,17 +53,7 @@ export function wrapper(ws: any, req: any) {
         (methodFunc as any)(params, cb);
       };
 
-      // add web transaction for websocket request
-      return newrelic.startWebTransaction(`/ws#${method}`, async () => {
-        newrelic.getTransaction();
-        try {
-          execMethod();
-        } catch (error) {
-          throw error;
-        } finally {
-          newrelic.endTransaction();
-        }
-      });
+      return execMethod();
     });
   }
 

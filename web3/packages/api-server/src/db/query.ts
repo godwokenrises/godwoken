@@ -1,4 +1,3 @@
-const newrelic = require("newrelic");
 import { Hash } from "@ckb-lumos/base";
 import {
   Block,
@@ -369,11 +368,7 @@ export class Query {
   // Latest ${LATEST_MEDIAN_GAS_PRICE} transactions median gas_price
   async getMedianGasPrice(): Promise<bigint> {
     const sql = `SELECT (PERCENTILE_CONT(0.5) WITHIN GROUP(ORDER BY gas_price)) AS median FROM (SELECT gas_price FROM transactions ORDER BY id DESC LIMIT ?) AS gas_price;`;
-    const result = await newrelic.startSegment(
-      "getMedianGasPrice",
-      true,
-      async () => this.knex.raw(sql, [LATEST_MEDIAN_GAS_PRICE])
-    );
+    const result = await this.knex.raw(sql, [LATEST_MEDIAN_GAS_PRICE]);
     const median = result.rows[0]?.median;
     if (median == null) {
       return BigInt(0);
