@@ -16,11 +16,6 @@ REDIS_URL=redis://user:password@localhost:6379 <redis url, optional, default to 
 GODWOKEN_JSON_RPC=<godwoken rpc>
 GODWOKEN_READONLY_JSON_RPC=<optional, default equals to GODWOKEN_JSON_RPC>
 
-SENTRY_DNS=<sentry dns, optional>
-SENTRY_ENVIRONMENT=<sentry environment, optional, default to `development`>,
-NEW_RELIC_LICENSE_KEY=<new relic license key, optional>
-NEW_RELIC_APP_NAME=<new relic app name, optional, default to 'Godwoken Web3'>
-
 PG_POOL_MAX=<pg pool max count, optional, default to 20>
 CLUSTER_COUNT=<cluster count, optional, default to num of cpus>
 GAS_PRICE_CACHE_SECONDS=<seconds, optional, default to 0, and 0 means no cache>

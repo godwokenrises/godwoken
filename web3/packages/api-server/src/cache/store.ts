@@ -1,4 +1,3 @@
-require("newrelic");
 import { RedisClientType } from "redis";
 import { CACHE_EXPIRED_TIME_MILSECS } from "../cache/constant";
 import { globalClient, SetOptions } from "./redis";

@@ -1,4 +1,3 @@
-const newrelic = require("newrelic");
 import { Hash, HexNumber, HexString, Script } from "@ckb-lumos/base";
 import { Reader } from "@ckb-lumos/toolkit";
 import { RPC } from "./rpc";
@@ -217,9 +216,7 @@ export class GodwokenClient {
   private async rpcCall(methodName: string, ...args: any[]): Promise<any> {
     const name = "gw_" + methodName;
     try {
-      return await newrelic.startSegment(`read_${name}`, true, async () => {
-        return this.readonlyRpc[name](...args);
-      });
+      return await this.readonlyRpc[name](...args);
     } catch (err: any) {
       logger.info(`Call gw rpc "${name}" error:`, err.message);
       throw err;
@@ -229,9 +226,7 @@ export class GodwokenClient {
   private async writeRpcCall(methodName: string, ...args: any[]): Promise<any> {
     const name = "gw_" + methodName;
     try {
-      return await newrelic.startSegment(`write_${name}`, true, async () => {
-        return this.rpc[name](...args);
-      });
+      return await this.rpc[name](...args);
     } catch (err: any) {
       logger.info(`Call gw rpc "${name}" error:`, err.message);
       throw err;

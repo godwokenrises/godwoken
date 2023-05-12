@@ -1,4 +1,3 @@
-require("newrelic");
 import { Store } from "./store";
 import { HexString } from "@ckb-lumos/base";
 import fs from "fs";

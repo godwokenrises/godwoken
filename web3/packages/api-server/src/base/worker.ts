@@ -1,7 +1,4 @@
-import * as Sentry from "@sentry/node";
-import { envConfig } from "./env-config";
 import { logger } from "./logger";
-const newrelic = require("newrelic");
 
 const POLL_TIME_INTERVAL = 5000; // 5s
 const LIVENESS_CHECK_INTERVAL = 5000; // 5s
@@ -75,28 +72,12 @@ export class BaseWorker {
         logger.error(
           `[${this.constructor.name}] Error occurs: ${e} ${e.stack}, stopping polling!`
         );
-        if (envConfig.sentryDns) {
-          Sentry.captureException(e);
-        }
         this.stop();
       });
   }
 
   protected async poll() {
-    // add new relic background transaction
-    return newrelic.startBackgroundTransaction(
-      `${this.constructor.name}#workerPoll`,
-      async () => {
-        newrelic.getTransaction();
-        try {
-          return await this.executePoll();
-        } catch (error) {
-          throw error;
-        } finally {
-          newrelic.endTransaction();
-        }
-      }
-    );
+    return await this.executePoll();
   }
 
   protected async executePoll(): Promise<number> {

@@ -1,10 +1,6 @@
 import * as modules from "./modules";
 import { Callback } from "./types";
-import * as Sentry from "@sentry/node";
-import { INVALID_PARAMS } from "./error-code";
 import { isRpcError, RpcError } from "./error";
-import { envConfig } from "../base/env-config";
-const newrelic = require("newrelic");
 
 /**
  * get all methods. e.g., getBlockByNumber in eth module
@@ -41,12 +37,6 @@ function getMethods(argsList: ModConstructorArgs = {}) {
             const result = await mod[methodName].bind(mod)(args);
             return cb(null, result);
           } catch (err: any) {
-            if (envConfig.sentryDns && err.code !== INVALID_PARAMS) {
-              Sentry.captureException(err, {
-                extra: { method: concatedMethodName, params: args },
-              });
-            }
-
             if (isRpcError(err)) {
               const error = {
                 code: err.code,
@@ -67,7 +57,6 @@ function getMethods(argsList: ModConstructorArgs = {}) {
               // express' error handler.
               //
               // Note: In order to link errors to transaction traces, we pass linking metadata.
-              newrelic.noticeError(err, newrelic.getLinkingMetadata());
             } else {
               throw err;
             }

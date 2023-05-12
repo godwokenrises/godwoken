@@ -11,14 +11,11 @@ export const envConfig = {
     return getRequired("GODWOKEN_JSON_RPC");
   },
 
-  _newRelicLicenseKey: getOptional("NEW_RELIC_LICENSE_KEY"),
   clusterCount: getOptional("CLUSTER_COUNT"),
   redisUrl: getOptional("REDIS_URL"),
   pgPoolMax: getOptional("PG_POOL_MAX"),
   gasPriceCacheSeconds: getOptional("GAS_PRICE_CACHE_SECONDS"),
   extraEstimateGas: getOptional("EXTRA_ESTIMATE_GAS"),
-  sentryDns: getOptional("SENTRY_DNS"),
-  sentryEnvironment: getOptional("SENTRY_ENVIRONMENT"),
   godwokenReadonlyJsonRpc: getOptional("GODWOKEN_READONLY_JSON_RPC"),
   enableCacheEthCall: getOptional("ENABLE_CACHE_ETH_CALL"),
   enableCacheEstimateGas: getOptional("ENABLE_CACHE_ESTIMATE_GAS"),
