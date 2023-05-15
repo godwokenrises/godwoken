@@ -53,10 +53,6 @@ function getMethods(argsList: ModConstructorArgs = {}) {
               // }
 
               cb(error);
-              // NOTE: Our error responses are not automatically collected by NewRelic because we use Jayson instead of
-              // express' error handler.
-              //
-              // Note: In order to link errors to transaction traces, we pass linking metadata.
             } else {
               throw err;
             }
