@@ -23,6 +23,14 @@ export class Store {
     return await this.client.eval(script, { keys, arguments: values });
   }
 
+  async evalsha(sha: string, keys: string[], values: string[]) {
+    return await this.client.evalSha(sha, { keys, arguments: values });
+  }
+
+  async scriptLoad(script: string): Promise<string> {
+    return await this.client.scriptLoad(script);
+  }
+
   async insert(
     key: string,
     value: string | number,

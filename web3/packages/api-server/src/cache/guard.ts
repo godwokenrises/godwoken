@@ -45,6 +45,8 @@ export class AccessGuard {
   public expiredTimeMilsecs: number;
   public batchLimit: number;
 
+  private evalSha?: string;
+
   constructor(
     enableExpired = true,
     expiredTimeMilsecs?: number, // milsec, default 1 minutes
@@ -57,6 +59,19 @@ export class AccessGuard {
     this.rpcMethods = config.methods;
     this.expiredTimeMilsecs = expiredTimeMilsecs || CACHE_EXPIRED_TIME_MILSECS;
     this.batchLimit = config.batch_limit || BATCH_LIMIT;
+
+    this.store.scriptLoad(RATE_LIMIT_SCRIPT).then((evalSha) => {
+      this.evalSha = evalSha;
+      logger.info("AccessGuard eval sha:", evalSha);
+    });
+  }
+
+  private async getEvalSha() {
+    if (!this.evalSha) {
+      this.evalSha = await this.store.scriptLoad(RATE_LIMIT_SCRIPT);
+      logger.warn(`AccessGuard reget eval sha:`, this.evalSha);
+    }
+    return this.evalSha;
   }
 
   async limitApiCall(
@@ -84,8 +99,8 @@ export class AccessGuard {
       };
     }
 
-    const result: [string, string] = (await this.store.eval(
-      RATE_LIMIT_SCRIPT,
+    const result: [string, string] = (await this.store.evalsha(
+      await this.getEvalSha(),
       [id],
       [offset.toString(), this.expiredTimeMilsecs.toString()]
     )) as [string, string];
