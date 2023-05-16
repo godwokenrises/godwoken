@@ -12,6 +12,9 @@ export const EXPIRED_TIME_MILSECS = 1 * 60 * 1000; // milsec, default 1 minutes
 export const MAX_REQUEST_COUNT = 30;
 export const BATCH_LIMIT = 100000; // 100_000 RPCs in single batch req
 
+const RATE_LIMIT_SCRIPT =
+  "local current = redis.call('incrby', KEYS[1], ARGV[1]); local pttl = redis.call('pttl', KEYS[1]); if pttl < 0 then redis.call('pexpire', KEYS[1], ARGV[2]) end; return {current, pttl}";
+
 export interface RateLimitConfig {
   batch_limit: number;
   expired_time_milsec: number;
@@ -56,6 +59,49 @@ export class AccessGuard {
     this.batchLimit = config.batch_limit || BATCH_LIMIT;
   }
 
+  async limitApiCall(
+    rpcMethod: string,
+    reqId: string,
+    offset: number = 1
+  ): Promise<
+    | {
+        current: number;
+        pttl: number;
+        isOverRate: boolean;
+      }
+    | {
+        isOverRate: false;
+      }
+  > {
+    const id = getId(rpcMethod, reqId);
+
+    const maxNumber: number | undefined = this.rpcMethods[rpcMethod];
+
+    // No limit for this RPC
+    if (maxNumber == null) {
+      return {
+        isOverRate: false,
+      };
+    }
+
+    const result: [string, string] = (await this.store.eval(
+      RATE_LIMIT_SCRIPT,
+      [id],
+      [offset.toString(), this.expiredTimeMilsecs.toString()]
+    )) as [string, string];
+    const current = +result[0];
+    const pttl = +result[1];
+
+    // if pttl < 0 (-1), means expired before eval call.
+    const isOverRate: boolean = current > maxNumber && pttl > 0;
+
+    return {
+      current,
+      pttl,
+      isOverRate,
+    };
+  }
+
   async setMaxReqLimit(rpcMethod: string, maxReqCount: number) {
     this.rpcMethods[rpcMethod] = maxReqCount;
   }
@@ -67,66 +113,6 @@ export class AccessGuard {
       return null;
     }
     return +count;
-  }
-
-  async add(rpcMethod: string, reqId: string): Promise<HexString | undefined> {
-    const isExist = await this.isExist(rpcMethod, reqId);
-    if (!isExist) {
-      const id = getId(rpcMethod, reqId);
-      await this.store.insert(id, 0);
-      return id;
-    }
-  }
-
-  async updateCount(rpcMethod: string, reqId: string, offset: number = 1) {
-    const isExist = await this.isExist(rpcMethod, reqId);
-    if (isExist === true) {
-      const id = getId(rpcMethod, reqId);
-      if (offset > 1) {
-        await this.store.incrBy(id, offset);
-      } else {
-        await this.store.incr(id);
-      }
-    }
-  }
-
-  async isExist(rpcMethod: string, reqId: string) {
-    const id = getId(rpcMethod, reqId);
-    const data = await this.store.get(id);
-    if (data == null) return false;
-    return true;
-  }
-
-  async isOverRate(
-    rpcMethod: string,
-    reqId: string,
-    offset: number = 1
-  ): Promise<boolean> {
-    const id = getId(rpcMethod, reqId);
-    const data = await this.store.get(id);
-    if (data == null) return false;
-    if (this.rpcMethods[rpcMethod] == null) return false;
-
-    const count = +data + offset;
-    const maxNumber = this.rpcMethods[rpcMethod];
-    if (count > maxNumber) {
-      return true;
-    }
-    return false;
-  }
-
-  async getKeyTTL(rpcMethod: string, reqId: string) {
-    const id = getId(rpcMethod, reqId);
-    const remainSecs = await this.store.ttl(id);
-    if (remainSecs === -1) {
-      const value = (await this.store.get(id)) || "0";
-      logger.info(
-        `key ${id} with no ttl, reset: ${this.expiredTimeMilsecs}ms, ${value}`
-      );
-      await this.store.insert(id, value, this.expiredTimeMilsecs / 1000);
-      return await this.store.ttl(id);
-    }
-    return remainSecs;
   }
 }
 

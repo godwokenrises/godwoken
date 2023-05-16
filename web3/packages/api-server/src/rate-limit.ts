@@ -19,14 +19,11 @@ export async function wsApplyBatchRateLimitByIp(
   for (const targetMethod of methods) {
     const count = calcMethodCount(objs, targetMethod);
     if (count > 0 && ip != null) {
-      const isExist = await accessGuard.isExist(targetMethod, ip);
-      if (!isExist) {
-        await accessGuard.add(targetMethod, ip);
-      }
+      const limitInfo = await accessGuard.limitApiCall(targetMethod, ip, count);
 
-      const isOverRate = await accessGuard.isOverRate(targetMethod, ip, count);
-      if (isOverRate) {
-        const remainSecs = await accessGuard.getKeyTTL(targetMethod, ip);
+      // If overrate, return error message
+      if (limitInfo.isOverRate) {
+        const remainSecs: number = limitInfo.pttl / 1000;
         const message = `Too Many Requests, IP: ${ip}, please wait ${remainSecs}s and retry. RPC method: ${targetMethod}.`;
         const error: JSONRPCError = {
           code: LIMIT_EXCEEDED,
@@ -38,8 +35,6 @@ export async function wsApplyBatchRateLimitByIp(
         );
 
         return new Array(objs.length).fill(error);
-      } else {
-        await accessGuard.updateCount(targetMethod, ip, count);
       }
     }
     // continue next loop
@@ -152,17 +147,13 @@ export async function rateLimit(
   let isBan = false;
   const count = calcMethodCount(req.body, rpcMethod);
   if (count > 0 && reqId != null) {
-    const isExist = await accessGuard.isExist(rpcMethod, reqId);
-    if (!isExist) {
-      await accessGuard.add(rpcMethod, reqId);
-    }
+    const limitInfo = await accessGuard.limitApiCall(rpcMethod, reqId, count);
 
-    const isOverRate = await accessGuard.isOverRate(rpcMethod, reqId, count);
-    if (isOverRate) {
+    if (limitInfo.isOverRate) {
       isBan = true;
 
-      const remainSecs = await accessGuard.getKeyTTL(rpcMethod, reqId);
-      const remainMilsecs = remainSecs * 1000;
+      const remainMilsecs = limitInfo.pttl;
+      const remainSecs = limitInfo.pttl / 1000;
       const httpRateLimitCode = 429;
       const httpRateLimitHeader = {
         "Retry-After": remainMilsecs.toString(),
@@ -192,8 +183,6 @@ export async function rateLimit(
             error: error,
           };
       res.status(httpRateLimitCode).header(httpRateLimitHeader).send(content);
-    } else {
-      await accessGuard.updateCount(rpcMethod, reqId, count);
     }
   }
   return isBan;
@@ -203,14 +192,9 @@ export async function wsRateLimit(
   rpcMethod: string,
   reqId: string
 ): Promise<{ error: JSONRPCError; remainSecs: number } | undefined> {
-  const isExist = await accessGuard.isExist(rpcMethod, reqId);
-  if (!isExist) {
-    await accessGuard.add(rpcMethod, reqId);
-  }
-
-  const isOverRate = await accessGuard.isOverRate(rpcMethod, reqId);
-  if (isOverRate) {
-    const remainSecs = await accessGuard.getKeyTTL(rpcMethod, reqId);
+  const limitInfo = await accessGuard.limitApiCall(rpcMethod, reqId);
+  if (limitInfo.isOverRate) {
+    const remainSecs = limitInfo.pttl / 1000;
 
     const message = `Too Many Requests, IP: ${reqId}, please wait ${remainSecs}s and retry. RPC method: ${rpcMethod}.`;
     const error: JSONRPCError = {
@@ -222,8 +206,6 @@ export async function wsRateLimit(
       `WS Rate Limit Exceed, ip: ${reqId}, method: ${rpcMethod}, ttl: ${remainSecs}s`
     );
     return { error, remainSecs };
-  } else {
-    await accessGuard.updateCount(rpcMethod, reqId);
   }
   return undefined;
 }

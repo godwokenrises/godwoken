@@ -19,6 +19,10 @@ export class Store {
       : {};
   }
 
+  async eval(script: string, keys: string[], values: string[]) {
+    return await this.client.eval(script, { keys, arguments: values });
+  }
+
   async insert(
     key: string,
     value: string | number,
