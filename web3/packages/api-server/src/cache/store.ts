@@ -1,6 +1,7 @@
 import { RedisClientType } from "redis";
 import { CACHE_EXPIRED_TIME_MILSECS } from "../cache/constant";
 import { globalClient, SetOptions } from "./redis";
+import { logger } from "../base/logger";
 
 export class Store {
   private client: RedisClientType;
@@ -23,8 +24,20 @@ export class Store {
     return await this.client.eval(script, { keys, arguments: values });
   }
 
-  async evalsha(sha: string, keys: string[], values: string[]) {
-    return await this.client.evalSha(sha, { keys, arguments: values });
+  async evalshaRetry(
+    script: string,
+    sha: string,
+    keys: string[],
+    values: string[]
+  ) {
+    try {
+      return await this.client.evalSha(sha, { keys, arguments: values });
+    } catch (err) {
+      // Load script, for sometimes cache invalidation
+      logger.debug(`evalsha reload script:`, script);
+      await this.scriptLoad(script);
+      return await this.client.evalSha(sha, { keys, arguments: values });
+    }
   }
 
   async scriptLoad(script: string): Promise<string> {

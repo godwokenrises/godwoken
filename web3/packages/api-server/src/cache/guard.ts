@@ -99,7 +99,8 @@ export class AccessGuard {
       };
     }
 
-    const result: [string, string] = (await this.store.evalsha(
+    const result: [string, string] = (await this.store.evalshaRetry(
+      RATE_LIMIT_SCRIPT,
       await this.getEvalSha(),
       [id],
       [offset.toString(), this.expiredTimeMilsecs.toString()]
