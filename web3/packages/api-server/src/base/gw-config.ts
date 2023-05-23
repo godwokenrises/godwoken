@@ -237,11 +237,6 @@ export class GwConfig {
   private async fetchDefaultFromAccount(
     registryId: number
   ): Promise<AccountWithAddress> {
-    const zeroAddressInfo = await zeroAddressAccount(this.rpc, registryId);
-    if (zeroAddressInfo != null) {
-      return zeroAddressInfo;
-    }
-
     const ethAccountLockTypeHash = this.nodeInfo.eoaScripts.find(
       (s) => s.eoaType === EoaScriptType.Eth
     )?.typeHash;
@@ -437,7 +432,7 @@ function toApiNodeInfo(nodeInfo: GwNodeInfo): NodeInfo {
   return snakeToCamel(nodeInfo, ["code_hash", "hash_type"]);
 }
 
-async function zeroAddressAccount(
+async function _zeroAddressAccount(
   rpc: GodwokenClient,
   registryId: number
 ): Promise<AccountWithAddress | undefined> {
