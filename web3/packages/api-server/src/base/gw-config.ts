@@ -231,7 +231,6 @@ export class GwConfig {
     return new Account(regIdHex, scriptHash);
   }
 
-  // Using zero address firstly
   // we search the first account id = 3, if it is eoa account, use it, otherwise continue with id + 1;
   private async fetchDefaultFromAccount(
     registryId: number
