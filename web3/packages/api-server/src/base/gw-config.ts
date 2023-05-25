@@ -1,4 +1,4 @@
-import { utils, HexNumber, Script, HexString, Hash } from "@ckb-lumos/base";
+import { utils, HexNumber, Script, HexString } from "@ckb-lumos/base";
 import {
   BackendInfo,
   EoaScript,
@@ -15,11 +15,10 @@ import {
   GodwokenClient,
   NodeInfo as GwNodeInfo,
 } from "@godwoken-web3/godwoken";
-import { CKB_SUDT_ID, ZERO_ETH_ADDRESS } from "../methods/constant";
+import { CKB_SUDT_ID } from "../methods/constant";
 import { Uint32 } from "./types/uint";
 import { snakeToCamel } from "../util";
 import { EntryPointContract } from "../gasless/entrypoint";
-import { BaseEthRegistryAddress } from "./base-eth-registry-address";
 import { logger } from "./logger";
 
 // source: https://github.com/nervosnetwork/godwoken/commit/d6c98d8f8a199b6ec29bc77c5065c1108220bb0a#diff-c56fda2ca3b1366049c88e633389d9b6faa8366151369fd7314c81f6e389e5c7R5
@@ -430,33 +429,6 @@ function toConfigEoaScripts(nodeInfo: NodeInfo) {
 function toApiNodeInfo(nodeInfo: GwNodeInfo): NodeInfo {
   // todo: use determinable converting to replace snakeToCamel
   return snakeToCamel(nodeInfo, ["code_hash", "hash_type"]);
-}
-
-async function _zeroAddressAccount(
-  rpc: GodwokenClient,
-  registryId: number
-): Promise<AccountWithAddress | undefined> {
-  const registryAddress = new BaseEthRegistryAddress(
-    ZERO_ETH_ADDRESS,
-    registryId
-  );
-  const scriptHash: Hash | undefined = await rpc.getScriptHashByRegistryAddress(
-    registryAddress.serialize()
-  );
-  if (scriptHash == null) {
-    return undefined;
-  }
-
-  const id = await rpc.getAccountIdByScriptHash(scriptHash);
-  if (id == null) {
-    return undefined;
-  }
-
-  return {
-    id: "0x" + id.toString(16),
-    scriptHash,
-    address: ZERO_ETH_ADDRESS,
-  };
 }
 
 async function findFirstEoaAccountId(
