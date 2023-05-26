@@ -5,6 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.14.0-rc1] - 2023-05-26
+
+Bug fixes:
+
+* fix: Cancel zero address as the default from address https://github.com/godwokenrises/godwoken/pull/1073
+* fix: fix re-syncing race condition https://github.com/godwokenrises/godwoken/pull/1066
+* feat: timeout for rpc serve https://github.com/godwokenrises/godwoken/pull/1060
+* fix: from > to should compare with number type, not string https://github.com/godwokenrises/godwoken/pull/1063
+
+Full Changelog: https://github.com/godwokenrises/godwoken/compare/v1.13.0…v1.14.0-rc1
+
 ## [v1.13.0] - 2023-04-25
 
 Upgrades:
