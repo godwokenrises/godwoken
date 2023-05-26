@@ -1,6 +1,6 @@
 [package]
 name = "gw-replay-chain"
-version = "1.13.0"
+version = "1.14.0-rc1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
