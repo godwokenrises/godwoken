@@ -1,6 +1,6 @@
 [package]
 name = "gw-tx-filter"
-version = "1.13.0"
+version = "1.14.0-rc1"
 authors = ["Nervos Network"]
 edition = "2021"
 
