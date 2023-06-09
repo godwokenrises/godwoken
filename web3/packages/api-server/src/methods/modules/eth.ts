@@ -68,9 +68,9 @@ import {
   getSignature,
   polyTxToGwTx,
   polyjuiceRawTransactionToApiTransaction,
-  PolyjuiceTransaction,
   ethCallTxToGodwokenRawTx,
 } from "../../convert-tx";
+import { PolyjuiceTransaction } from "../../rlp";
 import { ethAddressToAccountId, EthRegistryAddress } from "../../base/address";
 import { keccakFromString } from "ethereumjs-util";
 import { DataCacheConstructor, RedisDataCache } from "../../cache/data";
@@ -212,7 +212,7 @@ export class Eth {
     this.sendRawTransaction = middleware(
       this.sendRawTransaction.bind(this),
       1,
-      [validators.hexString]
+      [validators.rawTransaction]
     );
 
     //

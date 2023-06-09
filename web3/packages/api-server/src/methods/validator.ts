@@ -13,6 +13,11 @@ import { GodwokenClient } from "@godwoken-web3/godwoken";
 import { EthRegistryAddress } from "../base/address";
 import { decodeGaslessPayload } from "../gasless/payload";
 import { gwConfig } from "../base";
+import {
+  decodeEthRawTx,
+  encodePolyjuiceTransaction,
+  PolyjuiceTransaction,
+} from "../rlp";
 
 /**
  * middleware for parameters validation
@@ -136,6 +141,10 @@ export const validators = {
 
   newFilterParams(params: any[], index: number) {
     return verifyNewFilterObj(params[index], index);
+  },
+
+  rawTransaction(params: any[], index: number) {
+    return verifySendRawTransaction(params[index], index);
   },
 };
 
@@ -806,6 +815,54 @@ export function verifyGaslessTransaction(
       `userOperation.to(${to}}) != entrypointContract.address(${gwConfig.entrypointContract.address})`
     );
   }
+}
+
+type KeyOfPolyjuiceTransaction = keyof PolyjuiceTransaction;
+export function verifySendRawTransaction(rawTx: HexString, index: number) {
+  const verifyHexStringResult = verifyHexString(rawTx, index);
+  if (verifyHexStringResult != null) {
+    return verifyHexStringResult;
+  }
+
+  const numberTypes: KeyOfPolyjuiceTransaction[] = [
+    "nonce",
+    "gasPrice",
+    "gasLimit",
+    "value",
+    "v",
+    "r",
+    "s",
+  ];
+
+  let polyTx: PolyjuiceTransaction;
+  try {
+    polyTx = decodeEthRawTx(rawTx);
+  } catch (err) {
+    logger.debug(`verify raw transaction:`, err);
+    return invalidParamsError(index, `rlp: invalid format`);
+  }
+
+  for (const t of numberTypes) {
+    const v = polyTx[t];
+    if (v.startsWith("0x00")) {
+      const msg = `rlp: non-canonical integer (leading zero bytes) for ${t}, receive: ${v}`;
+      logger.debug(msg);
+      return invalidParamsError(index, msg);
+    }
+  }
+
+  let encoded: HexString;
+  try {
+    encoded = encodePolyjuiceTransaction(polyTx);
+  } catch (err) {
+    logger.debug(`verify raw transaction:`, err);
+    return invalidParamsError(index, `rlp: invalid format`);
+  }
+  if (encoded !== rawTx) {
+    return invalidParamsError(index, `rlp: invalid format`);
+  }
+
+  return undefined;
 }
 
 //******* end of standalone verify function ********/
