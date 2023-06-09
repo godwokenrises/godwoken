@@ -34,10 +34,8 @@ import {
 import { InvalidParamsError } from "../error";
 import { gwConfig, readonlyPriceOracle } from "../../base";
 import { META_CONTRACT_ID } from "../constant";
-import {
-  PolyjuiceTransaction,
-  recoverEthAddressFromPolyjuiceTx,
-} from "../../convert-tx";
+import { PolyjuiceTransaction } from "../../rlp";
+import { recoverEthAddressFromPolyjuiceTx } from "../../convert-tx";
 import { isGaslessTransaction } from "../../gasless/utils";
 
 export class Gw {

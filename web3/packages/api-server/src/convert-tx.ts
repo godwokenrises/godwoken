@@ -33,20 +33,14 @@ import { Uint64 } from "./base/types/uint";
 import { AutoCreateAccountCacheValue } from "./cache/types";
 import { TransactionCallObject } from "./methods/types";
 import { isGaslessTransaction } from "./gasless/utils";
+import {
+  PolyjuiceTransaction,
+  decodeEthRawTx,
+  encodePolyjuiceTransaction,
+  toRlpNumber,
+} from "./rlp";
 
 export const DEPLOY_TO_ADDRESS = "0x";
-
-export interface PolyjuiceTransaction {
-  nonce: HexNumber;
-  gasPrice: HexNumber;
-  gasLimit: HexNumber;
-  to: HexString;
-  value: HexNumber;
-  data: HexString;
-  v: HexNumber;
-  r: HexString;
-  s: HexString;
-}
 
 // execute raw transaction
 export async function ethCallTxToGodwokenRawTx(
@@ -246,14 +240,9 @@ export async function ethRawTxToGwTx(
  * Convert ETH raw transaction to PolyjuiceTransaction
  */
 export function ethRawTxToPolyTx(ethRawTx: HexString): PolyjuiceTransaction {
-  const result: Buffer[] = rlp.decode(ethRawTx) as Buffer[];
-  if (result.length !== 9) {
-    throw new Error("decode eth raw transaction data error");
-  }
-
   // todo: r might be "0x" which cause inconvenient for down-stream
-  const resultHex = result.map((r) => "0x" + Buffer.from(r).toString("hex"));
-  const [nonce, gasPrice, gasLimit, to, value, data, v, r, s] = resultHex;
+  const resultHex = decodeEthRawTx(ethRawTx);
+  const { nonce, gasPrice, gasLimit, to, value, data, v, r, s } = resultHex;
 
   // r & s is integer in RLP, convert to 32-byte hex string (add leading zeros)
   const rWithLeadingZeros: HexString = "0x" + r.slice(2).padStart(64, "0");
@@ -325,29 +314,6 @@ function calcMessage(tx: PolyjuiceTransaction): HexString {
   const message = "0x" + keccak256(encoded).toString("hex");
 
   return message;
-}
-
-function toRlpNumber(num: HexNumber): bigint {
-  return num === "0x" ? 0n : BigInt(num);
-}
-
-function encodePolyjuiceTransaction(tx: PolyjuiceTransaction) {
-  const { nonce, gasPrice, gasLimit, to, value, data, v, r, s } = tx;
-
-  const beforeEncode = [
-    toRlpNumber(nonce),
-    toRlpNumber(gasPrice),
-    toRlpNumber(gasLimit),
-    to,
-    toRlpNumber(value),
-    data,
-    toRlpNumber(v),
-    toRlpNumber(r),
-    toRlpNumber(s),
-  ];
-
-  const result = rlp.encode(beforeEncode);
-  return "0x" + result.toString("hex");
 }
 
 /**
