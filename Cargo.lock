@@ -108,13 +108,13 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.68"
+version = "0.1.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9ccdd8f2a161be9bd5c023df56f1b2a0bd1d83872ae53b71a84a12c9bf6e842"
+checksum = "76464446b8bc32758d7e88ee1a804d9914cd9b1cb264c029899680b0be29826f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.15",
+ "syn 1.0.107",
 ]
 
 [[package]]
@@ -266,13 +266,13 @@ dependencies = [
 
 [[package]]
 name = "axum"
-version = "0.6.7"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fb79c228270dcf2426e74864cabc94babb5dbab01a4314e702d2f16540e1591"
+checksum = "08b108ad2665fa3f6e6a517c3d80ec3e77d224c47d605167aefaa5d7ef97fa48"
 dependencies = [
  "async-trait",
  "axum-core",
- "base64 0.21.0",
+ "base64",
  "bitflags",
  "bytes",
  "futures-util",
@@ -290,7 +290,7 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "serde_urlencoded",
- "sha1",
+ "sha-1",
  "sync_wrapper",
  "tokio",
  "tokio-tungstenite",
@@ -302,9 +302,9 @@ dependencies = [
 
 [[package]]
 name = "axum-core"
-version = "0.3.4"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "759fa577a247914fd3f7f76d62972792636412fbfd634cd452f6a385a74d2d2c"
+checksum = "79b8558f5a0581152dc94dcd289132a1d377494bdeafcd41869b3258e3e2ad92"
 dependencies = [
  "async-trait",
  "bytes",
@@ -337,12 +337,6 @@ name = "base64"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
-
-[[package]]
-name = "base64"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4a4ddaa51a5bc52a6948f74c06d20aaaddb71924eab79b8c97a8c556e942d6a"
 
 [[package]]
 name = "bech32"
@@ -476,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "c-uint256-tests"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "cc",
  "cty",
@@ -1695,7 +1689,7 @@ dependencies = [
 
 [[package]]
 name = "godwoken-bin"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "ckb-types",
@@ -1728,7 +1722,7 @@ dependencies = [
 
 [[package]]
 name = "gw-benches"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "criterion",
@@ -1747,7 +1741,7 @@ dependencies = [
 
 [[package]]
 name = "gw-block-producer"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -1792,7 +1786,7 @@ dependencies = [
 
 [[package]]
 name = "gw-builtin-binaries"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "ckb-fixed-hash",
@@ -1805,7 +1799,7 @@ dependencies = [
 
 [[package]]
 name = "gw-chain"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "ckb-fixed-hash",
@@ -1834,7 +1828,7 @@ dependencies = [
 
 [[package]]
 name = "gw-challenge"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1864,7 +1858,7 @@ dependencies = [
 
 [[package]]
 name = "gw-common"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
@@ -1875,7 +1869,7 @@ dependencies = [
 
 [[package]]
 name = "gw-config"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "ckb-fixed-hash",
  "gw-builtin-binaries",
@@ -1889,7 +1883,7 @@ dependencies = [
 
 [[package]]
 name = "gw-generator"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1923,14 +1917,14 @@ dependencies = [
 
 [[package]]
 name = "gw-hash"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "blake2b-ref 0.3.1",
 ]
 
 [[package]]
 name = "gw-jsonrpc-types"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "ckb-fixed-hash",
@@ -1945,7 +1939,7 @@ dependencies = [
 
 [[package]]
 name = "gw-mem-pool"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1974,7 +1968,7 @@ dependencies = [
 
 [[package]]
 name = "gw-metrics"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "arc-swap",
  "gw-common",
@@ -1991,7 +1985,7 @@ dependencies = [
 
 [[package]]
 name = "gw-p2p-network"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2009,7 +2003,7 @@ dependencies = [
 
 [[package]]
 name = "gw-polyjuice-sender-recover"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "gw-common",
@@ -2025,7 +2019,7 @@ dependencies = [
 
 [[package]]
 name = "gw-replay-chain"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "ckb-fixed-hash",
@@ -2055,7 +2049,7 @@ dependencies = [
 
 [[package]]
 name = "gw-rpc-client"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -2080,7 +2074,7 @@ dependencies = [
 
 [[package]]
 name = "gw-rpc-server"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2127,7 +2121,7 @@ dependencies = [
 
 [[package]]
 name = "gw-smt"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
@@ -2137,7 +2131,7 @@ dependencies = [
 
 [[package]]
 name = "gw-store"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -2155,7 +2149,7 @@ dependencies = [
 
 [[package]]
 name = "gw-telemetry"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "chrono",
  "faster-hex 0.6.1",
@@ -2176,7 +2170,7 @@ dependencies = [
 
 [[package]]
 name = "gw-tests"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2222,7 +2216,7 @@ dependencies = [
 
 [[package]]
 name = "gw-tools"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "bech32",
@@ -2270,7 +2264,7 @@ dependencies = [
 
 [[package]]
 name = "gw-traits"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "gw-common",
@@ -2279,7 +2273,7 @@ dependencies = [
 
 [[package]]
 name = "gw-tx-filter"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "gw-common",
  "gw-config",
@@ -2293,7 +2287,7 @@ dependencies = [
 
 [[package]]
 name = "gw-types"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "cfg-if 1.0.0",
  "ckb-fixed-hash",
@@ -2306,7 +2300,7 @@ dependencies = [
 
 [[package]]
 name = "gw-utils"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
  "ckb-chain-spec",
@@ -2333,16 +2327,16 @@ dependencies = [
 
 [[package]]
 name = "gw-version"
-version = "1.14.0-rc1"
+version = "1.14.0"
 dependencies = [
  "anyhow",
 ]
 
 [[package]]
 name = "h2"
-version = "0.3.17"
+version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66b91535aa35fea1523ad1b86cb6b53c28e0ae566ba4a460f4457e936cad7c6f"
+checksum = "37a82c6d637fc9515a4694bbf1cb2457b79d81ce52b3108bdeea58b07dd34a57"
 dependencies = [
  "bytes",
  "fnv",
@@ -2776,7 +2770,7 @@ checksum = "8727d2c8bb2833f22c4306879a5cf4cc4a8659170c211e9b523b86aab654f823"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.15",
+ "syn 2.0.18",
 ]
 
 [[package]]
@@ -3728,9 +3722,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.56"
+version = "1.0.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b63bdb0cd06f1f4dedf69b254734f9b45af66e4a031e42a7480257d9898b435"
+checksum = "dec2b086b7a862cf4de201096214fa870344cf922b2b30c167badb3af3195406"
 dependencies = [
  "unicode-ident",
 ]
@@ -3865,9 +3859,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.26"
+version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4424af4bf778aae2051a77b60283332f386554255d722233d09fbfc7e30da2fc"
+checksum = "1b9ab9c7eadfd8df19006f1cf1a4aed13540ed5cbc047010ece5826e10825488"
 dependencies = [
  "proc-macro2",
 ]
@@ -4051,7 +4045,7 @@ version = "0.11.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68cc60575865c7831548863cc02356512e3f1dc2f3f82cb837d7fc4cc8f3c97c"
 dependencies = [
- "base64 0.13.0",
+ "base64",
  "bytes",
  "encoding_rs",
  "futures-core",
@@ -4334,9 +4328,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.94"
+version = "1.0.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c533a59c9d8a93a09c6ab31f0fd5e5f4dd1b8fc9434804029839884765d04ea"
+checksum = "057d394a50403bcac12672b2b18fb387ab6d289d957dab67dd201875391e52f1"
 dependencies = [
  "itoa 1.0.3",
  "ryu",
@@ -4385,10 +4379,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "sha1"
-version = "0.10.5"
+name = "sha-1"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f04293dc80c3993519f2d7f6f511707ee7094fe0c6d3406feb330cdb3540eba3"
+checksum = "f5058ada175748e33390e40e872bd0fe59a19f265d0158daa551c5a88a76009c"
 dependencies = [
  "cfg-if 1.0.0",
  "cpufeatures",
@@ -4598,9 +4592,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.15"
+version = "2.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a34fcf3e8b60f57e6a14301a2e916d323af98b0ea63c599441eec8558660c822"
+checksum = "32d41677bcbe24c20c52e7c70b0d8db04134c5d1066bf98662e2871ad200ea3e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4959,9 +4953,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-tungstenite"
-version = "0.18.0"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54319c93411147bced34cb5609a80e0a8e44c5999c93903a81cd866630ec0bfd"
+checksum = "f714dd15bead90401d77e04243611caec13726c2408afd5b31901dfcdcb3b181"
 dependencies = [
  "futures-util",
  "log",
@@ -5197,18 +5191,18 @@ checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
 
 [[package]]
 name = "tungstenite"
-version = "0.18.0"
+version = "0.17.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30ee6ab729cd4cf0fd55218530c4522ed30b7b6081752839b68fcec8d0960788"
+checksum = "e27992fd6a8c29ee7eef28fc78349aa244134e10ad447ce3b9f0ac0ed0fa4ce0"
 dependencies = [
- "base64 0.13.0",
+ "base64",
  "byteorder",
  "bytes",
  "http",
  "httparse",
  "log",
  "rand 0.8.5",
- "sha1",
+ "sha-1",
  "thiserror",
  "url",
  "utf-8",
