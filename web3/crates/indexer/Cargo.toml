@@ -10,8 +10,8 @@ edition = "2021"
 gw-types = { path = "../../../gwos/crates/types" }
 gw-common = { path = "../../../gwos/crates/common" }
 gw-jsonrpc-types = { path = "../../../crates/jsonrpc-types" }
-ckb-hash = "0.106"
-ckb-types = "0.106"
+ckb-hash = "0.111.0-rc8"
+ckb-types = "0.111.0-rc8"
 anyhow = { version = "1.0", features = ["backtrace"] }
 smol = "1.2.5"
 thiserror = "1.0"

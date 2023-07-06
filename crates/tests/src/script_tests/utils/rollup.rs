@@ -2,10 +2,9 @@ use crate::script_tests::programs::{
     CHALLENGE_LOCK_PROGRAM, ETH_ACCOUNT_LOCK_PROGRAM, SECP256K1_DATA, STATE_VALIDATOR_PROGRAM,
 };
 use crate::script_tests::utils::layer1::{
-    always_success_script, build_resolved_tx, random_out_point, DummyDataLoader, MAX_CYCLES,
+    always_success_script, random_out_point, DummyDataLoader,
 };
 use crate::testing_tool::chain::{ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM};
-use ckb_script::TransactionScriptsVerifier;
 use ckb_traits::CellDataProvider;
 use ckb_types::{
     packed::{CellDep, CellOutput},
@@ -267,10 +266,7 @@ impl CellContext {
         &self,
         tx: ckb_types::core::TransactionView,
     ) -> Result<ckb_types::core::Cycle, ckb_error::Error> {
-        let resolved_tx = build_resolved_tx(&self.inner, &tx);
-        let mut verifier = TransactionScriptsVerifier::new(&resolved_tx, &self.inner);
-        verifier.set_debug_printer(|_script, msg| println!("[script debug] {}", msg));
-        verifier.verify(MAX_CYCLES)
+        self.inner.clone().verify_tx(&tx)
     }
 
     pub fn rollup_config(&self) -> RollupConfig {

@@ -21,14 +21,15 @@ pub fn transferred_byte_cycles(bytes: u64) -> u64 {
 pub fn instruction_cycles(i: Instruction) -> u64 {
     match extract_opcode(i) {
         // IMC
-        insts::OP_JALR => 3,
-        insts::OP_LD => 2,
-        insts::OP_LW => 3,
-        insts::OP_LH => 3,
-        insts::OP_LB => 3,
-        insts::OP_LWU => 3,
-        insts::OP_LHU => 3,
-        insts::OP_LBU => 3,
+        // We are only using version 1 VM.
+        insts::OP_JALR_VERSION1 => 3,
+        insts::OP_LD_VERSION1 => 2,
+        insts::OP_LW_VERSION1 => 3,
+        insts::OP_LH_VERSION1 => 3,
+        insts::OP_LB_VERSION1 => 3,
+        insts::OP_LWU_VERSION1 => 3,
+        insts::OP_LHU_VERSION1 => 3,
+        insts::OP_LBU_VERSION1 => 3,
         insts::OP_SB => 3,
         insts::OP_SH => 3,
         insts::OP_SW => 3,

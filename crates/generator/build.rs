@@ -6,7 +6,10 @@ fn main() {
     let is_windows = target_family == "windows";
     let is_unix = target_family == "unix";
     let is_x86_64 = target_arch == "x86_64";
-    let can_enable_asm = is_x86_64 && (is_windows || is_unix);
+    let is_aarch64 = target_arch == "aarch64";
+    let x64_asm = is_x86_64 && (is_windows || is_unix);
+    let aarch64_asm = is_aarch64 && is_unix;
+    let can_enable_asm = x64_asm || aarch64_asm;
 
     if cfg!(feature = "asm") && (!can_enable_asm) {
         panic!("asm feature can only be enabled on x86_64 Linux, macOS and Windows platforms!");
