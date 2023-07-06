@@ -19,8 +19,8 @@ gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-utils = { path = "../utils" }
 clap = "3"
-ckb-fixed-hash = "0.106"
-ckb-types = "0.106"
+ckb-fixed-hash = "0.111.0-rc8"
+ckb-types = "0.111.0-rc8"
 anyhow = "1.0"
 thiserror = "1.0"
 lazy_static = "1.4"

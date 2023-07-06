@@ -243,6 +243,7 @@ impl Withdrawal {
         {
             ScriptHashType::Data => "data",
             ScriptHashType::Data1 => "data1",
+            ScriptHashType::Data2 => "data2",
             ScriptHashType::Type => "type",
         };
         let address = RegistryAddress::from_address(address)?;

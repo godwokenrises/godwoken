@@ -18,14 +18,14 @@ lazy_static = "1.4"
 secp256k1 = "0.24"
 sha3 = "0.10.6"
 reqwest = { version = "0.11", features = ["json", "blocking"] }
-ckb-jsonrpc-types = "0.106"
-ckb-types = "0.106"
-ckb-resource = "0.106"
-ckb-hash = "0.106"
-ckb-fixed-hash = "0.106"
-ckb-crypto = "0.106"
-ckb-traits = "0.106"
-ckb-dao-utils = "0.106"
+ckb-jsonrpc-types = "0.111.0-rc8"
+ckb-types = "0.111.0-rc8"
+ckb-resource = "0.111.0-rc8"
+ckb-hash = "0.111.0-rc8"
+ckb-fixed-hash = "0.111.0-rc8"
+ckb-crypto = "0.111.0-rc8"
+ckb-traits = "0.111.0-rc8"
+ckb-dao-utils = "0.111.0-rc8"
 gw-types = { path = "../../gwos/crates/types" }
 gw-config = { path = "../config" }
 gw-common = { path = "../../gwos/crates/common" }
@@ -48,8 +48,7 @@ parking_lot = "0.12"
 toml = "0.7.1"
 
 [dev-dependencies]
-ckb-chain-spec = "0.106"
-ckb-script = "0.106"
-ckb-mock-tx-types = "0.106"
+ckb-chain-spec = "0.111.0-rc8"
+ckb-script = "0.111.0-rc8"
 
 [features]
