@@ -20,7 +20,7 @@ gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-utils = { path = "../utils" }
 gw-telemetry = { path = "../telemetry" }
 gw-metrics = { path = "../metrics" }
-ckb-fixed-hash = "0.106"
+ckb-fixed-hash = "0.111.0-rc8"
 anyhow = "1.0"
 thiserror = "1.0"
 lazy_static = "1.4"

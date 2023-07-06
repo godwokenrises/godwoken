@@ -262,7 +262,7 @@ impl Generator {
             let t = Instant::now();
             let core_machine = VMVersion::V1.init_core_machine(max_cycles);
             let machine_builder = DefaultMachineBuilder::new(core_machine)
-                .syscall(Box::new(L2Syscalls {
+                .context(L2Syscalls {
                     chain,
                     state,
                     block_info,
@@ -272,21 +272,12 @@ impl Generator {
                     account_lock_manage: &self.account_lock_manage,
                     cycles_pool: &mut cycles_pool,
                     context: &mut context,
-                }))
-                .instruction_cycle_func(&instruction_cycles);
+                })
+                .instruction_cycle_func(instruction_cycles);
             let default_machine = machine_builder.build();
 
             #[cfg(has_asm)]
-            let aot_code_opt = self
-                .backend_manage
-                .get_aot_code(&backend.generator_checksum);
-            #[cfg(has_asm)]
-            if aot_code_opt.is_none() {
-                log::warn!("[machine_run] Not AOT mode!");
-            }
-
-            #[cfg(has_asm)]
-            let mut machine = ckb_vm_aot::AotMachine::new(default_machine, aot_code_opt);
+            let mut machine = ckb_vm::machine::asm::AsmMachine::new(default_machine);
 
             #[cfg(not(has_asm))]
             let mut machine = TraceMachine::new(default_machine);
@@ -464,7 +455,7 @@ impl Generator {
 
     /// Apply l2 state transition
     #[instrument(skip_all, fields(block = args.l2block.raw().number().unpack(), deposits_count = args.deposit_info_vec.len()))]
-    pub fn verify_and_apply_block<C: ChainView>(
+    pub fn verify_and_apply_block<C: ChainView + Sync>(
         &self,
         db: &mut StoreTransaction,
         chain: &C,
