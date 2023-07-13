@@ -804,7 +804,7 @@ dependencies = [
  "ckb-logger",
  "ckb-traits",
  "ckb-types",
- "ckb-vm 0.24.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ckb-vm 0.24.0",
  "faster-hex 0.6.1",
  "serde",
 ]
@@ -877,7 +877,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "cc",
- "ckb-vm-definitions 0.24.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ckb-vm-definitions 0.24.0",
  "derive_more",
  "goblin 0.2.3",
  "goblin 0.4.0",
@@ -888,13 +888,13 @@ dependencies = [
 
 [[package]]
 name = "ckb-vm"
-version = "0.24.0"
-source = "git+https://github.com/blckngm/ckb-vm.git?branch=rename-symbols-2#16d692271865b6edab2a502a1366bb607bddbcde"
+version = "0.24.1-l2"
+source = "git+https://github.com/nervosnetwork/ckb-vm.git?branch=release-0.24-l2#22609451cb9643aab9ea282a237799fa2c8dbbc4"
 dependencies = [
  "byteorder",
  "bytes",
  "cc",
- "ckb-vm-definitions 0.24.0 (git+https://github.com/blckngm/ckb-vm.git?branch=rename-symbols-2)",
+ "ckb-vm-definitions 0.24.1-l2",
  "derive_more",
  "goblin 0.2.3",
  "goblin 0.4.0",
@@ -911,11 +911,8 @@ checksum = "328c7a6b5664483d5c02fae7b0ada0c407660e7064b2f1505ee6f5d07a4dbf2b"
 
 [[package]]
 name = "ckb-vm-definitions"
-version = "0.24.0"
-source = "git+https://github.com/blckngm/ckb-vm.git?branch=rename-symbols-2#16d692271865b6edab2a502a1366bb607bddbcde"
-dependencies = [
- "paste",
-]
+version = "0.24.1-l2"
+source = "git+https://github.com/nervosnetwork/ckb-vm.git?branch=release-0.24-l2#22609451cb9643aab9ea282a237799fa2c8dbbc4"
 
 [[package]]
 name = "clang-sys"
@@ -1896,7 +1893,7 @@ dependencies = [
  "arc-swap",
  "blake2b-rs",
  "ckb-types",
- "ckb-vm 0.24.0 (git+https://github.com/blckngm/ckb-vm.git?branch=rename-symbols-2)",
+ "ckb-vm 0.24.1-l2",
  "ethabi",
  "goblin 0.4.0",
  "gw-builtin-binaries",
