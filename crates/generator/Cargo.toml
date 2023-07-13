@@ -24,7 +24,7 @@ ckb-types = "0.111.0-rc8"
 anyhow = "1.0"
 blake2b-rs = "0.2"
 # Use crates.io version if our changes are merged.
-ckb-vm = { git = "https://github.com/blckngm/ckb-vm.git", branch = "rename-symbols-2" }
+ckb-vm = { git = "https://github.com/nervosnetwork/ckb-vm.git", branch = "release-0.24-l2" }
 thiserror = "1.0"
 lazy_static = "1.4"
 rlp = "0.5.0"
