@@ -1754,7 +1754,6 @@ dependencies = [
  "futures",
  "gw-chain",
  "gw-challenge",
- "gw-ckb-hardfork",
  "gw-common",
  "gw-config",
  "gw-db",
@@ -1828,7 +1827,6 @@ dependencies = [
  "ckb-script",
  "ckb-traits",
  "ckb-types",
- "gw-ckb-hardfork",
  "gw-common",
  "gw-config",
  "gw-db",
@@ -1846,16 +1844,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "gw-ckb-hardfork"
-version = "0.1.0"
-dependencies = [
- "arc-swap",
- "ckb-types",
- "lazy_static",
  "tokio",
 ]
 
@@ -1917,7 +1905,6 @@ dependencies = [
  "arc-swap",
  "blake2b-rs 0.2.0",
  "ckb-vm 0.24.1-l2",
- "gw-ckb-hardfork",
  "gw-common",
  "gw-config",
  "gw-dynamic-config",
@@ -2170,7 +2157,6 @@ dependencies = [
  "env_logger",
  "gw-block-producer",
  "gw-chain",
- "gw-ckb-hardfork",
  "gw-common",
  "gw-config",
  "gw-db",

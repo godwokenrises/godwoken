@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::{atomic::Ordering::SeqCst, Arc},
+    sync::Arc,
     time::Instant,
 };
 
@@ -20,7 +20,6 @@ use crate::{
 use crate::{error::AccountError, syscalls::L2Syscalls};
 use crate::{error::LockAlgorithmError, traits::StateExt};
 use arc_swap::ArcSwap;
-use gw_ckb_hardfork::GLOBAL_VM_VERSION;
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     error::Error as StateError,
@@ -168,12 +167,8 @@ impl Generator {
 
         {
             let t = Instant::now();
-            let global_vm_version = GLOBAL_VM_VERSION.load(SeqCst);
-            let vm_version = match global_vm_version {
-                0 => VMVersion::V0,
-                1 => VMVersion::V1,
-                ver => panic!("Unsupport VMVersion: {}", ver),
-            };
+            // Always use V1 for now.
+            let vm_version = VMVersion::V1;
             let core_machine = vm_version.init_core_machine(max_cycles);
             let machine_builder = DefaultMachineBuilder::new(core_machine)
                 .syscall(L2Syscalls {
