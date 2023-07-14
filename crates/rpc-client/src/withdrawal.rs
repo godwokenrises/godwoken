@@ -257,7 +257,7 @@ mod test {
         let mut args = rollup_type_hash.to_vec();
         args.extend_from_slice(&lock_args.as_bytes());
         args.extend_from_slice(&(owner_lock.as_bytes().len() as u32).to_be_bytes());
-        args.extend_from_slice(&vec![1u8; owner_lock.as_bytes().len() as usize]);
+        args.extend_from_slice(&vec![1u8; owner_lock.as_bytes().len()]);
 
         let lock = Script::new_builder().args(args.pack()).build();
         let info = CellInfo {

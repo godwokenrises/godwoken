@@ -234,7 +234,7 @@ impl ChainTask {
                 let hardfork_switch = self.rpc_client.get_hardfork_switch().await?;
                 let rfc0032_epoch_number = hardfork_switch.rfc_0032();
                 let global_hardfork_switch = GLOBAL_HARDFORK_SWITCH.load();
-                if !is_hardfork_switch_eq(&*global_hardfork_switch, &hardfork_switch) {
+                if !is_hardfork_switch_eq(&global_hardfork_switch, &hardfork_switch) {
                     GLOBAL_HARDFORK_SWITCH.store(Arc::new(hardfork_switch));
                 }
 
@@ -399,12 +399,12 @@ impl BaseInitComponents {
                 .ok_or_else(|| anyhow!("Eth: No allowed EoA type hashes in the rollup config"))?;
             account_lock_manage.register_lock_algorithm(
                 eth_lock_script_type_hash.unpack(),
-                Box::new(Secp256k1Eth::default()),
+                Box::<Secp256k1Eth>::default(),
             );
             let tron_lock_script_type_hash = rollup_config.allowed_eoa_type_hashes().get(1);
             if let Some(code_hash) = tron_lock_script_type_hash {
                 account_lock_manage
-                    .register_lock_algorithm(code_hash.unpack(), Box::new(Secp256k1Tron::default()))
+                    .register_lock_algorithm(code_hash.unpack(), Box::<Secp256k1Tron>::default())
             }
             Arc::new(Generator::new(
                 backend_manage,
@@ -952,7 +952,7 @@ async fn check_rollup_config_cell(
         .await?
         .and_then(|cell_with_status| cell_with_status.cell)
         .ok_or_else(|| anyhow!("can't find rollup config cell"))?;
-    let cell_data = RollupConfig::from_slice(&rollup_config_cell.data.to_vec())?;
+    let cell_data = RollupConfig::from_slice(&rollup_config_cell.data)?;
     let eoa_set = rollup_config
         .allowed_eoa_type_hashes()
         .into_iter()

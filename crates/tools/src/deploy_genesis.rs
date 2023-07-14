@@ -137,10 +137,7 @@ impl<'a> DeployContext<'a> {
         } else {
             "62.0"
         };
-        let outputs_data: Vec<ckb_packed::Bytes> = outputs_data
-            .iter()
-            .map(|data| CKBPack::pack(data))
-            .collect();
+        let outputs_data: Vec<ckb_packed::Bytes> = outputs_data.iter().map(CKBPack::pack).collect();
         deps.extend_from_slice(&[
             self.deployment_result
                 .state_validator
@@ -160,7 +157,7 @@ impl<'a> DeployContext<'a> {
         // 7. build ckb-cli tx and sign
         let tx_file = NamedTempFile::new()?;
         let tx_path_str = tx_file.path().to_str().unwrap();
-        let _output = run_cmd(&[
+        let _output = run_cmd([
             "--url",
             rpc_client.url(),
             "tx",
@@ -175,7 +172,7 @@ impl<'a> DeployContext<'a> {
         cli_tx["transaction"] = tx_body;
         let cli_tx_content = serde_json::to_string_pretty(&cli_tx).unwrap();
         std::fs::write(tx_path_str, cli_tx_content.as_bytes())?;
-        let _output = run_cmd(&[
+        let _output = run_cmd([
             "--url",
             rpc_client.url(),
             "tx",
@@ -188,7 +185,7 @@ impl<'a> DeployContext<'a> {
         ])?;
 
         // 8. send and then wait for tx
-        let send_output = run_cmd(&[
+        let send_output = run_cmd([
             "--url",
             rpc_client.url(),
             "tx",
@@ -245,7 +242,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
             return Err(anyhow!(
                 "The burn lock hash: 0x{} is not default, we suggest to use default burn lock \
                 0x{} (code_hash: 0x, hash_type: Data, args: empty)",
-                hex::encode(&burn_lock_hash),
+                hex::encode(burn_lock_hash),
                 hex::encode(expected_burn_lock_hash)
             ));
         }

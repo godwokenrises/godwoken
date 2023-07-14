@@ -109,7 +109,6 @@ async fn withdrawal_from_chain(
 
 #[tokio::test]
 async fn test_deposit_and_withdrawal() {
-    env_logger::init();
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
     let mut chain = setup_chain(rollup_type_script.clone()).await;

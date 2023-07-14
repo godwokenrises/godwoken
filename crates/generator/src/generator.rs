@@ -176,7 +176,7 @@ impl Generator {
             };
             let core_machine = vm_version.init_core_machine(max_cycles);
             let machine_builder = DefaultMachineBuilder::new(core_machine)
-                .syscall(Box::new(L2Syscalls {
+                .syscall(L2Syscalls {
                     chain,
                     state,
                     block_info,
@@ -185,21 +185,12 @@ impl Generator {
                     account_lock_manage: &self.account_lock_manage,
                     result: &mut run_result,
                     code_store: state,
-                }))
-                .instruction_cycle_func(Box::new(instruction_cycles));
+                })
+                .instruction_cycle_func(instruction_cycles);
             let default_machine = machine_builder.build();
 
             #[cfg(has_asm)]
-            let aot_code_opt = self
-                .backend_manage
-                .get_aot_code(&backend.validator_script_type_hash, global_vm_version);
-            #[cfg(feature = "aot")]
-            if aot_code_opt.is_none() {
-                log::warn!("[machine_run] Not AOT mode!");
-            }
-
-            #[cfg(has_asm)]
-            let mut machine = ckb_vm::machine::asm::AsmMachine::new(default_machine, aot_code_opt);
+            let mut machine = ckb_vm::machine::asm::AsmMachine::new(default_machine);
 
             #[cfg(not(has_asm))]
             let mut machine = TraceMachine::new(default_machine);
@@ -510,7 +501,7 @@ impl Generator {
             log::warn!(
                 "skip the checkpoint check of block: #{} {}",
                 block_number,
-                hex::encode(&block_hash)
+                hex::encode(block_hash)
             );
         }
         for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {
@@ -1025,7 +1016,7 @@ mod test {
         );
         assert!(!parsed_args.withdraw_to_v1);
 
-        let lock_args = parsed_args.lock_args.clone();
+        let lock_args = &parsed_args.lock_args;
         assert_eq!(
             lock_args.account_script_hash(),
             req.raw().account_script_hash()

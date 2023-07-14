@@ -37,36 +37,17 @@ pub struct InputCellInfo {
     pub cell: CellInfo,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CollectedCustodianCells {
     pub cells_info: Vec<CellInfo>,
     pub capacity: u128,
     pub sudt: HashMap<[u8; 32], (u128, Script)>,
 }
 
-impl Default for CollectedCustodianCells {
-    fn default() -> Self {
-        CollectedCustodianCells {
-            cells_info: Default::default(),
-            capacity: 0,
-            sudt: Default::default(),
-        }
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct WithdrawalsAmount {
     pub capacity: u128,
     pub sudt: HashMap<[u8; 32], u128>,
-}
-
-impl Default for WithdrawalsAmount {
-    fn default() -> Self {
-        WithdrawalsAmount {
-            capacity: 0,
-            sudt: Default::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]

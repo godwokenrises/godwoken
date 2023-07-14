@@ -26,9 +26,9 @@ where
     S: AsRef<OsStr>,
 {
     let working_dir = env::current_dir().expect("get working dir");
-    env::set_current_dir(&target_dir).expect("set target dir");
+    env::set_current_dir(target_dir).expect("set target dir");
     let result = run(bin, args);
-    env::set_current_dir(&working_dir).expect("set working dir");
+    env::set_current_dir(working_dir).expect("set working dir");
     result
 }
 
@@ -38,7 +38,7 @@ where
     S: AsRef<OsStr>,
 {
     log::debug!("[Execute]: {} {:?}", bin, args);
-    let status = Command::new(bin.to_owned())
+    let status = Command::new(bin)
         .env("RUST_BACKTRACE", "full")
         .args(args)
         .status()
@@ -60,7 +60,7 @@ where
 {
     let bin = "ckb-cli";
     log::debug!("[Execute]: {} {:?}", bin, args);
-    let init_output = Command::new(bin.to_owned())
+    let init_output = Command::new(bin)
         .env("RUST_BACKTRACE", "full")
         .args(args)
         .output()
@@ -83,7 +83,7 @@ pub fn wait_for_tx(
     tx_hash: &H256,
     timeout_secs: u64,
 ) -> Result<TransactionView> {
-    log::info!("waiting tx {}", hex::encode(&tx_hash));
+    log::info!("waiting tx {}", hex::encode(tx_hash));
     let retry_timeout = Duration::from_secs(timeout_secs);
     let start_time = Instant::now();
     while start_time.elapsed() < retry_timeout {
@@ -121,7 +121,7 @@ where
     S: AsRef<OsStr>,
 {
     log::debug!("[Execute]: {} {:?}", bin, args);
-    let init_output = Command::new(bin.to_owned())
+    let init_output = Command::new(bin)
         .env("RUST_BACKTRACE", "full")
         .args(args)
         .output()

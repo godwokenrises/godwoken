@@ -118,8 +118,8 @@ impl<S: State + CodeStore> StateExt for S {
     ) -> Result<(), Error> {
         log::debug!(
             "account: 0x{} pay fee to block_producer: 0x{}, sudt_id: {}, amount: {}",
-            hex::encode(&payer_short_address),
-            hex::encode(&block_producer_short_address),
+            hex::encode(payer_short_address),
+            hex::encode(block_producer_short_address),
             sudt_id,
             &amount
         );

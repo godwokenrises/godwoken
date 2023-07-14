@@ -38,14 +38,14 @@ pub async fn deposit_ckb(
     let scripts_deployment: ScriptsDeploymentResult =
         serde_json::from_str(&scripts_deployment_content)?;
 
-    let config = read_config(&config_path)?;
+    let config = read_config(config_path)?;
 
     let privkey = read_privkey(privkey_path)?;
 
     // Using private key to calculate eth address when eth_address not provided.
     let eth_address_bytes = match eth_address {
         Some(addr) => {
-            let addr_vec = hex::decode(&addr.trim_start_matches("0x").as_bytes())?;
+            let addr_vec = hex::decode(addr.trim_start_matches("0x").as_bytes())?;
             CKBBytes::from(addr_vec)
         }
         None => privkey_to_eth_address(&privkey)?,

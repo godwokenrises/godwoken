@@ -31,11 +31,10 @@ pub async fn dump_transaction<P: AsRef<Path>>(
 
     let mut dump_path = PathBuf::new();
     dump_path.push(dir);
-    let json_content;
-    match build_mock_transaction(rpc_client, tx).await {
+    let json_content = match build_mock_transaction(rpc_client, tx).await {
         Ok(mock_tx) => {
             dump_path.push(format!("{}-mock-tx.json", tx_hash));
-            json_content = serde_json::to_string_pretty(&mock_tx)?;
+            serde_json::to_string_pretty(&mock_tx)?
         }
         Err(err) => {
             log::error!(
@@ -47,9 +46,9 @@ pub async fn dump_transaction<P: AsRef<Path>>(
             dump_path.push(format!("{}-raw-tx.json", tx_hash));
             let json_tx: ckb_jsonrpc_types::Transaction =
                 { ckb_types::packed::Transaction::new_unchecked(tx.as_bytes()).into() };
-            json_content = serde_json::to_string_pretty(&json_tx)?;
+            serde_json::to_string_pretty(&json_tx)?
         }
-    }
+    };
     log::info!("Dump transaction {} to {:?}", tx_hash, dump_path);
     write(dump_path, json_content)?;
     Ok(())

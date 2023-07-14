@@ -273,6 +273,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95916998c798756098a4eb1b3f2cd510659705a9817bf203d61abd30fbec3e7b"
 
 [[package]]
+name = "blake2b-ref"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "294d17c72e0ba59fad763caa112368d0672083779cdebbb97164f4bb4c1e339a"
+
+[[package]]
 name = "blake2b-rs"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -616,7 +622,7 @@ version = "0.100.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df37898d25ee742d94857cb2b41090e59b270eeb1f3e4b8a7422f53ea0e98364"
 dependencies = [
- "blake2b-ref",
+ "blake2b-ref 0.2.1",
  "blake2b-rs 0.1.5",
 ]
 
@@ -746,8 +752,8 @@ dependencies = [
  "ckb-logger",
  "ckb-traits",
  "ckb-types",
- "ckb-vm",
- "ckb-vm-definitions",
+ "ckb-vm 0.20.0-rc5",
+ "ckb-vm-definitions 0.20.0-rc5",
  "faster-hex 0.6.1",
  "goblin 0.2.3",
  "serde",
@@ -861,7 +867,7 @@ dependencies = [
  "byteorder",
  "bytes 1.1.0",
  "cc",
- "ckb-vm-definitions",
+ "ckb-vm-definitions 0.20.0-rc5",
  "derive_more",
  "goblin 0.2.3",
  "goblin 0.4.0",
@@ -873,10 +879,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "ckb-vm"
+version = "0.24.1-l2"
+source = "git+https://github.com/nervosnetwork/ckb-vm.git?branch=release-0.24-l2#3e3ebb67bed5411b6514c096da9475779f3393ce"
+dependencies = [
+ "byteorder",
+ "bytes 1.1.0",
+ "cc",
+ "ckb-vm-definitions 0.24.1-l2",
+ "derive_more",
+ "goblin 0.2.3",
+ "goblin 0.4.0",
+ "rand 0.7.3",
+ "scroll",
+ "serde",
+]
+
+[[package]]
 name = "ckb-vm-definitions"
 version = "0.20.0-rc5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "deb44cd2753aaeb2dc8a3df7b293ddfc3cbaaf8232d819650c0fc365cacda34f"
+
+[[package]]
+name = "ckb-vm-definitions"
+version = "0.24.1-l2"
+source = "git+https://github.com/nervosnetwork/ckb-vm.git?branch=release-0.24-l2#3e3ebb67bed5411b6514c096da9475779f3393ce"
 
 [[package]]
 name = "clang-sys"
@@ -1888,7 +1916,7 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "blake2b-rs 0.2.0",
- "ckb-vm",
+ "ckb-vm 0.24.1-l2",
  "gw-ckb-hardfork",
  "gw-common",
  "gw-config",
@@ -1913,7 +1941,7 @@ dependencies = [
 name = "gw-hash"
 version = "0.1.0"
 dependencies = [
- "blake2b-ref",
+ "blake2b-ref 0.3.1",
 ]
 
 [[package]]
@@ -2138,8 +2166,7 @@ dependencies = [
  "ckb-script",
  "ckb-traits",
  "ckb-types",
- "ckb-vm",
- "ckb-vm-definitions",
+ "ckb-vm 0.24.1-l2",
  "env_logger",
  "gw-block-producer",
  "gw-chain",

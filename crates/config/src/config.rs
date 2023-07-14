@@ -214,18 +214,13 @@ fn default_withdrawal_unlocker_wallet() -> Option<WalletConfig> {
     None
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub enum BackendType {
     Meta,
     Sudt,
     Polyjuice,
+    #[default]
     Unknown,
-}
-
-impl Default for BackendType {
-    fn default() -> Self {
-        BackendType::Unknown
-    }
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -333,18 +328,13 @@ impl Default for MemPoolConfig {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum NodeMode {
     FullNode,
     Test,
+    #[default]
     ReadOnly,
-}
-
-impl Default for NodeMode {
-    fn default() -> Self {
-        NodeMode::ReadOnly
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

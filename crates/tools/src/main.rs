@@ -1494,10 +1494,7 @@ async fn run_cli() -> Result<()> {
             ]
             .iter()
             .map(|(symbol, script_args)| {
-                (
-                    hex::decode(&script_args).unwrap().into(),
-                    symbol.to_string(),
-                )
+                (hex::decode(script_args).unwrap().into(), symbol.to_string())
             })
             .collect();
 
@@ -1547,7 +1544,7 @@ async fn run_cli() -> Result<()> {
 
             let input_path: PathBuf = m.value_of("input").unwrap().into();
             let input = std::fs::read_to_string(input_path)?;
-            let input_data = hex::decode(&input.trim().trim_start_matches("0x"))?;
+            let input_data = hex::decode(input.trim().trim_start_matches("0x"))?;
             if input_data.len() <= 32 {
                 return Err(anyhow::anyhow!(
                     "expect input at least 32 bytes length, got: {}",
@@ -1587,7 +1584,7 @@ where
     let output_content =
         serde_json::to_string_pretty(content).expect("serde json to string pretty");
     let output_dir = output_path.parent().expect("get output dir");
-    std::fs::create_dir_all(&output_dir).expect("create output dir");
+    std::fs::create_dir_all(output_dir).expect("create output dir");
     std::fs::write(output_path, output_content.as_bytes()).expect("generate json file");
     println!("Generate file {:?}", output_path);
 }

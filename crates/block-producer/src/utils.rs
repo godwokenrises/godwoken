@@ -7,7 +7,7 @@ pub async fn dump_transaction<P: AsRef<Path>>(dir: P, rpc_client: &RPCClient, tx
     if let Err(err) = debugger::dump_transaction(dir, rpc_client, tx).await {
         log::error!(
             "Failed to dump transaction {} error: {}",
-            hex::encode(&tx.hash()),
+            hex::encode(tx.hash()),
             err
         );
     }

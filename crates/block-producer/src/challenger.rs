@@ -604,7 +604,6 @@ impl Challenger {
             if input_len != witness_len {
                 // append dummy witness args to align our reverted deposit witness args
                 let dummy_witness_argses = (0..input_len - witness_len)
-                    .into_iter()
                     .map(|_| WitnessArgs::default())
                     .collect::<Vec<_>>();
                 tx_skeleton.witnesses_mut().extend(dummy_witness_argses);

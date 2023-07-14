@@ -41,8 +41,8 @@ impl TxReceipt {
             .read_data_hashes(
                 run_result
                     .read_data
-                    .into_iter()
-                    .map(|(hash, _)| hash.pack())
+                    .keys()
+                    .map(|hash| hash.pack())
                     .collect::<Vec<_>>()
                     .pack(),
             )

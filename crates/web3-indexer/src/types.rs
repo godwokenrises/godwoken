@@ -90,7 +90,7 @@ impl Transaction {
     }
 
     fn add_chain_replay_protection(&self) -> u64 {
-        self.v as u64
+        self.v
             + if let Some(n) = self.chain_id {
                 35 + n * 2
             } else {

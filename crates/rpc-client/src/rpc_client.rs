@@ -216,22 +216,26 @@ impl RPCClient {
                 cells.objects.len() <= 1,
                 "Never returns more than 1 identity cells"
             );
-            cell = cells.objects.into_iter().find_map(|cell| {
-                let out_point = {
-                    let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
-                    OutPoint::new_unchecked(out_point.as_bytes())
-                };
-                let output = {
-                    let output: ckb_types::packed::CellOutput = cell.output.into();
-                    CellOutput::new_unchecked(output.as_bytes())
-                };
-                let data = cell.output_data.into_bytes();
-                Some(CellInfo {
-                    out_point,
-                    output,
-                    data,
+            cell = cells
+                .objects
+                .into_iter()
+                .map(|cell| {
+                    let out_point = {
+                        let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
+                        OutPoint::new_unchecked(out_point.as_bytes())
+                    };
+                    let output = {
+                        let output: ckb_types::packed::CellOutput = cell.output.into();
+                        CellOutput::new_unchecked(output.as_bytes())
+                    };
+                    let data = cell.output_data.into_bytes();
+                    CellInfo {
+                        out_point,
+                        output,
+                        data,
+                    }
                 })
-            });
+                .next();
         }
         Ok(cell)
     }

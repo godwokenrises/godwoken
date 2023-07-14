@@ -645,7 +645,7 @@ fn dump_tx_to_file(
     let dump = || -> Result<_> {
         let debug_config = &validator_context.debug_config;
         let dir = debug_config.debug_tx_dump_path.as_path();
-        create_dir_all(&dir)?;
+        create_dir_all(dir)?;
 
         let mut dump_path = PathBuf::new();
         dump_path.push(dir);

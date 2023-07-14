@@ -71,7 +71,7 @@ impl FeeQueue {
     #[instrument(skip_all, fields(count = count))]
     pub fn fetch(&mut self, state: &impl State, count: usize) -> Result<Vec<FeeEntry>> {
         // sorted fee items
-        let mut fetched_items = Vec::with_capacity(count as usize);
+        let mut fetched_items = Vec::with_capacity(count);
         let mut fetched_senders: HashMap<u32, u32> = Default::default();
         // future items, we will push back this queue
         let mut future_queue = Vec::default();

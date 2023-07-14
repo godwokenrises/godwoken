@@ -111,7 +111,7 @@ pub async fn short_address_to_account_id(
         None => {
             return Err(anyhow!(
                 "script hash by short address: 0x{} not found",
-                hex::encode(short_address.to_vec()),
+                hex::encode(short_address),
             ))
         }
     };
@@ -139,7 +139,7 @@ pub async fn parse_account_short_address(
         Err(_) => return Err(anyhow!("account id parse error!")),
     };
     let script_hash = godwoken.get_script_hash(account_id).await?;
-    let short_address = GwBytes::from((&script_hash.as_bytes()[..20]).to_vec());
+    let short_address = GwBytes::copy_from_slice(&script_hash.as_bytes()[..20]);
     Ok(short_address)
 }
 

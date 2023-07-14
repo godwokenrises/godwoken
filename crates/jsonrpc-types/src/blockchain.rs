@@ -5,21 +5,16 @@ use gw_types::{packed, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ScriptHashType {
     /// Type "data" matches script code via cell data hash.
+    #[default]
     Data,
     /// Type "type" matches script code via cell type script hash.
     Type,
     /// Type "data" matches script code via cell data hash, and run the script code in v1 CKB VM.
     Data1,
-}
-
-impl Default for ScriptHashType {
-    fn default() -> Self {
-        ScriptHashType::Data
-    }
 }
 
 impl From<ScriptHashType> for packed::Byte {
@@ -276,12 +271,13 @@ impl From<ckb_jsonrpc_types::OutPoint> for OutPoint {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum DepType {
     /// Type "code".
     ///
     /// Use the cell itself as the dep cell.
+    #[default]
     Code,
     /// Type "dep_group".
     ///
@@ -318,12 +314,6 @@ impl From<ckb_jsonrpc_types::DepType> for DepType {
             ckb_jsonrpc_types::DepType::Code => DepType::Code,
             ckb_jsonrpc_types::DepType::DepGroup => DepType::DepGroup,
         }
-    }
-}
-
-impl Default for DepType {
-    fn default() -> Self {
-        DepType::Code
     }
 }
 

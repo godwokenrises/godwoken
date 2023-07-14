@@ -109,9 +109,7 @@ impl DBBlockCancelChallengeValidator {
                 .into_par_iter()
                 .try_for_each(|block_number| self.verify_block(block_number))?;
         } else {
-            (from_block..=to_block)
-                .into_iter()
-                .try_for_each(|block_number| self.verify_block(block_number))?;
+            (from_block..=to_block).try_for_each(|block_number| self.verify_block(block_number))?;
         }
 
         Ok(())
@@ -316,7 +314,7 @@ impl DBBlockCancelChallengeValidator {
         let dump = || -> Result<_> {
             let debug_config = &self.debug_config;
             let dir = debug_config.debug_tx_dump_path.as_path();
-            create_dir_all(&dir)?;
+            create_dir_all(dir)?;
 
             let mut dump_path = PathBuf::new();
             dump_path.push(dir);
