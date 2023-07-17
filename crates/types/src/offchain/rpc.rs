@@ -50,16 +50,6 @@ pub struct WithdrawalsAmount {
     pub sudt: HashMap<[u8; 32], u128>,
 }
 
-#[derive(Debug, Clone)]
-pub enum TxStatus {
-    /// Status "pending". The transaction is in the pool, and not proposed yet.
-    Pending,
-    /// Status "proposed". The transaction is in the pool and has been proposed.
-    Proposed,
-    /// Status "committed". The transaction has been committed to the canonical chain.
-    Committed,
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct DepositInfo {
     pub request: DepositRequest,

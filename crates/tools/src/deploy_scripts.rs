@@ -5,7 +5,7 @@ use crate::{
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{CellDep, DepType, OutPoint, Script};
-use ckb_sdk::{Address, AddressPayload, HttpRpcClient, HumanCapacity};
+use ckb_sdk::{Address, AddressPayload, CkbRpcClient, HumanCapacity};
 use ckb_types::{
     bytes::Bytes,
     core::{Capacity, ScriptHashType},
@@ -25,7 +25,7 @@ struct DeploymentIndex {
 
 pub fn deploy_program(
     privkey_path: &Path,
-    rpc_client: &mut HttpRpcClient,
+    rpc_client: &CkbRpcClient,
     binary_path: &Path,
     target_lock: &packed::Script,
     target_address: &Address,
@@ -49,17 +49,6 @@ pub fn deploy_program(
     let target_address_string = target_address.to_string();
     let tx_fee_str = "0.1";
 
-    /* ckb-cli
-        --url {ckb_rpc_url}
-        wallet transfer
-        --privkey-path {privkey_path}
-        --to-address {target_address}
-        --to-data-path {binary_path}
-        --capacity {capacity?}
-        --tx-fee {fee?}
-        --type-id
-        --skip-check-to-address
-    */
     log::info!(
         "file_size: {} bytes, output cell capacity: {} CKB",
         file_size,
@@ -67,7 +56,7 @@ pub fn deploy_program(
     );
     let output = run_cmd(vec![
         "--url",
-        rpc_client.url(),
+        rpc_client.url.as_str(),
         "wallet",
         "transfer",
         "--privkey-path",
@@ -116,11 +105,11 @@ pub fn deploy_scripts(
         ));
     }
 
-    let mut rpc_client = HttpRpcClient::new(ckb_rpc_url.to_string());
-    let network_type = get_network_type(&mut rpc_client)?;
+    let rpc_client = CkbRpcClient::new(ckb_rpc_url);
+    let network_type = get_network_type(&rpc_client)?;
     let target_lock = packed::Script::from(scripts_result.lock.clone());
     let address_payload = AddressPayload::from(target_lock.clone());
-    let target_address = Address::new(network_type, address_payload);
+    let target_address = Address::new(network_type, address_payload, true);
 
     let mut total_file_size = 0;
     for path in &[
@@ -155,70 +144,70 @@ pub fn deploy_scripts(
 
     let custodian_lock = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        &rpc_client,
         &scripts_result.programs.custodian_lock,
         &target_lock,
         &target_address,
     )?;
     let deposit_lock = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        &rpc_client,
         &scripts_result.programs.deposit_lock,
         &target_lock,
         &target_address,
     )?;
     let withdrawal_lock = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        &rpc_client,
         &scripts_result.programs.withdrawal_lock,
         &target_lock,
         &target_address,
     )?;
     let challenge_lock = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        &rpc_client,
         &scripts_result.programs.challenge_lock,
         &target_lock,
         &target_address,
     )?;
     let stake_lock = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        &rpc_client,
         &scripts_result.programs.stake_lock,
         &target_lock,
         &target_address,
     )?;
     let state_validator = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        &rpc_client,
         &scripts_result.programs.state_validator,
         &target_lock,
         &target_address,
     )?;
     let l2_sudt_validator = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        &rpc_client,
         &scripts_result.programs.l2_sudt_validator,
         &target_lock,
         &target_address,
     )?;
     let meta_contract_validator = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        &rpc_client,
         &scripts_result.programs.meta_contract_validator,
         &target_lock,
         &target_address,
     )?;
     let eth_account_lock = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        &rpc_client,
         &scripts_result.programs.eth_account_lock,
         &target_lock,
         &target_address,
     )?;
     let tron_account_lock = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        &rpc_client,
         &scripts_result.programs.tron_account_lock,
         &target_lock,
         &target_address,
@@ -226,21 +215,21 @@ pub fn deploy_scripts(
     // FIXME: write godwoken-polyjuice binary to named temp file then use the path
     let polyjuice_validator = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        &rpc_client,
         &scripts_result.programs.polyjuice_validator,
         &target_lock,
         &target_address,
     )?;
     let state_validator_lock = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        &rpc_client,
         &scripts_result.programs.state_validator_lock,
         &target_lock,
         &target_address,
     )?;
     let poa_state = deploy_program(
         privkey_path,
-        &mut rpc_client,
+        &rpc_client,
         &scripts_result.programs.poa_state,
         &target_lock,
         &target_address,

@@ -6,7 +6,7 @@ use crate::utils::transaction::{get_network_type, read_config, run_cmd, wait_for
 use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
-use ckb_sdk::{Address, AddressPayload, HttpRpcClient, HumanCapacity, SECP256K1};
+use ckb_sdk::{Address, AddressPayload, CkbRpcClient, HumanCapacity, SECP256K1};
 use ckb_types::{
     bytes::Bytes as CKBBytes, core::ScriptHashType, packed::Script as CKBScript,
     prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity, prelude::Pack as CKBPack,
@@ -97,13 +97,14 @@ pub async fn deposit_ckb(
 
     let deposit_lock_code_hash = &scripts_deployment.deposit_lock.script_type_hash;
 
-    let mut rpc_client = HttpRpcClient::new(ckb_rpc_url.to_string());
-    let network_type = get_network_type(&mut rpc_client)?;
-    let address_payload = AddressPayload::new_full_type(
+    let rpc_client = CkbRpcClient::new(ckb_rpc_url);
+    let network_type = get_network_type(&rpc_client)?;
+    let address_payload = AddressPayload::new_full(
+        ScriptHashType::Type,
         CKBPack::pack(deposit_lock_code_hash),
         GwBytes::from(l1_lock_args),
     );
-    let address: Address = Address::new(network_type, address_payload);
+    let address: Address = Address::new(network_type, address_payload, true);
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
@@ -115,7 +116,7 @@ pub async fn deposit_ckb(
 
     let output = run_cmd(vec![
         "--url",
-        rpc_client.url(),
+        rpc_client.url.as_str(),
         "wallet",
         "transfer",
         "--privkey-path",
@@ -131,7 +132,7 @@ pub async fn deposit_ckb(
     let tx_hash = H256::from_str(output.trim().trim_start_matches("0x"))?;
     log::info!("tx_hash: {:#x}", tx_hash);
 
-    wait_for_tx(&mut rpc_client, &tx_hash, 180u64)?;
+    wait_for_tx(&rpc_client, &tx_hash, 180u64)?;
 
     wait_for_balance_change(
         &mut godwoken_rpc_client,

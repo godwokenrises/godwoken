@@ -804,8 +804,10 @@ impl BlockProducer {
             let dep_cell_by_data: HashMap<[u8; 32], OutPoint> = dep_cells
                 .iter()
                 .map(|cell| {
-                    let data_hash =
-                        ckb_types::packed::CellOutput::calc_data_hash(&cell.data).unpack();
+                    let data_hash: [u8; 32] =
+                        ckb_types::packed::CellOutput::calc_data_hash(&cell.data)
+                            .unpack()
+                            .into();
                     (data_hash, cell.out_point.clone())
                 })
                 .collect();

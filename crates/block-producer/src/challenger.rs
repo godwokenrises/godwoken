@@ -25,9 +25,7 @@ use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::bytes::Bytes;
 use gw_types::core::{ChallengeTargetType, Status};
-use gw_types::offchain::{
-    global_state_from_slice, CellInfo, InputCellInfo, RollupContext, TxStatus,
-};
+use gw_types::offchain::{global_state_from_slice, CellInfo, InputCellInfo, RollupContext};
 use gw_types::packed::{
     CellDep, CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, ChallengeTarget,
     GlobalState, OutPoint, Script, Transaction, WitnessArgs,
@@ -407,7 +405,10 @@ impl Challenger {
         let challenge_tx_block_number = {
             let tx_hash: H256 = challenge_cell.out_point.tx_hash().unpack();
             let tx_status = self.rpc_client.get_transaction_status(tx_hash).await?;
-            if !matches!(tx_status, Some(TxStatus::Committed)) {
+            if !matches!(
+                tx_status,
+                Some(gw_jsonrpc_types::ckb_jsonrpc_types::Status::Committed)
+            ) {
                 log::debug!("challenge tx isn't committed");
                 return Ok(());
             }
@@ -676,14 +677,19 @@ impl Challenger {
     }
 
     async fn wait_tx_proposed(&self, tx_hash: H256) -> Result<()> {
+        use gw_jsonrpc_types::ckb_jsonrpc_types::Status;
+
         let timeout = Duration::new(30, 0);
         let now = Instant::now();
 
         loop {
             match self.rpc_client.get_transaction_status(tx_hash).await? {
-                Some(TxStatus::Proposed) | Some(TxStatus::Committed) => return Ok(()),
-                Some(TxStatus::Pending) => (),
-                None => return Err(anyhow!("tx hash {} not found", to_hex(&tx_hash))),
+                Some(Status::Proposed) | Some(Status::Committed) => return Ok(()),
+                Some(Status::Pending) => (),
+                Some(Status::Rejected) => bail!("tx hash {} rejected", to_hex(&tx_hash)),
+                Some(Status::Unknown) | None => {
+                    return Err(anyhow!("tx hash {} not found", to_hex(&tx_hash)))
+                }
             }
 
             if now.elapsed() >= timeout {
@@ -695,14 +701,19 @@ impl Challenger {
     }
 
     async fn wait_tx_committed(&self, tx_hash: H256) -> Result<()> {
+        use gw_jsonrpc_types::ckb_jsonrpc_types::Status;
+
         let timeout = Duration::new(30, 0);
         let now = Instant::now();
 
         loop {
             match self.rpc_client.get_transaction_status(tx_hash).await? {
-                Some(TxStatus::Committed) => return Ok(()),
-                Some(TxStatus::Proposed) | Some(TxStatus::Pending) => (),
-                None => return Err(anyhow!("tx hash {} not found", to_hex(&tx_hash))),
+                Some(Status::Committed) => return Ok(()),
+                Some(Status::Proposed) | Some(Status::Pending) => (),
+                Some(Status::Rejected) => bail!("tx {} rejected", to_hex(&tx_hash)),
+                Some(Status::Unknown) | None => {
+                    return Err(anyhow!("tx hash {} not found", to_hex(&tx_hash)))
+                }
             }
 
             if now.elapsed() >= timeout {

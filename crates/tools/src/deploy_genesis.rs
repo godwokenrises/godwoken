@@ -10,16 +10,14 @@ use ckb_hash::new_blake2b;
 use ckb_jsonrpc_types as rpc_types;
 use ckb_resource::CODE_HASH_SECP256K1_DATA;
 use ckb_sdk::{
-    calc_max_mature_number,
-    constants::{CELLBASE_MATURITY, MIN_SECP_CELL_CAPACITY, ONE_CKB},
-    Address, AddressPayload, GenesisInfo, HttpRpcClient, HumanCapacity, SECP256K1,
+    constants::{MIN_SECP_CELL_CAPACITY, ONE_CKB},
+    traits::DefaultCellDepResolver,
+    util::get_max_mature_number,
+    Address, AddressPayload, CkbRpcClient, HumanCapacity, SECP256K1,
 };
 use ckb_types::{
     bytes::{Bytes, BytesMut},
-    core::{
-        BlockView, Capacity, DepType, EpochNumberWithFraction, ScriptHashType, TransactionBuilder,
-        TransactionView,
-    },
+    core::{BlockView, Capacity, DepType, ScriptHashType, TransactionBuilder, TransactionView},
     packed as ckb_packed,
     prelude::Builder as CKBBuilder,
     prelude::Pack as CKBPack,
@@ -84,14 +82,14 @@ pub fn serialize_poa_data(data: &PoAData) -> Bytes {
 struct DeployContext<'a> {
     privkey_path: &'a Path,
     owner_address: &'a Address,
-    genesis_info: &'a GenesisInfo,
+    cell_dep_resolver: DefaultCellDepResolver,
     deployment_result: &'a ScriptsDeploymentResult,
 }
 
 impl<'a> DeployContext<'a> {
     fn deploy(
         &mut self,
-        rpc_client: &mut HttpRpcClient,
+        rpc_client: &CkbRpcClient,
         mut outputs: Vec<ckb_packed::CellOutput>,
         mut outputs_data: Vec<Bytes>,
         mut deps: Vec<ckb_packed::CellDep>,
@@ -109,10 +107,11 @@ impl<'a> DeployContext<'a> {
         let total_capacity = total_output_capacity + tx_fee;
         let tip_number = rpc_client
             .get_tip_block_number()
-            .map_err(|err| anyhow!(err))?;
-        let max_mature_number = get_max_mature_number(rpc_client)?;
+            .map_err(|err| anyhow!(err))?
+            .into();
+        let max_mature_number = get_max_mature_number(rpc_client).map_err(anyhow::Error::msg)?;
         let (inputs, total_input_capacity) = collect_live_cells(
-            rpc_client.url(),
+            rpc_client.url.as_str(),
             self.owner_address.to_string().as_str(),
             max_mature_number,
             tip_number,
@@ -138,13 +137,14 @@ impl<'a> DeployContext<'a> {
             "62.0"
         };
         let outputs_data: Vec<ckb_packed::Bytes> = outputs_data.iter().map(CKBPack::pack).collect();
+        let sighash_dep = self.cell_dep_resolver.sighash_dep().unwrap().0.clone();
         deps.extend_from_slice(&[
             self.deployment_result
                 .state_validator
                 .cell_dep
                 .clone()
                 .into(),
-            self.genesis_info.sighash_dep(),
+            sighash_dep,
         ]);
         let tx: TransactionView = TransactionBuilder::default()
             .cell_deps(deps)
@@ -159,7 +159,7 @@ impl<'a> DeployContext<'a> {
         let tx_path_str = tx_file.path().to_str().unwrap();
         let _output = run_cmd([
             "--url",
-            rpc_client.url(),
+            rpc_client.url.as_str(),
             "tx",
             "init",
             "--tx-file",
@@ -174,7 +174,7 @@ impl<'a> DeployContext<'a> {
         std::fs::write(tx_path_str, cli_tx_content.as_bytes())?;
         let _output = run_cmd([
             "--url",
-            rpc_client.url(),
+            rpc_client.url.as_str(),
             "tx",
             "sign-inputs",
             "--privkey-path",
@@ -187,7 +187,7 @@ impl<'a> DeployContext<'a> {
         // 8. send and then wait for tx
         let send_output = run_cmd([
             "--url",
-            rpc_client.url(),
+            rpc_client.url.as_str(),
             "tx",
             "send",
             "--tx-file",
@@ -228,7 +228,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
 
     let burn_lock_hash: [u8; 32] = {
         let lock: ckb_types::packed::Script = user_rollup_config.burn_lock.clone().into();
-        lock.calc_script_hash().unpack()
+        lock.calc_script_hash().unpack().0
     };
     // check config
     if !skip_config_check {
@@ -237,7 +237,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
             .hash_type(ScriptHashType::Data.into())
             .build();
         let expected_burn_lock_hash: [u8; 32] =
-            expected_burn_lock_script.calc_script_hash().unpack();
+            expected_burn_lock_script.calc_script_hash().unpack().0;
         if H256(expected_burn_lock_hash) != H256(burn_lock_hash) {
             return Err(anyhow!(
                 "The burn lock hash: 0x{} is not default, we suggest to use default burn lock \
@@ -251,8 +251,8 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
         }
     }
 
-    let mut rpc_client = HttpRpcClient::new(ckb_rpc_url.to_string());
-    let network_type = get_network_type(&mut rpc_client)?;
+    let rpc_client = CkbRpcClient::new(ckb_rpc_url);
+    let network_type = get_network_type(&rpc_client)?;
     let privkey_string = std::fs::read_to_string(privkey_path)?
         .split_whitespace()
         .next()
@@ -263,15 +263,15 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
         .map_err(|err| anyhow!("Invalid secp256k1 secret key format, error: {}", err))?;
     let pubkey = secp256k1::PublicKey::from_secret_key(&SECP256K1, &privkey);
     let owner_address_payload = AddressPayload::from_pubkey(&pubkey);
-    let owner_address = Address::new(network_type, owner_address_payload);
+    let owner_address = Address::new(network_type, owner_address_payload, true);
     let owner_address_string = owner_address.to_string();
-    let max_mature_number = get_max_mature_number(&mut rpc_client)?;
+    let max_mature_number = get_max_mature_number(&rpc_client).map_err(anyhow::Error::msg)?;
     let genesis_block: BlockView = rpc_client
-        .get_block_by_number(0)
+        .get_block_by_number(0.into())
         .map_err(|err| anyhow!(err))?
         .expect("Can not get genesis block?")
         .into();
-    let genesis_info = GenesisInfo::from_block(&genesis_block).map_err(|err| anyhow!(err))?;
+    let cell_dep_resolver = DefaultCellDepResolver::from_genesis(&genesis_block)?;
 
     // deploy rollup config cell
     let allowed_contract_type_hashes: Vec<gw_packed::Byte32> = vec![
@@ -319,11 +319,11 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
         .allowed_eoa_type_hashes(GwPackVec::pack(allowed_eoa_type_hashes))
         .allowed_contract_type_hashes(GwPackVec::pack(allowed_contract_type_hashes))
         .build();
-    let (secp_data, secp_data_dep) = get_secp_data(&mut rpc_client)?;
+    let (secp_data, secp_data_dep) = get_secp_data(&rpc_client)?;
     let mut deploy_context = DeployContext {
         privkey_path,
         owner_address: &owner_address,
-        genesis_info: &genesis_info,
+        cell_dep_resolver,
         deployment_result: scripts_result,
     };
 
@@ -337,7 +337,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
     };
     let rollup_config_cell_dep = {
         let tx_hash = deploy_context.deploy(
-            &mut rpc_client,
+            &rpc_client,
             vec![rollup_config_output],
             vec![rollup_config_data],
             Default::default(),
@@ -367,7 +367,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
     });
 
     let first_cell_input: ckb_packed::CellInput = get_live_cells(
-        rpc_client.url(),
+        rpc_client.url.as_str(),
         owner_address_string.as_str(),
         max_mature_number,
         None,
@@ -456,12 +456,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
     };
     // 4. build PoA data cell (with type id)
     let (poa_data_output, poa_data_data): (ckb_packed::CellOutput, Bytes) = {
-        let median_time = rpc_client
-            .get_blockchain_info()
-            .map_err(|err| anyhow!(err))?
-            .median_time
-            .0
-            / 1000;
+        let median_time = u64::from(rpc_client.get_blockchain_info()?.median_time) / 1000;
         let poa_data = PoAData {
             round_initial_subtime: median_time,
             subblock_subtime: median_time,
@@ -501,7 +496,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
     let outputs_data = vec![rollup_data, poa_setup_data, poa_data_data];
     let outputs = vec![rollup_output, poa_setup_output, poa_data_output];
     let tx_hash = deploy_context.deploy(
-        &mut rpc_client,
+        &rpc_client,
         outputs,
         outputs_data,
         vec![rollup_config_cell_dep.clone()],
@@ -705,31 +700,6 @@ fn get_live_cells(
     Ok(cells)
 }
 
-// Get max mature block number
-pub fn get_max_mature_number(rpc_client: &mut HttpRpcClient) -> Result<u64> {
-    let tip_epoch = rpc_client
-        .get_tip_header()
-        .map(|header| EpochNumberWithFraction::from_full_value(header.inner.epoch.0))
-        .map_err(|err| anyhow!(err))?;
-    let tip_epoch_number = tip_epoch.number();
-    if tip_epoch_number < 4 {
-        // No cellbase live cell is mature
-        Ok(0)
-    } else {
-        let max_mature_epoch = rpc_client
-            .get_epoch_by_number(tip_epoch_number - 4)
-            .map_err(|err| anyhow!(err))?
-            .ok_or_else(|| anyhow!("Can not get epoch less than current epoch number"))?;
-        let start_number = max_mature_epoch.start_number;
-        let length = max_mature_epoch.length;
-        Ok(calc_max_mature_number(
-            tip_epoch,
-            Some((start_number, length)),
-            CELLBASE_MATURITY,
-        ))
-    }
-}
-
 pub fn is_mature(number: u64, tx_index: u64, max_mature_number: u64) -> bool {
     // Not cellbase cell
     tx_index > 0
@@ -739,12 +709,11 @@ pub fn is_mature(number: u64, tx_index: u64, max_mature_number: u64) -> bool {
 }
 
 pub fn get_secp_data(
-    rpc_client: &mut HttpRpcClient,
+    rpc_client: &CkbRpcClient,
 ) -> Result<(Bytes, gw_jsonrpc_types::blockchain::CellDep)> {
     let mut cell_dep = None;
     rpc_client
-        .get_block_by_number(0)
-        .map_err(|err| anyhow!(err))?
+        .get_block_by_number(0.into())?
         .expect("get CKB genesis block")
         .transactions
         .iter()

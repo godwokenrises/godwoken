@@ -15,6 +15,7 @@ pub enum ScriptHashType {
     Type,
     /// Type "data" matches script code via cell data hash, and run the script code in v1 CKB VM.
     Data1,
+    Data2,
 }
 
 impl From<ScriptHashType> for packed::Byte {
@@ -23,6 +24,7 @@ impl From<ScriptHashType> for packed::Byte {
             ScriptHashType::Data => packed::Byte::new(0),
             ScriptHashType::Type => packed::Byte::new(1),
             ScriptHashType::Data1 => packed::Byte::new(2),
+            ScriptHashType::Data2 => packed::Byte::new(3),
         }
     }
 }
@@ -33,6 +35,7 @@ impl From<ckb_jsonrpc_types::ScriptHashType> for ScriptHashType {
             ckb_jsonrpc_types::ScriptHashType::Data => ScriptHashType::Data,
             ckb_jsonrpc_types::ScriptHashType::Type => ScriptHashType::Type,
             ckb_jsonrpc_types::ScriptHashType::Data1 => ScriptHashType::Data1,
+            ckb_jsonrpc_types::ScriptHashType::Data2 => ScriptHashType::Data2,
         }
     }
 }
@@ -43,6 +46,7 @@ impl From<ScriptHashType> for ckb_jsonrpc_types::ScriptHashType {
             ScriptHashType::Data => ckb_jsonrpc_types::ScriptHashType::Data,
             ScriptHashType::Type => ckb_jsonrpc_types::ScriptHashType::Type,
             ScriptHashType::Data1 => ckb_jsonrpc_types::ScriptHashType::Data1,
+            ScriptHashType::Data2 => ckb_jsonrpc_types::ScriptHashType::Data2,
         }
     }
 }

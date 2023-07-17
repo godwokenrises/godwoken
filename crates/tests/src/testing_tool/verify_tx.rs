@@ -1,12 +1,13 @@
-use std::{collections::HashMap, convert::TryFrom};
+use std::{collections::HashMap, convert::TryFrom, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use ckb_chain_spec::consensus::ConsensusBuilder;
 use ckb_script::{TransactionScriptsVerifier, TxVerifyEnv};
-use ckb_traits::{CellDataProvider, HeaderProvider};
+use ckb_traits::{CellDataProvider, ExtensionProvider, HeaderProvider};
 use ckb_types::core::{
     cell::{CellMeta, CellMetaBuilder, ResolvedTransaction},
-    DepType, HeaderView,
+    hardfork::{HardForks, CKB2021, CKB2023},
+    DepType, HeaderBuilder, HeaderView,
 };
 use ckb_types::{
     bytes::Bytes,
@@ -28,21 +29,28 @@ pub fn verify_tx(tx_with_context: TxWithContext, max_cycles: u64) -> Result<u64>
     data_loader.extend_inputs(tx_with_context.inputs);
 
     let resolved_tx = data_loader.resolve_tx(&tx_with_context.tx)?;
-    // TODO: use ckb2023 for testing.
-    let consensus = ConsensusBuilder::default().build();
-    let tx_verify_env = TxVerifyEnv::new_submit(
-        &HeaderView::new_advanced_builder()
-            // TODO: epoch.
-            .build(),
-    );
-    let cycles =
-        TransactionScriptsVerifier::new(&resolved_tx, &consensus, &data_loader, &tx_verify_env)
-            .verify(max_cycles)
-            .map_err(|err| anyhow!("verify tx failed: {}", err))?;
+    // Use ckb2023 for testing.
+    let consensus = ConsensusBuilder::default()
+        .hardfork_switch(HardForks {
+            ckb2021: CKB2021::new_dev_default(),
+            ckb2023: CKB2023::new_dev_default(),
+        })
+        .build();
+    let tip = HeaderBuilder::default().build();
+    let tx_verify_env = TxVerifyEnv::new_submit(&tip);
+    let cycles = TransactionScriptsVerifier::new(
+        Arc::new(resolved_tx),
+        data_loader,
+        Arc::new(consensus),
+        Arc::new(tx_verify_env),
+    )
+    .verify(max_cycles)
+    .map_err(|err| anyhow!("verify tx failed: {}", err))?;
 
     Ok(cycles)
 }
 
+#[derive(Clone)]
 struct TxDataLoader {
     headers: HashMap<Byte32, HeaderView>,
     cell_deps: HashMap<OutPoint, CellInfo>,
@@ -144,6 +152,15 @@ impl CellDataProvider for TxDataLoader {
 impl HeaderProvider for TxDataLoader {
     fn get_header(&self, block_hash: &Byte32) -> Option<HeaderView> {
         self.headers.get(block_hash).cloned()
+    }
+}
+
+impl ExtensionProvider for TxDataLoader {
+    fn get_block_extension(
+        &self,
+        _hash: &ckb_types::packed::Byte32,
+    ) -> Option<ckb_types::packed::Bytes> {
+        None
     }
 }
 

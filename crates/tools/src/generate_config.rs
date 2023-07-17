@@ -4,7 +4,7 @@ use crate::types::{
     BuildScriptsResult, RollupDeploymentResult, ScriptsDeploymentResult, UserRollupConfig,
 };
 use anyhow::{anyhow, Result};
-use ckb_sdk::HttpRpcClient;
+use ckb_sdk::CkbRpcClient;
 use ckb_types::prelude::{Builder, Entity};
 use gw_config::{
     BackendConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config, ConsensusConfig,
@@ -45,7 +45,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         node_mode,
     } = args;
 
-    let mut rpc_client = HttpRpcClient::new(ckb_url.to_string());
+    let rpc_client = CkbRpcClient::new(&ckb_url);
     let tx_with_status = rpc_client
         .get_transaction(rollup_result.tx_hash.clone())
         .map_err(|err| anyhow!("get transaction error: {}", err))?
@@ -60,8 +60,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         .map_err(|err| anyhow!("{}", err))?
         .ok_or_else(|| anyhow!("can't find block"))?
         .inner
-        .number
-        .into();
+        .number;
 
     // build configuration
     let account_id = 0;
@@ -112,7 +111,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
     let (_data, secp_data_dep) =
-        get_secp_data(&mut rpc_client).map_err(|err| anyhow!("get secp data {}", err))?;
+        get_secp_data(&rpc_client).map_err(|err| anyhow!("get secp data {}", err))?;
 
     let ckb_client = CKBClient::with_url(&ckb_url)?;
     let contract_type_scripts =

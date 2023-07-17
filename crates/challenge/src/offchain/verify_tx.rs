@@ -2,7 +2,7 @@ use anyhow::{anyhow, bail, Result};
 use ckb_chain_spec::consensus::Consensus;
 use ckb_fixed_hash::H256;
 use ckb_script::{TransactionScriptsVerifier, TxVerifyEnv};
-use ckb_traits::{CellDataProvider, HeaderProvider};
+use ckb_traits::{CellDataProvider, ExtensionProvider, HeaderProvider};
 use ckb_types::{
     bytes::Bytes,
     core::{
@@ -18,8 +18,11 @@ use gw_jsonrpc_types::{
 };
 use gw_types::offchain::InputCellInfo;
 
-use std::collections::{HashMap, HashSet};
-use std::{convert::TryFrom, fs::read, path::PathBuf, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
+use std::{convert::TryFrom, fs::read, path::PathBuf};
 
 pub struct TxWithContext {
     pub cell_deps: Vec<InputCellInfo>,
@@ -93,10 +96,14 @@ pub fn verify_tx(
             // TODO: epoch.
             .build(),
     );
-    let cycles =
-        TransactionScriptsVerifier::new(&resolved_tx, &consensus, &data_loader, &tx_verify_env)
-            .verify(max_cycles)
-            .map_err(|err| anyhow!("verify tx failed: {}", err))?;
+    let cycles = TransactionScriptsVerifier::new(
+        Arc::new(resolved_tx),
+        data_loader,
+        Arc::new(consensus),
+        Arc::new(tx_verify_env),
+    )
+    .verify(max_cycles)
+    .map_err(|err| anyhow!("verify tx failed: {}", err))?;
 
     Ok(cycles)
 }
@@ -157,6 +164,7 @@ pub fn dump_tx(
     Ok(mock_tx)
 }
 
+#[derive(Clone)]
 struct TxDataLoader {
     rollup_cell_deps: Arc<HashMap<OutPoint, CellInfo>>,
     headers: HashMap<Byte32, HeaderView>,
@@ -265,6 +273,12 @@ impl CellDataProvider for TxDataLoader {
 impl HeaderProvider for TxDataLoader {
     fn get_header(&self, block_hash: &Byte32) -> Option<HeaderView> {
         self.headers.get(block_hash).cloned()
+    }
+}
+
+impl ExtensionProvider for TxDataLoader {
+    fn get_block_extension(&self, _hash: &Byte32) -> Option<ckb_types::packed::Bytes> {
+        None
     }
 }
 
