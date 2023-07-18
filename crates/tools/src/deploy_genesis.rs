@@ -1,19 +1,18 @@
+use std::iter::FromIterator;
 use std::ops::{Deref, Sub};
 use std::path::Path;
 use std::str::FromStr;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use anyhow::{anyhow, Result};
-use tempfile::NamedTempFile;
-
+use anyhow::{anyhow, Context, Result};
 use ckb_fixed_hash::H256;
 use ckb_hash::new_blake2b;
 use ckb_jsonrpc_types as rpc_types;
 use ckb_resource::CODE_HASH_SECP256K1_DATA;
 use ckb_sdk::{
     constants::{MIN_SECP_CELL_CAPACITY, ONE_CKB},
-    traits::DefaultCellDepResolver,
-    util::get_max_mature_number,
-    Address, AddressPayload, CkbRpcClient, HumanCapacity, SECP256K1,
+    traits::{CellCollector, CellQueryOptions, DefaultCellCollector, DefaultCellDepResolver},
+    Address, AddressPayload, CkbRpcClient, SECP256K1,
 };
 use ckb_types::{
     bytes::{Bytes, BytesMut},
@@ -29,13 +28,12 @@ use gw_types::{
     packed as gw_packed, packed::RollupConfig, prelude::Entity as GwEntity,
     prelude::Pack as GwPack, prelude::PackVec as GwPackVec,
 };
+use tempfile::NamedTempFile;
 
 use crate::types::{
     PoAConfig, PoASetup, RollupDeploymentResult, ScriptsDeploymentResult, UserRollupConfig,
 };
 use crate::utils::transaction::{get_network_type, run_cmd, wait_for_tx, TYPE_ID_CODE_HASH};
-
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn serialize_poa_setup(setup: &PoASetup) -> Bytes {
     let mut buffer = BytesMut::new();
@@ -105,23 +103,25 @@ impl<'a> DeployContext<'a> {
             })
             .sum();
         let total_capacity = total_output_capacity + tx_fee;
-        let tip_number = rpc_client
-            .get_tip_block_number()
-            .map_err(|err| anyhow!(err))?
-            .into();
-        let max_mature_number = get_max_mature_number(rpc_client).map_err(anyhow::Error::msg)?;
-        let (inputs, total_input_capacity) = collect_live_cells(
-            rpc_client.url.as_str(),
-            self.owner_address.to_string().as_str(),
-            max_mature_number,
-            tip_number,
-            total_capacity,
-        )?;
+
+        let (inputs, total_input_capacity) = {
+            let mut collector = DefaultCellCollector::new(rpc_client.url.as_str());
+            let mut query = CellQueryOptions::new_lock(self.owner_address.payload().into());
+            query.min_total_capacity = total_capacity;
+            collector.collect_live_cells(&query, false)?
+        };
+
         if let Some(first_input) = first_cell_input {
-            if inputs[0].as_slice() != first_input.as_slice() {
+            if inputs[0].out_point.as_slice() != first_input.previous_output().as_slice() {
                 return Err(anyhow!("first input cell changed"));
             }
         }
+        let inputs = Vec::from_iter(
+            inputs
+                .into_iter()
+                .map(|i| ckb_packed::CellInput::new(i.out_point, 0)),
+        );
+
         // collect_live_cells will ensure `total_input_capacity >= total_capacity`.
         let rest_capacity = total_input_capacity - total_capacity;
         let max_tx_fee_str = if rest_capacity >= MIN_SECP_CELL_CAPACITY {
@@ -264,8 +264,6 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
     let pubkey = secp256k1::PublicKey::from_secret_key(&SECP256K1, &privkey);
     let owner_address_payload = AddressPayload::from_pubkey(&pubkey);
     let owner_address = Address::new(network_type, owner_address_payload, true);
-    let owner_address_string = owner_address.to_string();
-    let max_mature_number = get_max_mature_number(&rpc_client).map_err(anyhow::Error::msg)?;
     let genesis_block: BlockView = rpc_client
         .get_block_by_number(0.into())
         .map_err(|err| anyhow!(err))?
@@ -366,18 +364,17 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
             .as_millis() as u64
     });
 
-    let first_cell_input: ckb_packed::CellInput = get_live_cells(
-        rpc_client.url.as_str(),
-        owner_address_string.as_str(),
-        max_mature_number,
-        None,
-        None,
-        Some(1),
-    )?
-    .into_iter()
-    .next()
-    .map(|(input, _)| input)
-    .ok_or_else(|| anyhow!("No live cell found for address: {}", owner_address_string))?;
+    let first_cell_input = {
+        let mut collector = DefaultCellCollector::new(ckb_rpc_url);
+        let cell_query = CellQueryOptions::new_lock(owner_address.payload().into());
+        let first_input = collector
+            .collect_live_cells(&cell_query, false)?
+            .0
+            .into_iter()
+            .next()
+            .context("no live cell found")?;
+        ckb_packed::CellInput::new(first_input.out_point, 0)
+    };
 
     let rollup_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 0);
     let poa_setup_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 1);
@@ -536,176 +533,6 @@ fn fit_output_capacity(output: ckb_packed::CellOutput, data_size: usize) -> ckb_
         .as_builder()
         .capacity(CKBPack::pack(&capacity.as_u64()))
         .build()
-}
-
-fn collect_live_cells(
-    rpc_client_url: &str,
-    owner_address_str: &str,
-    max_mature_number: u64,
-    tip_number: u64,
-    total_capacity: u64,
-) -> Result<(Vec<ckb_packed::CellInput>, u64)> {
-    let number_step = 10000;
-    let limit = Some(usize::max_value());
-    let mut from_number = 0;
-    let mut to_number = from_number + number_step - 1;
-    let mut total_input_capacity = 0;
-    let mut inputs = Vec::new();
-    while total_input_capacity < total_capacity {
-        if from_number > tip_number {
-            return Err(anyhow!(
-                "not enough capacity from {}, expected: {}, found: {}",
-                owner_address_str,
-                HumanCapacity(total_capacity),
-                HumanCapacity(total_input_capacity),
-            ));
-        }
-        let new_cells = get_live_cells(
-            rpc_client_url,
-            owner_address_str,
-            max_mature_number,
-            Some(from_number),
-            Some(to_number),
-            limit,
-        )?;
-        for (new_input, new_capacity) in new_cells {
-            total_input_capacity += new_capacity;
-            inputs.push(new_input);
-            if total_input_capacity >= total_capacity {
-                break;
-            }
-        }
-        from_number += number_step;
-        to_number += number_step;
-    }
-    Ok((inputs, total_input_capacity))
-}
-
-// NOTE: This is an inefficient way to collect cells
-fn get_live_cells(
-    rpc_client_url: &str,
-    owner_address_str: &str,
-    max_mature_number: u64,
-    from_number: Option<u64>,
-    to_number: Option<u64>,
-    limit: Option<usize>,
-) -> Result<Vec<(ckb_packed::CellInput, u64)>> {
-    let from_number_string = from_number.map(|value| value.to_string());
-    let to_number_string = to_number.map(|value| value.to_string());
-    let mut actual_limit = limit.unwrap_or(20);
-    let mut cells = Vec::new();
-    while cells.is_empty() {
-        let limit_string = actual_limit.to_string();
-        // wallet get-live-cells --address {address} --fast-mode --limit {limit} --from {from-number} --to {to-number}
-        let mut args: Vec<&str> = vec![
-            "--output-format",
-            "json",
-            "--url",
-            rpc_client_url,
-            "wallet",
-            "get-live-cells",
-            "--address",
-            owner_address_str,
-            "--fast-mode",
-        ];
-        if let Some(from_number) = from_number_string.as_ref() {
-            args.push("--from");
-            args.push(from_number.as_str());
-        };
-        if let Some(to_number) = to_number_string.as_ref() {
-            args.push("--to");
-            args.push(to_number.as_str());
-        };
-        args.push("--limit");
-        args.push(limit_string.as_str());
-
-        let live_cells_output = run_cmd(args)?;
-        let live_cells: serde_json::Value = serde_json::from_str(&live_cells_output)?;
-        cells = live_cells["live_cells"]
-            .as_array()
-            .expect("josn live cells")
-            .iter()
-            .filter_map(|live_cell| {
-                /*
-                    {
-                    "capacity": "1200.0 (CKB)",
-                    "data_bytes": 968,
-                    "index": {
-                    "output_index": 0,
-                    "tx_index": 1
-                },
-                    "lock_hash": "0x1cdeae55a5768fe14b628001c6247ae84c70310a7ddcfdc73ac68494251e46ec",
-                    "mature": true,
-                    "number": 6617,
-                    "output_index": 0,
-                    "tx_hash": "0x0d0d63184973ccdaf2c972783e1ed5f984a3e31b971e3294b092e54fe1d86961",
-                    "type_hashes": null
-                }
-                     */
-                let tx_index = live_cell["index"]["tx_index"]
-                    .as_u64()
-                    .expect("live cell tx_index");
-                let number = live_cell["number"].as_u64().expect("live cell number");
-                let data_bytes = live_cell["data_bytes"]
-                    .as_u64()
-                    .expect("live cell data_bytes");
-                let type_is_null = live_cell["type_hashes"].is_null();
-                if !type_is_null
-                    || data_bytes > 0
-                    || !is_mature(number, tx_index, max_mature_number)
-                {
-                    log::debug!(
-                        "has type: {}, data not empty: {}, immature: {}, number: {}, tx_index: {}",
-                        !type_is_null,
-                        data_bytes > 0,
-                        !is_mature(number, tx_index, max_mature_number),
-                        number,
-                        tx_index,
-                    );
-                    return None;
-                }
-
-                let input_tx_hash = H256::from_str(
-                    live_cell["tx_hash"]
-                        .as_str()
-                        .expect("live cell tx hash")
-                        .trim_start_matches("0x"),
-                )
-                .expect("convert to h256");
-                let input_index = live_cell["output_index"]
-                    .as_u64()
-                    .expect("live cell output index") as u32;
-                let capacity = HumanCapacity::from_str(
-                    live_cell["capacity"]
-                        .as_str()
-                        .expect("live cell capacity")
-                        .split(' ')
-                        .next()
-                        .expect("capacity"),
-                )
-                .map(|human_capacity| human_capacity.0)
-                .expect("parse capacity");
-                let out_point =
-                    ckb_packed::OutPoint::new(CKBPack::pack(&input_tx_hash), input_index);
-                let input = ckb_packed::CellInput::new(out_point, 0);
-                Some((input, capacity))
-            })
-            .collect();
-        if actual_limit > u32::max_value() as usize / 2 {
-            log::debug!("Can not find live cells for {}", owner_address_str);
-            break;
-        }
-        actual_limit *= 2;
-    }
-    Ok(cells)
-}
-
-pub fn is_mature(number: u64, tx_index: u64, max_mature_number: u64) -> bool {
-    // Not cellbase cell
-    tx_index > 0
-    // Live cells in genesis are all mature
-        || number == 0
-        || number <= max_mature_number
 }
 
 pub fn get_secp_data(

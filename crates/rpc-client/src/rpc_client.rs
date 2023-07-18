@@ -372,7 +372,7 @@ impl RPCClient {
     #[instrument(skip_all)]
     pub async fn get_tip(&self) -> Result<NumberHash> {
         let number_hash: gw_jsonrpc_types::blockchain::NumberHash =
-            self.indexer.request("get_tip", None).await?;
+            self.indexer.request("get_indexer_tip", None).await?;
         Ok(number_hash.into())
     }
 
