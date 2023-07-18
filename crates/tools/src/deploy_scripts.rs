@@ -67,7 +67,7 @@ pub fn deploy_program(
         binary_path.to_str().expect("non-utf8 file path"),
         "--capacity",
         capacity_string.as_str(),
-        "--tx-fee",
+        "--max-tx-fee",
         tx_fee_str,
         "--type-id",
         "--skip-check-to-address",

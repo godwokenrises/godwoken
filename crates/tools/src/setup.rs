@@ -327,7 +327,7 @@ fn transfer_ckb(
             node_wallet.address(network),
             "--capacity",
             &ckb_amount.to_string(),
-            "--tx-fee",
+            "--max-tx-fee",
             "0.1",
             "--privkey-path",
             &payer_privkey_path.display().to_string(),

@@ -125,7 +125,7 @@ pub async fn deposit_ckb(
         address.to_string().as_str(),
         "--capacity",
         capacity,
-        "--tx-fee",
+        "--max-tx-fee",
         fee,
         "--skip-check-to-address",
     ])?;
