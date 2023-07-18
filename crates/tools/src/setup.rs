@@ -44,7 +44,6 @@ impl NodeWalletInfo {
 
 pub struct SetupArgs<'a> {
     pub ckb_rpc_url: &'a str,
-    pub indexer_url: &'a str,
     pub mode: ScriptsBuildMode,
     pub build_scripts_config_path: &'a Path,
     pub privkey_path: &'a Path,
@@ -58,7 +57,6 @@ pub struct SetupArgs<'a> {
 pub async fn setup(args: SetupArgs<'_>) {
     let SetupArgs {
         ckb_rpc_url,
-        indexer_url,
         mode,
         build_scripts_config_path,
         privkey_path,
@@ -175,7 +173,6 @@ pub async fn setup(args: SetupArgs<'_>) {
             scripts_deployment: &deploy_scripts_result,
             privkey_path: &privkey_path,
             ckb_url: ckb_rpc_url.to_string(),
-            indexer_url: indexer_url.to_string(),
             database_url: None,
             build_scripts_result: &build_scripts_result,
             server_url: server_url.to_string(),

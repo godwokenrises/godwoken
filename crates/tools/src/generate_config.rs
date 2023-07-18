@@ -23,7 +23,6 @@ pub struct GenerateNodeConfigArgs<'a> {
     pub scripts_deployment: &'a ScriptsDeploymentResult,
     pub privkey_path: &'a Path,
     pub ckb_url: String,
-    pub indexer_url: String,
     pub database_url: Option<&'a str>,
     pub build_scripts_result: &'a BuildScriptsResult,
     pub server_url: String,
@@ -37,7 +36,6 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         scripts_deployment,
         privkey_path,
         ckb_url,
-        indexer_url,
         database_url,
         build_scripts_result,
         server_url,
@@ -183,10 +181,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         rollup_type_script,
         skipped_invalid_block_list: Default::default(),
     };
-    let rpc_client: RPCClientConfig = RPCClientConfig {
-        indexer_url,
-        ckb_url,
-    };
+    let rpc_client: RPCClientConfig = RPCClientConfig { ckb_url };
     let rpc_server = RPCServerConfig {
         listen: server_url,
         ..Default::default()

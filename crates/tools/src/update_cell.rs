@@ -19,7 +19,6 @@ use crate::utils::transaction::{get_transaction, wait_for_tx};
 
 pub async fn update_cell<P: AsRef<Path>>(
     ckb_rpc_url: &str,
-    indexer_rpc_url: &str,
     tx_hash: [u8; 32],
     index: u32,
     type_id: [u8; 32],
@@ -27,7 +26,7 @@ pub async fn update_cell<P: AsRef<Path>>(
     pk_path: PathBuf,
 ) -> Result<()> {
     let rpc_client = CkbRpcClient::new(ckb_rpc_url);
-    let indexer_client = CKBIndexerClient::with_url(indexer_rpc_url)?;
+    let indexer_client = CKBIndexerClient::with_url(ckb_rpc_url)?;
     // check existed_cell
     let tx_with_status = get_transaction(&rpc_client, &tx_hash.into())?;
     let tx = tx_with_status

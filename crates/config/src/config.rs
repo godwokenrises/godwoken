@@ -66,7 +66,6 @@ pub struct RPCServerConfig {
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RPCClientConfig {
-    pub indexer_url: String,
     pub ckb_url: String,
 }
 
