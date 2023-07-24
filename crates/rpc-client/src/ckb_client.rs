@@ -72,21 +72,27 @@ impl CKBClient {
     #[instrument(skip_all)]
     pub async fn query_type_script(
         &self,
-        _contract: &str,
+        contract: &str,
         cell_dep: CellDep,
     ) -> Result<gw_jsonrpc_types::blockchain::Script> {
         let tx_hash = &cell_dep.out_point.tx_hash;
         let tx = self.get_transaction(tx_hash).await?;
         let type_script = tx
             .transaction
-            .context("transaction not found")?
+            .with_context(|| {
+                format!("transaction not found, contract={contract}, tx_hash={tx_hash}")
+            })?
             .inner
             .outputs
             .get(cell_dep.out_point.index.value() as usize)
             .cloned()
-            .context("output index not found")?
+            .with_context(|| {
+                format!("output index not found, contract={contract}, cell_dep={cell_dep:?}")
+            })?
             .type_
-            .context("type script not found")?;
+            .with_context(|| {
+                format!("type script not found, contract={contract}, cell_dep={cell_dep:?}")
+            })?;
         Ok(type_script.into())
     }
 }
