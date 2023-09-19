@@ -24,7 +24,7 @@ impl From<ScriptHashType> for packed::Byte {
             ScriptHashType::Data => packed::Byte::new(0),
             ScriptHashType::Type => packed::Byte::new(1),
             ScriptHashType::Data1 => packed::Byte::new(2),
-            ScriptHashType::Data2 => packed::Byte::new(3),
+            ScriptHashType::Data2 => packed::Byte::new(4),
         }
     }
 }
