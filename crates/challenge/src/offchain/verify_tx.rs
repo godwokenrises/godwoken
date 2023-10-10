@@ -10,7 +10,7 @@ use ckb_types::{
         DepType, HeaderView,
     },
     packed::{Byte32, CellDep, CellInput, CellOutput, OutPoint, OutPointVec, Transaction},
-    prelude::{Builder, Entity, Unpack},
+    prelude::*,
 };
 use gw_jsonrpc_types::{
     ckb_jsonrpc_types,

@@ -12,7 +12,7 @@ use ckb_types::core::{
 use ckb_types::{
     bytes::Bytes,
     packed::{Byte32, CellOutput, OutPoint, OutPointVec, Transaction},
-    prelude::Entity,
+    prelude::*,
 };
 use gw_types::offchain::InputCellInfo;
 
