@@ -21,10 +21,10 @@ gw-utils = { path = "../utils" }
 gw-polyjuice-sender-recover = { path = "../polyjuice-sender-recover" }
 gw-telemetry = { path = "../telemetry" }
 gw-metrics = { path = "../metrics" }
-ckb-crypto = "0.111.0-rc8"
-ckb-fixed-hash = "0.111.0-rc8"
-ckb-types = "0.111.0-rc8"
-ckb-chain-spec = "0.111.0-rc8"
+ckb-crypto = "0.111.0"
+ckb-fixed-hash = "0.111.0"
+ckb-types = "0.111.0"
+ckb-chain-spec = "0.111.0"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 async-channel = "1.4.2"
