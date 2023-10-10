@@ -96,8 +96,7 @@ fn test_delegate_cell_lock_case(case: Case) {
     };
     let witness = witness_args.as_bytes().pack();
 
-    let mut tx = ckb_types::packed::Transaction::default()
-        .as_advanced_builder()
+    let mut tx = ckb_types::core::TransactionView::new_advanced_builder()
         .input(CellInput::new_builder().previous_output(input).build())
         .witness(witness)
         .cell_dep(

@@ -20,7 +20,7 @@ gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
 gw-utils = { path = "../utils"}
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
-ckb-types = "0.111.0-rc8"
+ckb-types = "0.111.0"
 anyhow = "1.0"
 blake2b-rs = "0.2"
 # Use crates.io version if our changes are merged.
