@@ -63,7 +63,7 @@ async fn test_build_unlock_to_owner_tx() {
     let sudt_script = Script::new_builder()
         .code_hash(always_type.hash().pack())
         .hash_type(ScriptHashType::Type.into())
-        .args(vec![rand::random::<u8>(), 32].pack())
+        .args([rand::random::<u8>(), 32][..].pack())
         .build();
 
     let withdrawal_lock_type = random_always_success_script(None);
@@ -161,7 +161,7 @@ async fn test_build_unlock_to_owner_tx() {
     let rollup_type_script = Script::new_builder()
         .code_hash(state_validator_type.hash().pack())
         .hash_type(ScriptHashType::Type.into())
-        .args(vec![1u8; 32].pack())
+        .args([1u8; 32][..].pack())
         .build();
     let rollup_script_hash: H256 = rollup_type_script.hash();
     let rollup_cell = CellInfo {

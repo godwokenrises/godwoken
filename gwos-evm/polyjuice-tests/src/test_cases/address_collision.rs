@@ -210,7 +210,7 @@ fn create2_address_collision_overwrite() -> Result<()> {
 
     let script_hash = state.get_script_hash_by_registry_address(&create2_eth_reg_addr)?;
     assert!(script_hash.is_some());
-    let create_account_id = state.get_account_id_by_script_hash(&create2_script_hash.into())?;
+    let create_account_id = state.get_account_id_by_script_hash(&create2_script_hash)?;
     assert_eq!(create_account_id, Some(8));
     Ok(())
 }

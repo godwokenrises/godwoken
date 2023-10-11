@@ -49,7 +49,7 @@ fn test_contract_call_contract() {
 
     // Deploy CallContract
     block_number += 1;
-    let input = format!("{}{}", INIT_CODE, hex::encode(&ss_eth_abi_addr));
+    let input = format!("{}{}", INIT_CODE, hex::encode(ss_eth_abi_addr));
     let run_result = deploy(
         &generator,
         &store,

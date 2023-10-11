@@ -69,7 +69,7 @@ fn test_attack_allowance() {
     let proxy_eth_addr = {
         let contract_account_script =
             new_contract_account_script(&state, from_id, &from_eth_addr, false);
-        let script_hash = contract_account_script.hash().into();
+        let script_hash = contract_account_script.hash();
         let reg_addr = state
             .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &script_hash)
             .unwrap()
@@ -105,7 +105,7 @@ fn test_attack_allowance() {
     let attack_account_id = {
         let contract_account_script =
             new_contract_account_script(&state, from_id, &from_eth_addr, false);
-        let script_hash = contract_account_script.hash().into();
+        let script_hash = contract_account_script.hash();
         state
             .get_account_id_by_script_hash(&script_hash)
             .unwrap()

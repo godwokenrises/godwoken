@@ -1,3 +1,6 @@
+// Useless vec is from the arg_enum macro.
+#![allow(clippy::useless_vec)]
+
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -104,6 +107,7 @@ pub async fn setup(args: SetupArgs<'_>) {
         let scripts_deploy_result = output_dir.join("scripts-result.json");
         let deploy_result = deploy_scripts(
             // TODO.
+            #[allow(clippy::unnecessary_literal_unwrap)]
             None.unwrap(),
             &build_scripts_result,
         )
@@ -170,6 +174,7 @@ pub async fn setup(args: SetupArgs<'_>) {
             NodeMode::ReadOnly
         };
         // TODO.
+        #[allow(clippy::unnecessary_literal_unwrap)]
         let args = None.unwrap();
         generate_node_config(args).await.expect("generate_config");
     }

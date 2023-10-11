@@ -177,7 +177,7 @@ impl Filler {
                 let label = format!("{} {}", LABEL_PREFIX, label);
                 self.expect.iter().find(|ex| match &ex.indexes.data {
                     LabelIndex::Single(l) => l == &label,
-                    LabelIndex::Sequence(l) => l.iter().find(|data| **data == label).is_some(),
+                    LabelIndex::Sequence(l) => l.iter().any(|data| *data == label),
                     _ => false,
                 })
             }
@@ -212,7 +212,7 @@ impl TestRunner {
             let eth_addr: [u8; 20] = eth_addr.try_into().unwrap();
 
             if account.code != "0x" {
-                let code = hex::decode(&account.code.trim_start_matches("0x"))?;
+                let code = hex::decode(account.code.trim_start_matches("0x"))?;
                 let mut storage = HashMap::with_capacity(account.storage.len());
                 for (k, v) in &account.storage {
                     let k = hex_to_h256(k)?;
@@ -235,7 +235,7 @@ impl TestRunner {
         for hardfork in HARD_FORKS {
             if let Some(posts) = self.testcase.post.get(&hardfork.to_string()) {
                 println!("Prepare tx, hardfork: {}", hardfork);
-                for (_idx, post) in posts.into_iter().enumerate() {
+                for (_idx, post) in posts.iter().enumerate() {
                     // init ctx for each `post`
                     let mut chain = self.init()?;
                     let label = self
@@ -274,7 +274,7 @@ impl TestRunner {
             Some(gas_price) => U256::from_str_radix(gas_price, 16)?,
             None => U256::zero(),
         };
-        let from_eth_addr = hex_to_eth_address(&transaction.sender.as_ref().expect("sender"))?;
+        let from_eth_addr = hex_to_eth_address(transaction.sender.as_ref().expect("sender"))?;
         let to_eth_addr = hex_to_eth_address(&transaction.to)?;
         let from_id = chain
             .get_account_id_by_eth_address(&from_eth_addr)?
@@ -295,7 +295,7 @@ impl TestRunner {
         let run_result = sub_test_case.run()?;
         let logs_hash = rlp_log_hash(&run_result);
         let expect_logs_hash = hex::decode(post.logs.trim_start_matches("0x"))?;
-        if logs_hash.as_slice() != &expect_logs_hash {
+        if logs_hash.as_slice() != expect_logs_hash {
             return Err(anyhow::anyhow!(
                 "Compare logs hash failed: expect: {}, actual: {}",
                 hex::encode(&expect_logs_hash),
@@ -330,15 +330,15 @@ impl TestRunner {
                     let mut buf = [0u8; 32];
                     buf[24..].copy_from_slice(&k.to_be_bytes());
                     let actual = chain
-                        .get_storage(account_id, &buf.into())
+                        .get_storage(account_id, &buf)
                         .expect("get value");
-                    let expect = decode_storage_value(&v).expect("decode value");
+                    let expect = decode_storage_value(v).expect("decode value");
                     if expect.as_slice() != actual.as_slice() {
                         return Err(anyhow::anyhow!(
                             "State validate failed for key: {:x}, expect value: {}, actual value: {}",
                             k,
-                            &hex::encode(&expect.as_slice()),
-                            &hex::encode(&actual.as_slice()),
+                            &hex::encode(expect.as_slice()),
+                            &hex::encode(actual.as_slice()),
                         ));
                     }
                 }
@@ -404,8 +404,7 @@ fn rlp_log_hash(run_result: &RunResult) -> H256 {
         }
     });
     stream.finalize_unbounded_list();
-    let log_hash = tiny_keccak::keccak256(&stream.out().freeze());
-    log_hash.into()
+    tiny_keccak::keccak256(&stream.out().freeze())
 }
 
 fn hex_to_h256(hex_str: &str) -> anyhow::Result<H256> {
@@ -470,6 +469,7 @@ fn decode_storage_value(v: &str) -> anyhow::Result<H256> {
 
 #[test]
 fn ethereum_test() -> anyhow::Result<()> {
+    #[allow(clippy::manual_flatten)]
     for dir in fs::read_dir(TEST_CASE_DIR)? {
         if let Ok(dir) = dir {
             let subdir = dir.path();
@@ -565,10 +565,10 @@ fn ethereum_vmtest_test() -> anyhow::Result<()> {
 #[test]
 fn ethereum_single_test() -> anyhow::Result<()> {
     let path = "../integration-test/ethereum-tests/GeneralStateTests/VMTests/vmLogTest/log0.json";
-    let content = fs::read_to_string(&path)?;
+    let content = fs::read_to_string(path)?;
     let test_cases: HashMap<String, TestCase> = serde_json::from_str(&content)?;
     let path = "../integration-test/ethereum-tests/src/GeneralStateTestsFiller/VMTests/vmLogTest/log0Filler.yml";
-    let content = fs::read_to_string(&path)?;
+    let content = fs::read_to_string(path)?;
     let mut fillers: HashMap<String, Filler> = serde_yaml::from_str(&content)?;
     for (k, test_case) in test_cases.into_iter() {
         let filler = fillers.remove(&k).expect("get filler");

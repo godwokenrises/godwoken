@@ -59,7 +59,7 @@ impl CKBGenesisInfo {
                 raw_tx
                     .outputs()
                     .into_iter()
-                    .zip(raw_tx.outputs_data().into_iter())
+                    .zip(raw_tx.outputs_data())
                     .enumerate()
                     .map(|(index, (output, data))| {
                         let data_hash: H256 = {

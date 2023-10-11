@@ -371,7 +371,7 @@ async fn test_cancel_tx_signature() {
             .lock(sender_script)
             .capacity(CKBPack::pack(&42u64))
             .build();
-        let owner_lock_hash = vec![42u8; 32];
+        let owner_lock_hash = [42u8; 32];
         let message = {
             let typed_tx = eip712::types::L2Transaction::from_raw(
                 &tx.raw(),
