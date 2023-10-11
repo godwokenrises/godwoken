@@ -70,6 +70,6 @@ fn gas_price_test() -> anyhow::Result<()> {
     let mut arr = [0u8; 16];
     arr.copy_from_slice(&run_result.return_data[16..]);
     let tx_gas_price = u128::from_be_bytes(arr);
-    assert_eq!(tx_gas_price as u128, gas_price);
+    assert_eq!({ tx_gas_price }, gas_price);
     Ok(())
 }

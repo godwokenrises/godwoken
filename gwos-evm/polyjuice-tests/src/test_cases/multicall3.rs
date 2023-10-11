@@ -19,7 +19,7 @@ fn multicall3_test() -> anyhow::Result<()> {
         .get_account_id_by_eth_address(&contract_eth_addr)?
         .expect("contract account id");
 
-    let eth_addr = hex::encode(&contract_eth_addr);
+    let eth_addr = hex::encode(contract_eth_addr);
     const OLD_ADDR: &str = "ca11bde05977b3631167028862be2a173976ca11";
     let input = MULTICALL3_INPUT.trim_end_matches('\n');
     let input = input.replace(OLD_ADDR, &eth_addr);

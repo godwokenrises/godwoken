@@ -94,7 +94,7 @@ fn test_update_eth_addr_reg_by_contract() {
         &generator,
         eth_eoa_account_id,
         new_block_info(block_producer_id.clone(), 1, 1),
-        crate::helper::SetMappingArgs::One(eth_eoa_account_script_hash.into()),
+        crate::helper::SetMappingArgs::One(eth_eoa_account_script_hash),
     )
     .expect("execute the MSG_SET_MAPPING method of `ETH Address Registry` layer2 contract");
     assert_eq!(run_result.exit_code, crate::constant::EVMC_SUCCESS);
@@ -116,7 +116,7 @@ fn test_update_eth_addr_reg_by_contract() {
         &generator,
         eth_eoa_account_id,
         new_block_info(block_producer_id.clone(), 2, 2),
-        crate::helper::SetMappingArgs::One(eth_eoa_account_script_hash.into()),
+        crate::helper::SetMappingArgs::One(eth_eoa_account_script_hash),
     )
     .unwrap();
     assert_eq!(
@@ -206,7 +206,7 @@ fn test_batch_set_mapping_by_contract() {
     for address in eth_eoa_addresses.iter() {
         let account_script = build_eth_l2_script(address);
         let account_script_hash = account_script.hash();
-        eth_eoa_script_hashes.push(account_script_hash.into());
+        eth_eoa_script_hashes.push(account_script_hash);
         state.create_account_from_script(account_script).unwrap();
         let address = RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, address.to_vec());
 
@@ -243,7 +243,7 @@ fn test_batch_set_mapping_by_contract() {
     for (eth_eoa_address, eth_eoa_account_script_hash) in
         eth_eoa_addresses.into_iter().zip(eth_eoa_script_hashes)
     {
-        let eth_eoa_account_script_hash: [u8; 32] = eth_eoa_account_script_hash.into();
+        let eth_eoa_account_script_hash: [u8; 32] = eth_eoa_account_script_hash;
 
         // check result: eth_address -> gw_script_hash
         let args = EthToGwArgsBuilder::default()

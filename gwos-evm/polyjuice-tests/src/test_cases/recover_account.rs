@@ -48,7 +48,7 @@ fn test_recover_account() {
     let contract_account_script =
         new_contract_account_script(&state, from_id, &from_eth_address, false);
     let new_account_id = state
-        .get_account_id_by_script_hash(&contract_account_script.hash().into())
+        .get_account_id_by_script_hash(&contract_account_script.hash())
         .unwrap()
         .unwrap();
 
@@ -58,13 +58,13 @@ fn test_recover_account() {
 
     let message_hex = "1cdeae55a5768fe14b628001c6247ae84c70310a7ddcfdc73ac68494251e46ec";
     let signature_hex = "28aa0c394487edf2211f445c47fb5f4fb5e3023920f62124d309f5bdf70d95045a934f278cec717300a5417313d1cdc390e761e37c0964b940c0a6f07b7361ed01";
-    let secp256k1 = Secp256k1Eth::default();
-    let message = hex::decode(&message_hex).unwrap();
+    let secp256k1 = Secp256k1Eth;
+    let message = hex::decode(message_hex).unwrap();
     let msg: [u8; 32] = message.try_into().unwrap();
-    let signature = hex::decode(&signature_hex).unwrap();
+    let signature = hex::decode(signature_hex).unwrap();
 
     let lock_args = secp256k1
-        .recover(msg.into(), &signature)
+        .recover(msg, &signature)
         .expect("get lock args");
     let lock_args_hex = hex::encode(&lock_args);
     println!("lock args: {}", &lock_args_hex);
@@ -75,7 +75,7 @@ fn test_recover_account() {
         let input = hex::decode(format!(
             "7d7b0255{}0000000000000000000000000000000000000000000000000000000000000060{}0000000000000000000000000000000000000000000000000000000000000041{}00000000000000000000000000000000000000000000000000000000000000",
             message_hex,
-            hex::encode(&SECP_LOCK_CODE_HASH),
+            hex::encode(SECP_LOCK_CODE_HASH),
             signature_hex,
         ))
         .unwrap();
@@ -130,7 +130,7 @@ fn test_recover_account() {
         let input = hex::decode(format!(
             "7d7b0255{}0000000000000000000000000000000000000000000000000000000000000060{}0000000000000000000000000000000000000000000000000000000000000041{}00000000000000000000000000000000000000000000000000000000000000",
             message_hex,
-            hex::encode(&SECP_LOCK_CODE_HASH),
+            hex::encode(SECP_LOCK_CODE_HASH),
             signature_hex,
         ))
         .unwrap();
@@ -170,7 +170,7 @@ fn test_recover_account() {
         let input = hex::decode(format!(
             "7d7b0255{}0000000000000000000000000000000000000000000000000000000000000060{}0000000000000000000000000000000000000000000000000000000000000041{}00000000000000000000000000000000000000000000000000000000000000",
             message_hex,
-            hex::encode(&[1u8; 32]),
+            hex::encode([1u8; 32]),
             signature_hex,
         ))
         .unwrap();

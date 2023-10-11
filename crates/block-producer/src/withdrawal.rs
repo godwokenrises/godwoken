@@ -347,7 +347,7 @@ mod test {
         let sudt_script = Script::new_builder()
             .code_hash(H256::from_u32(2).pack())
             .hash_type(ScriptHashType::Type.into())
-            .args(vec![3u8; 32].pack())
+            .args([3u8; 32][..].pack())
             .build();
 
         let finalized_custodians = CollectedCustodianCells {
@@ -358,7 +358,7 @@ mod test {
 
         let owner_lock = Script::new_builder()
             .code_hash(H256::from_u32(4).pack())
-            .args(vec![5; 32].pack())
+            .args([5; 32][..].pack())
             .build();
 
         let withdrawal = {
@@ -374,7 +374,7 @@ mod test {
                 .build();
             WithdrawalRequest::new_builder()
                 .raw(raw)
-                .signature(vec![6u8; 65].pack())
+                .signature([6u8; 65][..].pack())
                 .build()
         };
 
@@ -460,7 +460,7 @@ mod test {
         let sudt_script = Script::new_builder()
             .code_hash(H256::from_u32(3).pack())
             .hash_type(ScriptHashType::Type.into())
-            .args(vec![4u8; 32].pack())
+            .args([4u8; 32][..].pack())
             .build();
 
         let rollup_context = RollupContext {
@@ -497,7 +497,7 @@ mod test {
         let owner_lock = Script::new_builder()
             .code_hash(H256::from_u32(8).pack())
             .hash_type(ScriptHashType::Type.into())
-            .args(vec![9u8; 32].pack())
+            .args([9u8; 32][..].pack())
             .build();
 
         let withdrawal_without_owner_lock = {
@@ -722,7 +722,7 @@ mod test {
             let sudt_script = Script::new_builder()
                 .code_hash(H256::from_u32(3).pack())
                 .hash_type(ScriptHashType::Type.into())
-                .args(vec![4u8; 32].pack())
+                .args([4u8; 32][..].pack())
                 .build();
             let rollup_config = RollupConfig::new_builder()
                 .l1_sudt_script_type_hash(sudt_script.code_hash())
@@ -793,7 +793,7 @@ mod test {
             let owner_lock_script = Script::new_builder()
                 .code_hash(H256::from_u32(8).pack())
                 .hash_type(ScriptHashType::Type.into())
-                .args(vec![9u8; 32].pack())
+                .args([9u8; 32][..].pack())
                 .build();
             let withdrawal_lock_args = WithdrawalLockArgs::new_builder()
                 .owner_lock_hash(owner_lock_script.hash().pack())

@@ -105,7 +105,7 @@ impl<S: HistoryStateStore> HistoryStateStore for MemStore<S> {
                 .collect(),
             None => HashSet::new(),
         };
-        list.extend(self.inner.iter_block_state_record(block_number).into_iter());
+        list.extend(self.inner.iter_block_state_record(block_number));
         list
     }
 

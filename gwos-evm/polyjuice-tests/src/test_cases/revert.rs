@@ -41,7 +41,7 @@ fn revert_in_try_test() -> anyhow::Result<()> {
     //call CallRevertWithTryCatch.test(Revert)
     let args_str = format!(
         "bb29998e000000000000000000000000{}",
-        hex::encode(&revert_eth_addr)
+        hex::encode(revert_eth_addr)
     );
     let code = hex::decode(args_str)?;
     let run_result = chain.execute(from_id, call_revert_id, &code, gas_limit, gas_price, value)?;
@@ -102,8 +102,8 @@ fn revert_in_deep_try_test() -> anyhow::Result<()> {
     //CallRevertWithTryCatchInDepth.test(CallRevertWithTryCatch, Revert)
     let args_str = format!(
         "2b6d0ceb000000000000000000000000{}000000000000000000000000{}",
-        hex::encode(&call_revert_eth_addr),
-        hex::encode(&revert_eth_addr)
+        hex::encode(call_revert_eth_addr),
+        hex::encode(revert_eth_addr)
     );
     let code = hex::decode(args_str)?;
     let run_result = chain.execute(
@@ -165,7 +165,7 @@ fn revert_contructor_try_test() -> anyhow::Result<()> {
         .expect("to id");
     assert_eq!(run_result.exit_code, 0);
 
-    let deploy_args = format!("000000000000000000000000{}", hex::encode(&revert_eth_addr));
+    let deploy_args = format!("000000000000000000000000{}", hex::encode(revert_eth_addr));
     let code = format!("{}{}", CONSTRUCTOR_REVERT_CODE, deploy_args);
     let code = hex::decode(code).expect("decode code");
     let run_result = chain.deploy(from_id, &code, gas_limit, gas_price, value)?;
@@ -233,7 +233,7 @@ fn revert_test() -> anyhow::Result<()> {
     //call CallRevertWithoutTryCatch.test(Revert)
     let args_str = format!(
         "bb29998e000000000000000000000000{}",
-        hex::encode(&revert_eth_addr)
+        hex::encode(revert_eth_addr)
     );
     let code = hex::decode(args_str)?;
     let run_result = chain.execute(from_id, call_revert_id, &code, gas_limit, gas_price, value)?;

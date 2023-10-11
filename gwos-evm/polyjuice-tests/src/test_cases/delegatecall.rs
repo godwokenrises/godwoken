@@ -39,7 +39,7 @@ fn test_delegatecall() {
     );
     let ss_account_script = new_contract_account_script_with_nonce(&from_eth_address, 0);
     let ss_account_id = state
-        .get_account_id_by_script_hash(&ss_account_script.hash().into())
+        .get_account_id_by_script_hash(&ss_account_script.hash())
         .unwrap()
         .unwrap();
 

@@ -46,7 +46,7 @@ async fn test_export_import_block() {
     let sudt_script = Script::new_builder()
         .code_hash(always_type.hash().pack())
         .hash_type(ScriptHashType::Type.into())
-        .args(vec![rand::random::<u8>(), 32].pack())
+        .args([rand::random::<u8>(), 32][..].pack())
         .build();
 
     let withdrawal_lock_type = random_always_success_script(None);
@@ -76,7 +76,7 @@ async fn test_export_import_block() {
     let rollup_type_script = Script::new_builder()
         .code_hash(state_validator_type.hash().pack())
         .hash_type(ScriptHashType::Type.into())
-        .args(vec![1u8; 32].pack())
+        .args([1u8; 32][..].pack())
         .build();
 
     let rollup_script_hash: H256 = rollup_type_script.hash();
@@ -102,10 +102,8 @@ async fn test_export_import_block() {
         let mut account_lock_manage = AccountLockManage::default();
         account_lock_manage
             .register_lock_algorithm(*ALWAYS_SUCCESS_CODE_HASH, Arc::new(AlwaysSuccess));
-        account_lock_manage.register_lock_algorithm(
-            *ETH_ACCOUNT_LOCK_CODE_HASH,
-            Arc::new(Secp256k1Eth::default()),
-        );
+        account_lock_manage
+            .register_lock_algorithm(*ETH_ACCOUNT_LOCK_CODE_HASH, Arc::new(Secp256k1Eth));
         setup_chain_with_account_lock_manage(
             rollup_type_script.clone(),
             rollup_config.clone(),
@@ -154,7 +152,7 @@ async fn test_export_import_block() {
         context: L1ActionContext::SubmitBlock {
             l2block: deposit_block_result.block.clone(),
             deposit_info_vec,
-            deposit_asset_scripts: HashSet::from_iter(vec![sudt_script.clone()].into_iter()),
+            deposit_asset_scripts: HashSet::from_iter([sudt_script.clone()]),
             withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.output.clone(), deposit_block_result.clone()),
@@ -202,10 +200,8 @@ async fn test_export_import_block() {
         let mut account_lock_manage = AccountLockManage::default();
         account_lock_manage
             .register_lock_algorithm(*ALWAYS_SUCCESS_CODE_HASH, Arc::new(AlwaysSuccess));
-        account_lock_manage.register_lock_algorithm(
-            *ETH_ACCOUNT_LOCK_CODE_HASH,
-            Arc::new(Secp256k1Eth::default()),
-        );
+        account_lock_manage
+            .register_lock_algorithm(*ETH_ACCOUNT_LOCK_CODE_HASH, Arc::new(Secp256k1Eth));
         setup_chain_with_account_lock_manage(
             rollup_type_script.clone(),
             rollup_config.clone(),
@@ -282,10 +278,8 @@ async fn test_export_import_block() {
         let mut account_lock_manage = AccountLockManage::default();
         account_lock_manage
             .register_lock_algorithm(*ALWAYS_SUCCESS_CODE_HASH, Arc::new(AlwaysSuccess));
-        account_lock_manage.register_lock_algorithm(
-            *ETH_ACCOUNT_LOCK_CODE_HASH,
-            Arc::new(Secp256k1Eth::default()),
-        );
+        account_lock_manage
+            .register_lock_algorithm(*ETH_ACCOUNT_LOCK_CODE_HASH, Arc::new(Secp256k1Eth));
         setup_chain_with_account_lock_manage(
             rollup_type_script.clone(),
             rollup_config.clone(),
