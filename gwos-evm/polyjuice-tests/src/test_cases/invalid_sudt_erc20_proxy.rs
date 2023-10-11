@@ -26,7 +26,7 @@ fn test_invalid_sudt_erc20_proxy() {
     let (from_id1, from_script_hash1) =
         helper::create_eth_eoa_account(&mut state, &from_eth_address1, 2000000u64.into());
     let address1 = state
-        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &from_script_hash1.into())
+        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &from_script_hash1)
         .unwrap()
         .unwrap();
 
@@ -34,7 +34,7 @@ fn test_invalid_sudt_erc20_proxy() {
     let (_from_id2, from_script_hash2) =
         helper::create_eth_eoa_account(&mut state, &from_eth_address2, 2000000u64.into());
     let address2 = state
-        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &from_script_hash2.into())
+        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &from_script_hash2)
         .unwrap()
         .unwrap();
 
@@ -65,7 +65,7 @@ fn test_invalid_sudt_erc20_proxy() {
     let contract_account_script =
         new_contract_account_script(&state, from_id1, &from_eth_address1, false);
     let invalid_proxy_account_id = state
-        .get_account_id_by_script_hash(&contract_account_script.hash().into())
+        .get_account_id_by_script_hash(&contract_account_script.hash())
         .unwrap()
         .unwrap();
 

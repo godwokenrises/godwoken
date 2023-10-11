@@ -21,7 +21,7 @@ fn test_parse_log_event() {
     let (from_id, from_script_hash) =
         crate::helper::create_eth_eoa_account(&mut state, &from_eth_addr, 200000u64.into());
     let address = state
-        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &from_script_hash.into())
+        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &from_script_hash)
         .unwrap()
         .unwrap();
 
@@ -48,12 +48,12 @@ fn test_parse_log_event() {
     let contract_addr = state
         .get_registry_address_by_script_hash(
             ETH_REGISTRY_ACCOUNT_ID,
-            &contract_script.hash().into(),
+            &contract_script.hash(),
         )
         .unwrap()
         .unwrap();
     let contract_id = state
-        .get_account_id_by_script_hash(&contract_script.hash().into())
+        .get_account_id_by_script_hash(&contract_script.hash())
         .unwrap()
         .unwrap();
     assert_eq!(run_result.logs.len(), 4);

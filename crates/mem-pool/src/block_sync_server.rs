@@ -106,7 +106,7 @@ impl BlockSyncServerState {
             .transaction(tx)
             .build();
         let msg = BlockSync::new_builder().set(msg).build();
-        if let Some((_, messages)) = self.buffer.iter_mut().rev().next() {
+        if let Some((_, messages)) = self.buffer.iter_mut().next_back() {
             // The first message is either a LocalBlock or a NextMemBlock. We
             // only need to buffer it for NextMemBlock.
             if matches!(

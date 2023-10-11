@@ -222,10 +222,8 @@ impl TestChain {
         let mut account_lock_manage = AccountLockManage::default();
         account_lock_manage
             .register_lock_algorithm(*ALWAYS_SUCCESS_CODE_HASH, Arc::new(AlwaysSuccess));
-        account_lock_manage.register_lock_algorithm(
-            *ETH_ACCOUNT_LOCK_CODE_HASH,
-            Arc::new(Secp256k1Eth::default()),
-        );
+        account_lock_manage
+            .register_lock_algorithm(*ETH_ACCOUNT_LOCK_CODE_HASH, Arc::new(Secp256k1Eth));
 
         let restore_path = {
             let mem_pool = chain.mem_pool().as_ref().unwrap();
@@ -392,10 +390,8 @@ pub async fn setup_chain(rollup_type_script: Script) -> Chain {
         .chain_id(TEST_CHAIN_ID.pack())
         .build();
     account_lock_manage.register_lock_algorithm(*ALWAYS_SUCCESS_CODE_HASH, Arc::new(AlwaysSuccess));
-    account_lock_manage.register_lock_algorithm(
-        *ETH_ACCOUNT_LOCK_CODE_HASH,
-        Arc::new(Secp256k1Eth::default()),
-    );
+    account_lock_manage
+        .register_lock_algorithm(*ETH_ACCOUNT_LOCK_CODE_HASH, Arc::new(Secp256k1Eth));
     let chain = setup_chain_with_account_lock_manage(
         rollup_type_script,
         rollup_config,
@@ -415,10 +411,8 @@ pub async fn setup_chain_with_config(
 ) -> Chain {
     let mut account_lock_manage = AccountLockManage::default();
     account_lock_manage.register_lock_algorithm(*ALWAYS_SUCCESS_CODE_HASH, Arc::new(AlwaysSuccess));
-    account_lock_manage.register_lock_algorithm(
-        *ETH_ACCOUNT_LOCK_CODE_HASH,
-        Arc::new(Secp256k1Eth::default()),
-    );
+    account_lock_manage
+        .register_lock_algorithm(*ETH_ACCOUNT_LOCK_CODE_HASH, Arc::new(Secp256k1Eth));
     setup_chain_with_account_lock_manage(
         rollup_type_script,
         rollup_config,
@@ -439,10 +433,8 @@ pub async fn restart_chain(
     let mut account_lock_manage = AccountLockManage::default();
     let rollup_config = chain.generator().rollup_context().rollup_config.to_owned();
     account_lock_manage.register_lock_algorithm(*ALWAYS_SUCCESS_CODE_HASH, Arc::new(AlwaysSuccess));
-    account_lock_manage.register_lock_algorithm(
-        *ETH_ACCOUNT_LOCK_CODE_HASH,
-        Arc::new(Secp256k1Eth::default()),
-    );
+    account_lock_manage
+        .register_lock_algorithm(*ETH_ACCOUNT_LOCK_CODE_HASH, Arc::new(Secp256k1Eth));
     let restore_path = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mem_pool = mem_pool.lock().await;
@@ -467,10 +459,8 @@ pub fn chain_generator(chain: &Chain, rollup_type_script: Script) -> Arc<Generat
     let rollup_config = chain.generator().rollup_context().rollup_config.to_owned();
     let mut account_lock_manage = AccountLockManage::default();
     account_lock_manage.register_lock_algorithm(*ALWAYS_SUCCESS_CODE_HASH, Arc::new(AlwaysSuccess));
-    account_lock_manage.register_lock_algorithm(
-        *ETH_ACCOUNT_LOCK_CODE_HASH,
-        Arc::new(Secp256k1Eth::default()),
-    );
+    account_lock_manage
+        .register_lock_algorithm(*ETH_ACCOUNT_LOCK_CODE_HASH, Arc::new(Secp256k1Eth));
     let backend_manage = build_backend_manage(&rollup_config);
     let rollup_context = RollupContext {
         rollup_script_hash: rollup_type_script.hash(),
@@ -563,11 +553,11 @@ pub fn build_sync_tx(
         .build();
     let raw = RawTransaction::new_builder()
         .outputs(vec![rollup_cell].pack())
-        .outputs_data(vec![global_state.as_bytes()].pack())
+        .outputs_data([global_state.as_bytes()].pack())
         .build();
     Transaction::new_builder()
         .raw(raw)
-        .witnesses(vec![witness.as_bytes()].pack())
+        .witnesses([witness.as_bytes()].pack())
         .build()
 }
 

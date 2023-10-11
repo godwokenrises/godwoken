@@ -341,7 +341,7 @@ mod test {
 
         let sudt_script = Script::new_builder()
             .code_hash(H256::from_u32(2).pack())
-            .args(vec![3u8; 32].pack())
+            .args([3u8; 32][..].pack())
             .build();
 
         let available_custodians = FinalizedCustodianCapacity {
@@ -353,7 +353,7 @@ mod test {
 
         let owner_lock = Script::new_builder()
             .code_hash(H256::from_u32(4).pack())
-            .args(vec![5; 32].pack())
+            .args([5; 32][..].pack())
             .build();
 
         let req = {
@@ -369,7 +369,7 @@ mod test {
                 .build();
             WithdrawalRequest::new_builder()
                 .raw(raw)
-                .signature(vec![6u8; 65].pack())
+                .signature([6u8; 65][..].pack())
                 .build()
         };
 
@@ -415,7 +415,7 @@ mod test {
         let err_req_extra = {
             let err_owner_lock = Script::new_builder()
                 .code_hash([100u8; 32].pack())
-                .args(vec![99u8; 32].pack())
+                .args([99u8; 32][..].pack())
                 .build();
             req_extra
                 .clone()

@@ -81,7 +81,7 @@ fn test_get_block_info() {
     let contract_account_script =
         new_contract_account_script(&state, from_id, &from_eth_address, false);
     let new_account_id = state
-        .get_account_id_by_script_hash(&contract_account_script.hash().into())
+        .get_account_id_by_script_hash(&contract_account_script.hash())
         .unwrap()
         .unwrap();
 

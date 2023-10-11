@@ -97,7 +97,7 @@ pub async fn deploy_rollup_cell(args: DeployRollupCellArgs<'_>) -> Result<Rollup
             .build();
 
         let mut type_hashes = vec![meta, sudt, polyjuice, eth_addr_reg_validator];
-        let builtin_hashes = vec![
+        let builtin_hashes = [
             &scripts_result.meta_contract_validator.script_type_hash,
             &scripts_result.l2_sudt_validator.script_type_hash,
             &scripts_result.polyjuice_validator.script_type_hash,
@@ -125,7 +125,7 @@ pub async fn deploy_rollup_cell(args: DeployRollupCellArgs<'_>) -> Result<Rollup
             .build();
 
         let mut type_hashes = vec![eth];
-        let builtin_hashes = vec![&scripts_result.eth_account_lock.script_type_hash];
+        let builtin_hashes = [&scripts_result.eth_account_lock.script_type_hash];
 
         let user_hashes: HashSet<_> =
             HashSet::from_iter(&user_rollup_config.allowed_eoa_type_hashes);

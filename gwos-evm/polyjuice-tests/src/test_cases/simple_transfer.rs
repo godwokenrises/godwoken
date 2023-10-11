@@ -68,11 +68,11 @@ fn test_simple_transfer() {
         .try_into()
         .unwrap();
     let ss_reg_addr = state
-        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &ss_script_hash.into())
+        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &ss_script_hash)
         .unwrap()
         .unwrap();
     let ss_account_id = state
-        .get_account_id_by_script_hash(&ss_account_script.hash().into())
+        .get_account_id_by_script_hash(&ss_account_script.hash())
         .unwrap()
         .unwrap();
     let ss_balance = state
@@ -116,12 +116,12 @@ fn test_simple_transfer() {
     let st_contract_reg_addr = state
         .get_registry_address_by_script_hash(
             ETH_REGISTRY_ACCOUNT_ID,
-            &st_contract_script_hash.into(),
+            &st_contract_script_hash,
         )
         .unwrap()
         .unwrap();
     let st_contract_id = state
-        .get_account_id_by_script_hash(&st_contract_account_script.hash().into())
+        .get_account_id_by_script_hash(&st_contract_account_script.hash())
         .unwrap()
         .unwrap();
     let st_contract_balance = state

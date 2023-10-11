@@ -39,7 +39,7 @@ fn test_heap_momory() {
     );
     let account_script = new_contract_account_script(&state, from_id, &from_eth_address, false);
     let contract_account_id = state
-        .get_account_id_by_script_hash(&account_script.hash().into())
+        .get_account_id_by_script_hash(&account_script.hash())
         .unwrap()
         .unwrap();
 

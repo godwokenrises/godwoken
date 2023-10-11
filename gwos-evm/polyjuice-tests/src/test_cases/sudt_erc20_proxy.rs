@@ -70,7 +70,7 @@ fn test_sudt_erc20_proxy_inner(
 
     let contract_account_script =
         new_contract_account_script(state, from_id1, &from_eth_address1, false);
-    let script_hash = contract_account_script.hash().into();
+    let script_hash = contract_account_script.hash();
     let new_account_id = state
         .get_account_id_by_script_hash(&script_hash)
         .unwrap()
@@ -128,7 +128,7 @@ fn test_sudt_erc20_proxy_inner(
         let mut buf = [0u8; 32];
         let total_supply = state.get_sudt_total_supply(new_sudt_id).unwrap();
         total_supply.to_big_endian(&mut buf);
-        hex::encode(&buf)
+        hex::encode(buf)
     };
     for (idx, (action, from_id, args_str, return_data_str)) in [
         // balanceOf(eoa1)

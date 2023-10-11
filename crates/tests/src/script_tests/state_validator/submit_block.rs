@@ -1281,7 +1281,7 @@ async fn test_withdrawal_cell_lock_args_with_owner_lock_in_submit_block() {
         construct_block_with_timestamp(
             &chain,
             &mut mem_pool,
-            vec![deposit.clone()].pack(),
+            [deposit.clone()].pack(),
             timestamp_now(),
             true,
         )
@@ -1291,7 +1291,7 @@ async fn test_withdrawal_cell_lock_args_with_owner_lock_in_submit_block() {
     let apply_deposits = L1Action {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
-            deposit_info_vec: vec![deposit].pack(),
+            deposit_info_vec: [deposit].pack(),
             deposit_asset_scripts: Default::default(),
             withdrawals: Default::default(),
         },

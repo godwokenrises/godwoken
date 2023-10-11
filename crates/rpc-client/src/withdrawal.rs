@@ -92,7 +92,7 @@ mod test {
         let owner_lock = Script::new_builder()
             .code_hash(H256::from_u32(1).pack())
             .hash_type(ScriptHashType::Type.into())
-            .args(vec![2u8; 32].pack())
+            .args([2u8; 32][..].pack())
             .build();
 
         let rollup_type_hash = [3u8; 32];
@@ -186,7 +186,7 @@ mod test {
         // # owner lock not match
         let err_owner_lock = Script::new_builder()
             .code_hash(H256::from_u32(5).pack())
-            .args(vec![7u8; 32].pack())
+            .args([7u8; 32][..].pack())
             .build();
         let mut args = rollup_type_hash.to_vec();
         args.extend_from_slice(&lock_args.as_bytes());
@@ -209,13 +209,13 @@ mod test {
         let owner_lock = Script::new_builder()
             .code_hash(H256::from_u32(1).pack())
             .hash_type(ScriptHashType::Type.into())
-            .args(vec![2u8; 32].pack())
+            .args([2u8; 32][..].pack())
             .build();
 
         let l1_sudt = Script::new_builder()
             .code_hash(H256::from_u32(3).pack())
             .hash_type(ScriptHashType::Type.into())
-            .args(vec![4u8; 32].pack())
+            .args([4u8; 32][..].pack())
             .build();
 
         let last_finalized_timepoint = Timepoint::from_block_number(100);

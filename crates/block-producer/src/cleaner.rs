@@ -152,9 +152,11 @@ impl Cleaner {
         let rpc_client = &self.rpc_client;
         for (idx, tx_hash) in consumed_txs {
             let consumed = match tx_hash {
-                Some(tx_hash) => {
-                    !matches!(rpc_client.ckb.get_transaction_status(tx_hash).await?, None)
-                }
+                Some(tx_hash) => rpc_client
+                    .ckb
+                    .get_transaction_status(tx_hash)
+                    .await?
+                    .is_some(),
                 None => false,
             };
             if consumed {

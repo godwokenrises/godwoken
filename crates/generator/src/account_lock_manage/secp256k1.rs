@@ -107,7 +107,7 @@ impl Secp256k1Eth {
 /// Usage
 /// register AlwaysSuccess to AccountLockManage
 ///
-/// manage.register_lock_algorithm(code_hash, Box::new(AlwaysSuccess::default()));
+/// manage.register_lock_algorithm(code_hash, Box::new(AlwaysSuccess));
 impl LockAlgorithm for Secp256k1Eth {
     fn recover(&self, message: H256, signature: &[u8]) -> Result<Bytes, LockAlgorithmError> {
         // extract rec_id
@@ -319,7 +319,7 @@ mod tests {
             .raw(raw_tx)
             .signature(signature.to_vec().pack())
             .build();
-        let eth = Secp256k1Eth::default();
+        let eth = Secp256k1Eth;
 
         let rollup_type_hash = vec![0u8; 32];
 
@@ -354,7 +354,7 @@ mod tests {
     #[test]
     fn test_secp256k1_eth_polyjuice_native_token_transfer() {
         let chain_id = 42;
-        let mut polyjuice_args = vec![0u8; 72];
+        let mut polyjuice_args = [0u8; 72];
         polyjuice_args[0..7].copy_from_slice(b"\xFF\xFF\xFFPOLY");
         polyjuice_args[7] = 0;
         let gas_limit: u64 = 21000;
@@ -410,7 +410,7 @@ mod tests {
                 .build(),
             ..Default::default()
         };
-        let eth = Secp256k1Eth::default();
+        let eth = Secp256k1Eth;
         eth.verify_tx(&ctx, sender_reg_addr, sender_script, receive_script, tx)
             .expect("verify signature");
     }
@@ -442,7 +442,7 @@ mod tests {
             .raw(raw_tx)
             .signature(signature.to_vec().pack())
             .build();
-        let eth = Secp256k1Eth::default();
+        let eth = Secp256k1Eth;
 
         // This rollup type hash is used, so the receiver script hash is:
         // 00002b003de527c1d67f2a2a348683ecc9598647c30884c89c5dcf6da1afbddd,
@@ -510,7 +510,7 @@ mod tests {
             .raw(raw_tx)
             .signature(signature.to_vec().pack())
             .build();
-        let eth = Secp256k1Eth::default();
+        let eth = Secp256k1Eth;
 
         let rollup_type_hash = vec![0u8; 32];
 
@@ -555,7 +555,7 @@ mod tests {
             .raw(raw_tx)
             .signature(signature.to_vec().pack())
             .build();
-        let eth = Secp256k1Eth::default();
+        let eth = Secp256k1Eth;
 
         let rollup_type_hash = vec![0u8; 32];
 
@@ -644,7 +644,7 @@ mod tests {
             rollup_config: RollupConfig::new_builder().chain_id(0.pack()).build(),
             ..Default::default()
         };
-        let eth = Secp256k1Eth::default();
+        let eth = Secp256k1Eth;
         eth.verify_tx(&ctx, sender_address, sender_script, receiver_script, tx)
             .expect("verify signature");
     }

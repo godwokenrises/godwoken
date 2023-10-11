@@ -92,7 +92,7 @@ lazy_static::lazy_static! {
         let mut hasher = new_blake2b();
         hasher.update(SECP_DATA);
         hasher.finalize(&mut buf);
-        buf.into()
+        buf
     };
 
     pub static ref POLYJUICE_GENERATOR_PROGRAM: Bytes
@@ -292,7 +292,7 @@ pub fn new_contract_account_script_with_nonce(from_addr: &[u8; 20], from_nonce: 
     // );
     let data_hash = tiny_keccak::keccak256(stream.as_raw());
 
-    let mut new_script_args = vec![0u8; 32 + 4 + 20];
+    let mut new_script_args = [0u8; 32 + 4 + 20];
     new_script_args[0..32].copy_from_slice(&ROLLUP_SCRIPT_HASH);
     new_script_args[32..36].copy_from_slice(&CREATOR_ACCOUNT_ID.to_le_bytes()[..]);
     new_script_args[36..36 + 20].copy_from_slice(&data_hash[12..]);
@@ -480,8 +480,8 @@ pub fn setup() -> (Store, DummyState, Generator) {
     // NOTICE in this test we won't need SUM validator
     let mut account_lock_manage = AccountLockManage::default();
     account_lock_manage.register_lock_algorithm(
-        SECP_LOCK_CODE_HASH.into(),
-        Arc::new(Secp256k1Eth::default()),
+        SECP_LOCK_CODE_HASH,
+        Arc::new(Secp256k1Eth),
     );
     let rollup_config = RollupConfig::new_builder()
         .chain_id(CHAIN_ID.pack())
@@ -513,7 +513,7 @@ pub fn setup() -> (Store, DummyState, Generator) {
         ..Default::default()
     };
     let rollup_context = RollupContext {
-        rollup_script_hash: ROLLUP_SCRIPT_HASH.into(),
+        rollup_script_hash: ROLLUP_SCRIPT_HASH,
         rollup_config,
         fork_config,
     };
@@ -605,7 +605,7 @@ pub fn compute_create2_script(
     data[1 + 20 + 32..1 + 20 + 32 + 32].copy_from_slice(&init_code_hash[..]);
     let data_hash = tiny_keccak::keccak256(&data);
 
-    let mut script_args = vec![0u8; 32 + 4 + 20];
+    let mut script_args = [0u8; 32 + 4 + 20];
     script_args[0..32].copy_from_slice(&ROLLUP_SCRIPT_HASH[..]);
     script_args[32..32 + 4].copy_from_slice(&CREATOR_ACCOUNT_ID.to_le_bytes()[..]);
     script_args[32 + 4..32 + 4 + 20].copy_from_slice(&data_hash[12..]);
@@ -794,7 +794,7 @@ pub(crate) fn register_eoa_account(
 ) {
     let address = RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, eth_address.to_vec());
     state
-        .mapping_registry_address_to_script_hash(address, (*script_hash).into())
+        .mapping_registry_address_to_script_hash(address, *script_hash)
         .expect("map reg addr to script hash");
 }
 
