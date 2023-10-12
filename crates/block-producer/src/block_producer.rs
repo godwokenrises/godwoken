@@ -804,8 +804,10 @@ impl BlockProducer {
             let dep_cell_by_data: HashMap<[u8; 32], OutPoint> = dep_cells
                 .iter()
                 .map(|cell| {
-                    let data_hash =
-                        ckb_types::packed::CellOutput::calc_data_hash(&cell.data).unpack();
+                    let data_hash: [u8; 32] =
+                        ckb_types::packed::CellOutput::calc_data_hash(&cell.data)
+                            .unpack()
+                            .into();
                     (data_hash, cell.out_point.clone())
                 })
                 .collect();
@@ -902,7 +904,6 @@ impl BlockProducer {
             if input_len != witness_len {
                 // append dummy witness args to align our reverted deposit witness args
                 let dummy_witness_argses = (0..input_len - witness_len)
-                    .into_iter()
                     .map(|_| WitnessArgs::default())
                     .collect::<Vec<_>>();
                 tx_skeleton.witnesses_mut().extend(dummy_witness_argses);
@@ -930,7 +931,6 @@ impl BlockProducer {
             if input_len != witness_len {
                 // append dummy witness args to align our reverted withdrawal witness args
                 let dummy_witness_argses = (0..input_len - witness_len)
-                    .into_iter()
                     .map(|_| WitnessArgs::default())
                     .collect::<Vec<_>>();
                 tx_skeleton.witnesses_mut().extend(dummy_witness_argses);

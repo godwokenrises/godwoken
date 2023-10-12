@@ -8,10 +8,8 @@ use crate::{
     withdrawal_unlocker::FinalizedWithdrawalUnlocker,
 };
 use anyhow::{anyhow, bail, Context, Result};
-use ckb_types::core::hardfork::HardForkSwitch;
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainMockContextBuildArgs};
-use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH, GLOBAL_VM_VERSION};
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
 use gw_db::migrate::open_or_create_db;
@@ -48,7 +46,7 @@ use gw_types::{
     packed::{Byte32, CellDep, NumberHash, RollupConfig, Script},
     prelude::*,
 };
-use gw_utils::{genesis_info::CKBGenesisInfo, since::EpochNumberWithFraction, wallet::Wallet};
+use gw_utils::{genesis_info::CKBGenesisInfo, wallet::Wallet};
 use gw_web3_indexer::{ErrorReceiptIndexer, Web3Indexer};
 use semver::Version;
 use sqlx::{
@@ -58,7 +56,7 @@ use sqlx::{
 use std::{
     collections::HashMap,
     net::{SocketAddr, ToSocketAddrs},
-    sync::{atomic::Ordering, Arc},
+    sync::Arc,
     time::{Duration, Instant},
 };
 use tokio::{
@@ -230,28 +228,6 @@ impl ChainTask {
                 tip_number = new_block_number;
                 tip_hash = block.header().hash().into();
 
-                // update global hardfork info
-                let hardfork_switch = self.rpc_client.get_hardfork_switch().await?;
-                let rfc0032_epoch_number = hardfork_switch.rfc_0032();
-                let global_hardfork_switch = GLOBAL_HARDFORK_SWITCH.load();
-                if !is_hardfork_switch_eq(&*global_hardfork_switch, &hardfork_switch) {
-                    GLOBAL_HARDFORK_SWITCH.store(Arc::new(hardfork_switch));
-                }
-
-                // when switching the epoch, update the tip epoch number and VM version
-                let tip_epoch = {
-                    let tip_epoch: u64 = block.header().raw().epoch().unpack();
-                    EpochNumberWithFraction::from_full_value(tip_epoch)
-                };
-                if tip_epoch.index() == 0 || tip_epoch.index() == tip_epoch.length() - 1 {
-                    let vm_version: u32 = if tip_epoch.number() >= rfc0032_epoch_number {
-                        1
-                    } else {
-                        0
-                    };
-                    GLOBAL_CURRENT_EPOCH_NUMBER.store(tip_epoch.number(), Ordering::SeqCst);
-                    GLOBAL_VM_VERSION.store(vm_version, Ordering::SeqCst);
-                }
                 last_event_time = Instant::now();
             } else {
                 log::debug!(
@@ -304,7 +280,7 @@ impl BaseInitComponents {
         };
         let rollup_type_script: Script = config.chain.rollup_type_script.clone().into();
         let rpc_client = {
-            let indexer_client = CKBIndexerClient::with_url(&config.rpc_client.indexer_url)?;
+            let indexer_client = CKBIndexerClient::with_url(&config.rpc_client.ckb_url)?;
             let ckb_client = CKBClient::with_url(&config.rpc_client.ckb_url)?;
             let rollup_type_script =
                 ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
@@ -399,12 +375,12 @@ impl BaseInitComponents {
                 .ok_or_else(|| anyhow!("Eth: No allowed EoA type hashes in the rollup config"))?;
             account_lock_manage.register_lock_algorithm(
                 eth_lock_script_type_hash.unpack(),
-                Box::new(Secp256k1Eth::default()),
+                Box::<Secp256k1Eth>::default(),
             );
             let tron_lock_script_type_hash = rollup_config.allowed_eoa_type_hashes().get(1);
             if let Some(code_hash) = tron_lock_script_type_hash {
                 account_lock_manage
-                    .register_lock_algorithm(code_hash.unpack(), Box::new(Secp256k1Tron::default()))
+                    .register_lock_algorithm(code_hash.unpack(), Box::<Secp256k1Tron>::default())
             }
             Arc::new(Generator::new(
                 backend_manage,
@@ -952,7 +928,7 @@ async fn check_rollup_config_cell(
         .await?
         .and_then(|cell_with_status| cell_with_status.cell)
         .ok_or_else(|| anyhow!("can't find rollup config cell"))?;
-    let cell_data = RollupConfig::from_slice(&rollup_config_cell.data.to_vec())?;
+    let cell_data = RollupConfig::from_slice(&rollup_config_cell.data)?;
     let eoa_set = rollup_config
         .allowed_eoa_type_hashes()
         .into_iter()
@@ -1035,16 +1011,6 @@ fn check_locks(
         ));
     }
     Ok(())
-}
-
-fn is_hardfork_switch_eq(l: &HardForkSwitch, r: &HardForkSwitch) -> bool {
-    l.rfc_0028() == r.rfc_0028()
-        && l.rfc_0029() == r.rfc_0029()
-        && l.rfc_0030() == r.rfc_0030()
-        && l.rfc_0031() == r.rfc_0031()
-        && l.rfc_0032() == r.rfc_0032()
-        && l.rfc_0036() == r.rfc_0036()
-        && l.rfc_0038() == r.rfc_0038()
 }
 
 fn is_l1_query_error(err: &anyhow::Error) -> bool {

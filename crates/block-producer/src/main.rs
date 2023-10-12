@@ -101,7 +101,7 @@ async fn run_cli() -> Result<()> {
     match matches.subcommand() {
         (COMMAND_RUN, Some(m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
-            let config = read_config(&config_path)?;
+            let config = read_config(config_path)?;
             let _guard = trace::init(config.trace)?;
             runner::run(config, m.is_present(ARG_SKIP_CONFIG_CHECK)).await?;
         }
@@ -112,7 +112,7 @@ async fn run_cli() -> Result<()> {
         }
         (COMMAND_VERIFY_DB_BLOCK, Some(m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
-            let config = read_config(&config_path)?;
+            let config = read_config(config_path)?;
             let _guard = trace::init(None)?;
             let from_block: Option<u64> = m.value_of(ARG_FROM_BLOCK).map(str::parse).transpose()?;
             let to_block: Option<u64> = m.value_of(ARG_TO_BLOCK).map(str::parse).transpose()?;
@@ -121,7 +121,7 @@ async fn run_cli() -> Result<()> {
         _ => {
             // default command: start a Godwoken node
             let config_path = "./config.toml";
-            let config = read_config(&config_path)?;
+            let config = read_config(config_path)?;
             let _guard = trace::init(config.trace)?;
             runner::run(config, false).await?;
         }

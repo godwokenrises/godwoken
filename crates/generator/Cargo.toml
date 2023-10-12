@@ -18,12 +18,11 @@ gw-common = { path = "../common" }
 gw-config = { path = "../config" }
 gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
-gw-ckb-hardfork = { path = "../ckb-hardfork" }
 gw-tx-filter = { path = "../tx-filter" }
 gw-dynamic-config = { path = "../dynamic-config"}
 anyhow = "1.0"
 blake2b-rs = "0.2"
-ckb-vm = { version = "=0.20.0-rc5", features = ["detect-asm"] }
+ckb-vm = { git = "https://github.com/nervosnetwork/ckb-vm.git", branch = "release-0.24-l2" }
 thiserror = "1.0"
 lazy_static = "1.4"
 rlp = "0.5.0"

@@ -13,7 +13,6 @@ use gw_jsonrpc_types::{
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::{
     core::DepType,
-    offchain::TxStatus,
     packed::{CellDep, OutPointVec, Transaction},
     prelude::*,
 };
@@ -31,11 +30,10 @@ pub async fn dump_transaction<P: AsRef<Path>>(
 
     let mut dump_path = PathBuf::new();
     dump_path.push(dir);
-    let json_content;
-    match build_mock_transaction(rpc_client, tx).await {
+    let json_content = match build_mock_transaction(rpc_client, tx).await {
         Ok(mock_tx) => {
             dump_path.push(format!("{}-mock-tx.json", tx_hash));
-            json_content = serde_json::to_string_pretty(&mock_tx)?;
+            serde_json::to_string_pretty(&mock_tx)?
         }
         Err(err) => {
             log::error!(
@@ -47,9 +45,9 @@ pub async fn dump_transaction<P: AsRef<Path>>(
             dump_path.push(format!("{}-raw-tx.json", tx_hash));
             let json_tx: ckb_jsonrpc_types::Transaction =
                 { ckb_types::packed::Transaction::new_unchecked(tx.as_bytes()).into() };
-            json_content = serde_json::to_string_pretty(&json_tx)?;
+            serde_json::to_string_pretty(&json_tx)?
         }
-    }
+    };
     log::info!("Dump transaction {} to {:?}", tx_hash, dump_path);
     write(dump_path, json_content)?;
     Ok(())
@@ -111,7 +109,7 @@ pub async fn build_mock_transaction(
 
         let input_tx_hash = input.previous_output().tx_hash().unpack();
         let input_block_hash = match rpc_client.get_transaction_status(input_tx_hash).await? {
-            Some(TxStatus::Committed) => {
+            Some(ckb_jsonrpc_types::Status::Committed) => {
                 let block_hash = rpc_client.get_transaction_block_hash(input_tx_hash).await?;
                 Some(block_hash.ok_or_else(|| anyhow!("not found input cell tx hash"))?)
             }
@@ -161,7 +159,7 @@ pub async fn build_mock_transaction(
         .ok_or_else(|| anyhow!("can't find dep cell"))?;
         let dep_cell_tx_hash = cell_dep.out_point().tx_hash().unpack();
         let dep_cell_block_hash = match rpc_client.get_transaction_status(dep_cell_tx_hash).await? {
-            Some(TxStatus::Committed) => {
+            Some(ckb_jsonrpc_types::Status::Committed) => {
                 let query = rpc_client
                     .get_transaction_block_hash(dep_cell_tx_hash)
                     .await?;

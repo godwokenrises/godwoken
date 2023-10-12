@@ -1,7 +1,7 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use ckb_jsonrpc_types::OutputsValidator;
-use ckb_sdk::HttpRpcClient;
-use ckb_types::prelude::{Entity, Unpack as CKBUnpack};
+use ckb_sdk::CkbRpcClient;
+use ckb_types::prelude::{Entity, Unpack};
 use gw_config::WalletConfig;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
 use gw_types::{
@@ -15,25 +15,24 @@ use gw_utils::{
 };
 use std::path::{Path, PathBuf};
 
-use crate::utils::transaction::wait_for_tx;
+use crate::utils::transaction::{get_transaction, wait_for_tx};
 
 pub async fn update_cell<P: AsRef<Path>>(
     ckb_rpc_url: &str,
-    indexer_rpc_url: &str,
     tx_hash: [u8; 32],
     index: u32,
     type_id: [u8; 32],
     cell_data_path: P,
     pk_path: PathBuf,
 ) -> Result<()> {
-    let mut rpc_client = HttpRpcClient::new(ckb_rpc_url.to_string());
-    let indexer_client = CKBIndexerClient::with_url(indexer_rpc_url)?;
+    let rpc_client = CkbRpcClient::new(ckb_rpc_url);
+    let indexer_client = CKBIndexerClient::with_url(ckb_rpc_url)?;
     // check existed_cell
-    let tx_with_status = rpc_client
-        .get_transaction(tx_hash.into())
-        .map_err(|err| anyhow!("{}", err))?
-        .ok_or_else(|| anyhow!("can't found transaction"))?;
-    let tx = tx_with_status.transaction.inner;
+    let tx_with_status = get_transaction(&rpc_client, &tx_hash.into())?;
+    let tx = tx_with_status
+        .transaction
+        .context("can't find transaction")?
+        .inner;
     let existed_cell = tx
         .outputs
         .get(index as usize)
@@ -48,7 +47,7 @@ pub async fn update_cell<P: AsRef<Path>>(
         .type_
         .ok_or_else(|| anyhow!("can't found type_id from existed cell"))?
         .into();
-    let existed_cell_type_id: [u8; 32] = type_.calc_script_hash().unpack();
+    let existed_cell_type_id: [u8; 32] = type_.calc_script_hash().unpack().into();
     assert_eq!(
         hex::encode(existed_cell_type_id),
         hex::encode(type_id),
@@ -70,7 +69,7 @@ pub async fn update_cell<P: AsRef<Path>>(
     // get genesis info
     let ckb_genesis_info = {
         let ckb_genesis = rpc_client
-            .get_block_by_number(0u64)
+            .get_block_by_number(0u64.into())
             .map_err(|err| anyhow!("{}", err))?
             .ok_or_else(|| anyhow!("can't found CKB genesis block"))?;
         let block: ckb_types::core::BlockView = ckb_genesis.into();
@@ -121,12 +120,12 @@ pub async fn update_cell<P: AsRef<Path>>(
     println!("Unlock cell {}", existed_cell.lock());
     let tx_hash = rpc_client
         .send_transaction(
-            ckb_types::packed::Transaction::new_unchecked(tx.as_bytes()),
+            ckb_types::packed::Transaction::new_unchecked(tx.as_bytes()).into(),
             Some(OutputsValidator::Passthrough),
         )
         .map_err(|err| anyhow!("{}", err))?;
     println!("Send tx...");
-    wait_for_tx(&mut rpc_client, &tx_hash, 180).map_err(|err| anyhow!("{}", err))?;
+    wait_for_tx(&rpc_client, &tx_hash, 180).map_err(|err| anyhow!("{}", err))?;
     println!("{}", update_message);
     println!("Cell is updated!");
     Ok(())

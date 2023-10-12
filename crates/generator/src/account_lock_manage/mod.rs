@@ -32,16 +32,9 @@ pub trait LockAlgorithm {
     ) -> Result<bool, LockAlgorithmError>;
 }
 
+#[derive(Default)]
 pub struct AccountLockManage {
     locks: HashMap<H256, Box<dyn LockAlgorithm + Send + Sync>>,
-}
-
-impl Default for AccountLockManage {
-    fn default() -> Self {
-        AccountLockManage {
-            locks: Default::default(),
-        }
-    }
 }
 
 impl AccountLockManage {

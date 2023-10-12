@@ -1,19 +1,17 @@
 use anyhow::{anyhow, bail, Result};
-use ckb_chain_spec::consensus::ConsensusBuilder;
+use ckb_chain_spec::consensus::Consensus;
 use ckb_fixed_hash::H256;
 use ckb_script::{TransactionScriptsVerifier, TxVerifyEnv};
-use ckb_traits::{CellDataProvider, HeaderProvider};
+use ckb_traits::{CellDataProvider, ExtensionProvider, HeaderProvider};
 use ckb_types::{
     bytes::Bytes,
     core::{
         cell::{CellMeta, CellMetaBuilder, ResolvedTransaction},
-        hardfork::HardForkSwitch,
         DepType, HeaderView,
     },
     packed::{Byte32, CellDep, CellInput, CellOutput, OutPoint, OutPointVec, Transaction},
-    prelude::{Builder, Entity, Pack, Unpack},
+    prelude::*,
 };
-use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH};
 use gw_jsonrpc_types::{
     ckb_jsonrpc_types,
     debugger::{ReprMockCellDep, ReprMockInfo, ReprMockInput, ReprMockTransaction},
@@ -22,9 +20,9 @@ use gw_types::offchain::InputCellInfo;
 
 use std::{
     collections::{HashMap, HashSet},
-    sync::atomic::Ordering,
+    sync::Arc,
 };
-use std::{convert::TryFrom, fs::read, path::PathBuf, sync::Arc};
+use std::{convert::TryFrom, fs::read, path::PathBuf};
 
 pub struct TxWithContext {
     pub cell_deps: Vec<InputCellInfo>,
@@ -91,33 +89,21 @@ pub fn verify_tx(
 
     let resolved_tx = data_loader.resolve_tx(&tx_with_context.tx)?;
 
-    let hardfork_switch = {
-        let switch = GLOBAL_HARDFORK_SWITCH.load();
-        HardForkSwitch::new_without_any_enabled()
-            .as_builder()
-            .rfc_0028(switch.rfc_0028())
-            .rfc_0029(switch.rfc_0029())
-            .rfc_0030(switch.rfc_0030())
-            .rfc_0031(switch.rfc_0031())
-            .rfc_0032(switch.rfc_0032())
-            .rfc_0036(switch.rfc_0036())
-            .rfc_0038(switch.rfc_0038())
-            .build()
-            .map_err(|err| anyhow!(err))?
-    };
-    let consensus = ConsensusBuilder::default()
-        .hardfork_switch(hardfork_switch)
-        .build();
-    let current_epoch_number = GLOBAL_CURRENT_EPOCH_NUMBER.load(Ordering::SeqCst);
+    // Default is ckb2021.
+    let consensus = Consensus::default();
     let tx_verify_env = TxVerifyEnv::new_submit(
         &HeaderView::new_advanced_builder()
-            .epoch(current_epoch_number.pack())
+            // TODO: epoch.
             .build(),
     );
-    let cycles =
-        TransactionScriptsVerifier::new(&resolved_tx, &consensus, &data_loader, &tx_verify_env)
-            .verify(max_cycles)
-            .map_err(|err| anyhow!("verify tx failed: {}", err))?;
+    let cycles = TransactionScriptsVerifier::new(
+        Arc::new(resolved_tx),
+        data_loader,
+        Arc::new(consensus),
+        Arc::new(tx_verify_env),
+    )
+    .verify(max_cycles)
+    .map_err(|err| anyhow!("verify tx failed: {}", err))?;
 
     Ok(cycles)
 }
@@ -178,6 +164,7 @@ pub fn dump_tx(
     Ok(mock_tx)
 }
 
+#[derive(Clone)]
 struct TxDataLoader {
     rollup_cell_deps: Arc<HashMap<OutPoint, CellInfo>>,
     headers: HashMap<Byte32, HeaderView>,
@@ -286,6 +273,12 @@ impl CellDataProvider for TxDataLoader {
 impl HeaderProvider for TxDataLoader {
     fn get_header(&self, block_hash: &Byte32) -> Option<HeaderView> {
         self.headers.get(block_hash).cloned()
+    }
+}
+
+impl ExtensionProvider for TxDataLoader {
+    fn get_block_extension(&self, _hash: &Byte32) -> Option<ckb_types::packed::Bytes> {
+        None
     }
 }
 

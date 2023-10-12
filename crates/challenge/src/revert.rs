@@ -85,7 +85,7 @@ impl<'a> Revert<'a> {
                 let reverted_blocks = self.revert_witness.reverted_blocks.clone();
                 reverted_blocks.into_iter().map(to_leave)
             };
-            let block_merkle_proof = self.revert_witness.block_proof.clone();
+            let block_merkle_proof = &self.revert_witness.block_proof;
             let block_root = block_merkle_proof.compute_root::<Blake2bHasher>(leaves.collect())?;
             let block_count = first_reverted_block.number();
 

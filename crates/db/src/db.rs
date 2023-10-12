@@ -130,11 +130,11 @@ impl RocksDB {
 
     pub fn get_pinned(&self, col: Col, key: &[u8]) -> Result<Option<DBPinnableSlice>> {
         let cf = cf_handle(&self.inner, col)?;
-        self.inner.get_pinned_cf(cf, &key).map_err(internal_error)
+        self.inner.get_pinned_cf(cf, key).map_err(internal_error)
     }
 
     pub fn get_pinned_default(&self, key: &[u8]) -> Result<Option<DBPinnableSlice>> {
-        self.inner.get_pinned(&key).map_err(internal_error)
+        self.inner.get_pinned(key).map_err(internal_error)
     }
 
     pub fn put_default<K, V>(&self, key: K, value: V) -> Result<()>

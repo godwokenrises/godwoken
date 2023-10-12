@@ -58,7 +58,7 @@ use crate::{
     withdrawal::Generator as WithdrawalGenerator,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct OutputParam {
     pub retry_count: usize,
 }
@@ -66,12 +66,6 @@ pub struct OutputParam {
 impl OutputParam {
     pub fn new(retry_count: usize) -> Self {
         OutputParam { retry_count }
-    }
-}
-
-impl Default for OutputParam {
-    fn default() -> Self {
-        OutputParam { retry_count: 0 }
     }
 }
 
@@ -749,7 +743,7 @@ impl MemPool {
                 let tx_hash = tx.hash();
                 log::info!(
                     "[mem pool] fail to re-inject tx {}, error: {}",
-                    hex::encode(&tx_hash),
+                    hex::encode(tx_hash),
                     err
                 );
             }
@@ -1324,7 +1318,7 @@ mod test {
                 expected.push_withdrawal(hash, state.clone(), touched_keys);
                 post_states.push(state);
             }
-            let deposits = deposits.iter().cloned().take(deposits_count).collect();
+            let deposits = deposits.iter().take(deposits_count).cloned().collect();
             let deposit_states: Vec<_> =
                 { deposits_state.clone().into_iter().take(deposits_count) }.collect();
             let deposit_touched_keys =

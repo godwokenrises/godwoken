@@ -2,15 +2,23 @@ use crate::{
     error::RPCRequestError,
     utils::{to_result, DEFAULT_HTTP_TIMEOUT},
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Context, Result};
 use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
+use ckb_fixed_hash::H256;
 use gw_jsonrpc_types::blockchain::CellDep;
-use serde::de::DeserializeOwned;
+use gw_jsonrpc_types::ckb_jsonrpc_types::{TransactionView, TxStatus};
+use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::json;
 use tracing::instrument;
 
 #[derive(Clone)]
 pub struct CKBClient(HttpClient);
+
+#[derive(Deserialize)]
+pub struct TransactionWithStatus {
+    pub transaction: Option<TransactionView>,
+    pub tx_status: TxStatus,
+}
 
 impl CKBClient {
     pub fn new(ckb_client: HttpClient) -> Self {
@@ -53,32 +61,38 @@ impl CKBClient {
         }
     }
 
+    pub async fn get_transaction(&self, tx_hash: &H256) -> Result<TransactionWithStatus> {
+        self.request(
+            "get_transaction",
+            Some(ClientParams::Array(vec![json!(tx_hash)])),
+        )
+        .await
+    }
+
     #[instrument(skip_all)]
     pub async fn query_type_script(
         &self,
         contract: &str,
         cell_dep: CellDep,
     ) -> Result<gw_jsonrpc_types::blockchain::Script> {
-        use gw_jsonrpc_types::ckb_jsonrpc_types::TransactionWithStatus;
-
-        let tx_hash = cell_dep.out_point.tx_hash;
-        let tx_with_status: Option<TransactionWithStatus> = self
-            .request(
-                "get_transaction",
-                Some(ClientParams::Array(vec![json!(tx_hash)])),
-            )
-            .await?;
-        let tx = match tx_with_status {
-            Some(tx_with_status) => tx_with_status.transaction.inner,
-            None => bail!("{} {} tx not found", contract, tx_hash),
-        };
-
-        match tx.outputs.get(cell_dep.out_point.index.value() as usize) {
-            Some(output) => match output.type_.as_ref() {
-                Some(script) => Ok(script.to_owned().into()),
-                None => Err(anyhow!("{} {} tx hasn't type script", contract, tx_hash)),
-            },
-            None => Err(anyhow!("{} {} tx index not found", contract, tx_hash)),
-        }
+        let tx_hash = &cell_dep.out_point.tx_hash;
+        let tx = self.get_transaction(tx_hash).await?;
+        let type_script = tx
+            .transaction
+            .with_context(|| {
+                format!("transaction not found, contract={contract}, tx_hash={tx_hash}")
+            })?
+            .inner
+            .outputs
+            .get(cell_dep.out_point.index.value() as usize)
+            .cloned()
+            .with_context(|| {
+                format!("output index not found, contract={contract}, cell_dep={cell_dep:?}")
+            })?
+            .type_
+            .with_context(|| {
+                format!("type script not found, contract={contract}, cell_dep={cell_dep:?}")
+            })?;
+        Ok(type_script.into())
     }
 }

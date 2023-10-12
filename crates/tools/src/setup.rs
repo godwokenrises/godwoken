@@ -44,7 +44,6 @@ impl NodeWalletInfo {
 
 pub struct SetupArgs<'a> {
     pub ckb_rpc_url: &'a str,
-    pub indexer_url: &'a str,
     pub mode: ScriptsBuildMode,
     pub build_scripts_config_path: &'a Path,
     pub privkey_path: &'a Path,
@@ -58,7 +57,6 @@ pub struct SetupArgs<'a> {
 pub async fn setup(args: SetupArgs<'_>) {
     let SetupArgs {
         ckb_rpc_url,
-        indexer_url,
         mode,
         build_scripts_config_path,
         privkey_path,
@@ -89,7 +87,7 @@ pub async fn setup(args: SetupArgs<'_>) {
         let output_content = serde_json::to_string_pretty(&build_scripts_result)
             .expect("serde json to string pretty");
         let output_dir = output_path.parent().expect("get output dir");
-        fs::create_dir_all(&output_dir).expect("create output dir");
+        fs::create_dir_all(output_dir).expect("create output dir");
         fs::write(output_path, output_content.as_bytes()).expect("output config");
         build_scripts_result
     };
@@ -162,7 +160,7 @@ pub async fn setup(args: SetupArgs<'_>) {
 
     // generate node config
     for (index, (node_name, _node_wallet)) in nodes.iter().enumerate() {
-        let privkey_path = output_dir.join(&node_name).join("pk");
+        let privkey_path = output_dir.join(node_name).join("pk");
         let output_file_path = output_dir.join(node_name).join("config.toml");
         // set the first node to fullnode
         let node_mode = if index == 0 {
@@ -175,7 +173,6 @@ pub async fn setup(args: SetupArgs<'_>) {
             scripts_deployment: &deploy_scripts_result,
             privkey_path: &privkey_path,
             ckb_url: ckb_rpc_url.to_string(),
-            indexer_url: indexer_url.to_string(),
             database_url: None,
             build_scripts_result: &build_scripts_result,
             server_url: server_url.to_string(),
@@ -199,7 +196,7 @@ fn setup_nodes(
 ) -> Vec<(String, NodeWalletInfo)> {
     (0..nodes_count)
         .map(|i| {
-            let node_name = format!("node{}", (i + 1).to_string());
+            let node_name = format!("node{}", i + 1);
             let node_dir = output_dir.join(&node_name);
             log::info!("Generate privkey file for {}...", &node_name);
             let node_pk_path = prepare_privkey(&node_dir);
@@ -212,7 +209,7 @@ fn setup_nodes(
 }
 
 fn prepare_privkey(node_dir: &Path) -> PathBuf {
-    fs::create_dir_all(&node_dir).expect("create node dir");
+    fs::create_dir_all(node_dir).expect("create node dir");
     let privkey_file = node_dir.join("pk");
     generate_privkey_file(&privkey_file);
     privkey_file
@@ -244,7 +241,7 @@ fn generate_poa_config(nodes: &[(String, NodeWalletInfo)]) -> PoAConfig {
     let identities: Vec<_> = nodes
         .iter()
         .map(|(_, node)| {
-            let lock_hash = hex::decode(&node.lock_hash.trim_start_matches("0x")).unwrap();
+            let lock_hash = hex::decode(node.lock_hash.trim_start_matches("0x")).unwrap();
             ckb_jsonrpc_types::JsonBytes::from_vec(lock_hash)
         })
         .collect();
@@ -279,7 +276,7 @@ fn generate_rollup_config(setup_config: &SetupConfig) -> Result<UserRollupConfig
 fn generate_privkey_file(privkey_file_path: &Path) {
     let key = rand::thread_rng().gen::<[u8; 32]>();
     let privkey = format!("0x{}", hex::encode(key));
-    fs::write(&privkey_file_path, &privkey).expect("create pk file");
+    fs::write(privkey_file_path, privkey).expect("create pk file");
 }
 
 pub fn get_wallet_info(privkey_path: &Path) -> NodeWalletInfo {
@@ -330,7 +327,7 @@ fn transfer_ckb(
             node_wallet.address(network),
             "--capacity",
             &ckb_amount.to_string(),
-            "--tx-fee",
+            "--max-tx-fee",
             "0.1",
             "--privkey-path",
             &payer_privkey_path.display().to_string(),

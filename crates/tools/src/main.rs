@@ -66,12 +66,6 @@ async fn run_cli() -> Result<()> {
         .takes_value(true)
         .default_value("http://127.0.0.1:8114")
         .help("CKB jsonrpc rpc sever URL");
-    let arg_indexer_rpc = Arg::with_name("indexer-rpc-url")
-        .long("ckb-indexer-rpc")
-        .takes_value(true)
-        .default_value("http://127.0.0.1:8116")
-        .required(true)
-        .help("The URL of ckb indexer");
     let arg_deployment_results_path = Arg::with_name("scripts-deployment-path")
         .long("scripts-deployment-path")
         .takes_value(true)
@@ -161,9 +155,6 @@ async fn run_cli() -> Result<()> {
             SubCommand::with_name("generate-config")
                 .about("Generate configure")
                 .arg(arg_ckb_rpc.clone())
-                .arg(
-                    arg_indexer_rpc.clone()
-                )
                 .arg(
                     arg_deployment_results_path.clone()
                 )
@@ -258,7 +249,6 @@ async fn run_cli() -> Result<()> {
             SubCommand::with_name("update-cell")
             .about("Update an existed cell")
             .arg(arg_ckb_rpc.clone())
-            .arg(arg_indexer_rpc.clone())
                 .arg(Arg::with_name("tx-hash").long("tx-hash").takes_value(true).required(true).help("The tx-hash of the exist cell"))
                 .arg(Arg::with_name("index").long("index").takes_value(true).required(true).help("The index of the exist cell"))
                 .arg(Arg::with_name("type-id").long("type-id").takes_value(true).required(true).help("The type-id of the exist cell"))
@@ -402,9 +392,6 @@ async fn run_cli() -> Result<()> {
             SubCommand::with_name("setup")
                 .about("Prepare scripts, deploy scripts, setup nodes, deploy genesis and generate configs")
                 .arg(arg_ckb_rpc.clone())
-                .arg(
-                    arg_indexer_rpc.clone()
-                )
                 .arg(
                     Arg::with_name("mode")
                         .long("build-mode")
@@ -838,7 +825,7 @@ async fn run_cli() -> Result<()> {
         .subcommand(
             SubCommand::with_name("stat-custodian-ckb")
                 .about("Output amount of layer2 custodian CKB")
-                .arg(arg_indexer_rpc.clone())
+                .arg(arg_ckb_rpc)
                 .arg(
                     Arg::with_name("rollup-type-hash")
                         .long("rollup-type-hash")
@@ -948,7 +935,6 @@ async fn run_cli() -> Result<()> {
         }
         ("generate-config", Some(m)) => {
             let ckb_url = m.value_of("ckb-rpc-url").unwrap().to_string();
-            let indexer_url = m.value_of("indexer-rpc-url").unwrap().to_string();
             let scripts_results_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let genesis_path = Path::new(m.value_of("genesis-deployment-path").unwrap());
             let user_rollup_config_path = Path::new(m.value_of("user-rollup-config-path").unwrap());
@@ -982,7 +968,6 @@ async fn run_cli() -> Result<()> {
                 build_scripts_result: &build_scripts_result,
                 privkey_path,
                 ckb_url,
-                indexer_url,
                 database_url,
                 server_url,
                 user_rollup_config: &user_rollup_config,
@@ -1025,7 +1010,6 @@ async fn run_cli() -> Result<()> {
         }
         ("update-cell", Some(m)) => {
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
-            let indexer_rpc_url = m.value_of("indexer-rpc-url").unwrap();
             let tx_hash = cli_args::to_h256(m.value_of("tx-hash").unwrap())?;
             let index: u32 = m.value_of("index").unwrap().parse()?;
             let type_id = cli_args::to_h256(m.value_of("type-id").unwrap())?;
@@ -1038,7 +1022,6 @@ async fn run_cli() -> Result<()> {
             };
             update_cell::update_cell(
                 ckb_rpc_url,
-                indexer_rpc_url,
                 tx_hash,
                 index,
                 type_id,
@@ -1131,7 +1114,6 @@ async fn run_cli() -> Result<()> {
         }
         ("setup", Some(m)) => {
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
-            let indexer_url = m.value_of("indexer-rpc-url").unwrap();
             let setup_config_path = Path::new(m.value_of("setup-config-path").unwrap());
             let mode = value_t!(m, "mode", prepare_scripts::ScriptsBuildMode).unwrap();
             let wallet_network = value_t!(m, "network", setup::WalletNetwork).unwrap();
@@ -1145,7 +1127,6 @@ async fn run_cli() -> Result<()> {
             let output_dir = Path::new(m.value_of("output-dir-path").unwrap());
             let args = SetupArgs {
                 ckb_rpc_url,
-                indexer_url,
                 mode,
                 wallet_network,
                 build_scripts_config_path: scripts_path,
@@ -1461,14 +1442,14 @@ async fn run_cli() -> Result<()> {
             };
         }
         ("stat-custodian-ckb", Some(m)) => {
-            let indexer_rpc_url = m.value_of("indexer-rpc-url").unwrap();
             let rollup_type_hash = cli_args::to_h256(m.value_of("rollup-type-hash").unwrap())?;
+            let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
             let custodian_script_type_hash =
                 cli_args::to_h256(m.value_of("custodian-script-type-hash").unwrap())?;
             let min_capacity: u64 = m.value_of("min-capacity").unwrap_or_default().parse()?;
             let tip_block_number: u64 =
                 m.value_of("tip-block-number").unwrap_or_default().parse()?;
-            let rpc_client = CKBIndexerClient::new(HttpClient::new(indexer_rpc_url)?);
+            let rpc_client = CKBIndexerClient::new(HttpClient::new(ckb_rpc_url)?);
 
             let alias: HashMap<ckb_types::bytes::Bytes, String> = [
                 (
@@ -1494,10 +1475,7 @@ async fn run_cli() -> Result<()> {
             ]
             .iter()
             .map(|(symbol, script_args)| {
-                (
-                    hex::decode(&script_args).unwrap().into(),
-                    symbol.to_string(),
-                )
+                (hex::decode(script_args).unwrap().into(), symbol.to_string())
             })
             .collect();
 
@@ -1547,7 +1525,7 @@ async fn run_cli() -> Result<()> {
 
             let input_path: PathBuf = m.value_of("input").unwrap().into();
             let input = std::fs::read_to_string(input_path)?;
-            let input_data = hex::decode(&input.trim().trim_start_matches("0x"))?;
+            let input_data = hex::decode(input.trim().trim_start_matches("0x"))?;
             if input_data.len() <= 32 {
                 return Err(anyhow::anyhow!(
                     "expect input at least 32 bytes length, got: {}",
@@ -1587,7 +1565,7 @@ where
     let output_content =
         serde_json::to_string_pretty(content).expect("serde json to string pretty");
     let output_dir = output_path.parent().expect("get output dir");
-    std::fs::create_dir_all(&output_dir).expect("create output dir");
+    std::fs::create_dir_all(output_dir).expect("create output dir");
     std::fs::write(output_path, output_content.as_bytes()).expect("generate json file");
     println!("Generate file {:?}", output_path);
 }

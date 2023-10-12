@@ -43,7 +43,7 @@ pub async fn withdraw(
     config_path: &Path,
     scripts_deployment_path: &Path,
 ) -> Result<()> {
-    let config = read_config(&config_path)?;
+    let config = read_config(config_path)?;
     if config.withdrawal_to_v1_config.is_none() {
         bail!("withdrawal to v1 is disabled");
     }
@@ -79,7 +79,7 @@ pub async fn withdraw(
 
     // v1 l2 lock
     let v1_l2_lock = {
-        let eth_address = hex::decode(&eth_address.trim_start_matches("0x").as_bytes())?;
+        let eth_address = hex::decode(eth_address.trim_start_matches("0x").as_bytes())?;
         let args = {
             let mut args = v1_config.v1_rollup_type_hash.0.to_vec();
             args.extend_from_slice(&eth_address);

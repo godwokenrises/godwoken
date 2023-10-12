@@ -210,7 +210,7 @@ async fn test_restore_mem_block() {
         let rollup_context = generator.rollup_context().to_owned();
         let rpc_client = {
             let indexer_client =
-                CKBIndexerClient::with_url(&RPCClientConfig::default().indexer_url).unwrap();
+                CKBIndexerClient::with_url(&RPCClientConfig::default().ckb_url).unwrap();
             let ckb_client = CKBClient::with_url(&RPCClientConfig::default().ckb_url).unwrap();
             let rollup_type_script =
                 ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());

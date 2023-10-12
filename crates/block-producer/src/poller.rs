@@ -1,14 +1,14 @@
 #![allow(clippy::mutable_key_type)]
 
 use crate::types::ChainEvent;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::Params as ClientParams;
 use ckb_fixed_hash::H256;
 use gw_chain::chain::{
     Chain, ChallengeCell, L1Action, L1ActionContext, RevertL1ActionContext, RevertedL1Action,
     SyncParam,
 };
-use gw_jsonrpc_types::ckb_jsonrpc_types::{BlockNumber, HeaderView, TransactionWithStatus, Uint32};
+use gw_jsonrpc_types::ckb_jsonrpc_types::{BlockNumber, HeaderView, Status, Uint32};
 use gw_rpc_client::{
     indexer_types::{Order, Pagination, ScriptType, SearchKey, SearchKeyFilter, Tx},
     rpc_client::RPCClient,
@@ -17,7 +17,7 @@ use gw_store::traits::chain_store::ChainStore;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::{RollupContext, TxStatus},
+    offchain::RollupContext,
     packed::{
         CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, DepositLockArgs,
         DepositRequest, L2BlockCommittedInfo, OutPoint, RollupAction, RollupActionUnion, Script,
@@ -217,18 +217,12 @@ impl ChainUpdater {
             }
         }
 
-        let tx: Option<TransactionWithStatus> = self
-            .rpc_client
-            .ckb
-            .request(
-                "get_transaction",
-                Some(ClientParams::Array(vec![json!(tx_hash)])),
-            )
-            .await?;
-        let tx_with_status =
-            tx.ok_or_else(|| QueryL1TxError::new(tx_hash, anyhow!("cannot locate tx")))?;
+        let tx_with_status = self.rpc_client.ckb.get_transaction(tx_hash).await?;
+        let tx = tx_with_status
+            .transaction
+            .ok_or_else(|| QueryL1TxError::new(tx_hash, anyhow!("cannot locate tx")))?;
         let tx = {
-            let tx: ckb_types::packed::Transaction = tx_with_status.transaction.inner.into();
+            let tx: ckb_types::packed::Transaction = tx.inner.into();
             Transaction::new_unchecked(tx.as_bytes())
         };
         let block_hash = tx_with_status.tx_status.block_hash.ok_or_else(|| {
@@ -317,7 +311,7 @@ impl ChainUpdater {
         let tx_hash: gw_common::H256 =
             From::<[u8; 32]>::from(committed_info.transaction_hash().unpack());
         let tx_status = rpc_client.get_transaction_status(tx_hash).await?;
-        if !matches!(tx_status, Some(TxStatus::Committed)) {
+        if !matches!(tx_status, Some(Status::Committed)) {
             return Ok(false);
         }
 
@@ -415,7 +409,7 @@ impl ChainUpdater {
     fn extract_rollup_action(&self, tx: &Transaction) -> Result<RollupAction> {
         let rollup_type_hash: [u8; 32] = {
             let hash = self.rollup_type_script.calc_script_hash();
-            ckb_types::prelude::Unpack::unpack(&hash)
+            ckb_types::prelude::Unpack::unpack(&hash).into()
         };
 
         // find rollup state cell from outputs
@@ -505,20 +499,11 @@ impl ChainUpdater {
             // Load cell denoted by the transaction input
             let tx_hash: H256 = input.previous_output().tx_hash().unpack();
             let index = input.previous_output().index().unpack();
-            let tx: Option<TransactionWithStatus> = self
+            let tx = self
                 .rpc_client
-                .ckb
-                .request(
-                    "get_transaction",
-                    Some(ClientParams::Array(vec![json!(tx_hash)])),
-                )
-                .await?;
-            let tx_with_status =
-                tx.ok_or_else(|| QueryL1TxError::new(&tx_hash, anyhow!("cannot locate tx")))?;
-            let tx = {
-                let tx: ckb_types::packed::Transaction = tx_with_status.transaction.inner.into();
-                Transaction::new_unchecked(tx.as_bytes())
-            };
+                .get_transaction(tx_hash.0.into())
+                .await?
+                .with_context(move || QueryL1TxError::new(&tx_hash, anyhow!("")))?;
             let cell_output = tx
                 .raw()
                 .outputs()

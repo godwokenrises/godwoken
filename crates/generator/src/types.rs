@@ -74,9 +74,6 @@ impl VMVersion {
     }
 }
 
-#[cfg(has_asm)]
-pub(crate) use ckb_vm::machine::aot::AotCode;
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ChallengeContext {
     pub target: ChallengeTarget,

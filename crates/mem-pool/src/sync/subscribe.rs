@@ -25,7 +25,7 @@ impl SubscribeMemPoolService {
         let tx_hash = tx.raw().hash();
         log::info!(
             "Add tx: {} from block: {} to mem block",
-            hex::encode(&tx_hash),
+            hex::encode(tx_hash),
             block_number
         );
         let mut mem_pool = self.mem_pool.lock().await;

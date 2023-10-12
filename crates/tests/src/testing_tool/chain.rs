@@ -45,8 +45,8 @@ lazy_static! {
     pub static ref ALWAYS_SUCCESS_PROGRAM: Bytes = {
         let mut buf = Vec::new();
         let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&ALWAYS_SUCCESS_PATH);
+        path.push(SCRIPT_DIR);
+        path.push(ALWAYS_SUCCESS_PATH);
         let mut f = fs::File::open(&path).expect("load program");
         f.read_to_end(&mut buf).expect("read program");
         Bytes::from(buf.to_vec())
@@ -61,8 +61,8 @@ lazy_static! {
     pub static ref WITHDRAWAL_LOCK_PROGRAM: Bytes = {
         let mut buf = Vec::new();
         let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&WITHDRAWAL_LOCK_PATH);
+        path.push(SCRIPT_DIR);
+        path.push(WITHDRAWAL_LOCK_PATH);
         let mut f = fs::File::open(&path).expect("load withdrawal lock program");
         f.read_to_end(&mut buf)
             .expect("read withdrawal lock program");
@@ -78,8 +78,8 @@ lazy_static! {
     pub static ref STATE_VALIDATOR_TYPE_PROGRAM: Bytes = {
         let mut buf = Vec::new();
         let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&STATE_VALIDATOR_TYPE_PATH);
+        path.push(SCRIPT_DIR);
+        path.push(STATE_VALIDATOR_TYPE_PATH);
         let mut f = fs::File::open(&path).expect("load state validator type program");
         f.read_to_end(&mut buf)
             .expect("read state validator type program");
@@ -95,8 +95,8 @@ lazy_static! {
     pub static ref STAKE_LOCK_PROGRAM: Bytes = {
         let mut buf = Vec::new();
         let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&STAKE_LOCK_PATH);
+        path.push(SCRIPT_DIR);
+        path.push(STAKE_LOCK_PATH);
         let mut f = fs::File::open(&path).expect("load stake lock program");
         f.read_to_end(&mut buf).expect("read stake lock program");
         Bytes::from(buf.to_vec())
@@ -111,8 +111,8 @@ lazy_static! {
     pub static ref CUSTODIAN_LOCK_PROGRAM: Bytes = {
         let mut buf = Vec::new();
         let mut path = PathBuf::new();
-        path.push(&SCRIPT_DIR);
-        path.push(&CUSTODIAN_LOCK_PATH);
+        path.push(SCRIPT_DIR);
+        path.push(CUSTODIAN_LOCK_PATH);
         let mut f = fs::File::open(&path).expect("load custodian lock program");
         f.read_to_end(&mut buf)
             .expect("read custodian lock program");

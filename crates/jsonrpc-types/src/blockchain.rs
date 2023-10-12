@@ -5,21 +5,17 @@ use gw_types::{packed, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ScriptHashType {
     /// Type "data" matches script code via cell data hash.
+    #[default]
     Data,
     /// Type "type" matches script code via cell type script hash.
     Type,
     /// Type "data" matches script code via cell data hash, and run the script code in v1 CKB VM.
     Data1,
-}
-
-impl Default for ScriptHashType {
-    fn default() -> Self {
-        ScriptHashType::Data
-    }
+    Data2,
 }
 
 impl From<ScriptHashType> for packed::Byte {
@@ -28,6 +24,7 @@ impl From<ScriptHashType> for packed::Byte {
             ScriptHashType::Data => packed::Byte::new(0),
             ScriptHashType::Type => packed::Byte::new(1),
             ScriptHashType::Data1 => packed::Byte::new(2),
+            ScriptHashType::Data2 => packed::Byte::new(4),
         }
     }
 }
@@ -38,6 +35,7 @@ impl From<ckb_jsonrpc_types::ScriptHashType> for ScriptHashType {
             ckb_jsonrpc_types::ScriptHashType::Data => ScriptHashType::Data,
             ckb_jsonrpc_types::ScriptHashType::Type => ScriptHashType::Type,
             ckb_jsonrpc_types::ScriptHashType::Data1 => ScriptHashType::Data1,
+            ckb_jsonrpc_types::ScriptHashType::Data2 => ScriptHashType::Data2,
         }
     }
 }
@@ -48,6 +46,7 @@ impl From<ScriptHashType> for ckb_jsonrpc_types::ScriptHashType {
             ScriptHashType::Data => ckb_jsonrpc_types::ScriptHashType::Data,
             ScriptHashType::Type => ckb_jsonrpc_types::ScriptHashType::Type,
             ScriptHashType::Data1 => ckb_jsonrpc_types::ScriptHashType::Data1,
+            ScriptHashType::Data2 => ckb_jsonrpc_types::ScriptHashType::Data2,
         }
     }
 }
@@ -276,12 +275,13 @@ impl From<ckb_jsonrpc_types::OutPoint> for OutPoint {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum DepType {
     /// Type "code".
     ///
     /// Use the cell itself as the dep cell.
+    #[default]
     Code,
     /// Type "dep_group".
     ///
@@ -318,12 +318,6 @@ impl From<ckb_jsonrpc_types::DepType> for DepType {
             ckb_jsonrpc_types::DepType::Code => DepType::Code,
             ckb_jsonrpc_types::DepType::DepGroup => DepType::DepGroup,
         }
-    }
-}
-
-impl Default for DepType {
-    fn default() -> Self {
-        DepType::Code
     }
 }
 

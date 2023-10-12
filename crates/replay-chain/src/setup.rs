@@ -62,7 +62,7 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
     };
     let secp_data: Bytes = {
         let rpc_client = {
-            let indexer_client = CKBIndexerClient::with_url(&config.rpc_client.indexer_url)?;
+            let indexer_client = CKBIndexerClient::with_url(&config.rpc_client.ckb_url)?;
             let ckb_client = CKBClient::with_url(&config.rpc_client.ckb_url)?;
             let rollup_type_script =
                 ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
@@ -102,12 +102,12 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
             .ok_or_else(|| anyhow!("Eth: No allowed EoA type hashes in the rollup config"))?;
         account_lock_manage.register_lock_algorithm(
             eth_lock_script_type_hash.unpack(),
-            Box::new(Secp256k1Eth::default()),
+            Box::<Secp256k1Eth>::default(),
         );
         let tron_lock_script_type_hash = rollup_config.allowed_eoa_type_hashes().get(1);
         if let Some(code_hash) = tron_lock_script_type_hash {
             account_lock_manage
-                .register_lock_algorithm(code_hash.unpack(), Box::new(Secp256k1Tron::default()))
+                .register_lock_algorithm(code_hash.unpack(), Box::<Secp256k1Tron>::default())
         }
         Arc::new(Generator::new(
             backend_manage,

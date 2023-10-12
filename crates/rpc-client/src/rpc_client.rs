@@ -7,12 +7,11 @@ use crate::traits::IndexedCells;
 use crate::utils::{to_h256, to_jsonh256, DEFAULT_QUERY_LIMIT, TYPE_ID_CODE_HASH};
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::Params as ClientParams;
-use ckb_types::core::hardfork::HardForkSwitch;
 use ckb_types::prelude::Entity;
 use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
-use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, Consensus, Uint32};
+use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, Status, Uint32};
 use gw_types::offchain::{
-    CellStatus, CellWithStatus, CollectedCustodianCells, DepositInfo, RollupContext, TxStatus,
+    CellStatus, CellWithStatus, CollectedCustodianCells, DepositInfo, RollupContext,
     WithdrawalsAmount,
 };
 use gw_types::{
@@ -216,22 +215,26 @@ impl RPCClient {
                 cells.objects.len() <= 1,
                 "Never returns more than 1 identity cells"
             );
-            cell = cells.objects.into_iter().find_map(|cell| {
-                let out_point = {
-                    let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
-                    OutPoint::new_unchecked(out_point.as_bytes())
-                };
-                let output = {
-                    let output: ckb_types::packed::CellOutput = cell.output.into();
-                    CellOutput::new_unchecked(output.as_bytes())
-                };
-                let data = cell.output_data.into_bytes();
-                Some(CellInfo {
-                    out_point,
-                    output,
-                    data,
+            cell = cells
+                .objects
+                .into_iter()
+                .map(|cell| {
+                    let out_point = {
+                        let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
+                        OutPoint::new_unchecked(out_point.as_bytes())
+                    };
+                    let output = {
+                        let output: ckb_types::packed::CellOutput = cell.output.into();
+                        CellOutput::new_unchecked(output.as_bytes())
+                    };
+                    let data = cell.output_data.into_bytes();
+                    CellInfo {
+                        out_point,
+                        output,
+                        data,
+                    }
                 })
-            });
+                .next();
         }
         Ok(cell)
     }
@@ -369,7 +372,7 @@ impl RPCClient {
     #[instrument(skip_all)]
     pub async fn get_tip(&self) -> Result<NumberHash> {
         let number_hash: gw_jsonrpc_types::blockchain::NumberHash =
-            self.indexer.request("get_tip", None).await?;
+            self.indexer.request("get_indexer_tip", None).await?;
         Ok(number_hash.into())
     }
 
@@ -1512,24 +1515,9 @@ impl RPCClient {
 
     #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]
     pub async fn get_transaction_block_hash(&self, tx_hash: H256) -> Result<Option<[u8; 32]>> {
-        let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = self
-            .ckb
-            .request(
-                "get_transaction",
-                Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
-            )
-            .await?;
-
-        match tx_with_status {
-            Some(tx_with_status) => {
-                let block_hash: ckb_fixed_hash::H256 = {
-                    let status = tx_with_status.tx_status;
-                    status.block_hash.ok_or_else(|| anyhow!("no tx block hash"))
-                }?;
-                Ok(Some(block_hash.into()))
-            }
-            None => Ok(None),
-        }
+        let hash: [u8; 32] = tx_hash.into();
+        let tx_with_status = self.ckb.get_transaction(&hash.into()).await?;
+        Ok(tx_with_status.tx_status.block_hash.map(|x| x.into()))
     }
 
     #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]
@@ -1545,42 +1533,21 @@ impl RPCClient {
 
     #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]
     pub async fn get_transaction(&self, tx_hash: H256) -> Result<Option<Transaction>> {
-        let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = self
-            .ckb
-            .request(
-                "get_transaction",
-                Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
-            )
-            .await?;
-        Ok(tx_with_status.map(|tx_with_status| {
-            let tx: ckb_types::packed::Transaction = tx_with_status.transaction.inner.into();
-            Transaction::new_unchecked(tx.as_bytes())
-        }))
+        let hash: [u8; 32] = tx_hash.into();
+        let tx_with_status = self.ckb.get_transaction(&hash.into()).await?;
+        if let Some(tx) = tx_with_status.transaction {
+            let tx = ckb_types::packed::Transaction::from(tx.inner);
+            Ok(Some(Transaction::new_unchecked(tx.as_bytes())))
+        } else {
+            Ok(None)
+        }
     }
 
     #[instrument(skip_all, fields(tx_hash = %tx_hash.pack()))]
-    pub async fn get_transaction_status(&self, tx_hash: H256) -> Result<Option<TxStatus>> {
-        let get_tx = self.ckb.request::<Option<serde_json::Value>>(
-            "get_transaction",
-            Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
-        );
-
-        let tx_with_status: ckb_jsonrpc_types::TransactionWithStatus = match get_tx.await? {
-            Some(ret) if ret["transaction"] == serde_json::Value::Null => {
-                log::debug!("get_transaction_status: tx {:x} {:?}", tx_hash.pack(), ret);
-                return Ok(None);
-            }
-            Some(ret) => serde_json::from_value(ret)?,
-            None => return Ok(None),
-        };
-
-        let status = match tx_with_status.tx_status.status {
-            ckb_jsonrpc_types::Status::Pending => TxStatus::Pending,
-            ckb_jsonrpc_types::Status::Committed => TxStatus::Committed,
-            ckb_jsonrpc_types::Status::Proposed => TxStatus::Proposed,
-        };
-
-        Ok(Some(status))
+    pub async fn get_transaction_status(&self, tx_hash: H256) -> Result<Option<Status>> {
+        let hash: [u8; 32] = tx_hash.into();
+        let tx_with_status = self.ckb.get_transaction(&hash.into()).await?;
+        Ok(Some(tx_with_status.tx_status.status))
     }
 
     #[instrument(skip_all, fields(tx_hash = %tx.hash().pack()))]
@@ -1611,10 +1578,10 @@ impl RPCClient {
             let tx = ckb_types::packed::Transaction::new_unchecked(tx.as_bytes());
             tx.into()
         };
-        let dry_run_result: ckb_jsonrpc_types::DryRunResult = self
+        let dry_run_result: ckb_jsonrpc_types::EstimateCycles = self
             .ckb
             .request(
-                "dry_run_transaction",
+                "estimate_cycles",
                 Some(ClientParams::Array(vec![json!(tx)])),
             )
             .await?;
@@ -1626,44 +1593,6 @@ impl RPCClient {
         let epoch_view: ckb_jsonrpc_types::EpochView =
             self.ckb.request("get_current_epoch", None).await?;
         let epoch_number: u64 = epoch_view.number.into();
-        Ok(epoch_number)
-    }
-
-    #[instrument(skip_all)]
-    pub async fn get_hardfork_switch(&self) -> Result<HardForkSwitch> {
-        let consensus: Consensus = self.ckb.request("get_consensus", None).await?;
-        let rfc_0028 = self.get_hardfork_feature_epoch_number(&consensus, "0028")?;
-        let rfc_0029 = self.get_hardfork_feature_epoch_number(&consensus, "0029")?;
-        let rfc_0030 = self.get_hardfork_feature_epoch_number(&consensus, "0030")?;
-        let rfc_0031 = self.get_hardfork_feature_epoch_number(&consensus, "0031")?;
-        let rfc_0032 = self.get_hardfork_feature_epoch_number(&consensus, "0032")?;
-        let rfc_0036 = self.get_hardfork_feature_epoch_number(&consensus, "0036")?;
-        let rfc_0038 = self.get_hardfork_feature_epoch_number(&consensus, "0038")?;
-        let hardfork_switch = HardForkSwitch::new_without_any_enabled()
-            .as_builder()
-            .rfc_0028(rfc_0028)
-            .rfc_0029(rfc_0029)
-            .rfc_0030(rfc_0030)
-            .rfc_0031(rfc_0031)
-            .rfc_0032(rfc_0032)
-            .rfc_0036(rfc_0036)
-            .rfc_0038(rfc_0038)
-            .build()
-            .map_err(|err| anyhow!(err))?;
-
-        Ok(hardfork_switch)
-    }
-
-    #[instrument(skip_all)]
-    fn get_hardfork_feature_epoch_number(&self, consensus: &Consensus, rfc: &str) -> Result<u64> {
-        let rfc_info = consensus
-            .hardfork_features
-            .iter()
-            .find(|f| f.rfc == rfc)
-            .ok_or_else(|| anyhow!("rfc {} hardfork feature not found!", rfc))?;
-
-        // if epoch_number is null, which means the fork will never going to happen
-        let epoch_number: u64 = rfc_info.epoch_number.map(Into::into).unwrap_or(u64::MAX);
         Ok(epoch_number)
     }
 

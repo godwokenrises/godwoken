@@ -4,7 +4,7 @@ use crate::types::{
     BuildScriptsResult, RollupDeploymentResult, ScriptsDeploymentResult, UserRollupConfig,
 };
 use anyhow::{anyhow, Result};
-use ckb_sdk::HttpRpcClient;
+use ckb_sdk::CkbRpcClient;
 use ckb_types::prelude::{Builder, Entity};
 use gw_config::{
     BackendConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config, ConsensusConfig,
@@ -23,7 +23,6 @@ pub struct GenerateNodeConfigArgs<'a> {
     pub scripts_deployment: &'a ScriptsDeploymentResult,
     pub privkey_path: &'a Path,
     pub ckb_url: String,
-    pub indexer_url: String,
     pub database_url: Option<&'a str>,
     pub build_scripts_result: &'a BuildScriptsResult,
     pub server_url: String,
@@ -37,7 +36,6 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         scripts_deployment,
         privkey_path,
         ckb_url,
-        indexer_url,
         database_url,
         build_scripts_result,
         server_url,
@@ -45,7 +43,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         node_mode,
     } = args;
 
-    let mut rpc_client = HttpRpcClient::new(ckb_url.to_string());
+    let rpc_client = CkbRpcClient::new(&ckb_url);
     let tx_with_status = rpc_client
         .get_transaction(rollup_result.tx_hash.clone())
         .map_err(|err| anyhow!("get transaction error: {}", err))?
@@ -60,8 +58,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         .map_err(|err| anyhow!("{}", err))?
         .ok_or_else(|| anyhow!("can't find block"))?
         .inner
-        .number
-        .into();
+        .number;
 
     // build configuration
     let account_id = 0;
@@ -112,7 +109,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
     let (_data, secp_data_dep) =
-        get_secp_data(&mut rpc_client).map_err(|err| anyhow!("get secp data {}", err))?;
+        get_secp_data(&rpc_client).map_err(|err| anyhow!("get secp data {}", err))?;
 
     let ckb_client = CKBClient::with_url(&ckb_url)?;
     let contract_type_scripts =
@@ -184,10 +181,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         rollup_type_script,
         skipped_invalid_block_list: Default::default(),
     };
-    let rpc_client: RPCClientConfig = RPCClientConfig {
-        indexer_url,
-        ckb_url,
-    };
+    let rpc_client: RPCClientConfig = RPCClientConfig { ckb_url };
     let rpc_server = RPCServerConfig {
         listen: server_url,
         ..Default::default()
