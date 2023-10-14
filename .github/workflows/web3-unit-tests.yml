@@ -22,7 +22,7 @@ env:
   WEB3_GIT_URL: "https://github.com/${{ github.repository }}"
   WEB3_GIT_CHECKOUT: "${{ github.ref }}"
   GODWOKEN_KICKER_REPO: "godwokenrises/godwoken-kicker"
-  GODWOKEN_KICKER_REF: "refs/pull/357/merge"
+  GODWOKEN_KICKER_REF: "develop"
   DOCKER_MANUAL_BUILD_IMAGE: "retricsu/godwoken-manual-build:node18"
 
 jobs:
@@ -49,10 +49,10 @@ jobs:
         capsule --version
 
     # Godwoken-Kicker
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
-        repository: godwokenrises/godwoken-kicker
-        ref: 'develop'
+        repository: ${{ env.GODWOKEN_KICKER_REPO }}
+        ref: ${{ env.GODWOKEN_KICKER_REF }}
     - name: Kicker init
       run: ./kicker init
     - name: Kicker start
@@ -71,7 +71,7 @@ jobs:
         echo "REDIS_URL=redis://127.0.0.1:6379"                           >> $GITHUB_ENV
 
     # Godwoken-Web3
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: godwoken-monorepo
     - name: Get yarn cache directory path
