@@ -22,8 +22,8 @@ env:
   WEB3_GIT_URL: "https://github.com/${{ github.repository }}"
   WEB3_GIT_CHECKOUT: "${{ github.ref }}"
   GODWOKEN_KICKER_REPO: "godwokenrises/godwoken-kicker"
-  GODWOKEN_KICKER_REF: "develop"
-
+  GODWOKEN_KICKER_REF: "refs/pull/357/merge"
+  DOCKER_MANUAL_BUILD_IMAGE: "retricsu/godwoken-manual-build:node18"
 
 jobs:
   web3-unit-tests:
