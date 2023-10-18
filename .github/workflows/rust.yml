@@ -9,10 +9,6 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-    - name: Install Rust components
-      run: |
-        cargo fmt --version || rustup component add rustfmt
-        cargo clippy --version || rustup component add clippy
     - name: Cache of Cargo
       uses: actions/cache@v3
       with:
@@ -26,8 +22,12 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-${{ runner.arch }}-cargo-clippy
 
+    - name: Install Rust components
+      run: |
+        cargo fmt --version || rustup component add rustfmt
+        cargo clippy --version || rustup component add clippy
     - name: Check format
-      run: cargo fmt -- --check
+      run: cargo fmt --all -- --check --verbose
     - name: Cargo clippy check
       env:
         RUSTFLAGS: -D warnings
@@ -40,23 +40,6 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-    - name: Install moleculec v0.7.2
-      run: CARGO_TARGET_DIR=target/ cargo install moleculec --version 0.7.2
-
-    - name: Cache of component.gwos-evm
-      id: godwoken-polyjuice-cache
-      uses: actions/cache@v3
-      with:
-        path: |
-          gwos-evm/build/*generator*
-          gwos-evm/build/*validator*
-        key: component.gwos-evm-${{ hashFiles('gwos-evm/**') }}
-    - name: Build godwoken-polyjuice
-      if: steps.godwoken-polyjuice-cache.outputs.cache-hit != 'true'
-      working-directory: gwos-evm
-      run: |
-        git submodule update --init --recursive --depth=1
-        make all-via-docker
 
     - name: Cache of Cargo
       uses: actions/cache@v3
@@ -70,6 +53,24 @@ jobs:
         key: ${{ runner.os }}-${{ runner.arch }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-${{ runner.arch }}-cargo-test
+
+    - name: Cache of component.gwos-evm
+      id: godwoken-polyjuice-cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          gwos-evm/build/*generator*
+          gwos-evm/build/*validator*
+        key: component.gwos-evm-${{ hashFiles('gwos-evm/**') }}  
+    - name: Build godwoken-polyjuice
+      if: steps.godwoken-polyjuice-cache.outputs.cache-hit != 'true'
+      working-directory: gwos-evm
+      run: |
+        test "$(moleculec --version)" = "Moleculec 0.7.2" \
+        || cargo install moleculec --version 0.7.2 --force
+        git submodule update --init --recursive --depth=1
+        make all-via-docker
+
     - name: Test all targets
       run: RUST_BACKTRACE=1 cargo test --all-targets
 
