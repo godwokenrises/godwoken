@@ -3,59 +3,84 @@ name: Build and Test
 on: [push, pull_request]
 
 jobs:
-  rust-clippy-and-test:
-    runs-on: ubuntu-latest
+  rustfmt-and-clippy:
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - name: Install Rust components
-        run: rustup component add rustfmt && rustup component add clippy
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-${{ runner.arch }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-cargo-test
-            ${{ runner.os }}-${{ runner.arch }}-cargo
-      - name: Install moleculec v0.7.2
-        run: CARGO_TARGET_DIR=target/ cargo install moleculec --version 0.7.2
-      - name: Check format
-        run: cargo fmt -- --check
-      - name: Cargo clippy check
-        env:
-          RUSTFLAGS: -D warnings
-        run: cargo clippy --tests --all-features --all-targets
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Install Rust components
+      run: |
+        cargo fmt --version || rustup component add rustfmt
+        cargo clippy --version || rustup component add clippy
+    - name: Cache of Cargo
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-${{ runner.arch }}-cargo-clippy-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-cargo-clippy
 
-      - name: Cache of component.gwos-evm
-        id: godwoken-polyjuice-cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            gwos-evm/build/*generator*
-            gwos-evm/build/*validator*
-          key: component.gwos-evm-${{ hashFiles('gwos-evm/**') }}
-      - name: Build godwoken-polyjuice
-        if: steps.godwoken-polyjuice-cache.outputs.cache-hit != 'true'
-        working-directory: gwos-evm
-        run: |
-          git submodule update --init --recursive --depth=1
-          make all-via-docker
+    - name: Check format
+      run: cargo fmt -- --check
+    - name: Cargo clippy check
+      env:
+        RUSTFLAGS: -D warnings
+      run: cargo clippy --tests --all-features --all-targets
 
-      - name: Tests all targets
-        run: RUST_BACKTRACE=1 cargo test --all-targets
+  
+  rust-test:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Install moleculec v0.7.2
+      run: CARGO_TARGET_DIR=target/ cargo install moleculec --version 0.7.2
+
+    - name: Cache of component.gwos-evm
+      id: godwoken-polyjuice-cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          gwos-evm/build/*generator*
+          gwos-evm/build/*validator*
+        key: component.gwos-evm-${{ hashFiles('gwos-evm/**') }}
+    - name: Build godwoken-polyjuice
+      if: steps.godwoken-polyjuice-cache.outputs.cache-hit != 'true'
+      working-directory: gwos-evm
+      run: |
+        git submodule update --init --recursive --depth=1
+        make all-via-docker
+
+    - name: Cache of Cargo
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-${{ runner.arch }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-cargo-test
+    - name: Test all targets
+      run: RUST_BACKTRACE=1 cargo test --all-targets
+
 
   test-generate-example-config:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
     - name: Cache of Cargo
-      id: cargo-test-cache
       uses: actions/cache@v3
       with:
         path: |
@@ -67,6 +92,5 @@ jobs:
         key: ${{ runner.os }}-${{ runner.arch }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-${{ runner.arch }}-cargo-build
-          ${{ runner.os }}-${{ runner.arch }}-cargo
     - name: Test TOML serialization
       run: cargo run --bin godwoken -- generate-example-config -o test.toml
