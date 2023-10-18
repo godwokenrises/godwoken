@@ -9,7 +9,7 @@ use ckb_vm::{
     machine::asm::AsmCoreMachine,
     memory::Memory,
     registers::{A0, A1, A3, A7},
-    DefaultMachineBuilder, Error as VMError, Register, SupportMachine, Syscalls,
+    DefaultMachineBuilder, Error as VMError, ExecutionContext, Register, SupportMachine,
 };
 use gw_common::state::{build_data_hash_key, State};
 use gw_config::SyscallCyclesConfig;
@@ -47,11 +47,7 @@ fn load_data_h256<Mac: SupportMachine>(machine: &mut Mac, addr: u64) -> Result<H
     Ok(H256::from(data))
 }
 
-impl<Mac: SupportMachine> Syscalls<Mac> for L2Syscalls {
-    fn initialize(&mut self, _machine: &mut Mac) -> Result<(), VMError> {
-        Ok(())
-    }
-
+impl<Mac: SupportMachine> ExecutionContext<Mac> for L2Syscalls {
     fn ecall(&mut self, machine: &mut Mac) -> Result<bool, VMError> {
         let code = machine.registers()[A7].to_u64();
 
@@ -155,9 +151,9 @@ fn test_contracts() {
     let core_machine = AsmCoreMachine::new(params.vm_isa, params.vm_version, 7000_0000);
 
     let machine_builder =
-        DefaultMachineBuilder::new(core_machine).syscall(Box::new(L2Syscalls { data, tree }));
+        DefaultMachineBuilder::new(core_machine).context(L2Syscalls { data, tree });
 
-    let mut machine = ckb_vm_aot::AotMachine::new(machine_builder.build(), None);
+    let mut machine = machine_builder.build();
     machine.load_program(&binary, &[]).unwrap();
     let code = machine.run().unwrap();
     assert_eq!(code, 0);

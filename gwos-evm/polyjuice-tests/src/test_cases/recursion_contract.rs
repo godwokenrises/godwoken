@@ -39,7 +39,7 @@ fn test_recursion_contract_call() {
     let recur_account_script =
         new_contract_account_script(&state, from_id, &from_eth_address, false);
     let recur_account_id = state
-        .get_account_id_by_script_hash(&recur_account_script.hash().into())
+        .get_account_id_by_script_hash(&recur_account_script.hash())
         .unwrap()
         .unwrap();
 

@@ -166,11 +166,11 @@ mod test {
         };
         let sudt_script = Script::new_builder()
             .code_hash(H256::from_u32(1).pack())
-            .args(vec![3; 32].pack())
+            .args([3; 32][..].pack())
             .build();
         let owner_lock = Script::new_builder()
             .code_hash(H256::from_u32(4).pack())
-            .args(vec![5; 32].pack())
+            .args([5; 32][..].pack())
             .build();
 
         // ## Fulfill withdrawal request
@@ -187,7 +187,7 @@ mod test {
                 .build();
             WithdrawalRequest::new_builder()
                 .raw(raw)
-                .signature(vec![6u8; 65].pack())
+                .signature([6u8; 65][..].pack())
                 .build()
         };
         let withdrawal = WithdrawalRequestExtra::new_builder()
@@ -291,7 +291,7 @@ mod test {
         let err_owner_lock = Script::new_builder()
             .code_hash([100u8; 32].pack())
             .hash_type(ScriptHashType::Data.into())
-            .args(vec![99u8; 32].pack())
+            .args([99u8; 32][..].pack())
             .build();
         let err = build_withdrawal_cell_output(
             &rollup_context,

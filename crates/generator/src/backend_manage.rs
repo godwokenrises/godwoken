@@ -4,9 +4,6 @@ use anyhow::{bail, Context, Result};
 use gw_config::{content_checksum, BackendConfig, BackendForkConfig, BackendType};
 use gw_types::{bytes::Bytes, h256::*};
 
-#[cfg(has_asm)]
-use crate::types::vm::AotCode;
-
 #[derive(Clone)]
 pub struct Backend {
     pub generator: Bytes,
@@ -91,10 +88,6 @@ pub struct BlockConsensus {
 #[derive(Default)]
 pub struct BackendManage {
     backend_forks: Vec<(u64, BlockConsensus)>,
-    /// define here not in backends,
-    /// so we don't need to implement the trait `Clone` of AotCode
-    #[cfg(has_asm)]
-    aot_codes: HashMap<H256, AotCode>,
 }
 
 impl BackendManage {
@@ -188,10 +181,6 @@ impl BackendManage {
                 generator_checksum.into(),
                 generator_debug,
             )?;
-            #[cfg(has_asm)]
-            if compile {
-                self.compile_backend(&backend);
-            }
 
             log::debug!(
                 "registry backend {:?}({}) at height {}",
@@ -208,15 +197,6 @@ impl BackendManage {
         self.backend_forks
             .push((config.fork_height, block_consensus));
         Ok(())
-    }
-
-    #[cfg(has_asm)]
-    fn compile_backend(&mut self, backend: &Backend) {
-        self.aot_codes.insert(
-            backend.generator_checksum,
-            self.aot_compile(&backend.generator)
-                .expect("Ahead-of-time compile"),
-        );
     }
 
     pub fn get_block_consensus_at_height(
@@ -251,25 +231,6 @@ impl BackendManage {
                 );
                 backend
             })
-    }
-
-    #[cfg(has_asm)]
-    fn aot_compile(&self, code_bytes: &Bytes) -> Result<AotCode, ckb_vm::Error> {
-        let vm_version = crate::types::vm::VMVersion::V1;
-        let mut aot_machine = ckb_vm_aot::AotCompilingMachine::load(
-            code_bytes,
-            Some(Box::new(crate::vm_cost_model::instruction_cycles)),
-            vm_version.vm_isa(),
-            vm_version.vm_version(),
-        )?;
-        aot_machine.compile()
-    }
-
-    /// get aot_code according to special VM version
-    #[cfg(has_asm)]
-    pub(crate) fn get_aot_code(&self, code_hash: &H256) -> Option<&AotCode> {
-        log::debug!("get_aot_code hash: {}", hex::encode(code_hash.as_slice()),);
-        self.aot_codes.get(code_hash)
     }
 }
 

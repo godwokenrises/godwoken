@@ -120,7 +120,7 @@ fn test_call_multiple_times() {
         // let ss2_contract_ethabi_addr = contract_script_to_eth_addr(&ss2_account_script, true);
         let input = hex::decode(format!(
             "bca0b9c2{}{}",
-            hex::encode(&ss2_contract_eth_abi_addr),
+            hex::encode(ss2_contract_eth_abi_addr),
             "0000000000000000000000000000000000000000000000000000000000000014",
         ))
         .unwrap();

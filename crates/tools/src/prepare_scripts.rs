@@ -1,3 +1,6 @@
+// Useless vec is from the arg_enum macro.
+#![allow(clippy::useless_vec)]
+
 use std::{
     collections::HashMap,
     fs,

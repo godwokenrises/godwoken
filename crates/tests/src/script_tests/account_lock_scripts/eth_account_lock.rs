@@ -5,7 +5,7 @@ use crate::script_tests::utils::layer1::*;
 use crate::testing_tool::chain::{ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM};
 use ckb_crypto::secp::{Generator, Privkey, Pubkey};
 use ckb_error::assert_error_eq;
-use ckb_script::{ScriptError, TransactionScriptsVerifier};
+use ckb_script::ScriptError;
 use ckb_types::{
     bytes::Bytes,
     core::{Capacity, DepType, ScriptHashType, TransactionBuilder, TransactionView},
@@ -15,8 +15,6 @@ use ckb_types::{
 use gw_types::core::SigningType;
 use rand::{thread_rng, Rng};
 use sha3::{Digest, Keccak256};
-
-use std::convert::TryInto;
 
 const ERROR_WRONG_SIGNATURE: i8 = 41;
 
@@ -227,11 +225,7 @@ fn test_sign_eth_message() {
             .as_bytes()
             .pack()])
         .build();
-    let resolved_tx = build_resolved_tx(&data_loader, &tx);
-    let mut verifier = TransactionScriptsVerifier::new(&resolved_tx, &data_loader);
-    verifier.set_debug_printer(|_script, msg| println!("[script debug] {}", msg));
-    let verify_result = verifier.verify(MAX_CYCLES);
-    verify_result.expect("pass verification");
+    data_loader.verify_tx(&tx).expect("pass verification");
 }
 
 #[test]
@@ -271,11 +265,8 @@ fn test_submit_signing_eth_message() {
             .as_bytes()
             .pack()])
         .build();
-    let resolved_tx = build_resolved_tx(&data_loader, &tx);
-    let mut verifier = TransactionScriptsVerifier::new(&resolved_tx, &data_loader);
-    verifier.set_debug_printer(|_script, msg| println!("[script debug] {}", msg));
-    let verify_result = verifier.verify(MAX_CYCLES);
-    verify_result.expect("pass verification");
+
+    data_loader.verify_tx(&tx).expect("pass verification");
 }
 
 #[test]
@@ -312,10 +303,7 @@ fn test_wrong_signature() {
             .as_bytes()
             .pack()])
         .build();
-    let resolved_tx = build_resolved_tx(&data_loader, &tx);
-    let mut verifier = TransactionScriptsVerifier::new(&resolved_tx, &data_loader);
-    verifier.set_debug_printer(|_script, msg| println!("[script debug] {}", msg));
-    let verify_result = verifier.verify(MAX_CYCLES);
+    let verify_result = data_loader.verify_tx(&tx);
     let script_cell_index = 0;
     assert_error_eq!(
         verify_result.unwrap_err(),

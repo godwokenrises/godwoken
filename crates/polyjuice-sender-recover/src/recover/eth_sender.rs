@@ -107,7 +107,7 @@ fn recover_registry_address(
 
     let message = Secp256k1Eth::polyjuice_tx_signing_message(ctx.chain_id, raw_tx, &to_script)
         .map_err(PolyjuiceTxSenderRecoverError::InvalidSignature)?;
-    let eth_address = Secp256k1Eth::default()
+    let eth_address = Secp256k1Eth
         .recover(message, signature)
         .map_err(|err| PolyjuiceTxSenderRecoverError::InvalidSignature(err.into()))?;
     let registry_address = RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, eth_address.to_vec());

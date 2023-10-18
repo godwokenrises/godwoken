@@ -98,8 +98,7 @@ fn test_example_sum() {
         }])
         .unwrap();
         let mut account_lock_manage = AccountLockManage::default();
-        account_lock_manage
-            .register_lock_algorithm(H256::zero(), Arc::new(AlwaysSuccess::default()));
+        account_lock_manage.register_lock_algorithm(H256::zero(), Arc::new(AlwaysSuccess));
         let rollup_context = RollupContext {
             rollup_config: Default::default(),
             rollup_script_hash: [42u8; 32],
@@ -238,7 +237,7 @@ fn test_example_account_operation() {
     }])
     .unwrap();
     let mut account_lock_manage = AccountLockManage::default();
-    account_lock_manage.register_lock_algorithm(H256::zero(), Arc::new(AlwaysSuccess::default()));
+    account_lock_manage.register_lock_algorithm(H256::zero(), Arc::new(AlwaysSuccess));
     let rollup_context = RollupContext {
         rollup_config: RollupConfig::new_builder()
             .allowed_contract_type_hashes(
@@ -478,8 +477,7 @@ fn test_example_recover_account() {
     .unwrap();
     let mut account_lock_manage = AccountLockManage::default();
     let secp256k1_code_hash = H256::from_u32(11);
-    account_lock_manage
-        .register_lock_algorithm(secp256k1_code_hash, Arc::new(Secp256k1Eth::default()));
+    account_lock_manage.register_lock_algorithm(secp256k1_code_hash, Arc::new(Secp256k1Eth));
     let rollup_script_hash: H256 = [42u8; 32];
     let rollup_context = RollupContext {
         rollup_config: RollupConfig::new_builder()
@@ -661,10 +659,8 @@ fn test_sudt_total_supply() {
         }])
         .unwrap();
         let mut account_lock_manage = AccountLockManage::default();
-        account_lock_manage.register_lock_algorithm(
-            *ALWAYS_SUCCESS_CODE_HASH,
-            Arc::new(AlwaysSuccess::default()),
-        );
+        account_lock_manage
+            .register_lock_algorithm(*ALWAYS_SUCCESS_CODE_HASH, Arc::new(AlwaysSuccess));
         let rollup_context = RollupContext {
             rollup_config,
             rollup_script_hash: [42u8; 32],

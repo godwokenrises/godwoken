@@ -116,7 +116,7 @@ fn test_duplicated_script_hash() {
     // create contract
     let contract_script = Script::new_builder()
         .code_hash([0u8; 32].pack())
-        .args(vec![42].pack())
+        .args([42][..].pack())
         .hash_type(ScriptHashType::Type.into())
         .build();
 

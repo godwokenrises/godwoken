@@ -265,10 +265,10 @@ mod tests {
 
         // Should able to restore from deprecated compact mem block
         let deprecated = DeprecatedCompactMemBlock::new_builder()
-            .txs(vec![[1u8; 32]].pack())
+            .txs([[1u8; 32]][..].pack())
             .build();
         let expected = CompactMemBlock::new_builder()
-            .txs(vec![[1u8; 32]].pack())
+            .txs([[1u8; 32]][..].pack())
             .build();
 
         let latest_timestamp = SystemTime::now()

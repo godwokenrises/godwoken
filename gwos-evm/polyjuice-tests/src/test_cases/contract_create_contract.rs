@@ -49,7 +49,7 @@ fn test_contract_create_contract() {
         new_contract_account_script(&state, from_id, &from_eth_address, false);
     let mom_contract_script_hash = mom_contract_script.hash();
     let mom_contract_id = state
-        .get_account_id_by_script_hash(&mom_contract_script_hash.into())
+        .get_account_id_by_script_hash(&mom_contract_script_hash)
         .unwrap()
         .unwrap(); // mom_contract_id = 6
     let mom_contract_nonce = state.get_nonce(mom_contract_id).unwrap();

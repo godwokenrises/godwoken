@@ -1,15 +1,19 @@
-use ckb_traits::{CellDataProvider, HeaderProvider};
+use std::{collections::HashMap, sync::Arc, time::Duration};
+
+use ckb_chain_spec::consensus::ConsensusBuilder;
+use ckb_script::{TransactionScriptsVerifier, TxVerifyEnv};
+use ckb_traits::{CellDataProvider, ExtensionProvider, HeaderProvider};
 use ckb_types::{
     bytes::Bytes,
     core::{
         cell::{CellMetaBuilder, ResolvedTransaction},
-        EpochExt, HeaderView, ScriptHashType, TransactionView,
+        hardfork::HardForks,
+        EpochExt, EpochNumberWithFraction, HeaderView, ScriptHashType, TransactionView,
     },
     packed::{Byte32, CellInput, CellOutput, OutPoint, Script, Transaction, Uint64},
     prelude::*,
 };
 use rand::{thread_rng, Rng};
-use std::{collections::HashMap, time::Duration};
 
 use crate::testing_tool::chain::ALWAYS_SUCCESS_CODE_HASH;
 
@@ -17,7 +21,7 @@ use crate::testing_tool::chain::ALWAYS_SUCCESS_CODE_HASH;
 pub const SINCE_BLOCK_TIMESTAMP_FLAG: u64 = 0x4000_0000_0000_0000;
 pub const MAX_CYCLES: u64 = std::u64::MAX;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct DummyDataLoader {
     pub cells: HashMap<OutPoint, (CellOutput, Bytes)>,
     pub headers: HashMap<Byte32, HeaderView>,
@@ -40,6 +44,15 @@ impl HeaderProvider for DummyDataLoader {
     // load header
     fn get_header(&self, block_hash: &Byte32) -> Option<HeaderView> {
         self.headers.get(block_hash).cloned()
+    }
+}
+
+impl ExtensionProvider for DummyDataLoader {
+    fn get_block_extension(
+        &self,
+        _hash: &ckb_types::packed::Byte32,
+    ) -> Option<ckb_types::packed::Bytes> {
+        None
     }
 }
 
@@ -151,5 +164,29 @@ pub fn build_resolved_tx(
         resolved_cell_deps,
         resolved_inputs,
         resolved_dep_groups: vec![],
+    }
+}
+
+impl DummyDataLoader {
+    pub fn verify_tx(self, tx: &TransactionView) -> Result<u64, ckb_error::Error> {
+        let resolved_tx = build_resolved_tx(&self, tx);
+        // Test with ckb 2023.
+        let consensus = ConsensusBuilder::default()
+            .hardfork_switch(HardForks::new_dev())
+            .build();
+        let tx_env = TxVerifyEnv::new_submit(
+            &HeaderView::new_advanced_builder()
+                .number(10000u64.pack())
+                .epoch(EpochNumberWithFraction::new(100, 0, 100).pack())
+                .build(),
+        );
+        let mut verifier = TransactionScriptsVerifier::new(
+            Arc::new(resolved_tx),
+            self,
+            Arc::new(consensus),
+            Arc::new(tx_env),
+        );
+        verifier.set_debug_printer(|_script, msg| println!("[script debug] {}", msg));
+        verifier.verify(MAX_CYCLES)
     }
 }
