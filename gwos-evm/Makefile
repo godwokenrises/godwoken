@@ -234,7 +234,7 @@ contract/sudt-erc20-proxy:
 
 # fetch godwoken-scripts from godwoken-prebuilds image,
 # including meta-contract and sudt-contract
-PREBUILDS := ghcr.io/zeroqn/godwoken-prebuilds:v1.1-feat-change-ckb-decimal-to-18
+PREBUILDS := ghcr.io/godwokenrises/godwoken:v1.14.0
 fetch-gw-scripts:
 	mkdir -p build
 	docker run --rm -v `pwd`/build:/build-dir \

@@ -39,7 +39,6 @@ LDFLAGS := -Wl,--gc-sections,-rpath,./gw-syscall-simulator/target/debug
 SANITIZER_FLAGS := -g -O1 -fsanitize=fuzzer,address,undefined,leak -Wno-incompatible-pointer-types
 LIMIT_ERROR := -ferror-limit=10
 
-# TODO: read PROTOCOL_VERSION from deps/godwoken-scripts/c/Makefile
 MOLC := moleculec
 
 MOLC_VERSION := $(shell cat $(GW_SCRIPTS)/Makefile | egrep "MOLC_VERSION :=" | awk '{print $$3}')
