@@ -93,7 +93,7 @@ jobs:
         mv corpus-new corpus-cache
 
     - name: Archive inputs that triggered crashes or sanitizer failures
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: failure()
       with:
         name: fuzzing-inputs
@@ -103,7 +103,7 @@ jobs:
           polyjuice-tests/fuzz/timeout-*
           polyjuice-tests/fuzz/oom-*
     - name: Archive corpus
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: corpus
         path: |
