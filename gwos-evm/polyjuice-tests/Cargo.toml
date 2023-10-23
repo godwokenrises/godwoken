@@ -22,8 +22,7 @@ gw-builtin-binaries = { path = "../../crates/builtin-binaries" }
 ####
 #Sync patch version with godwoken core.
 tracing = { version = "0.1.36", features = ["attributes"] } 
-ckb-vm = { version = "=0.22.1", default-features = false }
-ckb-vm-aot = { version = "=0.22" }
+ckb-vm = { git = "https://github.com/nervosnetwork/ckb-vm.git", branch = "release-0.24-l2" }
 ####
 
 lazy_static = "1.4"

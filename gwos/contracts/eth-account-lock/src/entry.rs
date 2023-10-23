@@ -78,7 +78,7 @@ fn verify_message_signature(
     // load signature
     let signature = load_signature_from_witness()?;
     // verify message
-    let secp256k1_eth = Secp256k1Eth::default();
+    let secp256k1_eth = Secp256k1Eth;
     let valid = match signing_type {
         SigningType::WithPrefix => secp256k1_eth.verify_message(eth_address, signature, message)?,
         SigningType::Raw => secp256k1_eth.verify_alone(eth_address, signature, message)?,

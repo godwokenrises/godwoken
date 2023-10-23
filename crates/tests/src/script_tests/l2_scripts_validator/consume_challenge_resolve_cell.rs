@@ -4,7 +4,6 @@
 //! once the challenge gets resolved, others need to be able to consume thier
 //! challenge resolve cell and get CKB back.
 
-use ckb_script::TransactionScriptsVerifier;
 use gw_types::{
     bytes::Bytes,
     packed::{CellDep, CellInput, CellOutput},
@@ -14,10 +13,7 @@ use gw_types::{
 use crate::{
     script_tests::{
         programs::{META_CONTRACT_CODE_HASH, META_CONTRACT_VALIDATOR_PROGRAM},
-        utils::layer1::{
-            build_resolved_tx, build_simple_tx_with_out_point, random_out_point, DummyDataLoader,
-            MAX_CYCLES,
-        },
+        utils::layer1::{build_simple_tx_with_out_point, random_out_point, DummyDataLoader},
     },
     testing_tool::chain::{ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM},
 };
@@ -93,8 +89,5 @@ fn test_consume_challenge_resolve_cell() {
     .cell_dep(CellDep::new_builder().out_point(script_out_point).build())
     .cell_dep(CellDep::new_builder().out_point(lock_out_point).build())
     .build();
-    let resolved_tx = build_resolved_tx(&ctx, &tx);
-    let mut verifier = TransactionScriptsVerifier::new(&resolved_tx, &ctx);
-    verifier.set_debug_printer(|_script, msg| println!("[script debug] {}", msg));
-    verifier.verify(MAX_CYCLES).expect("success");
+    ctx.verify_tx(&tx).expect("success");
 }

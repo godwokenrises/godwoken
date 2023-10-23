@@ -21,7 +21,7 @@ fn test_get_chain_id() {
     let (from_id, from_script_hash) =
         crate::helper::create_eth_eoa_account(&mut state, &from_eth_address, 200000u64.into());
     let address = state
-        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &from_script_hash.into())
+        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &from_script_hash)
         .unwrap()
         .unwrap();
 

@@ -126,11 +126,11 @@ fn test_create2() {
     );
     assert_eq!(run_result.return_data, create2_ethabi_addr);
     let create2_account_id = state
-        .get_account_id_by_script_hash(&create2_script_hash.into())
+        .get_account_id_by_script_hash(&create2_script_hash)
         .unwrap()
         .unwrap();
     let address = state
-        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &create2_script_hash.into())
+        .get_registry_address_by_script_hash(ETH_REGISTRY_ACCOUNT_ID, &create2_script_hash)
         .unwrap()
         .unwrap();
     let create2_account_balance = state
@@ -148,8 +148,8 @@ fn test_create2() {
         } => {
             println!(
                 "transfer from: {}, to: {}, amount: {}",
-                hex::encode(&from_addr.address),
-                hex::encode(&to_addr.address),
+                hex::encode(from_addr.address),
+                hex::encode(to_addr.address),
                 amount
             );
             Some(amount)

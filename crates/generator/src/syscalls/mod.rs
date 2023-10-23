@@ -9,7 +9,7 @@ use crate::{
 use ckb_vm::{
     memory::Memory,
     registers::{A0, A1, A2, A3, A4, A5, A7},
-    Error as VMError, Register, SupportMachine, Syscalls,
+    Error as VMError, ExecutionContext, Register, SupportMachine,
 };
 use gw_common::{
     blake2b::new_blake2b,
@@ -166,13 +166,9 @@ pub fn store_data<Mac: SupportMachine>(machine: &mut Mac, data: &[u8]) -> Result
     Ok(real_size)
 }
 
-impl<'a, 'b, S: State + CodeStore + JournalDB, C: ChainView, Mac: SupportMachine> Syscalls<Mac>
-    for L2Syscalls<'a, 'b, S, C>
+impl<'a, 'b, S: State + CodeStore + JournalDB, C: ChainView, Mac: SupportMachine>
+    ExecutionContext<Mac> for L2Syscalls<'a, 'b, S, C>
 {
-    fn initialize(&mut self, _machine: &mut Mac) -> Result<(), VMError> {
-        Ok(())
-    }
-
     fn ecall(&mut self, machine: &mut Mac) -> Result<bool, VMError> {
         let code = machine.registers()[A7].to_u64();
 

@@ -80,7 +80,7 @@ fn load_code_hash(path: &Path) -> [u8; 32] {
 fn set_mapping(state: &mut DummyState, eth_address: &[u8; 20], script_hash: &[u8; 32]) {
     let address = RegistryAddress::new(ETH_REGISTRY_ACCOUNT_ID, eth_address.to_vec());
     state
-        .mapping_registry_address_to_script_hash(address, (*script_hash).into())
+        .mapping_registry_address_to_script_hash(address, *script_hash)
         .expect("map reg addr to script hash");
 }
 
@@ -159,7 +159,7 @@ impl MockChain {
         code: &[u8],
         storage: HashMap<H256, H256>,
     ) -> anyhow::Result<u32> {
-        let mut new_script_args = vec![0u8; 32 + 4 + 20];
+        let mut new_script_args = [0u8; 32 + 4 + 20];
         new_script_args[0..32].copy_from_slice(&ROLLUP_SCRIPT_HASH);
         new_script_args[32..36].copy_from_slice(&CREATOR_ACCOUNT_ID.to_le_bytes()[..]);
         new_script_args[36..36 + 20].copy_from_slice(eth_address);
@@ -400,7 +400,7 @@ impl Context {
             .expect("create creator_account");
         assert_eq!(creator_account_id, CREATOR_ACCOUNT_ID);
 
-        state.insert_data(config.secp_data_hash.into(), config.secp_data.clone());
+        state.insert_data(config.secp_data_hash, config.secp_data.clone());
         state
             .update_raw(
                 build_data_hash_key(config.secp_data_hash.as_slice()),
@@ -413,11 +413,11 @@ impl Context {
         // NOTICE in this test we won't need SUM validator
         let mut account_lock_manage = AccountLockManage::default();
         account_lock_manage.register_lock_algorithm(
-            SECP_LOCK_CODE_HASH.into(),
-            Arc::new(Secp256k1Eth::default()),
+            SECP_LOCK_CODE_HASH,
+            Arc::new(Secp256k1Eth),
         );
         let rollup_context = RollupContext {
-            rollup_script_hash: ROLLUP_SCRIPT_HASH.into(),
+            rollup_script_hash: ROLLUP_SCRIPT_HASH,
             rollup_config: config.rollup,
             fork_config: Default::default(),
         };

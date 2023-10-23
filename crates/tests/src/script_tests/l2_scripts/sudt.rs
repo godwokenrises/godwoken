@@ -3,7 +3,7 @@ use crate::script_tests::utils::context::TestingContext;
 use crate::testing_tool::chain::SUDT_VALIDATOR_SCRIPT_TYPE_HASH;
 
 use super::{check_transfer_logs, new_block_info, run_contract, run_contract_get_result};
-use ckb_vm::Bytes;
+use bytes::Bytes;
 use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
 use gw_common::registry_address::RegistryAddress;
 use gw_common::state::State;

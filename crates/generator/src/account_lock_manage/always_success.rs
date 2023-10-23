@@ -16,7 +16,7 @@ pub struct AlwaysSuccess;
 /// Usage
 /// register AlwaysSuccess to AccountLockManage
 ///
-/// manage.register_lock_algorithm(code_hash, Box::new(AlwaysSuccess::default()));
+/// manage.register_lock_algorithm(code_hash, Box::new(AlwaysSuccess));
 impl LockAlgorithm for AlwaysSuccess {
     fn recover(&self, _message: H256, _signature: &[u8]) -> Result<Bytes, LockAlgorithmError> {
         Ok(Default::default())
