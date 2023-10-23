@@ -42,9 +42,9 @@ jobs:
           ~/.cargo/registry/cache/
           ~/.cargo/git/db/
           target/
-        key: ${{ runner.os }}-${{ runner.arch }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-cargo-gwos-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
-          ${{ runner.os }}-${{ runner.arch }}-cargo-test
+          ${{ runner.os }}-${{ runner.arch }}-cargo-gwos
 
     - name: Install moleculec
       run: |
