@@ -4,15 +4,27 @@ on:
   merge_group:
     types: [checks_requested]
   push:
-    paths:
-      - 'gwos/**'
-      - 'crates/tests/src/script_tests/**'
+    # TODO: remove this comment
+    # paths:
+    #   - 'gwos/**'
+    #   - 'crates/tests/src/script_tests/**'
   pull_request:
     paths:
       - 'gwos/**'
       - 'crates/tests/src/script_tests/**'
 
 jobs:
+  check-c-format:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    # Note: cargo fmt is done in .github/workflows/rust.yml
+    - name: Check format of gwos/c
+      working-directory: gwos/c
+      run: make fmt
+
   build-gwos-and-test-scripts:
     runs-on: ubuntu-22.04
 
@@ -50,12 +62,7 @@ jobs:
         && rm -rf capsule_${CAPSULE_VERSION}_x86_64-linux/
         capsule --version
 
-    # cargo fmt is done in .github/workflows/rust.yml
-    - name: Check C format
-      working-directory: gwos/c
-      run: make fmt
-
-    - name: Compile C contracts
+    - name: Compile C contracts of gwos
       working-directory: gwos/c
       run: make
 
