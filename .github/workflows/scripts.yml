@@ -1,17 +1,16 @@
-name: Scripts test
+name: GWOS Scripts Tests
 
 on:
   merge_group:
     types: [checks_requested]
   push:
-    # TODO: remove this comment
-    # paths:
-    #   - 'gwos/**'
-    #   - 'crates/tests/src/script_tests/**'
+    paths:
+    - 'gwos/**'
+    - 'crates/tests/src/script_tests/**'
   pull_request:
     paths:
-      - 'gwos/**'
-      - 'crates/tests/src/script_tests/**'
+    - 'gwos/**'
+    - 'crates/tests/src/script_tests/**'
 
 jobs:
   check-c-format:
@@ -86,10 +85,6 @@ jobs:
       if: steps.fetch-capsule-cache.outputs.cache-hit != 'true'
       working-directory: gwos
       run: tools/backup-capsule-cache.sh
-
-    # TODO: remove this
-    - name: Copy contracts from prebuild docker images
-      run: devtools/fetch-binaries.sh
 
     - name: Test C Uint256
       run: cargo test -p c-uint256-tests
