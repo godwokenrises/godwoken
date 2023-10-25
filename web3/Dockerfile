@@ -6,7 +6,7 @@ RUN apt-get update \
  && apt-get dist-upgrade -y \
  && apt-get install curl -y \
  && apt-get install jq -y \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* \
  && echo "Finished installing dependencies"
 RUN cd /godwoken-web3 && yarn && yarn build
 
