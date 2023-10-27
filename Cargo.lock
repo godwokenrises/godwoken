@@ -464,7 +464,7 @@ dependencies = [
 
 [[package]]
 name = "c-uint256-tests"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "cc",
  "cty",
@@ -1697,7 +1697,7 @@ dependencies = [
 
 [[package]]
 name = "godwoken-bin"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "ckb-types",
@@ -1739,7 +1739,7 @@ dependencies = [
 
 [[package]]
 name = "gw-benches"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "criterion",
@@ -1758,7 +1758,7 @@ dependencies = [
 
 [[package]]
 name = "gw-block-producer"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -1803,7 +1803,7 @@ dependencies = [
 
 [[package]]
 name = "gw-builtin-binaries"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "ckb-fixed-hash",
@@ -1816,7 +1816,7 @@ dependencies = [
 
 [[package]]
 name = "gw-chain"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "ckb-fixed-hash",
@@ -1845,7 +1845,7 @@ dependencies = [
 
 [[package]]
 name = "gw-challenge"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1875,7 +1875,7 @@ dependencies = [
 
 [[package]]
 name = "gw-common"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
@@ -1886,7 +1886,7 @@ dependencies = [
 
 [[package]]
 name = "gw-config"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "ckb-fixed-hash",
  "gw-builtin-binaries",
@@ -1900,7 +1900,7 @@ dependencies = [
 
 [[package]]
 name = "gw-generator"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1933,14 +1933,14 @@ dependencies = [
 
 [[package]]
 name = "gw-hash"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "blake2b-ref",
 ]
 
 [[package]]
 name = "gw-jsonrpc-types"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "ckb-fixed-hash",
@@ -1955,7 +1955,7 @@ dependencies = [
 
 [[package]]
 name = "gw-mem-pool"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1984,7 +1984,7 @@ dependencies = [
 
 [[package]]
 name = "gw-metrics"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "arc-swap",
  "gw-common",
@@ -2001,7 +2001,7 @@ dependencies = [
 
 [[package]]
 name = "gw-p2p-network"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2019,7 +2019,7 @@ dependencies = [
 
 [[package]]
 name = "gw-polyjuice-sender-recover"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "gw-common",
@@ -2035,7 +2035,7 @@ dependencies = [
 
 [[package]]
 name = "gw-replay-chain"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "ckb-fixed-hash",
@@ -2065,7 +2065,7 @@ dependencies = [
 
 [[package]]
 name = "gw-rpc-client"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -2090,7 +2090,7 @@ dependencies = [
 
 [[package]]
 name = "gw-rpc-server"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2137,7 +2137,7 @@ dependencies = [
 
 [[package]]
 name = "gw-smt"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
@@ -2147,7 +2147,7 @@ dependencies = [
 
 [[package]]
 name = "gw-store"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -2165,7 +2165,7 @@ dependencies = [
 
 [[package]]
 name = "gw-telemetry"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "chrono",
  "faster-hex 0.6.1",
@@ -2186,7 +2186,7 @@ dependencies = [
 
 [[package]]
 name = "gw-tests"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2233,7 +2233,7 @@ dependencies = [
 
 [[package]]
 name = "gw-tools"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "bech32",
@@ -2280,7 +2280,7 @@ dependencies = [
 
 [[package]]
 name = "gw-traits"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "gw-common",
@@ -2289,7 +2289,7 @@ dependencies = [
 
 [[package]]
 name = "gw-tx-filter"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "gw-common",
  "gw-config",
@@ -2303,7 +2303,7 @@ dependencies = [
 
 [[package]]
 name = "gw-types"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "cfg-if 1.0.0",
  "ckb-fixed-hash",
@@ -2316,7 +2316,7 @@ dependencies = [
 
 [[package]]
 name = "gw-utils"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "ckb-chain-spec",
@@ -2343,7 +2343,7 @@ dependencies = [
 
 [[package]]
 name = "gw-version"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
 ]
