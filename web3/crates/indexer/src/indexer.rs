@@ -625,8 +625,14 @@ impl Web3Indexer {
         };
 
         let epoch_time_as_millis: u64 = l2_block.raw().timestamp().unpack();
-        let timestamp =
-            NaiveDateTime::from_timestamp((epoch_time_as_millis / MILLIS_PER_SEC) as i64, 0);
+        let timestamp = {
+            let timestamp = NaiveDateTime::from_timestamp_opt(
+                (epoch_time_as_millis / MILLIS_PER_SEC) as i64,
+                0,
+            )
+            .ok_or_else(|| anyhow!("fail to parse epoch time"))?;
+            DateTime::from_naive_utc_and_offset(timestamp, Utc)
+        };
         let size = l2_block.raw().as_slice().len();
         let web3_block = Web3Block {
             number: block_number,
@@ -636,7 +642,7 @@ impl Web3Indexer {
             gas_used,
             miner: miner_address,
             size,
-            timestamp: DateTime::<Utc>::from_utc(timestamp, Utc),
+            timestamp,
         };
         Ok(web3_block)
     }
