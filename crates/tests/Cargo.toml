@@ -1,6 +1,6 @@
 [package]
 name = "gw-tests"
-version = "1.14.0"
+version = "1.15.0"
 authors = ["jjy <jjyruby@gmail.com>"]
 edition = "2021"
 

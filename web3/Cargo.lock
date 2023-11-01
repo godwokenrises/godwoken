@@ -1431,7 +1431,7 @@ dependencies = [
 
 [[package]]
 name = "gw-common"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
@@ -1442,14 +1442,14 @@ dependencies = [
 
 [[package]]
 name = "gw-hash"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "blake2b-ref",
 ]
 
 [[package]]
 name = "gw-jsonrpc-types"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "ckb-fixed-hash",
@@ -1464,7 +1464,7 @@ dependencies = [
 
 [[package]]
 name = "gw-types"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "cfg-if 1.0.0",
  "ckb-fixed-hash",
@@ -1477,7 +1477,7 @@ dependencies = [
 
 [[package]]
 name = "gw-web3-indexer"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "ckb-hash",
@@ -1513,7 +1513,7 @@ dependencies = [
 
 [[package]]
 name = "gw-web3-rpc-client"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "async-jsonrpc-client",

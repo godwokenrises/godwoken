@@ -1,4 +1,3 @@
 #!/usr/bin/env node
 
-require('../newrelic')
 require("../lib/app/cluster")

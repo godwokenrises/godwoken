@@ -1,6 +1,6 @@
 {
   "name": "@godwoken-web3/api-server",
-  "version": "1.14.0",
+  "version": "1.15.0",
   "private": true,
   "scripts": {
     "start": "concurrently \"tsc -w\" \"nodemon ./bin/cluster\"",
@@ -33,7 +33,7 @@
   "dependencies": {
     "@ckb-lumos/base": "0.18.0-rc6",
     "@ckb-lumos/toolkit": "0.18.0-rc6",
-    "@godwoken-web3/godwoken": "1.14.0",
+    "@godwoken-web3/godwoken": "1.15.0",
     "@ethersproject/bignumber": "^5.7.0",
     "@opentelemetry/api": "^1.3.0",
     "@opentelemetry/exporter-jaeger": "^1.8.0",
@@ -62,7 +62,6 @@
     "knex": "2.4.0",
     "leveldown": "^6.0.1",
     "levelup": "^5.0.1",
-    "newrelic": "^8.15.0",
     "pg": "8.7.3",
     "redis": "^4.2.0",
     "rlp": "^2.2.6",

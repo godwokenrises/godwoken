@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [v1.15.0] - 2023-10-27
+
+Features:
+
+* chore: update ckb deps for the upcoming ckb 2023 hardfork https://github.com/godwokenrises/godwoken/pull/1106
+
+CI:
+
+* chore: fix out-of-disk in the rust.yml workflow https://github.com/godwokenrises/godwoken/pull/1097
+
+Full Changelog: https://github.com/godwokenrises/godwoken/compare/v1.14.0…v1.15.0
+
 ## [v1.14.0] - 2023-06-12
 
 Features:
