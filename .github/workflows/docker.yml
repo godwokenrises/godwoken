@@ -106,7 +106,7 @@ jobs:
     - name: Archive built scripts
       # TODO: upload only once
       # if: steps.gwos-cache.outputs.cache-hit != 'true'
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: component.gwos-${{ steps.prepare.outputs.gwos-filehash }}
         path: |
@@ -134,7 +134,7 @@ jobs:
     - name: Archive godwoken-polyjuice binaries
       # TODO: upload only once
       # if: steps.godwoken-polyjuice-cache.outputs.cache-hit != 'true'
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: component.gwos-evm-${{ steps.prepare.outputs.gwos-evm-filehash }}
         path: |
@@ -214,7 +214,7 @@ jobs:
     - name: Archive godwoken binaries
       # TODO: upload only once
       # if: steps.godwoken-cache.outputs.cache-hit != 'true'
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: component.godwoken-${{ matrix.features || 'default' }}-${{ hashFiles('crates/**') }}
         path: |
