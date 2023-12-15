@@ -258,18 +258,18 @@ jobs:
 
     # https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
     - name: Download component.gwos and omni_lock
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: component.gwos-${{ hashFiles('gwos/**') }}
 
     - name: Download component.gwos-evm
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: component.gwos-evm-${{ hashFiles('gwos-evm/**') }}
         path: gwos-evm/build/
 
     - name: Download component.godwoken
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: component.godwoken-${{ matrix.features || 'default' }}-${{ hashFiles('crates/**') }}
         path: target/release/
