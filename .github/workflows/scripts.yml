@@ -33,7 +33,7 @@ jobs:
         submodules: recursive
 
     - name: Cache of Cargo
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/bin/
@@ -65,7 +65,7 @@ jobs:
       working-directory: gwos/c
       run: make
 
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       id: fetch-capsule-cache
       with:
         path: |

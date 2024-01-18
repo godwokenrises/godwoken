@@ -24,7 +24,7 @@ jobs:
       run: |
         cargo fmt --version || rustup component add rustfmt
         cargo clippy --version || rustup component add clippy
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/bin/
