@@ -10,7 +10,7 @@ jobs:
       with:
         submodules: recursive
     - name: Cache of Cargo
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/bin/
@@ -42,7 +42,7 @@ jobs:
         submodules: recursive
 
     - name: Cache of Cargo
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/bin/
@@ -56,7 +56,7 @@ jobs:
 
     - name: Cache of component.gwos-evm
       id: godwoken-polyjuice-cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           gwos-evm/build/*generator*
@@ -82,7 +82,7 @@ jobs:
       with:
         submodules: recursive
     - name: Cache of Cargo
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/bin/

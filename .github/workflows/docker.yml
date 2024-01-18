@@ -36,7 +36,7 @@ jobs:
       with:
         submodules: true
 
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/bin/
@@ -79,7 +79,7 @@ jobs:
 
     - name: Cache of component.ckb-production-scripts
       id: ckb-production-scripts-cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: docker/build/ckb-production-scripts/build/omni_lock
         key: component.omni_lock-${{ steps.prepare.outputs.ckb-production-scripts-sha1 }}
@@ -90,7 +90,7 @@ jobs:
 
     - name: Cache of component.gwos
       id: gwos-cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           gwos/build/release/*
@@ -119,7 +119,7 @@ jobs:
 
     - name: Cache of component.gwos-evm
       id: godwoken-polyjuice-cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           gwos-evm/build/*generator*
@@ -164,7 +164,7 @@ jobs:
       with:
         submodules: true
 
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/bin/
@@ -186,7 +186,7 @@ jobs:
     # see https://github.com/godwokenrises/godwoken/pull/946#discussion_r1068149031
     - name: Cache of component.godwoken
       id: godwoken-cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           target/release/godwoken
@@ -194,7 +194,7 @@ jobs:
         key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.runner_type || 'ubuntu-20.04' }}-godwoken-${{ matrix.features || 'default' }}-${{ hashFiles('crates/**') }}
     - name: Cache Godwoken target directory
       if: steps.godwoken-cache.outputs.cache-hit != 'true'
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           target

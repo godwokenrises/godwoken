@@ -16,7 +16,7 @@ jobs:
       with:
         submodules: true
 
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/bin/
@@ -46,7 +46,7 @@ jobs:
 
     # - name: Cache of component.gwos
     #   id: gwos-cache
-    #   uses: actions/cache@v3
+    #   uses: actions/cache@v4
     #   with:
     #     path: |
     #       gwos/build/release/*
@@ -61,7 +61,7 @@ jobs:
 
     - name: Cache of component.gwos-evm
       id: godwoken-polyjuice-cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           gwos-evm/build/*generator*
