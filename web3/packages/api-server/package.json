@@ -52,7 +52,7 @@
     "dotenv": "^8.2.0",
     "ethereum-input-data-decoder": "^0.3.5",
     "ethereumjs-util": "^7.0.9",
-    "express": "^4.17.3",
+    "express": "^4.19.2",
     "express-winston": "^4.2.0",
     "express-ws": "^5.0.2",
     "http-errors": "~1.6.3",
