@@ -1,9 +1,9 @@
-use alloc::vec::Vec;
 use crate::{
     blake2b::new_blake2b,
     smt::{default_store::DefaultStore, Error, SMT, SMTH256},
     smt_h256_ext::SMTH256Ext,
 };
+use alloc::vec::Vec;
 use gw_types::h256::{H256Ext, H256};
 
 // Calculate compacted account root

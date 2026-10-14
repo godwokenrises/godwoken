@@ -1,0 +1,58 @@
+name: Withdraw Contract Tests
+
+on: [push, pull_request, merge_group, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  settlement-contracts:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    env:
+      CARGO_TERM_COLOR: always
+      CC: clang
+      CXX: clang++
+      AR: llvm-ar
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm libclang-dev cmake pkg-config libssl-dev jq
+
+      - name: Install refund Rust toolchain
+        run: |
+          rustup toolchain install 1.94.0 --profile minimal
+          rustup target add --toolchain 1.94.0 riscv64imac-unknown-none-elf
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            exit-withdraw/target/
+            gwos/contracts/exit-withdraw-state-validator/target/
+          key: ${{ runner.os }}-${{ runner.arch }}-withdraw-contracts-rust-1.94.0-${{ hashFiles('exit-withdraw/Cargo.lock', 'gwos/contracts/exit-withdraw-state-validator/Cargo.lock') }}
+
+      - name: Contract unit and adversarial tests
+        working-directory: gwos/contracts/exit-withdraw-state-validator
+        run: cargo +1.94.0 test --locked --lib --tests
+
+      # These scripts export synthetic profiles and build profile-pinned RISC-V
+      # binaries before testing. They execute the contracts in CKB-VM, not just
+      # the host verifier. Fixture binaries must never be deployed.
+      - name: V1 settlement and EOA OmniLock withdrawal in CKB-VM
+        run: bash exit-withdraw/scripts/test-settlement-e2e.sh
+
+      - name: V0 settlement and EOA OmniLock withdrawal in CKB-VM
+        run: bash exit-withdraw/scripts/test-v0-settlement-e2e.sh
+
+      # Run after the EOA suites, which also fetch the dependencies needed by
+      # this script's locked, offline host test commands.
+      - name: V0 and V1 controller withdrawals in CKB-VM
+        run: bash exit-withdraw/scripts/test-control-settlement-e2e.sh
