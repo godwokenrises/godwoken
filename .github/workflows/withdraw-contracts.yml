@@ -24,6 +24,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang llvm libclang-dev cmake pkg-config libssl-dev jq
 
+      # The upgrade test signs a synthetic multisig digest with the real CLI.
+      - name: Install ckb-cli 1.16.0
+        shell: bash
+        run: |
+          archive="$RUNNER_TEMP/ckb-cli.tar.gz"
+          curl --fail --location --retry 3 \
+            https://github.com/nervosnetwork/ckb-cli/releases/download/v1.16.0/ckb-cli_v1.16.0_x86_64-unknown-linux-gnu.tar.gz \
+            --output "$archive"
+          echo "9ceb9fc51905f7d9d902fc829bde2d059470b76fa95378a62ac8ec1e69ab53e6  $archive" | sha256sum --check
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          mkdir -p "$RUNNER_TEMP/withdraw-bin"
+          install -m 755 "$RUNNER_TEMP/ckb-cli_v1.16.0_x86_64-unknown-linux-gnu/ckb-cli" "$RUNNER_TEMP/withdraw-bin/ckb-cli"
+          "$RUNNER_TEMP/withdraw-bin/ckb-cli" --version
+          echo "$RUNNER_TEMP/withdraw-bin" >> "$GITHUB_PATH"
+
       - name: Install refund Rust toolchain
         run: |
           rustup toolchain install 1.94.0 --profile minimal

@@ -100,7 +100,7 @@ pub(super) fn exercise(mut node: Node, mut deployment: Deployment) {
         ])
         .arg(&secret)
         .output()
-        .unwrap();
+        .expect("upgrade integration tests require ckb-cli 1.16.0 on PATH");
     assert!(
         result.status.success(),
         "{}",
