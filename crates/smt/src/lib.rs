@@ -1,5 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+extern crate alloc;
+
 pub mod merkle_utils;
 pub mod smt;
 pub mod smt_h256_ext;

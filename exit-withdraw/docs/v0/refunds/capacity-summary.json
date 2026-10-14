@@ -1,0 +1,13 @@
+{
+  "beneficiary_entries": 19303,
+  "entries_with_positive_refund": 19303,
+  "capacity_blocked_entries": 8008,
+  "entries_with_zero_usable_own_ckb_shannons": 735,
+  "entries_without_ckb_entitlement": 735,
+  "no_ckb_entries_topup_shannons": "12225600000000",
+  "no_ckb_entries_topup_ckb": "122256",
+  "total_topup_shannons": "54421309829905",
+  "total_topup_ckb": "544213.09829905",
+  "zero_ckb_entries_topup_shannons": "12225600000000",
+  "capacity_assumption": "63 CKB plain or 144 CKB per nonzero sUDT output; excludes network fees; multisig destination integration remains pending"
+}

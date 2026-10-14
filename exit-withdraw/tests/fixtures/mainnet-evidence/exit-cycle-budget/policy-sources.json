@@ -1,0 +1,23 @@
+{
+  "observed_at_utc": "2026-09-22T04:36:33.862725+00:00",
+  "tx_pool_default": {
+    "source": "https://github.com/nervosnetwork/ckb/blob/v0.200.0/resource/ckb.toml#L151",
+    "sha256": "b4b3d8ea3a17c79e2e5ca9d17d997f1b40c47ecfc099911c46b5d2a5e6c50919",
+    "excerpt": "max_tx_verify_cycles = 70_000_000",
+    "cycles": 70000000,
+    "scope": "Configurable node transaction-pool admission policy, not a consensus-wide transaction cap."
+  },
+  "pool_config_source": "https://github.com/nervosnetwork/ckb/blob/v0.200.0/util/app-config/src/configs/tx_pool.rs#L20",
+  "consensus_rpc": {
+    "endpoint": "https://mainnet.ckb.dev/rpc",
+    "method": "get_consensus",
+    "params": [],
+    "response_file": "mainnet-consensus.json",
+    "max_block_cycles": 3500000000
+  },
+  "test_policy": {
+    "recovery_and_all_custodian_groups": 60000000,
+    "reserved_for_other_groups": 10000000,
+    "production_requirement": "Simulate all actual transaction script groups under the destination node policy; split if total exceeds the allowed budget."
+  }
+}

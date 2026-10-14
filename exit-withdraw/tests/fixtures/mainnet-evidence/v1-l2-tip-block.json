@@ -1,0 +1,16 @@
+{
+  "observed_at_utc": "2026-09-21T07:20:45.102794+00:00",
+  "endpoint": "https://v1.mainnet.godwoken.io/rpc",
+  "method": "gw_get_block",
+  "params": [
+    "0x2b81ba"
+  ],
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "error": {
+      "code": -32602,
+      "message": "Invalid params: invalid length 6, expected a 0x-prefixed hex string with 64 digits."
+    }
+  }
+}

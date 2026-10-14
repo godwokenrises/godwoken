@@ -1,0 +1,43 @@
+{
+  "observed_at_utc": "2026-10-11T13:10:39.742257+00:00",
+  "endpoint": "https://mainnet.ckb.dev/rpc",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "get_live_cell",
+    "params": [
+      {
+        "index": "0x1",
+        "tx_hash": "0x818b561267276ef25b16c605b9fd9d758f5b375c4af18550b36ca0e438522e68"
+      },
+      true
+    ]
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "result": {
+      "block_hash": "0xf98afe625e0c879a6bd5f9f3d67d470db3ac5ed8a6795c9773e19cf94c67f9d3",
+      "cell": {
+        "data": {
+          "content": "0x84a02b6a0000000084a02b6a00000000000000000000",
+          "hash": "0x5e525fa1ee3afe6909e04837118c298534f5acccff59b396c1d241a233e51ee0"
+        },
+        "output": {
+          "capacity": "0x3b9aca000",
+          "lock": {
+            "args": "0xc0464bbb406441b651e84d2b20bb3d2c9a0c05f595b053b8409a607e6554775f",
+            "code_hash": "0x1c04df09d9adede5bfc40ff1a39a3a17fc8e29f15c56f16b7e48680c600ee5ac",
+            "hash_type": "type"
+          },
+          "type": {
+            "args": "0xf26f761463b4d66b1b4e69e8f8dc097003572faeeb6751f1ff283b6fb2b85082",
+            "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+            "hash_type": "type"
+          }
+        }
+      },
+      "status": "live"
+    },
+    "id": 1
+  }
+}

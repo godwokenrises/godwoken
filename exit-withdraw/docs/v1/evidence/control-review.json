@@ -1,0 +1,543 @@
+[
+  {
+    "protocol": "v1",
+    "account_id": 225,
+    "category": "signer-wallet exception",
+    "authority": "caller and cosigner may be the same member of three",
+    "authority_addresses_and_roles": "signer: 0x7e2cd50ff305780450df7d8a02b6bd2b4878c3d8; signer: 0x27837f6036d94b107e203e535d991afa544d0b3d; signer: 0x666666488c608edec79d6f85094e6e514a67064f",
+    "controller_evidence": [
+      {
+        "address": "0x7e2cd50ff305780450df7d8a02b6bd2b4878c3d8",
+        "controlled_account": 225,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 225 getSignerAddressList()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": null,
+          "kind": "unregistered_in_saved_inventory"
+        },
+        "role": "signer"
+      },
+      {
+        "address": "0x27837f6036d94b107e203e535d991afa544d0b3d",
+        "controlled_account": 225,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 225 getSignerAddressList()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": null,
+          "kind": "unregistered_in_saved_inventory"
+        },
+        "role": "signer"
+      },
+      {
+        "address": "0x666666488c608edec79d6f85094e6e514a67064f",
+        "controlled_account": 225,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 225 getSignerAddressList()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 122,
+          "kind": "eth_eoa"
+        },
+        "role": "signer"
+      }
+    ],
+    "current_disposition": "APPROVED_ORIGINAL_AUTHORITY"
+  },
+  {
+    "protocol": "v1",
+    "account_id": 253,
+    "category": "signer-wallet exception",
+    "authority": "caller and cosigner may be the same member of three",
+    "authority_addresses_and_roles": "signer: 0x7e2cd50ff305780450df7d8a02b6bd2b4878c3d8; signer: 0x27837f6036d94b107e203e535d991afa544d0b3d; signer: 0x666666488c608edec79d6f85094e6e514a67064f",
+    "controller_evidence": [
+      {
+        "address": "0x7e2cd50ff305780450df7d8a02b6bd2b4878c3d8",
+        "controlled_account": 253,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 253 getSignerAddressList()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": null,
+          "kind": "unregistered_in_saved_inventory"
+        },
+        "role": "signer"
+      },
+      {
+        "address": "0x27837f6036d94b107e203e535d991afa544d0b3d",
+        "controlled_account": 253,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 253 getSignerAddressList()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": null,
+          "kind": "unregistered_in_saved_inventory"
+        },
+        "role": "signer"
+      },
+      {
+        "address": "0x666666488c608edec79d6f85094e6e514a67064f",
+        "controlled_account": 253,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 253 getSignerAddressList()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 122,
+          "kind": "eth_eoa"
+        },
+        "role": "signer"
+      }
+    ],
+    "current_disposition": "APPROVED_ORIGINAL_AUTHORITY"
+  },
+  {
+    "protocol": "v1",
+    "account_id": 263,
+    "category": "signer wallet",
+    "authority": "2-of-3 DISTINCT members",
+    "authority_addresses_and_roles": "signer: 0x7e2cd50ff305780450df7d8a02b6bd2b4878c3d8; signer: 0x27837f6036d94b107e203e535d991afa544d0b3d; signer: 0x666666488c608edec79d6f85094e6e514a67064f",
+    "controller_evidence": [
+      {
+        "address": "0x7e2cd50ff305780450df7d8a02b6bd2b4878c3d8",
+        "controlled_account": 263,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 263 getSignerAddressList()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": null,
+          "kind": "unregistered_in_saved_inventory"
+        },
+        "role": "signer"
+      },
+      {
+        "address": "0x27837f6036d94b107e203e535d991afa544d0b3d",
+        "controlled_account": 263,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 263 getSignerAddressList()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": null,
+          "kind": "unregistered_in_saved_inventory"
+        },
+        "role": "signer"
+      },
+      {
+        "address": "0x666666488c608edec79d6f85094e6e514a67064f",
+        "controlled_account": 263,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 263 getSignerAddressList()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 122,
+          "kind": "eth_eoa"
+        },
+        "role": "signer"
+      }
+    ],
+    "current_disposition": "APPROVED_ORIGINAL_AUTHORITY"
+  },
+  {
+    "protocol": "v1",
+    "account_id": 3943,
+    "category": "custom Safe",
+    "authority": "2-of-4",
+    "authority_addresses_and_roles": "safe_owner: 0x6538d3d3737b653bc7ca4f1061e6e0a1dfd8f3af; safe_owner: 0x2661a4786ea12b7edfd3f5c08ff617702360a993; safe_owner: 0xd5f7c76eeba710023e620f8770f6d8c4acdd1452; safe_owner: 0x9c023610d438de45b8d53358de663233ce752f77",
+    "controller_evidence": [
+      {
+        "address": "0x6538d3d3737b653bc7ca4f1061e6e0a1dfd8f3af",
+        "controlled_account": 3943,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 3943 getOwners()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 6852,
+          "kind": "eth_eoa"
+        },
+        "role": "safe_owner"
+      },
+      {
+        "address": "0x2661a4786ea12b7edfd3f5c08ff617702360a993",
+        "controlled_account": 3943,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 3943 getOwners()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 4746,
+          "kind": "eth_eoa"
+        },
+        "role": "safe_owner"
+      },
+      {
+        "address": "0xd5f7c76eeba710023e620f8770f6d8c4acdd1452",
+        "controlled_account": 3943,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 3943 getOwners()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 4808,
+          "kind": "eth_eoa"
+        },
+        "role": "safe_owner"
+      },
+      {
+        "address": "0x9c023610d438de45b8d53358de663233ce752f77",
+        "controlled_account": 3943,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 3943 getOwners()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 130,
+          "kind": "eth_eoa"
+        },
+        "role": "safe_owner"
+      }
+    ],
+    "current_disposition": "APPROVED_ORIGINAL_AUTHORITY"
+  },
+  {
+    "protocol": "v1",
+    "account_id": 4075,
+    "category": "permissioned executor",
+    "authority": "fixed controller recipient; individual executors",
+    "authority_addresses_and_roles": "Controller and fixed withdrawal recipient: 0xb156c425f325d750968702d4bd4226573edc3aed; Authorized executor: 0x740d5718a79a8559feee8b00922f8cd773a81d84; Authorized executor: 0xb156c425f325d750968702d4bd4226573edc3aed",
+    "controller_evidence": [
+      {
+        "address": "0xb156c425f325d750968702d4bd4226573edc3aed",
+        "evidence": "remaining-resolution-20261011-001: authenticated slot / mapping, deployed withdrawal path, getter",
+        "evidence_level": "SMT state and bytecode behavior, no full source match",
+        "identity": {
+          "account_id": 3559
+        },
+        "role": "Controller and fixed withdrawal recipient"
+      },
+      {
+        "address": "0x740d5718a79a8559feee8b00922f8cd773a81d84",
+        "evidence": "remaining-resolution-20261011-001: authenticated slot / mapping, deployed withdrawal path, getter",
+        "evidence_level": "SMT state and bytecode behavior, no full source match",
+        "identity": {
+          "account_id": 3551
+        },
+        "role": "Authorized executor"
+      },
+      {
+        "address": "0xb156c425f325d750968702d4bd4226573edc3aed",
+        "evidence": "remaining-resolution-20261011-001: authenticated slot / mapping, deployed withdrawal path, getter",
+        "evidence_level": "SMT state and bytecode behavior, no full source match",
+        "identity": {
+          "account_id": 3559
+        },
+        "role": "Authorized executor"
+      }
+    ],
+    "current_disposition": "APPROVED_ORIGINAL_AUTHORITY"
+  },
+  {
+    "protocol": "v1",
+    "account_id": 4466,
+    "category": "project sale",
+    "authority": "not an established simple multisig",
+    "authority_addresses_and_roles": "Owner: 0x666666488c608edec79d6f85094e6e514a67064f",
+    "controller_evidence": [
+      {
+        "address": "0x666666488c608edec79d6f85094e6e514a67064f",
+        "evidence": "remaining-resolution-20261011-001: authenticated slot / mapping, deployed withdrawal path, getter",
+        "evidence_level": "SMT state and bytecode behavior, no full source match",
+        "identity": {
+          "account_id": 122
+        },
+        "role": "Owner"
+      }
+    ],
+    "current_disposition": "HOLD_PROJECT_OR_EXCLUDED"
+  },
+  {
+    "protocol": "v1",
+    "account_id": 4573,
+    "category": "project sale",
+    "authority": "not an established simple multisig",
+    "authority_addresses_and_roles": "Owner: 0x666666488c608edec79d6f85094e6e514a67064f",
+    "controller_evidence": [
+      {
+        "address": "0x666666488c608edec79d6f85094e6e514a67064f",
+        "evidence": "remaining-resolution-20261011-001: authenticated slot / mapping, deployed withdrawal path, getter",
+        "evidence_level": "SMT state and bytecode behavior, no full source match",
+        "identity": {
+          "account_id": 122
+        },
+        "role": "Owner"
+      }
+    ],
+    "current_disposition": "APPROVED_ORIGINAL_AUTHORITY"
+  },
+  {
+    "protocol": "v1",
+    "account_id": 4831,
+    "category": "owner treasury",
+    "authority": "not an established simple multisig",
+    "authority_addresses_and_roles": "owner: 0x65698468f12a25885602b9f925b0f5e09e4857e9",
+    "controller_evidence": [
+      {
+        "address": "0x65698468f12a25885602b9f925b0f5e09e4857e9",
+        "controlled_account": 4831,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 4831 owner()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 4822,
+          "kind": "eth_eoa"
+        },
+        "role": "owner"
+      }
+    ],
+    "current_disposition": "HOLD_PROJECT_OR_EXCLUDED"
+  },
+  {
+    "protocol": "v1",
+    "account_id": 5707,
+    "category": "governance proxy",
+    "authority": "not an established simple multisig",
+    "authority_addresses_and_roles": "owner: 0x00c69071a6ad8a331d70d2f5cca5c09efc355ea4",
+    "controller_evidence": [
+      {
+        "address": "0x00c69071a6ad8a331d70d2f5cca5c09efc355ea4",
+        "controlled_account": 5707,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 5707 owner()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 5662,
+          "kind": "eth_eoa"
+        },
+        "role": "owner"
+      }
+    ],
+    "current_disposition": "HOLD_PROJECT_OR_EXCLUDED"
+  },
+  {
+    "protocol": "v1",
+    "account_id": 5713,
+    "category": "owner treasury",
+    "authority": "not an established simple multisig",
+    "authority_addresses_and_roles": "owner: 0xcaebe8353b11b23546ad51ec7a51bf3f673e47dc",
+    "controller_evidence": [
+      {
+        "address": "0xcaebe8353b11b23546ad51ec7a51bf3f673e47dc",
+        "controlled_account": 5713,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 5713 owner()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 5699,
+          "kind": "eth_eoa"
+        },
+        "role": "owner"
+      }
+    ],
+    "current_disposition": "HOLD_PROJECT_OR_EXCLUDED"
+  },
+  {
+    "protocol": "v1",
+    "account_id": 5793,
+    "category": "owner treasury",
+    "authority": "not an established simple multisig",
+    "authority_addresses_and_roles": "owner: 0x00c69071a6ad8a331d70d2f5cca5c09efc355ea4",
+    "controller_evidence": [
+      {
+        "address": "0x00c69071a6ad8a331d70d2f5cca5c09efc355ea4",
+        "controlled_account": 5793,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 5793 owner()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 5662,
+          "kind": "eth_eoa"
+        },
+        "role": "owner"
+      }
+    ],
+    "current_disposition": "APPROVED_ORIGINAL_AUTHORITY"
+  },
+  {
+    "protocol": "v1",
+    "account_id": 10288,
+    "category": "owner treasury",
+    "authority": "not an established simple multisig",
+    "authority_addresses_and_roles": "owner: 0xcaebe8353b11b23546ad51ec7a51bf3f673e47dc",
+    "controller_evidence": [
+      {
+        "address": "0xcaebe8353b11b23546ad51ec7a51bf3f673e47dc",
+        "controlled_account": 10288,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 10288 owner()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 5699,
+          "kind": "eth_eoa"
+        },
+        "role": "owner"
+      }
+    ],
+    "current_disposition": "HOLD_PROJECT_OR_EXCLUDED"
+  },
+  {
+    "protocol": "v1",
+    "account_id": 10317,
+    "category": "owner treasury",
+    "authority": "not an established simple multisig",
+    "authority_addresses_and_roles": "owner: 0xcaebe8353b11b23546ad51ec7a51bf3f673e47dc",
+    "controller_evidence": [
+      {
+        "address": "0xcaebe8353b11b23546ad51ec7a51bf3f673e47dc",
+        "controlled_account": 10317,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 10317 owner()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 5699,
+          "kind": "eth_eoa"
+        },
+        "role": "owner"
+      }
+    ],
+    "current_disposition": "HOLD_PROJECT_OR_EXCLUDED"
+  },
+  {
+    "protocol": "v1",
+    "account_id": 10506,
+    "category": "SafeL2 1.3.0",
+    "authority": "3-of-6",
+    "authority_addresses_and_roles": "safe_owner: 0xcb3c4f5f817604f3c8b5c7e1ecab480279c449d0; safe_owner: 0xa14d06ee65f19ea64548ca2effcc26925823827d; safe_owner: 0x2072e365400d42ae5b4c4145e0a98d65fbb526e1; safe_owner: 0xe7d5869fe1955f2500987b9eccff0a9452c164cf; safe_owner: 0x6538d3d3737b653bc7ca4f1061e6e0a1dfd8f3af; safe_owner: 0x2661a4786ea12b7edfd3f5c08ff617702360a993",
+    "controller_evidence": [
+      {
+        "address": "0xcb3c4f5f817604f3c8b5c7e1ecab480279c449d0",
+        "controlled_account": 10506,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 10506 getOwners()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 11305,
+          "kind": "eth_eoa"
+        },
+        "role": "safe_owner"
+      },
+      {
+        "address": "0xa14d06ee65f19ea64548ca2effcc26925823827d",
+        "controlled_account": 10506,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 10506 getOwners()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 11293,
+          "kind": "eth_eoa"
+        },
+        "role": "safe_owner"
+      },
+      {
+        "address": "0x2072e365400d42ae5b4c4145e0a98d65fbb526e1",
+        "controlled_account": 10506,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 10506 getOwners()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 12032,
+          "kind": "eth_eoa"
+        },
+        "role": "safe_owner"
+      },
+      {
+        "address": "0xe7d5869fe1955f2500987b9eccff0a9452c164cf",
+        "controlled_account": 10506,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 10506 getOwners()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 8091,
+          "kind": "eth_eoa"
+        },
+        "role": "safe_owner"
+      },
+      {
+        "address": "0x6538d3d3737b653bc7ca4f1061e6e0a1dfd8f3af",
+        "controlled_account": 10506,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 10506 getOwners()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 6852,
+          "kind": "eth_eoa"
+        },
+        "role": "safe_owner"
+      },
+      {
+        "address": "0x2661a4786ea12b7edfd3f5c08ff617702360a993",
+        "controlled_account": 10506,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 10506 getOwners()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 4746,
+          "kind": "eth_eoa"
+        },
+        "role": "safe_owner"
+      }
+    ],
+    "current_disposition": "APPROVED_ORIGINAL_AUTHORITY"
+  },
+  {
+    "protocol": "v1",
+    "account_id": 11784,
+    "category": "UUPS trading executor",
+    "authority": "owner and individual operators; NOT 2-of-2",
+    "authority_addresses_and_roles": "owner: 0x9b8d70b41c0b1e69b739f60151f2d14127ecc165; OPERATOR_ROLE: 0x4b673f0d54bc58cd4fd4fdb5f5fd0058214e13a3; OPERATOR_ROLE: 0x9b8d70b41c0b1e69b739f60151f2d14127ecc165",
+    "controller_evidence": [
+      {
+        "address": "0x9b8d70b41c0b1e69b739f60151f2d14127ecc165",
+        "controlled_account": 11784,
+        "evidence": "contracts-full-review-20261010-001/accounts-reviewed.json account 11784 owner()",
+        "evidence_level": "saved_fixed_block_RPC; not a new SMT proof",
+        "identity": {
+          "account_id": 11402,
+          "kind": "eth_eoa"
+        },
+        "role": "owner"
+      },
+      {
+        "address": "0x4b673f0d54bc58cd4fd4fdb5f5fd0058214e13a3",
+        "controlled_account": 11784,
+        "evidence": "account-11784-research-20261010-001/storage.json roles",
+        "evidence_level": "root-authenticated membership; candidate-limited enumeration",
+        "identity": {
+          "account_id": 11805,
+          "kind": "eth_eoa"
+        },
+        "role": "OPERATOR_ROLE"
+      },
+      {
+        "address": "0x9b8d70b41c0b1e69b739f60151f2d14127ecc165",
+        "controlled_account": 11784,
+        "evidence": "account-11784-research-20261010-001/storage.json roles",
+        "evidence_level": "root-authenticated membership; candidate-limited enumeration",
+        "identity": {
+          "account_id": 11402,
+          "kind": "eth_eoa"
+        },
+        "role": "OPERATOR_ROLE"
+      }
+    ],
+    "current_disposition": "APPROVED_ORIGINAL_AUTHORITY"
+  },
+  {
+    "protocol": "v1",
+    "account_id": 12228,
+    "category": "project sale",
+    "authority": "not an established simple multisig",
+    "authority_addresses_and_roles": "Owner: 0xa9bd87fbdd609bfb170e99da2bf3c8a23760ead2",
+    "controller_evidence": [
+      {
+        "address": "0xa9bd87fbdd609bfb170e99da2bf3c8a23760ead2",
+        "evidence": "remaining-resolution-20261011-001: authenticated slot / mapping, deployed withdrawal path, getter",
+        "evidence_level": "SMT state and bytecode behavior, no full source match",
+        "identity": {
+          "account_id": 11888
+        },
+        "role": "Owner"
+      }
+    ],
+    "current_disposition": "HOLD_PROJECT_OR_EXCLUDED"
+  },
+  {
+    "protocol": "v1",
+    "account_id": 12229,
+    "category": "project sale",
+    "authority": "not an established simple multisig",
+    "authority_addresses_and_roles": "Owner: 0xa9bd87fbdd609bfb170e99da2bf3c8a23760ead2",
+    "controller_evidence": [
+      {
+        "address": "0xa9bd87fbdd609bfb170e99da2bf3c8a23760ead2",
+        "evidence": "remaining-resolution-20261011-001: authenticated slot / mapping, deployed withdrawal path, getter",
+        "evidence_level": "SMT state and bytecode behavior, no full source match",
+        "identity": {
+          "account_id": 11888
+        },
+        "role": "Owner"
+      }
+    ],
+    "current_disposition": "HOLD_PROJECT_OR_EXCLUDED"
+  }
+]

@@ -1,0 +1,49 @@
+{
+  "all_assertions_passed": true,
+  "root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee",
+  "account_id": 11784,
+  "owner_account_id": 11402,
+  "owner_eth_address": "0x9b8d70b41c0b1e69b739f60151f2d14127ecc165",
+  "owner_eoa_script": {
+    "code_hash": "0x096df264f38fff07f3acd318995abc2c71ae0e504036fe32bc38d5b6037364d4",
+    "hash_type": "type",
+    "args": "0x1ca35cb5fda4bd542e71d94a6d5f4c0d255d6d6fba73c41cf45d2693e59b30729b8d70b41c0b1e69b739f60151f2d14127ecc165",
+    "script_hash": "0x4499389799c9e87a5f6f2d6c3d7836622ac2fbb18d667aafb643966c9d009a20"
+  },
+  "owner_eoa_script_preimage_matches_authenticated_inventory": true,
+  "scope": "Exact saved proxy and implementation, snapshot slots and role members, synthetic caller execution and token stub. No owner signature or full Godwoken/CKB transaction. Synthetic default admin cannot bypass owner-only gates; absence of every possible default-admin member is not claimed.",
+  "results": [
+    {
+      "mode": "owner",
+      "caller": "0x9b8d70b41c0b1e69b739f60151f2d14127ecc165",
+      "send_token_success": true,
+      "recorded_token_transfer_amount": "7",
+      "upgrade_to_current_implementation_success": true,
+      "transfer_ownership_success": true
+    },
+    {
+      "mode": "operator",
+      "caller": "0x4b673f0d54bc58cd4fd4fdb5f5fd0058214e13a3",
+      "send_token_success": false,
+      "recorded_token_transfer_amount": "0",
+      "upgrade_to_current_implementation_success": false,
+      "transfer_ownership_success": false
+    },
+    {
+      "mode": "outsider",
+      "caller": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "send_token_success": false,
+      "recorded_token_transfer_amount": "0",
+      "upgrade_to_current_implementation_success": false,
+      "transfer_ownership_success": false
+    },
+    {
+      "mode": "synthetic_default_admin",
+      "caller": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "send_token_success": false,
+      "recorded_token_transfer_amount": "0",
+      "upgrade_to_current_implementation_success": false,
+      "transfer_ownership_success": false
+    }
+  ]
+}

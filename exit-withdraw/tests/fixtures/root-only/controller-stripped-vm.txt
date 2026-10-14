@@ -1,0 +1,12 @@
+V0 Begin: 29967553 cycles
+V0 Pay: 26833771 cycles
+V0 control OmniLock onward exit: 1486044 cycles
+V0 Pay: 27796221 cycles
+V0 control OmniLock onward exit: 1476185 cycles
+test claim_e2e::v0_settlement::control_v0_full_vm_partial_and_remainder ... ok
+V1 control round 0: 30831584 cycles
+V1 controller-selected OmniLock onward exit: 1463985 cycles
+V1 control round 1: 31715934 cycles
+V1 controller-selected OmniLock onward exit: 1478815 cycles
+test settlement_e2e::control_v1_full_vm_partial_remainder_and_wrong_signer ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 44 filtered out; finished in 7.52s

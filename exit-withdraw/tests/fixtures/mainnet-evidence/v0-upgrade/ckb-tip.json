@@ -1,0 +1,28 @@
+{
+  "observed_at_utc": "2026-10-11T13:09:46.182270+00:00",
+  "endpoint": "https://mainnet.ckb.dev/rpc",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "get_tip_header",
+    "params": []
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "result": {
+      "compact_target": "0x19156d6d",
+      "dao": "0x98f2952f129d385bab7cc7cfa7d42a00d4fc5cd67cbc770a00bf86d143153307",
+      "epoch": "0x61f049f003af2",
+      "extra_hash": "0xc5a8ead44b757363728ad5e471d97f45f0a506a95dbb8ee0c6fdc26b74005837",
+      "hash": "0xaf3197d0d08433c8b04dc4529cf5918c41380acfb849d2cd9583f3dc0a0096a1",
+      "nonce": "0x83c74e5c3b010000000000013e203120",
+      "number": "0x13beb91",
+      "parent_hash": "0xb4c4b6b8067e0205f6d227d1b917d608d0ffe523d8b240a94df92a83f5b8bc3c",
+      "proposals_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "timestamp": "0x1a12b153f95",
+      "transactions_root": "0x938920bb295101a1504de9d04d0066d42f9fa15a1e5c44f69cf457ac9f1ee25a",
+      "version": "0x0"
+    },
+    "id": 1
+  }
+}

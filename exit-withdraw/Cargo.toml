@@ -1,0 +1,52 @@
+[package]
+name = "godwoken-withdraw"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "gw-withdraw"
+path = "src/main.rs"
+
+[features]
+default = ["smt-trie"]
+smt-trie = ["gw-smt/smt-trie"]
+e2e-tests = []
+simulation = ["dep:ckb-testtool", "dep:ckb-system-scripts"]
+
+[dependencies]
+bech32 = "0.9.1"
+tiny_http = "0.12.0"
+ckb-testtool = { version = "0.15.1", optional = true }
+ckb-system-scripts = { version = "0.5.4", optional = true }
+secp256k1 = { version = "0.30", features = ["recovery"] }
+sha3 = "0.10"
+exit-withdraw-state-validator = { path = "../gwos/contracts/exit-withdraw-state-validator" }
+ckb-types = "0.118"
+ckb-jsonrpc-types = "0.118"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+csv = "1"
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+sha2 = "0.10"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+num-bigint = { version = "0.4", features = ["serde"] }
+rocksdb = { version = "0.21", default-features = false, features = ["snappy", "lz4", "zstd", "zlib", "bzip2"] }
+gw-types = { path = "../gwos/crates/types" }
+gw-common = { path = "../gwos/crates/common" }
+gw-hash = { path = "../gwos/crates/hash" }
+gw-smt = { path = "../crates/smt" }
+revm = { version = "=19.7.0", default-features = false, features = ["std", "portable", "secp256k1", "memory_limit"] }
+
+[dev-dependencies]
+ckb-testtool = "0.15.1"
+ckb-system-scripts = "0.5.4"
+secp256k1 = { version = "0.30", features = ["recovery"] }
+sha3 = "0.10"
+tempfile = "3"
+
+# Keep the audit tool's pinned dependencies separate from the legacy node workspace.
+[workspace]
+exclude = ["tests/reference"]

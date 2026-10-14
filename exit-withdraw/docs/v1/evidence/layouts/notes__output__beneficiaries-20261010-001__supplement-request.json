@@ -1,0 +1,328 @@
+{
+  "accounts": [
+    {
+      "account_id": 3474,
+      "eth_address": "0xcc3419c5e5013d7fb1e7d6beade5a8420787698c",
+      "mappings": [
+        {
+          "label": "balance getter verified in second implementation",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": []
+    },
+    {
+      "account_id": 3476,
+      "eth_address": "0x08b7434acb8079b79e88945f205c6f226c73ffa3",
+      "mappings": [
+        {
+          "label": "balance getter verified in second implementation",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": []
+    },
+    {
+      "account_id": 186,
+      "eth_address": "0xbcaaedd0337d6c311c9d49f69b44c419b22ea17a",
+      "mappings": [],
+      "prefix_words": 0,
+      "runtime_code_hash": "0xf601f6484fc84f0515c0ed834594c582a3974f00e4dc030ec489e8b57c75f8da",
+      "slots": [
+        {
+          "key": "0x11953f0405e4854bd06badea6a0172e2e4f2e2cd079eb84471e4f272a91c3b9a",
+          "label": "Pair balanceOf 0xeb08501ee7556a6350ff23b3bf991ca384e3277a"
+        },
+        {
+          "key": "0x5d9a1aba1678f996c5d542ca1a11f7ee2bd3b0edc59e40b3288060b14a9f15dc",
+          "label": "Pair balanceOf 0xe9298ed830feb5c63d0cb449caa360087daccb85"
+        },
+        {
+          "key": "0x40a650f87b4b884f2799aeedc02803ae5b5a7945f6fb0dfe998846f7a588bd80",
+          "label": "Pair balanceOf 0x9063a720bcc1e1c303d06df3fd8c8df9d58368de"
+        },
+        {
+          "key": "0xbd5f5155fe96a613fb184cb7e8de0ceeda3333efca44f8b72a299af2c1c0aeba",
+          "label": "Pair balanceOf 0x7ba1df0bc3ba5c232c77bb1aab0e9e9260546942"
+        }
+      ]
+    },
+    {
+      "account_id": 187,
+      "eth_address": "0xbf7b7295f84b4bd2de9d549d047e51c7917dc5e3",
+      "mappings": [],
+      "prefix_words": 0,
+      "runtime_code_hash": "0xf601f6484fc84f0515c0ed834594c582a3974f00e4dc030ec489e8b57c75f8da",
+      "slots": [
+        {
+          "key": "0x3f914a530146deb784f1ae968f5f59af11b8ca5e3da483b10a671951f1366fbb",
+          "label": "Pair balanceOf 0xc98c7a43c97a9ba6c6fd0e9a63dd39df3136c901"
+        },
+        {
+          "key": "0x4f5d3fdd4f62235d58cff4bd1f6ed979f43f96b672c584e4e54660c5f63b016a",
+          "label": "Pair balanceOf 0x664d99f83861cfd8cddddd212eb9b9c1496afd4b"
+        },
+        {
+          "key": "0xdf18487e8c83a47274197a94215737098726a9050ee6f07785c8012071dcae30",
+          "label": "Pair balanceOf 0x28bef62f7880eec6f70d5eee06752f813c8276e0"
+        },
+        {
+          "key": "0x1f95584e4d91527a39fbf3707d7939aa54d1bd40a7a84d90edf86ffa62ce899d",
+          "label": "Pair balanceOf 0x51bd2194b5913ff879f7cab6be52bdd17aaa7b5e"
+        },
+        {
+          "key": "0xde8e8b71da0de1d8b8a1e45e584c7e3c6f6301c361702c933d007336de59d456",
+          "label": "Pair balanceOf 0xd2626b07938bc0fc78acdcd0cc89a35b6ab8892e"
+        },
+        {
+          "key": "0x59fb044bb3d1f77cc25ecdc35e56e3f9bec9d45b3086c0a585b74ef315fa3e5c",
+          "label": "Pair balanceOf 0x9368f85e3737c1a318ae7ffb6eb789a287002bc1"
+        }
+      ]
+    },
+    {
+      "account_id": 1433,
+      "eth_address": "0x1a519c84397b1f07a5cbed634d55ec288f1a9177",
+      "mappings": [],
+      "prefix_words": 0,
+      "runtime_code_hash": "0xf601f6484fc84f0515c0ed834594c582a3974f00e4dc030ec489e8b57c75f8da",
+      "slots": [
+        {
+          "key": "0x2cb30d373e46ede5c78787370663cc10de0a464168776e141f04e7e903fd83e1",
+          "label": "Pair balanceOf 0x2d6af020fb005fe8f3f2e8d8403b702cd75e3ba1"
+        },
+        {
+          "key": "0xdda505ac508ffac060c0522bd375890311ee4823873ab183d79f719faf5036d1",
+          "label": "Pair balanceOf 0xc84d4a9a396e621d79430b36f5bf5205020aaaef"
+        },
+        {
+          "key": "0xfbd59f89c774b4726ed83b99962527ba0cececa193b7464c9bd79af85e020122",
+          "label": "Pair balanceOf 0x5c7fa6fe3f6c5d8333741339ea7268e3d0e03cad"
+        },
+        {
+          "key": "0x9240d55e8326909ef77ed45664e54e1fe95db2b38412d4d3ab1f464c7847635a",
+          "label": "Pair balanceOf 0xd09135618d13b8cd5984a58203e29dc61987aa07"
+        }
+      ]
+    },
+    {
+      "account_id": 1434,
+      "eth_address": "0x7535c308e4d56b1d471faf60e852a7ef58408992",
+      "mappings": [],
+      "prefix_words": 0,
+      "runtime_code_hash": "0xf601f6484fc84f0515c0ed834594c582a3974f00e4dc030ec489e8b57c75f8da",
+      "slots": [
+        {
+          "key": "0x124226efa832e3d8d233972d62bbe2b7bc2d0a5d1b78f6da68b8d4d47bbb781a",
+          "label": "Pair balanceOf 0x1a2163b19eb58cca9279465539adf29572e828c6"
+        },
+        {
+          "key": "0x286fe785096e518d2c72f18bb9692c0c6681b745a0b47070dec4de0867732fe3",
+          "label": "Pair balanceOf 0x3730224d4a1438129fc651e09e4688543f78d9bd"
+        },
+        {
+          "key": "0x48172907795433415548df8d00ac9a95b59c344ef8b8d7723141f8e271c90377",
+          "label": "Pair balanceOf 0xcfa03b95388eeb39b754968e5d97b154a645c15f"
+        },
+        {
+          "key": "0x26d2b0ae8260fea34c1a046a990eef8ef34d6fc7dfc418e6395d6fd14e8483c5",
+          "label": "Pair balanceOf 0xd7cad0b097523f45e582d7fcbbeebd7de2312e17"
+        }
+      ]
+    },
+    {
+      "account_id": 1435,
+      "eth_address": "0xe7970ba16e4922e332ad8ca3650eed7d52cad4d0",
+      "mappings": [],
+      "prefix_words": 0,
+      "runtime_code_hash": "0xf601f6484fc84f0515c0ed834594c582a3974f00e4dc030ec489e8b57c75f8da",
+      "slots": [
+        {
+          "key": "0xcfdddc5fabf2bc2aec6a489bb84cf1e25f22a139779ac405eb0834e7c362f1ab",
+          "label": "Pair balanceOf 0x63925846425cc1ef1ac8bee2a888c8a0b392db30"
+        },
+        {
+          "key": "0x98a88f69ec736b0ca9fc15c85544803c01f2eee16628dbf34ead161230730fb0",
+          "label": "Pair balanceOf 0x9a0963085290c3aea6eedb54a154f35a5a7df709"
+        },
+        {
+          "key": "0xa8f23770410bfce595adff291faead7c3267c08800fff28fab7134b8d7fec820",
+          "label": "Pair balanceOf 0x3f26835cae2d8921ad328348828d975bf1cb8bfc"
+        },
+        {
+          "key": "0xc909ab9d434a9498cb3d536b77ce27a597787ce111e826a95286eb9fb65e37de",
+          "label": "Pair balanceOf 0x72314858e7629e5776be6658eebc83d4be84beaa"
+        },
+        {
+          "key": "0x4a2c49e83dbf540000ba655d918522dd639a90f630feb15486396cc3c43eafc6",
+          "label": "Pair balanceOf 0x08b7434acb8079b79e88945f205c6f226c73ffa3"
+        },
+        {
+          "key": "0x45bb0d63446d800a8fd2163d270285d6c4866bd015c9b2b8f6e54ea95e70e469",
+          "label": "Pair balanceOf 0x1c74906bac1701f3ea7e42518200c76dc16df6de"
+        }
+      ]
+    },
+    {
+      "account_id": 1437,
+      "eth_address": "0xae448332e434b65ef2535055f6d8a1e3461c6f73",
+      "mappings": [],
+      "prefix_words": 0,
+      "runtime_code_hash": "0xf601f6484fc84f0515c0ed834594c582a3974f00e4dc030ec489e8b57c75f8da",
+      "slots": [
+        {
+          "key": "0xbfac66786744b02cf78e728752e54662766f7b4c19a2114b4bcb9babbb7dfcbd",
+          "label": "Pair balanceOf 0xeb99c5af10acd6c175026dba6c1830b7df995813"
+        },
+        {
+          "key": "0x26e85a6c90fa50a70e8ba65c0dfe60ec0432e36a99f0142019b379e169bd69f3",
+          "label": "Pair balanceOf 0xef62580c88ce73c97019a41fbe241aec013df24e"
+        },
+        {
+          "key": "0x12f2cc6c047c43c95be32abc72cd07481443e789fa9d1a8b4db09c837d4aa6aa",
+          "label": "Pair balanceOf 0x3a666a7fbb9966100ea44507d3956b98826797e2"
+        },
+        {
+          "key": "0xa2dc2714763ad933a99d8b730da9a265c76fd975264d86f0f322da980b99c078",
+          "label": "Pair balanceOf 0xd81f52c5c6a6d7f8ee68a1e4505b185ca4e3d299"
+        },
+        {
+          "key": "0xe5a8afbc4c3061ed1b67c79908b451a0fcb48773d0bc14ba71a0826a11fe4124",
+          "label": "Pair balanceOf 0x21c4b09e076d03d68fdd242c31f575fe6a38e395"
+        },
+        {
+          "key": "0x3304629bf79decd3ba840a5e9486293814eb20486921b15ea832bf72be9f2c9b",
+          "label": "Pair balanceOf 0x757f6d6e12009d57416c612aea7409cebd53fa40"
+        },
+        {
+          "key": "0x8636662edcb9cf20a8eaeadea7b71104eb45cefd1409e9f016aab2ef3a3cc403",
+          "label": "Pair balanceOf 0xcc3419c5e5013d7fb1e7d6beade5a8420787698c"
+        },
+        {
+          "key": "0x2c495352b423bfe394760f70ba2a4a52f98e00afbc9cff087387d07951e23321",
+          "label": "Pair balanceOf 0x8cf682d35d07029b8eead8c1fb08ed20617333b9"
+        },
+        {
+          "key": "0x593ae4c2c1c87ea8cdc274dd872bbc3138771dcd77709fbcfcab5b9fadd890fd",
+          "label": "Pair balanceOf 0x1b43782669996be2ca11078ae064e631c1b87502"
+        },
+        {
+          "key": "0x70b247c0392a550b8f5f0569df502dba3917a91e6a553be8f09db1ae0d36ba11",
+          "label": "Pair balanceOf 0x55f3f878a0b3f68a93a8de277d637ff49bb5e396"
+        }
+      ]
+    },
+    {
+      "account_id": 1438,
+      "eth_address": "0x48d14809e46c10b8789c30afef5e181a79993843",
+      "mappings": [],
+      "prefix_words": 0,
+      "runtime_code_hash": "0xf601f6484fc84f0515c0ed834594c582a3974f00e4dc030ec489e8b57c75f8da",
+      "slots": [
+        {
+          "key": "0xa44006306976e4515747495324838a5f337d7f945700f07de945f69b1c315b2b",
+          "label": "Pair balanceOf 0x9dc00b9157af4e09ed50bab841d91e1cd2bc7ff6"
+        },
+        {
+          "key": "0x52f00b71e38efa34d0e5008aecb0fede808e2c4311c2b4e109c5f88988198b1d",
+          "label": "Pair balanceOf 0x176c1716fbd2b1cf99574e1feb261b55fffc37d8"
+        },
+        {
+          "key": "0xe231e4ee6978a392614f2835cea9a80534d9d27395bb087c6fa66a4804980d84",
+          "label": "Pair balanceOf 0x0ae82e915da5f572f2a6c63c9a3dd35b272937d8"
+        },
+        {
+          "key": "0xae0fe1395d9707b6032cf4003ac00f6d20bc11a5a078488285ffc1763e49bd3f",
+          "label": "Pair balanceOf 0x1c5f613bde998965ab2ad5f0977c67c2eaecd5ae"
+        }
+      ]
+    },
+    {
+      "account_id": 1439,
+      "eth_address": "0xbcbc8f5261397a34c83264f81e3df790bebd8eeb",
+      "mappings": [],
+      "prefix_words": 0,
+      "runtime_code_hash": "0xf601f6484fc84f0515c0ed834594c582a3974f00e4dc030ec489e8b57c75f8da",
+      "slots": [
+        {
+          "key": "0x4444ee42a151cdff6ef0449c5b0bd90158549a381cd85223f38e8e3372dbe1f9",
+          "label": "Pair balanceOf 0xf144ce2be1ef30afde24f24aa4bbd3b839d9a983"
+        },
+        {
+          "key": "0x05108368c7d7fa27529248c1e1c906109180cb4c186a181f9001286dda8d5de9",
+          "label": "Pair balanceOf 0x2da4e58fc8f534a4e11eb9f64c5874180655a7eb"
+        },
+        {
+          "key": "0xd02a42621e912105771b100190499c20e5fdc3f8e868c5c65d720827f023447b",
+          "label": "Pair balanceOf 0x2c08d024515e8ce54751019de98258c1be37f842"
+        },
+        {
+          "key": "0xa9bffcad8030ecafbf3ad341ca81f33df0ec904ecb8205c6e430c82275aabd55",
+          "label": "Pair balanceOf 0x11b4713ba06b06150740900cfe7d6860cb147c41"
+        }
+      ]
+    }
+  ],
+  "extra_candidates": [
+    "0x0000000000000000000000000000000000000000",
+    "0x03ffd3254870440c4a087d20179362fccd5b19ac",
+    "0x06e4cc6bf8096b78cdc1eafd7cef73e6ee58c09a",
+    "0x071044b6be5a3202d36e5ea6f035355d9cb10aba",
+    "0x1c352e8f3e035c524f2385818b44859906d3c705",
+    "0x2176638fef52dfc3ac6a727611a00d4575b82370",
+    "0x22c998ea311e8c14cff633091d1ae82f3beb87b0",
+    "0x263ecc1408848fae0f8e061de3b4d1e350a6474e",
+    "0x28d6c9a5170599f40b0027cc236d0293ad64ae6e",
+    "0x2b6f17fea009e20f9c90c13403cd1f3b13c73344",
+    "0x3335833eb19c9fc4b50aa338a31874c5747c5fed",
+    "0x3a93bbf4b4147c8c98289b7e31b941dfb3e9b18f",
+    "0x3b71961693eb3da8bfde50178a3ca9a1df1bc374",
+    "0x407a8125d4d23c99cfc001c72778625effcdd946",
+    "0x492afcda95f17126ca4bb09c78e7bd11cdfb8735",
+    "0x4fa3414fd3e572f2562c1a823bb00ea14c6a6755",
+    "0x517be509bf19833f90846e9e3af5eeca30ec4aec",
+    "0x52f3c7f87c0979571a417b4b7aa34f2764677d6e",
+    "0x5896bed3959d4508fee5cdaed6da41e8016d1ebe",
+    "0x5a0ac23b69db12351510c31fc5adcbc2df8c04e5",
+    "0x5d4316e69be2ca870a97a5cbfd7b7a1f079d956f",
+    "0x5fb2a2f3298a26d9c7729a37ffa03d24b2d0499a",
+    "0x60310d44a00682a9f11e0a9287e5f64383781453",
+    "0x62bb1f76baa0e39c66554d30805369133a805b52",
+    "0x62bb3aa883a0cdb278da3c5d646f19574e883970",
+    "0x65189b30e214daf11f525ac239192a2438303409",
+    "0x6d500e275be80545ae39a0d9b20b6b6f8d32aa15",
+    "0x72ef3abd6a43e33b8678996e558d30d498824170",
+    "0x734852350daf09f31fdb5ceb7f9d521043cfb2ad",
+    "0x77f540fa374a276cb689ff678a5fd2d5ee55062a",
+    "0x7f4ae3763c6d18e281c6ad61219e6415a8196389",
+    "0x86cd1278d475445d52686c3f4556c03fedcb5adc",
+    "0x8e528699aafd0eca078a43db62defd14a3b62798",
+    "0x9266cb1cbd548bd94be540fc347f150ac4112914",
+    "0x93afdfd6b4fa0e40d1b58af74ddb794b4504455c",
+    "0x99ef4d197ce38ad638e32a0d90e4893f03a730b6",
+    "0x9ec915f4e78fc65c0fc9274c28dc06d07d103369",
+    "0xa73f7865920d634c5e9a20e9128cd36a9fb88490",
+    "0xb06c531948220d1dd1b43cb13dce00a91201e3e3",
+    "0xb1fa9df7226967b6a55969a5162a61d88879be4d",
+    "0xb4748cc3077226e46f73a9c758b8819d947ff41a",
+    "0xb50b1a477a30af74524c9e0d0ee02232d3dc117a",
+    "0xb52a090ad4b0470a8f97ca3b30320d5c7e02cd6a",
+    "0xc33b055961dadcf48732a267b8ca2c0dfa212b5a",
+    "0xd9afb15fa70cbad4ca3d312146a329ac0812ff47",
+    "0xe1e16eff8817ac07141afffbe59c9954812ac5d3",
+    "0xe2c0d842047781f2cf05a7973dc8124a37544976",
+    "0xe43785a2106572cfb54f087f2606ede005ed9a61",
+    "0xf41c3ae5aad07fd21fc57bcb1fea01377f67988f",
+    "0xf5958c98473f04ee61344022011cd6b57f159cb8",
+    "0xf61b43f972ba556d4dc8f938e164b3a3ff3a5a66",
+    "0xfa7aee4da9a51832822cfdf152d1ae924ff24b3c",
+    "0xfb2508a367cb370aafdde4ffd25b3f4d80c85381"
+  ],
+  "root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee"
+}

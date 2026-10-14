@@ -1,0 +1,224 @@
+[
+  {
+    "account_id": 225,
+    "members": 3,
+    "original_allows_same_member": true,
+    "owners": [
+      {
+        "account_id": null,
+        "eth_address": "0x7e2cd50ff305780450df7d8a02b6bd2b4878c3d8",
+        "identity_kind": "stored_eth_signer_without_l2_account",
+        "signature_still_required": true
+      },
+      {
+        "account_id": null,
+        "eth_address": "0x27837f6036d94b107e203e535d991afa544d0b3d",
+        "identity_kind": "stored_eth_signer_without_l2_account",
+        "signature_still_required": true
+      },
+      {
+        "account_id": 122,
+        "eth_address": "0x666666488c608edec79d6f85094e6e514a67064f",
+        "identity_kind": "registered_eth_eoa"
+      }
+    ],
+    "payout_signatures_still_required": true,
+    "refund_threshold": 2,
+    "runtime_hash": "0x9d1fdfcc1f4a687253d32e25e738c94850718e2690fda97b69b6989e62ead263",
+    "wallet_kind": "signer-wallet"
+  },
+  {
+    "account_id": 253,
+    "members": 3,
+    "original_allows_same_member": true,
+    "owners": [
+      {
+        "account_id": null,
+        "eth_address": "0x7e2cd50ff305780450df7d8a02b6bd2b4878c3d8",
+        "identity_kind": "stored_eth_signer_without_l2_account",
+        "signature_still_required": true
+      },
+      {
+        "account_id": null,
+        "eth_address": "0x27837f6036d94b107e203e535d991afa544d0b3d",
+        "identity_kind": "stored_eth_signer_without_l2_account",
+        "signature_still_required": true
+      },
+      {
+        "account_id": 122,
+        "eth_address": "0x666666488c608edec79d6f85094e6e514a67064f",
+        "identity_kind": "registered_eth_eoa"
+      }
+    ],
+    "payout_signatures_still_required": true,
+    "refund_threshold": 2,
+    "runtime_hash": "0xc6bce90f1fba741db86e38bf91f918a8f39b179fd8315484c4333d33821a8c68",
+    "wallet_kind": "signer-wallet"
+  },
+  {
+    "account_id": 263,
+    "members": 3,
+    "original_allows_same_member": false,
+    "owners": [
+      {
+        "account_id": null,
+        "eth_address": "0x7e2cd50ff305780450df7d8a02b6bd2b4878c3d8",
+        "identity_kind": "stored_eth_signer_without_l2_account",
+        "signature_still_required": true
+      },
+      {
+        "account_id": null,
+        "eth_address": "0x27837f6036d94b107e203e535d991afa544d0b3d",
+        "identity_kind": "stored_eth_signer_without_l2_account",
+        "signature_still_required": true
+      },
+      {
+        "account_id": 122,
+        "eth_address": "0x666666488c608edec79d6f85094e6e514a67064f",
+        "identity_kind": "registered_eth_eoa"
+      }
+    ],
+    "payout_signatures_still_required": true,
+    "refund_threshold": 2,
+    "runtime_hash": "0x3142438bff01104e8448c4c43ce985eecd4b24cb3b35d9140a216317807d085a",
+    "wallet_kind": "signer-wallet"
+  },
+  {
+    "account_id": 3943,
+    "active_guard": false,
+    "active_modules": false,
+    "fallback_account_id": 3935,
+    "implementation_account_id": 3940,
+    "implementation_runtime_hash": "0x7534d039a623c146fa2b59ecf9ab1a456342b45fcdade7809f489c1fd82808b0",
+    "members": 4,
+    "owners": [
+      {
+        "account_id": 6852,
+        "eth_address": "0x6538d3d3737b653bc7ca4f1061e6e0a1dfd8f3af",
+        "identity_kind": "registered_eth_eoa"
+      },
+      {
+        "account_id": 4746,
+        "eth_address": "0x2661a4786ea12b7edfd3f5c08ff617702360a993",
+        "identity_kind": "registered_eth_eoa"
+      },
+      {
+        "account_id": 4808,
+        "eth_address": "0xd5f7c76eeba710023e620f8770f6d8c4acdd1452",
+        "identity_kind": "registered_eth_eoa"
+      },
+      {
+        "account_id": 130,
+        "eth_address": "0x9c023610d438de45b8d53358de663233ce752f77",
+        "identity_kind": "registered_eth_eoa"
+      }
+    ],
+    "payout_signatures_still_required": true,
+    "refund_threshold": 2,
+    "wallet_kind": "safe"
+  },
+  {
+    "account_id": 10506,
+    "active_guard": false,
+    "active_modules": false,
+    "fallback_account_id": 10478,
+    "implementation_account_id": 10482,
+    "implementation_runtime_hash": "0x61ac213298bf09251d4920b8bd58bc8ae3416179be459354f8ae48258172419c",
+    "members": 6,
+    "owners": [
+      {
+        "account_id": 11305,
+        "eth_address": "0xcb3c4f5f817604f3c8b5c7e1ecab480279c449d0",
+        "identity_kind": "registered_eth_eoa"
+      },
+      {
+        "account_id": 11293,
+        "eth_address": "0xa14d06ee65f19ea64548ca2effcc26925823827d",
+        "identity_kind": "registered_eth_eoa"
+      },
+      {
+        "account_id": 12032,
+        "eth_address": "0x2072e365400d42ae5b4c4145e0a98d65fbb526e1",
+        "identity_kind": "registered_eth_eoa"
+      },
+      {
+        "account_id": 8091,
+        "eth_address": "0xe7d5869fe1955f2500987b9eccff0a9452c164cf",
+        "identity_kind": "registered_eth_eoa"
+      },
+      {
+        "account_id": 6852,
+        "eth_address": "0x6538d3d3737b653bc7ca4f1061e6e0a1dfd8f3af",
+        "identity_kind": "registered_eth_eoa"
+      },
+      {
+        "account_id": 4746,
+        "eth_address": "0x2661a4786ea12b7edfd3f5c08ff617702360a993",
+        "identity_kind": "registered_eth_eoa"
+      }
+    ],
+    "payout_signatures_still_required": true,
+    "refund_threshold": 3,
+    "wallet_kind": "safe"
+  },
+  {
+    "account_id": 11784,
+    "executor_may_redirect": false,
+    "members": 1,
+    "owners": [
+      {
+        "account_id": 11402,
+        "eth_address": "0x9b8d70b41c0b1e69b739f60151f2d14127ecc165",
+        "identity_kind": "registered_eth_eoa"
+      }
+    ],
+    "payout_signatures_still_required": true,
+    "refund_threshold": 1,
+    "wallet_kind": "single-owner"
+  },
+  {
+    "account_id": 4573,
+    "executor_may_redirect": false,
+    "members": 1,
+    "owners": [
+      {
+        "account_id": 122,
+        "eth_address": "0x666666488c608edec79d6f85094e6e514a67064f",
+        "identity_kind": "registered_eth_eoa"
+      }
+    ],
+    "payout_signatures_still_required": true,
+    "refund_threshold": 1,
+    "wallet_kind": "single-owner"
+  },
+  {
+    "account_id": 5793,
+    "executor_may_redirect": false,
+    "members": 1,
+    "owners": [
+      {
+        "account_id": 5662,
+        "eth_address": "0x00c69071a6ad8a331d70d2f5cca5c09efc355ea4",
+        "identity_kind": "registered_eth_eoa"
+      }
+    ],
+    "payout_signatures_still_required": true,
+    "refund_threshold": 1,
+    "wallet_kind": "single-owner"
+  },
+  {
+    "account_id": 4075,
+    "executor_may_redirect": false,
+    "members": 1,
+    "owners": [
+      {
+        "account_id": 3559,
+        "eth_address": "0xb156c425f325d750968702d4bd4226573edc3aed",
+        "identity_kind": "registered_eth_eoa"
+      }
+    ],
+    "payout_signatures_still_required": true,
+    "refund_threshold": 1,
+    "wallet_kind": "fixed-recipient-executor"
+  }
+]

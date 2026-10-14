@@ -1,0 +1,32 @@
+[
+  {
+    "underlying": "0x9e858a7aaedf9fdb1026ab1f77f627be2791e98a",
+    "symbol": "ETH",
+    "reference": "0xda7a001b254cd22e46d3eab04d937489c93174c3"
+  },
+  {
+    "underlying": "0xbadb9b25150ee75bb794198658a4d0448e43e528",
+    "symbol": "BNB",
+    "reference": "0xda7a001b254cd22e46d3eab04d937489c93174c3"
+  },
+  {
+    "underlying": "0x82455018f2c32943b3f12f4e59d0da2faf2257ef",
+    "symbol": "BTC",
+    "reference": "0xda7a001b254cd22e46d3eab04d937489c93174c3"
+  },
+  {
+    "underlying": "0x7538c85cae4e4673253ffd2568c1f1b48a71558a",
+    "symbol": "CKB",
+    "reference": "0xda7a001b254cd22e46d3eab04d937489c93174c3"
+  },
+  {
+    "underlying": "0x186181e225dc1ad85a4a94164232bd261e351c33",
+    "symbol": "USDC",
+    "reference": "0xda7a001b254cd22e46d3eab04d937489c93174c3"
+  },
+  {
+    "underlying": "0x8e019acb11c7d17c26d334901fa2ac41c1f44d50",
+    "symbol": "USDT",
+    "reference": "0xda7a001b254cd22e46d3eab04d937489c93174c3"
+  }
+]

@@ -1,0 +1,26 @@
+# Godwoken withdraw
+
+Rust CLI, refund-only V0/V1 contracts and shared ETH-wallet portal. V1 is the default UI protocol; every operation handles only the explicitly selected version.
+
+- [Current documents and complete tables](docs/README.md)
+- [Operator runbook](docs/ops-refund-runbook.md)
+- [Contract design](docs/contract-design.md)
+- [Verification and limitations](docs/validation.md)
+- [Web app](claim-web/README.md)
+
+From this directory, build with `cargo +1.94.0 build --locked --release --bin gw-withdraw`. Use the compiled executable's `--help` for exact flags.
+
+```sh
+gw-withdraw refund generate --protocol v1 --db /path/to/db --output-dir ./new-refunds
+gw-withdraw l2-db --protocol v1 --db /path/to/db --output ./l2.json
+gw-withdraw l1-custodian --protocol v1 --output ./l1.json
+gw-withdraw check-backing --l2-report ./l2.json --l1-report ./l1.json --output ./backing.json
+```
+
+Use explicit `--protocol v0` for V0. Generation takes only a read-only DB and embedded reviewed policy; independent asset queries do not generate DeFi entitlements. Outputs refuse overwrite. Frozen L2 state and fresh L1 observations have separate anchors and scope limitations.
+
+Operator commands are `refund`, `l2-db`, `l1-custodian`, `check-backing`, `upgrade`, `settlement` and `claim-serve`. The refund lifecycle is one Begin, then Pay for selected applicants. Old per-record registration, direct-balance withdrawal and frozen-table research tools are not operator interfaces.
+
+Publication, multisig upgrades, controller approvals and broadcasts follow the runbook; generating tables does not execute payments. Keep machine-specific paths and connection details in the separate machine inventory.
+
+Historical table-driven research calculators have been removed. The two retained [developer diagnostics](examples/README.md) do not generate refunds or replace the CLI. Production validator builds exclude the historical direct-account regression binary.

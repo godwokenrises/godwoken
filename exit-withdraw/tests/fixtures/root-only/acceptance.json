@@ -1,0 +1,1656 @@
+{
+  "status": "PASS",
+  "scope": "Original read-only V0 DB, separate CLI process per transition, synthetic L1 history, unsigned host consensus",
+  "operations": [
+    "Begin",
+    "Pay",
+    "Pay",
+    "Pay"
+  ],
+  "first_applicant": "0x0003bae4f2201c65a41dd332b72c7c99e2037c84",
+  "second_applicant": "0x002898bb0b7f593686c0c6dcde6a8b016f082d46",
+  "repeat_rejected": true,
+  "all_checks_passed": true,
+  "stages": [
+    {
+      "after_coverage": {
+        "all_unpaid_ceilings_covered": true,
+        "assets": [
+          {
+            "asset_id": 1,
+            "available_raw": "25975721587278411",
+            "covered": true,
+            "unpaid_ceiling_raw": "25964479881781875"
+          },
+          {
+            "asset_id": 19,
+            "available_raw": "207956131817159791117",
+            "covered": true,
+            "unpaid_ceiling_raw": "207956131817066031581"
+          },
+          {
+            "asset_id": 172,
+            "available_raw": "23531564144",
+            "covered": true,
+            "unpaid_ceiling_raw": "23531543430"
+          },
+          {
+            "asset_id": 177,
+            "available_raw": "13915015464798029455125",
+            "covered": true,
+            "unpaid_ceiling_raw": "13915015464798009169453"
+          },
+          {
+            "asset_id": 180,
+            "available_raw": "234100000000000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "234100000000000000000"
+          },
+          {
+            "asset_id": 190,
+            "available_raw": "218532477912",
+            "covered": true,
+            "unpaid_ceiling_raw": "210031213593"
+          },
+          {
+            "asset_id": 249,
+            "available_raw": "37930692967565",
+            "covered": true,
+            "unpaid_ceiling_raw": "37930692731519"
+          },
+          {
+            "asset_id": 253,
+            "available_raw": "204855742017",
+            "covered": true,
+            "unpaid_ceiling_raw": "204855644638"
+          },
+          {
+            "asset_id": 30634,
+            "available_raw": "705838148698589834329",
+            "covered": true,
+            "unpaid_ceiling_raw": "705838148698549973656"
+          },
+          {
+            "asset_id": 30667,
+            "available_raw": "707547599160000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "707547599159999999999"
+          },
+          {
+            "asset_id": 30668,
+            "available_raw": "423754196144168137613",
+            "covered": true,
+            "unpaid_ceiling_raw": "423754196142059278804"
+          },
+          {
+            "asset_id": 30669,
+            "available_raw": "261351211109313721",
+            "covered": true,
+            "unpaid_ceiling_raw": "261351211109313708"
+          },
+          {
+            "asset_id": 30670,
+            "available_raw": "10582844834226587",
+            "covered": true,
+            "unpaid_ceiling_raw": "10582844724046387"
+          },
+          {
+            "asset_id": 30671,
+            "available_raw": "156112411024188669",
+            "covered": true,
+            "unpaid_ceiling_raw": "156112410324492961"
+          },
+          {
+            "asset_id": 30672,
+            "available_raw": "36810263866266067817350",
+            "covered": true,
+            "unpaid_ceiling_raw": "36810263866264816940962"
+          },
+          {
+            "asset_id": 37688,
+            "available_raw": "67200000000000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "67200000000000000000"
+          },
+          {
+            "asset_id": 49361,
+            "available_raw": "4893924",
+            "covered": true,
+            "unpaid_ceiling_raw": "4893869"
+          },
+          {
+            "asset_id": 49721,
+            "available_raw": "134427780094408200118671748",
+            "covered": true,
+            "unpaid_ceiling_raw": "0"
+          },
+          {
+            "asset_id": 49787,
+            "available_raw": "108988084032923953898964599683",
+            "covered": true,
+            "unpaid_ceiling_raw": "0"
+          }
+        ],
+        "minimum_retained_custodian_capacity_shannons": 510400000000,
+        "remaining_native_sources": [
+          {
+            "asset_id": 1,
+            "raw": "25975721587278411"
+          },
+          {
+            "asset_id": 19,
+            "raw": "207956131817159791117"
+          },
+          {
+            "asset_id": 172,
+            "raw": "23531564144"
+          },
+          {
+            "asset_id": 177,
+            "raw": "13915015464798029455125"
+          },
+          {
+            "asset_id": 180,
+            "raw": "234100000000000000000"
+          },
+          {
+            "asset_id": 190,
+            "raw": "218532477912"
+          },
+          {
+            "asset_id": 249,
+            "raw": "37930692967565"
+          },
+          {
+            "asset_id": 253,
+            "raw": "204855742017"
+          },
+          {
+            "asset_id": 30634,
+            "raw": "705838148698589834329"
+          },
+          {
+            "asset_id": 30667,
+            "raw": "707547599160000000000"
+          },
+          {
+            "asset_id": 30668,
+            "raw": "423754196144168137613"
+          },
+          {
+            "asset_id": 30669,
+            "raw": "261351211109313721"
+          },
+          {
+            "asset_id": 30670,
+            "raw": "10582844834226587"
+          },
+          {
+            "asset_id": 30671,
+            "raw": "156112411024188669"
+          },
+          {
+            "asset_id": 30672,
+            "raw": "36810263866266067817350"
+          },
+          {
+            "asset_id": 37688,
+            "raw": "67200000000000000000"
+          },
+          {
+            "asset_id": 49361,
+            "raw": "4893924"
+          },
+          {
+            "asset_id": 49721,
+            "raw": "134427780094408200118671748"
+          },
+          {
+            "asset_id": 49787,
+            "raw": "108988084032923953898964599683"
+          }
+        ]
+      },
+      "after_root": "0xdb612d20d9f8b6151d0e937a440a6c2de094a6e11452b1cc0436efd6c8e07f00",
+      "before_coverage": {
+        "all_unpaid_ceilings_covered": true,
+        "assets": [
+          {
+            "asset_id": 1,
+            "available_raw": "25975721587278411",
+            "covered": true,
+            "unpaid_ceiling_raw": "25964479881781875"
+          },
+          {
+            "asset_id": 19,
+            "available_raw": "207956131817159791117",
+            "covered": true,
+            "unpaid_ceiling_raw": "207956131817066031581"
+          },
+          {
+            "asset_id": 172,
+            "available_raw": "23531564144",
+            "covered": true,
+            "unpaid_ceiling_raw": "23531543430"
+          },
+          {
+            "asset_id": 177,
+            "available_raw": "13915015464798029455125",
+            "covered": true,
+            "unpaid_ceiling_raw": "13915015464798009169453"
+          },
+          {
+            "asset_id": 180,
+            "available_raw": "234100000000000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "234100000000000000000"
+          },
+          {
+            "asset_id": 190,
+            "available_raw": "218532477912",
+            "covered": true,
+            "unpaid_ceiling_raw": "210031213593"
+          },
+          {
+            "asset_id": 249,
+            "available_raw": "37930692967565",
+            "covered": true,
+            "unpaid_ceiling_raw": "37930692731519"
+          },
+          {
+            "asset_id": 253,
+            "available_raw": "204855742017",
+            "covered": true,
+            "unpaid_ceiling_raw": "204855644638"
+          },
+          {
+            "asset_id": 30634,
+            "available_raw": "705838148698589834329",
+            "covered": true,
+            "unpaid_ceiling_raw": "705838148698549973656"
+          },
+          {
+            "asset_id": 30667,
+            "available_raw": "707547599160000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "707547599159999999999"
+          },
+          {
+            "asset_id": 30668,
+            "available_raw": "423754196144168137613",
+            "covered": true,
+            "unpaid_ceiling_raw": "423754196142059278804"
+          },
+          {
+            "asset_id": 30669,
+            "available_raw": "261351211109313721",
+            "covered": true,
+            "unpaid_ceiling_raw": "261351211109313708"
+          },
+          {
+            "asset_id": 30670,
+            "available_raw": "10582844834226587",
+            "covered": true,
+            "unpaid_ceiling_raw": "10582844724046387"
+          },
+          {
+            "asset_id": 30671,
+            "available_raw": "156112411024188669",
+            "covered": true,
+            "unpaid_ceiling_raw": "156112410324492961"
+          },
+          {
+            "asset_id": 30672,
+            "available_raw": "36810263866266067817350",
+            "covered": true,
+            "unpaid_ceiling_raw": "36810263866264816940962"
+          },
+          {
+            "asset_id": 37688,
+            "available_raw": "67200000000000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "67200000000000000000"
+          },
+          {
+            "asset_id": 49361,
+            "available_raw": "4893924",
+            "covered": true,
+            "unpaid_ceiling_raw": "4893869"
+          },
+          {
+            "asset_id": 49721,
+            "available_raw": "134427780094408200118671748",
+            "covered": true,
+            "unpaid_ceiling_raw": "0"
+          },
+          {
+            "asset_id": 49787,
+            "available_raw": "108988084032923953898964599683",
+            "covered": true,
+            "unpaid_ceiling_raw": "0"
+          }
+        ],
+        "minimum_retained_custodian_capacity_shannons": 510400000000,
+        "remaining_native_sources": [
+          {
+            "asset_id": 1,
+            "raw": "25975721587278411"
+          },
+          {
+            "asset_id": 19,
+            "raw": "207956131817159791117"
+          },
+          {
+            "asset_id": 172,
+            "raw": "23531564144"
+          },
+          {
+            "asset_id": 177,
+            "raw": "13915015464798029455125"
+          },
+          {
+            "asset_id": 180,
+            "raw": "234100000000000000000"
+          },
+          {
+            "asset_id": 190,
+            "raw": "218532477912"
+          },
+          {
+            "asset_id": 249,
+            "raw": "37930692967565"
+          },
+          {
+            "asset_id": 253,
+            "raw": "204855742017"
+          },
+          {
+            "asset_id": 30634,
+            "raw": "705838148698589834329"
+          },
+          {
+            "asset_id": 30667,
+            "raw": "707547599160000000000"
+          },
+          {
+            "asset_id": 30668,
+            "raw": "423754196144168137613"
+          },
+          {
+            "asset_id": 30669,
+            "raw": "261351211109313721"
+          },
+          {
+            "asset_id": 30670,
+            "raw": "10582844834226587"
+          },
+          {
+            "asset_id": 30671,
+            "raw": "156112411024188669"
+          },
+          {
+            "asset_id": 30672,
+            "raw": "36810263866266067817350"
+          },
+          {
+            "asset_id": 37688,
+            "raw": "67200000000000000000"
+          },
+          {
+            "asset_id": 49361,
+            "raw": "4893924"
+          },
+          {
+            "asset_id": 49721,
+            "raw": "134427780094408200118671748"
+          },
+          {
+            "asset_id": 49787,
+            "raw": "108988084032923953898964599683"
+          }
+        ]
+      },
+      "before_root": "0xbf094fbcee2258770df7749bed2ed3e2565c17c98b1f40f2ca6377d253a11d7d",
+      "broadcast": false,
+      "db_unchanged": true,
+      "history_after": 1,
+      "history_before": 0,
+      "operation": "Begin",
+      "original_db_root": "0xbf094fbcee2258770df7749bed2ed3e2565c17c98b1f40f2ca6377d253a11d7d",
+      "protocol": "v0",
+      "status": "unsigned_host_consensus_cold_replay_pass",
+      "transaction_bytes": 4438,
+      "vm_executed": false
+    },
+    {
+      "after_coverage": {
+        "all_unpaid_ceilings_covered": true,
+        "assets": [
+          {
+            "asset_id": 1,
+            "available_raw": "25975357849188815",
+            "covered": true,
+            "unpaid_ceiling_raw": "25964116143692279"
+          },
+          {
+            "asset_id": 19,
+            "available_raw": "207956131817159791117",
+            "covered": true,
+            "unpaid_ceiling_raw": "207956131817066031581"
+          },
+          {
+            "asset_id": 172,
+            "available_raw": "23531564144",
+            "covered": true,
+            "unpaid_ceiling_raw": "23531543430"
+          },
+          {
+            "asset_id": 177,
+            "available_raw": "13915015464798029455125",
+            "covered": true,
+            "unpaid_ceiling_raw": "13915015464798009169453"
+          },
+          {
+            "asset_id": 180,
+            "available_raw": "234100000000000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "234100000000000000000"
+          },
+          {
+            "asset_id": 190,
+            "available_raw": "218532477912",
+            "covered": true,
+            "unpaid_ceiling_raw": "210031213593"
+          },
+          {
+            "asset_id": 249,
+            "available_raw": "37930692967565",
+            "covered": true,
+            "unpaid_ceiling_raw": "37930692731519"
+          },
+          {
+            "asset_id": 253,
+            "available_raw": "204855742017",
+            "covered": true,
+            "unpaid_ceiling_raw": "204855644638"
+          },
+          {
+            "asset_id": 30634,
+            "available_raw": "705838148698589834329",
+            "covered": true,
+            "unpaid_ceiling_raw": "705838148698549973656"
+          },
+          {
+            "asset_id": 30667,
+            "available_raw": "707547599160000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "707547599159999999999"
+          },
+          {
+            "asset_id": 30668,
+            "available_raw": "423754196144168137613",
+            "covered": true,
+            "unpaid_ceiling_raw": "423754196142059278804"
+          },
+          {
+            "asset_id": 30669,
+            "available_raw": "261351211109313721",
+            "covered": true,
+            "unpaid_ceiling_raw": "261351211109313708"
+          },
+          {
+            "asset_id": 30670,
+            "available_raw": "10582844834226587",
+            "covered": true,
+            "unpaid_ceiling_raw": "10582844724046387"
+          },
+          {
+            "asset_id": 30671,
+            "available_raw": "156112411024188669",
+            "covered": true,
+            "unpaid_ceiling_raw": "156112410324492961"
+          },
+          {
+            "asset_id": 30672,
+            "available_raw": "36810263866266067817350",
+            "covered": true,
+            "unpaid_ceiling_raw": "36810263866264816940962"
+          },
+          {
+            "asset_id": 37688,
+            "available_raw": "67200000000000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "67200000000000000000"
+          },
+          {
+            "asset_id": 49361,
+            "available_raw": "4893924",
+            "covered": true,
+            "unpaid_ceiling_raw": "4893869"
+          },
+          {
+            "asset_id": 49721,
+            "available_raw": "134427780094408200118671748",
+            "covered": true,
+            "unpaid_ceiling_raw": "0"
+          },
+          {
+            "asset_id": 49787,
+            "available_raw": "108988084032923953898964599683",
+            "covered": true,
+            "unpaid_ceiling_raw": "0"
+          }
+        ],
+        "minimum_retained_custodian_capacity_shannons": 510400000000,
+        "remaining_native_sources": [
+          {
+            "asset_id": 1,
+            "raw": "25975357849188815"
+          },
+          {
+            "asset_id": 19,
+            "raw": "207956131817159791117"
+          },
+          {
+            "asset_id": 172,
+            "raw": "23531564144"
+          },
+          {
+            "asset_id": 177,
+            "raw": "13915015464798029455125"
+          },
+          {
+            "asset_id": 180,
+            "raw": "234100000000000000000"
+          },
+          {
+            "asset_id": 190,
+            "raw": "218532477912"
+          },
+          {
+            "asset_id": 249,
+            "raw": "37930692967565"
+          },
+          {
+            "asset_id": 253,
+            "raw": "204855742017"
+          },
+          {
+            "asset_id": 30634,
+            "raw": "705838148698589834329"
+          },
+          {
+            "asset_id": 30667,
+            "raw": "707547599160000000000"
+          },
+          {
+            "asset_id": 30668,
+            "raw": "423754196144168137613"
+          },
+          {
+            "asset_id": 30669,
+            "raw": "261351211109313721"
+          },
+          {
+            "asset_id": 30670,
+            "raw": "10582844834226587"
+          },
+          {
+            "asset_id": 30671,
+            "raw": "156112411024188669"
+          },
+          {
+            "asset_id": 30672,
+            "raw": "36810263866266067817350"
+          },
+          {
+            "asset_id": 37688,
+            "raw": "67200000000000000000"
+          },
+          {
+            "asset_id": 49361,
+            "raw": "4893924"
+          },
+          {
+            "asset_id": 49721,
+            "raw": "134427780094408200118671748"
+          },
+          {
+            "asset_id": 49787,
+            "raw": "108988084032923953898964599683"
+          }
+        ]
+      },
+      "after_root": "0xe6a5b546b5be23d8d5c8a56f7990c067f76b2d24c7f4900b4f6c2e074f8f749e",
+      "before_coverage": {
+        "all_unpaid_ceilings_covered": true,
+        "assets": [
+          {
+            "asset_id": 1,
+            "available_raw": "25975721587278411",
+            "covered": true,
+            "unpaid_ceiling_raw": "25964479881781875"
+          },
+          {
+            "asset_id": 19,
+            "available_raw": "207956131817159791117",
+            "covered": true,
+            "unpaid_ceiling_raw": "207956131817066031581"
+          },
+          {
+            "asset_id": 172,
+            "available_raw": "23531564144",
+            "covered": true,
+            "unpaid_ceiling_raw": "23531543430"
+          },
+          {
+            "asset_id": 177,
+            "available_raw": "13915015464798029455125",
+            "covered": true,
+            "unpaid_ceiling_raw": "13915015464798009169453"
+          },
+          {
+            "asset_id": 180,
+            "available_raw": "234100000000000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "234100000000000000000"
+          },
+          {
+            "asset_id": 190,
+            "available_raw": "218532477912",
+            "covered": true,
+            "unpaid_ceiling_raw": "210031213593"
+          },
+          {
+            "asset_id": 249,
+            "available_raw": "37930692967565",
+            "covered": true,
+            "unpaid_ceiling_raw": "37930692731519"
+          },
+          {
+            "asset_id": 253,
+            "available_raw": "204855742017",
+            "covered": true,
+            "unpaid_ceiling_raw": "204855644638"
+          },
+          {
+            "asset_id": 30634,
+            "available_raw": "705838148698589834329",
+            "covered": true,
+            "unpaid_ceiling_raw": "705838148698549973656"
+          },
+          {
+            "asset_id": 30667,
+            "available_raw": "707547599160000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "707547599159999999999"
+          },
+          {
+            "asset_id": 30668,
+            "available_raw": "423754196144168137613",
+            "covered": true,
+            "unpaid_ceiling_raw": "423754196142059278804"
+          },
+          {
+            "asset_id": 30669,
+            "available_raw": "261351211109313721",
+            "covered": true,
+            "unpaid_ceiling_raw": "261351211109313708"
+          },
+          {
+            "asset_id": 30670,
+            "available_raw": "10582844834226587",
+            "covered": true,
+            "unpaid_ceiling_raw": "10582844724046387"
+          },
+          {
+            "asset_id": 30671,
+            "available_raw": "156112411024188669",
+            "covered": true,
+            "unpaid_ceiling_raw": "156112410324492961"
+          },
+          {
+            "asset_id": 30672,
+            "available_raw": "36810263866266067817350",
+            "covered": true,
+            "unpaid_ceiling_raw": "36810263866264816940962"
+          },
+          {
+            "asset_id": 37688,
+            "available_raw": "67200000000000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "67200000000000000000"
+          },
+          {
+            "asset_id": 49361,
+            "available_raw": "4893924",
+            "covered": true,
+            "unpaid_ceiling_raw": "4893869"
+          },
+          {
+            "asset_id": 49721,
+            "available_raw": "134427780094408200118671748",
+            "covered": true,
+            "unpaid_ceiling_raw": "0"
+          },
+          {
+            "asset_id": 49787,
+            "available_raw": "108988084032923953898964599683",
+            "covered": true,
+            "unpaid_ceiling_raw": "0"
+          }
+        ],
+        "minimum_retained_custodian_capacity_shannons": 510400000000,
+        "remaining_native_sources": [
+          {
+            "asset_id": 1,
+            "raw": "25975721587278411"
+          },
+          {
+            "asset_id": 19,
+            "raw": "207956131817159791117"
+          },
+          {
+            "asset_id": 172,
+            "raw": "23531564144"
+          },
+          {
+            "asset_id": 177,
+            "raw": "13915015464798029455125"
+          },
+          {
+            "asset_id": 180,
+            "raw": "234100000000000000000"
+          },
+          {
+            "asset_id": 190,
+            "raw": "218532477912"
+          },
+          {
+            "asset_id": 249,
+            "raw": "37930692967565"
+          },
+          {
+            "asset_id": 253,
+            "raw": "204855742017"
+          },
+          {
+            "asset_id": 30634,
+            "raw": "705838148698589834329"
+          },
+          {
+            "asset_id": 30667,
+            "raw": "707547599160000000000"
+          },
+          {
+            "asset_id": 30668,
+            "raw": "423754196144168137613"
+          },
+          {
+            "asset_id": 30669,
+            "raw": "261351211109313721"
+          },
+          {
+            "asset_id": 30670,
+            "raw": "10582844834226587"
+          },
+          {
+            "asset_id": 30671,
+            "raw": "156112411024188669"
+          },
+          {
+            "asset_id": 30672,
+            "raw": "36810263866266067817350"
+          },
+          {
+            "asset_id": 37688,
+            "raw": "67200000000000000000"
+          },
+          {
+            "asset_id": 49361,
+            "raw": "4893924"
+          },
+          {
+            "asset_id": 49721,
+            "raw": "134427780094408200118671748"
+          },
+          {
+            "asset_id": 49787,
+            "raw": "108988084032923953898964599683"
+          }
+        ]
+      },
+      "before_root": "0xdb612d20d9f8b6151d0e937a440a6c2de094a6e11452b1cc0436efd6c8e07f00",
+      "broadcast": false,
+      "db_unchanged": true,
+      "history_after": 2,
+      "history_before": 1,
+      "operation": "Pay",
+      "original_db_root": "0xbf094fbcee2258770df7749bed2ed3e2565c17c98b1f40f2ca6377d253a11d7d",
+      "protocol": "v0",
+      "status": "unsigned_host_consensus_cold_replay_pass",
+      "transaction_bytes": 21453,
+      "vm_executed": false
+    },
+    {
+      "after_coverage": {
+        "all_unpaid_ceilings_covered": true,
+        "assets": [
+          {
+            "asset_id": 1,
+            "available_raw": "25974994111099217",
+            "covered": true,
+            "unpaid_ceiling_raw": "25963752405602681"
+          },
+          {
+            "asset_id": 19,
+            "available_raw": "207956131817159791117",
+            "covered": true,
+            "unpaid_ceiling_raw": "207956131817066031581"
+          },
+          {
+            "asset_id": 172,
+            "available_raw": "23531564144",
+            "covered": true,
+            "unpaid_ceiling_raw": "23531543430"
+          },
+          {
+            "asset_id": 177,
+            "available_raw": "13915015464798029455125",
+            "covered": true,
+            "unpaid_ceiling_raw": "13915015464798009169453"
+          },
+          {
+            "asset_id": 180,
+            "available_raw": "234100000000000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "234100000000000000000"
+          },
+          {
+            "asset_id": 190,
+            "available_raw": "218532477912",
+            "covered": true,
+            "unpaid_ceiling_raw": "210031213593"
+          },
+          {
+            "asset_id": 249,
+            "available_raw": "37930692967565",
+            "covered": true,
+            "unpaid_ceiling_raw": "37930692731519"
+          },
+          {
+            "asset_id": 253,
+            "available_raw": "204855742017",
+            "covered": true,
+            "unpaid_ceiling_raw": "204855644638"
+          },
+          {
+            "asset_id": 30634,
+            "available_raw": "705838148698589834329",
+            "covered": true,
+            "unpaid_ceiling_raw": "705838148698549973656"
+          },
+          {
+            "asset_id": 30667,
+            "available_raw": "707547599160000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "707547599159999999999"
+          },
+          {
+            "asset_id": 30668,
+            "available_raw": "423754196144168137613",
+            "covered": true,
+            "unpaid_ceiling_raw": "423754196142059278804"
+          },
+          {
+            "asset_id": 30669,
+            "available_raw": "261351211109313721",
+            "covered": true,
+            "unpaid_ceiling_raw": "261351211109313708"
+          },
+          {
+            "asset_id": 30670,
+            "available_raw": "10582844834226587",
+            "covered": true,
+            "unpaid_ceiling_raw": "10582844724046387"
+          },
+          {
+            "asset_id": 30671,
+            "available_raw": "156112411024188669",
+            "covered": true,
+            "unpaid_ceiling_raw": "156112410324492961"
+          },
+          {
+            "asset_id": 30672,
+            "available_raw": "36810263866266067817350",
+            "covered": true,
+            "unpaid_ceiling_raw": "36810263866264816940962"
+          },
+          {
+            "asset_id": 37688,
+            "available_raw": "67200000000000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "67200000000000000000"
+          },
+          {
+            "asset_id": 49361,
+            "available_raw": "4893924",
+            "covered": true,
+            "unpaid_ceiling_raw": "4893869"
+          },
+          {
+            "asset_id": 49721,
+            "available_raw": "134427780094408200118671748",
+            "covered": true,
+            "unpaid_ceiling_raw": "0"
+          },
+          {
+            "asset_id": 49787,
+            "available_raw": "108988084032923953898964599683",
+            "covered": true,
+            "unpaid_ceiling_raw": "0"
+          }
+        ],
+        "minimum_retained_custodian_capacity_shannons": 510400000000,
+        "remaining_native_sources": [
+          {
+            "asset_id": 1,
+            "raw": "25974994111099217"
+          },
+          {
+            "asset_id": 19,
+            "raw": "207956131817159791117"
+          },
+          {
+            "asset_id": 172,
+            "raw": "23531564144"
+          },
+          {
+            "asset_id": 177,
+            "raw": "13915015464798029455125"
+          },
+          {
+            "asset_id": 180,
+            "raw": "234100000000000000000"
+          },
+          {
+            "asset_id": 190,
+            "raw": "218532477912"
+          },
+          {
+            "asset_id": 249,
+            "raw": "37930692967565"
+          },
+          {
+            "asset_id": 253,
+            "raw": "204855742017"
+          },
+          {
+            "asset_id": 30634,
+            "raw": "705838148698589834329"
+          },
+          {
+            "asset_id": 30667,
+            "raw": "707547599160000000000"
+          },
+          {
+            "asset_id": 30668,
+            "raw": "423754196144168137613"
+          },
+          {
+            "asset_id": 30669,
+            "raw": "261351211109313721"
+          },
+          {
+            "asset_id": 30670,
+            "raw": "10582844834226587"
+          },
+          {
+            "asset_id": 30671,
+            "raw": "156112411024188669"
+          },
+          {
+            "asset_id": 30672,
+            "raw": "36810263866266067817350"
+          },
+          {
+            "asset_id": 37688,
+            "raw": "67200000000000000000"
+          },
+          {
+            "asset_id": 49361,
+            "raw": "4893924"
+          },
+          {
+            "asset_id": 49721,
+            "raw": "134427780094408200118671748"
+          },
+          {
+            "asset_id": 49787,
+            "raw": "108988084032923953898964599683"
+          }
+        ]
+      },
+      "after_root": "0xfd1966edd8b98da72e0c98ed02945146b9402eb26000ddc35194cfa62fdc3db4",
+      "before_coverage": {
+        "all_unpaid_ceilings_covered": true,
+        "assets": [
+          {
+            "asset_id": 1,
+            "available_raw": "25975357849188815",
+            "covered": true,
+            "unpaid_ceiling_raw": "25964116143692279"
+          },
+          {
+            "asset_id": 19,
+            "available_raw": "207956131817159791117",
+            "covered": true,
+            "unpaid_ceiling_raw": "207956131817066031581"
+          },
+          {
+            "asset_id": 172,
+            "available_raw": "23531564144",
+            "covered": true,
+            "unpaid_ceiling_raw": "23531543430"
+          },
+          {
+            "asset_id": 177,
+            "available_raw": "13915015464798029455125",
+            "covered": true,
+            "unpaid_ceiling_raw": "13915015464798009169453"
+          },
+          {
+            "asset_id": 180,
+            "available_raw": "234100000000000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "234100000000000000000"
+          },
+          {
+            "asset_id": 190,
+            "available_raw": "218532477912",
+            "covered": true,
+            "unpaid_ceiling_raw": "210031213593"
+          },
+          {
+            "asset_id": 249,
+            "available_raw": "37930692967565",
+            "covered": true,
+            "unpaid_ceiling_raw": "37930692731519"
+          },
+          {
+            "asset_id": 253,
+            "available_raw": "204855742017",
+            "covered": true,
+            "unpaid_ceiling_raw": "204855644638"
+          },
+          {
+            "asset_id": 30634,
+            "available_raw": "705838148698589834329",
+            "covered": true,
+            "unpaid_ceiling_raw": "705838148698549973656"
+          },
+          {
+            "asset_id": 30667,
+            "available_raw": "707547599160000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "707547599159999999999"
+          },
+          {
+            "asset_id": 30668,
+            "available_raw": "423754196144168137613",
+            "covered": true,
+            "unpaid_ceiling_raw": "423754196142059278804"
+          },
+          {
+            "asset_id": 30669,
+            "available_raw": "261351211109313721",
+            "covered": true,
+            "unpaid_ceiling_raw": "261351211109313708"
+          },
+          {
+            "asset_id": 30670,
+            "available_raw": "10582844834226587",
+            "covered": true,
+            "unpaid_ceiling_raw": "10582844724046387"
+          },
+          {
+            "asset_id": 30671,
+            "available_raw": "156112411024188669",
+            "covered": true,
+            "unpaid_ceiling_raw": "156112410324492961"
+          },
+          {
+            "asset_id": 30672,
+            "available_raw": "36810263866266067817350",
+            "covered": true,
+            "unpaid_ceiling_raw": "36810263866264816940962"
+          },
+          {
+            "asset_id": 37688,
+            "available_raw": "67200000000000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "67200000000000000000"
+          },
+          {
+            "asset_id": 49361,
+            "available_raw": "4893924",
+            "covered": true,
+            "unpaid_ceiling_raw": "4893869"
+          },
+          {
+            "asset_id": 49721,
+            "available_raw": "134427780094408200118671748",
+            "covered": true,
+            "unpaid_ceiling_raw": "0"
+          },
+          {
+            "asset_id": 49787,
+            "available_raw": "108988084032923953898964599683",
+            "covered": true,
+            "unpaid_ceiling_raw": "0"
+          }
+        ],
+        "minimum_retained_custodian_capacity_shannons": 510400000000,
+        "remaining_native_sources": [
+          {
+            "asset_id": 1,
+            "raw": "25975357849188815"
+          },
+          {
+            "asset_id": 19,
+            "raw": "207956131817159791117"
+          },
+          {
+            "asset_id": 172,
+            "raw": "23531564144"
+          },
+          {
+            "asset_id": 177,
+            "raw": "13915015464798029455125"
+          },
+          {
+            "asset_id": 180,
+            "raw": "234100000000000000000"
+          },
+          {
+            "asset_id": 190,
+            "raw": "218532477912"
+          },
+          {
+            "asset_id": 249,
+            "raw": "37930692967565"
+          },
+          {
+            "asset_id": 253,
+            "raw": "204855742017"
+          },
+          {
+            "asset_id": 30634,
+            "raw": "705838148698589834329"
+          },
+          {
+            "asset_id": 30667,
+            "raw": "707547599160000000000"
+          },
+          {
+            "asset_id": 30668,
+            "raw": "423754196144168137613"
+          },
+          {
+            "asset_id": 30669,
+            "raw": "261351211109313721"
+          },
+          {
+            "asset_id": 30670,
+            "raw": "10582844834226587"
+          },
+          {
+            "asset_id": 30671,
+            "raw": "156112411024188669"
+          },
+          {
+            "asset_id": 30672,
+            "raw": "36810263866266067817350"
+          },
+          {
+            "asset_id": 37688,
+            "raw": "67200000000000000000"
+          },
+          {
+            "asset_id": 49361,
+            "raw": "4893924"
+          },
+          {
+            "asset_id": 49721,
+            "raw": "134427780094408200118671748"
+          },
+          {
+            "asset_id": 49787,
+            "raw": "108988084032923953898964599683"
+          }
+        ]
+      },
+      "before_root": "0xe6a5b546b5be23d8d5c8a56f7990c067f76b2d24c7f4900b4f6c2e074f8f749e",
+      "broadcast": false,
+      "db_unchanged": true,
+      "history_after": 3,
+      "history_before": 2,
+      "operation": "Pay",
+      "original_db_root": "0xbf094fbcee2258770df7749bed2ed3e2565c17c98b1f40f2ca6377d253a11d7d",
+      "protocol": "v0",
+      "status": "unsigned_host_consensus_cold_replay_pass",
+      "transaction_bytes": 17049,
+      "vm_executed": false
+    },
+    {
+      "after_coverage": {
+        "all_unpaid_ceilings_covered": true,
+        "assets": [
+          {
+            "asset_id": 1,
+            "available_raw": "25973965531584217",
+            "covered": true,
+            "unpaid_ceiling_raw": "25962723826087681"
+          },
+          {
+            "asset_id": 19,
+            "available_raw": "207956131817159791117",
+            "covered": true,
+            "unpaid_ceiling_raw": "207956131817066031581"
+          },
+          {
+            "asset_id": 172,
+            "available_raw": "23531564144",
+            "covered": true,
+            "unpaid_ceiling_raw": "23531543430"
+          },
+          {
+            "asset_id": 177,
+            "available_raw": "13915015464798029455125",
+            "covered": true,
+            "unpaid_ceiling_raw": "13915015464798009169453"
+          },
+          {
+            "asset_id": 180,
+            "available_raw": "234100000000000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "234100000000000000000"
+          },
+          {
+            "asset_id": 190,
+            "available_raw": "218532477912",
+            "covered": true,
+            "unpaid_ceiling_raw": "210031213593"
+          },
+          {
+            "asset_id": 249,
+            "available_raw": "37930692967565",
+            "covered": true,
+            "unpaid_ceiling_raw": "37930692731519"
+          },
+          {
+            "asset_id": 253,
+            "available_raw": "204855742017",
+            "covered": true,
+            "unpaid_ceiling_raw": "204855644638"
+          },
+          {
+            "asset_id": 30634,
+            "available_raw": "705838148698589834329",
+            "covered": true,
+            "unpaid_ceiling_raw": "705838148698549973656"
+          },
+          {
+            "asset_id": 30667,
+            "available_raw": "707547599160000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "707547599159999999999"
+          },
+          {
+            "asset_id": 30668,
+            "available_raw": "423754196144168137613",
+            "covered": true,
+            "unpaid_ceiling_raw": "423754196142059278804"
+          },
+          {
+            "asset_id": 30669,
+            "available_raw": "261351211109313721",
+            "covered": true,
+            "unpaid_ceiling_raw": "261351211109313708"
+          },
+          {
+            "asset_id": 30670,
+            "available_raw": "10582844834226587",
+            "covered": true,
+            "unpaid_ceiling_raw": "10582844724046387"
+          },
+          {
+            "asset_id": 30671,
+            "available_raw": "156112411024188669",
+            "covered": true,
+            "unpaid_ceiling_raw": "156112410324492961"
+          },
+          {
+            "asset_id": 30672,
+            "available_raw": "36810263866266067817350",
+            "covered": true,
+            "unpaid_ceiling_raw": "36810263866264816940962"
+          },
+          {
+            "asset_id": 37688,
+            "available_raw": "67200000000000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "67200000000000000000"
+          },
+          {
+            "asset_id": 49361,
+            "available_raw": "4893924",
+            "covered": true,
+            "unpaid_ceiling_raw": "4893869"
+          },
+          {
+            "asset_id": 49721,
+            "available_raw": "134427780094408200118671748",
+            "covered": true,
+            "unpaid_ceiling_raw": "0"
+          },
+          {
+            "asset_id": 49787,
+            "available_raw": "108988084032923953898964599683",
+            "covered": true,
+            "unpaid_ceiling_raw": "0"
+          }
+        ],
+        "minimum_retained_custodian_capacity_shannons": 510400000000,
+        "remaining_native_sources": [
+          {
+            "asset_id": 1,
+            "raw": "25973965531584217"
+          },
+          {
+            "asset_id": 19,
+            "raw": "207956131817159791117"
+          },
+          {
+            "asset_id": 172,
+            "raw": "23531564144"
+          },
+          {
+            "asset_id": 177,
+            "raw": "13915015464798029455125"
+          },
+          {
+            "asset_id": 180,
+            "raw": "234100000000000000000"
+          },
+          {
+            "asset_id": 190,
+            "raw": "218532477912"
+          },
+          {
+            "asset_id": 249,
+            "raw": "37930692967565"
+          },
+          {
+            "asset_id": 253,
+            "raw": "204855742017"
+          },
+          {
+            "asset_id": 30634,
+            "raw": "705838148698589834329"
+          },
+          {
+            "asset_id": 30667,
+            "raw": "707547599160000000000"
+          },
+          {
+            "asset_id": 30668,
+            "raw": "423754196144168137613"
+          },
+          {
+            "asset_id": 30669,
+            "raw": "261351211109313721"
+          },
+          {
+            "asset_id": 30670,
+            "raw": "10582844834226587"
+          },
+          {
+            "asset_id": 30671,
+            "raw": "156112411024188669"
+          },
+          {
+            "asset_id": 30672,
+            "raw": "36810263866266067817350"
+          },
+          {
+            "asset_id": 37688,
+            "raw": "67200000000000000000"
+          },
+          {
+            "asset_id": 49361,
+            "raw": "4893924"
+          },
+          {
+            "asset_id": 49721,
+            "raw": "134427780094408200118671748"
+          },
+          {
+            "asset_id": 49787,
+            "raw": "108988084032923953898964599683"
+          }
+        ]
+      },
+      "after_root": "0x4d7328a991d85e12e2a34b52b964489a73576d070356c21211e261a512b0fc90",
+      "before_coverage": {
+        "all_unpaid_ceilings_covered": true,
+        "assets": [
+          {
+            "asset_id": 1,
+            "available_raw": "25974994111099217",
+            "covered": true,
+            "unpaid_ceiling_raw": "25963752405602681"
+          },
+          {
+            "asset_id": 19,
+            "available_raw": "207956131817159791117",
+            "covered": true,
+            "unpaid_ceiling_raw": "207956131817066031581"
+          },
+          {
+            "asset_id": 172,
+            "available_raw": "23531564144",
+            "covered": true,
+            "unpaid_ceiling_raw": "23531543430"
+          },
+          {
+            "asset_id": 177,
+            "available_raw": "13915015464798029455125",
+            "covered": true,
+            "unpaid_ceiling_raw": "13915015464798009169453"
+          },
+          {
+            "asset_id": 180,
+            "available_raw": "234100000000000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "234100000000000000000"
+          },
+          {
+            "asset_id": 190,
+            "available_raw": "218532477912",
+            "covered": true,
+            "unpaid_ceiling_raw": "210031213593"
+          },
+          {
+            "asset_id": 249,
+            "available_raw": "37930692967565",
+            "covered": true,
+            "unpaid_ceiling_raw": "37930692731519"
+          },
+          {
+            "asset_id": 253,
+            "available_raw": "204855742017",
+            "covered": true,
+            "unpaid_ceiling_raw": "204855644638"
+          },
+          {
+            "asset_id": 30634,
+            "available_raw": "705838148698589834329",
+            "covered": true,
+            "unpaid_ceiling_raw": "705838148698549973656"
+          },
+          {
+            "asset_id": 30667,
+            "available_raw": "707547599160000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "707547599159999999999"
+          },
+          {
+            "asset_id": 30668,
+            "available_raw": "423754196144168137613",
+            "covered": true,
+            "unpaid_ceiling_raw": "423754196142059278804"
+          },
+          {
+            "asset_id": 30669,
+            "available_raw": "261351211109313721",
+            "covered": true,
+            "unpaid_ceiling_raw": "261351211109313708"
+          },
+          {
+            "asset_id": 30670,
+            "available_raw": "10582844834226587",
+            "covered": true,
+            "unpaid_ceiling_raw": "10582844724046387"
+          },
+          {
+            "asset_id": 30671,
+            "available_raw": "156112411024188669",
+            "covered": true,
+            "unpaid_ceiling_raw": "156112410324492961"
+          },
+          {
+            "asset_id": 30672,
+            "available_raw": "36810263866266067817350",
+            "covered": true,
+            "unpaid_ceiling_raw": "36810263866264816940962"
+          },
+          {
+            "asset_id": 37688,
+            "available_raw": "67200000000000000000",
+            "covered": true,
+            "unpaid_ceiling_raw": "67200000000000000000"
+          },
+          {
+            "asset_id": 49361,
+            "available_raw": "4893924",
+            "covered": true,
+            "unpaid_ceiling_raw": "4893869"
+          },
+          {
+            "asset_id": 49721,
+            "available_raw": "134427780094408200118671748",
+            "covered": true,
+            "unpaid_ceiling_raw": "0"
+          },
+          {
+            "asset_id": 49787,
+            "available_raw": "108988084032923953898964599683",
+            "covered": true,
+            "unpaid_ceiling_raw": "0"
+          }
+        ],
+        "minimum_retained_custodian_capacity_shannons": 510400000000,
+        "remaining_native_sources": [
+          {
+            "asset_id": 1,
+            "raw": "25974994111099217"
+          },
+          {
+            "asset_id": 19,
+            "raw": "207956131817159791117"
+          },
+          {
+            "asset_id": 172,
+            "raw": "23531564144"
+          },
+          {
+            "asset_id": 177,
+            "raw": "13915015464798029455125"
+          },
+          {
+            "asset_id": 180,
+            "raw": "234100000000000000000"
+          },
+          {
+            "asset_id": 190,
+            "raw": "218532477912"
+          },
+          {
+            "asset_id": 249,
+            "raw": "37930692967565"
+          },
+          {
+            "asset_id": 253,
+            "raw": "204855742017"
+          },
+          {
+            "asset_id": 30634,
+            "raw": "705838148698589834329"
+          },
+          {
+            "asset_id": 30667,
+            "raw": "707547599160000000000"
+          },
+          {
+            "asset_id": 30668,
+            "raw": "423754196144168137613"
+          },
+          {
+            "asset_id": 30669,
+            "raw": "261351211109313721"
+          },
+          {
+            "asset_id": 30670,
+            "raw": "10582844834226587"
+          },
+          {
+            "asset_id": 30671,
+            "raw": "156112411024188669"
+          },
+          {
+            "asset_id": 30672,
+            "raw": "36810263866266067817350"
+          },
+          {
+            "asset_id": 37688,
+            "raw": "67200000000000000000"
+          },
+          {
+            "asset_id": 49361,
+            "raw": "4893924"
+          },
+          {
+            "asset_id": 49721,
+            "raw": "134427780094408200118671748"
+          },
+          {
+            "asset_id": 49787,
+            "raw": "108988084032923953898964599683"
+          }
+        ]
+      },
+      "before_root": "0xfd1966edd8b98da72e0c98ed02945146b9402eb26000ddc35194cfa62fdc3db4",
+      "broadcast": false,
+      "db_unchanged": true,
+      "history_after": 4,
+      "history_before": 3,
+      "operation": "Pay",
+      "original_db_root": "0xbf094fbcee2258770df7749bed2ed3e2565c17c98b1f40f2ca6377d253a11d7d",
+      "protocol": "v0",
+      "status": "unsigned_host_consensus_cold_replay_pass",
+      "transaction_bytes": 17161,
+      "vm_executed": false
+    }
+  ]
+}

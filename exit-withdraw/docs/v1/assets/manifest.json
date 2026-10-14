@@ -1,0 +1,52 @@
+{
+  "protocol": "v1",
+  "binary_sha256": "8b2d7e15d6857a611f089259e6de34f3ea7495bedc07f21ea5347eba6bb5b898",
+  "root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee",
+  "l2_tip": {
+    "account_count": 14091,
+    "account_root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee",
+    "hash": "0x2b9c2fc728a233f1677b04b7ec3bc2ddc76e5787462e4f14514f8d66471558f3",
+    "number": 2851258,
+    "timestamp": 1781242440312
+  },
+  "l1_state": {
+    "account_count": 14091,
+    "account_root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee",
+    "block_count": 2851259,
+    "block_root": "0x29e6bdf4de9e5bb29d141542505f6f34015061420a943821ffe5a98f22d3ff6b",
+    "config_hash": "0xd6eea74bbbde42287e71e5831f6869d06c3f9711af2f5001546e71f808e69a0d",
+    "finalized_timepoint": 2834458,
+    "reverted_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "status": 0,
+    "timestamp": 1781242440312,
+    "tip_hash": "0x2b9c2fc728a233f1677b04b7ec3bc2ddc76e5787462e4f14514f8d66471558f3",
+    "version": 1
+  },
+  "observed_at": null,
+  "header_before": null,
+  "header_after": null,
+  "observation_start": "2026-10-14T05:40:34.531285759+00:00",
+  "observation_end": "2026-10-14T05:40:40.220876005+00:00",
+  "indexer_before": {
+    "block_hash": "0xa606b4fd4631cd45fe1abb724ea423a1e12a5c079c2529140e5ef2dd0fad0d41",
+    "block_number": "0x13c4843"
+  },
+  "indexer_after": {
+    "block_hash": "0xa606b4fd4631cd45fe1abb724ea423a1e12a5c079c2529140e5ef2dd0fad0d41",
+    "block_number": "0x13c4843"
+  },
+  "check_backing_exit_code": 1,
+  "raw_l2_sha256": "650b5d56004054c8f80272b4afe6a1fd4067596fe7ac31aac1efc7be99306075",
+  "raw_l1_sha256": "29c6f548d11204ec099a0463fb4d5b5e7b9cc186b89c063e27eb6a58dedd16c9",
+  "query_commands": [
+    "gw-withdraw l2-db --protocol v1 --db DB --output l2.json",
+    "gw-withdraw l1-custodian --protocol v1 --output l1.json",
+    "gw-withdraw check-backing --l2-report l2.json --l1-report l1.json --output backing.json"
+  ],
+  "source_conservation_pass": true,
+  "fresh_l2_inventory_matches_complete_report": true,
+  "all_planned_payments_covered_by_finalized_custody": true,
+  "custodian_cell_view_matches_cli": true,
+  "unknown_custodian_asset_count": 0,
+  "caveat": "Non-atomic L1 observation. Recorded supply mismatch and census limits remain in backing.json; this is not deployment or payment approval."
+}

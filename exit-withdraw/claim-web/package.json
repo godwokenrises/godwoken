@@ -1,0 +1,27 @@
+{
+  "name": "godwoken-withdraw-portal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ckb-lumos/base": "0.23.0",
+    "@ckb-lumos/config-manager": "0.23.0",
+    "@ckb-lumos/helpers": "0.23.0",
+    "ethers": "6.15.0",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.10",
+    "@types/react-dom": "19.1.9",
+    "@vitejs/plugin-react": "4.7.0",
+    "typescript": "5.9.2",
+    "vite": "6.4.1",
+    "vitest": "3.2.4"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "observed_at_utc": "2026-09-21T07:20:52.021972+00:00",
+  "endpoint": "https://mainnet.ckb.dev/rpc",
+  "method": "get_cells",
+  "params": [
+    {
+      "script": {
+        "code_hash": "0xb619184ab9142c51b0ee75f4e24bcec3d077eefe513115bad68836d06738fd2c",
+        "hash_type": "type",
+        "args": "0x1ca35cb5fda4bd542e71d94a6d5f4c0d255d6d6fba73c41cf45d2693e59b3072"
+      },
+      "script_type": "lock",
+      "script_search_mode": "prefix",
+      "with_data": true
+    },
+    "asc",
+    "0x64",
+    "0x40b619184ab9142c51b0ee75f4e24bcec3d077eefe513115bad68836d06738fd2c011ca35cb5fda4bd542e71d94a6d5f4c0d255d6d6fba73c41cf45d2693e59b307280d6acef972db4688408a5e196f92eb0457ca003d9aa1c45ff05056b429b3539ba812b000000000000000000012aaa0c0000000300000001"
+  ],
+  "response": {
+    "jsonrpc": "2.0",
+    "result": {
+      "last_cursor": "0x",
+      "objects": []
+    },
+    "id": 1
+  }
+}

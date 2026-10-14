@@ -1,0 +1,50 @@
+{
+  "observed_at_utc": "2026-09-21T07:20:10.756333+00:00",
+  "endpoint": "https://mainnet.ckb.dev/rpc",
+  "method": "get_cells",
+  "params": [
+    {
+      "script": {
+        "args": "0xf3a8efcb165546ab0d7bc2aaf35c52c3432c571b4b1b2abee0619e872539654d",
+        "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+        "hash_type": "type"
+      },
+      "script_type": "type",
+      "script_search_mode": "exact",
+      "with_data": false
+    },
+    "asc",
+    "0x2"
+  ],
+  "response": {
+    "jsonrpc": "2.0",
+    "result": {
+      "last_cursor": "0x6000000000000000000000000000000000000000000000000000545950455f494401f3a8efcb165546ab0d7bc2aaf35c52c3432c571b4b1b2abee0619e872539654d000000000071f89f0000000200000000",
+      "objects": [
+        {
+          "block_number": "0x71f89f",
+          "out_point": {
+            "index": "0x0",
+            "tx_hash": "0x625696834db4320214a8af09de74fd51fc8a83be69d920243f8ccd219071473b"
+          },
+          "output": {
+            "capacity": "0x9c222135e00",
+            "lock": {
+              "args": "0xbc3ab00eee663550bff042289a50ddd65465f899",
+              "code_hash": "0x5c5069eb0857efc65e1bca0c07df34c31663b3622fd3876c876320fc9634e2a8",
+              "hash_type": "type"
+            },
+            "type": {
+              "args": "0xf3a8efcb165546ab0d7bc2aaf35c52c3432c571b4b1b2abee0619e872539654d",
+              "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+              "hash_type": "type"
+            }
+          },
+          "output_data": null,
+          "tx_index": "0x2"
+        }
+      ]
+    },
+    "id": 1
+  }
+}

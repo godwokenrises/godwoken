@@ -1,0 +1,48 @@
+{
+  "observed_at_utc": "2026-09-21T07:24:02.100762+00:00",
+  "endpoint": "https://v1.mainnet.godwoken.io/rpc",
+  "method": "gw_get_block",
+  "params": [
+    "0x2b9c2fc728a233f1677b04b7ec3bc2ddc76e5787462e4f14514f8d66471558f3"
+  ],
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "block": {
+        "block_proof": "0x4c4f01509d5c2bc89c93cee4ebdffc1d8041213229c31ffe04e47fe142fa7d470505b1c84f0150aab04a713524024413c07ce90df0654c48d9248a9dff91bd7117f0bd7e35510450e457ff67f8c3b7412e35bd88da4752192204963c2a04e5fe7d5715b92faa044050b27351751579a0915774e97fa5daaad463b15afab4b8a3d206e9dd446e01efac4f01506dad977241418cfe0c2c2e91c45040e0f47060c854046def5bde17dcc2765ec850de5d81205d6d5df7f6288bfc74d96f0aca02eb97c283dd4a38d56c3cba0e4d274f06506c5e31f47ead22b7717c621a171cc66d1ef7da566718eda94df3380e508b9f85504e70d5cc6749dec6114bc85a7511b641ec25c836dd734794043b243286806ad2500a8678029f7734487df27c0ac1acbbaf0cf3e27b233347ec50e3f6a0a611921c4f0150015ff37376fcc6eaa13c75cb4b0b85c01ca4458423f184100c2128df11e1f1634f0150e850dd067c46a0cdff7e301c5a3efc56e3e5a20e7ee10fc09443c68f35d8c1eb4fea",
+        "hash": "0x2b9c2fc728a233f1677b04b7ec3bc2ddc76e5787462e4f14514f8d66471558f3",
+        "kv_state": [],
+        "kv_state_proof": "0x",
+        "raw": {
+          "block_producer": "0x0200000014000000b8cde090e6a4741b6450308fad1dc338c53936a0",
+          "number": "0x2b81ba",
+          "parent_block_hash": "0xcc90d6b89773cf75de475773b6ba255a85ac9089d99047a03aa10765cb7c140b",
+          "post_account": {
+            "count": "0x370b",
+            "merkle_root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee"
+          },
+          "prev_account": {
+            "count": "0x370b",
+            "merkle_root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee"
+          },
+          "stake_cell_owner_lock_hash": "0x80d6acef972db4688408a5e196f92eb0457ca003d9aa1c45ff05056b429b3539",
+          "state_checkpoint_list": [],
+          "submit_transactions": {
+            "prev_state_checkpoint": "0xdf8827c45420bc4438c0e17e570f0d2b8223d334e1581b5f231e23507cf8e08e",
+            "tx_count": "0x0",
+            "tx_witness_root": "0x0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "submit_withdrawals": {
+            "withdrawal_count": "0x0",
+            "withdrawal_witness_root": "0x0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "timestamp": "0x19eba52aa78"
+        },
+        "transactions": [],
+        "withdrawal_requests": []
+      },
+      "status": "unfinalized"
+    }
+  }
+}

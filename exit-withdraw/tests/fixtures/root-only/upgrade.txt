@@ -1,0 +1,5 @@
+v0 TYPE_ID upgrade, real ckb-cli 2-of-3 signing: 3999947 cycles
+v1 TYPE_ID upgrade, real ckb-cli 2-of-3 signing: 4035085 cycles
+test settlement_e2e::multisig_upgrade_v1 ... ok
+test claim_e2e::v0_settlement::multisig_upgrade_v0 ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 44 filtered out; finished in 3.42s

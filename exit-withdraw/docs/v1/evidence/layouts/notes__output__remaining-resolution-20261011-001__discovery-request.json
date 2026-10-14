@@ -1,0 +1,172 @@
+{
+  "root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee",
+  "extra_candidates": [
+
+  ],
+  "accounts": [
+    {
+      "account_id": 10735,
+      "eth_address": "0xb434d6e7945c755c6b16df386a4b0be2bfd2d4a5",
+      "runtime_code_hash": "0x73343b3c0901e7b26947f77671916c9e748482112f92721e6f63b23c7f8b02a1",
+      "prefix_words": 180,
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        },
+        {
+          "key": "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103",
+          "label": "EIP1967 admin"
+        }
+      ],
+      "mappings": [
+
+      ]
+    },
+    {
+      "account_id": 10737,
+      "eth_address": "0xe16ae54fd2b74d92f9fed49bf7fa20aab003dd60",
+      "runtime_code_hash": "0x73343b3c0901e7b26947f77671916c9e748482112f92721e6f63b23c7f8b02a1",
+      "prefix_words": 180,
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        },
+        {
+          "key": "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103",
+          "label": "EIP1967 admin"
+        }
+      ],
+      "mappings": [
+
+      ]
+    },
+    {
+      "account_id": 11560,
+      "eth_address": "0x85c8bda7498f575243cce55ad859894fe67cf0bc",
+      "runtime_code_hash": "0x73343b3c0901e7b26947f77671916c9e748482112f92721e6f63b23c7f8b02a1",
+      "prefix_words": 180,
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        },
+        {
+          "key": "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103",
+          "label": "EIP1967 admin"
+        }
+      ],
+      "mappings": [
+
+      ]
+    },
+    {
+      "account_id": 11567,
+      "eth_address": "0x39228fac0ffbfb343ea2ed855e06333fe001dcd2",
+      "runtime_code_hash": "0x73343b3c0901e7b26947f77671916c9e748482112f92721e6f63b23c7f8b02a1",
+      "prefix_words": 180,
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        },
+        {
+          "key": "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103",
+          "label": "EIP1967 admin"
+        }
+      ],
+      "mappings": [
+
+      ]
+    },
+    {
+      "account_id": 11740,
+      "eth_address": "0x4edc8690d6c2636cfaa5df7a4f0013f20aeb9223",
+      "runtime_code_hash": "0x73343b3c0901e7b26947f77671916c9e748482112f92721e6f63b23c7f8b02a1",
+      "prefix_words": 180,
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        },
+        {
+          "key": "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103",
+          "label": "EIP1967 admin"
+        }
+      ],
+      "mappings": [
+
+      ]
+    },
+    {
+      "account_id": 10652,
+      "eth_address": "0x3c98274aff14ee0deb7d230da173b1bcfc14fd48",
+      "runtime_code_hash": "0xe55ce9c61966406d048781efae2c7e470b93b56d9a7c4c883b0315b3731ea3df",
+      "prefix_words": 180,
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        },
+        {
+          "key": "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103",
+          "label": "EIP1967 admin"
+        }
+      ],
+      "mappings": [
+
+      ]
+    },
+    {
+      "account_id": 4075,
+      "eth_address": "0xb45263adf4e09b77d538d37f13a24568ae48a587",
+      "runtime_code_hash": "0x0c25f9e15d44f0c124a1fff30143bfdaa987effaa51d74a8a69c75b8d9cb7ee2",
+      "prefix_words": 180,
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        },
+        {
+          "key": "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103",
+          "label": "EIP1967 admin"
+        }
+      ],
+      "mappings": [
+
+      ]
+    },
+    {
+      "account_id": 13044,
+      "eth_address": "0xa2caff852814832e1fb6c68c710a325e41b57d17",
+      "runtime_code_hash": "0x4bdbbfd92696ffc74f5ea6ce8470b4d790459bc23871ac90d6ae5f09b9ec9d7e",
+      "prefix_words": 180,
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        },
+        {
+          "key": "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103",
+          "label": "EIP1967 admin"
+        }
+      ],
+      "mappings": [
+
+      ]
+    },
+    {
+      "account_id": 264,
+      "eth_address": "0xe4546255048fe202aaf1e1084e45efd06ed6dfde",
+      "runtime_code_hash": "0xa58e2aa72eed5d587b4da23c218fee223ab162cb68153c44569a22f89d78f4e8",
+      "prefix_words": 180,
+      "slots": [
+
+      ],
+      "mappings": [
+
+      ]
+    }
+  ]
+}

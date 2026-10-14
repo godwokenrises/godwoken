@@ -1,0 +1,111 @@
+{
+  "account_id": 263,
+  "authenticated_reads": 56376,
+  "checks": [
+    {
+      "detail": "DB CHAIN_ID is the rollup type hash",
+      "name": "db_rollup_identity",
+      "status": "PASS"
+    },
+    {
+      "detail": "Stored SMT root branch vs DB last-valid block",
+      "name": "db_tree_vs_db_block_root",
+      "status": "PASS"
+    },
+    {
+      "detail": "DB SMT root vs on-chain account root",
+      "name": "db_tree_vs_l1_root",
+      "status": "PASS"
+    },
+    {
+      "detail": "Exact L2 tip hash and number",
+      "name": "db_block_vs_l1_tip",
+      "status": "PASS"
+    },
+    {
+      "detail": "Account count comparison",
+      "name": "db_count_vs_l1_count",
+      "status": "PASS"
+    },
+    {
+      "detail": "Halting/challenge state needs separate resolution",
+      "name": "rollup_running",
+      "status": "PASS"
+    },
+    {
+      "detail": "14140 DB reads verified with native Godwoken SMT proofs; unqueried state not scanned",
+      "name": "db_queried_state_proofs",
+      "status": "PASS"
+    }
+  ],
+  "eth_address": "0x5d6400eea9c1312be8edbcfea8d36fa7e1a402b4",
+  "limitation": "Slot labels and role layout are research hypotheses. Membership search covers registered addresses plus explicit candidates; non-enumerable mappings may contain other addresses. No user entitlement or full-storage enumeration is implied.",
+  "request_sha256": "d4953f200993f6f829d33feb4ca7f37678dbeb645daa9001750fb040e39e18e9",
+  "role_candidates_checked": 14039,
+  "roles": [],
+  "root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee",
+  "runtime_code_hash": "0x3142438bff01104e8448c4c43ce985eecd4b24cb3b35d9140a216317807d085a",
+  "script": {
+    "args": "0x1ca35cb5fda4bd542e71d94a6d5f4c0d255d6d6fba73c41cf45d2693e59b3072040000005d6400eea9c1312be8edbcfea8d36fa7e1a402b4",
+    "code_hash": "0x83d5d8841518e8db686909d27c821398491f475ed5f1cd392c36e83f4252c4ac",
+    "hash_type": "type"
+  },
+  "slots": [
+    {
+      "key": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "label": "slot_0",
+      "value": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "key": "0x0000000000000000000000000000000000000000000000000000000000000001",
+      "label": "slot_1",
+      "value": "0x0000000000000000000000000000000000000000000000000000000000000003"
+    },
+    {
+      "key": "0x0000000000000000000000000000000000000000000000000000000000000002",
+      "label": "slot_2",
+      "value": "0x0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "key": "0x0000000000000000000000000000000000000000000000000000000000000003",
+      "label": "slot_3",
+      "value": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "key": "0x000000000000000000000000000000000000000000000000000000000000000e",
+      "label": "slot_14",
+      "value": "0x47572d56312d4d41494e4e45540000000000000000000000000000000000001a"
+    },
+    {
+      "key": "0xa0b14bdec6b6a3a7476d8e30e058f2cca50bdef265797181f00a8c6a8387f097",
+      "label": "signer_0x7e2cd50ff305780450df7d8a02b6bd2b4878c3d8",
+      "value": "0x0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "key": "0x10de2fa96227b528c459982490403a59da39edc051c347d5595fea58d896ced4",
+      "label": "signer_0x27837f6036d94b107e203e535d991afa544d0b3d",
+      "value": "0x0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "key": "0x69a15639c23798ad506d994e26b5a8fc4abf4010eb4ff9bd72ce88b990d8ae12",
+      "label": "signer_0x666666488c608edec79d6f85094e6e514a67064f",
+      "value": "0x0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "key": "0xb10e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf6",
+      "label": "signer_array_0",
+      "value": "0x0000000000000000000000007e2cd50ff305780450df7d8a02b6bd2b4878c3d8"
+    },
+    {
+      "key": "0xb10e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf7",
+      "label": "signer_array_1",
+      "value": "0x00000000000000000000000027837f6036d94b107e203e535d991afa544d0b3d"
+    },
+    {
+      "key": "0xb10e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf8",
+      "label": "signer_array_2",
+      "value": "0x000000000000000000000000666666488c608edec79d6f85094e6e514a67064f"
+    }
+  ],
+  "source_sha256": "bc072d455f5ec93edcd36b45d8a29f8c87afa8909bba3fb8bce240f873b4a998"
+}

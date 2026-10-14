@@ -1,0 +1,50 @@
+{
+  "db_tip": {
+    "account_count": 49984,
+    "account_root": "0xbf094fbcee2258770df7749bed2ed3e2565c17c98b1f40f2ca6377d253a11d7d",
+    "hash": "0x2d2f4031c37ecce6e28fbf75e3a1234f61f29fef3aa0b307bc9133f65f861b33",
+    "number": 2071124,
+    "timestamp_ms": 1781243976000
+  },
+  "l1_state": "0x2882e450fce6ba51eb4167c6a5d86cf48013be8c0e2ff870ea820e4bafa70f1cbf094fbcee2258770df7749bed2ed3e2565c17c98b1f40f2ca6377d253a11d7d40c300000d377881dac1efff4017390bb66c8ffcf4eed6e8d2aeedcea0cb7753c3965eb8569a1f000000000000000000000000000000000000000000000000000000000000000000000000004ddaa3814dcb5e9c101180879629af8923ee1639ff2973ccd5217784a04b11e578e06aba9e010000458c1f00000000000001",
+  "block_response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "block": {
+        "raw": {
+          "number": "0x1f9a55",
+          "parent_block_hash": "0x2d2f4031c37ecce6e28fbf75e3a1234f61f29fef3aa0b307bc9133f65f861b33",
+          "block_producer_id": "0x2",
+          "stake_cell_owner_lock_hash": "0xe6c7befcbf4697f1a7f8f04ffb8de71f5304826af7bfce3e4d396483e935820a",
+          "timestamp": "0x19eba6ae078",
+          "prev_account": {
+            "merkle_root": "0xbf094fbcee2258770df7749bed2ed3e2565c17c98b1f40f2ca6377d253a11d7d",
+            "count": "0xc340"
+          },
+          "post_account": {
+            "merkle_root": "0xbf094fbcee2258770df7749bed2ed3e2565c17c98b1f40f2ca6377d253a11d7d",
+            "count": "0xc340"
+          },
+          "submit_transactions": {
+            "tx_witness_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "tx_count": "0x0",
+            "prev_state_checkpoint": "0x84d3fdc401a291c82e0e4f81a18a3de73f278a32701ea578d1469199f5d841b7"
+          },
+          "submit_withdrawals": {
+            "withdrawal_witness_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "withdrawal_count": "0x0"
+          },
+          "state_checkpoint_list": []
+        },
+        "kv_state": [],
+        "kv_state_proof": "0x",
+        "transactions": [],
+        "block_proof": "0x4c502d2f4031c37ecce6e28fbf75e3a1234f61f29fef3aa0b307bc9133f65f861b334f01504fbfa76537f01acbd2128fff5fd380c6d9e315006cc69e5f9e23019340b1dfbd4f0150e1c5f008c8346dae7f1e495071b4c6d4814fc78d6dd14388a2e0d91be6cb99754f01501771b4cb036cccd1b25d08dfd257a79f6429cd83b3a7ed7610c8cc7b57fc70cc4f0250fc98d66bf44b6d6608ff84adb0fd3465d933a0b67e255581d79e0a42a8f7ab374f01503789434d7a519eaff3a3b95b8136b6e0d04b1d6ed6f133687e420d89b2fb2111508ab58aa638c6b0bcd3e57a7fc68ffa48fb6d92b1d74b69875366d61910106de34f025089b95ae8767f2aa38d4ee0ddf8639f90218d5ee95c2e210d111b272cc0a9958750fbdd37a4f3a451482219f69a2650ce4e1bf90c4ab7134f8a00d54eb1c52ac10f50d73bb32b590df1b7a9601e8a797484f2af4040545326e5a988214c1643e4343450ed5dfa09ac2b702f9976597bb72f353fdb2221f0cd32768eb92e0904959ce2f45066a3af8a51539f08eacf8726a469551a9a1a74b6667ddda96cecc6a3f908549e500b38c79ab45d4e215d5d6db408855e80f99f1ecdd0432d98fb376c95e00b6d104feb",
+        "withdrawal_requests": [],
+        "hash": "0x4ddaa3814dcb5e9c101180879629af8923ee1639ff2973ccd5217784a04b11e5"
+      },
+      "status": "unfinalized"
+    }
+  }
+}

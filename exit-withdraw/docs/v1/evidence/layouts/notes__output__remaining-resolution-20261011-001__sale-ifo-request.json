@@ -1,0 +1,104 @@
+{
+  "root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee",
+  "extra_candidates": [
+
+  ],
+  "accounts": [
+    {
+      "account_id": 4466,
+      "eth_address": "0xad9aada74ff777062444cdc1d0940ec3685375b4",
+      "runtime_code_hash": "0xed4a2f404eacb178ceea1b9cb1ad972100050df6dccbd157d5fbcbaa75318636",
+      "prefix_words": 32,
+      "slots": [
+
+      ],
+      "mappings": [
+
+      ]
+    },
+    {
+      "account_id": 4573,
+      "eth_address": "0x0db80faf96aa985edb70cbd1aa63872cc02d2c32",
+      "runtime_code_hash": "0x8a024bcfc948e352a124b444ff7c7b7ce98fee3771dfa7bade610da13458f49a",
+      "prefix_words": 32,
+      "slots": [
+
+      ],
+      "mappings": [
+
+      ]
+    },
+    {
+      "account_id": 12228,
+      "eth_address": "0xde3c590b1a4442314a91277668d63ab5ebbe7340",
+      "runtime_code_hash": "0x46423c2a6f321d04c6ee24437a5a0161dd842480cb0cc489cb8b97cde6c2e499",
+      "prefix_words": 32,
+      "slots": [
+
+      ],
+      "mappings": [
+
+      ]
+    },
+    {
+      "account_id": 12229,
+      "eth_address": "0x27ad36529c956c952eb65295e519ff312fbad665",
+      "runtime_code_hash": "0x5f3b5bb9ea26225f7c5214e7bf23f0b32a84429f3b5492f3efce2f70abc555f1",
+      "prefix_words": 32,
+      "slots": [
+
+      ],
+      "mappings": [
+
+      ]
+    },
+    {
+      "account_id": 5731,
+      "eth_address": "0x47a59dbb02042224083a2cdbd092374b4e3dff3a",
+      "runtime_code_hash": "0xfb314c14abba9c26242c2cde20528b22b8496e5e9c1713e71cbf1657f49c3ae8",
+      "prefix_words": 32,
+      "slots": [
+
+      ],
+      "mappings": [
+
+      ]
+    },
+    {
+      "account_id": 5732,
+      "eth_address": "0x128b633e2bd8541814025678b99280162fd7fbd3",
+      "runtime_code_hash": "0x635ae5238100f4ceb4ea04072eba067def9b75d757279104bab6a70bdc310719",
+      "prefix_words": 32,
+      "slots": [
+
+      ],
+      "mappings": [
+
+      ]
+    },
+    {
+      "account_id": 11852,
+      "eth_address": "0x37daab4ac68a57bd9438f91f6cb47db26c865baa",
+      "runtime_code_hash": "0x635ae5238100f4ceb4ea04072eba067def9b75d757279104bab6a70bdc310719",
+      "prefix_words": 32,
+      "slots": [
+
+      ],
+      "mappings": [
+
+      ]
+    },
+    {
+      "account_id": 11853,
+      "eth_address": "0x8f0614f4f47580c0cbb85e9ca0726eb6124e70d1",
+      "runtime_code_hash": "0xfb314c14abba9c26242c2cde20528b22b8496e5e9c1713e71cbf1657f49c3ae8",
+      "prefix_words": 32,
+      "slots": [
+
+      ],
+      "mappings": [
+
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "observed_at_utc": "2026-10-11T12:52:25.029077+00:00",
+  "endpoint": "https://mainnet.godwoken.io/rpc",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "eth_blockNumber",
+    "params": []
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": "0x1f9a54"
+  }
+}

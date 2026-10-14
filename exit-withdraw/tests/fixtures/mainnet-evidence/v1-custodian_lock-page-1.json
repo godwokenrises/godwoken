@@ -1,0 +1,28 @@
+{
+  "observed_at_utc": "2026-09-21T07:20:47.962951+00:00",
+  "endpoint": "https://mainnet.ckb.dev/rpc",
+  "method": "get_cells",
+  "params": [
+    {
+      "script": {
+        "code_hash": "0x000f87062a2fe9bb4a6cc475212ea11014b84deb32e0375ee51e6ec4a553e009",
+        "hash_type": "type",
+        "args": "0x1ca35cb5fda4bd542e71d94a6d5f4c0d255d6d6fba73c41cf45d2693e59b3072"
+      },
+      "script_type": "lock",
+      "script_search_mode": "prefix",
+      "with_data": true
+    },
+    "asc",
+    "0x64",
+    "0x40000f87062a2fe9bb4a6cc475212ea11014b84deb32e0375ee51e6ec4a553e009011ca35cb5fda4bd542e71d94a6d5f4c0d255d6d6fba73c41cf45d2693e59b3072e10000001000000030000000380000007be2b6bfb61e934ee1a6a9c690cf72185293f99923115e305fa44d52a35b45dec2c3030000000000a900000014000000340000009d000000a5000000caf73e38e004fbbc44be1a5755e3fb14bccbb2363b8b02ae6d9e9eba3ced102669000000100000003000000031000000096df264f38fff07f3acd318995abc2c71ae0e504036fe32bc38d5b6037364d401340000001ca35cb5fda4bd542e71d94a6d5f4c0d255d6d6fba73c41cf45d2693e59b30722483d44edab17fefe0f45bf30d42b7d55973959f803a0900000000c002000000000000000082c0b00000000200000001"
+  ],
+  "response": {
+    "jsonrpc": "2.0",
+    "result": {
+      "last_cursor": "0x",
+      "objects": []
+    },
+    "id": 1
+  }
+}

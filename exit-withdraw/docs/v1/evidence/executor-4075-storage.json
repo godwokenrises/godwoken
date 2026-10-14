@@ -1,0 +1,106 @@
+{
+  "authenticated_reads": 70408,
+  "candidate_addresses": 14039,
+  "checks": [
+    {
+      "detail": "DB CHAIN_ID is the rollup type hash",
+      "name": "db_rollup_identity",
+      "status": "PASS"
+    },
+    {
+      "detail": "Stored SMT root branch vs DB last-valid block",
+      "name": "db_tree_vs_db_block_root",
+      "status": "PASS"
+    },
+    {
+      "detail": "DB SMT root vs on-chain account root",
+      "name": "db_tree_vs_l1_root",
+      "status": "PASS"
+    },
+    {
+      "detail": "Exact L2 tip hash and number",
+      "name": "db_block_vs_l1_tip",
+      "status": "PASS"
+    },
+    {
+      "detail": "Account count comparison",
+      "name": "db_count_vs_l1_count",
+      "status": "PASS"
+    },
+    {
+      "detail": "Halting/challenge state needs separate resolution",
+      "name": "rollup_running",
+      "status": "PASS"
+    },
+    {
+      "detail": "14140 DB reads verified with native Godwoken SMT proofs; unqueried state not scanned",
+      "name": "db_queried_state_proofs",
+      "status": "PASS"
+    }
+  ],
+  "input_sha256": "447f4ed8316bfe3d3b0c78260c084b6f5dd200b0dd0294b8f255399141ad7517",
+  "limitation": "SMT-authenticated raw storage. Layout and economic semantics require independent review. Candidate discovery includes registry, zero/dead and explicit log participants; unknown keys are not proved absent.",
+  "root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee",
+  "rows": [
+    {
+      "account_id": 4075,
+      "eth_address": "0xb45263adf4e09b77d538d37f13a24568ae48a587",
+      "mappings": [
+        {
+          "label": "authorized executor boolean; not a financial balance",
+          "nonzero_records": [
+            {
+              "account_ids": [
+                3551
+              ],
+              "address": "0x740d5718a79a8559feee8b00922f8cd773a81d84",
+              "base_slot": "0x567fde64164f004fc9371d35c3a82614513d3943b630f0374415694ca90515ef",
+              "fields": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+              ]
+            },
+            {
+              "account_ids": [
+                3559
+              ],
+              "address": "0xb156c425f325d750968702d4bd4226573edc3aed",
+              "base_slot": "0x1f04a7ce9d0d3aef92a6b4a048e37ec2969242cad4a6111947b05bd8613c49b9",
+              "fields": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+              ]
+            }
+          ],
+          "request": {
+            "label": "authorized executor boolean; not a financial balance",
+            "slot": 0,
+            "width": 1
+          },
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "runtime_code_hash": "0x0c25f9e15d44f0c124a1fff30143bfdaa987effaa51d74a8a69c75b8d9cb7ee2",
+      "slots": [
+        {
+          "key": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "value": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        {
+          "key": "0x0000000000000000000000000000000000000000000000000000000000000001",
+          "value": "0x000000000000000000000000b156c425f325d750968702d4bd4226573edc3aed"
+        },
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation",
+          "value": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        {
+          "key": "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103",
+          "label": "EIP1967 admin",
+          "value": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    }
+  ],
+  "source_sha256": "8ace01e51dc299b0df159dd81256ee6bfbd705f21e9e1462bc8e0b45ac9d23f5"
+}

@@ -21,3 +21,6 @@ web3/*.log
 web3/*.cpuprofile
 web3/*.heapsnapshot
 
+
+# Local browser rehearsal traces and synthetic approval downloads.
+/.playwright-cli/

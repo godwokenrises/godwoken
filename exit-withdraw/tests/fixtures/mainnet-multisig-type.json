@@ -1,0 +1,12 @@
+{
+  "source": "https://mainnet.ckb.dev/rpc get_block_by_number 0x0",
+  "out_point": {
+    "tx_hash": "0xe2fb199810d49a4d8beec56718ba2593b665db9d52299a0f9e6e75416d73ff5c",
+    "index": "0x4"
+  },
+  "type": {
+    "args": "0xd813c1b15bd79c8321ad7f5819e5d9f659a1042b72e64659a2c092be68ea9758",
+    "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+    "hash_type": "type"
+  }
+}

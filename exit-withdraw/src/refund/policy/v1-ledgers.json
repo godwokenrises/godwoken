@@ -1,0 +1,1138 @@
+[
+  {
+    "account_id": 151,
+    "family": "wrapped_ckb",
+    "slot": 3,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 180,
+    "family": "wrapped_ckb",
+    "slot": 3,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 232,
+    "family": "wrapped_ckb",
+    "slot": 3,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 2732,
+    "family": "stable_lp",
+    "slot": 2,
+    "slot_first": true,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 2734,
+    "family": "staking_rewards",
+    "slot": 12,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 2735,
+    "family": "stable_lp",
+    "slot": 2,
+    "slot_first": true,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 2737,
+    "family": "staking_rewards",
+    "slot": 12,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 2738,
+    "family": "stable_lp",
+    "slot": 2,
+    "slot_first": true,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 2740,
+    "family": "staking_rewards",
+    "slot": 12,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 2741,
+    "family": "stable_lp",
+    "slot": 2,
+    "slot_first": true,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 2743,
+    "family": "staking_rewards",
+    "slot": 12,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 2747,
+    "family": "staking_rewards",
+    "slot": 11,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 3656,
+    "family": "aave_lending",
+    "slot": 52,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 3657,
+    "family": "aave_stable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "principalBalanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 3658,
+    "family": "aave_variable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 3662,
+    "family": "aave_lending",
+    "slot": 52,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 3663,
+    "family": "aave_stable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "principalBalanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 3664,
+    "family": "aave_variable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 3665,
+    "family": "aave_lending",
+    "slot": 52,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 3666,
+    "family": "aave_stable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "principalBalanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 3667,
+    "family": "aave_variable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 4007,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4008,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4009,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4010,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4011,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4012,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4013,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4029,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4030,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4031,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4032,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4033,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4034,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4035,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4185,
+    "family": "stable_lp",
+    "slot": 51,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4262,
+    "family": "stable_lp",
+    "slot": 51,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4317,
+    "family": "stable_lp",
+    "slot": 51,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4352,
+    "family": "dao_lp",
+    "slot": 1,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4787,
+    "family": "aave_lending",
+    "slot": 52,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 4788,
+    "family": "aave_stable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "principalBalanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4789,
+    "family": "aave_variable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 4791,
+    "family": "aave_lending",
+    "slot": 52,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 4792,
+    "family": "aave_stable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "principalBalanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4793,
+    "family": "aave_variable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 4794,
+    "family": "aave_lending",
+    "slot": 52,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 4795,
+    "family": "aave_stable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "principalBalanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4796,
+    "family": "aave_variable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 4797,
+    "family": "aave_lending",
+    "slot": 52,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 4798,
+    "family": "aave_stable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "principalBalanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4799,
+    "family": "aave_variable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 4835,
+    "family": "compound_lending",
+    "slot": 14,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 4946,
+    "family": "compound_lending",
+    "slot": 14,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 5032,
+    "family": "compound_lending",
+    "slot": 14,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 5156,
+    "family": "locked_staking",
+    "slot": 19,
+    "slot_first": false,
+    "balance_getter": "supplyAmount(address)",
+    "supply_getter": "totalSupplies()"
+  },
+  {
+    "account_id": 5158,
+    "family": "locked_staking",
+    "slot": 19,
+    "slot_first": false,
+    "balance_getter": "supplyAmount(address)",
+    "supply_getter": "totalSupplies()"
+  },
+  {
+    "account_id": 5198,
+    "family": "locked_staking",
+    "slot": 19,
+    "slot_first": false,
+    "balance_getter": "supplyAmount(address)",
+    "supply_getter": "totalSupplies()"
+  },
+  {
+    "account_id": 5717,
+    "family": "compound_lending",
+    "slot": 14,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 5718,
+    "family": "compound_lending",
+    "slot": 14,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 5719,
+    "family": "compound_lending",
+    "slot": 14,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 5757,
+    "family": "locked_staking",
+    "slot": 19,
+    "slot_first": false,
+    "balance_getter": "supplyAmount(address)",
+    "supply_getter": "totalSupplies()"
+  },
+  {
+    "account_id": 5759,
+    "family": "locked_staking",
+    "slot": 19,
+    "slot_first": false,
+    "balance_getter": "supplyAmount(address)",
+    "supply_getter": "totalSupplies()"
+  },
+  {
+    "account_id": 5761,
+    "family": "locked_staking",
+    "slot": 19,
+    "slot_first": false,
+    "balance_getter": "supplyAmount(address)",
+    "supply_getter": "totalSupplies()"
+  },
+  {
+    "account_id": 5767,
+    "family": "compound_lending",
+    "slot": 14,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 5797,
+    "family": "compound_lending",
+    "slot": 14,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 5798,
+    "family": "compound_lending",
+    "slot": 14,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 5799,
+    "family": "compound_lending",
+    "slot": 14,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 5826,
+    "family": "locked_staking",
+    "slot": 19,
+    "slot_first": false,
+    "balance_getter": "supplyAmount(address)",
+    "supply_getter": "totalSupplies()"
+  },
+  {
+    "account_id": 5830,
+    "family": "locked_staking",
+    "slot": 19,
+    "slot_first": false,
+    "balance_getter": "supplyAmount(address)",
+    "supply_getter": "totalSupplies()"
+  },
+  {
+    "account_id": 5832,
+    "family": "locked_staking",
+    "slot": 19,
+    "slot_first": false,
+    "balance_getter": "supplyAmount(address)",
+    "supply_getter": "totalSupplies()"
+  },
+  {
+    "account_id": 9763,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10211,
+    "family": "compound_lending",
+    "slot": 14,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10295,
+    "family": "compound_lending",
+    "slot": 14,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10297,
+    "family": "compound_lending",
+    "slot": 14,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10324,
+    "family": "compound_lending",
+    "slot": 14,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10326,
+    "family": "compound_lending",
+    "slot": 14,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10678,
+    "family": "aave_lending",
+    "slot": 52,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 10679,
+    "family": "aave_stable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "principalBalanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10680,
+    "family": "aave_variable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 10684,
+    "family": "aave_lending",
+    "slot": 52,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 10685,
+    "family": "aave_stable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "principalBalanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10686,
+    "family": "aave_variable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 10687,
+    "family": "aave_lending",
+    "slot": 52,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 10688,
+    "family": "aave_stable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "principalBalanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10689,
+    "family": "aave_variable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 10690,
+    "family": "aave_lending",
+    "slot": 52,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 10691,
+    "family": "aave_stable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "principalBalanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10692,
+    "family": "aave_variable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 10693,
+    "family": "aave_lending",
+    "slot": 52,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 10694,
+    "family": "aave_stable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "principalBalanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10695,
+    "family": "aave_variable_debt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "scaledBalanceOf(address)",
+    "supply_getter": "scaledTotalSupply()"
+  },
+  {
+    "account_id": 10725,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10726,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10727,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10728,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10729,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10730,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10731,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10733,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10738,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10740,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10742,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10743,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10744,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10745,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10746,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10919,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10920,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10921,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10922,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10955,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10957,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10958,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10959,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 10960,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 11558,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 11563,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 11569,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 11572,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 11573,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 11574,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 11641,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 11647,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 11655,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 11741,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 11743,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 12757,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 12758,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 12759,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 12760,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 12761,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 12765,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 12767,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 12768,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 12769,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 12770,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 12771,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 12772,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 12773,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 12774,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 12775,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  },
+  {
+    "account_id": 12776,
+    "family": "balancer_receipt",
+    "slot": 0,
+    "slot_first": false,
+    "balance_getter": "balanceOf(address)",
+    "supply_getter": "totalSupply()"
+  }
+]

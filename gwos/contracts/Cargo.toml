@@ -1,4 +1,5 @@
 [workspace]
+exclude = ["exit-withdraw-state-validator"]
 members = [
   "custodian-lock",
   "deposit-lock",

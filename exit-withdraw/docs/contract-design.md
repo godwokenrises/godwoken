@@ -1,0 +1,126 @@
+# Root-only, applicant-driven refunds (V0 and V1)
+
+Implemented 14 October 2026. This replaces the previous per-record registration
+lifecycle. Approved table amounts, beneficiary identities, controller policies,
+source/lot/claim Merkle trees and V0/V1 separation are unchanged. Rebuild the
+validator binaries from this source before deployment. No production upgrade
+or payment is performed by the development tests.
+
+## On-chain lifecycle
+
+1. Publish the complete table, policy, plan and profile for independent checking;
+   deploy/upgrade the profile-pinned validator using the existing authority.
+2. One **Begin** transaction updates the rollup account SMT with metadata committing
+   the profile hash and an active epoch containing the claims root. The profile
+   commits source/reserve roots and asset ceilings. Begin also initializes asset
+   paid counters. It neither pays nor enumerates all beneficiaries.
+3. For an applicant, **Pay** verifies claim, source and payable-lot membership,
+   the actual native identity and balance, the recipient lock/controller authority,
+   cumulative paid values, lot remainder, source budget and global asset budget.
+   It transfers the requested assets from custodians and updates the native SMT.
+4. Later Pay transactions repeat against current state. Non-applicants need no
+   on-chain records or transactions. No registration/activation batch loop remains.
+
+The rollup cell retains its original GlobalState format. Its account root commits
+settlement metadata, which commits the profile and mutable ledger roots; the epoch
+leaf commits the immutable claims root. The account root is not overwritten with
+the claims root. Old and new native SMT roots and all touched ledger proofs are
+verified, including non-membership proofs for newly created paid/source/lot records.
+
+Only Begin and epoch-0 Pay are accepted by the release. Legacy registration,
+seal/activate, later epochs, cancellation and all ordinary rollup actions are
+rejected. A changed table or previously retained balance cannot be introduced by
+an arbitrary administrator transaction. Such policy changes need a separate review.
+
+## Per-payment constraints
+
+- Claim amount <= committed cap minus cumulative paid; duplicate claim keys in
+  one action are rejected, and paid values survive process restarts.
+- Source identity/type/baseline comes from the source-root proof, and native
+  balance must equal baseline minus already paid before deducting the new payment.
+- Lot must belong to the source, have kind INITIAL and contain sufficient remaining
+  amount. A lot shared by claims cannot be reused beyond its total; deferred,
+  excluded and protected lots cannot fund a payment. V0 protected raw destinations
+  remain forbidden even if a malformed release attempted to make them payable.
+- Source aggregate and asset aggregate remain bounded; custodian input assets equal
+  retained custodian output assets plus exact payout assets. External governance
+  inputs fund the operator fee. Minimum occupied CKB still applies to every output.
+- EOAs receive standard ETH OmniLock outputs. Controller groups approve the full
+  transaction through distinct actual OmniLock inputs returned unchanged.
+
+The complete table's global partition/accounting is independently checked during
+DB export and plan verification before root publication. The contract no longer
+reconstructs the complete table by spending thousands of registration transactions;
+it enforces the approved root and all relevant local/aggregate spending bounds.
+
+## CLI and continuation
+
+The production command names do not change: `refund export-plan`,
+`settlement create-profile`, validator build/upgrade, then one `build-next`
+without selections, followed by `build-next --addresses`, `--payments` or
+`--controls`. See [Ops runbook](ops-refund-runbook.md).
+
+After each confirmed transaction, use its `next-deployment-after-confirmation.json`
+for fresh sponsor outpoints. Preserve the original DB, plan and deployment ID.
+Every invocation walks confirmed rollup history, rebuilds state, checks the live
+root and produces fresh SMT proofs. Do not process competing payouts against the
+same rollup input. A user's subsequent L1 OmniLock spend does not reset entitlement
+or alter the rollup. The archive RPC/witness availability requirement remains.
+
+## Cold-process rehearsal
+
+`settlement rehearse-next` exercises the production action/cell builder and shared
+consensus checks against a real read-only DB, while storing a **synthetic** L1
+history. It never signs, executes CKB-VM, calls network RPC or broadcasts. It must
+not be confused with `verify-signed` or a deployable release. Its synthetic archive
+contains transactions and release data, not saved SMT nodes or trusted paid counters.
+
+```sh
+gw-withdraw settlement --protocol v0 rehearse-next --db /path/to/original-v0-db \
+  --plan full-plan.json --deployment rehearsal-deployment.json \
+  --snapshot rehearsal-snapshot.json --output-dir step-0
+# Exit the process. The next invocation reopens DB and reconstructs from transactions.
+gw-withdraw settlement --protocol v0 rehearse-next --db /path/to/original-v0-db \
+  --plan full-plan.json --archive step-0/archive.json \
+  --payments first-partial.json --output-dir step-1
+gw-withdraw settlement --protocol v0 rehearse-next --db /path/to/original-v0-db \
+  --plan full-plan.json --archive step-1/archive.json \
+  --addresses same-applicant.json --output-dir step-2
+```
+
+Use a new output directory each time. `summary.json` records before/after roots,
+replayed history length, per-claim paid/remainder, custody coverage and unchanged
+original DB root. The complete original DB test complements actual signed VM
+fixtures, which use public test keys to cover bootstrap authority, EOA/controller
+payouts, repeated payments, malicious proofs and onward OmniLock withdrawal.
+
+
+## Completed acceptance
+
+[Updated test evidence](validation.md) includes both protocol regressions, controller/Web flows, original V0 DB cold-process batches and actual signed CKB VM execution of those real-DB proofs.
+
+## Exact custody and recipient checks
+
+The shared verifier authenticates custodian code/hash type, rollup binding and finality. V1 retained custody uses the exact pinned change lock; V0 retained custody must pass native validation and match a consumed custodian lock. Inputs equal retained outputs plus payouts per exact asset type, including all CKB capacity. Governance funding pays the fee separately. Every output meets occupied capacity.
+
+An EOA identity is authenticated from native state. Its output must be standard mainnet ETH OmniLock, type hash, exactly `0x01 || ETH[20] || 0x00`; extra arguments or another address fail. V0 short addresses are not substituted for ETH owners.
+
+Controller identities and thresholds are root-committed descriptors. Distinct owners consume plain ETH OmniLock authorization cells and receive them unchanged. Real lock signatures bind the transaction. All payouts for one controller group use one jointly authorized CKB destination; it need not itself be an ETH OmniLock.
+
+Code: [shared verifier](../../gwos/contracts/exit-withdraw-state-validator/src/verify.rs), [controller authorization](../../gwos/contracts/exit-withdraw-state-validator/src/control.rs), [settlement proofs](../../gwos/contracts/exit-withdraw-state-validator/src/settlement/mod.rs). The old and new native roots, claim/source/lot proofs and cumulative state are enforced by consensus, not only the frontend.
+
+## Merkle records and reproducible encoding
+
+| Record | Committed content |
+|---|---|
+| Source | Native account ID, script hash, address, asset ID, L1 type hash, baseline amount, evidence hash |
+| Lot | Lot ID, source key, disposition kind, amount, evidence and reopening commitment |
+| Claim | Epoch, source and lot keys, recipient ID/script hash/address, maximum amount, evidence hash |
+| Source/asset budgets | Original source or asset limit and cumulative paid amount |
+| Reserve / Paid | Remaining lot amount / cumulative amount for a claim |
+| Epoch | Claims root, manifest/policy and status; only initial epoch is payable |
+| Metadata | Deployment/profile/snapshot, sequence and mutable ledger roots; committed as a native SMT leaf |
+
+Records use exact tagged layouts and little-endian integers; trailing bytes are rejected. Nonempty leaf values are CKB-personalized Blake2b-256 of `GW_SETTLEMENT_V2/value\0 || encoded_record`; absent values are zero. Keys use `GW_SETTLEMENT_V2/key\0 || domain_length_u32_le || domain || deployment_id || record_identity`. The bytes `\0` here denote one NUL byte. Record identity and tags are specified by [records.rs](../../gwos/contracts/exit-withdraw-state-validator/src/settlement/records.rs); independent verifiers must use those exact bytes, not JSON serialization.
+
+Source, lot and claim plan trees are immutable release commitments. Pay proves membership against them while proving the old values or nonexistence of its mutable counters. Legacy wire-format tags remain decodable for compatibility but their operations are rejected; this does not enable registering or activating a new table. A batch is bounded to 32 payment records and bounded proof keys. Split larger applicants into batches without dropping their remainder.

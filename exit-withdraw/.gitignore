@@ -1,0 +1,8 @@
+/target/
+/reports/
+/tests/reference/target/
+
+/.source-git/
+
+# Private operator notes, request lists and simulation outputs.
+/docs/notes/

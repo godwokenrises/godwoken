@@ -1,0 +1,39 @@
+{
+  "scope": "Real DB proofs; synthetic L1 inputs and public test-key authorities; no broadcast; end-user keys not used",
+  "signed_predecessor_chain_checked": true,
+  "stages": [
+    {
+      "after_root": "0xdb612d20d9f8b6151d0e937a440a6c2de094a6e11452b1cc0436efd6c8e07f00",
+      "before_root": "0xbf094fbcee2258770df7749bed2ed3e2565c17c98b1f40f2ca6377d253a11d7d",
+      "bytes": 4845,
+      "cycles": 30086145,
+      "signed_vm_verified": true,
+      "step": 0
+    },
+    {
+      "after_root": "0xe6a5b546b5be23d8d5c8a56f7990c067f76b2d24c7f4900b4f6c2e074f8f749e",
+      "before_root": "0xdb612d20d9f8b6151d0e937a440a6c2de094a6e11452b1cc0436efd6c8e07f00",
+      "bytes": 21860,
+      "cycles": 30224077,
+      "signed_vm_verified": true,
+      "step": 1
+    },
+    {
+      "after_root": "0xfd1966edd8b98da72e0c98ed02945146b9402eb26000ddc35194cfa62fdc3db4",
+      "before_root": "0xe6a5b546b5be23d8d5c8a56f7990c067f76b2d24c7f4900b4f6c2e074f8f749e",
+      "bytes": 17456,
+      "cycles": 29925629,
+      "signed_vm_verified": true,
+      "step": 2
+    },
+    {
+      "after_root": "0x4d7328a991d85e12e2a34b52b964489a73576d070356c21211e261a512b0fc90",
+      "before_root": "0xfd1966edd8b98da72e0c98ed02945146b9402eb26000ddc35194cfa62fdc3db4",
+      "bytes": 17568,
+      "cycles": 20311245,
+      "signed_vm_verified": true,
+      "step": 3
+    }
+  ],
+  "status": "PASS"
+}

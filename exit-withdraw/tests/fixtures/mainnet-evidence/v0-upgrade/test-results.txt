@@ -1,0 +1,21 @@
+Offline v0 identity and upgrade tests, 2026-10-11.
+Command: cargo +1.94.0 test --locked --manifest-path exit-withdraw/Cargo.toml --features e2e-tests --test withdraw_e2e v0_ -- --nocapture
+Synthetic signing identities; not a full settlement validator or production signature.
+
+test claim_e2e::v0_upgrade::v0_live_poa_references_are_type_id_args_not_script_hashes ... ok
+test claim_e2e::v0_identity::v0_live_applicant_short_address_maps_to_distinct_eth_owner ... ok
+test claim_e2e::v0_upgrade::v0_historical_upgrade_reveals_current_three_of_five_config ... ok
+V0 owner / standard OmniLock: 1458259 cycles
+test claim_e2e::v0_identity::v0_eth_owner_can_unlock_standard_omnilock_but_short_address_cannot ... ok
+test claim_e2e::v0_identity::v0_tron_identity_requires_omnilock_tron_mode ... ok
+test claim_e2e::v0_identity::v0_deployed_eth_lock_accepts_same_personal_sign_key_and_rejects_tron_prefix ... ok
+V0 PoA consensus with both helper locks retired: 4969566 cycles
+test claim_e2e::v0_upgrade::v0_deployed_poa_consensus_can_retire_both_helper_locks ... ok
+V0 PoA normal lock transition: 2491448 cycles
+V0 PoA consensus lock transition: 3946011 cycles
+V0 PoA missing producer rejected: Full VM: Error { kind: Script, inner: TransactionScriptError { source: Inputs[0].Lock, cause: ValidationFailure: see error code -2 on page https://nervosnetwork.github.io/ckb-script-error-codes/by-type-hash/ede199745fbd9e9f339f1dd2e92a586020d111432bfb81a6c2b12ddc9856f0ba.html#-2 } }
+V0 PoA one of two rejected: Full VM: Error { kind: Script, inner: TransactionScriptError { source: Inputs[0].Lock, cause: ValidationFailure: see error code -2 on page https://nervosnetwork.github.io/ckb-script-error-codes/by-type-hash/ede199745fbd9e9f339f1dd2e92a586020d111432bfb81a6c2b12ddc9856f0ba.html#-2 } }
+test claim_e2e::v0_upgrade::v0_deployed_poa_consensus_requires_two_distinct_identities ... ok
+V0 PoA inconsistent timestamp rejected: Full VM: Error { kind: Script, inner: TransactionScriptError { source: Inputs[0].Lock, cause: ValidationFailure: see error code -2 on page https://nervosnetwork.github.io/ckb-script-error-codes/by-type-hash/ede199745fbd9e9f339f1dd2e92a586020d111432bfb81a6c2b12ddc9856f0ba.html#-2 } }
+test claim_e2e::v0_upgrade::v0_deployed_poa_normal_path_can_change_output_lock ... ok
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 24 filtered out; finished in 1.87s

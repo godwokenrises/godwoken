@@ -1,0 +1,34 @@
+{
+  "accounts": [
+    {
+      "account_id": 185,
+      "eth_address": "0xfc657d8f128c44604f570ce29b518aa4a11c237a",
+      "mappings": [
+        {
+          "label": "user shares and action bookkeeping; deployed userInfo getter",
+          "slot": 1,
+          "width": 4
+        }
+      ],
+      "prefix_words": 32,
+      "runtime_code_hash": "0x6827784cabba71dbdf630f2d8a043eb1c4a7a6f92e38876fc5118bc67fb26e90",
+      "slots": []
+    },
+    {
+      "account_id": 2748,
+      "eth_address": "0x8b389790f70bd423342b88faf4291b2034db224b",
+      "mappings": [
+        {
+          "label": "user shares and action bookkeeping; deployed userInfo getter",
+          "slot": 1,
+          "width": 4
+        }
+      ],
+      "prefix_words": 32,
+      "runtime_code_hash": "0x0ef8f37d0751a130332e549e6dceaf3efc6de7cf0801801fc94ea340836b6f92",
+      "slots": []
+    }
+  ],
+  "extra_candidates": [],
+  "root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee"
+}

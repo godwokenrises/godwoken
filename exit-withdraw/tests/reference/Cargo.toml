@@ -1,0 +1,10 @@
+[package]
+name = "godwoken-audit-smt-reference"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sparse-merkle-tree = { version = "=0.6.1", features = ["trie"] }
+blake2b-ref = "=0.3.1"
+
+[workspace]

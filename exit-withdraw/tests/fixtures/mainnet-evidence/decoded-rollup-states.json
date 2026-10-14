@@ -1,0 +1,36 @@
+{
+  "v1": {
+    "outpoint": {
+      "index": "0x0",
+      "tx_hash": "0xb1c468e47a507425814fea33402ed50fe800899d975875033f992a9cb19419b7"
+    },
+    "ckb_block": 19573260,
+    "config_hash": "0xd6eea74bbbde42287e71e5831f6869d06c3f9711af2f5001546e71f808e69a0d",
+    "account_root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee",
+    "account_count": 14091,
+    "block_root": "0x29e6bdf4de9e5bb29d141542505f6f34015061420a943821ffe5a98f22d3ff6b",
+    "block_count": 2851259,
+    "tip_hash": "0x2b9c2fc728a233f1677b04b7ec3bc2ddc76e5787462e4f14514f8d66471558f3",
+    "tip_timestamp": "2026-06-12T05:34:00.312000+00:00",
+    "finalized": 2834458,
+    "status": 0,
+    "version": 1
+  },
+  "v0": {
+    "outpoint": {
+      "index": "0x0",
+      "tx_hash": "0x818b561267276ef25b16c605b9fd9d758f5b375c4af18550b36ca0e438522e68"
+    },
+    "ckb_block": 19573403,
+    "config_hash": "0x2882e450fce6ba51eb4167c6a5d86cf48013be8c0e2ff870ea820e4bafa70f1c",
+    "account_root": "0xbf094fbcee2258770df7749bed2ed3e2565c17c98b1f40f2ca6377d253a11d7d",
+    "account_count": 49984,
+    "block_root": "0x0d377881dac1efff4017390bb66c8ffcf4eed6e8d2aeedcea0cb7753c3965eb8",
+    "block_count": 2071126,
+    "tip_hash": "0x4ddaa3814dcb5e9c101180879629af8923ee1639ff2973ccd5217784a04b11e5",
+    "tip_timestamp": "2026-06-12T06:00:27+00:00",
+    "finalized": 2067525,
+    "status": 0,
+    "version": 1
+  }
+}

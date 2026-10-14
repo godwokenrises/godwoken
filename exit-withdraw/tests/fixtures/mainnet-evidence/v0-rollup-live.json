@@ -1,0 +1,39 @@
+{
+  "observed_at_utc": "2026-09-21T07:20:08.197706+00:00",
+  "endpoint": "https://mainnet.ckb.dev/rpc",
+  "method": "get_live_cell",
+  "params": [
+    {
+      "index": "0x0",
+      "tx_hash": "0x818b561267276ef25b16c605b9fd9d758f5b375c4af18550b36ca0e438522e68"
+    },
+    true
+  ],
+  "response": {
+    "jsonrpc": "2.0",
+    "result": {
+      "block_hash": "0xf98afe625e0c879a6bd5f9f3d67d470db3ac5ed8a6795c9773e19cf94c67f9d3",
+      "cell": {
+        "data": {
+          "content": "0x2882e450fce6ba51eb4167c6a5d86cf48013be8c0e2ff870ea820e4bafa70f1cbf094fbcee2258770df7749bed2ed3e2565c17c98b1f40f2ca6377d253a11d7d40c300000d377881dac1efff4017390bb66c8ffcf4eed6e8d2aeedcea0cb7753c3965eb8569a1f000000000000000000000000000000000000000000000000000000000000000000000000004ddaa3814dcb5e9c101180879629af8923ee1639ff2973ccd5217784a04b11e578e06aba9e010000458c1f00000000000001",
+          "hash": "0x587cda30ed009b2b8fb9d95f301962798690334bee11a2119e29050bd0d96209"
+        },
+        "output": {
+          "capacity": "0x861c46800",
+          "lock": {
+            "args": "0x974bab5b82e0c93c08c751158c209b124d4e1b247c0593be193edbde81749322f26f761463b4d66b1b4e69e8f8dc097003572faeeb6751f1ff283b6fb2b85082",
+            "code_hash": "0xede199745fbd9e9f339f1dd2e92a586020d111432bfb81a6c2b12ddc9856f0ba",
+            "hash_type": "type"
+          },
+          "type": {
+            "args": "0x2d8d67c8d73453c1a6d6d600e491b303910802e0cc90a709da9b15d26c5c48b3",
+            "code_hash": "0xa9267ff5a16f38aa9382608eb9022883a78e6a40855107bb59f8406cce00e981",
+            "hash_type": "type"
+          }
+        }
+      },
+      "status": "live"
+    },
+    "id": 1
+  }
+}

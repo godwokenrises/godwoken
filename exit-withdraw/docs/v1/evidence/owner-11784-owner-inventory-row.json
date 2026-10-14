@@ -1,0 +1,12 @@
+{
+  "account_id": 11402,
+  "balance_status": "authenticated",
+  "checked_asset_count": 48,
+  "ckb_display": "1580866.133387792450285771",
+  "classification": "eth_eoa",
+  "eth_address": "0x9b8d70b41c0b1e69b739f60151f2d14127ecc165",
+  "ordinary_erc20_lp_status": "not_scanned",
+  "positive_asset_count": 3,
+  "positive_non_ckb_count": 2,
+  "script_hash": "0x4499389799c9e87a5f6f2d6c3d7836622ac2fbb18d667aafb643966c9d009a20"
+}

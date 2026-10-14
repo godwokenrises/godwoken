@@ -1,0 +1,144 @@
+{
+  "custodian_lock": {
+    "complete_pagination": true,
+    "cell_count": 17,
+    "groups": {
+      "{\"args\": \"0x08430183dda1cbd81912c4762a3006a59e2291d5bd43b48bb7fa7544cace9e4a\", \"code_hash\": \"0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5\", \"hash_type\": \"type\"}": {
+        "cells": 1,
+        "capacity_shannons": 32700000000,
+        "sudt_amount": 39527933548,
+        "unexpected_data": 0
+      },
+      "{\"args\": \"0x928123cdb74b08e0f058cc1aaa67b5e8fc9c17612061b433716a61e499f7c5f7\", \"code_hash\": \"0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5\", \"hash_type\": \"type\"}": {
+        "cells": 1,
+        "capacity_shannons": 32700000000,
+        "sudt_amount": 1475521000000000000000,
+        "unexpected_data": 0
+      },
+      "{\"args\": \"0x69c215249102308356778d58259c91c0f1988f6f5b07aa614921ee1803ea0059\", \"code_hash\": \"0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5\", \"hash_type\": \"type\"}": {
+        "cells": 1,
+        "capacity_shannons": 32700000000,
+        "sudt_amount": 628188193682696278913,
+        "unexpected_data": 0
+      },
+      "{\"args\": \"0xdd97fe4f673ed231af188855f4ca8b1034153c8d4e40f5b4fae2afd5d3f53ccc\", \"code_hash\": \"0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5\", \"hash_type\": \"type\"}": {
+        "cells": 1,
+        "capacity_shannons": 32700000000,
+        "sudt_amount": 100842214593455767964,
+        "unexpected_data": 0
+      },
+      "{\"args\": \"0xfd6f1818fe746687ef5268f82ce1835ba1a94fdccee5f098a389aeed0067eb57\", \"code_hash\": \"0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5\", \"hash_type\": \"type\"}": {
+        "cells": 1,
+        "capacity_shannons": 32700000000,
+        "sudt_amount": 2121602254832319079804,
+        "unexpected_data": 0
+      },
+      "{\"args\": \"0x68ab5e63d676ce31c56c73d037f38bc35398d4af94b43f8717832c1c81eb251e\", \"code_hash\": \"0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5\", \"hash_type\": \"type\"}": {
+        "cells": 1,
+        "capacity_shannons": 32700000000,
+        "sudt_amount": 281429376421935767110930893051,
+        "unexpected_data": 0
+      },
+      "{\"args\": \"0xe5451c05231e1df43e4b199b5d12dbed820dfbea2769943bb593f874526eeb55\", \"code_hash\": \"0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5\", \"hash_type\": \"type\"}": {
+        "cells": 1,
+        "capacity_shannons": 32700000000,
+        "sudt_amount": 410212449785820,
+        "unexpected_data": 0
+      },
+      "{\"args\": \"0xcedd0f67f2d218ab992284ab343c2e729d2a124a1612592deaa9f8b8f8a581dd\", \"code_hash\": \"0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5\", \"hash_type\": \"type\"}": {
+        "cells": 1,
+        "capacity_shannons": 32700000000,
+        "sudt_amount": 753205354772713678866,
+        "unexpected_data": 0
+      },
+      "{\"args\": \"0x9ea7beb4a36469e00bb30dbac75e93672441b483d519556ba9d1424b9294eae5\", \"code_hash\": \"0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5\", \"hash_type\": \"type\"}": {
+        "cells": 1,
+        "capacity_shannons": 32700000000,
+        "sudt_amount": 37787056728272600,
+        "unexpected_data": 0
+      },
+      "{\"args\": \"0x0a2117bce7a84cac80e7c5971919d12987e4da58f79e010c6c2f58c7d6e687e1\", \"code_hash\": \"0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5\", \"hash_type\": \"type\"}": {
+        "cells": 1,
+        "capacity_shannons": 32700000000,
+        "sudt_amount": 478291988,
+        "unexpected_data": 0
+      },
+      "{\"args\": \"0x578cd6ab8c0800e6fbc17b58633857dac5626883af89f842e79cb8f7af24de75\", \"code_hash\": \"0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5\", \"hash_type\": \"type\"}": {
+        "cells": 1,
+        "capacity_shannons": 32700000000,
+        "sudt_amount": 38725017937614102499,
+        "unexpected_data": 0
+      },
+      "{\"args\": \"0x9657b32fcdc463e13ec9205914fd91c443822a949937ae94add9869e7f2e1de8\", \"code_hash\": \"0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5\", \"hash_type\": \"type\"}": {
+        "cells": 1,
+        "capacity_shannons": 32700000000,
+        "sudt_amount": 114876402178719076576,
+        "unexpected_data": 0
+      },
+      "{\"args\": \"0x5c4ac961a2428137f27271cf2af205e5c55156d26d9ac285ed3170e8c4cc1501\", \"code_hash\": \"0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5\", \"hash_type\": \"type\"}": {
+        "cells": 1,
+        "capacity_shannons": 32700000000,
+        "sudt_amount": 339650505408,
+        "unexpected_data": 0
+      },
+      "{\"args\": \"0x656edac5463ef828a1a95f214b56adfe8f37da148fbc7ff424905e5264297c70\", \"code_hash\": \"0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5\", \"hash_type\": \"type\"}": {
+        "cells": 1,
+        "capacity_shannons": 32700000000,
+        "sudt_amount": 832021351884016067451474621,
+        "unexpected_data": 0
+      },
+      "{\"args\": \"0x1b89ae72b96c4f02fa7667ab46febcedf9b495737752176303ddd215d66a615a\", \"code_hash\": \"0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5\", \"hash_type\": \"type\"}": {
+        "cells": 1,
+        "capacity_shannons": 32700000000,
+        "sudt_amount": 165963828230,
+        "unexpected_data": 0
+      },
+      "CKB-only": {
+        "cells": 1,
+        "capacity_shannons": 42730380290283169,
+        "sudt_amount": 0,
+        "unexpected_data": 0
+      },
+      "{\"args\": \"0x232678824938dfd87a049122c4e244af88dad7faa79a262362f5bc5356ee4c64\", \"code_hash\": \"0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5\", \"hash_type\": \"type\"}": {
+        "cells": 1,
+        "capacity_shannons": 40100000000,
+        "sudt_amount": 74180000000000000000,
+        "unexpected_data": 0
+      }
+    }
+  },
+  "deposit_lock": {
+    "complete_pagination": true,
+    "cell_count": 37,
+    "groups": {
+      "CKB-only": {
+        "cells": 37,
+        "capacity_shannons": 918918029017,
+        "sudt_amount": 0,
+        "unexpected_data": 0
+      }
+    }
+  },
+  "withdrawal_lock": {
+    "complete_pagination": true,
+    "cell_count": 0,
+    "groups": {}
+  },
+  "stake_lock": {
+    "complete_pagination": true,
+    "cell_count": 1,
+    "groups": {
+      "CKB-only": {
+        "cells": 1,
+        "capacity_shannons": 60000000000,
+        "sudt_amount": 0,
+        "unexpected_data": 0
+      }
+    }
+  },
+  "challenge_lock": {
+    "complete_pagination": true,
+    "cell_count": 0,
+    "groups": {}
+  }
+}

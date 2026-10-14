@@ -1,0 +1,162 @@
+[
+  {
+    "control_account_id": 16045,
+    "controller_account_id": 18802,
+    "controller_short_address": "0x083168f08fea8c86e252b4397aafbaa5bc44d153",
+    "controller_eth_address": "0x7e2cd50ff305780450df7d8a02b6bd2b4878c3d8",
+    "controller_kind": "eth_eoa",
+    "authority": "signer/owner",
+    "refund_treatment": "retained; controller is not automatically beneficiary",
+    "evidence": "authenticated storage and fixed-block getter"
+  },
+  {
+    "control_account_id": 16045,
+    "controller_account_id": 16058,
+    "controller_short_address": "0x649dd8bd3091e335ec17c34dba970a725b94f71e",
+    "controller_eth_address": "0x27837f6036d94b107e203e535d991afa544d0b3d",
+    "controller_kind": "eth_eoa",
+    "authority": "signer/owner",
+    "refund_treatment": "retained; controller is not automatically beneficiary",
+    "evidence": "authenticated storage and fixed-block getter"
+  },
+  {
+    "control_account_id": 16045,
+    "controller_account_id": 18,
+    "controller_short_address": "0x2e863895a1a494fad4b1b5d02c3bc54b5395ef70",
+    "controller_eth_address": "0x666666488c608edec79d6f85094e6e514a67064f",
+    "controller_kind": "eth_eoa",
+    "authority": "signer/owner",
+    "refund_treatment": "retained; controller is not automatically beneficiary",
+    "evidence": "authenticated storage and fixed-block getter"
+  },
+  {
+    "control_account_id": 48851,
+    "controller_account_id": 48852,
+    "controller_short_address": "0x717a9cc5599875041fc8bc84078257a6f9da7b00",
+    "controller_eth_address": "0xbc350b51742711c962ffe8df9584124e9015f32f",
+    "controller_kind": "eth_eoa",
+    "authority": "signer/owner",
+    "refund_treatment": "retained; controller is not automatically beneficiary",
+    "evidence": "authenticated storage and fixed-block getter"
+  },
+  {
+    "control_account_id": 48851,
+    "controller_account_id": 48853,
+    "controller_short_address": "0xe510e933bae39a0599688f19cfae2e6da38d29a5",
+    "controller_eth_address": "0xff164b51ffecde88198af33fe579925e91c28da5",
+    "controller_kind": "eth_eoa",
+    "authority": "signer/owner",
+    "refund_treatment": "retained; controller is not automatically beneficiary",
+    "evidence": "authenticated storage and fixed-block getter"
+  },
+  {
+    "control_account_id": 48851,
+    "controller_account_id": 44091,
+    "controller_short_address": "0x2617012e33180ceacad8487c4c70123865a920ff",
+    "controller_eth_address": "0xdf6ab9f6daf25dbd31513a6ccc441ccfb210a53c",
+    "controller_kind": "eth_eoa",
+    "authority": "signer/owner",
+    "refund_treatment": "retained; controller is not automatically beneficiary",
+    "evidence": "authenticated storage and fixed-block getter"
+  },
+  {
+    "control_account_id": 36620,
+    "controller_account_id": 36622,
+    "controller_short_address": "0x74e18999f0f0483dbd1d87c04a051a93724e1c9d",
+    "controller_eth_address": "0x2dc726a69d6d3495eccb7b5666bccc6153589277",
+    "controller_kind": "eth_eoa",
+    "authority": "signer/owner",
+    "refund_treatment": "retained; controller is not automatically beneficiary",
+    "evidence": "authenticated storage and fixed-block getter"
+  },
+  {
+    "control_account_id": 36620,
+    "controller_account_id": 36623,
+    "controller_short_address": "0x8e521ad5f800d26dec8b2d53ea116a2b8f711973",
+    "controller_eth_address": "0x6d6a162dbbfa724ca953509c0a6cec18ef8abceb",
+    "controller_kind": "eth_eoa",
+    "authority": "signer/owner",
+    "refund_treatment": "retained; controller is not automatically beneficiary",
+    "evidence": "authenticated storage and fixed-block getter"
+  },
+  {
+    "control_account_id": 36620,
+    "controller_account_id": 36625,
+    "controller_short_address": "0x4209513cbdb3d48a7097bdab5be29cf57b64574b",
+    "controller_eth_address": "0x19337d112e9a494986221237e4b7c2fa38f2b567",
+    "controller_kind": "eth_eoa",
+    "authority": "signer/owner",
+    "refund_treatment": "retained; controller is not automatically beneficiary",
+    "evidence": "authenticated storage and fixed-block getter"
+  },
+  {
+    "control_account_id": 36630,
+    "controller_account_id": 36622,
+    "controller_short_address": "0x74e18999f0f0483dbd1d87c04a051a93724e1c9d",
+    "controller_eth_address": "0x2dc726a69d6d3495eccb7b5666bccc6153589277",
+    "controller_kind": "eth_eoa",
+    "authority": "signer/owner",
+    "refund_treatment": "retained; controller is not automatically beneficiary",
+    "evidence": "authenticated storage and fixed-block getter"
+  },
+  {
+    "control_account_id": 36630,
+    "controller_account_id": 36623,
+    "controller_short_address": "0x8e521ad5f800d26dec8b2d53ea116a2b8f711973",
+    "controller_eth_address": "0x6d6a162dbbfa724ca953509c0a6cec18ef8abceb",
+    "controller_kind": "eth_eoa",
+    "authority": "signer/owner",
+    "refund_treatment": "retained; controller is not automatically beneficiary",
+    "evidence": "authenticated storage and fixed-block getter"
+  },
+  {
+    "control_account_id": 36630,
+    "controller_account_id": 36625,
+    "controller_short_address": "0x4209513cbdb3d48a7097bdab5be29cf57b64574b",
+    "controller_eth_address": "0x19337d112e9a494986221237e4b7c2fa38f2b567",
+    "controller_kind": "eth_eoa",
+    "authority": "signer/owner",
+    "refund_treatment": "retained; controller is not automatically beneficiary",
+    "evidence": "authenticated storage and fixed-block getter"
+  },
+  {
+    "control_account_id": 38316,
+    "controller_account_id": 38636,
+    "controller_short_address": "0x450d50aa3e0d89f2c4c98fd707d1bbef18cffe1d",
+    "controller_eth_address": "0xc207a5dc49771a71367bd3a97fe58aaf9c5dfdae",
+    "controller_kind": "eth_eoa",
+    "authority": "signer/owner",
+    "refund_treatment": "retained; controller is not automatically beneficiary",
+    "evidence": "authenticated storage and fixed-block getter"
+  },
+  {
+    "control_account_id": 38316,
+    "controller_account_id": 13,
+    "controller_short_address": "0x2e9382dd59fac5dc94826ffa898706c35acb16a8",
+    "controller_eth_address": "0x9c023610d438de45b8d53358de663233ce752f77",
+    "controller_kind": "eth_eoa",
+    "authority": "signer/owner",
+    "refund_treatment": "retained; controller is not automatically beneficiary",
+    "evidence": "authenticated storage and fixed-block getter"
+  },
+  {
+    "control_account_id": 38316,
+    "controller_account_id": 38429,
+    "controller_short_address": "0xb24a264f1267e59613dd4bd1fbfdb7fffd483e5a",
+    "controller_eth_address": "0xbb91644f26b075bda47a13682dad006eb9d70867",
+    "controller_kind": "eth_eoa",
+    "authority": "signer/owner",
+    "refund_treatment": "retained; controller is not automatically beneficiary",
+    "evidence": "authenticated storage and fixed-block getter"
+  },
+  {
+    "control_account_id": 36838,
+    "controller_account_id": 35969,
+    "controller_short_address": "0xe2f2b2b845bd526c0a171045334dfb24c7d2496b",
+    "controller_eth_address": "0x72e0c4199049f6143afb808104f804f31ca30540",
+    "controller_kind": "eth_eoa",
+    "authority": "manager",
+    "refund_treatment": "retained; controller is not automatically beneficiary",
+    "evidence": "authenticated storage and fixed-block getter"
+  }
+]

@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use crate::{
     blake2b::new_blake2b,
     smt::{default_store::DefaultStore, Error, SMT, SMTH256},

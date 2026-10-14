@@ -1,0 +1,57 @@
+{
+  "accounts": 3,
+  "block_hash": "0x2b9c2fc728a233f1677b04b7ec3bc2ddc76e5787462e4f14514f8d66471558f3",
+  "block_number": "0x2b81ba",
+  "calls": 3,
+  "input_sha256": "07faf489a377b0aaa671ce7691b4208f5c79f5ddd3bd96b6d0bbd8fa5f2c1058",
+  "limitation": "Fixed-block RPC getters, not authenticated SMT proofs. Getter success and interface names do not establish behavior, beneficiary rights or source identity.",
+  "rows": [
+    {
+      "account_id": 4075,
+      "address": "0xb45263adf4e09b77d538d37f13a24568ae48a587",
+      "arguments_hex": "000000000000000000000000740d5718a79a8559feee8b00922f8cd773a81d84",
+      "data": "0xd9eb0e9f000000000000000000000000740d5718a79a8559feee8b00922f8cd773a81d84",
+      "decoded": {
+        "bytes": 32,
+        "words": [
+          "0x0000000000000000000000000000000000000000000000000000000000000001"
+        ]
+      },
+      "error": null,
+      "result": "0x0000000000000000000000000000000000000000000000000000000000000001",
+      "signature": "registerUsers(address)"
+    },
+    {
+      "account_id": 4075,
+      "address": "0xb45263adf4e09b77d538d37f13a24568ae48a587",
+      "arguments_hex": "000000000000000000000000b156c425f325d750968702d4bd4226573edc3aed",
+      "data": "0xd9eb0e9f000000000000000000000000b156c425f325d750968702d4bd4226573edc3aed",
+      "decoded": {
+        "bytes": 32,
+        "words": [
+          "0x0000000000000000000000000000000000000000000000000000000000000001"
+        ]
+      },
+      "error": null,
+      "result": "0x0000000000000000000000000000000000000000000000000000000000000001",
+      "signature": "registerUsers(address)"
+    },
+    {
+      "account_id": 4075,
+      "address": "0xb45263adf4e09b77d538d37f13a24568ae48a587",
+      "arguments_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "data": "0xd9eb0e9f0000000000000000000000000000000000000000000000000000000000000000",
+      "decoded": {
+        "bytes": 32,
+        "text": "",
+        "words": [
+          "0x0000000000000000000000000000000000000000000000000000000000000000"
+        ]
+      },
+      "error": null,
+      "result": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "signature": "registerUsers(address)"
+    }
+  ],
+  "source_sha256": "dc59b9c7af7fcb473587617d12d1da32fc3a7ad6f50c7b7d2e28b8a19b278468"
+}

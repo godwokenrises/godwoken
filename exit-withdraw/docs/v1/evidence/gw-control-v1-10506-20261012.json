@@ -1,0 +1,71 @@
+{
+  "account_id": 10506,
+  "authenticated_reads": 56368,
+  "checks": [
+    {
+      "detail": "DB CHAIN_ID is the rollup type hash",
+      "name": "db_rollup_identity",
+      "status": "PASS"
+    },
+    {
+      "detail": "Stored SMT root branch vs DB last-valid block",
+      "name": "db_tree_vs_db_block_root",
+      "status": "PASS"
+    },
+    {
+      "detail": "DB SMT root vs on-chain account root",
+      "name": "db_tree_vs_l1_root",
+      "status": "PASS"
+    },
+    {
+      "detail": "Exact L2 tip hash and number",
+      "name": "db_block_vs_l1_tip",
+      "status": "PASS"
+    },
+    {
+      "detail": "Account count comparison",
+      "name": "db_count_vs_l1_count",
+      "status": "PASS"
+    },
+    {
+      "detail": "Halting/challenge state needs separate resolution",
+      "name": "rollup_running",
+      "status": "PASS"
+    },
+    {
+      "detail": "14140 DB reads verified with native Godwoken SMT proofs; unqueried state not scanned",
+      "name": "db_queried_state_proofs",
+      "status": "PASS"
+    }
+  ],
+  "eth_address": "0x7b761e6f5c129544a6663bcb8741940604a65af3",
+  "limitation": "Slot labels and role layout are research hypotheses. Membership search covers registered addresses plus explicit candidates; non-enumerable mappings may contain other addresses. No user entitlement or full-storage enumeration is implied.",
+  "request_sha256": "1ba7dcb3f6c3716e33d5f70b4f4928a1a8cda90403d2112d37a133460575e10a",
+  "role_candidates_checked": 14039,
+  "roles": [],
+  "root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee",
+  "runtime_code_hash": "0x9724af9bb6361190cbe87ffcc359d99ad1ace2949050252b6995b53901be47d5",
+  "script": {
+    "args": "0x1ca35cb5fda4bd542e71d94a6d5f4c0d255d6d6fba73c41cf45d2693e59b3072040000007b761e6f5c129544a6663bcb8741940604a65af3",
+    "code_hash": "0x83d5d8841518e8db686909d27c821398491f475ed5f1cd392c36e83f4252c4ac",
+    "hash_type": "type"
+  },
+  "slots": [
+    {
+      "key": "0x4a204f620c8c5ccdca3fd54d003badd85ba500436a431f0cbda4f558c93c34c8",
+      "label": "guard",
+      "value": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "key": "0x6c9a6c4a39284e37ed1cf53d337577d14212a4870fb976a4366c693b939918d5",
+      "label": "fallback",
+      "value": "0x000000000000000000000000017062a1de2fe6b99be3d9d37841fed19f573804"
+    },
+    {
+      "key": "0xcc69885fda6bcc1a4ace058b4a62bf5e179ea78fd58a1ccd71c22cc9b688792f",
+      "label": "modules_sentinel",
+      "value": "0x0000000000000000000000000000000000000000000000000000000000000001"
+    }
+  ],
+  "source_sha256": "bc072d455f5ec93edcd36b45d8a29f8c87afa8909bba3fb8bce240f873b4a998"
+}

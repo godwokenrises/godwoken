@@ -1,0 +1,14 @@
+{
+  "observed_at_utc": "2026-09-21T07:24:02.693020+00:00",
+  "endpoint": "https://mainnet.ckb.dev/rpc",
+  "method": "get_indexer_tip",
+  "params": [],
+  "response": {
+    "jsonrpc": "2.0",
+    "result": {
+      "block_hash": "0x60da4107224023bdbb5bd995fd57ba2fb5e03190e4b03bd566bee9f74810f698",
+      "block_number": "0x13916e5"
+    },
+    "id": 1
+  }
+}

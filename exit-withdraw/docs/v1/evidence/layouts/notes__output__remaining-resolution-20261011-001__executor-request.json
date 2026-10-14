@@ -1,0 +1,31 @@
+{
+  "root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee",
+  "extra_candidates": [
+    "0xb156c425f325d750968702d4bd4226573edc3aed"
+  ],
+  "accounts": [
+    {
+      "account_id": 4075,
+      "eth_address": "0xb45263adf4e09b77d538d37f13a24568ae48a587",
+      "runtime_code_hash": "0x0c25f9e15d44f0c124a1fff30143bfdaa987effaa51d74a8a69c75b8d9cb7ee2",
+      "prefix_words": 2,
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        },
+        {
+          "key": "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103",
+          "label": "EIP1967 admin"
+        }
+      ],
+      "mappings": [
+        {
+          "slot": 0,
+          "width": 1,
+          "label": "authorized executor boolean; not a financial balance"
+        }
+      ]
+    }
+  ]
+}

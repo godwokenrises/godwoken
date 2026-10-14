@@ -1,0 +1,837 @@
+{
+  "accounts": [
+    {
+      "account_id": 256,
+      "eth_address": "0x577422e5e376bb0dfceef1a8489b89619f76b46c",
+      "mappings": [
+        {
+          "label": "exact matched YOKVault userInfo",
+          "slot": 1,
+          "width": 4
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb3983698854be0a35088b3d18197e1fab24e93ed628cfd792f9d2840ab9a40c2",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 1791,
+      "eth_address": "0xc98c7a43c97a9ba6c6fd0e9a63dd39df3136c901",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 1792,
+      "eth_address": "0x664d99f83861cfd8cddddd212eb9b9c1496afd4b",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 1810,
+      "eth_address": "0x28bef62f7880eec6f70d5eee06752f813c8276e0",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 1811,
+      "eth_address": "0x51bd2194b5913ff879f7cab6be52bdd17aaa7b5e",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2069,
+      "eth_address": "0xeb08501ee7556a6350ff23b3bf991ca384e3277a",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2070,
+      "eth_address": "0xe9298ed830feb5c63d0cb449caa360087daccb85",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2075,
+      "eth_address": "0x9dc00b9157af4e09ed50bab841d91e1cd2bc7ff6",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2076,
+      "eth_address": "0x176c1716fbd2b1cf99574e1feb261b55fffc37d8",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2314,
+      "eth_address": "0x1a2163b19eb58cca9279465539adf29572e828c6",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2315,
+      "eth_address": "0x3730224d4a1438129fc651e09e4688543f78d9bd",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2318,
+      "eth_address": "0xf144ce2be1ef30afde24f24aa4bbd3b839d9a983",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2319,
+      "eth_address": "0x2da4e58fc8f534a4e11eb9f64c5874180655a7eb",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2356,
+      "eth_address": "0x2d6af020fb005fe8f3f2e8d8403b702cd75e3ba1",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2357,
+      "eth_address": "0xc84d4a9a396e621d79430b36f5bf5205020aaaef",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2499,
+      "eth_address": "0xb5d68d132594c8a175cd9e754c58e6bb2c6ec434",
+      "mappings": [
+        {
+          "label": "candidate userRewardPerTokenPaid",
+          "slot": 10,
+          "width": 1
+        },
+        {
+          "label": "candidate rewards",
+          "slot": 11,
+          "width": 1
+        },
+        {
+          "label": "balanceOf mapping verified by bytecode",
+          "slot": 13,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x14beada659e0202d31894175ad55f9716dc37b2085507cf1956d66636a736e74",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3171,
+      "eth_address": "0xd2626b07938bc0fc78acdcd0cc89a35b6ab8892e",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3172,
+      "eth_address": "0x9368f85e3737c1a318ae7ffb6eb789a287002bc1",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3173,
+      "eth_address": "0x9063a720bcc1e1c303d06df3fd8c8df9d58368de",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3174,
+      "eth_address": "0x7ba1df0bc3ba5c232c77bb1aab0e9e9260546942",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3175,
+      "eth_address": "0x0ae82e915da5f572f2a6c63c9a3dd35b272937d8",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3176,
+      "eth_address": "0x1c5f613bde998965ab2ad5f0977c67c2eaecd5ae",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3177,
+      "eth_address": "0xcfa03b95388eeb39b754968e5d97b154a645c15f",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3178,
+      "eth_address": "0xd7cad0b097523f45e582d7fcbbeebd7de2312e17",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3179,
+      "eth_address": "0x2c08d024515e8ce54751019de98258c1be37f842",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3180,
+      "eth_address": "0x11b4713ba06b06150740900cfe7d6860cb147c41",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3181,
+      "eth_address": "0x5c7fa6fe3f6c5d8333741339ea7268e3d0e03cad",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3182,
+      "eth_address": "0xd09135618d13b8cd5984a58203e29dc61987aa07",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3242,
+      "eth_address": "0xeb99c5af10acd6c175026dba6c1830b7df995813",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3243,
+      "eth_address": "0xef62580c88ce73c97019a41fbe241aec013df24e",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3244,
+      "eth_address": "0x63925846425cc1ef1ac8bee2a888c8a0b392db30",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3245,
+      "eth_address": "0x9a0963085290c3aea6eedb54a154f35a5a7df709",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3455,
+      "eth_address": "0x3a666a7fbb9966100ea44507d3956b98826797e2",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3456,
+      "eth_address": "0xd81f52c5c6a6d7f8ee68a1e4505b185ca4e3d299",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3460,
+      "eth_address": "0x21c4b09e076d03d68fdd242c31f575fe6a38e395",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3461,
+      "eth_address": "0x757f6d6e12009d57416c612aea7409cebd53fa40",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3462,
+      "eth_address": "0x3f26835cae2d8921ad328348828d975bf1cb8bfc",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3463,
+      "eth_address": "0x72314858e7629e5776be6658eebc83d4be84beaa",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3474,
+      "eth_address": "0xcc3419c5e5013d7fb1e7d6beade5a8420787698c",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3475,
+      "eth_address": "0x8cf682d35d07029b8eead8c1fb08ed20617333b9",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3476,
+      "eth_address": "0x08b7434acb8079b79e88945f205c6f226c73ffa3",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3477,
+      "eth_address": "0x1c74906bac1701f3ea7e42518200c76dc16df6de",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4223,
+      "eth_address": "0x1b43782669996be2ca11078ae064e631c1b87502",
+      "mappings": [
+        {
+          "label": "ERC20 balance mapping; shared implementation getter bytecode verified",
+          "slot": 101,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4224,
+      "eth_address": "0x55f3f878a0b3f68a93a8de277d637ff49bb5e396",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6ba89b775b28f01b99d5465b0ebdc1e44dd531afa7ad9ab5bcc146674c47eb65",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 1786,
+      "eth_address": "0x0631885f5843e12d8377b03893b63166a03d3d15",
+      "mappings": [],
+      "prefix_words": 0,
+      "runtime_code_hash": "0xbc614a64f085163a2e94a11fa1bfa3c2ba49cfc2089d1a4bb761de283596ac35",
+      "slots": []
+    },
+    {
+      "account_id": 1806,
+      "eth_address": "0x381fd0aeb8c53e946d102e6df95f9e1947de0a47",
+      "mappings": [],
+      "prefix_words": 0,
+      "runtime_code_hash": "0x16e5182512527d217b4ec8d340dcfa559ee6caca19a9aeb7ec961961847e6b21",
+      "slots": []
+    },
+    {
+      "account_id": 1808,
+      "eth_address": "0x78a7b7085492f12ca6834395baa221906f283531",
+      "mappings": [],
+      "prefix_words": 0,
+      "runtime_code_hash": "0x1b2840bc7bb6b49e66cb15d217e85250d9f004074ea2041e678fe462d9e70c47",
+      "slots": []
+    },
+    {
+      "account_id": 2089,
+      "eth_address": "0xa3ea46c4af36fd8b34c1f9bae32ca9e7db659a26",
+      "mappings": [],
+      "prefix_words": 0,
+      "runtime_code_hash": "0xc31ea66b758978337d745b15b18bf2276f7cdc1a7afb4099700993bda2cbab25",
+      "slots": []
+    },
+    {
+      "account_id": 2809,
+      "eth_address": "0x420743025981bacde0b5adcee211ab2f5d51b886",
+      "mappings": [],
+      "prefix_words": 0,
+      "runtime_code_hash": "0x7a5a74e5e8c5ca3c123cb640f06484f140970e19ecbd76b4f62c0055e4295e34",
+      "slots": []
+    },
+    {
+      "account_id": 3457,
+      "eth_address": "0xabfed12d8dfce23c36870c53ccba05e276b032b2",
+      "mappings": [],
+      "prefix_words": 0,
+      "runtime_code_hash": "0xf3166d317e5e72197843a37e6dbdac945631ca353c994fe8e09a05d2479a981c",
+      "slots": []
+    },
+    {
+      "account_id": 3469,
+      "eth_address": "0x9aaff7d2b5a91a25188eab097acf66998b8c590e",
+      "mappings": [],
+      "prefix_words": 0,
+      "runtime_code_hash": "0x6e8b2f704ab7bdd2e7cd9aebaec4f25a5b7b7cbbabcb3b4846839a7fd3408c61",
+      "slots": []
+    },
+    {
+      "account_id": 3472,
+      "eth_address": "0xb849d5731ac4bea388f29b3561eab8bc44deaf34",
+      "mappings": [],
+      "prefix_words": 0,
+      "runtime_code_hash": "0xe375dfc6e1fd2082da9d46674f4e2217d2df43d1fc220aec42a7ba6780264645",
+      "slots": []
+    },
+    {
+      "account_id": 4158,
+      "eth_address": "0x8579249f0ed423b1680a81a78485387fcfe53068",
+      "mappings": [],
+      "prefix_words": 0,
+      "runtime_code_hash": "0x0da2ba9e5d0b1fb921106a658f391834cd21364df611f5ca6e6dcb9903dfd64a",
+      "slots": []
+    }
+  ],
+  "extra_candidates": [
+    "0x0000000000000000000000000000000000000000",
+    "0x03ffd3254870440c4a087d20179362fccd5b19ac",
+    "0x06e4cc6bf8096b78cdc1eafd7cef73e6ee58c09a",
+    "0x071044b6be5a3202d36e5ea6f035355d9cb10aba",
+    "0x1c352e8f3e035c524f2385818b44859906d3c705",
+    "0x2176638fef52dfc3ac6a727611a00d4575b82370",
+    "0x22c998ea311e8c14cff633091d1ae82f3beb87b0",
+    "0x263ecc1408848fae0f8e061de3b4d1e350a6474e",
+    "0x28d6c9a5170599f40b0027cc236d0293ad64ae6e",
+    "0x2b6f17fea009e20f9c90c13403cd1f3b13c73344",
+    "0x3335833eb19c9fc4b50aa338a31874c5747c5fed",
+    "0x3a93bbf4b4147c8c98289b7e31b941dfb3e9b18f",
+    "0x3b71961693eb3da8bfde50178a3ca9a1df1bc374",
+    "0x407a8125d4d23c99cfc001c72778625effcdd946",
+    "0x492afcda95f17126ca4bb09c78e7bd11cdfb8735",
+    "0x4fa3414fd3e572f2562c1a823bb00ea14c6a6755",
+    "0x517be509bf19833f90846e9e3af5eeca30ec4aec",
+    "0x52f3c7f87c0979571a417b4b7aa34f2764677d6e",
+    "0x5896bed3959d4508fee5cdaed6da41e8016d1ebe",
+    "0x5a0ac23b69db12351510c31fc5adcbc2df8c04e5",
+    "0x5d4316e69be2ca870a97a5cbfd7b7a1f079d956f",
+    "0x5fb2a2f3298a26d9c7729a37ffa03d24b2d0499a",
+    "0x60310d44a00682a9f11e0a9287e5f64383781453",
+    "0x62bb1f76baa0e39c66554d30805369133a805b52",
+    "0x62bb3aa883a0cdb278da3c5d646f19574e883970",
+    "0x65189b30e214daf11f525ac239192a2438303409",
+    "0x6d500e275be80545ae39a0d9b20b6b6f8d32aa15",
+    "0x72ef3abd6a43e33b8678996e558d30d498824170",
+    "0x734852350daf09f31fdb5ceb7f9d521043cfb2ad",
+    "0x77f540fa374a276cb689ff678a5fd2d5ee55062a",
+    "0x86cd1278d475445d52686c3f4556c03fedcb5adc",
+    "0x8e528699aafd0eca078a43db62defd14a3b62798",
+    "0x9266cb1cbd548bd94be540fc347f150ac4112914",
+    "0x93afdfd6b4fa0e40d1b58af74ddb794b4504455c",
+    "0x99ef4d197ce38ad638e32a0d90e4893f03a730b6",
+    "0x9ec915f4e78fc65c0fc9274c28dc06d07d103369",
+    "0xa73f7865920d634c5e9a20e9128cd36a9fb88490",
+    "0xb06c531948220d1dd1b43cb13dce00a91201e3e3",
+    "0xb1fa9df7226967b6a55969a5162a61d88879be4d",
+    "0xb4748cc3077226e46f73a9c758b8819d947ff41a",
+    "0xb50b1a477a30af74524c9e0d0ee02232d3dc117a",
+    "0xb52a090ad4b0470a8f97ca3b30320d5c7e02cd6a",
+    "0xc33b055961dadcf48732a267b8ca2c0dfa212b5a",
+    "0xd9afb15fa70cbad4ca3d312146a329ac0812ff47",
+    "0xe1e16eff8817ac07141afffbe59c9954812ac5d3",
+    "0xe2c0d842047781f2cf05a7973dc8124a37544976",
+    "0xe43785a2106572cfb54f087f2606ede005ed9a61",
+    "0xf5958c98473f04ee61344022011cd6b57f159cb8",
+    "0xfa7aee4da9a51832822cfdf152d1ae924ff24b3c",
+    "0xfb2508a367cb370aafdde4ffd25b3f4d80c85381"
+  ],
+  "root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee"
+}

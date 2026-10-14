@@ -1,0 +1,20 @@
+{
+  "accounts": [
+    {
+      "account_id": 4572,
+      "eth_address": "0xea54182ea1cc48745ce381ff3810acc14532a631",
+      "mappings": [
+        {
+          "label": "pendingRevenue native WCKB claims; getter anchored",
+          "slot": 6,
+          "width": 1
+        }
+      ],
+      "prefix_words": 32,
+      "runtime_code_hash": "0x608b8c30e65d552f18139da549f2523adebbe4b008e6390b91c87b423d69fe78",
+      "slots": []
+    }
+  ],
+  "extra_candidates": [],
+  "root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee"
+}

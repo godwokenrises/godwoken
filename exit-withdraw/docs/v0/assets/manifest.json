@@ -1,0 +1,64 @@
+{
+  "protocol": "v0",
+  "binary_sha256": "8b2d7e15d6857a611f089259e6de34f3ea7495bedc07f21ea5347eba6bb5b898",
+  "root": "0xbf094fbcee2258770df7749bed2ed3e2565c17c98b1f40f2ca6377d253a11d7d",
+  "l2_tip": {
+    "account_count": 49984,
+    "account_root": "0xbf094fbcee2258770df7749bed2ed3e2565c17c98b1f40f2ca6377d253a11d7d",
+    "hash": "0x2d2f4031c37ecce6e28fbf75e3a1234f61f29fef3aa0b307bc9133f65f861b33",
+    "number": 2071124,
+    "timestamp_ms": 1781243976000
+  },
+  "l1_state": {
+    "block_count": 2071126,
+    "finalized_block_number": 2067525,
+    "hash": "0x4ddaa3814dcb5e9c101180879629af8923ee1639ff2973ccd5217784a04b11e5"
+  },
+  "observed_at": "2026-10-14T05:40:34.347148561+00:00",
+  "header_before": {
+    "compact_target": "0x190e6ced",
+    "dao": "0x92a1f6c817b3415beb2307f551d62a0085e5238bcefe7a0a005c286f3f653307",
+    "epoch": "0x4780014003b03",
+    "extra_hash": "0xd64502ec9eb12c20fb2f7596f73bef454a7cb99edb6f192c85e7f4e61b0323f7",
+    "hash": "0x5dbbc8f2913da4196da9bc8121305c6b95d5ff7c66543c96bea5cf88a0562b4b",
+    "nonce": "0x6101cf7674cd8150000000dc4e11005",
+    "number": "0x13c4842",
+    "parent_hash": "0x61d9d5b43d02ba8dbec6463fe7f89cca9d08b8019373f90dcaef6a703f4d8deb",
+    "proposals_hash": "0x13ec9d9fde310cf8a25b06384f75e020d042c41f06f6956148fb8b84f5c464d4",
+    "timestamp": "0x1a138ec7f6e",
+    "transactions_root": "0x3571140c282167fe91c70dacc152e09ccf6fdd5f76f725384c69e77f9a947784",
+    "version": "0x0"
+  },
+  "header_after": {
+    "compact_target": "0x190e6ced",
+    "dao": "0xe64188ca37b3415bab16e4fa51d62a00d6b4530cdafe7a0a00f9beda40653307",
+    "epoch": "0x4780015003b03",
+    "extra_hash": "0x902d7079251b1670bade91b5193f6fe852e38f6a784ced428ab7807a70c1049a",
+    "hash": "0xa606b4fd4631cd45fe1abb724ea423a1e12a5c079c2529140e5ef2dd0fad0d41",
+    "nonce": "0xd336307b2781353e00000009fc56030e",
+    "number": "0x13c4843",
+    "parent_hash": "0x5dbbc8f2913da4196da9bc8121305c6b95d5ff7c66543c96bea5cf88a0562b4b",
+    "proposals_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp": "0x1a138ece786",
+    "transactions_root": "0xcd589c9718edbef25c18f3335583741cd67dfa171620a8932c0c4fa73fb99e6f",
+    "version": "0x0"
+  },
+  "observation_start": null,
+  "observation_end": null,
+  "indexer_before": null,
+  "indexer_after": null,
+  "check_backing_exit_code": 2,
+  "raw_l2_sha256": "e8c6025d4398b6d43f4430433419ee44247279c4eb2c36169324f4c8f9f5a0c9",
+  "raw_l1_sha256": "fd3c64caa2432d6784b51efdd899a783bce37ead92891ab7e0f6b7c54f57188e",
+  "query_commands": [
+    "gw-withdraw l2-db --protocol v0 --db DB --output l2.json",
+    "gw-withdraw l1-custodian --protocol v0 --output l1.json",
+    "gw-withdraw check-backing --l2-report l2.json --l1-report l1.json --output backing.json"
+  ],
+  "source_conservation_pass": true,
+  "fresh_l2_inventory_matches_complete_report": true,
+  "all_planned_payments_covered_by_finalized_custody": true,
+  "custodian_cell_view_matches_cli": true,
+  "unknown_custodian_asset_count": 0,
+  "caveat": "Non-atomic L1 observation. Recorded supply mismatch and census limits remain in backing.json; this is not deployment or payment approval."
+}

@@ -1,0 +1,4 @@
+V0 Pay: 26052416 cycles
+V0 Pay: 27002249 cycles
+test claim_e2e::v0_settlement::v0_signed_adversarial_and_second_overdraw ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 45 filtered out; finished in 12.77s

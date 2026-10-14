@@ -1,0 +1,985 @@
+{
+  "policy_change": "Exclude all V1 YOK; preserve all other decisions.",
+  "comparison_basis": "New CLI ran refund generate against each original read-only DB; old reports are comparison-only inputs.",
+  "v1_snapshot_root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee",
+  "v0_all_generated_files_byte_identical": true,
+  "v1_all_non_yok_account_entitlements_payments_authorities_and_provenance_identical": true,
+  "v1_all_non_yok_source_partitions_and_retained_lots_identical": true,
+  "v1_authorities_and_unregistered_reserves_identical": true,
+  "v1_source_conservation_pass": true,
+  "capacity_can_only_improve_for_remaining_accounts": true,
+  "removed_beneficiary_entries_had_only_yok_entitlements": true,
+  "removed_beneficiary_count": 217,
+  "before": {
+    "beneficiary_entries": 10887,
+    "positive_payable_beneficiaries": 9842,
+    "capacity_blocked": 7022,
+    "total_topup_shannons": "51003573436726",
+    "yok_positive_beneficiaries": 3302
+  },
+  "after": {
+    "beneficiary_entries": 10670,
+    "positive_payable_beneficiaries": 9392,
+    "capacity_blocked": 6661,
+    "total_topup_shannons": "41561268628253",
+    "yok_positive_beneficiaries": 0
+  },
+  "asset_comparison": [
+    {
+      "asset_id": 1,
+      "symbol": "CKB",
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "426641430312102478543775918",
+        "refund_payable_l1_raw": "42664143031208614",
+        "discovered_l2_retained_raw": "568184199898870955368538",
+        "l2_recorded_after_payable_raw": "1012817486042960847672066",
+        "capacity_ready_l2_raw": "426585987046453400000000000"
+      },
+      "after": {
+        "refund_entitlement_raw": "426641430312102478543775918",
+        "refund_payable_l1_raw": "42664143031208614",
+        "discovered_l2_retained_raw": "568184199898870955368538",
+        "l2_recorded_after_payable_raw": "1012817486042960847672066",
+        "capacity_ready_l2_raw": "426602362998368670000000000"
+      }
+    },
+    {
+      "asset_id": 34,
+      "symbol": "dCKB",
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "410182449785820",
+        "refund_payable_l1_raw": "410182449785820",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "30000000000",
+        "capacity_ready_l2_raw": "7939183506237"
+      },
+      "after": {
+        "refund_entitlement_raw": "410182449785820",
+        "refund_payable_l1_raw": "410182449785820",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "30000000000",
+        "capacity_ready_l2_raw": "7939183506237"
+      }
+    },
+    {
+      "asset_id": 36,
+      "symbol": "TAI",
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "39527933548",
+        "refund_payable_l1_raw": "39527933548",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "35974735920"
+      },
+      "after": {
+        "refund_entitlement_raw": "39527933548",
+        "refund_payable_l1_raw": "39527933548",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "35974735920"
+      }
+    },
+    {
+      "asset_id": 38,
+      "symbol": "ETH",
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "114856401874525649334",
+        "refund_payable_l1_raw": "114856401874525649334",
+        "discovered_l2_retained_raw": "20000304193427242",
+        "l2_recorded_after_payable_raw": "20000304193427242",
+        "capacity_ready_l2_raw": "113724659306235648687"
+      },
+      "after": {
+        "refund_entitlement_raw": "114856401874525649334",
+        "refund_payable_l1_raw": "114856401874525649334",
+        "discovered_l2_retained_raw": "20000304193427242",
+        "l2_recorded_after_payable_raw": "20000304193427242",
+        "capacity_ready_l2_raw": "113736047157161538280"
+      }
+    },
+    {
+      "asset_id": 40,
+      "symbol": "USDT",
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "165510945217",
+        "refund_payable_l1_raw": "165510945217",
+        "discovered_l2_retained_raw": "332902480",
+        "l2_recorded_after_payable_raw": "452883013",
+        "capacity_ready_l2_raw": "163986074373"
+      },
+      "after": {
+        "refund_entitlement_raw": "165510945217",
+        "refund_payable_l1_raw": "165510945217",
+        "discovered_l2_retained_raw": "332902480",
+        "l2_recorded_after_payable_raw": "452883013",
+        "capacity_ready_l2_raw": "163988480702"
+      }
+    },
+    {
+      "asset_id": 42,
+      "symbol": "DAI",
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "99739356584949061267",
+        "refund_payable_l1_raw": "99739356584949061267",
+        "discovered_l2_retained_raw": "1102858008506706697",
+        "l2_recorded_after_payable_raw": "1102858008506706697",
+        "capacity_ready_l2_raw": "59767225434935793902"
+      },
+      "after": {
+        "refund_entitlement_raw": "99739356584949061267",
+        "refund_payable_l1_raw": "99739356584949061267",
+        "discovered_l2_retained_raw": "1102858008506706697",
+        "l2_recorded_after_payable_raw": "1102858008506706697",
+        "capacity_ready_l2_raw": "59767225434935793902"
+      }
+    },
+    {
+      "asset_id": 44,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 46,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 48,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 50,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 52,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 54,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 56,
+      "symbol": "BUSD",
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "73845976123580531094",
+        "refund_payable_l1_raw": "73845976123580531094",
+        "discovered_l2_retained_raw": "334023876419468906",
+        "l2_recorded_after_payable_raw": "334023876419468906",
+        "capacity_ready_l2_raw": "73845976123580531094"
+      },
+      "after": {
+        "refund_entitlement_raw": "73845976123580531094",
+        "refund_payable_l1_raw": "73845976123580531094",
+        "discovered_l2_retained_raw": "334023876419468906",
+        "l2_recorded_after_payable_raw": "334023876419468906",
+        "capacity_ready_l2_raw": "73845976123580531094"
+      }
+    },
+    {
+      "asset_id": 58,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 60,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 62,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 64,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 66,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 68,
+      "symbol": "USDC",
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "337613642210",
+        "refund_payable_l1_raw": "337613642210",
+        "discovered_l2_retained_raw": "2001888014",
+        "l2_recorded_after_payable_raw": "2036863198",
+        "capacity_ready_l2_raw": "333007004459"
+      },
+      "after": {
+        "refund_entitlement_raw": "337613642210",
+        "refund_payable_l1_raw": "337613642210",
+        "discovered_l2_retained_raw": "2001888014",
+        "l2_recorded_after_payable_raw": "2036863198",
+        "capacity_ready_l2_raw": "333140615843"
+      }
+    },
+    {
+      "asset_id": 70,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 72,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 74,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 76,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 78,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 80,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 82,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 84,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 86,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 88,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 90,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 92,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 94,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 96,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 98,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 100,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 102,
+      "symbol": "BNB|bsc",
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "37907445798378944678",
+        "refund_payable_l1_raw": "37907445798378944678",
+        "discovered_l2_retained_raw": "2556281648885764",
+        "l2_recorded_after_payable_raw": "817572139235157821",
+        "capacity_ready_l2_raw": "14008299505678701994"
+      },
+      "after": {
+        "refund_entitlement_raw": "37907445798378944678",
+        "refund_payable_l1_raw": "37907445798378944678",
+        "discovered_l2_retained_raw": "2556281648885764",
+        "l2_recorded_after_payable_raw": "817572139235157821",
+        "capacity_ready_l2_raw": "14081347730353348507"
+      }
+    },
+    {
+      "asset_id": 104,
+      "symbol": "BUSD|bsc",
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "628188193626530003744",
+        "refund_payable_l1_raw": "628188193626530003744",
+        "discovered_l2_retained_raw": "56166275169",
+        "l2_recorded_after_payable_raw": "56166275169",
+        "capacity_ready_l2_raw": "498429969499391366666"
+      },
+      "after": {
+        "refund_entitlement_raw": "628188193626530003744",
+        "refund_payable_l1_raw": "628188193626530003744",
+        "discovered_l2_retained_raw": "56166275169",
+        "l2_recorded_after_payable_raw": "56166275169",
+        "capacity_ready_l2_raw": "614329969499391366666"
+      }
+    },
+    {
+      "asset_id": 106,
+      "symbol": "USDT|bsc",
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "2121602254831637889693",
+        "refund_payable_l1_raw": "2121602254831637889693",
+        "discovered_l2_retained_raw": "681190111",
+        "l2_recorded_after_payable_raw": "681190111",
+        "capacity_ready_l2_raw": "1098188126929365586467"
+      },
+      "after": {
+        "refund_entitlement_raw": "2121602254831637889693",
+        "refund_payable_l1_raw": "2121602254831637889693",
+        "discovered_l2_retained_raw": "681190111",
+        "l2_recorded_after_payable_raw": "681190111",
+        "capacity_ready_l2_raw": "1098203526929365586467"
+      }
+    },
+    {
+      "asset_id": 108,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 110,
+      "symbol": "BTCB|bsc",
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "37784409760391092",
+        "refund_payable_l1_raw": "37784409760391092",
+        "discovered_l2_retained_raw": "2646967881508",
+        "l2_recorded_after_payable_raw": "2646967881508",
+        "capacity_ready_l2_raw": "13439520473195343"
+      },
+      "after": {
+        "refund_entitlement_raw": "37784409760391092",
+        "refund_payable_l1_raw": "37784409760391092",
+        "discovered_l2_retained_raw": "2646967881508",
+        "l2_recorded_after_payable_raw": "2646967881508",
+        "capacity_ready_l2_raw": "13439520473195343"
+      }
+    },
+    {
+      "asset_id": 112,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 114,
+      "symbol": "USDC|bsc",
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "753205354654207895911",
+        "refund_payable_l1_raw": "753205354654207895911",
+        "discovered_l2_retained_raw": "118505782955",
+        "l2_recorded_after_payable_raw": "118505782955",
+        "capacity_ready_l2_raw": "224170895127024428179"
+      },
+      "after": {
+        "refund_entitlement_raw": "753205354654207895911",
+        "refund_payable_l1_raw": "753205354654207895911",
+        "discovered_l2_retained_raw": "118505782955",
+        "l2_recorded_after_payable_raw": "118505782955",
+        "capacity_ready_l2_raw": "224170895127024428179"
+      }
+    },
+    {
+      "asset_id": 116,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 118,
+      "symbol": null,
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "0",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 120,
+      "symbol": "WBTC|eth",
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "477931387",
+        "refund_payable_l1_raw": "477931387",
+        "discovered_l2_retained_raw": "360601",
+        "l2_recorded_after_payable_raw": "360601",
+        "capacity_ready_l2_raw": "477893499"
+      },
+      "after": {
+        "refund_entitlement_raw": "477931387",
+        "refund_payable_l1_raw": "477931387",
+        "discovered_l2_retained_raw": "360601",
+        "l2_recorded_after_payable_raw": "360601",
+        "capacity_ready_l2_raw": "477893829"
+      }
+    },
+    {
+      "asset_id": 128,
+      "symbol": "YOK",
+      "monetary_entitlement_unchanged": false,
+      "before": {
+        "refund_entitlement_raw": "828862403383093455073690234",
+        "refund_payable_l1_raw": "828862403383093455073690234",
+        "discovered_l2_retained_raw": "3048259684051281942655992",
+        "l2_recorded_after_payable_raw": "3158948500922612377784387",
+        "capacity_ready_l2_raw": "811994065992749170262800304"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "831910663067144737016346226",
+        "l2_recorded_after_payable_raw": "832021351884016067451474621",
+        "capacity_ready_l2_raw": "0"
+      }
+    },
+    {
+      "asset_id": 161,
+      "symbol": "COOP",
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "1470521000000000000000",
+        "refund_payable_l1_raw": "1470521000000000000000",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "5000000000000000000",
+        "capacity_ready_l2_raw": "1190691000000000000000"
+      },
+      "after": {
+        "refund_entitlement_raw": "1470521000000000000000",
+        "refund_payable_l1_raw": "1470521000000000000000",
+        "discovered_l2_retained_raw": "0",
+        "l2_recorded_after_payable_raw": "5000000000000000000",
+        "capacity_ready_l2_raw": "1190691000000000000000"
+      }
+    },
+    {
+      "asset_id": 1570,
+      "symbol": "KOI",
+      "monetary_entitlement_unchanged": true,
+      "before": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "281429376421935767110930893051",
+        "l2_recorded_after_payable_raw": "281429376421935767110930893051",
+        "capacity_ready_l2_raw": "0"
+      },
+      "after": {
+        "refund_entitlement_raw": "0",
+        "refund_payable_l1_raw": "0",
+        "discovered_l2_retained_raw": "281429376421935767110930893051",
+        "l2_recorded_after_payable_raw": "281429376421935767110930893051",
+        "capacity_ready_l2_raw": "0"
+      }
+    }
+  ],
+  "old_v1_report_sha256": "c18d565896d4d6eb13dce79b679836691535a6ff0858348e1956ccade830536b",
+  "new_v1_report_sha256": "3c317dd67dc161647a159671518032481db66f40fb183ede9c2a969a6178a13b",
+  "old_policy_sha256": "09fac64d0d37f635763ec459d8e622c1bf2c71d907362ee629c09ee7bcd3a219",
+  "new_policy_sha256": "d3a4cf793b6fe1cf07f349aac0e5d54ffa23112728766cdb85bd4a70f8605f18",
+  "scope_note": "Non-YOK capacity-ready amounts/status and top-up estimates may change because YOK outputs are removed. These are not changes in non-YOK entitlements.",
+  "custody_recheck": {
+    "observed_start": "2026-10-14T10:29:33.257971113+00:00",
+    "observed_end": "2026-10-14T10:29:39.199124597+00:00",
+    "account_root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee",
+    "all_total_and_finalized_amounts_match_published_capture": true,
+    "sha256": "cb4e57621b85bb4c58c79a636e65e4eafe239b9c797483595810a8dcc06ec200",
+    "raw_capture": "../assets/custody-recheck.json.gz"
+  },
+  "audit_only_plan_comparison": {
+    "purpose": "Non-production fixed deployment ID used only to verify plan export and compare policy roots. No profile initialized or deployed.",
+    "before": {
+      "protocol": "v1",
+      "deployment": "0xfb4db94c65626106c5bf92f23d0dc06cf00b96bbda53312e11b7d011008bb48d",
+      "snapshot_root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee",
+      "manifest": "0xcfb4af4b5786ce41393aa7aefecb118e7df9a1446854a43a3d11cddfa422977a",
+      "source_root": "0x1fc6ee1f9dca2b533fe031f0d1debb7e1d900247049735cb497035f0b222708d",
+      "reserve_root": "0x569432e148cc810ab7adf603a946787d7f9d421f8061821a359a2398b34e08e0",
+      "claims_root": "0x3cd67e3c0020e0f97da1db400e00adf60b694d2ef60557c35b792fa3b75dcfdd"
+    },
+    "after": {
+      "protocol": "v1",
+      "deployment": "0xfb4db94c65626106c5bf92f23d0dc06cf00b96bbda53312e11b7d011008bb48d",
+      "snapshot_root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee",
+      "manifest": "0xdb4b6f5db325bf92b37a974c966c325074a269e470ab6f799c45c48d29b76965",
+      "source_root": "0x4c72138529853b43f21637fc2db4418873b41978555d5b9c0b9ba5d5ab4ebbf6",
+      "reserve_root": "0x1226a2e0457be2aa7ce41a60620d75bb33f69318b550c3e57c311f0fdd78b9cc",
+      "claims_root": "0xc88efafb51c0dae19dd2d2075aeb16a5807716de76555487806d4996298ab162"
+    },
+    "after_verify_plan": {
+      "claims": 12840,
+      "claims_root": "0xc88efafb51c0dae19dd2d2075aeb16a5807716de76555487806d4996298ab162",
+      "deployment": "0xfb4db94c65626106c5bf92f23d0dc06cf00b96bbda53312e11b7d011008bb48d",
+      "reserve_root": "0x1226a2e0457be2aa7ce41a60620d75bb33f69318b550c3e57c311f0fdd78b9cc",
+      "reserves": 13900,
+      "source_root": "0x4c72138529853b43f21637fc2db4418873b41978555d5b9c0b9ba5d5ab4ebbf6",
+      "sources": 13833,
+      "status": "verified_plan_not_deployed"
+    }
+  }
+}

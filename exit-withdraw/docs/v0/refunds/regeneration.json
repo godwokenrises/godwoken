@@ -1,0 +1,45 @@
+{
+  "protocol": "v0",
+  "db_only": true,
+  "binary_sha256": "8b2d7e15d6857a611f089259e6de34f3ea7495bedc07f21ea5347eba6bb5b898",
+  "root": "0xbf094fbcee2258770df7749bed2ed3e2565c17c98b1f40f2ca6377d253a11d7d",
+  "command": "gw-withdraw refund generate --protocol v0 --db DB --output-dir NEW",
+  "report_sha256": "647f9a8324268154efa99ec016fe6110a608f156b4849c88c59f7148383302fa",
+  "previous_report_sha256": "647f9a8324268154efa99ec016fe6110a608f156b4849c88c59f7148383302fa",
+  "report_semantically_equal": true,
+  "report_byte_equal": true,
+  "files": [
+    {
+      "file": "assets.csv",
+      "sha256": "76c34d243e6242d959421f1c9e50389ea8686eb3942f1893bb2084768312c71b",
+      "byte_equal_to_previous": true
+    },
+    {
+      "file": "accounts.csv",
+      "sha256": "9adb9df84cece068b88b2a410c5527688d4001a0bf1a20d86058996da409a8c5",
+      "byte_equal_to_previous": true
+    },
+    {
+      "file": "claim-sources.csv",
+      "sha256": "a143586b141b37f5abdf807242c8155d13d0feaf5536d9d1b6c9e0f107e0a3ce",
+      "byte_equal_to_previous": true
+    },
+    {
+      "file": "capacity.csv",
+      "sha256": "24592a5350964a3f8851595446a411666f8cd6b1497ee02c6f85ab1d19b5d890",
+      "byte_equal_to_previous": true
+    },
+    {
+      "file": "source-reserves.csv",
+      "sha256": "e8884e125ebe6d2986a1e2a7ac4db72ea70c6179265eab84fc1d5c4457ba693c",
+      "byte_equal_to_previous": true
+    },
+    {
+      "file": "authorities.json",
+      "sha256": "898fff824253a40460fb5b73a817f04fc6c685b91a07a5a68eb8644cf0c5d529",
+      "byte_equal_to_previous": true
+    }
+  ],
+  "original_generator_manifest": "9adb9df84cece068b88b2a410c5527688d4001a0bf1a20d86058996da409a8c5  accounts.csv\n24592a5350964a3f8851595446a411666f8cd6b1497ee02c6f85ab1d19b5d890  capacity.csv\na143586b141b37f5abdf807242c8155d13d0feaf5536d9d1b6c9e0f107e0a3ce  claim-sources.csv\ne8884e125ebe6d2986a1e2a7ac4db72ea70c6179265eab84fc1d5c4457ba693c  source-reserves.csv\n76c34d243e6242d959421f1c9e50389ea8686eb3942f1893bb2084768312c71b  assets.csv\n898fff824253a40460fb5b73a817f04fc6c685b91a07a5a68eb8644cf0c5d529  authorities.json\n647f9a8324268154efa99ec016fe6110a608f156b4849c88c59f7148383302fa  report.json\n",
+  "release_status": "Calculation only; export-plan requires chosen deployment ID; no root initialized or payment submitted by this refresh."
+}

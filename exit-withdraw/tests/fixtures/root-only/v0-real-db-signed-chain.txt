@@ -1,0 +1,6 @@
+Real DB V0 cold step 0: 30086145 cycles, 4845 bytes
+Real DB V0 cold step 1: 30224077 cycles, 21860 bytes
+Real DB V0 cold step 2: 29925629 cycles, 17456 bytes
+Real DB V0 cold step 3: 20311245 cycles, 17568 bytes
+test claim_e2e::v0_settlement::v0_real_db_cold_artifacts_signed_vm ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 46 filtered out; finished in 4.48s

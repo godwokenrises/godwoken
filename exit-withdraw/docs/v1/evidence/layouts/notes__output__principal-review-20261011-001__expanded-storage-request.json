@@ -1,0 +1,2113 @@
+{
+  "accounts": [
+    {
+      "account_id": 135,
+      "eth_address": "0xfb104223a2d6193c9491da2f2f4a2aee26f65b96",
+      "mappings": [
+        {
+          "label": "Moloch member fields",
+          "slot": 18,
+          "width": 6
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xf81dc25138a0ce953b6a3bcf77924576bde91173daf9d214feced5afcb5ea982",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 183,
+      "eth_address": "0x215b329f52062625745f4a5c0d1d43c61d7ab46f",
+      "mappings": [
+        {
+          "key_before": "0x00",
+          "label": "pool0 principal and reward debt",
+          "slot": 7,
+          "width": 2
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x40c119039f4d85dab094912217cf608722033bee1824ef4e8d0fdff15e2aa7cb",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2732,
+      "eth_address": "0x993883a64e2269d8b09893c4ad137449de7280d8",
+      "mappings": [
+        {
+          "key_order": "slot_address",
+          "label": "stable pool LP balances",
+          "slot": 2,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb6aca248f2fe1ba4880b4cce8bd25380da32115fbb40b64a60d85372e58e8ead",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2735,
+      "eth_address": "0x8ec194bac04f22390b1ba34a4bfeff70c8d11ae2",
+      "mappings": [
+        {
+          "key_order": "slot_address",
+          "label": "stable pool LP balances",
+          "slot": 2,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb6aca248f2fe1ba4880b4cce8bd25380da32115fbb40b64a60d85372e58e8ead",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2738,
+      "eth_address": "0x985ab92270eb1b59b8445a015417d14e3557deb6",
+      "mappings": [
+        {
+          "key_order": "slot_address",
+          "label": "stable pool LP balances",
+          "slot": 2,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb6aca248f2fe1ba4880b4cce8bd25380da32115fbb40b64a60d85372e58e8ead",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2741,
+      "eth_address": "0x6dcb54a9a4a9a23266839190da3b7c7fea0f4849",
+      "mappings": [
+        {
+          "key_order": "slot_address",
+          "label": "stable pool LP balances",
+          "slot": 2,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb6aca248f2fe1ba4880b4cce8bd25380da32115fbb40b64a60d85372e58e8ead",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3657,
+      "eth_address": "0xb9e3d6cd367ba6a18d8a3d09b3bce16b9a5296bd",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb3a74f69adad445f8f912b7c2e683e0355b1f4abff08f3aee2e8f6bf35959f94",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3658,
+      "eth_address": "0x23ff3c9a41aebe9f03ad1c35afac3fb80d01ec42",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb3a74f69adad445f8f912b7c2e683e0355b1f4abff08f3aee2e8f6bf35959f94",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3663,
+      "eth_address": "0x245f9c5bf02c769b778843db132470573658391f",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb3a74f69adad445f8f912b7c2e683e0355b1f4abff08f3aee2e8f6bf35959f94",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3664,
+      "eth_address": "0x5dfe7b1974bca89dba7808217b7614f45b217068",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb3a74f69adad445f8f912b7c2e683e0355b1f4abff08f3aee2e8f6bf35959f94",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3666,
+      "eth_address": "0x194ef1eddfc9459a89da294898381873d083e6e2",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb3a74f69adad445f8f912b7c2e683e0355b1f4abff08f3aee2e8f6bf35959f94",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3667,
+      "eth_address": "0xb45cbf6e657657f49265179623f24f170bd08d79",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb3a74f69adad445f8f912b7c2e683e0355b1f4abff08f3aee2e8f6bf35959f94",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4007,
+      "eth_address": "0xd27cb72308cb478c414da3f6c5ed0ddcb9f9e3a9",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6a53f43ec9b4d88301ab29f904e2a56e8b0c36d8d9820a12eda1ce9c98addab9",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4008,
+      "eth_address": "0xed31726dbfc54ef64725a2473d88cf036090d104",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6b1fc2077de8e9b3cdd6f72232fb2b6db4ca770556017539a92d5e931f0080db",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4009,
+      "eth_address": "0x4b99507fd46c1d131c20b3d4dbae2df4aed992cc",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x4f95352ef963b1f208149c6df84a7a098b3c3706aa84acd2f2230cf7cc57ebf6",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4010,
+      "eth_address": "0x943f7612a68e85a1eae900e5dd16d6f1f83d6e21",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x262f5d656866eb08431c66a312b3f56e85e7c5a8e58011ef4e7453d85408d5d7",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4011,
+      "eth_address": "0x5a09fa37e7638a569ff7cd7584a5ff7dfa84b92d",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x849a7f4575234c26ccae049b5d6ccba741c5680ada7c640f205b6895c2ce90af",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4012,
+      "eth_address": "0x9a34162e8b913477874bb6241e4e10a10ae99c97",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x1a6ebadae26236b7697e66e70bf0dbb4989da68ccc4b76d761eb902cb3720c39",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4013,
+      "eth_address": "0xfb52f22fd9a42c08dfa54eea1d4020938f543efa",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xe1aadde08c522312fa04c57055d6404a0e3dc3661232c4a70e7aef903f0b9cd5",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4029,
+      "eth_address": "0xaf3a8d3d0783d3b54b868cc3a93fce1591c49e97",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6bf74b9e222ba8ee6e61a9113831e6de9b16a8c2dc8b1d7cd463950b03f77f34",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4030,
+      "eth_address": "0x91b5860c9943aa516c8904fd9cbb7d28cc64198f",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x0d3177ab94aaefb4330639d4bf162abf4200b077b47a446dc0d5c7645c383173",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4031,
+      "eth_address": "0x06916af6081c58034c32792c5ce397dd29fe55fc",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x58d510316e42b9142b115791cfa31fbf1a6e4cdd2559650e94cdd145f34fa20e",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4032,
+      "eth_address": "0x14cdaafc38b64bffdbb7e61ac19cc7e71faf4f5c",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x5397edaf38cc4554151245ea0d171a8e2cf0588e11538966febf6015baf73656",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4033,
+      "eth_address": "0xbea150296ead8edb47cd249ed5f8669f87b36598",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x2971ff51f20864c557fff5b51fd41bdb7cd1944d517da1ae0003b5b94f3ffb4f",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4034,
+      "eth_address": "0x825f09fa806e0fcafb2d09a7b0408562ffe32485",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x1940344df7fe838b09ffb2ebbb98d925654c2ff71dd24ebfab818d1a685718a4",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4035,
+      "eth_address": "0x0c34d24a3b04e16ee601273650130f808a88bd3e",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x1b0dbdee5fd8de1ae4115448f84c1b1d6e997d1f450759e8479b617517ae85a1",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4185,
+      "eth_address": "0xbe6fb8874c6e5800092e7e85bdd8c165adcd0592",
+      "mappings": [
+        {
+          "key_order": "address_slot",
+          "label": "stable pool LP balances",
+          "slot": 51,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x39670069e639d1f441ac1212a0140d60052df4a8168095a7e43edcece15fa017",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4262,
+      "eth_address": "0xb3d6913cf2d6a8fd9b472ff7526ec11620957c8b",
+      "mappings": [
+        {
+          "key_order": "address_slot",
+          "label": "stable pool LP balances",
+          "slot": 51,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x39670069e639d1f441ac1212a0140d60052df4a8168095a7e43edcece15fa017",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4317,
+      "eth_address": "0x3d57df23702c761f28fec15b358b4e2f543f343e",
+      "mappings": [
+        {
+          "key_order": "address_slot",
+          "label": "stable pool LP balances",
+          "slot": 51,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x39670069e639d1f441ac1212a0140d60052df4a8168095a7e43edcece15fa017",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4502,
+      "eth_address": "0x8d98fe6b41ef6eb53c5db91b8867c3766c1c55f8",
+      "mappings": [
+        {
+          "label": "Moloch member fields",
+          "slot": 18,
+          "width": 6
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xf81dc25138a0ce953b6a3bcf77924576bde91173daf9d214feced5afcb5ea982",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4788,
+      "eth_address": "0xa0e14570c51ba07095abf6e4c899edb429a5cbd8",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x7ad234bebf4c9c91fa145da12ae081e4bf29212a1995981af988130f30c21e70",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4789,
+      "eth_address": "0xbb8443441f4f4a16281c589da5af85acb891d494",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x7ad234bebf4c9c91fa145da12ae081e4bf29212a1995981af988130f30c21e70",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4792,
+      "eth_address": "0x594b3d84b61877216e0145f21334d3c47f7bd076",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x7ad234bebf4c9c91fa145da12ae081e4bf29212a1995981af988130f30c21e70",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4793,
+      "eth_address": "0x9fb46572e2b9d4b646b38d59a9609300a788d3d6",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x7ad234bebf4c9c91fa145da12ae081e4bf29212a1995981af988130f30c21e70",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4795,
+      "eth_address": "0x95a0fe63c26538c2b419ee8589424a97416b0c31",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x7ad234bebf4c9c91fa145da12ae081e4bf29212a1995981af988130f30c21e70",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4796,
+      "eth_address": "0x5b6824d3305ffabee2e27130db862f1d118362e9",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x7ad234bebf4c9c91fa145da12ae081e4bf29212a1995981af988130f30c21e70",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4798,
+      "eth_address": "0xd15c322caf2c389825f0650ae3057ec66618e257",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x7ad234bebf4c9c91fa145da12ae081e4bf29212a1995981af988130f30c21e70",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4799,
+      "eth_address": "0xa3d76892482b8e6acaa3e418a3b625642e332127",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x7ad234bebf4c9c91fa145da12ae081e4bf29212a1995981af988130f30c21e70",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 5156,
+      "eth_address": "0x2f5748670c3afeedffd661100807344141e2b4e4",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x4542c8f569bc897add704c9887f12e925e51fbf87cc9a7ef6a39b43da55dc722",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 5158,
+      "eth_address": "0x91339ece2d5ee1314a914707987c9bcc50ad7500",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x4542c8f569bc897add704c9887f12e925e51fbf87cc9a7ef6a39b43da55dc722",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 5198,
+      "eth_address": "0x1cab4d17010dc3ba09b2804ac362429f8ccc350a",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x4542c8f569bc897add704c9887f12e925e51fbf87cc9a7ef6a39b43da55dc722",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 5732,
+      "eth_address": "0x128b633e2bd8541814025678b99280162fd7fbd3",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x635ae5238100f4ceb4ea04072eba067def9b75d757279104bab6a70bdc310719",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 5757,
+      "eth_address": "0x1420dadd299f0a2b8241b47affffb06e22b62c1e",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xbb8368980591bbe8c171090e5a8592c6d9624e954ca2897142d28b0f2b594247",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 5759,
+      "eth_address": "0x618c54200d25f1fb63c22a54d2f62fd2c27dc21c",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xbb8368980591bbe8c171090e5a8592c6d9624e954ca2897142d28b0f2b594247",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 5761,
+      "eth_address": "0x25c47658a728d317f4ed7ac81c59174e82cc5ecb",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xbb8368980591bbe8c171090e5a8592c6d9624e954ca2897142d28b0f2b594247",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 9763,
+      "eth_address": "0xe8bc81638901961c5d522888acb1d0c3f946e60d",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xad1c587df0b579f70580a4fbd17512197cb31f25edd854867a0132632be224f1",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10679,
+      "eth_address": "0x529d39f41d579250abb883f8f139d9c58b901946",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9fc6ada7f920ae96571ddcebc7716d95f62b11b7a819059dba39833a320090b8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10680,
+      "eth_address": "0x57ea2149dba2875b52b07c49db9a90f79c02435f",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9fc6ada7f920ae96571ddcebc7716d95f62b11b7a819059dba39833a320090b8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10685,
+      "eth_address": "0x3d8fd5b6f9784c3aabd49a44ffe4384ff29eaa19",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9fc6ada7f920ae96571ddcebc7716d95f62b11b7a819059dba39833a320090b8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10686,
+      "eth_address": "0x2307b5e440f5d5df52b824a9089acb60c22af8f9",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9fc6ada7f920ae96571ddcebc7716d95f62b11b7a819059dba39833a320090b8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10688,
+      "eth_address": "0x9833865a21de49307decff252773b85319fca72d",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9fc6ada7f920ae96571ddcebc7716d95f62b11b7a819059dba39833a320090b8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10689,
+      "eth_address": "0x32ca9b3f6b9d2c9cfe709448331bd1e3e8083b9c",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9fc6ada7f920ae96571ddcebc7716d95f62b11b7a819059dba39833a320090b8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10691,
+      "eth_address": "0xce9c862cce9aa87670643b8e2f4ccf10822cf796",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9fc6ada7f920ae96571ddcebc7716d95f62b11b7a819059dba39833a320090b8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10692,
+      "eth_address": "0xc43849cf085c50c94df48efbf3628b5c5849941e",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9fc6ada7f920ae96571ddcebc7716d95f62b11b7a819059dba39833a320090b8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10694,
+      "eth_address": "0x2c59470050d1e480776c6c68b9179b5f422b4da7",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9fc6ada7f920ae96571ddcebc7716d95f62b11b7a819059dba39833a320090b8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10695,
+      "eth_address": "0x3ff0c92a8ee540d59f0730fb6603edfe0b144ed3",
+      "mappings": [
+        {
+          "label": "Aave debt principal/scaled balance candidate",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9fc6ada7f920ae96571ddcebc7716d95f62b11b7a819059dba39833a320090b8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10725,
+      "eth_address": "0x030f1d783141ba68338356cacc8c98b9d5b56edf",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xa7d37d4aebf4ae0fbe9f9a79dd124b3bd314a915234fe2e471a2058d17aaaf82",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10726,
+      "eth_address": "0xf1f6dad64c189ddc8368ebfd5761765aa31f4191",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x40843ce09dc0415b56b2687ea7684c45b3f3a7066b91c0597f086bfc4b5c10ac",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10727,
+      "eth_address": "0xaea765ef470fd9aa24853bb1ce5f21c6879349c2",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x4e0d2c7d1ca603958ad6884776ec49256c7131ddfce6a7db82686d647a530f59",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10728,
+      "eth_address": "0xdfc80050d829ddbf5dc8ea3f1b9da5c68a4cbd7a",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xc3f55432bb93ac1e7a395917b091050cf3467ace700cfd778ac8b6374214f413",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10729,
+      "eth_address": "0xd0b29dda7bf9ba85f975170e31040a959e4c59e1",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xf0a5d29fc3ce5a7871ff72b716a2dc293781d1783f7ff55344d11f32592d62cd",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10730,
+      "eth_address": "0xbb4bea2b794f1bf9a3d3de7f2ccdd8f443a021e5",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x39348db8d1e8209b33da80a9417b0578a03fbc9cceb29899cccfd503d5bf1e95",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10731,
+      "eth_address": "0x113eca3385216d5152220b6f6d902b5b94a961ad",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xf9c063a6cbde8c081610378e0de30a250efb28012d689d7f0b53a5d70fdb47cc",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10733,
+      "eth_address": "0x523e6933395914ce56b804e0212593a939c6521d",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x516d242d8b60e518f93b3e2815a3c3f1d175eb83d7dd7e3744074df7b88fcd2a",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10738,
+      "eth_address": "0x149916d7128c36bbcebd04f794217baf51085fb9",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xd1588887ed890f9fb77ee0729e940c3c291bf8e2e81991128a2a2813fb85b683",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10740,
+      "eth_address": "0xa0430f122fb7e4f6f509c9cb664912c2f01db3e2",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x8e6a2b1176bb42607f30abba5a1cd10df1c225c7515cb683c7afeb92d86a83a4",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10742,
+      "eth_address": "0xa04b5b5a11a04773064d8ca9a28d51a3176f3b02",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xc54892f52c1e64c2e80f281251092ef9e663065cdcc14dbc5125aa4822562309",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10743,
+      "eth_address": "0x95386b036b945cd42d5abc6bc521fc936383bb7b",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x3f8f566c45131fb2c3dde5a9e519c66b071fadc1b549f47b8704d53a6226ee43",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10744,
+      "eth_address": "0xd3a35ec483aac0ac728f6d062211f04a373aa7e4",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x3b3b2a033c6dbbd194df6a17e4a9e73cbcc32b94566eeb5100aa93642ed3e992",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10745,
+      "eth_address": "0x7e7a0b8baf6ca29154180a31a3f89ad27d83252b",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x411c2b7ac89c0a3daa1871344a9a4082e378c4f57dd24cf8977e2d0f194f7a7c",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10746,
+      "eth_address": "0xcd8fdd6debc178f2bd743fdc31e211f19484d549",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xc007199f12bf92b85c79a8da1884e0282bcb9aa064cf527960732b94041b310e",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10919,
+      "eth_address": "0x10787c272d37253c3d50d12665d97b748e52b01a",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xd4f6613a3610fed452548d92c7aacaab723905ef9665c4f5c3fc4f98e68142c3",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10920,
+      "eth_address": "0xe7ba5777535c09c47f6d30b766a819ff9a90c905",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x04a72717abfa9513382904a128915ac3ce1265039ca713135bb6118e0c18015b",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10921,
+      "eth_address": "0x7cc4e51d7ddd74d627669aa492b04e61a4128206",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6553e50c04cf51b56395ef3f5e7b6dd41b02cbf69584732d07cdc5cb37c9779f",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10922,
+      "eth_address": "0xefd18a48d0210c807dee73eb79ca0fd73dd49f1c",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x4885204790c1a392ca044e1efd252d6b49711d075101b33c181062eb5cbeb367",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10955,
+      "eth_address": "0xaf9d4028272f750dd2d028990fd664dc223479b1",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb848303461c4d4488b563f3235ecfa32c2ad04f1cc93e6bbec422bd272d396b7",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10957,
+      "eth_address": "0x9121a3821a5885679e7f14579e7fbb0bfdefb5a4",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x669978893eba522ca027ea215e3ee4228a3542d83cd32719a79ef81725ac6b85",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10958,
+      "eth_address": "0xb49a409ce9013e732e15fc0ba1061abbad7c387c",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x40b5e4aba01d807f579cf436852da95d20f5c2ce8261f8c50b42b676f6701060",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10959,
+      "eth_address": "0x8cd3dbc0ee2c5c63cb9f10bbb042334f203e97d2",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xeb059ee2f4ab177ce11498b8e47d2cf49e59c170558203e79dbe21a2049dd7dd",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10960,
+      "eth_address": "0x0dbfb1d03b4c8d1283913ebd0fe453ea7133fb51",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xf5f462acc4811ea2a9b0a413b3a8f47c61382a5f452656f1bbb454f98397a9d8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 11558,
+      "eth_address": "0xd4ceadae793ff0cab490c078c948d7bb8ffb0951",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x942e873668f47b90f39f6263fdb1ed6d92d100ab060c4e74e22d7bd23cc20cbf",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 11563,
+      "eth_address": "0x95b91be8ab6743b2a45044f3563170586e0acddf",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x357d088d40e3aec61b52efe16e598cb1c1e80dd1daedd62b42c69345fda0a81a",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 11569,
+      "eth_address": "0x136c814f6c7f7412518c07dc401a29707a773ad0",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xcc772fe75f1d8f25ea6559bcadbdda835b941b5111aa76944a4f781929a383e6",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 11572,
+      "eth_address": "0xeb885c6da09f7ccdcbb302bde8f6d8e83bfd651c",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb4664efeafd0b9ad825e00b69977b8df6944078ec6b2325ef71934ba3b5d1fab",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 11573,
+      "eth_address": "0x386c963dbbd084dd806f2112d2b214fb86469a44",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x838dcdf49346721b1802035b9789d177067e59c711d0e7201c7daec632b398c2",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 11574,
+      "eth_address": "0x6291c16e5553dc70b54974fe19ae0cbfe0cd0fd6",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb6c29a0eb3e28c0c34a8a8200ce8b4e27eca1cd91f73437d8a17cf174eff949a",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 11641,
+      "eth_address": "0x3572806d69b9359f740669b1f65209a082db97b2",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xeecafd2f59dae11ff4541c2cf8afc523dd88a98fe31d607c851a1b86a17d208d",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 11647,
+      "eth_address": "0x7b7839f61cbb7c1c52db9e264c1cba1883f46b33",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x5e81d5113c846b466c485868b8c5f9e38c8e08766b03ac9d8a12dca303e188f5",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 11655,
+      "eth_address": "0x6d649f42e3b641d4d0bc7e8edcefca87df164c9a",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb293594a7bda7fd15407eed98944992e5c2a135f1867117f5ce59a62b385a720",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 11741,
+      "eth_address": "0x3718e79a9ef7b2970afd5053ce1f6a4c3043af5a",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x2cb8e05eeab7ffd0bcbb3eb6e5d0cdcca2dd62bdd831894e4f84c4805f146a7c",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 11743,
+      "eth_address": "0x3b02f1be3cb02f0c76d4f93458a2424395b3e9f6",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x0d30f780e828efb82125bef892964005ee118ac3e2a2577dd694e467b9f39dc0",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 11852,
+      "eth_address": "0x37daab4ac68a57bd9438f91f6cb47db26c865baa",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x635ae5238100f4ceb4ea04072eba067def9b75d757279104bab6a70bdc310719",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 11853,
+      "eth_address": "0x8f0614f4f47580c0cbb85e9ca0726eb6124e70d1",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xfb314c14abba9c26242c2cde20528b22b8496e5e9c1713e71cbf1657f49c3ae8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 11919,
+      "eth_address": "0xab22df0a98cc6286791cfa70f0f0603f21435026",
+      "mappings": [
+        {
+          "key_before": "0x0000000000000000000000000000000000000000",
+          "label": "balances candidate key_before 0x0000000000000000000000000000000000000000",
+          "slot": 2,
+          "width": 1
+        },
+        {
+          "key_after": "0x0000000000000000000000000000000000000000",
+          "label": "balances candidate key_after 0x0000000000000000000000000000000000000000",
+          "slot": 2,
+          "width": 1
+        },
+        {
+          "key_before": "0x7538c85cae4e4673253ffd2568c1f1b48a71558a",
+          "label": "balances candidate key_before 0x7538c85cae4e4673253ffd2568c1f1b48a71558a",
+          "slot": 2,
+          "width": 1
+        },
+        {
+          "key_after": "0x7538c85cae4e4673253ffd2568c1f1b48a71558a",
+          "label": "balances candidate key_after 0x7538c85cae4e4673253ffd2568c1f1b48a71558a",
+          "slot": 2,
+          "width": 1
+        },
+        {
+          "key_before": "0x885fb612947ccf1c7611894bd828d388b046fc24",
+          "label": "balances candidate key_before 0x885fb612947ccf1c7611894bd828d388b046fc24",
+          "slot": 2,
+          "width": 1
+        },
+        {
+          "key_after": "0x885fb612947ccf1c7611894bd828d388b046fc24",
+          "label": "balances candidate key_after 0x885fb612947ccf1c7611894bd828d388b046fc24",
+          "slot": 2,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x58d27df9183b88f173573f58cef5c96e92ec28ca61da68fad7b0f44cd9cf4cce",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 11957,
+      "eth_address": "0x274e13daf1c9795d7b48a637de8910662f0f6af1",
+      "mappings": [],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x5ff44ec5b1a5d8e015a6174e3b9f9ada66a23547c4713f8c1c4326e9ac7290d9",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 12282,
+      "eth_address": "0xbb2e62b3c50c9087f9db6f991148b7871bd3dbc0",
+      "mappings": [
+        {
+          "label": "gas escrow balance getter",
+          "slot": 10,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x264f36029a8914fb1eb81527eae359c48106bdd397c978fab4bd7b648e5ecfc5",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 12757,
+      "eth_address": "0x2fa3757f7cb848861d6eb56c398e2edd385cd8b3",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x3d3df61c63082cf183f7e629ab9c54a98b45b8d9f584418652d2600a70439c06",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 12758,
+      "eth_address": "0x1dff577744cf1f0066b3fd262356b1c41d047ad4",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb9b3dbbaadceec55e241a4271746c8cd74c56c12d86d618e72c5ed3f431046b8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 12759,
+      "eth_address": "0x80245ba36346fe10a1af3f7103e8fdcb2549a87d",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xf213d2baf04fffd47cca5e7da08e944dbcd1d3660b7569e2152dc9179f05d3e2",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 12760,
+      "eth_address": "0x3a22945c94fcc35a569dc7e4ef0e17e08fe9acc5",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x0f489f503656298eb86f51dd9c3210071e3752791fb6b50e6d23b7159cf3ab7a",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 12761,
+      "eth_address": "0x70af4745b56c786db80b860b76316e0ce9d7ac43",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xa6f6956d846c8de29d52f13d1e5da5243c833477d2e5db528484e56c0bbc682b",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 12765,
+      "eth_address": "0x23d8e927ddb7113eed58273c128376f941d4dea1",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x310790974b84ddab135618acbe111d3aedc31cbb23aa0007c4d8547c098f322a",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 12767,
+      "eth_address": "0xbe908a1858f9060e851b917f5abfd8e82b464c5f",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9c9356206853f0f134ae421f5a7ef08aac128a494403e59ca9664b5b2e9bd460",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 12768,
+      "eth_address": "0xdd6fb327bbd16546d071a9ecdefe5f8674354350",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x88f3f2842ec1462d732a0009f3a5173066562a83c58d2dcc37deccb4197a1fc9",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 12769,
+      "eth_address": "0xc71f7372c0f297b5c214fd6795852c413c883d36",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x37f3d9fd727a95b38581087b5d0a18b9315077c1cc2bb47b8d126087cd835262",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 12770,
+      "eth_address": "0x942f2c5303fa02aa14d2885f034f6a2df8fe59c6",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xd6f97c8875351192ecc3f0ac482a7c4ded2dfa2e726f9dd4f7367d023fce90f2",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 12771,
+      "eth_address": "0x1236e1b64d3184ff21d579198cbb35aedfebc4f7",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x906d8e819cd74a77e3e9e20bcbaa4562a317139ccc3a7289bfae289b8de472f2",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 12772,
+      "eth_address": "0x7f99a27607fedde982f5ac1dfe9ed9208d236d95",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xf7ea6fba9bf19f799858982750f6b5d0fb9dc93b653ee69b0078d5befec67045",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 12773,
+      "eth_address": "0xa7b28ddf165ff3bcd698e33924fb09dcd881fe0e",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x089bdc333f18f5d7ef3413e1a7b06a88aa818de652407ce5e7b5a6638a781eb8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 12774,
+      "eth_address": "0x177aed005ad86bbfc61c1dfbcb9d8e89a72aeeb9",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x862ffe53e33571d54a73d1bc484185b0328cf236439260285488401ca51bd15e",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 12775,
+      "eth_address": "0x890dce8bc9f90d2037149c85075a8d42ec6c23be",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xde734d8a9c800550c32682d2186d706165aff418b7041c407d806dcda78586d4",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 12776,
+      "eth_address": "0x6b20f20be5f4c41e138a2018b369aa80d4c4b34d",
+      "mappings": [
+        {
+          "label": "Balancer receipt balance candidate; deployed getter must agree",
+          "slot": 0,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x5af5bdf037e0292de2fa76295e98bbdadd663e2340f5568827a8997c2f516aa9",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "EIP1967 implementation"
+        }
+      ]
+    }
+  ],
+  "extra_candidates": [],
+  "root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee"
+}

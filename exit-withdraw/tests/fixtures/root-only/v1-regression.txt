@@ -1,0 +1,19 @@
+test settlement_e2e::export_settlement_profile ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 45 filtered out; finished in 0.89s
+test settlement_e2e::control_v1_full_vm_partial_remainder_and_wrong_signer ... ok
+test settlement_e2e::export_settlement_profile ... ok
+test settlement_e2e::offline_rehearsal_uses_same_builder_and_preserves_source_db ... ok
+test settlement_e2e::root_initialization_rejects_registration_and_epoch_mutation ... ok
+test settlement_e2e::root_payment_requires_source_and_lot_membership ... ok
+test settlement_e2e::settlement_lifecycle_and_adversarial_matrix ... ok
+test settlement_e2e::same_beneficiary_multiple_sources_combines_subshannon_contributions ... ok
+v1 TYPE_ID upgrade, real ckb-cli 2-of-3 signing: 4015353 cycles
+test settlement_e2e::signing_rejects_wrong_duplicate_missing_and_mutated_signatures ... ok
+test settlement_e2e::partial_claim_then_remainder_never_debits_twice ... ok
+settlement cycles: admin=[55447699], payout=31111305, user_claim=1457723
+test settlement_e2e::settlement_full_signed_vm_and_user_omnilock ... ok
+test settlement_e2e::multisig_upgrade_v1 ... ok
+CLI lifecycle operations: ["Begin", "Pay", "Pay"]
+test settlement_e2e::settlement_cli_build_sign_verify_and_reconstruct ... ok
+test settlement_e2e::settlement_refund_only_before_bootstrap_and_after_activation ... ok
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 33 filtered out; finished in 16.88s

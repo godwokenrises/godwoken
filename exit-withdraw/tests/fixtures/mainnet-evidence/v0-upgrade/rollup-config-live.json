@@ -1,0 +1,39 @@
+{
+  "observed_at_utc": "2026-10-11T13:12:56.202019+00:00",
+  "endpoint": "https://mainnet.ckb.dev/rpc",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "get_live_cell",
+    "params": [
+      {
+        "tx_hash": "0xc8502347882e91a849146f20dcff59d413056be9093c83ea17ed88339596f142",
+        "index": "0x0"
+      },
+      true
+    ]
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "result": {
+      "block_hash": "0xfc2349385425512aa894fa77d24d12b6a3522fea293e2391e2771bc5437b7aac",
+      "cell": {
+        "data": {
+          "content": "0xfd0100003c0000005c0000007c0000009c000000bc000000dc000000fc0000001c0100003c010000440100004c0100005401000055010000990100005e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd545c112df97daece27c4afa02b24b15f64403bdfd45ab2e0e88c9fb2a24796b1de24164e2204f998b088920405dece3dcfd5c1fbcb23aecfce4b3d3edf1488897f1717ee388b181fcb14352055c00b7ea7cd7c27350ffd1a2dd231e059dde2fed8f74432fb98bba53223df8dfc6e369affa5e0b1ea96da9a6e526628c87ce87aaff022d5512d3d5fd9614cc6ead110925d7a39e8916b6b1c8d5967846e4d32733db9896ecb952ab72f4f533d33fd9562fc1333fb6903899e93921efa9f879140877c93b0632b5b6c3ef922c5b7cea208fb0a7c427a13d50e13d3fefad17e0c59000e40b5402000000c201000000000000100e00000000000032020000001563080d175bf8ddd44a48e850cecf0c0b4575835756eb5ffd53ad830931b9f90bc55f318d738bd1f50e5d950110f0ce5ea2230ec1b62defe1271e06e680476f03000000cb99a9de6811812e79ffcda132f4d716dc26016cf89d94c832c51f9defa6b14fdb9896ecb952ab72f4f533d33fd9562fc1333fb6903899e93921efa9f8791408636b89329db092883883ab5256e435ccabeee07b52091a78be22179636affce8",
+          "hash": "0x2882e450fce6ba51eb4167c6a5d86cf48013be8c0e2ff870ea820e4bafa70f1c"
+        },
+        "output": {
+          "capacity": "0xd4576fa00",
+          "lock": {
+            "args": "0x6790e022ce4fe4178302d1e801a6ef1b1085399f",
+            "code_hash": "0x5c5069eb0857efc65e1bca0c07df34c31663b3622fd3876c876320fc9634e2a8",
+            "hash_type": "type"
+          },
+          "type": null
+        }
+      },
+      "status": "live"
+    },
+    "id": 1
+  }
+}

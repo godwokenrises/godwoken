@@ -1,0 +1,17 @@
+{
+  "observed_at_utc": "2026-10-11T12:52:20.911824+00:00",
+  "endpoint": "https://mainnet.godwoken.io/rpc",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "gw_get_account_id_by_script_hash",
+    "params": [
+      "0xdeb3312e58616e345acf9bef412a8c13d9ab4fb4e2ac64d6d93eb19702353da8"
+    ]
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": "0x5f52"
+  }
+}

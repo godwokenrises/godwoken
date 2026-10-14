@@ -1,0 +1,26 @@
+[
+  {
+    "out_point": {
+      "tx_hash": "0xc76edf469816aa22f416503c38d0b533d2a018e253e379f134c3985b3472c842",
+      "index": "0x0"
+    },
+    "dep_type": "code",
+    "data_hash": "0x768f306681da232ceb0b94f436c5f813377179762a831c5ad8797bd4fd2d118d"
+  },
+  {
+    "out_point": {
+      "tx_hash": "0xc7813f6a415144643970c2e88e0bb6ca6a8edc5dd7c1022746f628284a9936d5",
+      "index": "0x0"
+    },
+    "dep_type": "code",
+    "data_hash": "0xe1e354d6d643ad42724d40967e334984534e0367405c5ae42a9d7d63d77df419"
+  },
+  {
+    "out_point": {
+      "tx_hash": "0xe2fb199810d49a4d8beec56718ba2593b665db9d52299a0f9e6e75416d73ff5c",
+      "index": "0x3"
+    },
+    "dep_type": "code",
+    "data_hash": "0x9799bee251b975b82c45a02154ce28cec89c5853ecc14d12b7b8cccfc19e0af4"
+  }
+]

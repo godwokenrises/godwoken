@@ -1,0 +1,746 @@
+{
+  "accounts": [
+    {
+      "account_id": 151,
+      "eth_address": "0x8215efbb011632ee3bc275f3d8c630ed126277f0",
+      "mappings": [
+        {
+          "label": "wrapper_balances",
+          "slot": 3,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x6a036ce266961a302d69c02c186fae42b88a3582ecfb8ef51f0cc342131ee5e4",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 180,
+      "eth_address": "0xc296f806d15e97243a08334256c705ba5c5754cd",
+      "mappings": [
+        {
+          "label": "wrapper_balances",
+          "slot": 3,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xeff32b72882b38bb97bde14c7ac09f4cab2ef14f6e089d778a05496f554a2973",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 232,
+      "eth_address": "0x0c2e4ecd93346629a94bfde4bafd98a53de94b2b",
+      "mappings": [
+        {
+          "label": "wrapper_balances",
+          "slot": 3,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9c4490584ddd6fb731a233d3219e34ee78b34159d2576539f9fac6d919e7120b",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2734,
+      "eth_address": "0x5bf8f49ec085eeef89fa61d12f2a4a520883593f",
+      "mappings": [
+        {
+          "label": "staked_lp_balances",
+          "slot": 12,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x21abe0e270dd8af43a1736927c4a93d321e85f8fcc53c0f79efe4de89c777752",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2737,
+      "eth_address": "0xd3ab9c16f1639fa527d4cf7edd9e04257f12ed95",
+      "mappings": [
+        {
+          "label": "staked_lp_balances",
+          "slot": 12,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x21abe0e270dd8af43a1736927c4a93d321e85f8fcc53c0f79efe4de89c777752",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2740,
+      "eth_address": "0x3e1abc4b6da7d933f884b3a509621c232f223d2a",
+      "mappings": [
+        {
+          "label": "staked_lp_balances",
+          "slot": 12,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x21abe0e270dd8af43a1736927c4a93d321e85f8fcc53c0f79efe4de89c777752",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2743,
+      "eth_address": "0x23aaa13aff32d511948862918d5b6c2bf67a6f2d",
+      "mappings": [
+        {
+          "label": "staked_lp_balances",
+          "slot": 12,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x21abe0e270dd8af43a1736927c4a93d321e85f8fcc53c0f79efe4de89c777752",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 2747,
+      "eth_address": "0x0264ac90b1af4deed4d7549d480ee87718080f8a",
+      "mappings": [
+        {
+          "label": "koi_staking_balances",
+          "slot": 11,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xe036ce4e186b7419482d4e7f7a150be0fbe4704ba1fa023d743c60cbed88b58f",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3656,
+      "eth_address": "0x308509011d86ab37c1fc8b04d72e2e6dcaab0aa5",
+      "mappings": [
+        {
+          "label": "scaled_receipt_balances",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb3a74f69adad445f8f912b7c2e683e0355b1f4abff08f3aee2e8f6bf35959f94",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3662,
+      "eth_address": "0x382087b036c6e046135edfb05e9fcc39416fd848",
+      "mappings": [
+        {
+          "label": "scaled_receipt_balances",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb3a74f69adad445f8f912b7c2e683e0355b1f4abff08f3aee2e8f6bf35959f94",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 3665,
+      "eth_address": "0x557dfa7c2b0067c2f6eba4841f213ccbb353e9eb",
+      "mappings": [
+        {
+          "label": "scaled_receipt_balances",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xb3a74f69adad445f8f912b7c2e683e0355b1f4abff08f3aee2e8f6bf35959f94",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4787,
+      "eth_address": "0xe609c8861db284195510ff805e0aeafd92bb980d",
+      "mappings": [
+        {
+          "label": "scaled_receipt_balances",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x7ad234bebf4c9c91fa145da12ae081e4bf29212a1995981af988130f30c21e70",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4791,
+      "eth_address": "0xec2bf7ec6afcec1594baf4f33736573d0a12c25e",
+      "mappings": [
+        {
+          "label": "scaled_receipt_balances",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x7ad234bebf4c9c91fa145da12ae081e4bf29212a1995981af988130f30c21e70",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4794,
+      "eth_address": "0x3d8714a8e553fb872ac3790c49e9480ab1d31342",
+      "mappings": [
+        {
+          "label": "scaled_receipt_balances",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x7ad234bebf4c9c91fa145da12ae081e4bf29212a1995981af988130f30c21e70",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4797,
+      "eth_address": "0x30d1911e7703ad37d76682735e50a925e4cb9139",
+      "mappings": [
+        {
+          "label": "scaled_receipt_balances",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x7ad234bebf4c9c91fa145da12ae081e4bf29212a1995981af988130f30c21e70",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4835,
+      "eth_address": "0x953a470e72728806852bb85e150e47329601c687",
+      "mappings": [
+        {
+          "label": "market_receipt_balances",
+          "slot": 14,
+          "width": 1
+        },
+        {
+          "label": "borrow_principal_and_index",
+          "slot": 16,
+          "width": 2
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x4427b599365db7fe4959bb271160b6c8cf28271da063bfe2ed7bb434fca01b79",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 4946,
+      "eth_address": "0xbb0aa874a890b6c05742221290ba6715f5ec228c",
+      "mappings": [
+        {
+          "label": "market_receipt_balances",
+          "slot": 14,
+          "width": 1
+        },
+        {
+          "label": "borrow_principal_and_index",
+          "slot": 16,
+          "width": 2
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x4427b599365db7fe4959bb271160b6c8cf28271da063bfe2ed7bb434fca01b79",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 5032,
+      "eth_address": "0x1718e4d9dfe63ebf2bf9a813f864d037050ec62b",
+      "mappings": [
+        {
+          "label": "market_receipt_balances",
+          "slot": 14,
+          "width": 1
+        },
+        {
+          "label": "borrow_principal_and_index",
+          "slot": 16,
+          "width": 2
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x4427b599365db7fe4959bb271160b6c8cf28271da063bfe2ed7bb434fca01b79",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 5717,
+      "eth_address": "0xe415fc011e1f60bcff7546b70bf70d37083fee5b",
+      "mappings": [
+        {
+          "label": "market_receipt_balances",
+          "slot": 14,
+          "width": 1
+        },
+        {
+          "label": "borrow_principal_and_index",
+          "slot": 16,
+          "width": 2
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9d7f96e08445666bfc789053b8f3f84a33659b7b643bad2773b9c5d1fb468e29",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 5718,
+      "eth_address": "0x93a308edfd0551e0360be980896aec9057fa97c2",
+      "mappings": [
+        {
+          "label": "market_receipt_balances",
+          "slot": 14,
+          "width": 1
+        },
+        {
+          "label": "borrow_principal_and_index",
+          "slot": 16,
+          "width": 2
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9d7f96e08445666bfc789053b8f3f84a33659b7b643bad2773b9c5d1fb468e29",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 5719,
+      "eth_address": "0x178bc53e879326b11b120ffb8fa86524b33f562d",
+      "mappings": [
+        {
+          "label": "market_receipt_balances",
+          "slot": 14,
+          "width": 1
+        },
+        {
+          "label": "borrow_principal_and_index",
+          "slot": 16,
+          "width": 2
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9d7f96e08445666bfc789053b8f3f84a33659b7b643bad2773b9c5d1fb468e29",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 5767,
+      "eth_address": "0x45747ed1b57b0bdca936513f5ae2f8b5dbe877e9",
+      "mappings": [
+        {
+          "label": "market_receipt_balances",
+          "slot": 14,
+          "width": 1
+        },
+        {
+          "label": "borrow_principal_and_index",
+          "slot": 16,
+          "width": 2
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9d7f96e08445666bfc789053b8f3f84a33659b7b643bad2773b9c5d1fb468e29",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 5797,
+      "eth_address": "0x352d09567de5a02415670723d09e006f623fe62e",
+      "mappings": [
+        {
+          "label": "market_receipt_balances",
+          "slot": 14,
+          "width": 1
+        },
+        {
+          "label": "borrow_principal_and_index",
+          "slot": 16,
+          "width": 2
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x8e0b4a159fa3821fd700245ce10316cf460721d937357fb5098c31dd4aebc580",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 5798,
+      "eth_address": "0x5302a41d95fc7b194c59154fd6ed8dde9e7c7430",
+      "mappings": [
+        {
+          "label": "market_receipt_balances",
+          "slot": 14,
+          "width": 1
+        },
+        {
+          "label": "borrow_principal_and_index",
+          "slot": 16,
+          "width": 2
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x8e0b4a159fa3821fd700245ce10316cf460721d937357fb5098c31dd4aebc580",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 5799,
+      "eth_address": "0x19ba507232748f135e52cd025f0837c583c4eb4a",
+      "mappings": [
+        {
+          "label": "market_receipt_balances",
+          "slot": 14,
+          "width": 1
+        },
+        {
+          "label": "borrow_principal_and_index",
+          "slot": 16,
+          "width": 2
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x8e0b4a159fa3821fd700245ce10316cf460721d937357fb5098c31dd4aebc580",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10211,
+      "eth_address": "0xd1c94f2a0d8fb40604af2ce0280fbfffa754bfdf",
+      "mappings": [
+        {
+          "label": "market_receipt_balances",
+          "slot": 14,
+          "width": 1
+        },
+        {
+          "label": "borrow_principal_and_index",
+          "slot": 16,
+          "width": 2
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xeb9b20e30889c4f7cbe479764a3fb6851cb8f7a286277265dec850141ad3d391",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10295,
+      "eth_address": "0x442e7169cdec0beff4528add64e162d9a4393dc0",
+      "mappings": [
+        {
+          "label": "market_receipt_balances",
+          "slot": 14,
+          "width": 1
+        },
+        {
+          "label": "borrow_principal_and_index",
+          "slot": 16,
+          "width": 2
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xeb9b20e30889c4f7cbe479764a3fb6851cb8f7a286277265dec850141ad3d391",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10297,
+      "eth_address": "0xefa05d8ac4a198b4e99b9ef24bf123ada849e14c",
+      "mappings": [
+        {
+          "label": "market_receipt_balances",
+          "slot": 14,
+          "width": 1
+        },
+        {
+          "label": "borrow_principal_and_index",
+          "slot": 16,
+          "width": 2
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0xeb9b20e30889c4f7cbe479764a3fb6851cb8f7a286277265dec850141ad3d391",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10324,
+      "eth_address": "0x50673ce02bb80a6d795cd8c1683ee0749f58b13c",
+      "mappings": [
+        {
+          "label": "market_receipt_balances",
+          "slot": 14,
+          "width": 1
+        },
+        {
+          "label": "borrow_principal_and_index",
+          "slot": 16,
+          "width": 2
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9d7f96e08445666bfc789053b8f3f84a33659b7b643bad2773b9c5d1fb468e29",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10326,
+      "eth_address": "0x67343f6ecc3bc6e25251954b7a0a2e79918a5275",
+      "mappings": [
+        {
+          "label": "market_receipt_balances",
+          "slot": 14,
+          "width": 1
+        },
+        {
+          "label": "borrow_principal_and_index",
+          "slot": 16,
+          "width": 2
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9d7f96e08445666bfc789053b8f3f84a33659b7b643bad2773b9c5d1fb468e29",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10678,
+      "eth_address": "0x0a0f1d2a3ea1e0442ebc8cc3a2139a2e7b314aa5",
+      "mappings": [
+        {
+          "label": "scaled_receipt_balances",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9fc6ada7f920ae96571ddcebc7716d95f62b11b7a819059dba39833a320090b8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10684,
+      "eth_address": "0x294f250a63c10df254233b382db495321e23e161",
+      "mappings": [
+        {
+          "label": "scaled_receipt_balances",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9fc6ada7f920ae96571ddcebc7716d95f62b11b7a819059dba39833a320090b8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10687,
+      "eth_address": "0x734ba3e711a22a383c1a26dbe5d529cfb793c3bf",
+      "mappings": [
+        {
+          "label": "scaled_receipt_balances",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9fc6ada7f920ae96571ddcebc7716d95f62b11b7a819059dba39833a320090b8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10690,
+      "eth_address": "0x06c0c3ea4983d0141e79f78343da48bae6b61a09",
+      "mappings": [
+        {
+          "label": "scaled_receipt_balances",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9fc6ada7f920ae96571ddcebc7716d95f62b11b7a819059dba39833a320090b8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    },
+    {
+      "account_id": 10693,
+      "eth_address": "0x66206e9b054361b623046b12aa99215541216741",
+      "mappings": [
+        {
+          "label": "scaled_receipt_balances",
+          "slot": 52,
+          "width": 1
+        }
+      ],
+      "prefix_words": 224,
+      "runtime_code_hash": "0x9fc6ada7f920ae96571ddcebc7716d95f62b11b7a819059dba39833a320090b8",
+      "slots": [
+        {
+          "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+          "label": "proxy implementation"
+        }
+      ]
+    }
+  ],
+  "extra_candidates": [],
+  "root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee"
+}

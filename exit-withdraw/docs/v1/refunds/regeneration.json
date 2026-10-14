@@ -1,0 +1,51 @@
+{
+  "protocol": "v1",
+  "db_only": true,
+  "binary_sha256": "5423fa938e9337b3014cff85244985f542d7c02d9a3a78e43468b237c4824301",
+  "policy_comparison": "policy-comparison.json",
+  "root": "0x5aedd0572ffb113b8b2ee3c850b1e56aede782a2eb0be41fe4b5f3033495caee",
+  "command": "gw-withdraw refund generate --protocol v1 --db DB --output-dir NEW",
+  "report_sha256": "3c317dd67dc161647a159671518032481db66f40fb183ede9c2a969a6178a13b",
+  "previous_report_sha256": "c18d565896d4d6eb13dce79b679836691535a6ff0858348e1956ccade830536b",
+  "report_semantically_equal": false,
+  "report_byte_equal": false,
+  "files": [
+    {
+      "file": "assets.csv",
+      "sha256": "7406dbfac1f3905e3aa24a3b195727e577e11fb1c0827bfe974840469c3add7b",
+      "byte_equal_to_previous": false
+    },
+    {
+      "file": "accounts.csv",
+      "sha256": "3bc2ce7cc8448635763b1ee07f338836532b2b06f270d2bb8f4310eec2476bc7",
+      "byte_equal_to_previous": false
+    },
+    {
+      "file": "claim-sources.csv",
+      "sha256": "56a9adc9a28d427b122c199011e102bd89620c3ac7da6a732b663fbac6476192",
+      "byte_equal_to_previous": false
+    },
+    {
+      "file": "retained-lots.json",
+      "sha256": "132b7d55f4e22ef10e4b17c0fd4b5debd0d6438154ea6f5ee34e6989cbe948c4",
+      "byte_equal_to_previous": false
+    },
+    {
+      "file": "capacity.csv",
+      "sha256": "7dca77cb488469996dd2bc109c1c399b8f90a33a845a59f79bbc76b94322647b",
+      "byte_equal_to_previous": false
+    },
+    {
+      "file": "source-reserves.csv",
+      "sha256": "2da0541208f27c3856d52743e94b6321f59bb55a98539b318094506755543eca",
+      "byte_equal_to_previous": false
+    },
+    {
+      "file": "authorities.json",
+      "sha256": "7cf518bf94e9e73ddfa588fa41840421cadd30fbca88e5740d8c8cad4d2fb01c",
+      "byte_equal_to_previous": true
+    }
+  ],
+  "original_generator_manifest": "3bc2ce7cc8448635763b1ee07f338836532b2b06f270d2bb8f4310eec2476bc7  accounts.csv\n7dca77cb488469996dd2bc109c1c399b8f90a33a845a59f79bbc76b94322647b  capacity.csv\n56a9adc9a28d427b122c199011e102bd89620c3ac7da6a732b663fbac6476192  claim-sources.csv\n2da0541208f27c3856d52743e94b6321f59bb55a98539b318094506755543eca  source-reserves.csv\n7406dbfac1f3905e3aa24a3b195727e577e11fb1c0827bfe974840469c3add7b  assets.csv\n7cf518bf94e9e73ddfa588fa41840421cadd30fbca88e5740d8c8cad4d2fb01c  authorities.json\n3c317dd67dc161647a159671518032481db66f40fb183ede9c2a969a6178a13b  report.json\n132b7d55f4e22ef10e4b17c0fd4b5debd0d6438154ea6f5ee34e6989cbe948c4  retained-lots.json\n",
+  "release_status": "Calculation only; export-plan requires chosen deployment ID; no root initialized or payment submitted by this refresh."
+}
