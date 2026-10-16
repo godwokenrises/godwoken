@@ -6,7 +6,7 @@ vector Bytes <byte>;
 vector Hashes <Byte32>;
 struct AssetSpec { id: Uint32, type_hash: Byte32, }
 vector Catalogue <AssetSpec>;
-table RecoveryProfile {
+table SettlementBase {
     rollup_script: Bytes,
     config_hash: Byte32,
     bootstrap_outpoint: Bytes,
@@ -26,7 +26,7 @@ struct Payout { output_index: Uint32, recipient_index: Uint32, asset_id: Uint32,
 vector Payouts <Payout>;
 struct KV { key: Byte32, value: Byte32, }
 vector KVs <KV>;
-table ExitWithdraw {
+table NativeTransition {
     version: Uint32,
     recipients: Recipients,
     assets: Assets,
@@ -35,20 +35,18 @@ table ExitWithdraw {
     proof: Bytes,
 }
 
-// Settlement v2: record tags are fixed by records.rs and checked after Molecule layout validation.
-array SettlementRoots [Byte32; 8];
+// Settlement v3: record tags are fixed by records.rs and checked after Molecule layout validation.
 struct SettlementSource { tag: Uint32, account: Uint32, script_hash: Byte32, address: Byte20, asset: Uint32, type_hash: Byte32, baseline: Byte32, evidence: Byte32, }
 struct SettlementLot { tag: Uint32, id: Byte32, source: Byte32, kind: byte, amount: Byte32, evidence: Byte32, reopen: Byte32, }
-struct SettlementReserve { tag: Uint32, lot: SettlementLot, remaining: Byte32, }
+struct SettlementReserve { tag: Uint32, remaining: Byte32, }
 struct SettlementClaim { tag: Uint32, epoch: Uint64, source: Byte32, lot: Byte32, recipient: Uint32, script_hash: Byte32, address: Byte20, cap: Byte32, evidence: Byte32, }
-struct SettlementSourceBudget { tag: Uint32, source: SettlementSource, allocated: Byte32, paid: Byte32, reserved: Byte32, lot_sum: Byte32, finalized: byte, }
+struct SettlementSourceBudget { tag: Uint32, paid: Byte32, }
 struct SettlementAssetLimit { tag: Uint32, asset: Uint32, type_hash: Byte32, ceiling: Byte32, }
-struct SettlementAssetBudget { tag: Uint32, limit: SettlementAssetLimit, allocated: Byte32, paid: Byte32, }
-struct SettlementEpoch { tag: Uint32, id: Uint64, claims_root: Byte32, claim_count: Uint64, manifest: Byte32, policy: Byte32, parent: Byte32, allowed_lots_root: Byte32, status: byte, }
-struct SettlementPaid { tag: Uint32, claim: Byte32, amount: Byte32, }
-struct SettlementPermit { tag: Uint32, lot: Byte32, }
+struct SettlementAssetBudget { tag: Uint32, paid: Byte32, }
+struct SettlementEpoch { tag: Uint32, id: Uint64, claim_count: Uint64, manifest: Byte32, policy: Byte32, status: byte, }
+struct SettlementPaid { tag: Uint32, amount: Byte32, }
 struct SettlementPayment { tag: Uint32, claim: SettlementClaim, amount: Byte32, }
-struct SettlementMetadata { tag: Uint32, deployment: Byte32, profile: Byte32, snapshot: Byte32, sequence: Uint64, phase: byte, next_epoch: Uint64, pending_epoch: Uint64, has_pending: byte, roots: SettlementRoots, source_count: Uint64, lot_count: Uint64, finalized_count: Uint64, registered_count: Uint64, initial_lots_left: Uint64, }
+struct SettlementMetadata { tag: Uint32, deployment: Byte32, profile: Byte32, snapshot: Byte32, sequence: Uint64, state_root: Byte32, }
 vector SettlementRecords <Bytes>;
 table SettlementLeaf { key: Byte32, record: Bytes, }
 vector SettlementLeaves <SettlementLeaf>;
@@ -61,6 +59,6 @@ table SettlementAction {
 }
 table SettlementProfile {
  version: Uint32, base: Bytes, deployment: Byte32, manifest: Byte32,
- source_root: Byte32, source_count: Uint64, reserve_root: Byte32, reserve_count: Uint64,
+ state_root: Byte32, source_count: Uint64, reserve_count: Uint64,
  initial_epoch: Bytes, limits: SettlementRecords,
 }

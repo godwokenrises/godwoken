@@ -23,11 +23,9 @@ pub struct Plan {
     pub reserves: Vec<String>,
     pub claims: Vec<String>,
     pub limits: Vec<String>,
-    pub source_root: String,
-    pub reserve_root: String,
-    pub claims_root: String,
+    pub state_root: String,
     pub input_sha256: BTreeMap<String, String>,
-    /// Root-bound reviewed controller descriptors. Empty for historical EOA plans.
+    /// Root-bound reviewed controller descriptors; empty for EOA-only plans.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub recipient_scripts: BTreeMap<u32, Script>,
 }
@@ -44,6 +42,10 @@ pub fn tree(records: &BTreeMap<c::Hash, Vec<u8>>) -> Result<Tree> {
 }
 pub fn root(records: &BTreeMap<c::Hash, Vec<u8>>) -> Result<String> {
     Ok(hx(tree(records)?.root().as_slice()))
+}
+pub fn initial_root(maps: &[BTreeMap<c::Hash, Vec<u8>>; 3]) -> Result<String> {
+    let layout = super::layout::Layout::new(maps)?;
+    root(&layout.records)
 }
 pub fn parse<T: Field>(s: &str) -> Result<T> {
     decode(&bytes(s)?).map_err(|e| anyhow::anyhow!("Record: {e:?}"))
@@ -76,7 +78,7 @@ impl Plan {
         Ok(maps)
     }
     pub fn verify(&self) -> Result<serde_json::Value> {
-        ensure!(self.version == 2, "Unknown plan version");
+        ensure!(self.version == s::FORMAT_VERSION, "Unknown plan version");
         let d = hash32(&self.deployment)?;
         let maps = self.records()?;
         for (id, script) in &self.recipient_scripts {
@@ -90,10 +92,8 @@ impl Plan {
             );
         }
         ensure!(
-            root(&maps[0])? == self.source_root
-                && root(&maps[1])? == self.reserve_root
-                && root(&maps[2])? == self.claims_root,
-            "Plan root mismatch"
+            self.state_root == initial_root(&maps)?,
+            "Plan state root mismatch"
         );
         let mut lot_totals = BTreeMap::<c::Hash, U256>::new();
         let mut claim_totals = BTreeMap::<c::Hash, U256>::new();
@@ -215,7 +215,7 @@ impl Plan {
             "Manifest mismatch"
         );
         Ok(
-            serde_json::json!({"status":"verified_plan_not_deployed","deployment":hx(d),"sources":maps[0].len(),"reserves":maps[1].len(),"claims":maps[2].len(),"source_root":self.source_root,"reserve_root":self.reserve_root,"claims_root":self.claims_root}),
+            serde_json::json!({"version":s::FORMAT_VERSION,"status":"verified_plan_not_deployed","deployment":hx(d),"sources":maps[0].len(),"reserves":maps[1].len(),"claims":maps[2].len(),"state_root":self.state_root}),
         )
     }
     pub(crate) fn compute_manifest(&self) -> Result<String> {
@@ -226,12 +226,9 @@ impl Plan {
     pub fn epoch(&self) -> Result<Epoch> {
         Ok(Epoch {
             id: 0,
-            claims_root: hash32(&self.claims_root)?,
             claim_count: self.claims.len() as u64,
             manifest: hash32(&self.manifest)?,
             policy: hash32(&self.policy)?,
-            parent: [0; 32],
-            allowed_lots_root: [0; 32],
             status: PENDING,
         })
     }
@@ -242,8 +239,7 @@ impl Plan {
                 && hash32(&self.snapshot_root)?.as_slice()
                     == p.base.bootstrap_state.account().merkle_root().as_slice()
                 && hash32(&self.manifest)? == p.manifest
-                && hash32(&self.source_root)? == p.source_root
-                && hash32(&self.reserve_root)? == p.reserve_root
+                && hash32(&self.state_root)? == p.state_root
                 && self.sources.len() as u64 == p.source_count
                 && self.reserves.len() as u64 == p.reserve_count
                 && self.epoch()? == p.initial_epoch,
@@ -524,7 +520,7 @@ pub fn export(
     let mut p = Plan {
         recipient_scripts: BTreeMap::new(),
         protocol: super::adapter::Protocol::V1,
-        version: 2,
+        version: s::FORMAT_VERSION,
         deployment: hx(deployment),
         snapshot_root: db.root(),
         manifest: String::new(),
@@ -533,15 +529,11 @@ pub fn export(
         reserves: reserves.values().map(|v| hx(encode(v))).collect(),
         claims: claims.values().map(|v| hx(encode(v))).collect(),
         limits: limits.iter().map(|v| hx(encode(v))).collect(),
-        source_root: String::new(),
-        reserve_root: String::new(),
-        claims_root: String::new(),
+        state_root: String::new(),
         input_sha256,
     };
     let maps = p.records()?;
-    p.source_root = root(&maps[0])?;
-    p.reserve_root = root(&maps[1])?;
-    p.claims_root = root(&maps[2])?;
+    p.state_root = initial_root(&maps)?;
     p.manifest = p.compute_manifest()?;
     p.verify()?;
     Ok(p)

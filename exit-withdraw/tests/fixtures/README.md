@@ -12,6 +12,6 @@ db77b93abd9ba8ead8913daf10d3d0c1d353d32e335914afda9f37718ca1f3cf  mainnet-sudt-l
 36f07dda7a29155ba7239bdfdf16b126d3623f69ca5bc2263df3e4de901ce9b7  mainnet-multisig-type.json
 ```
 
-Other real mainnet code bytes are reused from `tests/fixtures/mainnet-evidence/`: custodian and validator type metadata, the original Godwoken OmniLock, and standard mainnet OmniLock. See [ETH lock research](../../docs/v1/protocol-details.md) for source pages and deployment hashes. The historical direct-account test validator is built from source against the synthetic test profile by `scripts/test-withdraw-e2e.sh`.
+Other real mainnet code bytes are reused from `tests/fixtures/mainnet-evidence/`: custodian and validator type metadata, the original Godwoken OmniLock, and standard mainnet OmniLock. See [ETH lock research](../../docs/v1/protocol-details.md) for source pages and deployment hashes. V3 settlement regression scripts build the network-specific validator against a synthetic V3 profile.
 
 Current allocation-based V0/V1 tests use the settlement test scripts documented in [validation](../../docs/validation.md). Mainnet observations and root-only VM evidence are test inputs, not current refund tables.

@@ -1,5 +1,6 @@
 #![allow(dead_code)]
-use exit_withdraw_state_validator::*;
+use crate::*;
+use alloc::{vec, vec::Vec};
 use gw_common::state::*;
 use gw_hash::blake2b::hash;
 use gw_smt::smt::{default_store::DefaultStore, SMT, SMTH256};
@@ -265,6 +266,7 @@ impl Fixture {
         t
     }
     pub fn refresh(&mut self) {
+        self.keys.insert(metadata_key(&self.p));
         let mut t = self.tree();
         let root: Hash = (*t.root()).into();
         set_root(&mut self.tx.inputs[0], root);
@@ -305,118 +307,59 @@ impl Fixture {
         set_root(&mut self.tx.outputs[0], (*t.root()).into());
     }
     pub fn verify(&self) -> Result<Outcome> {
-        verify(&self.p, &self.cfg, &self.tx, &self.a)
+        verify_native(&self.p, &self.cfg, &self.tx, &self.a)
     }
 }
-// Wire encoders used by tests and VM fixtures; production builder is deliberately out of scope.
-use exit_withdraw_state_validator::wire as w;
-fn wb(v: &[u8]) -> w::Bytes {
-    w::Bytes::new_builder()
-        .set(v.iter().map(|x| (*x).into()).collect())
-        .build()
-}
-fn w32(v: Hash) -> w::Byte32 {
-    w::Byte32::from_slice(&v).unwrap()
-}
-fn wn(v: u32) -> w::Uint32 {
-    w::Uint32::from_slice(&v.to_le_bytes()).unwrap()
-}
 pub fn encode_action(a: &Action) -> Vec<u8> {
-    let b = w::ExitWithdraw::new_builder()
-        .version(wn(1))
-        .recipients(
-            w::Recipients::new_builder()
-                .set(
-                    a.recipients
-                        .iter()
-                        .map(|r| {
-                            w::Recipient::new_builder()
-                                .address(w::Byte20::from_slice(&r.address).unwrap())
-                                .account_id(wn(r.id))
-                                .script(wb(r.script.as_slice()))
-                                .build()
-                        })
-                        .collect(),
-                )
-                .build(),
-        )
-        .assets(
-            w::Assets::new_builder()
-                .set(
-                    a.assets
-                        .iter()
-                        .map(|x| {
-                            w::Asset::new_builder()
-                                .id(wn(x.id))
-                                .script(wb(x.script.as_slice()))
-                                .build()
-                        })
-                        .collect(),
-                )
-                .build(),
-        )
-        .payouts(
-            w::Payouts::new_builder()
-                .set(
-                    a.payouts
-                        .iter()
-                        .map(|p| {
-                            w::Payout::new_builder()
-                                .output_index(wn(p.output))
-                                .recipient_index(wn(p.recipient))
-                                .asset_id(wn(p.asset))
-                                .build()
-                        })
-                        .collect(),
-                )
-                .build(),
-        )
-        .kv_state(
-            w::KVs::new_builder()
-                .set(
-                    a.kv.iter()
-                        .map(|(k, v)| w::KV::new_builder().key(w32(*k)).value(w32(*v)).build())
-                        .collect(),
-                )
-                .build(),
-        )
-        .proof(wb(&a.proof.0))
-        .build();
-    [4u32.to_le_bytes().as_slice(), b.as_slice()].concat()
+    crate::codec::encode_action(a)
 }
 pub fn encode_profile(p: &Profile) -> Vec<u8> {
-    w::RecoveryProfile::new_builder()
-        .rollup_script(wb(p.rollup.as_slice()))
-        .config_hash(w32(p.config_hash))
-        .bootstrap_outpoint(wb(p.bootstrap_outpoint.as_slice()))
-        .bootstrap_capacity(w::Uint64::from_slice(&p.bootstrap_capacity.to_le_bytes()).unwrap())
-        .bootstrap_lock(wb(p.bootstrap_lock.as_slice()))
-        .bootstrap_state(wb(p.bootstrap_state.as_slice()))
-        .governance_lock(wb(p.governance.as_slice()))
-        .custodian_change_lock(wb(p.change.as_slice()))
-        .eth_eoa_codes(
-            w::Hashes::new_builder()
-                .set(p.eoa_codes.iter().map(|h| w32(*h)).collect())
-                .build(),
-        )
-        .catalogue(
-            w::Catalogue::new_builder()
-                .set(
-                    p.catalogue
-                        .iter()
-                        .map(|(id, h)| {
-                            w::AssetSpec::new_builder()
-                                .id(wn(*id))
-                                .type_hash(w32(*h))
-                                .build()
-                        })
-                        .collect(),
-                )
-                .build(),
-        )
-        .build()
-        .as_slice()
-        .to_vec()
+    crate::codec::encode_profile(p)
+}
+fn metadata_key(p: &Profile) -> Hash {
+    crate::settlement::records::metadata_key([99; 32], script_hash(&p.rollup))
+}
+// Exercise shared native checks with an already evaluated V3 transition. This is not a public entrypoint.
+pub fn verify_native(
+    p: &Profile,
+    cfg: &packed::RollupConfig,
+    tx: &Transaction,
+    a: &Action,
+) -> Result<Outcome> {
+    let mut payments = BTreeMap::<(u32, u32), U256>::new();
+    for payout in &a.payouts {
+        let Some(cell) = tx.outputs.get(payout.output as usize) else {
+            continue;
+        };
+        *payments.entry((payout.recipient, 1)).or_default() +=
+            U256::from(cell.capacity) * U256::from(SCALE);
+        if payout.asset != 1 && cell.data.len() == 16 {
+            *payments
+                .entry((payout.recipient, payout.asset))
+                .or_default() += U256::from_little_endian(&cell.data);
+        }
+    }
+    let mut sources = BTreeMap::<(u32, [u8; 20]), U256>::new();
+    for ((r, id), n) in &payments {
+        if let Some(recipient) = a.recipients.get(*r as usize) {
+            *sources.entry((*id, recipient.address)).or_default() += *n;
+        }
+    }
+    let key = metadata_key(p);
+    crate::verify::verify_transition(
+        p,
+        cfg,
+        tx,
+        a,
+        &crate::verify::SettlementTransition {
+            admin: false,
+            reads: BTreeSet::from([key]),
+            metadata_key: key,
+            metadata_value: [0; 32],
+            sources,
+            payments,
+        },
+    )
 }
 
 pub fn code_type() -> packed::Script {
@@ -523,6 +466,7 @@ impl Fixture {
     }
 }
 
+#[path = "native_adversarial.rs"]
 pub mod adversarial;
 
 impl Fixture {

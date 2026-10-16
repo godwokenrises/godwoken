@@ -1,4 +1,7 @@
-use super::plan::{self, Plan, Tree};
+use super::{
+    layout::{Layout, Records},
+    plan::{self, Plan, Tree},
+};
 use crate::{settlement::adapter::NativeDb, withdraw::state::RecoveryState};
 use anyhow::{ensure, Context, Result};
 use exit_withdraw_state_validator::{
@@ -10,9 +13,13 @@ use gw_types::{prelude::*, U256};
 use std::collections::{BTreeMap, BTreeSet};
 pub struct Ledger {
     pub recipient_scripts: BTreeMap<u32, crate::model::Script>,
-    pub records: [BTreeMap<c::Hash, Vec<u8>>; 12],
-    pub trees: [Tree; 12],
+    pub records: [Records; s::RECORD_KINDS],
+    pub tree: Tree,
     pub metadata: Option<Metadata>,
+    physical: Records,
+    layout: Layout,
+    deployment: c::Hash,
+    asset_locations: BTreeMap<c::Hash, c::Hash>,
 }
 fn cv<T>(r: c::Result<T>) -> Result<T> {
     r.map_err(|e| anyhow::anyhow!("Settlement: {e:?}"))
@@ -25,16 +32,91 @@ impl Ledger {
         records[s::SOURCE_PLAN] = maps[0].clone();
         records[s::LOT_PLAN] = maps[1].clone();
         records[s::CLAIM_PLAN] = maps[2].clone();
-        let mut trees = std::array::from_fn(|_| Tree::default());
-        for i in 0..12 {
-            trees[i] = plan::tree(&records[i])?;
-        }
-        Ok(Self {
-            recipient_scripts: plan.recipient_scripts.clone(),
+        let limits = plan
+            .limits
+            .iter()
+            .map(|v| plan::parse::<AssetLimit>(v))
+            .collect::<Result<Vec<_>>>()?;
+        Self::from_records(
             records,
-            trees,
+            plan.recipient_scripts.clone(),
+            crate::model::hash32(&plan.deployment)?,
+            &limits,
+        )
+    }
+    pub fn from_records(
+        records: [Records; s::RECORD_KINDS],
+        recipient_scripts: BTreeMap<u32, crate::model::Script>,
+        deployment: c::Hash,
+        limits: &[AssetLimit],
+    ) -> Result<Self> {
+        let maps = [
+            records[s::SOURCE_PLAN].clone(),
+            records[s::LOT_PLAN].clone(),
+            records[s::CLAIM_PLAN].clone(),
+        ];
+        let layout = Layout::new(&maps)?;
+        let asset_locations = limits
+            .iter()
+            .map(|l| {
+                (
+                    asset_key(deployment, l.asset),
+                    s::physical::asset_state_key(l.asset),
+                )
+            })
+            .collect();
+        let mut out = Self {
+            recipient_scripts,
+            records,
+            tree: Tree::default(),
             metadata: None,
-        })
+            physical: Records::new(),
+            layout,
+            deployment,
+            asset_locations,
+        };
+        out.rebuild_from_records()?;
+        Ok(out)
+    }
+    pub fn state_root(&self) -> c::Hash {
+        (*self.tree.root()).into()
+    }
+    pub fn physical_records(&self) -> &Records {
+        &self.physical
+    }
+    fn location(&self, kind: usize, key: c::Hash) -> Result<c::Hash> {
+        match kind {
+            s::EPOCHS => {
+                ensure!(key == epoch_key(self.deployment, 0), "Unknown epoch");
+                Ok(s::physical::epoch_state_key(0))
+            }
+            s::ASSETS => self
+                .asset_locations
+                .get(&key)
+                .copied()
+                .context("Unknown asset state"),
+            _ => self.layout.location(kind, key),
+        }
+    }
+    /// Rebuild is used when importing an authenticated snapshot; normal replay updates touched pages only.
+    pub fn rebuild_from_records(&mut self) -> Result<()> {
+        let mut physical = self.layout.records.clone();
+        for kind in [s::PAID, s::RESERVES, s::SOURCES] {
+            for (key, value) in &self.records[kind] {
+                let (location, raw) =
+                    self.layout
+                        .update_page(&physical, kind, *key, value.clone())?;
+                physical.insert(location, raw);
+            }
+        }
+        for kind in [s::EPOCHS, s::ASSETS] {
+            for (key, value) in &self.records[kind] {
+                physical.insert(self.location(kind, *key)?, value.clone());
+            }
+        }
+        self.tree = plan::tree(&physical)?;
+        self.physical = physical;
+        Ok(())
     }
     pub fn get<T: Field>(&self, kind: usize, key: c::Hash) -> Result<T> {
         cv(decode(
@@ -43,7 +125,6 @@ impl Ledger {
                 .context("Missing ledger record")?,
         ))
     }
-    /// Immutable authenticated catalogue, including sources not yet paid on-chain.
     pub fn source(&self, key: c::Hash) -> Result<Source> {
         self.get(s::SOURCE_PLAN, key)
     }
@@ -56,25 +137,49 @@ impl Ledger {
         })
     }
     pub fn apply(&mut self, e: s::Evaluation) -> Result<()> {
-        for (kind, writes) in e.tree_writes {
-            for (k, v) in writes {
-                self.trees[kind].update(k.into(), commitment(&v).into())?;
-                if v.is_empty() {
-                    self.records[kind].remove(&k);
+        let mut changes = Records::new();
+        for (kind, writes) in &e.tree_writes {
+            ensure!(
+                s::physical::mutable(*kind) || (self.metadata.is_none() && *kind == s::EPOCHS),
+                "Immutable state write"
+            );
+            for (key, value) in writes {
+                let location = self.location(*kind, *key)?;
+                let raw = if matches!(*kind, s::EPOCHS | s::ASSETS) {
+                    value.clone()
                 } else {
-                    self.records[kind].insert(k, v);
-                }
+                    let old = changes
+                        .get(&location)
+                        .or_else(|| self.physical.get(&location))
+                        .context("Missing account page")?;
+                    let mut page = cv(s::physical::unpack_page(old))?;
+                    page.insert((*kind, *key), value.clone());
+                    let raw = s::physical::pack_page(&page);
+                    cv(s::physical::unpack_page(&raw))?;
+                    raw
+                };
+                changes.insert(location, raw);
             }
         }
-        if e.metadata.has_pending == 0 {
-            self.records[s::REGISTERED].clear();
-            self.trees[s::REGISTERED] = Tree::default();
-        }
-        for i in 0..8 {
-            ensure!(
-                self.trees[i].root().as_slice() == e.metadata.roots[i],
-                "Ledger root mismatch for tree {i}"
-            );
+        self.tree.update_all(
+            changes
+                .iter()
+                .map(|(key, value)| ((*key).into(), commitment(value).into()))
+                .collect(),
+        )?;
+        ensure!(
+            self.tree.root().as_slice() == e.metadata.state_root,
+            "Ledger state root mismatch"
+        );
+        self.physical.extend(changes);
+        for (kind, writes) in e.tree_writes {
+            for (key, value) in writes {
+                if value.is_empty() {
+                    self.records[kind].remove(&key);
+                } else {
+                    self.records[kind].insert(key, value);
+                }
+            }
         }
         self.metadata = Some(e.metadata);
         Ok(())
@@ -98,10 +203,6 @@ impl Ledger {
             records,
             action,
             db.protocol().native(),
-            |id| {
-                let (_, s) = db.account(id)?;
-                s.packed()
-            },
             |keys| {
                 let kv = keys
                     .iter()
@@ -122,7 +223,6 @@ impl Ledger {
         records: Vec<Vec<u8>>,
         mut action: c::Action,
         version: c::native::NativeVersion,
-        mut account: impl FnMut(u32) -> Result<gw_types::packed::Script>,
         mut proof: impl FnMut(
             &BTreeSet<c::Hash>,
         )
@@ -135,8 +235,6 @@ impl Ledger {
             keys.entry(kind).or_default().insert(key);
         };
         let mut sources = Vec::new();
-        let mut recipients = BTreeMap::new();
-        let mut assets = BTreeSet::new();
         match op {
             s::Operation::Begin => {
                 need(s::EPOCHS, epoch_key(d, 0));
@@ -144,103 +242,24 @@ impl Ledger {
                     need(s::ASSETS, asset_key(d, l.asset));
                 }
             }
-            s::Operation::RegisterSources => {
+            s::Operation::Pay => {
+                need(s::EPOCHS, epoch_key(d, epoch));
                 for raw in &records {
-                    let src: Source = cv(decode(raw))?;
-                    let k = source_key(d, &src);
-                    need(s::SOURCES, k);
-                    need(s::SOURCE_PLAN, k);
-                    assets.insert(src.asset);
+                    let claim = cv(decode::<Payment>(raw))?.claim;
+                    let ck = claim_key(d, &claim);
+                    let src = self.source(claim.source)?;
+                    need(s::SOURCES, claim.source);
+                    need(s::ASSETS, asset_key(d, src.asset));
+                    need(s::SOURCE_PLAN, claim.source);
+                    need(s::LOT_PLAN, claim.lot);
+                    need(s::RESERVES, claim.lot);
+                    need(s::PAID, ck);
+                    need(s::CLAIM_PLAN, ck);
+                    if let Some(key) = version.supply_key(src.asset) {
+                        nk.insert(key);
+                    }
                     sources.push(src);
                 }
-            }
-            s::Operation::RegisterReserves => {
-                for raw in &records {
-                    let l: Lot = cv(decode(raw))?;
-                    let k = lot_key(d, &l);
-                    need(s::SOURCES, l.source);
-                    for t in [s::RESERVES, s::LOT_RECEIPTS, s::LOT_PLAN] {
-                        need(t, k);
-                    }
-                }
-            }
-            s::Operation::FinalizeSources => {
-                for raw in &records {
-                    let k: c::Hash = cv(decode(raw))?;
-                    need(s::SOURCES, k);
-                    need(s::COMPLETED, k);
-                }
-            }
-            s::Operation::SealBudgets => {}
-            s::Operation::BeginEpoch => {
-                need(s::EPOCHS, epoch_key(d, epoch));
-            }
-            s::Operation::Activate | s::Operation::Abort => {
-                need(s::EPOCHS, epoch_key(d, epoch));
-            }
-            s::Operation::RegisterClaims | s::Operation::Unregister | s::Operation::Pay => {
-                need(s::EPOCHS, epoch_key(d, epoch));
-                for raw in &records {
-                    let claim = if op == s::Operation::Pay {
-                        cv(decode::<Payment>(raw))?.claim
-                    } else {
-                        cv(decode::<Claim>(raw))?
-                    };
-                    let ck = claim_key(d, &claim);
-                    need(s::SOURCES, claim.source);
-                    let src = self.source(claim.source)?;
-                    need(s::ASSETS, asset_key(d, src.asset));
-                    match op {
-                        s::Operation::Pay => {
-                            need(s::SOURCE_PLAN, claim.source);
-                            need(s::LOT_PLAN, claim.lot);
-                            need(s::RESERVES, claim.lot);
-                            need(s::PAID, ck);
-                            need(s::CLAIM_PLAN, ck);
-                            sources.push(src);
-                            assets.insert(src.asset);
-                            if let Some(key) = version.supply_key(src.asset) {
-                                nk.insert(key);
-                            }
-                            recipients.insert(claim.address, claim.recipient);
-                        }
-                        s::Operation::RegisterClaims => {
-                            need(s::CLAIM_PLAN, ck);
-                            need(s::REGISTERED, ck);
-                            need(s::RESERVES, claim.lot);
-                            if epoch > 0 {
-                                need(s::ALLOWED_LOTS, claim.lot);
-                            }
-                            recipients.insert(claim.address, claim.recipient);
-                        }
-                        _ => {
-                            need(s::REGISTERED, ck);
-                            need(s::PAID, ck);
-                            need(s::RESERVES, claim.lot);
-                        }
-                    }
-                }
-            }
-        }
-        // Payout shape already constructed by the cell builder. Registration derives its own EOA list.
-        if op == s::Operation::RegisterClaims {
-            for (address, id) in &recipients {
-                let script = if let Some(s) = self.recipient_scripts.get(id) {
-                    s.packed()?
-                } else {
-                    account(*id)?
-                };
-                action.recipients.push(c::Recipient {
-                    address: *address,
-                    id: *id,
-                    script,
-                });
-            }
-        }
-        if op == s::Operation::RegisterSources {
-            for id in assets {
-                let script = account(id)?;
-                action.assets.push(c::Asset { id, script });
             }
         }
         for r in &action.recipients {
@@ -265,21 +284,22 @@ impl Ledger {
         let (kv, native_proof) = proof(&nk)?;
         action.kv = kv;
         action.proof = native_proof;
-        let trees = keys
-            .into_iter()
-            .map(|(kind, keys)| {
-                let leaves = keys
-                    .iter()
-                    .map(|k| (*k, self.records[kind].get(k).cloned().unwrap_or_default()))
-                    .collect();
-                let ks: Vec<_> = keys.into_iter().map(Into::into).collect();
-                Ok(s::TreeProof {
-                    kind,
-                    leaves,
-                    proof: self.trees[kind].merkle_proof(ks.clone())?.compile(ks)?,
-                })
-            })
-            .collect::<Result<_>>()?;
+        let mut physical_keys = BTreeSet::new();
+        for (kind, logical_keys) in keys {
+            for key in logical_keys {
+                physical_keys.insert(self.location(kind, key)?);
+            }
+        }
+        let leaves = physical_keys
+            .iter()
+            .map(|key| (*key, self.physical.get(key).cloned().unwrap_or_default()))
+            .collect();
+        let ks: Vec<_> = physical_keys.into_iter().map(Into::into).collect();
+        let trees = vec![s::TreeProof {
+            kind: s::physical::STATE,
+            leaves,
+            proof: self.tree.merkle_proof(ks.clone())?.compile(ks)?,
+        }];
         let mut out = s::SettlementAction {
             op,
             epoch,
@@ -309,15 +329,11 @@ impl Ledger {
     ) -> Result<Option<(s::Operation, Vec<Vec<u8>>)>> {
         ensure!(
             batch > 0 && batch <= s::MAX_RECORDS,
-            "Batch size must be 1..32"
+            "Batch size must be 1..64"
         );
         let Some(m) = self.metadata else {
             return Ok(Some((s::Operation::Begin, vec![])));
         };
-        ensure!(
-            m.phase == 2 && m.has_pending == 0,
-            "Expected active root-only release"
-        );
         ensure!(m.profile == profile_hash, "Profile mismatch");
         Ok(None)
     }

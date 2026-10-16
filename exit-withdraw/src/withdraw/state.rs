@@ -86,20 +86,4 @@ impl<'a> RecoveryState<'a> {
         );
         Ok(v.into())
     }
-    pub fn apply(&mut self, a: &contract::Action, outcome: &contract::Outcome) -> Result<()> {
-        for ((r, id), debit) in &outcome.debits {
-            let key = contract::balance_key(*id, a.recipients[*r as usize].address);
-            let n = contract::amount(self.read(key)?)
-                .checked_sub(*debit)
-                .ok_or_else(|| anyhow::anyhow!("Balance underflow"))?;
-            self.tree.update(key.into(), contract::value(n).into())?;
-            let key = contract::supply_key(*id);
-            let n = contract::amount(self.read(key)?)
-                .checked_sub(*debit)
-                .ok_or_else(|| anyhow::anyhow!("Supply underflow"))?;
-            self.tree.update(key.into(), contract::value(n).into())?;
-        }
-        ensure!(self.root() == outcome.root, "Replayed state root mismatch");
-        Ok(())
-    }
 }

@@ -1,16 +1,17 @@
+use crate::proof_backend::ProofBackend;
 use alloc::{
     collections::{BTreeMap, BTreeSet},
     vec::Vec,
 };
 use gw_common::state::*;
 use gw_hash::blake2b::hash;
-use gw_smt::smt::{Blake2bHasher, CompiledMerkleProof};
+use gw_smt::smt::CompiledMerkleProof;
 use gw_types::{core::Timepoint, packed, prelude::*, registry_address::RegistryAddress, U256};
 
 use crate::native::NativeVersion;
 pub type Hash = [u8; 32];
 pub const SCALE: u64 = 10_000_000_000;
-pub const MAX_RECIPIENTS: usize = 8;
+pub const MAX_RECIPIENTS: usize = 20;
 pub const MAX_ASSETS: usize = 48;
 pub const MAX_INPUTS: usize = 64;
 pub const MAX_OUTPUTS: usize = 128;
@@ -266,17 +267,6 @@ fn ordered<T: Ord>(v: impl Iterator<Item = T>) -> bool {
     true
 }
 
-/// Pure consensus verifier. Input locks (including multisig signatures) are executed by CKB,
-/// not emulated here. The on-chain adapter loads all cells and binds the profile by data hash.
-pub fn verify(
-    profile: &Profile,
-    cfg: &packed::RollupConfig,
-    tx: &Transaction,
-    a: &Action,
-) -> Result<Outcome> {
-    verify_transition(profile, cfg, tx, a, None)
-}
-
 /// Derived by the settlement verifier, never decoded from a caller-controlled write set.
 pub(crate) struct SettlementTransition {
     pub admin: bool,
@@ -291,7 +281,7 @@ pub(crate) fn verify_transition(
     cfg: &packed::RollupConfig,
     tx: &Transaction,
     a: &Action,
-    settlement: Option<&SettlementTransition>,
+    settlement: &SettlementTransition,
 ) -> Result<Outcome> {
     verify_transition_version(
         profile,
@@ -309,14 +299,14 @@ pub(crate) fn verify_transition_version(
     cfg: &packed::RollupConfig,
     tx: &Transaction,
     a: &Action,
-    settlement: Option<&SettlementTransition>,
+    settlement: &SettlementTransition,
     version: NativeVersion,
     config_hash: Hash,
     auxiliary: &[crate::v0::Auxiliary],
 ) -> Result<Outcome> {
     // Step 1: Bound transaction/witness sizes before doing expensive work.
     // Begin may have no recipients or payouts; a payment must include them.
-    let admin = settlement.is_some_and(|s| s.admin);
+    let admin = settlement.admin;
     require(
         !tx.inputs.is_empty()
             && tx.inputs.len() <= MAX_INPUTS
@@ -504,7 +494,7 @@ pub(crate) fn verify_transition_version(
     // are still UNTRUSTED witness data until the old-root proof check in step 15.
     // Start with the state reads already required by the settlement rules.
     // The codec/verifier requires sorted unique keys; borrow them instead of copying into a tree.
-    let mut expected = settlement.map(|s| s.reads.clone()).unwrap_or_default();
+    let mut expected = settlement.reads.clone();
     let mut read = |k: Hash| -> Result<Hash> {
         expected.insert(k);
         a.kv.binary_search_by_key(&k, |(key, _)| *key)
@@ -516,9 +506,12 @@ pub(crate) fn verify_transition_version(
     // V0's L2 balance address comes from the script hash; the payout ETH address
     // still comes from the EOA script args. Controller authorization follows below.
     for r in &a.recipients {
-        if settlement.is_some() && crate::control::is_descriptor(&r.script) {
+        if crate::control::is_descriptor(&r.script) {
             crate::control::validate(&r.script, rollup, r.id)?;
-            require(r.address == crate::control::identity(&r.script), Error::Recipient)?;
+            require(
+                r.address == crate::control::identity(&r.script),
+                Error::Recipient,
+            )?;
             continue;
         }
         require(
@@ -585,7 +578,8 @@ pub(crate) fn verify_transition_version(
         require(
             payout_indices.insert(p.output as usize)
                 && p.output as usize != ro
-                && ((settlement.is_some() && crate::control::is_descriptor(&r.script)) || matches_eth_lock(&c.lock, &r.address)),
+                && ((crate::control::is_descriptor(&r.script))
+                    || matches_eth_lock(&c.lock, &r.address)),
             Error::Output,
         )?;
         recipients_used.insert(p.recipient);
@@ -616,7 +610,8 @@ pub(crate) fn verify_transition_version(
     // Step 12: Validate controller approval cells and their payout bindings,
     // then validate any V0 bootstrap migration cells. Track these separately so
     // they cannot be mistaken for custodians or fee-sponsor cells.
-    let (control_inputs, control_outputs) = crate::control::authorize(tx, a, &payout_indices, rollup, !admin)?;
+    let (control_inputs, control_outputs) =
+        crate::control::authorize(tx, a, &payout_indices, rollup, !admin)?;
     let (aux_inputs, aux_outputs) =
         crate::v0::check_auxiliary(auxiliary, tx, ri, ro, admin, profile)?;
     // Step 13: Classify every remaining cell and account for all pool assets.
@@ -645,7 +640,11 @@ pub(crate) fn verify_transition_version(
         }
     }
     for (i, c) in tx.outputs.iter().enumerate() {
-        if i == ro || payout_indices.contains(&i) || aux_outputs.contains(&i) || control_outputs.contains(&i) {
+        if i == ro
+            || payout_indices.contains(&i)
+            || aux_outputs.contains(&i)
+            || control_outputs.contains(&i)
+        {
             continue;
         }
         if c.lock.as_slice() == profile.governance.as_slice() {
@@ -690,37 +689,26 @@ pub(crate) fn verify_transition_version(
     // Keep zero-valued type identities: every consumed token type must be returned or paid.
     require(ins == outs, Error::Conservation)?;
     // Step 14: Derive the only permitted native SMT writes.
-    // In settlement mode, actual payouts must match the evaluated entitlements;
-    // debit their approved source accounts and commit the new refund metadata.
-    // checked_sub rejects overdrafts. The else branch is the legacy direct-account
-    // path retained for regression tests, not a Begin/Pay settlement operation.
+    // Match evaluated entitlements, debit approved sources and commit settlement metadata.
+    let s = settlement;
+    require(debits == s.payments, Error::Balance)?;
+    require(
+        !s.reads.contains(&[0; 32]) && s.reads.contains(&s.metadata_key),
+        Error::Keys,
+    )?;
     let mut sums = BTreeMap::new();
     let mut writes = BTreeMap::new();
-    if let Some(s) = settlement {
-        require(debits == s.payments, Error::Balance)?;
+    for ((id, address), n) in &s.sources {
+        let key = version.balance_key(*id, *address);
         require(
-            !s.reads.contains(&[0; 32]) && s.reads.contains(&s.metadata_key),
+            key != s.metadata_key && version.supply_key(*id) != Some(s.metadata_key),
             Error::Keys,
         )?;
-        for ((id, address), n) in &s.sources {
-            let key = version.balance_key(*id, *address);
-            require(
-                key != s.metadata_key && version.supply_key(*id) != Some(s.metadata_key),
-                Error::Keys,
-            )?;
-            let old = version.amount(read(key)?)?;
-            writes.insert(key, value(old.checked_sub(*n).ok_or(Error::Balance)?));
-            insert_sum(&mut sums, *id, *n)?;
-        }
-        writes.insert(s.metadata_key, s.metadata_value);
-    } else {
-        for ((r, id), n) in &debits {
-            let key = balance_key(*id, a.recipients[*r as usize].address);
-            let old = version.amount(read(key)?)?;
-            writes.insert(key, value(old.checked_sub(*n).ok_or(Error::Balance)?));
-            insert_sum(&mut sums, *id, *n)?;
-        }
+        let old = version.amount(read(key)?)?;
+        writes.insert(key, value(old.checked_sub(*n).ok_or(Error::Balance)?));
+        insert_sum(&mut sums, *id, *n)?;
     }
+    writes.insert(s.metadata_key, s.metadata_value);
     // Reduce recorded supply where this protocol defines a supply key, by the
     // same amount removed from its source balances. Reject supply underflow.
     for (id, n) in sums {
@@ -737,7 +725,7 @@ pub(crate) fn verify_transition_version(
     require(expected.len() == a.kv.len(), Error::Keys)?;
     let checked = a
         .proof
-        .compute_root::<Blake2bHasher>(
+        .backend_root(
             a.kv.iter()
                 .map(|(k, v)| ((*k).into(), (*v).into()))
                 .collect(),
@@ -751,7 +739,7 @@ pub(crate) fn verify_transition_version(
     // the proof bytes and original key/value slice are reused by reference.
     let root: Hash = a
         .proof
-        .compute_root::<Blake2bHasher>(
+        .backend_root(
             a.kv.iter()
                 .map(|(k, v)| ((*k).into(), (*writes.get(k).unwrap_or(v)).into()))
                 .collect(),

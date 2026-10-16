@@ -1,0 +1,197 @@
+{
+  "protocol": "settlement-v3-only",
+  "format_version": 3,
+  "native_network": "v0",
+  "upstream_smt": "sparse-merkle-tree 0.6.1 (unchanged)",
+  "rust_opt_level": 3,
+  "signed_full_vm": true,
+  "broadcast": false,
+  "max_cycles": 70000000,
+  "max_transaction_bytes": 512000,
+  "max_witness_bytes": 32768,
+  "background_accounts": 20000,
+  "mature_state_scope": "Synthetic authenticated paid/reserve/source counters and native balances; not a replay of 20000 historical transactions.",
+  "begin_cycles": 10165560,
+  "paged_begin_cycles": 10184971,
+  "benchmark": [
+    {
+      "bytes": 88299,
+      "case": "single_20",
+      "cycles": 60193973,
+      "error": null,
+      "mature": false,
+      "max_witness": 16000,
+      "proof_bytes": 754,
+      "recipients": 20,
+      "records": 20,
+      "sources": 20,
+      "state_leaves": 22,
+      "state_roots": 1
+    },
+    {
+      "bytes": 96404,
+      "case": "single_40",
+      "cycles": null,
+      "error": "Full VM: Error { kind: Script, inner: TransactionScriptError { source: Inputs[0].Type, cause: ExceededMaximumCycles: expect cycles <= 64785481 } }",
+      "mature": false,
+      "max_witness": 16000,
+      "proof_bytes": 692,
+      "recipients": 20,
+      "records": 40,
+      "sources": 20,
+      "state_leaves": 23,
+      "state_roots": 1
+    },
+    {
+      "bytes": 100178,
+      "case": "single_51",
+      "cycles": null,
+      "error": "Full VM: Error { kind: Script, inner: TransactionScriptError { source: Inputs[0].Type, cause: ExceededMaximumCycles: expect cycles <= 64642503 } }",
+      "mature": false,
+      "max_witness": 16000,
+      "proof_bytes": 692,
+      "recipients": 20,
+      "records": 51,
+      "sources": 20,
+      "state_leaves": 23,
+      "state_roots": 1
+    },
+    {
+      "bytes": 54110,
+      "case": "owners_1",
+      "cycles": 41568489,
+      "error": null,
+      "mature": false,
+      "max_witness": 16000,
+      "proof_bytes": 901,
+      "recipients": 10,
+      "records": 25,
+      "sources": 10,
+      "state_leaves": 13,
+      "state_roots": 1
+    },
+    {
+      "bytes": 55922,
+      "case": "owners_2",
+      "cycles": 42702427,
+      "error": null,
+      "mature": false,
+      "max_witness": 16000,
+      "proof_bytes": 903,
+      "recipients": 10,
+      "records": 26,
+      "sources": 10,
+      "state_leaves": 13,
+      "state_roots": 1
+    },
+    {
+      "bytes": 85496,
+      "case": "single_20",
+      "cycles": 58778654,
+      "error": null,
+      "mature": true,
+      "max_witness": 16000,
+      "proof_bytes": 754,
+      "recipients": 20,
+      "records": 20,
+      "sources": 20,
+      "state_leaves": 22,
+      "state_roots": 1
+    },
+    {
+      "bytes": 93665,
+      "case": "single_40",
+      "cycles": 69604607,
+      "error": null,
+      "mature": true,
+      "max_witness": 16000,
+      "proof_bytes": 692,
+      "recipients": 20,
+      "records": 40,
+      "sources": 20,
+      "state_leaves": 23,
+      "state_roots": 1
+    },
+    {
+      "bytes": 97274,
+      "case": "single_51",
+      "cycles": null,
+      "error": "Full VM: Error { kind: Script, inner: TransactionScriptError { source: Inputs[0].Type, cause: ExceededMaximumCycles: expect cycles <= 64730158 } }",
+      "mature": true,
+      "max_witness": 16000,
+      "proof_bytes": 692,
+      "recipients": 20,
+      "records": 51,
+      "sources": 20,
+      "state_leaves": 23,
+      "state_roots": 1
+    },
+    {
+      "bytes": 52365,
+      "case": "owners_1",
+      "cycles": 40781256,
+      "error": null,
+      "mature": true,
+      "max_witness": 16000,
+      "proof_bytes": 901,
+      "recipients": 10,
+      "records": 25,
+      "sources": 10,
+      "state_leaves": 13,
+      "state_roots": 1
+    },
+    {
+      "bytes": 54796,
+      "case": "owners_2",
+      "cycles": 42013692,
+      "error": null,
+      "mature": true,
+      "max_witness": 16000,
+      "proof_bytes": 903,
+      "recipients": 10,
+      "records": 26,
+      "sources": 10,
+      "state_leaves": 13,
+      "state_roots": 1
+    },
+    {
+      "bytes": 60968,
+      "case": "one_source_paged",
+      "cycles": 43338880,
+      "error": null,
+      "mature": false,
+      "max_witness": 16000,
+      "proof_bytes": 610,
+      "recipients": 20,
+      "records": 51,
+      "sources": 1,
+      "state_leaves": 10,
+      "state_roots": 1
+    }
+  ],
+  "resigned_malformed_chunks_rejected": [
+    "corrupt chunk",
+    "missing chunk",
+    "reordered chunks",
+    "duplicated chunk",
+    "wrong chunk count"
+  ],
+  "artifacts": {
+    "unified-batch-profile.bin": {
+      "bytes": 4828,
+      "sha256": "76733e7c4f761804b634f311e1dddff51917463df4f84ee394b26515c1a45ca0"
+    },
+    "unified-batch-validator": {
+      "bytes": 325072,
+      "sha256": "18553b74cdb69f396f2d2f9c6160e1fd950048ca2feff4d48f60c81b2c6d806d"
+    },
+    "unified-paged-profile.bin": {
+      "bytes": 4828,
+      "sha256": "71b48f51fe1b844f1f147b9bd481bee45d38839b6eb20a6dd8f302d71e34ab03"
+    },
+    "unified-paged-validator": {
+      "bytes": 325072,
+      "sha256": "0aecd5477fde7233817979f8534311418fa1e7814deedcdef2e823d0933f8cf7"
+    }
+  }
+}

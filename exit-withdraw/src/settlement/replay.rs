@@ -30,7 +30,7 @@ pub fn action(tx: &Transaction, profile: &contract::Profile) -> Result<settle::S
         .output_type()
         .to_opt()
         .context("Missing recovery action")?;
-    settle::codec::decode_action(data.raw_data())
+    settle::codec::decode_action(&unframe(tx, data.raw_data())?)
         .map_err(|e| anyhow::anyhow!("Recovery action: {e:?}"))
 }
 pub fn reconstruct_for<'a>(
@@ -169,7 +169,8 @@ pub fn action_for(tx: &Transaction, profile: &Profile) -> Result<settle::Settlem
     let raw = bytes(tx.witnesses.get(i).context("Missing witness")?)?;
     let w = packed::WitnessArgsReader::from_slice(&raw)?;
     let data = w.output_type().to_opt().context("Missing action")?;
-    contract::v0::decode_action(data.raw_data()).map_err(|e| anyhow::anyhow!("v0 action: {e:?}"))
+    contract::v0::decode_action(&unframe(tx, data.raw_data())?)
+        .map_err(|e| anyhow::anyhow!("v0 action: {e:?}"))
 }
 
 pub fn reconstruct<'a>(
@@ -190,4 +191,33 @@ pub fn reconstruct<'a>(
         current,
         confirmations,
     )
+}
+
+pub fn unframe(tx: &Transaction, data: &[u8]) -> Result<Vec<u8>> {
+    contract::transport::unframe(data, tx.inputs.len(), |i| {
+        let s = tx.witnesses.get(i).ok_or(contract::Error::Encoding)?;
+        bytes(s).map_err(|_| contract::Error::Encoding)
+    })
+    .map_err(|e| anyhow::anyhow!("Framing {e:?}"))
+}
+pub fn frame_transaction(tx: &mut Transaction) -> Result<()> {
+    let raw = bytes(&tx.witnesses[0])?;
+    let w = packed::WitnessArgs::from_slice(&raw)?;
+    let data = w
+        .output_type()
+        .to_opt()
+        .context("Missing action")?
+        .raw_data();
+    let (header, parts) = contract::transport::frame(&data);
+    tx.witnesses[0] = hx(w
+        .as_builder()
+        .output_type(Some(gw_types::bytes::Bytes::from(header)).pack())
+        .build()
+        .as_slice());
+    ensure!(
+        tx.witnesses.len() == tx.inputs.len(),
+        "Unexpected extra witnesses before framing"
+    );
+    tx.witnesses.extend(parts.iter().map(|p| hx(p)));
+    Ok(())
 }

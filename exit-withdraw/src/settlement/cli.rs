@@ -636,9 +636,8 @@ pub fn run_for(cmd: Command, protocol: Protocol) -> Result<()> {
                 base,
                 deployment: hash32(&plan.deployment)?,
                 manifest: hash32(&plan.manifest)?,
-                source_root: hash32(&plan.source_root)?,
+                state_root: hash32(&plan.state_root)?,
                 source_count: plan.sources.len() as u64,
-                reserve_root: hash32(&plan.reserve_root)?,
                 reserve_count: plan.reserves.len() as u64,
                 initial_epoch: plan.epoch()?,
                 limits,
@@ -929,7 +928,7 @@ pub fn run_for(cmd: Command, protocol: Protocol) -> Result<()> {
             println!(
                 "{}",
                 serde_json::to_string_pretty(
-                    &json!({"protocol":p.protocol(),"profile_hash":hx(h),"deployment":hx(p.deployment),"manifest":hx(p.manifest),"metadata_key":hx(metadata_key(p.deployment,c::script_hash(&p.base.rollup))),"source_root":hx(p.source_root),"reserve_root":hx(p.reserve_root),"claims_root":hx(p.initial_epoch.claims_root),"sources":p.source_count,"reserves":p.reserve_count,"claims":p.initial_epoch.claim_count,"bootstrap_outpoint":withdraw::from_outpoint(&p.base.bootstrap_outpoint),"governance":Script::from_packed(p.base.governance.clone())?})
+                    &json!({"version":s::FORMAT_VERSION,"protocol":p.protocol(),"profile_hash":hx(h),"deployment":hx(p.deployment),"manifest":hx(p.manifest),"metadata_key":hx(metadata_key(p.deployment,c::script_hash(&p.base.rollup))),"state_root":hx(p.state_root),"sources":p.source_count,"reserves":p.reserve_count,"claims":p.initial_epoch.claim_count,"bootstrap_outpoint":withdraw::from_outpoint(&p.base.bootstrap_outpoint),"governance":Script::from_packed(p.base.governance.clone())?})
                 )?
             );
         }
@@ -999,7 +998,7 @@ pub fn run_for(cmd: Command, protocol: Protocol) -> Result<()> {
                 Ok(json!({"claim_key":hx(key),"account_id":c.recipient,"recipient_identity":hx(c.address),"asset_id":src.asset,"source_account_id":src.account,"cap_raw":c.cap.to_string(),"paid_raw":paid.to_string(),"remaining_raw":(c.cap-paid).to_string()}))
             }).collect::<Result<Vec<_>>>()?;
             let m = ledger.metadata;
-            let report = json!({"status":"canonical_state_reconstructed","claims":claim_details,"account_root":hx(native.root()),"confirmed_transactions":journal.len(),"rollup_outpoint":b.rollup_cell.out_point,"sequence":m.map(|m|m.sequence),"phase":m.map(|m|m.phase),"registered_sources":m.map_or(0,|m|m.source_count),"registered_lots":m.map_or(0,|m|m.lot_count),"pending_registered_claims":m.map_or(0,|m|m.registered_count),"next_operation":ledger.next_with_profile_hash(p.hash(),4)?.map(|(op,_)|format!("{op:?}")),"epoch0_accounts":accounts.into_iter().map(|((address,asset),(cap,paid))|json!({"address":address,"asset_id":asset,"entitlement_raw":cap.to_string(),"paid_raw":paid.to_string(),"remaining_raw":(cap-paid).to_string()})).collect::<Vec<_>>(),"coverage":backing});
+            let report = json!({"version":s::FORMAT_VERSION,"status":"canonical_state_reconstructed","claims":claim_details,"account_root":hx(native.root()),"confirmed_transactions":journal.len(),"rollup_outpoint":b.rollup_cell.out_point,"sequence":m.map(|m|m.sequence),"state_root":m.map(|m|hx(m.state_root)),"sources":p.source_count,"lots":p.reserve_count,"paid_claims":ledger.records[s::PAID].len(),"next_operation":ledger.next_with_profile_hash(p.hash(),4)?.map(|(op,_)|format!("{op:?}")),"epoch0_accounts":accounts.into_iter().map(|((address,asset),(cap,paid))|json!({"address":address,"asset_id":asset,"entitlement_raw":cap.to_string(),"paid_raw":paid.to_string(),"remaining_raw":(cap-paid).to_string()})).collect::<Vec<_>>(),"coverage":backing});
             save(&output, &report)?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }

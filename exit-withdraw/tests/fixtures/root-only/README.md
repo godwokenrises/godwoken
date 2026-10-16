@@ -1,3 +1,3 @@
-# Root-only VM regression evidence
+# Historical execution evidence
 
-Historical synthetic execution fixtures and compact results, not a production release or current refund table. See [current validation](../../../docs/validation.md) for scope, binaries and reproduction commands. The small VM archive is not a rehearse-next archive.
+Compact historical results, not a production release or current refund table. Replayable old-format VM archives have been removed. See [current validation](../../../docs/validation.md) for V3 binaries, tests and fresh-artifact reproduction.

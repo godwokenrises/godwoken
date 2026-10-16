@@ -86,7 +86,8 @@ pub fn construct_with_controls(
     );
     ensure!(
         !requests.is_empty() && requests.len() <= contract::MAX_RECIPIENTS,
-        "Use 1..8 recipients per batch"
+        "Use 1..{} recipients per batch",
+        contract::MAX_RECIPIENTS
     );
     let mut requests = requests
         .iter()
@@ -484,9 +485,9 @@ pub fn finish(
             .as_builder()
             .lock(Some(gw_types::bytes::Bytes::from(placeholder)).pack())
             .build();
-        signing.push(json!({"lock_hash":lock_hash,"input_indices":indices,"first_witness_index":first,"kind":if sp.protocol()==adapter::Protocol::V1 {if kind=="ckb_multisig" {"legacy_multisig"}else{"bootstrap_lock"}}else{kind},"preserve_input_type_and_output_type":true}));
+        signing.push(json!({"lock_hash":lock_hash,"input_indices":indices,"first_witness_index":first,"kind":kind,"preserve_input_type_and_output_type":true}));
     }
-    let transaction = Transaction {
+    let mut transaction = Transaction {
         version: "0x0".into(),
         cell_deps: d
             .cell_deps
@@ -506,8 +507,9 @@ pub fn finish(
         outputs_data: transition.outputs.iter().map(|c| hx(&c.data)).collect(),
         witnesses: witnesses.iter().map(|w| hx(w.as_slice())).collect(),
     };
+    super::replay::frame_transaction(&mut transaction)?;
     Ok(Skeleton {
-        schema_version: 2,
+        schema_version: settle::FORMAT_VERSION,
         status: "unsigned_requires_full_signed_vm_validation".into(),
         transaction_hash: transaction.hash()?,
         transaction,

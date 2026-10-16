@@ -1,7 +1,7 @@
 use exit_withdraw_state_validator::{settlement::records::*, wire};
 use gw_types::prelude::Entity;
 fn golden() -> serde_json::Value {
-    serde_json::from_str(include_str!("fixtures/settlement-v2-vectors.json")).unwrap()
+    serde_json::from_str(include_str!("fixtures/settlement-v3-vectors.json")).unwrap()
 }
 fn raw(v: &serde_json::Value, n: &str) -> Vec<u8> {
     hex::decode(v["records"][n]["bytes"].as_str().unwrap()).unwrap()
@@ -38,7 +38,6 @@ fn fixed_molecule_records_match_independent_golden_vectors() {
     check!("asset_budget", AssetBudget, wire::SettlementAssetBudget);
     check!("epoch", Epoch, wire::SettlementEpoch);
     check!("paid", Paid, wire::SettlementPaid);
-    check!("permit", Permit, wire::SettlementPermit);
     check!("payment", Payment, wire::SettlementPayment);
     check!("metadata", Metadata, wire::SettlementMetadata);
     assert_eq!(commitment(&[]), [0; 32]);

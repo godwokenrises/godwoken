@@ -5,7 +5,10 @@ use super::{
 };
 use crate::model::*;
 use anyhow::{ensure, Context, Result};
-use exit_withdraw_state_validator::{self as c, settlement::records::*};
+use exit_withdraw_state_validator::{
+    self as c,
+    settlement::{self as s, records::*},
+};
 use gw_common::state::*;
 use gw_types::{prelude::*, registry_address::RegistryAddress, U256};
 use serde_json::{json, Value};
@@ -316,7 +319,7 @@ pub fn export(
     });
     let mut p = Plan {
         protocol: db.protocol(),
-        version: 2,
+        version: s::FORMAT_VERSION,
         deployment: hx(deployment),
         snapshot_root: db.root(),
         manifest: String::new(),
@@ -325,9 +328,7 @@ pub fn export(
         reserves: lots.values().map(hx).collect(),
         claims: claims.values().map(hx).collect(),
         limits: assets.values().map(|v| hx(encode(v))).collect(),
-        source_root: plan::root(&sources)?,
-        reserve_root: plan::root(&lots)?,
-        claims_root: plan::root(&claims)?,
+        state_root: plan::initial_root(&[sources.clone(), lots.clone(), claims.clone()])?,
         input_sha256: BTreeMap::from([(
             "report.json".into(),
             hex::encode(Sha256::digest(original)),

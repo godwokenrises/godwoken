@@ -1,5 +1,4 @@
-//! Strict recovery envelope: u32 little-endian action ID 4, then a Molecule ExitWithdraw.
-//! The normal RollupAction parser intentionally cannot accept this replacement-only action.
+//! Native transition payload embedded only in the V3 settlement action.
 use crate::{wire, *};
 use alloc::vec::Vec;
 use gw_hash::blake2b::hash;
@@ -20,11 +19,8 @@ pub fn decode_action(bytes: &[u8]) -> Result<Action> {
     if bytes.len() > MAX_ACTION {
         return Err(Error::Limit);
     }
-    if bytes.len() < 4 || bytes[..4] != 4u32.to_le_bytes() {
-        return Err(Error::Encoding);
-    }
-    let a = wire::ExitWithdrawReader::from_slice(&bytes[4..]).map_err(|_| Error::Encoding)?;
-    if u32le(a.version().as_slice())? != 1 {
+    let a = wire::NativeTransitionReader::from_slice(bytes).map_err(|_| Error::Encoding)?;
+    if u32le(a.version().as_slice())? != crate::settlement::FORMAT_VERSION {
         return Err(Error::Encoding);
     }
     if a.recipients().len() > MAX_RECIPIENTS
@@ -98,7 +94,7 @@ pub fn decode_profile(bytes: &[u8], expected: Hash) -> Result<Profile> {
     if expected == [0; 32] || hash(bytes) != expected {
         return Err(Error::Profile);
     }
-    let p = wire::RecoveryProfileReader::from_slice(bytes).map_err(|_| Error::Encoding)?;
+    let p = wire::SettlementBaseReader::from_slice(bytes).map_err(|_| Error::Encoding)?;
     if p.catalogue().len() > MAX_ASSETS || p.eth_eoa_codes().len() > 16 {
         return Err(Error::Limit);
     }
@@ -157,8 +153,8 @@ fn wn(v: u32) -> w::Uint32 {
     w::Uint32::from_slice(&v.to_le_bytes()).unwrap()
 }
 pub fn encode_action(a: &Action) -> Vec<u8> {
-    let b = w::ExitWithdraw::new_builder()
-        .version(wn(1))
+    let b = w::NativeTransition::new_builder()
+        .version(wn(crate::settlement::FORMAT_VERSION))
         .recipients(
             w::Recipients::new_builder()
                 .set(
@@ -217,10 +213,10 @@ pub fn encode_action(a: &Action) -> Vec<u8> {
         )
         .proof(wb(&a.proof.0))
         .build();
-    [4u32.to_le_bytes().as_slice(), b.as_slice()].concat()
+    b.as_slice().to_vec()
 }
 pub fn encode_profile(p: &Profile) -> Vec<u8> {
-    w::RecoveryProfile::new_builder()
+    w::SettlementBase::new_builder()
         .rollup_script(wb(p.rollup.as_slice()))
         .config_hash(w32(p.config_hash))
         .bootstrap_outpoint(wb(p.bootstrap_outpoint.as_slice()))

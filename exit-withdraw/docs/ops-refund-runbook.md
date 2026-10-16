@@ -18,17 +18,17 @@ second time through, that owner's personal EOA allocation.
 
 The contract commits the source, reserve and claim trees through settlement
 metadata in the rollup's account SMT. The updated **account root remains in the
-existing rollup cell**. Epoch records commit the claims root; cumulative paid
+existing rollup cell**. One settlement state root commits immutable account-page plans and cumulative paid
 records and source/asset budgets prevent double payment. Each transition verifies
 both old and new SMT roots. GlobalState encoding is preserved for compatibility
-with the existing custodian scripts. The claims root must not simply replace the
+with the existing custodian scripts. The settlement state root must not simply replace the
 account root: these are different commitments.
 
 The upgraded V0/V1 binaries accept refund lifecycle actions only. They reject
 ordinary block submission, deposits through block execution, challenges,
-reverts and legacy direct-balance exits. Initialization commits the approved allocation roots and asset budgets in one
+reverts and legacy direct-balance exits. Initialization commits the approved unified allocation root and asset budgets in one
 transaction. There is no per-account registration stage. Only Begin (once) and
-Pay are accepted; later-epoch and legacy registration operations are disabled.
+Pay are accepted; the action enum contains only Begin and Pay.
 
 There are three different authorities:
 
@@ -221,8 +221,8 @@ Use `settlement build-next` once without recipients:
   --plan plan.json --deployment deployment.json --output-dir step-001
 ```
 
-This single Begin transaction commits the release profile (source/reserve roots,
-manifest and policy), activates its claims-root record and initializes per-asset
+This single Begin transaction commits the release profile (one initial state root,
+manifest and policy), activates its epoch record and initializes per-asset
 budgets. It does not register every source, reserve or beneficiary. After Begin
 is confirmed, only requested payments are submitted. Each payment carries
 membership proofs for its claim, source and INITIAL lot. Source/lot counters are
@@ -300,10 +300,10 @@ state requires rebuilding and collecting fresh signatures. Governance alone
 cannot redirect a control refund. A project account without a committed payable
 claim cannot enter this flow by presenting its administrator's key.
 
-For partial payouts or beneficiaries with more than 32 source claims, first run
+For partial payouts or beneficiaries with more than 64 source claims, first run
 `settlement status` with DB/plan/deployment and `--output status.json`. Its `claims`
 array lists source, asset, account, cap, paid amount, remaining amount and claim
-key. Select up to 32 records in `payments.json`:
+key. Select up to 64 records in `payments.json`:
 
 ```json
 [{"claim_key":"0xCLAIM_KEY", "amount_raw":"POSITIVE_L2_INTEGER"}]
@@ -387,3 +387,11 @@ Canonical JSON is `report.json`; CSVs are views. Outputs include accounts, capac
 `l2-db` lists native registered balances and asset definitions; it does not itself enumerate every nonstandard destination or protocol receipt. `l1-custodian` captures current cells independently, or accepts `--snapshot` for explicitly historical inspection. Live captures are non-atomic single-provider observations. `check-backing` returns 1 on insufficient backing/supply mismatch, 2 for review with census limitations, and 3 on operational errors; consult the report rather than treating every nonzero status as capture failure.
 
 The generation-time capacity estimate is 63 CKB per plain output or 144 CKB per nonzero sUDT output, excluding network fees. It is not an exact quote for arbitrary controller destinations. Actual transaction building enforces actual occupied capacity. Capacity-blocked rights are included in theoretical totals, not represented as immediately executable payouts.
+
+## V3 state-format upgrade
+
+The current source uses one settlement `state_root` and V3 plans/profiles/actions. Only this format is supported; no compatibility or migration workflow is provided. Regenerate the complete plan/profile, independently verify its static account-page root and rebuild the pinned validator. Existing deployment/governance and multisig upgrade requirements remain unchanged.
+
+64 records / 20 recipients are format ceilings. Verify the entire signed transaction against the actual node cycles policy and split a batch when necessary. Keep a recipient's CKB and token payments together to fund occupied capacity. See [single-root validation](unified-state-validation.md) for reproducible benchmarks and observed limits.
+
+V3 keys and values both use V3 commitment domains. Plan/profile/action/native-payload/signing-skeleton versions are 3; V0 profile bytes use the `GWV0SET3` marker. Do not mix separately generated release artifacts. Status reports expose the current `state_root` and paid-claim count; registration-phase counters no longer exist.

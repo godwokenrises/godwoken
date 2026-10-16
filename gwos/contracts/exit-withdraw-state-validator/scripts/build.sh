@@ -1,17 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-# Default: production V0/V1 settlement binaries only. The legacy binary must be
-# requested explicitly by regression scripts.
+# Build only the V3 settlement validators for the existing V0/V1 networks.
 if [ "$#" -gt 1 ]; then
-  echo 'Usage: build.sh [settlement-state-validator|v0-settlement-state-validator|exit-withdraw-state-validator]' >&2
+  echo 'Usage: build.sh [settlement-state-validator|v0-settlement-state-validator]' >&2
   exit 2
 fi
 features=onchain
 case "${1:-settlement}" in
   settlement) binaries=(--bin settlement-state-validator --bin v0-settlement-state-validator) ;;
   settlement-state-validator|v0-settlement-state-validator) binaries=(--bin "$1") ;;
-  exit-withdraw-state-validator) features=legacy-tests; binaries=(--bin "$1") ;;
   *) echo 'Unknown validator binary' >&2; exit 2 ;;
 esac
 # Prerequisites: Rust 1.94.0, riscv64imac target, clang, llvm-ar, jq.

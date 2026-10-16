@@ -1,6 +1,16 @@
-# Root-only acceptance — 14 October 2026
+# Refund validation history
 
-The current lifecycle is **Begin → Pay → Pay …** for both V0 and V1. No full-table
+## Single settlement root — 16 October 2026
+
+Current source implements only settlement V3: one physical settlement SMT, bounded account pages, compact mutable counters and framed witnesses, with the upstream SMT algorithm unchanged. The original native Godwoken root remains separate. Only the V3 format is implemented; compatibility code, fixtures and standalone direct-account entrypoints have been removed.
+
+The final optimized build passed 89 contract unit cases, 32 host library cases, 13 V0 regressions, 13 V1 regressions, and dedicated actual-VM V0/V1 controller flows. Signed large-state V0 tests include 20,000 background accounts, fresh and mature counter states, exact write preservation, and re-signed malformed witness chunks. Twenty source accounts and recipients fully exit two assets through two ten-recipient transactions, each below 43M cycles and 57 KB in this fixture. A 20-recipient CKB-only transaction passes below 61M cycles. A 51-record single transaction exceeds 70M in both states; 40 selected records fail in fresh state and narrowly pass in mature state at 69,604,607 cycles.
+
+A separate source-account paging transaction also passes: seven account pages, 20 recipients and all 51 claims, at 43,338,880 cycles / 60,968 bytes. See [single-root measurements, paging and reproduction](unified-state-validation.md). The dated results below concern previous protocol artifacts and are historical evidence, not V3 validation of those saved binaries, plans or roots.
+
+## Root-only acceptance — 14 October 2026
+
+That release used **Begin → Pay → Pay …** for both V0 and V1. No full-table
 registration transactions are required. Monetary tables and their source/lot/claim
 roots were not changed. See [design](contract-design.md) and
 [Ops instructions](ops-refund-runbook.md).
@@ -72,7 +82,7 @@ EOA/controller end-to-end fixtures. No production keys, deployment or broadcast.
 From `exit-withdraw/`, configure LLVM clang/ar/libclang and build the CLI first:
 
 ```sh
-FIXTURE="$PWD/tests/fixtures/root-only/v0-vm-fixture"
+FIXTURE="/path/to/fresh-v3-vm-context"
 GW_WITHDRAW_CLI="$PWD/target/debug/gw-withdraw" LLVM_STRIP=/path/to/llvm-strip \
   bash scripts/build-settlement-validator.sh "$FIXTURE" /tmp/v0-cold-validator v0
 GW_V0_COLD_ARTIFACTS="$FIXTURE" GW_V0_SETTLEMENT_BINARY=/tmp/v0-cold-validator \
@@ -80,7 +90,7 @@ GW_V0_COLD_ARTIFACTS="$FIXTURE" GW_V0_SETTLEMENT_BINARY=/tmp/v0-cold-validator \
   --test withdraw_e2e v0_real_db_cold_artifacts_signed_vm -- --nocapture
 ```
 
-The small `archive.json` in this fixture directory is deliberately only VM context;
+Generate a new V3 VM context first; replayable old-format archives have been removed. Its `archive.json` is deliberately only VM context;
 it is not accepted as a `rehearse-next` archive. To repeat cold DB reconstruction,
 use the commands in the design document with the actual DB, complete plan and a
 new synthetic rehearsal directory. Host operating paths remain in the machine

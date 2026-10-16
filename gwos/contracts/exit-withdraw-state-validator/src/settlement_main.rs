@@ -128,6 +128,16 @@ fn run() -> Result<()> {
     }
     let w = syscall(high_level::load_witness_args(index, Source::Output))?;
     let b = w.output_type().to_opt().ok_or(Error::Encoding)?.raw_data();
+    let b = transport::unframe(&b, inputs.len(), |i| {
+        let size = match syscalls::load_witness(&mut [], 0, i, Source::Input) {
+            Ok(n) | Err(SysError::LengthNotEnough(n)) => n,
+            _ => return Err(Error::Syscall),
+        };
+        if size > transport::CHUNK {
+            return Err(Error::Limit);
+        }
+        syscall(high_level::load_witness(i, Source::Input))
+    })?;
     let a = codec::decode_action(&b)?;
     settlement::verify(
         &settlement_profile,

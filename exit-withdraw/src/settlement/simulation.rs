@@ -214,7 +214,7 @@ pub fn run(
             l.ceiling.checked_sub(a.paid).context("Ceiling underflow")? <= supply,
             "Unpaid rights exceed remaining L2 supply"
         );
-        asset_rows.push(json!({"asset_id":l.asset,"paid_raw":a.paid.to_string(),"allocated_raw":a.allocated.to_string(),"remaining_native_supply_raw":if p.protocol()==Protocol::V1 {Some(supply.to_string())}else{None},"unpaid_ceiling_raw":(l.ceiling-a.paid).to_string()}));
+        asset_rows.push(json!({"asset_id":l.asset,"paid_raw":a.paid.to_string(),"allocated_raw":l.ceiling.to_string(),"remaining_native_supply_raw":if p.protocol()==Protocol::V1 {Some(supply.to_string())}else{None},"unpaid_ceiling_raw":(l.ceiling-a.paid).to_string()}));
     }
     let summary = json!({"status":"host_consensus_simulation_pass","simulation_only":true,"full_vm_executed":false,"signed":false,"broadcast":false,"db_root_unchanged":db.root()==plan.snapshot_root,"snapshot_root":plan.snapshot_root,"simulated_root":hx(native.root()),"plan_manifest":plan.manifest,"batch_size":batch,"administrative_transactions":steps,"operations":operations,"max_unsigned_transaction_bytes":max_bytes,"protocol":p.protocol(),"payouts":payouts,"capacity_blocked":blocked,"asset_counters":asset_rows,"before_coverage":before_coverage,"after_coverage":after_coverage,"warning":"Artificial fee sponsor; unsigned host consensus rehearsal only. This does not validate live code deployment, signatures, cycles or input liveness."});
     report::write_new(

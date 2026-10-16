@@ -4,14 +4,12 @@ use alloc::vec::Vec;
 use gw_hash::blake2b::hash;
 use gw_types::U256;
 pub type Eth = [u8; 20];
-pub type Roots = [Hash; 8];
 pub const INITIAL: u8 = 0;
 pub const DEFERRED: u8 = 1;
 pub const EXCLUDED: u8 = 2;
 pub const PROTECTED: u8 = 3;
 pub const PENDING: u8 = 0;
 pub const ACTIVE: u8 = 1;
-pub const CANCELLED: u8 = 2;
 
 pub struct Cursor<'a>(pub &'a [u8]);
 impl<'a> Cursor<'a> {
@@ -67,21 +65,6 @@ impl Field for U256 {
         Ok(U256::from_little_endian(c.take(32)?))
     }
 }
-impl Field for Roots {
-    const SIZE: usize = 256;
-    fn write(&self, o: &mut Vec<u8>) {
-        for r in self {
-            r.write(o);
-        }
-    }
-    fn read(c: &mut Cursor<'_>) -> Result<Self> {
-        let mut r = [[0; 32]; 8];
-        for v in &mut r {
-            *v = Hash::read(c)?;
-        }
-        Ok(r)
-    }
-}
 pub fn encode<T: Field>(v: &T) -> Vec<u8> {
     let mut out = Vec::with_capacity(T::SIZE);
     v.write(&mut out);
@@ -96,7 +79,7 @@ pub fn decode<T: Field>(b: &[u8]) -> Result<T> {
     Ok(v)
 }
 macro_rules! record {($n:ident,$tag:expr,{$($f:ident:$t:ty),*})=>{
-    #[derive(Clone,Copy,Debug,PartialEq,Eq)] pub struct $n {$(pub $f:$t),*}
+    #[derive(Clone,Copy,Debug,PartialEq,Eq,Default)] pub struct $n {$(pub $f:$t),*}
     impl Field for $n {
         const SIZE:usize=4 $(+ <$t as Field>::SIZE)*;
         fn write(&self,o:&mut Vec<u8>){($tag as u32).write(o);$(self.$f.write(o);)*}
@@ -105,23 +88,22 @@ macro_rules! record {($n:ident,$tag:expr,{$($f:ident:$t:ty),*})=>{
 };}
 record!(Source, 512, {account:u32, script_hash:Hash, address:Eth, asset:u32, type_hash:Hash, baseline:U256, evidence:Hash});
 record!(Lot, 513, {id:Hash, source:Hash, kind:u8, amount:U256, evidence:Hash, reopen:Hash});
-record!(Reserve, 514, {lot:Lot, remaining:U256});
+record!(Reserve, 514, {remaining:U256});
 record!(Claim, 515, {epoch:u64, source:Hash, lot:Hash, recipient:u32, script_hash:Hash, address:Eth, cap:U256, evidence:Hash});
-record!(SourceBudget, 516, {source:Source, allocated:U256, paid:U256, reserved:U256, lot_sum:U256, finalized:u8});
+record!(SourceBudget, 516, {paid:U256});
 record!(AssetLimit, 517, {asset:u32, type_hash:Hash, ceiling:U256});
-record!(AssetBudget, 518, {limit:AssetLimit, allocated:U256, paid:U256});
-record!(Epoch, 519, {id:u64, claims_root:Hash, claim_count:u64, manifest:Hash, policy:Hash, parent:Hash, allowed_lots_root:Hash, status:u8});
-record!(Paid, 520, {claim:Hash, amount:U256});
-record!(Permit, 521, {lot:Hash});
+record!(AssetBudget, 518, {paid:U256});
+record!(Epoch, 519, {id:u64, claim_count:u64, manifest:Hash, policy:Hash, status:u8});
+record!(Paid, 520, {amount:U256});
 record!(Payment, 522, {claim:Claim, amount:U256});
-record!(Metadata, 523, {deployment:Hash, profile:Hash, snapshot:Hash, sequence:u64, phase:u8, next_epoch:u64, pending_epoch:u64, has_pending:u8, roots:Roots, source_count:u64, lot_count:u64, finalized_count:u64, registered_count:u64, initial_lots_left:u64});
+record!(Metadata, 523, {deployment:Hash, profile:Hash, snapshot:Hash, sequence:u64, state_root:Hash});
 
 pub fn commitment(bytes: &[u8]) -> Hash {
     if bytes.is_empty() {
         return [0; 32];
     }
     let mut h = gw_hash::blake2b::new_blake2b();
-    h.update(b"GW_SETTLEMENT_V2/value\0");
+    h.update(b"GW_SETTLEMENT_V3/value\0");
     h.update(bytes);
     let mut out = [0; 32];
     h.finalize(&mut out);
@@ -129,7 +111,7 @@ pub fn commitment(bytes: &[u8]) -> Hash {
 }
 fn key(domain: &[u8], deployment: Hash, body: &[u8]) -> Hash {
     let mut h = gw_hash::blake2b::new_blake2b();
-    h.update(b"GW_SETTLEMENT_V2/key\0");
+    h.update(b"GW_SETTLEMENT_V3/key\0");
     h.update(&(domain.len() as u32).to_le_bytes());
     h.update(domain);
     h.update(&deployment);

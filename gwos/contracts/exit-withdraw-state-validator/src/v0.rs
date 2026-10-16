@@ -72,7 +72,7 @@ pub const ETH: Hash = [
     21, 99, 8, 13, 23, 91, 248, 221, 212, 74, 72, 232, 80, 206, 207, 12, 11, 69, 117, 131, 87, 86,
     235, 95, 253, 83, 173, 131, 9, 49, 185, 249,
 ];
-const MAGIC: &[u8; 8] = b"GWV0SET1";
+const MAGIC: &[u8; 8] = b"GWV0SET3";
 #[derive(Clone, Debug)]
 /// One cell consumed and recreated during the initial PoA migration.
 pub struct Auxiliary {
@@ -526,7 +526,7 @@ pub fn verify(
         &normalized_config,
         transaction,
         &action.native,
-        Some(&transition),
+        &transition,
         NativeVersion::V0,
         hash(raw_config),
         if action.op == s::Operation::Begin {

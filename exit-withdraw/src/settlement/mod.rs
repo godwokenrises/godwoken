@@ -1,6 +1,7 @@
 pub mod adapter;
 pub mod build;
 pub mod cli;
+pub mod layout;
 pub mod plan;
 pub mod rehearsal;
 pub mod replay;
@@ -170,7 +171,7 @@ pub fn select_version(
     protocol: Protocol,
 ) -> Result<(Vec<Vec<u8>>, Vec<Request>)> {
     ensure!(
-        ledger.metadata.is_some_and(|m| m.phase == 2),
+        ledger.metadata.is_some(),
         "Refund roots are not initialized; run the Begin step first"
     );
     let mut wanted = BTreeSet::new();
@@ -182,7 +183,8 @@ pub fn select_version(
     }
     ensure!(
         !wanted.is_empty() && wanted.len() <= c::MAX_RECIPIENTS,
-        "Select 1..8 unique applicants"
+        "Select 1..{} unique applicants",
+        c::MAX_RECIPIENTS
     );
     let mut selected = BTreeMap::<[u8; 20], Vec<Payment>>::new();
     for raw in ledger.records[s::CLAIM_PLAN].values() {
@@ -277,10 +279,9 @@ pub fn select_payments(
     selected: &[PaymentSelection],
 ) -> Result<(Vec<Vec<u8>>, Vec<Request>)> {
     ensure!(
-        ledger.metadata.is_some_and(|m| m.phase == 2)
-            && !selected.is_empty()
-            && selected.len() <= s::MAX_RECORDS,
-        "Select 1..32 claims from an active release"
+        ledger.metadata.is_some() && !selected.is_empty() && selected.len() <= s::MAX_RECORDS,
+        "Select 1..{} claims from an active release",
+        s::MAX_RECORDS
     );
     let mut seen = BTreeSet::new();
     let mut sums = BTreeMap::<[u8; 20], BTreeMap<u32, U256>>::new();

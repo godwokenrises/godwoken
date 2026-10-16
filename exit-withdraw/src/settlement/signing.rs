@@ -61,6 +61,10 @@ fn witness_lock(tx: &mut Transaction, i: usize, lock: Vec<u8>) -> Result<()> {
 }
 /// Re-derive groups from actual input locks, never trust a skeleton's explanatory signing_groups.
 pub fn requests(d: &Deployment, sk: &Skeleton) -> Result<SigningRequest> {
+    ensure!(
+        sk.schema_version == s::FORMAT_VERSION,
+        "Expected V3 settlement skeleton"
+    );
     let p = Profile::load(d)?;
     let tx = &sk.transaction;
     ensure!(

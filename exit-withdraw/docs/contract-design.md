@@ -1,18 +1,14 @@
 # Root-only, applicant-driven refunds (V0 and V1)
 
-Implemented 14 October 2026. This replaces the previous per-record registration
-lifecycle. Approved table amounts, beneficiary identities, controller policies,
-source/lot/claim Merkle trees and V0/V1 separation are unchanged. Rebuild the
-validator binaries from this source before deployment. No production upgrade
-or payment is performed by the development tests.
+Updated 16 October 2026: settlement **V3** uses one physical settlement SMT with bounded account pages. V0/V1 here identify native networks; V3 identifies the refund protocol. Approved amounts, identities and authority checks are preserved. Regenerate and verify the plan/profile before building the profile-pinned validator; Only V3 plans, profiles and actions are supported; no compatibility decoder or migration path is retained. Development tests do not upgrade or pay on mainnet.
 
 ## On-chain lifecycle
 
 1. Publish the complete table, policy, plan and profile for independent checking;
    deploy/upgrade the profile-pinned validator using the existing authority.
 2. One **Begin** transaction updates the rollup account SMT with metadata committing
-   the profile hash and an active epoch containing the claims root. The profile
-   commits source/reserve roots and asset ceilings. Begin also initializes asset
+   the profile hash and one settlement `state_root`. The profile commits the initial
+   static account-page root and asset ceilings. Begin also initializes asset
    paid counters. It neither pays nor enumerates all beneficiaries.
 3. For an applicant, **Pay** verifies claim, source and payable-lot membership,
    the actual native identity and balance, the recipient lock/controller authority,
@@ -22,10 +18,10 @@ or payment is performed by the development tests.
    on-chain records or transactions. No registration/activation batch loop remains.
 
 The rollup cell retains its original GlobalState format. Its account root commits
-settlement metadata, which commits the profile and mutable ledger roots; the epoch
-leaf commits the immutable claims root. The account root is not overwritten with
-the claims root. Old and new native SMT roots and all touched ledger proofs are
-verified, including non-membership proofs for newly created paid/source/lot records.
+settlement metadata, which commits the profile and a single settlement state root; immutable source/lot/claim
+records and their mutable counters share account pages in that tree. The account root is not overwritten with
+the settlement state root. Old and new native SMT roots and one touched-state multiproof are
+verified. An authenticated account page also proves which of its counter slots are absent.
 
 Only Begin and epoch-0 Pay are accepted by the release. Legacy registration,
 seal/activate, later epochs, cancellation and all ordinary rollup actions are
@@ -36,7 +32,7 @@ an arbitrary administrator transaction. Such policy changes need a separate revi
 
 - Claim amount <= committed cap minus cumulative paid; duplicate claim keys in
   one action are rejected, and paid values survive process restarts.
-- Source identity/type/baseline comes from the source-root proof, and native
+- Source identity/type/baseline comes from its immutable account-page record, and native
   balance must equal baseline minus already paid before deducting the new payment.
 - Lot must belong to the source, have kind INITIAL and contain sufficient remaining
   amount. A lot shared by claims cannot be reused beyond its total; deferred,
@@ -116,11 +112,25 @@ Code: [shared verifier](../../gwos/contracts/exit-withdraw-state-validator/src/v
 | Source | Native account ID, script hash, address, asset ID, L1 type hash, baseline amount, evidence hash |
 | Lot | Lot ID, source key, disposition kind, amount, evidence and reopening commitment |
 | Claim | Epoch, source and lot keys, recipient ID/script hash/address, maximum amount, evidence hash |
-| Source/asset budgets | Original source or asset limit and cumulative paid amount |
+| Source/asset budgets | Cumulative paid amount; immutable source/limit is authenticated separately |
 | Reserve / Paid | Remaining lot amount / cumulative amount for a claim |
-| Epoch | Claims root, manifest/policy and status; only initial epoch is payable |
-| Metadata | Deployment/profile/snapshot, sequence and mutable ledger roots; committed as a native SMT leaf |
+| Epoch | Claim count, manifest/policy and status; only initial epoch is payable |
+| Metadata | Deployment/profile/snapshot, sequence and one settlement state root; committed as a native SMT leaf |
 
-Records use exact tagged layouts and little-endian integers; trailing bytes are rejected. Nonempty leaf values are CKB-personalized Blake2b-256 of `GW_SETTLEMENT_V2/value\0 || encoded_record`; absent values are zero. Keys use `GW_SETTLEMENT_V2/key\0 || domain_length_u32_le || domain || deployment_id || record_identity`. The bytes `\0` here denote one NUL byte. Record identity and tags are specified by [records.rs](../../gwos/contracts/exit-withdraw-state-validator/src/settlement/records.rs); independent verifiers must use those exact bytes, not JSON serialization.
+Records use exact tagged layouts and little-endian integers; trailing bytes are rejected. Nonempty leaf values are CKB-personalized Blake2b-256 of `GW_SETTLEMENT_V3/value\0 || encoded_record`; absent values are zero. Keys use `GW_SETTLEMENT_V3/key\0 || domain_length_u32_le || domain || deployment_id || record_identity`. The bytes `\0` here denote one NUL byte. Record identity and tags are specified by [records.rs](../../gwos/contracts/exit-withdraw-state-validator/src/settlement/records.rs); independent verifiers must use those exact bytes, not JSON serialization.
 
-Source, lot and claim plan trees are immutable release commitments. Pay proves membership against them while proving the old values or nonexistence of its mutable counters. Legacy wire-format tags remain decodable for compatibility but their operations are rejected; this does not enable registering or activating a new table. A batch is bounded to 32 payment records and bounded proof keys. Split larger applicants into batches without dropping their remainder.
+Source, lot and claim records are immutable portions of account pages. There are no independent source/lot/claim SMT roots in V3. Physical keys have canonical namespaces for `(account_id, page_number)`, asset ID and epoch ID. Each frozen page contains at most 16 static records and their paired counter slots, with at most 32 entries and 8 KiB total. Large accounts use multiple pages; subsequent payments never relocate a slot. Original full logical keys and full lot IDs are retained.
+
+`Trees::set` allows only `PAID`, `RESERVES`, `SOURCES`, `ASSETS`; epoch initialization is allowed only during Begin. Clients submit payment references and amounts, not a key/value write list. The evaluator derives changes from authenticated old pages and preserves every other entry. The claimed output root must equal the root recomputed from exactly these derived changes. Native identity/storage write restrictions remain enforced separately.
+
+Chain verification uses unmodified sparse-merkle-tree 0.6.1's C backend for compiled proof bytes. Rust verification/generation uses the upstream Rust implementation. Release builds use opt-level 3 for VM cycles; no SMT algorithm or opcode is patched.
+
+Large actions are split before signing into 16,000-byte extra witnesses. A bounded length/count/full-payload-hash header occupies the action witness. Both V0 and V1 reconstruct it, and standard sighash signatures cover extra witnesses. Splitting witnesses solves a per-witness constraint; it does not remove transaction cycles or size limits.
+
+The protocol permits at most 64 payment records and 20 recipients; this is not a guarantee that every combination fits a node's budget. Generate the full signed transaction and pre-execute it under the target node policy. Prefer grouping a recipient's CKB and tokens so token cells have enough capacity. The typical 70M cycles admission policy is a configurable node limit, not a consensus-wide per-transaction cap.
+
+[Single-root measurements and reproducible tests](unified-state-validation.md) record tested batch sizes, failed single-transaction combinations and paging coverage.
+
+The native payload is a version-3 `NativeTransition` table embedded in the settlement action. There is no standalone direct-account action envelope or verifier entrypoint. The eight logical record kinds are the complete set; obsolete registration slots, permit records, pending-epoch fields and reconstructed mutable-record copies are removed. Metadata contains only deployment/profile/snapshot, sequence and `state_root`.
+
+CLI signing skeletons also require version 3. `verify-plan`, `create-profile`, `inspect-profile`, `build-next`, offline signing/assembly, `verify-signed`, status, portal proposals and confirmed-history replay all use this same format. V0 profiles start with `GWV0SET3`; V1 profiles use the V3 Molecule profile table. Native chain snapshots and CKB lock encodings retain their own formats.

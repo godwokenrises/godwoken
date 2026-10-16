@@ -1,4 +1,4 @@
-//! Refund-only dispatch: v1 accepts tag 5, v0 accepts tag 6, both inner version 2.
+//! Refund-only dispatch: v1 accepts tag 5, v0 accepts tag 6, both inner version 3.
 //! There is no fallback to the historical RollupAction or direct-account exit parsers.
 use super::*;
 use crate::wire as w;
@@ -35,13 +35,12 @@ fn rh(b: &[u8]) -> Result<Hash> {
 }
 pub fn encode_profile(p: &SettlementProfile) -> Vec<u8> {
     w::SettlementProfile::new_builder()
-        .version(n(2))
+        .version(n(FORMAT_VERSION))
         .base(b(&crate::codec::encode_profile(&p.base)))
         .deployment(h(p.deployment))
         .manifest(h(p.manifest))
-        .source_root(h(p.source_root))
+        .state_root(h(p.state_root))
         .source_count(u(p.source_count))
-        .reserve_root(h(p.reserve_root))
         .reserve_count(u(p.reserve_count))
         .initial_epoch(b(&encode(&p.initial_epoch)))
         .limits(
@@ -61,7 +60,7 @@ pub fn decode_profile(bytes: &[u8], expected: Hash) -> Result<SettlementProfile>
     )?;
     let p = w::SettlementProfileReader::from_slice(bytes).map_err(|_| Error::Encoding)?;
     require(
-        rn(p.version().as_slice())? == 2 && p.limits().len() <= MAX_ASSETS,
+        rn(p.version().as_slice())? == FORMAT_VERSION && p.limits().len() <= MAX_ASSETS,
         Error::Encoding,
     )?;
     let base = p.base().raw_data();
@@ -69,9 +68,8 @@ pub fn decode_profile(bytes: &[u8], expected: Hash) -> Result<SettlementProfile>
         base: crate::codec::decode_profile(&base, hash(&base))?,
         deployment: rh(p.deployment().as_slice())?,
         manifest: rh(p.manifest().as_slice())?,
-        source_root: rh(p.source_root().as_slice())?,
+        state_root: rh(p.state_root().as_slice())?,
         source_count: ru(p.source_count().as_slice())?,
-        reserve_root: rh(p.reserve_root().as_slice())?,
         reserve_count: ru(p.reserve_count().as_slice())?,
         initial_epoch: decode(&p.initial_epoch().raw_data())?,
         limits: p
@@ -85,14 +83,33 @@ pub fn decode_profile(bytes: &[u8], expected: Hash) -> Result<SettlementProfile>
 }
 pub fn encode_action(a: &SettlementAction) -> Vec<u8> {
     let body = w::SettlementAction::new_builder()
-        .version(n(2))
+        .version(n(FORMAT_VERSION))
         .operation(n(a.op as u32))
         .epoch(u(a.epoch))
         .before(b(&a.before))
         .after(b(&a.after))
         .records(
             w::SettlementRecords::new_builder()
-                .set(a.records.iter().map(|v| b(v)).collect())
+                .set(
+                    a.records
+                        .iter()
+                        .map(|v| {
+                            if a.op != Operation::Pay {
+                                return b(v);
+                            }
+                            let pay: Payment = decode(v).unwrap();
+                            let deployment = decode::<Metadata>(&a.before)
+                                .map(|m| m.deployment)
+                                .unwrap_or([0; 32]);
+                            let key = claim_key(deployment, &pay.claim);
+                            let mut out = Vec::new();
+                            522u32.write(&mut out);
+                            key.write(&mut out);
+                            pay.amount.write(&mut out);
+                            b(&out)
+                        })
+                        .collect(),
+                )
                 .build(),
         )
         .trees(
@@ -143,13 +160,16 @@ pub(crate) fn decode_action_tag(bytes: &[u8], version: NativeVersion) -> Result<
         Error::Encoding,
     )?;
     let a = w::SettlementActionReader::from_slice(&bytes[4..]).map_err(|_| Error::Encoding)?;
-    require(rn(a.version().as_slice())? == 2, Error::Encoding)?;
+    require(
+        rn(a.version().as_slice())? == FORMAT_VERSION,
+        Error::Encoding,
+    )?;
     // Reject unknown operations before copying records, proofs or native witness buffers.
     // The exhaustive enum contains refund lifecycle operations only; never dispatch legacy actions.
     let op = Operation::from_u32(rn(a.operation().as_slice())?)?;
     require(
         a.records().len() <= MAX_RECORDS
-            && a.trees().len() <= 12
+            && a.trees().len() == 1
             && a.before().raw_data().len() <= 1024
             && a.after().raw_data().len() <= 1024,
         Error::Limit,
@@ -176,7 +196,7 @@ pub(crate) fn decode_action_tag(bytes: &[u8], version: NativeVersion) -> Result<
                     .leaves()
                     .iter()
                     .map(|v| {
-                        require(v.record().raw_data().len() <= 1024, Error::Limit)?;
+                        require(v.record().raw_data().len() <= 8192, Error::Limit)?;
                         Ok((rh(v.key().as_slice())?, v.record().raw_data().to_vec()))
                     })
                     .collect::<Result<Vec<_>>>()?,
@@ -184,6 +204,26 @@ pub(crate) fn decode_action_tag(bytes: &[u8], version: NativeVersion) -> Result<
             })
         })
         .collect::<Result<Vec<_>>>()?;
+    let records = if op == Operation::Pay {
+        let claims = physical::record_index(&trees, CLAIM_PLAN)?;
+        records
+            .iter()
+            .map(|raw| {
+                let mut cur = Cursor(raw);
+                require(u32::read(&mut cur)? == 522, Error::Encoding)?;
+                let key = Hash::read(&mut cur)?;
+                let amount = U256::read(&mut cur)?;
+                require(cur.0.is_empty(), Error::Encoding)?;
+                let raw = claims.get(&key).ok_or(Error::Keys)?;
+                Ok(encode(&Payment {
+                    claim: decode(raw)?,
+                    amount,
+                }))
+            })
+            .collect::<Result<Vec<_>>>()?
+    } else {
+        records
+    };
     Ok(SettlementAction {
         op,
         epoch: ru(a.epoch().as_slice())?,

@@ -12,7 +12,10 @@ pub(super) fn sign(sk: &Skeleton) -> Transaction {
             .iter()
             .map(|i| i.as_u64().unwrap() as usize)
             .collect();
-        let bootstrap = g["kind"] == "bootstrap_lock";
+        let bootstrap = matches!(
+            g["kind"].as_str(),
+            Some("ckb_omnilock" | "ethereum_personal_sign")
+        );
         let ethereum =
             bootstrap && bytes(&sk.input_cells[indices[0]].output.lock.args).unwrap()[0] == 1;
         sign_group_with_mode(
@@ -192,6 +195,7 @@ fn setup_two(dbpath: &Path) -> Setup {
             .to_vec(),
     );
     Setup {
+        base: p,
         d: Deployment {
             profile: hx(&profile),
             profile_hash: hx(hash(&profile)),
@@ -265,7 +269,7 @@ fn fixture_split(path: &Path, split: bool) -> (Setup, Plan) {
             }
         }
     }
-    let base = setup.d.profile().unwrap();
+    let base = setup.base.clone();
     let assets:Vec<_>=base.catalogue.iter().map(|(id,h)|json!({"asset_id":id,"type_hash":hx(h),"eligible_before_capacity_raw":if *id==1{(U256::from(600)*U256::exp10(18)).to_string()}else if *id==3{"150".into()}else{"0".into()},"custodian_covers_eligible_before_capacity":true,"l2_covers_eligible_before_capacity":true})).collect();
     for (name, value) in [
         ("summary.json", json!({"snapshot_root": db.root()})),
@@ -290,7 +294,7 @@ fn fixture_split(path: &Path, split: bool) -> (Setup, Plan) {
             c.script_hash = contract::script_hash(&descriptor);
             *raw = hx(encode(&c));
         }
-        plan.claims_root = tool::plan::root(&plan.records().unwrap()[2]).unwrap();
+        plan.state_root = tool::plan::initial_root(&plan.records().unwrap()).unwrap();
         plan.manifest.clear();
         plan.manifest = hx(hash(&serde_json::to_vec(&plan).unwrap()));
         plan.verify().unwrap();
@@ -299,9 +303,8 @@ fn fixture_split(path: &Path, split: bool) -> (Setup, Plan) {
         base,
         deployment: hash32(&plan.deployment).unwrap(),
         manifest: hash32(&plan.manifest).unwrap(),
-        source_root: hash32(&plan.source_root).unwrap(),
+        state_root: hash32(&plan.state_root).unwrap(),
         source_count: plan.sources.len() as u64,
-        reserve_root: hash32(&plan.reserve_root).unwrap(),
         reserve_count: plan.reserves.len() as u64,
         initial_epoch: plan.epoch().unwrap(),
         limits: plan
@@ -375,7 +378,7 @@ pub(super) fn active(s: &mut Setup, plan: &Plan, db: &Database, vm: bool) -> Vec
             10,
         )
         .unwrap();
-        if ledger.metadata.is_some_and(|m| m.phase == 2) {
+        if ledger.metadata.is_some() {
             return cycles;
         }
         let sk = tool::prepare(db, &s.node, &s.d, &s.b, plan, None, 2).unwrap();
@@ -583,7 +586,7 @@ fn settlement_full_signed_vm_and_user_omnilock() {
 
 // Exercise lifecycle invariants using canonical proofs, rather than only corrupting bytes.
 #[test]
-fn root_initialization_rejects_registration_and_epoch_mutation() {
+fn root_initialization_cannot_be_repeated() {
     let t = tempfile::tempdir().unwrap();
     let (mut setup, plan) = fixture(t.path());
     let db = Database::open(&t.path().join("db")).unwrap();
@@ -604,18 +607,7 @@ fn root_initialization_rejects_registration_and_epoch_mutation() {
     assert!(ledger.records[sc::SOURCES].is_empty());
     assert!(ledger.records[sc::RESERVES].is_empty());
     assert!(ledger.records[sc::PAID].is_empty());
-    for op in [
-        sc::Operation::RegisterSources,
-        sc::Operation::RegisterReserves,
-        sc::Operation::FinalizeSources,
-        sc::Operation::SealBudgets,
-        sc::Operation::RegisterClaims,
-        sc::Operation::Activate,
-        sc::Operation::BeginEpoch,
-        sc::Operation::Unregister,
-        sc::Operation::Abort,
-        sc::Operation::Begin,
-    ] {
+    for op in [sc::Operation::Begin] {
         assert!(ledger
             .build_action(
                 &db,
@@ -759,6 +751,50 @@ fn partial_claim_then_remainder_never_debits_twice() {
     );
 }
 
+pub(super) fn tamper_state_record(action: &mut sc::SettlementAction, kind: usize, remove: bool) {
+    use sc::physical;
+    let parent = physical::static_kind(kind).unwrap();
+    let (index, mut page, key) = action.trees[0]
+        .leaves
+        .iter()
+        .enumerate()
+        .find_map(|(i, (physical_key, raw))| {
+            if physical::namespace(*physical_key) != Ok(16) {
+                return None;
+            }
+            let page = physical::unpack_page(raw).unwrap();
+            let key = page.keys().find(|(tag, _)| *tag == parent)?.1;
+            Some((i, page, key))
+        })
+        .unwrap();
+    if remove {
+        if page.remove(&(kind, key)).is_none() {
+            action.trees[0].leaves.remove(index);
+            return;
+        }
+    } else if let Some(value) = page.get_mut(&(kind, key)) {
+        let n = value.len();
+        value[n - 1] ^= 1;
+    } else {
+        let raw = match kind {
+            sc::PAID => encode(&Paid {
+                amount: U256::one(),
+                ..Default::default()
+            }),
+            sc::RESERVES => encode(&Reserve {
+                remaining: U256::one(),
+                ..Default::default()
+            }),
+            sc::SOURCES => encode(&SourceBudget {
+                paid: U256::one(),
+                ..Default::default()
+            }),
+            _ => unreachable!(),
+        };
+        page.insert((kind, key), raw);
+    }
+    action.trees[0].leaves[index].1 = physical::pack_page(&page);
+}
 #[test]
 fn root_payment_requires_source_and_lot_membership() {
     let t = tempfile::tempdir().unwrap();
@@ -786,18 +822,13 @@ fn root_payment_requires_source_and_lot_membership() {
         sc::PAID,
     ] {
         let mut bad = action.clone();
-        bad.trees.retain(|t| t.kind != kind);
+        tamper_state_record(&mut bad, kind, true);
         assert!(
             sc::evaluate(&p, hash32(&setup.d.profile_hash).unwrap(), &bad).is_err(),
             "missing tree {kind}"
         );
         let mut bad = action.clone();
-        let t = bad.trees.iter_mut().find(|t| t.kind == kind).unwrap();
-        if !t.leaves[0].1.is_empty() {
-            t.leaves[0].1[4] ^= 1;
-        } else {
-            t.leaves[0].1 = vec![1];
-        }
+        tamper_state_record(&mut bad, kind, false);
         assert!(
             sc::evaluate(&p, hash32(&setup.d.profile_hash).unwrap(), &bad).is_err(),
             "forged leaf {kind}"
@@ -842,11 +873,38 @@ fn settlement_cli_build_sign_verify_and_reconstruct() {
         );
         out
     };
-    run(vec![
+    let verified_plan = run(vec![
         "verify-plan".into(),
         "--plan".into(),
         planfile.display().to_string(),
     ]);
+    let verified_plan: Value = serde_json::from_slice(&verified_plan.stdout).unwrap();
+    assert_eq!(plan.version, sc::FORMAT_VERSION);
+    assert_eq!(verified_plan["state_root"], plan.state_root);
+    let snapshot = t.path().join("snapshot.json");
+    std::fs::write(&snapshot, serde_json::to_vec(&setup.b).unwrap()).unwrap();
+    let profile_dir = t.path().join("cli-profile");
+    run(vec![
+        "create-profile".into(),
+        "--plan".into(),
+        planfile.display().to_string(),
+        "--l1-snapshot".into(),
+        snapshot.display().to_string(),
+        "--multisig-config".into(),
+        setup.d.multisig_config.clone(),
+        "--output-dir".into(),
+        profile_dir.display().to_string(),
+    ]);
+    let inspected = run(vec![
+        "inspect-profile".into(),
+        "--profile".into(),
+        profile_dir.join("profile.bin").display().to_string(),
+    ]);
+    let inspected: Value = serde_json::from_slice(&inspected.stdout).unwrap();
+    assert_eq!(inspected["state_root"], plan.state_root);
+    let generated = std::fs::read(profile_dir.join("profile.bin")).unwrap();
+    let generated = sc::codec::decode_profile(&generated, hash(&generated)).unwrap();
+    plan.bind(&generated).unwrap();
     let path = |p: &Path| p.display().to_string();
     let partial = t.path().join("partial-payments.json");
     let selections = plan
@@ -899,6 +957,7 @@ fn settlement_cli_build_sign_verify_and_reconstruct() {
         run(args);
         let sk: Skeleton =
             serde_json::from_slice(&std::fs::read(output.join("skeleton.json")).unwrap()).unwrap();
+        assert_eq!(sk.schema_version, sc::FORMAT_VERSION);
         let signing: tool::signing::SigningRequest =
             serde_json::from_slice(&std::fs::read(output.join("signing-request.json")).unwrap())
                 .unwrap();

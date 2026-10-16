@@ -183,7 +183,7 @@ impl Profile {
         Self::decode(&bytes(&d.profile)?, hash32(&d.profile_hash)?)
     }
     pub fn decode(b: &[u8], h: c::Hash) -> Result<Self> {
-        let p = if b.starts_with(b"GWV0SET1") {
+        let p = if b.starts_with(b"GWV0SET3") {
             Self::V0(c::v0::decode_profile(b, h).map_err(|e| anyhow::anyhow!("v0 profile: {e:?}"))?)
         } else {
             Self::V1(

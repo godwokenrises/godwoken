@@ -1,6 +1,5 @@
-use super::state::RecoveryState;
 use super::*;
-use crate::{db::Database, network::Rpc};
+use crate::network::Rpc;
 use anyhow::{bail, ensure, Context, Result};
 use serde_json::{json, Value};
 use std::{
@@ -131,26 +130,6 @@ pub fn resolved(tx: &Transaction, inputs: &[Cell]) -> Result<contract::Transacti
         outpoints: points.iter().map(outpoint).collect::<Result<_>>()?,
     })
 }
-pub fn action(tx: &Transaction, profile: &contract::Profile) -> Result<contract::Action> {
-    let rollup = Script::from_packed(profile.rollup.clone())?;
-    let i = tx
-        .outputs
-        .iter()
-        .position(|o| o.type_script.as_ref() == Some(&rollup))
-        .context("Missing output rollup")?;
-    let w = bytes(
-        tx.witnesses
-            .get(i)
-            .context("Missing rollup output witness")?,
-    )?;
-    let w = packed::WitnessArgsReader::from_slice(&w)?;
-    let data = w
-        .output_type()
-        .to_opt()
-        .context("Missing recovery action")?;
-    contract::codec::decode_action(data.raw_data())
-        .map_err(|e| anyhow::anyhow!("Recovery action: {e:?}"))
-}
 #[derive(Debug, Serialize)]
 pub struct Replay {
     pub transaction_hash: String,
@@ -158,124 +137,6 @@ pub struct Replay {
     pub output_rollup: OutPoint,
     pub before_root: String,
     pub after_root: String,
-}
-pub fn reconstruct<'a>(
-    db: &'a Database,
-    rpc: &impl Chain,
-    p: &contract::Profile,
-    cfg: &packed::RollupConfig,
-    current: &Cell,
-    confirmations: u64,
-) -> Result<(RecoveryState<'a>, Vec<Replay>)> {
-    let mut state = RecoveryState::new(db)?;
-    ensure!(
-        p.bootstrap_state.account().merkle_root().as_slice() == state.root(),
-        "DB is not the profile bootstrap snapshot"
-    );
-    ensure!(
-        u32::from_le_bytes(p.bootstrap_state.account().count().as_slice().try_into()?)
-            == db.tip.account_count
-            && p.bootstrap_state.tip_block_hash().as_slice() == hash32(&db.tip.hash)?,
-        "Bootstrap metadata differs from DB"
-    );
-    let anchor = from_outpoint(&p.bootstrap_outpoint);
-    let rollup = Script::from_packed(p.rollup.clone())?;
-    let mut history = History::new(rpc, confirmations)?;
-    // Also authenticate the current anchor's inclusion/confirmations, even before the first exit.
-    let observed = history.cell(&current.out_point)?;
-    ensure!(
-        same_cell(&observed, current),
-        "Current rollup differs from canonical history"
-    );
-    let mut cursor = current.out_point.clone();
-    let mut seen = BTreeSet::new();
-    let mut chain = Vec::new();
-    while cursor != anchor {
-        ensure!(
-            chain.len() < 10_000 && seen.insert(cursor.clone()),
-            "Recovery history limit or cycle"
-        );
-        let tx = history.transaction(&cursor.tx_hash)?;
-        ensure!(
-            tx.inputs.len() <= contract::MAX_INPUTS && tx.outputs.len() <= contract::MAX_OUTPUTS,
-            "Historical exit exceeds contract bounds"
-        );
-        let inputs = tx
-            .input_points()?
-            .iter()
-            .map(|op| history.cell(op))
-            .collect::<Result<Vec<_>>>()?;
-        let prev: Vec<_> = inputs
-            .iter()
-            .filter(|c| c.output.type_script.as_ref() == Some(&rollup))
-            .collect();
-        ensure!(prev.len() == 1, "History has no unique rollup predecessor");
-        let point = prev[0].out_point.clone();
-        let outputs: Vec<_> = tx
-            .outputs
-            .iter()
-            .enumerate()
-            .filter(|(_, o)| o.type_script.as_ref() == Some(&rollup))
-            .collect();
-        ensure!(
-            outputs.len() == 1 && quantity(&cursor.index)? == outputs[0].0 as u64,
-            "History output is not the unique rollup"
-        );
-        chain.push((tx, inputs, point.clone(), cursor));
-        cursor = point;
-    }
-    let bootstrap = history.cell(&anchor)?;
-    ensure!(
-        bootstrap.output.type_script.as_ref() == Some(&rollup),
-        "Bootstrap rollup type differs from profile"
-    );
-    ensure!(
-        bootstrap.output.lock.packed()?.as_slice() == p.bootstrap_lock.as_slice()
-            && quantity(&bootstrap.output.capacity)? == p.bootstrap_capacity
-            && bytes(&bootstrap.output_data)? == p.bootstrap_state.as_slice(),
-        "Bootstrap anchor bytes differ from profile"
-    );
-    let mut journal = Vec::new();
-    for (tx, inputs, previous, next) in chain.into_iter().rev() {
-        let transition = resolved(&tx, &inputs)?;
-        let a = action(&tx, p)?;
-        let prior = inputs
-            .iter()
-            .find(|c| c.out_point == previous)
-            .context("Missing predecessor")?;
-        ensure!(
-            GlobalState::parse(&bytes(&prior.output_data)?)?.account_root == hx(state.root()),
-            "Recovery history is discontinuous"
-        );
-        // Match every witness value to locally reconstructed state before applying the verified delta.
-        for (k, v) in &a.kv {
-            ensure!(
-                state.read(*k)? == *v,
-                "History witness disagrees with reconstructed storage"
-            );
-        }
-        let outcome = contract::verify(p, cfg, &transition, &a)
-            .map_err(|e| anyhow::anyhow!("Invalid historical exit: {e:?}"))?;
-        let before = hx(state.root());
-        state.apply(&a, &outcome)?;
-        journal.push(Replay {
-            transaction_hash: tx.hash()?,
-            input_rollup: previous,
-            output_rollup: next,
-            before_root: before,
-            after_root: hx(state.root()),
-        });
-    }
-    ensure!(
-        GlobalState::parse(&bytes(&current.output_data)?)?.account_root == hx(state.root()),
-        "Reconstructed L2 root does not equal live rollup root"
-    );
-    history.recheck()?;
-    ensure!(
-        same_cell(&live(rpc, &current.out_point)?, current),
-        "Rollup changed during reconstruction"
-    );
-    Ok((state, journal))
 }
 pub fn verify_dependencies(
     rpc: &impl Chain,

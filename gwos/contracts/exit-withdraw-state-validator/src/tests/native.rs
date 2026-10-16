@@ -1,5 +1,7 @@
+#[path = "native_support.rs"]
 mod support;
-use exit_withdraw_state_validator::*;
+use crate::*;
+use alloc::vec;
 use gw_common::state::*;
 use gw_hash::blake2b::hash;
 use gw_types::{packed, prelude::*, U256};
@@ -33,7 +35,7 @@ fn codec_roundtrip_binds_profile_hash() {
     let pb = encode_profile(&f.p);
     let p = codec::decode_profile(&pb, hash(&pb)).unwrap();
     let a = codec::decode_action(&encode_action(&f.a)).unwrap();
-    verify(&p, &f.cfg, &f.tx, &a).unwrap();
+    support::verify_native(&p, &f.cfg, &f.tx, &a).unwrap();
     assert_eq!(
         codec::decode_profile(&pb, [0; 32]).unwrap_err(),
         Error::Profile
@@ -46,7 +48,7 @@ fn codec_roundtrip_binds_profile_hash() {
     );
 }
 #[test]
-fn normal_actions_and_trailing_bytes_rejected() {
+fn native_payload_invalid_lengths_and_trailing_bytes_rejected() {
     let f = Fixture::new();
     for tag in [0u32, 1, 2, 3, 5, u32::MAX] {
         let mut b = encode_action(&f.a);
@@ -305,7 +307,7 @@ reject!(unfinalized_custodian, Error::Finality, |f: &mut Fixture| {
     f.tx.inputs[1].lock = script(custodian_hash(), [&args[..32], c.as_slice()].concat());
 });
 reject!(too_many_recipients, Error::Limit, |f: &mut Fixture| {
-    f.a.recipients = vec![f.a.recipients[0].clone(); 9];
+    f.a.recipients = vec![f.a.recipients[0].clone(); MAX_RECIPIENTS + 1];
 });
 reject!(empty_batch, Error::Limit, |f: &mut Fixture| {
     f.a.payouts.clear();
@@ -600,17 +602,32 @@ fn borrowed_global_state_comparison_preserves_all_other_fields() {
 
 #[test]
 fn v0_id_reverse_mapping_is_plain_le32_not_v1_exists_flag() {
-    use native::{NativeVersion,short_key};
-    for id in [0u32,1,24402] {
-        let sh=[0x42;32];let short=[0x42;20];
-        let mut leaves=std::collections::BTreeMap::from([
-            (build_account_field_key(id,GW_ACCOUNT_SCRIPT_HASH_TYPE),sh),
-            (short_key(short),sh),
+    use native::{short_key, NativeVersion};
+    for id in [0u32, 1, 24402] {
+        let sh = [0x42; 32];
+        let short = [0x42; 20];
+        let mut leaves = std::collections::BTreeMap::from([
+            (build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH_TYPE), sh),
+            (short_key(short), sh),
         ]);
-        let key=build_script_hash_to_account_id_key(&sh);
-        let mut raw=[0;32];raw[..4].copy_from_slice(&id.to_le_bytes());leaves.insert(key,raw);
-        assert!(NativeVersion::V0.identity(id,sh,short,50000,|k|Ok(*leaves.get(&k).unwrap_or(&[0;32]))).is_ok());
-        raw[4]=1;leaves.insert(key,raw);
-        assert_eq!(NativeVersion::V0.identity(id,sh,short,50000,|k|Ok(*leaves.get(&k).unwrap_or(&[0;32]))).unwrap_err(),Error::Recipient);
+        let key = build_script_hash_to_account_id_key(&sh);
+        let mut raw = [0; 32];
+        raw[..4].copy_from_slice(&id.to_le_bytes());
+        leaves.insert(key, raw);
+        assert!(NativeVersion::V0
+            .identity(id, sh, short, 50000, |k| Ok(*leaves
+                .get(&k)
+                .unwrap_or(&[0; 32])))
+            .is_ok());
+        raw[4] = 1;
+        leaves.insert(key, raw);
+        assert_eq!(
+            NativeVersion::V0
+                .identity(id, sh, short, 50000, |k| Ok(*leaves
+                    .get(&k)
+                    .unwrap_or(&[0; 32])))
+                .unwrap_err(),
+            Error::Recipient
+        );
     }
 }

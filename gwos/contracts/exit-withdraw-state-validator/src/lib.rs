@@ -15,3 +15,13 @@ pub mod native;
 pub mod v0;
 
 pub mod control;
+
+pub mod proof_backend;
+
+pub mod transport;
+
+#[cfg(test)]
+extern crate std;
+#[cfg(test)]
+#[path = "tests/native.rs"]
+mod native_tests;

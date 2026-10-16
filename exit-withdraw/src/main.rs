@@ -73,7 +73,7 @@ enum Command {
     },
     /// Serve explicitly selected V1/V0 refunds and the ETH-signed L1 claim API.
     ClaimServe(godwoken_withdraw::claim::server::Options),
-    /// Approved-allocation refunds: plan, register, pay and verify.
+    /// Approved V3 refunds: commit one state root, pay and verify.
     Settlement {
         #[arg(long, value_enum, default_value = "v1", global = true)]
         protocol: Protocol,
@@ -84,42 +84,65 @@ enum Command {
 #[derive(Subcommand)]
 enum UpgradeCommand {
     Build {
-        #[arg(long)] request: PathBuf,
-        #[arg(long)] deployment: PathBuf,
-        #[arg(long)] binary: PathBuf,
-        #[arg(long)] output_dir: PathBuf,
-        #[arg(long, default_value="https://mainnet.ckb.dev/rpc")] ckb_rpc: String,
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        deployment: PathBuf,
+        #[arg(long)]
+        binary: PathBuf,
+        #[arg(long)]
+        output_dir: PathBuf,
+        #[arg(long, default_value = "https://mainnet.ckb.dev/rpc")]
+        ckb_rpc: String,
     },
     AssembleSignatures {
-        #[arg(long)] skeleton: PathBuf,
-        #[arg(long, required=true, num_args=1..)] signatures: Vec<PathBuf>,
-        #[arg(long)] output: PathBuf,
+        #[arg(long)]
+        skeleton: PathBuf,
+        #[arg(long, required=true, num_args=1..)]
+        signatures: Vec<PathBuf>,
+        #[arg(long)]
+        output: PathBuf,
     },
     VerifySigned {
-        #[arg(long)] skeleton: PathBuf,
-        #[arg(long)] deployment: PathBuf,
-        #[arg(long)] transaction: PathBuf,
-        #[arg(long)] output: PathBuf,
-        #[arg(long, default_value="https://mainnet.ckb.dev/rpc")] ckb_rpc: String,
+        #[arg(long)]
+        skeleton: PathBuf,
+        #[arg(long)]
+        deployment: PathBuf,
+        #[arg(long)]
+        transaction: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long, default_value = "https://mainnet.ckb.dev/rpc")]
+        ckb_rpc: String,
     },
 }
 #[derive(Subcommand)]
 enum RefundCommand {
     /// Inspect every asset in a generated report; optionally select an account or ETH owner.
     Inspect {
-        #[arg(long, value_enum)] protocol: Protocol,
-        #[arg(long)] report: PathBuf,
-        #[arg(long)] account_id: Option<u32>,
-        #[arg(long)] eth_address: Option<String>,
-        #[arg(long)] output: PathBuf,
+        #[arg(long, value_enum)]
+        protocol: Protocol,
+        #[arg(long)]
+        report: PathBuf,
+        #[arg(long)]
+        account_id: Option<u32>,
+        #[arg(long)]
+        eth_address: Option<String>,
+        #[arg(long)]
+        output: PathBuf,
     },
     /// Commit a complete generated report to a settlement plan, checking source balances in DB.
     ExportPlan {
-        #[arg(long, value_enum)] protocol: Protocol,
-        #[arg(long)] db: PathBuf,
-        #[arg(long)] report: PathBuf,
-        #[arg(long)] deployment_id: String,
-        #[arg(long)] output: PathBuf,
+        #[arg(long, value_enum)]
+        protocol: Protocol,
+        #[arg(long)]
+        db: PathBuf,
+        #[arg(long)]
+        report: PathBuf,
+        #[arg(long)]
+        deployment_id: String,
+        #[arg(long)]
+        output: PathBuf,
     },
     /// Offline V0/V1 reconstruction from the original DB and embedded approved policy.
     Generate {
@@ -167,36 +190,118 @@ fn execute(cli: Cli) -> Result<u8> {
         Command::Upgrade { command } => {
             use godwoken_withdraw::upgrade;
             match command {
-                UpgradeCommand::Build{request,deployment,binary,output_dir,ckb_rpc} => {
-                    let out=new_output(&output_dir,None)?;
-                    let sk=upgrade::build(&serde_json::from_value(read(&request)?)?,&serde_json::from_value(read(&deployment)?)?,&fs::read(binary)?,&network::Rpc::new(&ckb_rpc)?)?;
-                    save(&out.join("skeleton.json"),&serde_json::to_value(&sk)?)?;
-                    save(&out.join("transaction.json"),&serde_json::to_value(&sk.transaction)?)?;
-                    save(&out.join("signing-request.json"),&serde_json::to_value(upgrade::signing_request(&sk)?)?)?;
-                },
-                UpgradeCommand::AssembleSignatures{skeleton,signatures,output}=>{
-                    let out=new_output(&output,None)?;
-                    let responses=signatures.iter().map(|p|Ok(serde_json::from_value(read(p)?)?)).collect::<Result<Vec<_>>>()?;
-                    save(&out,&serde_json::to_value(upgrade::assemble(&serde_json::from_value(read(&skeleton)?)?,&responses)?)?)?;
-                },
-                UpgradeCommand::VerifySigned{skeleton,deployment,transaction,output,ckb_rpc}=>{
-                    let out=new_output(&output,None)?;
-                    let rpc=network::Rpc::new(&ckb_rpc)?;
-                    ensure!(rpc.call("get_block_hash",serde_json::json!(["0x0"]))?==godwoken_withdraw::claim::GENESIS,"Not CKB mainnet");
-                    save(&out,&upgrade::verify(&serde_json::from_value(read(&skeleton)?)?,&serde_json::from_value(read(&deployment)?)?,&serde_json::from_value(read(&transaction)?)?,&rpc)?)?;
+                UpgradeCommand::Build {
+                    request,
+                    deployment,
+                    binary,
+                    output_dir,
+                    ckb_rpc,
+                } => {
+                    let out = new_output(&output_dir, None)?;
+                    let sk = upgrade::build(
+                        &serde_json::from_value(read(&request)?)?,
+                        &serde_json::from_value(read(&deployment)?)?,
+                        &fs::read(binary)?,
+                        &network::Rpc::new(&ckb_rpc)?,
+                    )?;
+                    save(&out.join("skeleton.json"), &serde_json::to_value(&sk)?)?;
+                    save(
+                        &out.join("transaction.json"),
+                        &serde_json::to_value(&sk.transaction)?,
+                    )?;
+                    save(
+                        &out.join("signing-request.json"),
+                        &serde_json::to_value(upgrade::signing_request(&sk)?)?,
+                    )?;
                 }
-            } Ok(0)
+                UpgradeCommand::AssembleSignatures {
+                    skeleton,
+                    signatures,
+                    output,
+                } => {
+                    let out = new_output(&output, None)?;
+                    let responses = signatures
+                        .iter()
+                        .map(|p| Ok(serde_json::from_value(read(p)?)?))
+                        .collect::<Result<Vec<_>>>()?;
+                    save(
+                        &out,
+                        &serde_json::to_value(upgrade::assemble(
+                            &serde_json::from_value(read(&skeleton)?)?,
+                            &responses,
+                        )?)?,
+                    )?;
+                }
+                UpgradeCommand::VerifySigned {
+                    skeleton,
+                    deployment,
+                    transaction,
+                    output,
+                    ckb_rpc,
+                } => {
+                    let out = new_output(&output, None)?;
+                    let rpc = network::Rpc::new(&ckb_rpc)?;
+                    ensure!(
+                        rpc.call("get_block_hash", serde_json::json!(["0x0"]))?
+                            == godwoken_withdraw::claim::GENESIS,
+                        "Not CKB mainnet"
+                    );
+                    save(
+                        &out,
+                        &upgrade::verify(
+                            &serde_json::from_value(read(&skeleton)?)?,
+                            &serde_json::from_value(read(&deployment)?)?,
+                            &serde_json::from_value(read(&transaction)?)?,
+                            &rpc,
+                        )?,
+                    )?;
+                }
+            }
+            Ok(0)
         }
-        Command::Refund { command: RefundCommand::Inspect{protocol,report,account_id,eth_address,output}}=>{
-            let out=new_output(&output,None)?;
-            save(&out,&godwoken_withdraw::settlement::table::inspect(&read(&report)?,protocol,account_id,eth_address.as_deref())?)?;Ok(0)
+        Command::Refund {
+            command:
+                RefundCommand::Inspect {
+                    protocol,
+                    report,
+                    account_id,
+                    eth_address,
+                    output,
+                },
+        } => {
+            let out = new_output(&output, None)?;
+            save(
+                &out,
+                &godwoken_withdraw::settlement::table::inspect(
+                    &read(&report)?,
+                    protocol,
+                    account_id,
+                    eth_address.as_deref(),
+                )?,
+            )?;
+            Ok(0)
         }
-        Command::Refund { command: RefundCommand::ExportPlan{protocol,db,report,deployment_id,output}}=>{
-            let out=new_output(&output,Some(&db))?;
-            let db=godwoken_withdraw::settlement::adapter::open(protocol,&db)?;
-            let raw=fs::read(report)?;
-            let plan=godwoken_withdraw::settlement::table::export(db.as_ref(),&serde_json::from_slice(&raw)?,&raw,hash32(&deployment_id)?)?;
-            save(&out,&serde_json::to_value(plan)?)?;Ok(0)
+        Command::Refund {
+            command:
+                RefundCommand::ExportPlan {
+                    protocol,
+                    db,
+                    report,
+                    deployment_id,
+                    output,
+                },
+        } => {
+            let out = new_output(&output, Some(&db))?;
+            let db = godwoken_withdraw::settlement::adapter::open(protocol, &db)?;
+            let raw = fs::read(report)?;
+            let plan = godwoken_withdraw::settlement::table::export(
+                db.as_ref(),
+                &serde_json::from_slice(&raw)?,
+                &raw,
+                hash32(&deployment_id)?,
+            )?;
+            save(&out, &serde_json::to_value(plan)?)?;
+            Ok(0)
         }
         Command::Refund {
             command:
@@ -208,7 +313,11 @@ fn execute(cli: Cli) -> Result<u8> {
         } => {
             let out = new_output(&output_dir, Some(&db))?;
             let tables = match protocol {
-                Protocol::V0 => { let candidate = godwoken_withdraw::refund::reconstruct_candidate(protocol, &db)?; godwoken_withdraw::refund::reports::v0(&candidate)? },
+                Protocol::V0 => {
+                    let candidate =
+                        godwoken_withdraw::refund::reconstruct_candidate(protocol, &db)?;
+                    godwoken_withdraw::refund::reports::v0(&candidate)?
+                }
                 Protocol::V1 => godwoken_withdraw::refund::v1::reconstruct(&db)?,
             };
             fs::create_dir_all(out.parent().context("Report parent")?)?;

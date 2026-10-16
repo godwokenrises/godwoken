@@ -44,6 +44,9 @@ fn deploy(node: &mut Node, deps: &mut Vec<Dependency>, typ: Option<Script>, data
     node.insert(tx);
 }
 fn fixture() -> Fixture {
+    fixture_scaled(false, false)
+}
+fn fixture_scaled(large: bool, one_source: bool) -> Fixture {
     let (mut node, mut poa) = super::v0_upgrade::poa_fixture(true, 2);
     let data_type: Script = serde_json::from_value(
         super::v0_upgrade::evidence("poa-data-current")["response"]["result"]["objects"][0]
@@ -106,6 +109,24 @@ fn fixture() -> Fixture {
             .packed()
             .unwrap(),
     );
+    if large {
+        for k in 2..=20u8 {
+            accounts.insert(
+                k as u32 + 4,
+                script(v0::ETH, [roll_hash.as_slice(), &eth(k)].concat())
+                    .packed()
+                    .unwrap(),
+            );
+        }
+        for i in 0..20u8 {
+            accounts.insert(
+                25 + i as u32,
+                script([88; 32], [roll_hash.as_slice(), &[100 + i; 20]].concat())
+                    .packed()
+                    .unwrap(),
+            );
+        }
+    }
     let mut native = Tree::default();
     for (id, sc) in &accounts {
         let sh = contract::script_hash(sc);
@@ -126,10 +147,15 @@ fn fixture() -> Fixture {
             .unwrap();
     }
     let d = hash(b"v0 signed settlement fixture deployment");
-    let mut records: [BTreeMap<contract::Hash, Vec<u8>>; 12] =
+    let mut records: [BTreeMap<contract::Hash, Vec<u8>>; s::RECORD_KINDS] =
         std::array::from_fn(|_| BTreeMap::new());
     for (account, asset, baseline, eligible) in [
-        (5, 1, 1400 * CAP, 600 * CAP),
+        (
+            5,
+            1,
+            if large { 14000 * CAP } else { 1400 * CAP },
+            if large { 6000 * CAP } else { 600 * CAP },
+        ),
         (5, 3, 500, 100),
         (RAW_DESTINATION, 1, 80 * CAP, 0),
     ] {
@@ -199,6 +225,172 @@ fn fixture() -> Fixture {
             }
         }
     }
+    if large {
+        // Benchmark fixture: split the token entitlement into 31 independent lots/claims.
+        let token_claim_key = *records[s::CLAIM_PLAN]
+            .iter()
+            .find(|(_, b)| {
+                let c: Claim = decode(b).unwrap();
+                let src: Source = decode(&records[s::SOURCE_PLAN][&c.source]).unwrap();
+                src.asset == 3
+            })
+            .unwrap()
+            .0;
+        let old: Claim = decode(&records[s::CLAIM_PLAN].remove(&token_claim_key).unwrap()).unwrap();
+        let old_lot: Lot = decode(&records[s::LOT_PLAN].remove(&old.lot).unwrap()).unwrap();
+        for i in 0..31u64 {
+            let n = 100 * (i + 1) / 31 - 100 * i / 31;
+            let mut lot = old_lot.clone();
+            lot.id = hash(&[b"token".as_slice(), &i.to_le_bytes()].concat());
+            lot.amount = n.into();
+            let lk = lot_key(d, &lot);
+            records[s::LOT_PLAN].insert(lk, encode(&lot));
+            let mut c = old.clone();
+            c.lot = lk;
+            c.cap = n.into();
+            let k = (i % 20 + 1) as u8;
+            c.recipient = if k == 1 { 4 } else { k as u32 + 4 };
+            c.script_hash = contract::script_hash(&accounts[&c.recipient]);
+            c.address = eth(k);
+            records[s::CLAIM_PLAN].insert(claim_key(d, &c), encode(&c));
+        }
+        let ck = *records[s::CLAIM_PLAN]
+            .iter()
+            .find(|(_, b)| {
+                let c: Claim = decode(b).unwrap();
+                let src: Source = decode(&records[s::SOURCE_PLAN][&c.source]).unwrap();
+                src.asset == 1
+            })
+            .unwrap()
+            .0;
+        let old: Claim = decode(&records[s::CLAIM_PLAN].remove(&ck).unwrap()).unwrap();
+        let old_lot: Lot = decode(&records[s::LOT_PLAN].remove(&old.lot).unwrap()).unwrap();
+        for k in 1..=20u8 {
+            let mut lot = old_lot.clone();
+            lot.id = hash(&[b"ckb".as_slice(), &[k]].concat());
+            lot.amount = (300 * CAP).into();
+            let lk = lot_key(d, &lot);
+            records[s::LOT_PLAN].insert(lk, encode(&lot));
+            let mut c = old.clone();
+            c.lot = lk;
+            c.cap = lot.amount;
+            c.recipient = if k == 1 { 4 } else { k as u32 + 4 };
+            c.script_hash = contract::script_hash(&accounts[&c.recipient]);
+            c.address = eth(k);
+            records[s::CLAIM_PLAN].insert(claim_key(d, &c), encode(&c));
+        }
+
+        // Redistribute 51 claims across 20 source accounts (or one paged account), conserving balances.
+        let claims: Vec<Claim> = records[s::CLAIM_PLAN]
+            .values()
+            .map(|b| decode(b).unwrap())
+            .collect();
+        records[s::CLAIM_PLAN].clear();
+        let mut moved = BTreeMap::<contract::Hash, U256>::new();
+        let mut new_sources = BTreeMap::<contract::Hash, Source>::new();
+        for mut c in claims {
+            let src: Source = decode(&records[s::SOURCE_PLAN][&c.source]).unwrap();
+            *moved.entry(c.source).or_default() += c.cap;
+            let index = if c.recipient == 4 { 0 } else { c.recipient - 5 };
+            let id = if one_source { 25 } else { 25 + index };
+            let sh = contract::script_hash(&accounts[&id]);
+            let mut ns = src;
+            ns.account = id;
+            ns.script_hash = sh;
+            ns.address = sh[..20].try_into().unwrap();
+            ns.baseline = U256::zero();
+            let sk = source_key(d, &ns);
+            let entry = new_sources.entry(sk).or_insert(ns);
+            entry.baseline += c.cap;
+            let mut lot: Lot = decode(&records[s::LOT_PLAN].remove(&c.lot).unwrap()).unwrap();
+            lot.source = sk;
+            c.lot = lot_key(d, &lot);
+            records[s::LOT_PLAN].insert(c.lot, encode(&lot));
+            c.source = sk;
+            records[s::CLAIM_PLAN].insert(claim_key(d, &c), encode(&c));
+        }
+        for (sk, n) in moved {
+            let mut src: Source = decode(&records[s::SOURCE_PLAN][&sk]).unwrap();
+            src.baseline -= n;
+            native
+                .update(
+                    NativeVersion::V0.balance_key(src.asset, src.address).into(),
+                    contract::value(src.baseline).into(),
+                )
+                .unwrap();
+            records[s::SOURCE_PLAN].insert(sk, encode(&src));
+        }
+        for (sk, src) in new_sources {
+            native
+                .update(
+                    NativeVersion::V0.balance_key(src.asset, src.address).into(),
+                    contract::value(src.baseline).into(),
+                )
+                .unwrap();
+            records[s::SOURCE_PLAN].insert(sk, encode(&src));
+        }
+
+        // 20,000 additional funded source accounts and claims, only to stress proof scale.
+        for i in 0..20000u32 {
+            let id = 45 + i;
+            let sc = script([88; 32], [roll_hash.as_slice(), &id.to_le_bytes()].concat())
+                .packed()
+                .unwrap();
+            let sh = contract::script_hash(&sc);
+            let address = sh[..20].try_into().unwrap();
+            accounts.insert(id, sc);
+            native
+                .update(
+                    build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH_TYPE).into(),
+                    sh.into(),
+                )
+                .unwrap();
+            let mut idv = [0; 32];
+            idv[..4].copy_from_slice(&id.to_le_bytes());
+            native
+                .update(build_script_hash_to_account_id_key(&sh).into(), idv.into())
+                .unwrap();
+            native.update(short_key(address).into(), sh.into()).unwrap();
+            native
+                .update(
+                    NativeVersion::V0.balance_key(1, address).into(),
+                    contract::value(U256::one()).into(),
+                )
+                .unwrap();
+            let src = Source {
+                account: id,
+                script_hash: sh,
+                address,
+                asset: 1,
+                type_hash: [0; 32],
+                baseline: U256::one(),
+                evidence: [10; 32],
+            };
+            let sk = source_key(d, &src);
+            records[s::SOURCE_PLAN].insert(sk, encode(&src));
+            let lot = Lot {
+                id: hash(&[b"background".as_slice(), &id.to_le_bytes()].concat()),
+                source: sk,
+                kind: INITIAL,
+                amount: U256::one(),
+                evidence: [11; 32],
+                reopen: [0; 32],
+            };
+            let lk = lot_key(d, &lot);
+            records[s::LOT_PLAN].insert(lk, encode(&lot));
+            let c = Claim {
+                epoch: 0,
+                source: sk,
+                lot: lk,
+                recipient: 4,
+                script_hash: contract::script_hash(&accounts[&4]),
+                address: eth(1),
+                cap: U256::one(),
+                evidence: [12; 32],
+            };
+            records[s::CLAIM_PLAN].insert(claim_key(d, &c), encode(&c));
+        }
+    }
     let mut control_scripts = BTreeMap::new();
     if std::env::var_os("GW_CONTROL_TEST").is_some() {
         let mut owners = vec![eth(1), eth(2), eth(4)];
@@ -222,7 +414,6 @@ fn fixture() -> Fixture {
             .collect();
         records[s::CLAIM_PLAN] = claims;
     }
-    let trees = std::array::from_fn(|i| plan::tree(&records[i]).unwrap());
     let state = packed::GlobalState::from_slice(
         &bytes(snap["rollup_cell"]["output_data"].as_str().unwrap()).unwrap(),
     )
@@ -235,7 +426,7 @@ fn fixture() -> Fixture {
                 .account()
                 .as_builder()
                 .merkle_root(packed::Byte32::from_slice(native.root().as_slice()).unwrap())
-                .count(6u32.pack())
+                .count((if large { 20045u32 } else { 6u32 }).pack())
                 .build(),
         )
         .build();
@@ -251,7 +442,7 @@ fn fixture() -> Fixture {
     });
     data.push("0x".into());
     outputs.push(CellOutput {
-        capacity: format!("0x{:x}", 2000 * CAP),
+        capacity: format!("0x{:x}", if large { 20000 * CAP } else { 2000 * CAP }),
         lock: custody_cell.output.lock.clone(),
         type_script: None,
     });
@@ -300,25 +491,29 @@ fn fixture() -> Fixture {
             base,
             deployment: d,
             manifest: [1; 32],
-            source_root: trees[s::SOURCE_PLAN].root().as_slice().try_into().unwrap(),
+            state_root: hash32(
+                &plan::initial_root(&[
+                    records[s::SOURCE_PLAN].clone(),
+                    records[s::LOT_PLAN].clone(),
+                    records[s::CLAIM_PLAN].clone(),
+                ])
+                .unwrap(),
+            )
+            .unwrap(),
             source_count: records[s::SOURCE_PLAN].len() as u64,
-            reserve_root: trees[s::LOT_PLAN].root().as_slice().try_into().unwrap(),
             reserve_count: records[s::LOT_PLAN].len() as u64,
             initial_epoch: Epoch {
                 id: 0,
-                claims_root: trees[s::CLAIM_PLAN].root().as_slice().try_into().unwrap(),
-                claim_count: 2,
+                claim_count: if large { 20051 } else { 2 },
                 manifest: [2; 32],
                 policy: [3; 32],
-                parent: [0; 32],
-                allowed_lots_root: [0; 32],
                 status: PENDING,
             },
             limits: vec![
                 AssetLimit {
                     asset: 1,
                     type_hash: [0; 32],
-                    ceiling: (1000 * CAP).into(),
+                    ceiling: (if large { 10000 * CAP } else { 1000 * CAP }).into(),
                 },
                 AssetLimit {
                     asset: 3,
@@ -385,18 +580,15 @@ fn fixture() -> Fixture {
     let sponsor = point(&genesis, 5);
     let custody = vec![point(&genesis, 6), point(&genesis, 7)];
     node.insert(genesis);
+    let ledger =
+        Ledger::from_records(records, control_scripts, d, &profile.settlement.limits).unwrap();
     Fixture {
         node,
         deps,
         profile,
         config,
         native,
-        ledger: Ledger {
-            recipient_scripts: control_scripts,
-            records,
-            trees,
-            metadata: None,
-        },
+        ledger,
         accounts,
         roll,
         sponsor,
@@ -465,7 +657,6 @@ impl Fixture {
             records,
             native,
             NativeVersion::V0,
-            |id| Ok(self.accounts[&id].clone()),
             |keys| {
                 let ks: Vec<_> = keys.iter().map(|k| (*k).into()).collect();
                 Ok((
@@ -595,6 +786,7 @@ impl Fixture {
             if begin { None } else { Some(vec![0; 65]) },
             Some(v0::encode_action(a)),
         );
+        godwoken_withdraw::settlement::replay::frame_transaction(&mut tx).unwrap();
         if begin {
             tx.witnesses[2] = witness(Some(omni_signature(&[0; 65])), None);
             tx.witnesses[3] = witness(Some(omni_signature(&[0; 65])), None);
@@ -671,7 +863,7 @@ impl Fixture {
     }
     fn active(&mut self, vm: bool) {
         for _ in 0..30 {
-            if self.ledger.metadata.is_some_and(|m| m.phase == 2) {
+            if self.ledger.metadata.is_some() {
                 assert!(self
                     .ledger
                     .next_with_profile_hash(hash(&v0::encode_profile(&self.profile)), 2)
@@ -799,12 +991,19 @@ fn v0_shared_settlement_full_signed_lifecycle() {
 }
 
 fn replace_action(tx: &mut Transaction, a: &s::SettlementAction) {
+    tx.witnesses.truncate(tx.inputs.len());
     let w = packed::WitnessArgs::from_slice(&bytes(&tx.witnesses[0]).unwrap()).unwrap();
     tx.witnesses[0] = hx(w
         .as_builder()
         .output_type(Some(gw_types::bytes::Bytes::from(v0::encode_action(a))).pack())
         .build()
         .as_slice());
+    godwoken_withdraw::settlement::replay::frame_transaction(tx).unwrap();
+}
+fn decode_transaction(tx: &Transaction) -> s::SettlementAction {
+    let w = packed::WitnessArgs::from_slice(&bytes(&tx.witnesses[0]).unwrap()).unwrap();
+    let data = w.output_type().to_opt().unwrap().raw_data();
+    v0::decode_action(&godwoken_withdraw::settlement::replay::unframe(tx, &data).unwrap()).unwrap()
 }
 fn resign(f: &Fixture, tx: &mut Transaction) {
     let gov = Script::from_packed(f.profile.settlement.base.governance.clone()).unwrap();
@@ -863,7 +1062,7 @@ fn v0_signed_adversarial_and_second_overdraw() {
         s::PAID,
     ] {
         let mut bad = a.clone();
-        bad.trees.retain(|t| t.kind != kind);
+        super::settlement_e2e::tamper_state_record(&mut bad, kind, true);
         rejected(
             &f,
             &format!("missing root-only tree {kind}"),
@@ -871,12 +1070,7 @@ fn v0_signed_adversarial_and_second_overdraw() {
             bad,
         );
         let mut bad = a.clone();
-        let t = bad.trees.iter_mut().find(|t| t.kind == kind).unwrap();
-        if t.leaves[0].1.is_empty() {
-            t.leaves[0].1 = vec![1];
-        } else {
-            t.leaves[0].1[4] ^= 1;
-        }
+        super::settlement_e2e::tamper_state_record(&mut bad, kind, false);
         rejected(
             &f,
             &format!("forged root-only leaf {kind}"),
@@ -884,21 +1078,7 @@ fn v0_signed_adversarial_and_second_overdraw() {
             bad,
         );
     }
-    for op in [
-        s::Operation::RegisterSources,
-        s::Operation::RegisterReserves,
-        s::Operation::FinalizeSources,
-        s::Operation::SealBudgets,
-        s::Operation::RegisterClaims,
-        s::Operation::Activate,
-        s::Operation::BeginEpoch,
-        s::Operation::Unregister,
-        s::Operation::Abort,
-    ] {
-        let mut bad = a.clone();
-        bad.op = op;
-        rejected(&f, &format!("disabled operation {op:?}"), tx.clone(), bad);
-    }
+
     let mut bad = a.clone();
     bad.records.push(bad.records[0].clone());
     rejected(&f, "duplicate payment", tx.clone(), bad);
@@ -1244,19 +1424,6 @@ fn v0_native_keys_profile_and_protected_reserves() {
     assert!(f.ledger.records[s::CLAIM_PLAN]
         .values()
         .all(|r| decode::<Claim>(r).unwrap().source != k));
-    for op in [
-        s::Operation::RegisterSources,
-        s::Operation::RegisterReserves,
-        s::Operation::FinalizeSources,
-        s::Operation::SealBudgets,
-        s::Operation::RegisterClaims,
-        s::Operation::Activate,
-        s::Operation::BeginEpoch,
-        s::Operation::Unregister,
-        s::Operation::Abort,
-    ] {
-        assert!(f.action(op, vec![], empty_action()).is_err());
-    }
 }
 
 #[test]
@@ -1375,6 +1542,25 @@ impl Fixture {
         records: Vec<Vec<u8>>,
         amounts: Option<BTreeMap<u32, String>>,
     ) -> Skeleton {
+        let requests = amounts.map(|amounts| {
+            vec![Request::Amounts {
+                eth_address: hx(self
+                    .ledger
+                    .recipient_scripts
+                    .get(&4)
+                    .map(|s| contract::control::identity(&s.packed().unwrap()))
+                    .unwrap_or(eth(1))),
+                amounts,
+            }]
+        });
+        self.production_requests(op, records, requests)
+    }
+    fn production_requests(
+        &self,
+        op: s::Operation,
+        records: Vec<Vec<u8>>,
+        requests: Option<Vec<Request>>,
+    ) -> Skeleton {
         use godwoken_withdraw::settlement::{self as tool, adapter::NativeDb};
         let d = self.deployment();
         let b = godwoken_withdraw::model::Bundle {
@@ -1413,7 +1599,7 @@ impl Fixture {
             .map(|d| self.node.live[&d.out_point].clone())
             .collect();
         let native = self.overlay().unwrap();
-        let sk = if let Some(amounts) = amounts {
+        let sk = if let Some(requests) = requests {
             tool::build::construct_with_controls(
                 self,
                 &self.ledger,
@@ -1422,15 +1608,7 @@ impl Fixture {
                 &native,
                 &d,
                 &b,
-                &[Request::Amounts {
-                    eth_address: hx(self
-                        .ledger
-                        .recipient_scripts
-                        .get(&4)
-                        .map(|s| contract::control::identity(&s.packed().unwrap()))
-                        .unwrap_or(eth(1))),
-                    amounts,
-                }],
+                &requests,
                 vec![self.node.live[&self.sponsor].clone()],
                 deps,
                 json!([]),
@@ -1527,16 +1705,7 @@ fn v0_production_builder_signer_and_omnilock_full_flow() {
         .unwrap()
     {
         let sk = f.production(op, records, None);
-        let a = v0::decode_action(
-            packed::WitnessArgs::from_slice(&bytes(&sk.transaction.witnesses[0]).unwrap())
-                .unwrap()
-                .output_type()
-                .to_opt()
-                .unwrap()
-                .raw_data()
-                .as_ref(),
-        )
-        .unwrap();
+        let a = decode_transaction(&sk.transaction);
         f.apply(&a, sk.transaction, vm);
     }
     for (capacity, token) in [(300 * CAP, 40u64), (300 * CAP, 60u64)] {
@@ -1549,16 +1718,7 @@ fn v0_production_builder_signer_and_omnilock_full_flow() {
                 (3, token.to_string()),
             ])),
         );
-        let a = v0::decode_action(
-            packed::WitnessArgs::from_slice(&bytes(&sk.transaction.witnesses[0]).unwrap())
-                .unwrap()
-                .output_type()
-                .to_opt()
-                .unwrap()
-                .raw_data()
-                .as_ref(),
-        )
-        .unwrap();
+        let a = decode_transaction(&sk.transaction);
         let p = point(&sk.transaction, 1);
         f.apply(&a, sk.transaction, vm);
         let (_, _, _, assets, mut request) = setup_claim();
@@ -1869,3 +2029,6 @@ fn v0_real_db_cold_artifacts_signed_vm() {
         std::fs::write(result_path,serde_json::to_vec_pretty(&json!({"status":"PASS","scope":"Real DB proofs; synthetic L1 inputs and public test-key authorities; no broadcast; end-user keys not used","signed_predecessor_chain_checked":true,"stages":results})).unwrap()).unwrap();
     }
 }
+
+#[path = "unified_batches.rs"]
+mod unified_batches;

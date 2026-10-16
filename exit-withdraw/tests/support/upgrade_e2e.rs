@@ -36,9 +36,13 @@ pub(super) fn exercise(mut node: Node, mut deployment: Deployment) {
     let fund = point(&tx, 1);
     node.insert(tx);
     // Only TYPE_ID + multisig execute during code replacement. New code is data.
-    let binary = std::fs::read("target/control-v1-validator")
-        .or_else(|_| std::fs::read("target/settlement-test-validator"))
-        .unwrap();
+    let mut binary = bytes(&old.output_data).unwrap();
+    if !binary.starts_with(b"\x7fELF") {
+        // VM bytecode is supplied by the protocol-specific settlement regression script.
+        return;
+    }
+    // ELF permits trailing data: change the code-cell hash without changing its executable program.
+    binary.extend_from_slice(b"V3-upgrade-fixture");
     deployment.validator_data_hash = hx(hash(&binary));
     let mut dependencies = deployment.cell_deps.clone();
     if !dependencies.iter().any(|d| {

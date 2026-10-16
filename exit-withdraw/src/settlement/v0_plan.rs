@@ -297,7 +297,7 @@ pub fn export(
     let mut p = plan::Plan {
         recipient_scripts: BTreeMap::new(),
         protocol: Protocol::V0,
-        version: 2,
+        version: s::FORMAT_VERSION,
         deployment: hx(deployment),
         snapshot_root: db.root(),
         manifest: String::new(),
@@ -306,15 +306,11 @@ pub fn export(
         reserves: lots.values().map(|s| hx(encode(s))).collect(),
         claims: claims.values().map(|s| hx(encode(s))).collect(),
         limits: limits.values().map(|s| hx(encode(s))).collect(),
-        source_root: String::new(),
-        reserve_root: String::new(),
-        claims_root: String::new(),
+        state_root: String::new(),
         input_sha256: checksums,
     };
     let maps = p.records()?;
-    p.source_root = plan::root(&maps[0])?;
-    p.reserve_root = plan::root(&maps[1])?;
-    p.claims_root = plan::root(&maps[2])?;
+    p.state_root = plan::initial_root(&maps)?;
     p.manifest = p.compute_manifest()?;
     p.verify()?;
     Ok(p)

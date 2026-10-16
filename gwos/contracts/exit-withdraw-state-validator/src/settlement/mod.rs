@@ -1,5 +1,7 @@
 //! Settlement-only consensus. All writes are derived from typed, authenticated records.
+use crate::proof_backend::ProofBackend;
 pub mod codec;
+pub mod physical;
 pub mod records;
 use crate::native::NativeVersion;
 use crate::{
@@ -10,7 +12,7 @@ use alloc::{
     collections::{BTreeMap, BTreeSet},
     vec::Vec,
 };
-use gw_smt::smt::{Blake2bHasher, CompiledMerkleProof};
+use gw_smt::smt::CompiledMerkleProof;
 use gw_types::{packed, prelude::*, U256};
 use records::*;
 
@@ -19,44 +21,24 @@ pub const PAID: usize = 1;
 pub const SOURCES: usize = 2;
 pub const RESERVES: usize = 3;
 pub const ASSETS: usize = 4;
-pub const COMPLETED: usize = 5;
-pub const LOT_RECEIPTS: usize = 6;
-pub const REGISTERED: usize = 7;
-pub const SOURCE_PLAN: usize = 8;
-pub const LOT_PLAN: usize = 9;
-pub const CLAIM_PLAN: usize = 10;
-pub const ALLOWED_LOTS: usize = 11;
-pub const MAX_RECORDS: usize = 32;
+pub const SOURCE_PLAN: usize = 5;
+pub const LOT_PLAN: usize = 6;
+pub const CLAIM_PLAN: usize = 7;
+pub const RECORD_KINDS: usize = 8;
+pub const FORMAT_VERSION: u32 = 3;
+pub const MAX_RECORDS: usize = 64;
 pub const MAX_TREE_KEYS: usize = 256;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Operation {
     Begin = 0,
-    RegisterSources = 1,
-    RegisterReserves = 2,
-    FinalizeSources = 3,
-    SealBudgets = 4,
-    RegisterClaims = 5,
-    Activate = 6,
     Pay = 7,
-    BeginEpoch = 8,
-    Unregister = 9,
-    Abort = 10,
 }
 impl Operation {
     pub fn from_u32(n: u32) -> Result<Self> {
         Ok(match n {
             0 => Self::Begin,
-            1 => Self::RegisterSources,
-            2 => Self::RegisterReserves,
-            3 => Self::FinalizeSources,
-            4 => Self::SealBudgets,
-            5 => Self::RegisterClaims,
-            6 => Self::Activate,
             7 => Self::Pay,
-            8 => Self::BeginEpoch,
-            9 => Self::Unregister,
-            10 => Self::Abort,
             _ => return Err(Error::Encoding),
         })
     }
@@ -66,9 +48,8 @@ pub struct SettlementProfile {
     pub base: Profile,
     pub deployment: Hash,
     pub manifest: Hash,
-    pub source_root: Hash,
+    pub state_root: Hash,
     pub source_count: u64,
-    pub reserve_root: Hash,
     pub reserve_count: u64,
     pub initial_epoch: Epoch,
     pub limits: Vec<AssetLimit>,
@@ -99,59 +80,126 @@ pub struct Evaluation {
     pub reads: BTreeSet<Hash>,
 }
 struct Trees<'a> {
-    proofs: &'a [TreeProof],
-    roots: [Hash; 12],
-    used: BTreeMap<usize, BTreeSet<Hash>>,
+    proof: &'a TreeProof,
+    pages: BTreeMap<Hash, physical::Page>,
+    locations: BTreeMap<(usize, Hash), Hash>,
+    globals: BTreeMap<(usize, Hash), Hash>,
+    used: BTreeSet<Hash>,
+    empty: Vec<u8>,
+    root: Hash,
+    deployment: Hash,
+    op: Operation,
     writes: BTreeMap<usize, BTreeMap<Hash, Vec<u8>>>,
 }
 impl<'a> Trees<'a> {
-    fn new(p: &'a [TreeProof], m: &Metadata, profile: &SettlementProfile) -> Result<Self> {
+    fn new(
+        proofs: &'a [TreeProof],
+        m: &Metadata,
+        p: &SettlementProfile,
+        op: Operation,
+    ) -> Result<Self> {
         require(
-            p.len() <= 12 && p.windows(2).all(|w| w[0].kind < w[1].kind),
-            Error::Encoding,
+            proofs.len() == 1 && proofs[0].kind == physical::STATE,
+            Error::Proof,
         )?;
-        let mut total = 0;
-        for t in p {
-            require(
-                t.kind < 12
-                    && !t.leaves.is_empty()
-                    && t.leaves.len() <= MAX_TREE_KEYS
-                    && t.leaves.windows(2).all(|w| w[0].0 < w[1].0),
-                Error::Keys,
-            )?;
-            require(
-                t.proof.0.len() <= MAX_PROOF
-                    && t.leaves.iter().all(|(_, v)| {
-                        v.len() <= 1024 && (v.is_empty() || commitment(v) != [0; 32])
-                    }),
-                Error::Limit,
-            )?;
-            total += t.leaves.len();
+        let proof = &proofs[0];
+        require(
+            !proof.leaves.is_empty()
+                && proof.leaves.len() <= MAX_TREE_KEYS
+                && proof.leaves.windows(2).all(|w| w[0].0 < w[1].0)
+                && proof.proof.0.len() <= MAX_PROOF,
+            Error::Limit,
+        )?;
+        let mut pages = BTreeMap::new();
+        let mut locations = BTreeMap::new();
+        for (k, raw) in &proof.leaves {
+            match physical::namespace(*k)? {
+                16 => {
+                    let page = physical::unpack_page(raw)?;
+                    for ((kind, key), _) in &page {
+                        if matches!(*kind, SOURCE_PLAN | LOT_PLAN | CLAIM_PLAN) {
+                            require(locations.insert((*kind, *key), *k).is_none(), Error::Keys)?;
+                        }
+                    }
+                    pages.insert(*k, page);
+                }
+                32 | 48 => require(raw.len() <= 1024, Error::Limit)?,
+                _ => return Err(Error::Keys),
+            }
         }
-        require(total <= MAX_KEYS, Error::Limit)?;
-        let mut roots = [[0; 32]; 12];
-        roots[..8].copy_from_slice(&m.roots);
-        roots[SOURCE_PLAN] = profile.source_root;
-        roots[LOT_PLAN] = profile.reserve_root;
+        let mut globals = BTreeMap::new();
+        globals.insert(
+            (EPOCHS, epoch_key(p.deployment, 0)),
+            physical::epoch_state_key(0),
+        );
+        for l in &p.limits {
+            globals.insert(
+                (ASSETS, asset_key(p.deployment, l.asset)),
+                physical::asset_state_key(l.asset),
+            );
+        }
         Ok(Self {
-            proofs: p,
-            roots,
-            used: BTreeMap::new(),
+            proof,
+            pages,
+            locations,
+            globals,
+            used: BTreeSet::new(),
+            empty: Vec::new(),
+            root: m.state_root,
+            deployment: p.deployment,
+            op,
             writes: BTreeMap::new(),
         })
     }
-    fn original(&mut self, t: usize, k: Hash) -> Result<&[u8]> {
-        self.used.entry(t).or_default().insert(k);
-        let p = self
-            .proofs
-            .iter()
-            .find(|p| p.kind == t)
-            .ok_or(Error::Proof)?;
-        let i = p
-            .leaves
-            .binary_search_by_key(&k, |v| v.0)
-            .map_err(|_| Error::Keys)?;
-        Ok(&p.leaves[i].1)
+    fn location(&self, kind: usize, key: Hash) -> Result<Hash> {
+        if matches!(kind, EPOCHS | ASSETS) {
+            return self.globals.get(&(kind, key)).copied().ok_or(Error::Keys);
+        }
+        self.locations
+            .get(&(physical::static_kind(kind)?, key))
+            .copied()
+            .ok_or(Error::Keys)
+    }
+    fn original(&mut self, kind: usize, key: Hash) -> Result<&[u8]> {
+        let loc = self.location(kind, key)?;
+        self.used.insert(loc);
+        if matches!(kind, EPOCHS | ASSETS) {
+            let i = self
+                .proof
+                .leaves
+                .binary_search_by_key(&loc, |v| v.0)
+                .map_err(|_| Error::Keys)?;
+            return Ok(&self.proof.leaves[i].1);
+        }
+        let page = self.pages.get(&loc).ok_or(Error::Proof)?;
+        if matches!(kind, SOURCE_PLAN | LOT_PLAN | CLAIM_PLAN) {
+            let raw = page.get(&(kind, key)).ok_or(Error::Keys)?;
+            let account = u32::from_le_bytes(loc[..4].try_into().map_err(|_| Error::Keys)?);
+            let source = match kind {
+                SOURCE_PLAN => {
+                    let src: records::Source = decode(raw)?;
+                    require(
+                        source_key(self.deployment, &src) == key && src.account == account,
+                        Error::Keys,
+                    )?;
+                    None
+                }
+                LOT_PLAN => Some(decode::<Lot>(raw)?.source),
+                CLAIM_PLAN => Some(decode::<Claim>(raw)?.source),
+                _ => None,
+            };
+            if let Some(source) = source {
+                let sloc = self.location(SOURCE_PLAN, source)?;
+                let src: records::Source = decode(
+                    self.pages
+                        .get(&sloc)
+                        .and_then(|p| p.get(&(SOURCE_PLAN, source)))
+                        .ok_or(Error::Keys)?,
+                )?;
+                require(src.account == account, Error::Keys)?;
+            }
+        }
+        Ok(page.get(&(kind, key)).unwrap_or(&self.empty))
     }
     fn get<T: Field>(&mut self, t: usize, k: Hash) -> Result<T> {
         self.original(t, k)?;
@@ -171,44 +219,73 @@ impl<'a> Trees<'a> {
         require(b.is_empty(), Error::State)
     }
     fn set<T: Field>(&mut self, t: usize, k: Hash, v: &T) -> Result<()> {
+        require(
+            physical::mutable(t) || (self.op == Operation::Begin && t == EPOCHS),
+            Error::State,
+        )?;
         self.original(t, k)?;
         self.writes.entry(t).or_default().insert(k, encode(v));
         Ok(())
     }
     fn finish(&self, m: &mut Metadata) -> Result<()> {
-        require(self.used.len() == self.proofs.len(), Error::Keys)?;
-        for p in self.proofs {
+        require(self.used.len() == self.proof.leaves.len(), Error::Keys)?;
+        let old = self
+            .proof
+            .leaves
+            .iter()
+            .map(|(k, v)| ((*k).into(), commitment(v).into()))
+            .collect();
+        let checked: Hash = self
+            .proof
+            .proof
+            .backend_root(old)
+            .map_err(|_| Error::Proof)?
+            .into();
+        require(checked == self.root, Error::Proof)?;
+        let mut pages = self.pages.clone();
+        let mut global = BTreeMap::new();
+        for (kind, writes) in &self.writes {
             require(
-                self.used
-                    .get(&p.kind)
-                    .is_some_and(|u| u.len() == p.leaves.len()),
-                Error::Keys,
+                physical::mutable(*kind) || (self.op == Operation::Begin && *kind == EPOCHS),
+                Error::State,
             )?;
-            let old = p
-                .leaves
-                .iter()
-                .map(|(k, v)| ((*k).into(), commitment(v).into()))
-                .collect();
-            let r: Hash = p
-                .proof
-                .compute_root::<Blake2bHasher>(old)
-                .map_err(|_| Error::Proof)?
-                .into();
-            require(r == self.roots[p.kind], Error::Proof)?;
-            if let Some(w) = self.writes.get(&p.kind) {
-                require(p.kind < 8, Error::State)?;
-                let new = p
-                    .leaves
-                    .iter()
-                    .map(|(k, v)| ((*k).into(), commitment(w.get(k).unwrap_or(v)).into()))
-                    .collect();
-                m.roots[p.kind] = p
-                    .proof
-                    .compute_root::<Blake2bHasher>(new)
-                    .map_err(|_| Error::Proof)?
-                    .into();
+            for (key, value) in writes {
+                let loc = self.location(*kind, *key)?;
+                if matches!(*kind, EPOCHS | ASSETS) {
+                    global.insert(loc, value.clone());
+                } else {
+                    pages
+                        .get_mut(&loc)
+                        .ok_or(Error::Keys)?
+                        .insert((*kind, *key), value.clone());
+                }
             }
         }
+        let new = self
+            .proof
+            .leaves
+            .iter()
+            .map(|(k, v)| {
+                let raw = if let Some(page) = pages.get(k) {
+                    let raw = physical::pack_page(page);
+                    require(
+                        raw.len() <= physical::MAX_PAGE_BYTES
+                            && page.len() <= physical::PAGE_ITEMS * 2,
+                        Error::Limit,
+                    )?;
+                    raw
+                } else {
+                    global.get(k).cloned().unwrap_or_else(|| v.clone())
+                };
+                Ok(((*k).into(), commitment(&raw).into()))
+            })
+            .collect::<Result<_>>()?;
+        m.state_root = self
+            .proof
+            .proof
+            .backend_root(new)
+            .map_err(|_| Error::Proof)?
+            .into();
         Ok(())
     }
 }
@@ -264,8 +341,7 @@ fn check_profile(p: &SettlementProfile) -> Result<()> {
     require(
         p.deployment != [0; 32]
             && p.manifest != [0; 32]
-            && p.source_root != [0; 32]
-            && p.reserve_root != [0; 32]
+            && p.state_root != [0; 32]
             && p.source_count > 0
             && p.reserve_count > 0,
         Error::Profile,
@@ -274,10 +350,7 @@ fn check_profile(p: &SettlementProfile) -> Result<()> {
     require(
         e.id == 0
             && e.status == PENDING
-            && e.claims_root != [0; 32]
             && e.claim_count > 0
-            && e.parent == [0; 32]
-            && e.allowed_lots_root == [0; 32]
             && e.manifest != [0; 32]
             && e.policy != [0; 32],
         Error::Profile,
@@ -305,10 +378,7 @@ pub fn evaluate_version(
 ) -> Result<Evaluation> {
     check_profile(p)?;
     // This release is immutable: one root commitment followed only by proven payments.
-    require(
-        matches!(a.op, Operation::Begin | Operation::Pay) && a.epoch == 0,
-        Error::State,
-    )?;
+    require(a.epoch == 0, Error::State)?;
     require(
         a.records.len() <= MAX_RECORDS && a.records.iter().all(|r| r.len() <= 1024),
         Error::Limit,
@@ -329,16 +399,7 @@ pub fn evaluate_version(
             profile: profile_hash,
             snapshot: p.base.bootstrap_state.account().merkle_root().unpack(),
             sequence: 0,
-            phase: 2,
-            next_epoch: 1,
-            pending_epoch: 0,
-            has_pending: 0,
-            roots: [[0; 32]; 8],
-            source_count: 0,
-            lot_count: 0,
-            finalized_count: 0,
-            registered_count: 0,
-            initial_lots_left: 0,
+            state_root: p.state_root,
         }
     } else {
         require(
@@ -353,13 +414,12 @@ pub fn evaluate_version(
                 && m.profile == profile_hash
                 && m.snapshot.as_slice()
                     == p.base.bootstrap_state.account().merkle_root().as_slice()
-                && m.phase <= 2
-                && m.has_pending <= 1,
+                && m.sequence > 0,
             Error::Profile,
         )?;
         m
     };
-    let mut trees = Trees::new(&a.trees, &m, p)?;
+    let mut trees = Trees::new(&a.trees, &m, p, a.op)?;
     let mut sources = BTreeMap::new();
     let mut payments = BTreeMap::new();
     let mut used_recipients = BTreeSet::new();
@@ -370,18 +430,17 @@ pub fn evaluate_version(
         *v = plus(*v, value)?;
         Ok(())
     };
-    // Non-payment actions cannot smuggle payout references; only source registration needs asset identities.
+    // Begin cannot carry payment references or native asset/recipient identities.
     require(
         a.op == Operation::Pay || a.native.payouts.is_empty(),
         Error::Output,
     )?;
     require(
-        matches!(a.op, Operation::Pay | Operation::RegisterSources) || a.native.assets.is_empty(),
+        a.op == Operation::Pay || a.native.assets.is_empty(),
         Error::Asset,
     )?;
     require(
-        matches!(a.op, Operation::Pay | Operation::RegisterClaims)
-            || a.native.recipients.is_empty(),
+        a.op == Operation::Pay || a.native.recipients.is_empty(),
         Error::Recipient,
     )?;
     match a.op {
@@ -394,22 +453,14 @@ pub fn evaluate_version(
             for l in &p.limits {
                 let k = asset_key(p.deployment, l.asset);
                 trees.absent(ASSETS, k)?;
-                trees.set(
-                    ASSETS,
-                    k,
-                    &AssetBudget {
-                        limit: *l,
-                        allocated: l.ceiling,
-                        paid: 0.into(),
-                    },
-                )?;
+                trees.set(ASSETS, k, &AssetBudget { paid: 0.into() })?;
             }
         }
         Operation::Pay => {
-            require(m.phase == 2 && !a.records.is_empty(), Error::State)?;
+            require(!a.records.is_empty(), Error::State)?;
             let e: Epoch = trees.get(EPOCHS, epoch_key(p.deployment, a.epoch))?;
             require(e.status == ACTIVE && e.id == a.epoch, Error::State)?;
-            trees.roots[CLAIM_PLAN] = e.claims_root;
+
             for b in &a.records {
                 let pay: Payment = decode(b)?;
                 let c = &pay.claim;
@@ -425,20 +476,13 @@ pub fn evaluate_version(
                     U256::zero()
                 } else {
                     let v: Paid = decode(old)?;
-                    require(v.claim == ck && !v.amount.is_zero(), Error::State)?;
+                    require(!v.amount.is_zero(), Error::State)?;
                     v.amount
                 };
                 let n = plus(n, pay.amount)?;
                 require(n <= c.cap, Error::Balance)?;
-                trees.set(
-                    PAID,
-                    ck,
-                    &Paid {
-                        claim: ck,
-                        amount: n,
-                    },
-                )?;
-                // Authenticate immutable source and payable lot against published roots.
+                trees.set(PAID, ck, &Paid { amount: n })?;
+                // Authenticate immutable source and payable lot within the published state root.
                 // Mutable budgets are created only when that source/lot is first requested.
                 let src: records::Source = trees.get(SOURCE_PLAN, c.source)?;
                 require(
@@ -464,13 +508,11 @@ pub fn evaluate_version(
                         .is_some_and(|w| w.contains_key(&c.lot))
                 {
                     Reserve {
-                        lot,
                         remaining: lot.amount,
                     }
                 } else {
                     trees.get::<Reserve>(RESERVES, c.lot)?
                 };
-                require(reserve.lot == lot, Error::State)?;
                 reserve.remaining = minus(reserve.remaining, pay.amount)?;
                 trees.set(RESERVES, c.lot, &reserve)?;
                 let mut s = if trees.original(SOURCES, c.source)?.is_empty()
@@ -479,60 +521,51 @@ pub fn evaluate_version(
                         .get(&SOURCES)
                         .is_some_and(|w| w.contains_key(&c.source))
                 {
-                    SourceBudget {
-                        source: src,
-                        allocated: src.baseline,
-                        paid: 0.into(),
-                        reserved: 0.into(),
-                        lot_sum: src.baseline,
-                        finalized: 1,
-                    }
+                    SourceBudget { paid: 0.into() }
                 } else {
                     trees.get::<SourceBudget>(SOURCES, c.source)?
                 };
-                require(s.source == src && s.finalized == 1, Error::State)?;
                 if checked_sources.insert(c.source) {
-                    source_identity(p, &a.native, &s.source, &mut reads, version)?;
+                    source_identity(p, &a.native, &src, &mut reads, version)?;
                     require(
                         version.amount(read_native(
                             &a.native,
                             &mut reads,
-                            version.balance_key(s.source.asset, s.source.address),
-                        )?)? == minus(s.source.baseline, s.paid)?,
+                            version.balance_key(src.asset, src.address),
+                        )?)? == minus(src.baseline, s.paid)?,
                         Error::Balance,
                     )?;
                 }
                 s.paid = plus(s.paid, pay.amount)?;
-                require(s.paid <= s.allocated, Error::Balance)?;
+                require(s.paid <= src.baseline, Error::Balance)?;
                 trees.set(SOURCES, c.source, &s)?;
-                let ak = asset_key(p.deployment, s.source.asset);
+                let ak = asset_key(p.deployment, src.asset);
                 let mut asset: AssetBudget = trees.get(ASSETS, ak)?;
+                let limit = p
+                    .limits
+                    .iter()
+                    .find(|l| l.asset == src.asset)
+                    .ok_or(Error::Asset)?;
                 require(
-                    asset.limit.asset == s.source.asset
-                        && asset.limit.type_hash == s.source.type_hash,
+                    limit.asset == src.asset && limit.type_hash == src.type_hash,
                     Error::Asset,
                 )?;
                 asset.paid = plus(asset.paid, pay.amount)?;
-                require(asset.paid <= asset.allocated, Error::Balance)?;
+                require(asset.paid <= limit.ceiling, Error::Balance)?;
                 trees.set(ASSETS, ak, &asset)?;
                 let v = sources
-                    .entry((s.source.asset, s.source.address))
+                    .entry((src.asset, src.address))
                     .or_insert(U256::zero());
                 *v = plus(*v, pay.amount)?;
-                add_amount(&mut payments, (r, s.source.asset), pay.amount)?;
+                add_amount(&mut payments, (r, src.asset), pay.amount)?;
             }
         }
-        _ => return Err(Error::State),
     }
     require(
         used_recipients.len() == a.native.recipients.len(),
         Error::Recipient,
     )?;
     trees.finish(&mut m)?;
-    // Reset only the completed pending registration tree; it is a scratch receipt, never paid state.
-    if matches!(a.op, Operation::Activate | Operation::Abort) {
-        m.roots[REGISTERED] = [0; 32];
-    }
     m.sequence = increment(m.sequence)?;
     let metadata_value = commitment(&encode(&m));
     require(metadata_value != [0; 32], Error::State)?;
@@ -612,5 +645,5 @@ pub fn verify(
         sources: e.sources,
         payments: e.payments,
     };
-    verify_transition(&p.base, cfg, tx, &a.native, Some(&transition))
+    verify_transition(&p.base, cfg, tx, &a.native, &transition)
 }

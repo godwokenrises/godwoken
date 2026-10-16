@@ -8,17 +8,9 @@ publish = false
 
 [features]
 default = []
-vm-tests = ["dep:ckb-testtool"]
-onchain = ["dep:ckb-std"]
-# Historical direct-account VM regression binary; never a refund release target.
-legacy-tests = ["onchain"]
-
-[[bin]]
-name = "exit-withdraw-state-validator"
-path = "src/main.rs"
-required-features = ["legacy-tests"]
-
+onchain = ["dep:ckb-std", "dep:sparse-merkle-tree"]
 [dependencies]
+sparse-merkle-tree = { version = "0.6.1", default-features = false, features = ["smtc"], optional = true }
 gw-types = { path = "../../crates/types", default-features = false }
 gw-common = { path = "../../crates/common", default-features = false }
 gw-hash = { path = "../../crates/hash", default-features = false }
@@ -26,7 +18,6 @@ gw-smt = { path = "../../../crates/smt", default-features = false }
 molecule = { version = "0.7.5", default-features = false }
 ckb-std = { version = "0.16.4", optional = true, default-features = false, features = ["allocator", "ckb-types", "dummy-atomic"] }
 
-ckb-testtool = { version = "0.15.0", optional = true }
 
 [build-dependencies]
 molecule-codegen = "0.7.5"
@@ -36,7 +27,7 @@ hex = "0.4"
 serde_json = "1"
 
 [profile.release]
-opt-level = "s"
+opt-level = 3
 overflow-checks = true
 panic = "abort"
 codegen-units = 1

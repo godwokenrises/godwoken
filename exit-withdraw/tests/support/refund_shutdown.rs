@@ -34,17 +34,6 @@ pub(super) fn forbidden_actions(good: &[u8]) -> Vec<(&'static str, Vec<u8>)> {
             (name, bytes)
         })
         .collect();
-    let native = if good[..4] == contract::settlement::codec::V1_ACTION_TAG.to_le_bytes() {
-        contract::settlement::codec::decode_action(good)
-            .unwrap()
-            .native
-    } else {
-        contract::v0::decode_action(good).unwrap().native
-    };
-    cases.push((
-        "retired direct-account exit",
-        contract::codec::encode_action(&native),
-    ));
     let mut other = good.to_vec();
     other[..4].copy_from_slice(&if good[0] == 5 { 6u32 } else { 5u32 }.to_le_bytes());
     cases.push(("other protocol envelope", other));

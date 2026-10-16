@@ -1,8 +1,7 @@
-//! Offline-signable exit transaction construction and chain-derived recovery.
+//! Shared transaction models and chain utilities for V3 settlement and L1 wallet claims.
 pub mod build;
 pub mod chain;
 pub mod state;
-pub mod report;
 use crate::model::*;
 use anyhow::{ensure, Context, Result};
 use ckb_types::prelude::Entity as CkbEntity;
@@ -31,10 +30,6 @@ pub struct Dependency {
     pub data_hash: String,
 }
 impl Deployment {
-    pub fn profile(&self) -> Result<contract::Profile> {
-        contract::codec::decode_profile(&bytes(&self.profile)?, hash32(&self.profile_hash)?)
-            .map_err(|e| anyhow::anyhow!("Invalid profile: {e:?}"))
-    }
     pub fn multisig_placeholder(&self, p: &contract::Profile) -> Result<Vec<u8>> {
         let c = bytes(&self.multisig_config)?;
         ensure!(
@@ -182,137 +177,4 @@ pub(crate) fn verify_size(tx: &Transaction) -> Result<()> {
         "Transaction exceeds 512,000-byte size budget; split request"
     );
     Ok(())
-}
-pub fn prepare(
-    db: &crate::db::Database,
-    rpc: &impl chain::Chain,
-    d: &Deployment,
-    bundle: &Bundle,
-    requests: &[build::Request],
-) -> Result<build::Skeleton> {
-    let profile = d.profile()?;
-    let (_, cfg) = bundle.validate()?;
-    let dependencies = chain::verify_dependencies(rpc, d, &profile)?;
-    let (state, journal) = chain::reconstruct(
-        db,
-        rpc,
-        &profile,
-        &cfg.packed,
-        &bundle.rollup_cell,
-        d.confirmations,
-    )?;
-    let sponsors = d
-        .sponsor_inputs
-        .iter()
-        .map(|p| chain::live(rpc, p))
-        .collect::<Result<Vec<_>>>()?;
-    let skeleton = build::construct(
-        db,
-        &state,
-        d,
-        bundle,
-        requests,
-        sponsors,
-        dependencies,
-        serde_json::to_value(journal)?,
-    )?;
-    verify_script_dependencies(
-        &skeleton.input_cells,
-        &skeleton.transaction.outputs,
-        &skeleton.dependency_cells,
-    )?;
-    verify_size(&skeleton.transaction)?;
-    for cell in skeleton
-        .input_cells
-        .iter()
-        .chain(&skeleton.dependency_cells)
-    {
-        ensure!(
-            chain::same_cell(&chain::live(rpc, &cell.out_point)?, cell),
-            "Selected cell changed while building"
-        );
-    }
-    Ok(skeleton)
-}
-
-pub fn verify_signed(
-    db: &crate::db::Database,
-    rpc: &impl chain::Chain,
-    d: &Deployment,
-    bundle: &Bundle,
-    tx: &Transaction,
-    max_cycles: u64,
-) -> Result<serde_json::Value> {
-    ensure!(
-        max_cycles > 0 && max_cycles <= 70_000_000,
-        "Signed transaction cycle cap must be within 1..70,000,000"
-    );
-    let profile = d.profile()?;
-    let (_, cfg) = bundle.validate()?;
-    let dependencies = chain::verify_dependencies(rpc, d, &profile)?;
-    verify_size(tx)?;
-    ensure!(
-        tx.inputs.len() <= contract::MAX_INPUTS && tx.outputs.len() <= contract::MAX_OUTPUTS,
-        "Signed exit exceeds contract bounds"
-    );
-    let (state, _) = chain::reconstruct(
-        db,
-        rpc,
-        &profile,
-        &cfg.packed,
-        &bundle.rollup_cell,
-        d.confirmations,
-    )?;
-    ensure!(
-        tx.cell_deps
-            == d.cell_deps
-                .iter()
-                .map(|x| serde_json::json!({"out_point":x.out_point,"dep_type":x.dep_type}))
-                .collect::<Vec<_>>(),
-        "Transaction dependencies differ from deployment"
-    );
-    let inputs = tx
-        .input_points()?
-        .iter()
-        .map(|op| chain::live(rpc, op))
-        .collect::<Result<Vec<_>>>()?;
-    ensure!(
-        inputs
-            .iter()
-            .any(|c| chain::same_cell(c, &bundle.rollup_cell)),
-        "Signed transaction uses a stale rollup"
-    );
-    verify_script_dependencies(&inputs, &tx.outputs, &dependencies)?;
-    let a = chain::action(tx, &profile)?;
-    for (k, v) in &a.kv {
-        ensure!(
-            state.read(*k)? == *v,
-            "Signed witness differs from current reconstructed state"
-        );
-    }
-    let outcome = contract::verify(&profile, &cfg.packed, &chain::resolved(tx, &inputs)?, &a)
-        .map_err(|e| anyhow::anyhow!("Signed transaction violates recovery rules: {e:?}"))?;
-    ensure!(
-        outcome.fee == d.fee_shannons,
-        "Signed fee differs from approved deployment fee"
-    );
-    let result = rpc.call("estimate_cycles", serde_json::json!([tx]))?;
-    let cycles = quantity(
-        result["cycles"]
-            .as_str()
-            .context("Missing full-transaction cycles")?,
-    )?;
-    ensure!(
-        cycles <= max_cycles,
-        "Full signed transaction exceeds cycle budget; split request"
-    );
-    for c in inputs.iter().chain(&dependencies) {
-        ensure!(
-            chain::same_cell(&chain::live(rpc, &c.out_point)?, c),
-            "Input spent during signed validation"
-        );
-    }
-    Ok(
-        serde_json::json!({"status":"verified_not_broadcast","transaction_hash":tx.hash()?,"cycles":cycles,"max_cycles":max_cycles,"before_root":hx(state.root()),"after_root":hx(outcome.root)}),
-    )
 }
