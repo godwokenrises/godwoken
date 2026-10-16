@@ -5,7 +5,6 @@ Rust CLI, refund-only V0/V1 contracts and shared ETH-wallet portal. V1 is the de
 - [Current documents and complete tables](docs/README.md)
 - [Operator runbook](docs/ops-refund-runbook.md)
 - [Contract design](docs/contract-design.md)
-- [V3 single-root state and batch validation](docs/unified-state-validation.md)
 - [Verification and limitations](docs/validation.md)
 - [Web app](claim-web/README.md)
 

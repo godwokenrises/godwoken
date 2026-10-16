@@ -1,6 +1,6 @@
 # Root-only, applicant-driven refunds (V0 and V1)
 
-Updated 16 October 2026: settlement **V3** uses one physical settlement SMT with bounded account pages. V0/V1 here identify native networks; V3 identifies the refund protocol. Approved amounts, identities and authority checks are preserved. Regenerate and verify the plan/profile before building the profile-pinned validator; Only V3 plans, profiles and actions are supported; no compatibility decoder or migration path is retained. Development tests do not upgrade or pay on mainnet.
+Updated 16 October 2026: settlement **V3** uses one physical settlement SMT with bounded account pages. V0/V1 here identify native networks; V3 identifies the refund protocol. Approved amounts, identities and authority checks are preserved. Regenerate and verify the plan/profile before building the profile-pinned validator. Only V3 plans, profiles and actions are supported; no compatibility decoder or migration path is retained. Development tests do not upgrade or pay on mainnet.
 
 ## On-chain lifecycle
 
@@ -91,10 +91,6 @@ fixtures, which use public test keys to cover bootstrap authority, EOA/controlle
 payouts, repeated payments, malicious proofs and onward OmniLock withdrawal.
 
 
-## Completed acceptance
-
-[Updated test evidence](validation.md) includes both protocol regressions, controller/Web flows, original V0 DB cold-process batches and actual signed CKB VM execution of those real-DB proofs.
-
 ## Exact custody and recipient checks
 
 The shared verifier authenticates custodian code/hash type, rollup binding and finality. V1 retained custody uses the exact pinned change lock; V0 retained custody must pass native validation and match a consumed custodian lock. Inputs equal retained outputs plus payouts per exact asset type, including all CKB capacity. Governance funding pays the fee separately. Every output meets occupied capacity.
@@ -129,7 +125,7 @@ Large actions are split before signing into 16,000-byte extra witnesses. A bound
 
 The protocol permits at most 64 payment records and 20 recipients; this is not a guarantee that every combination fits a node's budget. Generate the full signed transaction and pre-execute it under the target node policy. Prefer grouping a recipient's CKB and tokens so token cells have enough capacity. The typical 70M cycles admission policy is a configurable node limit, not a consensus-wide per-transaction cap.
 
-[Single-root measurements and reproducible tests](unified-state-validation.md) record tested batch sizes, failed single-transaction combinations and paging coverage.
+[Batch measurements and reproducible tests](validation.md) record tested batch sizes, failed single-transaction combinations and paging coverage.
 
 The native payload is a version-3 `NativeTransition` table embedded in the settlement action. There is no standalone direct-account action envelope or verifier entrypoint. The eight logical record kinds are the complete set; obsolete registration slots, permit records, pending-epoch fields and reconstructed mutable-record copies are removed. Metadata contains only deployment/profile/snapshot, sequence and `state_root`.
 

@@ -392,6 +392,6 @@ The generation-time capacity estimate is 63 CKB per plain output or 144 CKB per 
 
 The current source uses one settlement `state_root` and V3 plans/profiles/actions. Only this format is supported; no compatibility or migration workflow is provided. Regenerate the complete plan/profile, independently verify its static account-page root and rebuild the pinned validator. Existing deployment/governance and multisig upgrade requirements remain unchanged.
 
-64 records / 20 recipients are format ceilings. Verify the entire signed transaction against the actual node cycles policy and split a batch when necessary. Keep a recipient's CKB and token payments together to fund occupied capacity. See [single-root validation](unified-state-validation.md) for reproducible benchmarks and observed limits.
+64 records / 20 recipients are format ceilings. Verify the entire signed transaction against the actual node cycles policy and split a batch when necessary. Keep a recipient's CKB and token payments together to fund occupied capacity. See [batch measurements](validation.md#batch-size-and-cycles) for reproducible benchmarks and observed limits.
 
 V3 keys and values both use V3 commitment domains. Plan/profile/action/native-payload/signing-skeleton versions are 3; V0 profile bytes use the `GWV0SET3` marker. Do not mix separately generated release artifacts. Status reports expose the current `state_root` and paid-claim count; registration-phase counters no longer exist.

@@ -1,133 +1,72 @@
-# Refund validation history
+# Refund validation
 
-## Single settlement root — 16 October 2026
+Current code supports settlement V3 on native networks V0 and V1. It uses one settlement SMT with bounded account pages and the unchanged upstream sparse-merkle-tree 0.6.1. The native Godwoken account root remains separate. See [contract design](contract-design.md) for encoding and write restrictions, and [operator runbook](ops-refund-runbook.md) for release procedures.
 
-Current source implements only settlement V3: one physical settlement SMT, bounded account pages, compact mutable counters and framed witnesses, with the upstream SMT algorithm unchanged. The original native Godwoken root remains separate. Only the V3 format is implemented; compatibility code, fixtures and standalone direct-account entrypoints have been removed.
+## Executed checks — 16 October 2026
 
-The final optimized build passed 89 contract unit cases, 32 host library cases, 13 V0 regressions, 13 V1 regressions, and dedicated actual-VM V0/V1 controller flows. Signed large-state V0 tests include 20,000 background accounts, fresh and mature counter states, exact write preservation, and re-signed malformed witness chunks. Twenty source accounts and recipients fully exit two assets through two ten-recipient transactions, each below 43M cycles and 57 KB in this fixture. A 20-recipient CKB-only transaction passes below 61M cycles. A 51-record single transaction exceeds 70M in both states; 40 selected records fail in fresh state and narrowly pass in mature state at 69,604,607 cycles.
+- 89 contract tests and 32 host library tests.
+- 13 V0 and 13 V1 regression cases; four opt-in V0 artifact/benchmark cases are excluded from the regular run and exercised separately below.
+- Signed V0/V1 controller transactions, onward OmniLock spends and actual ckb-cli multisig upgrades.
+- 47 frontend tests and a production build. Controller fixtures were regenerated from V3 VM runs.
+- Signed V0 batch/paging tests: exact cumulative payments, unchanged unrelated state, rejection of static-record mutations and arbitrary output roots. Re-signed corrupt, missing, reordered, duplicated and wrong-count witness chunks are rejected by the type script.
 
-A separate source-account paging transaction also passes: seven account pages, 20 recipients and all 51 claims, at 43,338,880 cycles / 60,968 bytes. See [single-root measurements, paging and reproduction](unified-state-validation.md). The dated results below concern previous protocol artifacts and are historical evidence, not V3 validation of those saved binaries, plans or roots.
+## Batch size and cycles
 
-## Root-only acceptance — 14 October 2026
+Measurements include complete signed V0 transactions and actual CKB-VM execution, including authority/custodian locks and payout cells. Tested budgets: **70,000,000 cycles**, **512,000 transaction bytes**, **32,768 bytes per witness**. Actions are split into 16,000-byte witness chunks. The 70M budget is a CLI/test admission policy, not a consensus-wide per-transaction cap.
 
-That release used **Begin → Pay → Pay …** for both V0 and V1. No full-table
-registration transactions are required. Monetary tables and their source/lot/claim
-roots were not changed. See [design](contract-design.md) and
-[Ops instructions](ops-refund-runbook.md).
+The fixture has 20 target source accounts, 20 recipients, two assets (CKB and one token), 51 claims and 20,000 background accounts. “Mature” means synthetic authenticated paid/reserve/source counters and native balances; it does not mean replaying 20,000 historical transactions.
 
-## Executed checks
+| State | Selection | Records | Cycles | Transaction bytes |
+| --- | --- | ---: | ---: | ---: |
+| Fresh | 20 recipients, CKB only | 20 | 60,193,973 | 88,299 |
+| Fresh | 20 recipients, 40 selected records (two assets) | 40 | > 70M (rejected) | 96,404 |
+| Fresh | 20 recipients, all claims | 51 | > 70M (rejected) | 100,178 |
+| Fresh | First 10 recipients, all assets | 25 | 41,568,489 | 54,110 |
+| Fresh | Second 10 recipients, all assets | 26 | 42,702,427 | 55,922 |
+| Mature | 20 recipients, CKB only | 20 | 58,778,654 | 85,496 |
+| Mature | 20 recipients, 40 selected records (two assets) | 40 | 69,604,607 | 93,665 |
+| Mature | 20 recipients, all claims | 51 | > 70M (rejected) | 97,274 |
+| Mature | First 10 recipients, all assets | 25 | 40,781,256 | 52,365 |
+| Mature | Second 10 recipients, all assets | 26 | 42,013,692 | 54,796 |
 
-- V1 regression: 13 passing cases, including an actual CLI subprocess lifecycle
-  `Begin, Pay, Pay`. The original DB stays unchanged; each command replays history.
-- V0 regression: 11 passing cases. Dedicated actual-VM adversarial test also passed,
-  including missing/forged source, lot, claim and mutable-state proofs, legacy
-  operation rejection, stale paid state, excessive second payment and wrong outputs.
-- Two dedicated controller VM tests passed with stripped binaries, including
-  repeated payouts and onward OmniLock spends. Maximum observed controller payout:
-  **31,715,934 cycles** (V1); both versions remain below 70M.
-- Actual ckb-cli multisig upgrade tests: two passed.
-- Frontend: 47 unit tests and production build passed; V0/V1 controller browser
-  flows passed using freshly generated VM-accepted root-only transaction fixtures.
-  Includes protocol/tab isolation, approval exchange, rejected signing, duplicate
-  submission guard and mobile layout. Real HTTP/API rehearsal is part of the V1
-  controller test and uses a local VM-backed RPC.
+For this fixture, use two ten-recipient transactions to pay all assets. They execute sequentially and fully drain all 40 target source/asset balances and all 51 claim caps. The mature 40-record transaction has less than 0.6% cycle headroom and does not cover all 51 claims. The failed single-transaction checks leave state unchanged.
 
-Regression counts include environment-selected artifact/control cases; dedicated
-runs above supply the corresponding binaries rather than assuming a skipped case
-executed VM code. The optional real-DB VM test below is reported separately.
+A separate fixture groups all 51 claims under one source account: seven account pages plus epoch and two asset leaves. It pays 20 recipients in **43,338,880 cycles / 60,968 bytes**, using a 610-byte settlement proof, and fully drains the claims. Begin costs 10,165,560 cycles in the main fixture and 10,184,971 in the paged fixture. Main-fixture settlement proofs are 754 bytes for CKB-only and 901/903 bytes for the two full-asset batches; transaction sizes also include native proofs and account-page preimages.
 
-## Original V0 DB, cold CLI processes
+The protocol ceilings are 64 payment records and 20 recipients. Actual feasibility depends on assets, page contents, controller locks, custodian fragmentation and proofs. Pre-execute the exact signed transaction under the target node policy.
 
-The original V0 DB was opened read-only in a separate process for each operation.
-Each invocation verified all 770,736 native leaves before operating. The complete
-current plan contains 24,483 claims, but only two selected EOA applicants were paid.
-The plan, DB and source baseline remained unchanged; no SMT-node cache or trusted
-local paid-counter file was reused.
+## Reproduce
 
-1. Initialize once: history 0 → 1.
-2. First applicant, partial payment: history 1 → 2.
-3. Restart; pay its remaining rights: history 2 → 3.
-4. Restart; repeated request for that applicant is rejected.
-5. Restart; pay a distinct new applicant: history 3 → 4.
-
-All roots linked correctly; all L2-source/custodian coverage checks passed.
-[Cold-process evidence](../tests/fixtures/root-only/acceptance.json) contains exact roots, source/custody
-coverage, selected addresses and operation counts. This part uses synthetic L1
-history and unsigned host consensus, with no network submission.
-
-## Signed VM execution of the real-DB proofs
-
-The same four saved transitions were then equipped with actual script dependencies,
-signed using public test-key **L1 governance/PoA authorities**, and executed in CKB
-VM. After changing dependency outpoints, successor input references were remapped
-to the preceding signed transaction hash, and the exact predecessor output bytes
-were checked. Every signed transaction was inserted into the simulated chain;
-replaying its consumed inputs failed. Beneficiary private keys were never used.
-
-| Transition | Cycles | Signed bytes |
-|---|---:|---:|
-| Begin | 30,086,145 | 4,845 |
-| Partial Pay | 30,224,077 | 21,860 |
-| Remainder Pay | 29,925,629 | 17,456 |
-| New applicant Pay | 20,311,245 | 17,568 |
-
-[Signed-chain results](../tests/fixtures/root-only/signed-vm.json) record the exact before/after roots. These
-are actual original-DB Merkle proofs and real beneficiaries/balances, with synthetic
-L1 funding and test authority keys. Real recipients' onward withdrawals are not
-signed by this test; onward OmniLock spending is covered by the separate synthetic
-EOA/controller end-to-end fixtures. No production keys, deployment or broadcast.
-
-## Reproduce the real-DB proof VM test without copying the DB
-
-From `exit-withdraw/`, configure LLVM clang/ar/libclang and build the CLI first:
+From `exit-withdraw/`, with Rust 1.94.0, the RISC-V target, clang, llvm-ar, llvm-strip, jq and ckb-cli available:
 
 ```sh
-FIXTURE="/path/to/fresh-v3-vm-context"
-GW_WITHDRAW_CLI="$PWD/target/debug/gw-withdraw" LLVM_STRIP=/path/to/llvm-strip \
-  bash scripts/build-settlement-validator.sh "$FIXTURE" /tmp/v0-cold-validator v0
-GW_V0_COLD_ARTIFACTS="$FIXTURE" GW_V0_SETTLEMENT_BINARY=/tmp/v0-cold-validator \
-  cargo +1.94.0 test --locked --offline --features e2e-tests \
-  --test withdraw_e2e v0_real_db_cold_artifacts_signed_vm -- --nocapture
+cargo +1.94.0 test --locked --lib
+cargo +1.94.0 test --manifest-path ../gwos/contracts/exit-withdraw-state-validator/Cargo.toml --locked --lib --tests
+bash scripts/test-v0-settlement-e2e.sh
+bash scripts/test-settlement-e2e.sh
+bash scripts/test-control-settlement-e2e.sh
+cargo +1.94.0 test --locked --offline --features e2e-tests --test withdraw_e2e multisig_upgrade -- --nocapture
+GW_LLVM_STRIP=llvm-strip bash scripts/test-unified-batch-e2e.sh
+GW_LLVM_STRIP=llvm-strip bash scripts/test-unified-batch-e2e.sh paged
+npm test --prefix claim-web
+npm run build --prefix claim-web
 ```
 
-Generate a new V3 VM context first; replayable old-format archives have been removed. Its `archive.json` is deliberately only VM context;
-it is not accepted as a `rehearse-next` archive. To repeat cold DB reconstruction,
-use the commands in the design document with the actual DB, complete plan and a
-new synthetic rehearsal directory. Host operating paths remain in the machine
-inventory. Use fresh filenames for builds; the production build script refuses
-replacement of existing release files.
+VM scripts build synthetic profile-pinned binaries. The batch scripts print `UNIFIED_BENCH` records with cycles, transaction size, leaf count and proof size; retain the output with any release measurement. Strip binaries before recording their deployment code hashes, as in the production build. Release Rust uses optimization level 3 with overflow checks enabled. Optional environment-dependent cases count as VM coverage only when the required artifacts are supplied.
 
-## Portal coverage and boundary
+## Test JSON files
 
-Personal browser scenarios cover wallet discovery, every asset row, invalid network, account change, signature rejection, confirmation, partial spend, remaining balance, excessive second request, final spend and mobile layout. V0/V1 controller scenarios cover tabs/protocol isolation, proposal review, signer approval exchange and duplicate submission.
+| File | Purpose |
+| --- | --- |
+| [control-v0-fixture.json](../claim-web/tests/control-v0-fixture.json), [control-v1-fixture.json](../claim-web/tests/control-v1-fixture.json) | Synthetic VM-accepted controller proposals, transactions and test-key signatures; used by frontend signature and tampering tests. Regenerated by `test-control-settlement-e2e.sh`. |
+| [settlement-v3-vectors.json](../../gwos/contracts/exit-withdraw-state-validator/tests/fixtures/settlement-v3-vectors.json) | Fixed record encodings, keys and commitments checked by `settlement_records.rs`. Detects unintended protocol encoding changes. |
 
-Browser scenarios use injected test wallets and intercepted APIs, not the actual MetaMask extension. The real Rust HTTP service with VM-backed RPC is separately exercised by the V1 controller test. A single real-wallet-extension-to-live-node end-to-end acceptance has not been performed. Original beneficiaries' private keys are not available; onward OmniLock spends use synthetic test beneficiaries.
+## Scope and earlier evidence
 
-From `exit-withdraw/`, use `scripts/test-settlement-e2e.sh`, `scripts/test-v0-settlement-e2e.sh`, `scripts/test-control-settlement-e2e.sh`, and `cargo +1.94.0 test --locked --offline --features e2e-tests --test withdraw_e2e multisig_upgrade -- --nocapture`. Frontend: `npm test --prefix claim-web`, `npm run build --prefix claim-web`. Browser scenario generators are `claim-web/tests/{browser,partial-browser,control-browser}-rehearsal.mjs`; follow their fixture/server requirements. Optional VM cases require their environment variables; an early-return case is not evidence of VM execution.
+These fixtures use public test keys. They are not production releases or evidence of a mainnet payout. A release needs freshly generated, independently checked V3 plans/profiles and profile-pinned binaries, plus the existing upgrade authorities.
 
-Historical VM inputs and compact execution evidence live under `tests/fixtures/`, separate from current financial tables. Reproducing those historical transactions does not require replacing the current tables with an old release.
+The external browser scenario suite and original-DB release export were not rerun for V3. Earlier browser runs used injected wallets/intercepted APIs; a real-wallet-extension-to-live-node acceptance has not been performed. The Rust HTTP service with VM-backed RPC is exercised separately by the V1 controller test.
 
-## Documentation reorganization checks (14 October 2026)
+Earlier V0 cold-process checks read 770,736 native leaves and a 24,483-claim plan, then paid two selected applicants using real DB proofs and synthetic L1 authorities. [Host evidence](../tests/fixtures/root-only/acceptance.json) and [signed VM evidence](../tests/fixtures/root-only/signed-vm.json) are historical results for the prior format, not V3 acceptance. Old replay archives have been removed. Use [cold-process rehearsal](contract-design.md#cold-process-rehearsal) to generate fresh context.
 
-After moving executable test inputs from docs to tests/fixtures, all Rust targets compiled. The versioned integration scripts passed (V1: 13 reported cases; V0: 12, including environment-selected cases). Both dedicated controller VM tests also passed with actual binaries. Ordinary unit/audit/inventory suites passed. The generic unconfigured e2e command initially failed cases requiring VM binaries; the versioned scripts supply those binaries. Optional real-DB/controller tests are not counted as executed merely because a case returns without its environment.
-
-The two complete DB regenerations and live L1 observations are separately recorded under each version's assets/manifest.json and refunds/regeneration.json. They do not depend on historical tables; comparison occurs only after generation. No mainnet deployment or payout is implied.
-
-The documentation cleanup also reran the real personal HTTP/VM test successfully. The dual-protocol smoke script now accepts both exported portal directories explicitly, instead of opening a hardcoded historical release. Its two-current-package run verifies 54 V0 / 48 V1 asset definitions, separate manifests, CKB decimals, rejected cross-protocol requests and disabled broadcasting.
-
-After the old documentation directories and superseded accounting tool were actually removed, 63 maintained unit/CLI/audit/inventory tests passed (30 + 2 + 23 + 5 + 3). All current document links, JSON files and published checksum manifests validate; no published table is gitignored. At that documentation-cleanup revision, fresh V0 and V1 complete reports were byte-identical to their previous final outputs. The subsequent YOK policy revision is documented below. Each registered source matches the independent fresh L2 query, and all planned asset payments fit the new finalized custodian observations. V0 backing review returns 2 for its census scope; V1 returns 1 for the already documented recorded-supply mismatch, not a capture error.
-
-
-## Whole-YOK exclusion verification — 14 October 2026
-
-The production CLI was rebuilt after excluding V1 asset 128 (YOK). It regenerated V1 and V0 tables from their original read-only databases, with no historical report supplied to generation. Old reports were used only for independent comparison. See [policy comparison](v1/refunds/policy-comparison.json) for exact hashes, asset deltas and audit-only plan roots.
-
-- Every non-YOK beneficiary entitlement and payable amount, claim source, source partition, retained lot and authority matched the previous V1 result exactly.
-- All V1 YOK payments are zero; its known balances remain in the retained and custodian reconciliation. No non-YOK right was redistributed.
-- Capacity-ready fields and top-up requirements were recalculated after removing YOK outputs. These can improve even though non-YOK monetary entitlements do not change. Accounts removed from the beneficiary list had only YOK entitlements.
-- Every V0 generator output was byte-identical to its previous counterpart.
-- Source balances were independently matched to the published authenticated L2 inventory. All planned payments fit finalized custody. A fresh V1 L1 capture found the same rollup account root, custody totals and finalized amounts as the published observation; its raw evidence is retained as [custody-recheck.json.gz](v1/assets/custody-recheck.json.gz).
-- Both old and new V1 plans were exported under the same explicitly audit-only deployment ID; the new plan passed `settlement verify-plan`. These are comparison commitments, not a production deployment or initialized refund root. Production release plans, profiles and profile-bound validator binaries must be generated from the new report.
-- 64 local library/CLI/audit/inventory tests passed, including a regression rejecting any payable YOK allocation and checking that retained YOK adds no payout capacity requirement. Contract verification logic and web behavior were not changed by this policy revision.
-
-No original database write, production signature, contract deployment or payment was performed. Existing recorded-supply discrepancies and approved holds remain unchanged.
+Financial-table verification is recorded in each network's asset manifests and refund regeneration records. The [V1 policy comparison](v1/refunds/policy-comparison.json) checks whole-YOK exclusion: other entitlements remain unchanged, YOK payouts are zero and V0 outputs are byte-identical. These historical calculation checks do not validate a V3 deployment. Machine-specific paths belong in the machine inventory.
