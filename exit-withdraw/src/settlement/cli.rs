@@ -134,6 +134,9 @@ pub enum Command {
         /// Explicit claim keys and raw L2 amounts for partial payments or large beneficiaries.
         #[arg(long, conflicts_with = "addresses")]
         payments: Option<PathBuf>,
+        /// Reviewed governance lock hash and maximum total CKB spend (fee included).
+        #[arg(long)]
+        capacity_funding: Option<PathBuf>,
         #[arg(long, default_value_t = 4)]
         batch_size: usize,
         #[arg(long)]
@@ -175,10 +178,17 @@ pub enum Command {
         #[arg(long)]
         output: PathBuf,
     },
-    /// Offline optional signer. Review the skeleton first; keys are read from a file, never arguments.
+    /// Offline optional signer. Compare the request with a reviewed skeleton and pinned deployment before reading a key.
     SignMessage {
         #[arg(long)]
         request: PathBuf,
+        #[arg(long)]
+        deployment: PathBuf,
+        #[arg(long)]
+        skeleton: PathBuf,
+        /// Independent governance account and maximum total CKB spend for funded payouts.
+        #[arg(long)]
+        capacity_funding: Option<PathBuf>,
         #[arg(long)]
         lock_hash: String,
         #[arg(long)]
@@ -718,6 +728,7 @@ pub fn run_for(cmd: Command, protocol: Protocol) -> Result<()> {
             addresses,
             controls,
             payments,
+            capacity_funding,
             batch_size,
             output_dir,
             ckb_rpc,
@@ -754,7 +765,9 @@ pub fn run_for(cmd: Command, protocol: Protocol) -> Result<()> {
             )?;
             let payments: Option<Vec<PaymentSelection>> =
                 payments.as_deref().map(load).transpose()?;
-            let out = prepare_selected(
+            let funding: Option<build::CapacityFunding> =
+                capacity_funding.as_deref().map(load).transpose()?;
+            let out = prepare_selected_funding(
                 db.as_ref(),
                 &rpc,
                 &d,
@@ -764,6 +777,7 @@ pub fn run_for(cmd: Command, protocol: Protocol) -> Result<()> {
                 batch_size,
                 &controls,
                 payments.as_deref(),
+                funding.as_ref(),
             )?;
             fs::create_dir_all(&output_dir)?;
             save(&output_dir.join("skeleton.json"), &out)?;
@@ -774,13 +788,32 @@ pub fn run_for(cmd: Command, protocol: Protocol) -> Result<()> {
             )?;
             let mut next = d.clone();
             let gov = Script::from_packed(Profile::load(&d)?.base.governance.clone())?;
-            next.sponsor_inputs = out
-                .transaction
-                .outputs
-                .iter()
-                .enumerate()
-                .filter(|(_, c)| c.lock == gov && c.type_script.is_none())
-                .map(|(i, _)| OutPoint {
+            let sponsor_output_indices = if let Some(index) =
+                out.allocations["capacity_funding"]["sponsor_change_output_index"].as_u64()
+            {
+                let index = usize::try_from(index)?;
+                let cell = out
+                    .transaction
+                    .outputs
+                    .get(index)
+                    .context("Missing recorded sponsor change")?;
+                ensure!(
+                    cell.lock == gov && cell.type_script.is_none(),
+                    "Recorded sponsor change is not a plain governance cell"
+                );
+                vec![index]
+            } else {
+                out.transaction
+                    .outputs
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, c)| c.lock == gov && c.type_script.is_none())
+                    .map(|(i, _)| i)
+                    .collect()
+            };
+            next.sponsor_inputs = sponsor_output_indices
+                .into_iter()
+                .map(|i| OutPoint {
                     tx_hash: out.transaction.hash().expect("validated transaction"),
                     index: format!("0x{i:x}"),
                 })
@@ -792,7 +825,7 @@ pub fn run_for(cmd: Command, protocol: Protocol) -> Result<()> {
             let a = replay::action_for(&out.transaction, &Profile::load(&d)?)?;
             save(
                 &output_dir.join("progress.json"),
-                &json!({"operation":format!("{:?}", a.op),"metadata_after":hx(a.after),"use_next_deployment_only_after_confirmation":true}),
+                &json!({"operation":format!("{:?}", a.op),"metadata_after":hx(a.after),"capacity_funding":out.allocations.get("capacity_funding"),"use_next_deployment_only_after_confirmation":true}),
             )?;
             println!("{}", serde_json::to_string_pretty(&out.allocations)?);
         }
@@ -841,10 +874,28 @@ pub fn run_for(cmd: Command, protocol: Protocol) -> Result<()> {
         }
         Command::SignMessage {
             request,
+            deployment,
+            skeleton,
+            capacity_funding,
             lock_hash,
             private_key_file,
             output,
         } => {
+            let d: Deployment = load(&deployment)?;
+            ensure!(
+                Profile::load(&d)?.protocol() == protocol,
+                "Selected signing protocol differs from deployment"
+            );
+            let sk: Skeleton = load(&skeleton)?;
+            let supplied: signing::SigningRequest = load(&request)?;
+            let request = signing::checked_request(&d, &sk, &supplied)?;
+            let funding: Option<build::CapacityFunding> =
+                capacity_funding.as_deref().map(load).transpose()?;
+            signing::check_capacity_funding(&d, &sk, funding.as_ref())?;
+            ensure!(
+                request.groups.iter().any(|g| g.lock_hash == lock_hash),
+                "Unknown signing group"
+            );
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
@@ -853,7 +904,6 @@ pub fn run_for(cmd: Command, protocol: Protocol) -> Result<()> {
                     "Private key file must not be readable by group/others (chmod 600)"
                 );
             }
-            let request = load(&request)?;
             let mut secret_text = fs::read(&private_key_file)?;
             let mut secret = bytes(std::str::from_utf8(&secret_text)?.trim())?;
             let response = signing::sign(&request, &lock_hash, &secret);
@@ -998,7 +1048,18 @@ pub fn run_for(cmd: Command, protocol: Protocol) -> Result<()> {
                 Ok(json!({"claim_key":hx(key),"account_id":c.recipient,"recipient_identity":hx(c.address),"asset_id":src.asset,"source_account_id":src.account,"cap_raw":c.cap.to_string(),"paid_raw":paid.to_string(),"remaining_raw":(c.cap-paid).to_string()}))
             }).collect::<Result<Vec<_>>>()?;
             let m = ledger.metadata;
-            let report = json!({"version":s::FORMAT_VERSION,"status":"canonical_state_reconstructed","claims":claim_details,"account_root":hx(native.root()),"confirmed_transactions":journal.len(),"rollup_outpoint":b.rollup_cell.out_point,"sequence":m.map(|m|m.sequence),"state_root":m.map(|m|hx(m.state_root)),"sources":p.source_count,"lots":p.reserve_count,"paid_claims":ledger.records[s::PAID].len(),"next_operation":ledger.next_with_profile_hash(p.hash(),4)?.map(|(op,_)|format!("{op:?}")),"epoch0_accounts":accounts.into_iter().map(|((address,asset),(cap,paid))|json!({"address":address,"asset_id":asset,"entitlement_raw":cap.to_string(),"paid_raw":paid.to_string(),"remaining_raw":(cap-paid).to_string()})).collect::<Vec<_>>(),"coverage":backing});
+            let confirmed_capacity_funding = journal
+                .iter()
+                .filter_map(|entry| {
+                    entry.capacity_funding.as_ref().map(|funding| {
+                        json!({
+                            "transaction_hash": &entry.transaction_hash,
+                            "funding": funding
+                        })
+                    })
+                })
+                .collect::<Vec<_>>();
+            let report = json!({"version":s::FORMAT_VERSION,"status":"canonical_state_reconstructed","claims":claim_details,"account_root":hx(native.root()),"confirmed_transactions":journal.len(),"confirmed_capacity_funding":confirmed_capacity_funding,"rollup_outpoint":b.rollup_cell.out_point,"sequence":m.map(|m|m.sequence),"state_root":m.map(|m|hx(m.state_root)),"sources":p.source_count,"lots":p.reserve_count,"paid_claims":ledger.records[s::PAID].len(),"next_operation":ledger.next_with_profile_hash(p.hash(),4)?.map(|(op,_)|format!("{op:?}")),"epoch0_accounts":accounts.into_iter().map(|((address,asset),(cap,paid))|json!({"address":address,"asset_id":asset,"entitlement_raw":cap.to_string(),"paid_raw":paid.to_string(),"remaining_raw":(cap-paid).to_string()})).collect::<Vec<_>>(),"coverage":backing});
             save(&output, &report)?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }

@@ -541,6 +541,213 @@ fn settlement_lifecycle_and_adversarial_matrix() {
     )
     .is_err());
 }
+
+#[test]
+fn governance_capacity_top_up_preserves_entitlement_and_fee() {
+    let t = tempfile::tempdir().unwrap();
+    let (mut s, plan) = fixture(t.path());
+    let db = Database::open(&t.path().join("db")).unwrap();
+    active(&mut s, &plan, &db, false);
+    let profile = tool::profile(&s.d).unwrap();
+    let cfg = Config::parse(&bytes(&s.b.config_data).unwrap()).unwrap();
+    let sk = tool::prepare(&db, &s.node, &s.d, &s.b, &plan, Some(&[hx(eth(1))]), 2).unwrap();
+    let mut tx = withdraw::chain::resolved(&sk.transaction, &sk.input_cells).unwrap();
+    let a = tool::replay::action(&sk.transaction, &profile.base).unwrap();
+    let ph = hash32(&s.d.profile_hash).unwrap();
+    let baseline = sc::verify(&profile, ph, &cfg.packed, &tx, &a).unwrap();
+
+    let top_up = 10 * CAP;
+    tx.outputs[1].capacity += top_up;
+    assert!(sc::verify(&profile, ph, &cfg.packed, &tx, &a).is_err());
+    tx.outputs.last_mut().unwrap().capacity -= top_up;
+    let funded = sc::verify(&profile, ph, &cfg.packed, &tx, &a).unwrap();
+    assert_eq!(funded.debits, baseline.debits);
+    assert_eq!(funded.fee, baseline.fee);
+    assert_eq!(funded.root, baseline.root);
+    assert_eq!(funded.top_up_shannons, top_up);
+}
+
+#[test]
+fn builder_requires_reviewed_capacity_funder_and_reports_actual_spend() {
+    let t = tempfile::tempdir().unwrap();
+    let (mut s, plan) = fixture(t.path());
+    let db = Database::open(&t.path().join("db")).unwrap();
+    active(&mut s, &plan, &db, false);
+    let profile = tool::adapter::Profile::load(&s.d).unwrap();
+    let (native, ledger, journal) = tool::replay::reconstruct_for(
+        &db,
+        &s.node,
+        &profile,
+        &plan,
+        &bytes(&s.b.config_data).unwrap(),
+        &s.b.rollup_cell,
+        10,
+    )
+    .unwrap();
+    let claim = ledger.records[sc::CLAIM_PLAN]
+        .values()
+        .map(|raw| decode::<Claim>(raw).unwrap())
+        .find(|claim| claim.address == eth(1) && ledger.source(claim.source).unwrap().asset == 1)
+        .unwrap();
+    let selected = [tool::PaymentSelection {
+        claim_key: hx(claim_key(profile.deployment, &claim)),
+        amount_raw: (U256::from(50) * U256::exp10(18)).to_string(),
+    }];
+    let (records, requests) =
+        tool::select_payments(&ledger, &profile, tool::adapter::Protocol::V1, &selected).unwrap();
+    let sponsors =
+        s.d.sponsor_inputs
+            .iter()
+            .map(|point| s.node.live[point].clone())
+            .collect::<Vec<_>>();
+    let deps = withdraw::chain::verify_dependencies(&s.node, &s.d, &profile.base).unwrap();
+    let build = |funding: Option<&tool::build::CapacityFunding>| {
+        tool::build::construct_with_controls_funding(
+            &db,
+            &ledger,
+            records.clone(),
+            0,
+            &native,
+            &s.d,
+            &s.b,
+            &requests,
+            sponsors.clone(),
+            deps.clone(),
+            json!(journal),
+            &[],
+            funding,
+        )
+    };
+    assert!(build(None)
+        .unwrap_err()
+        .to_string()
+        .contains("--capacity-funding"));
+    let mut funding = tool::build::CapacityFunding {
+        account_lock_hash: hx(contract::script_hash(&profile.base.governance)),
+        max_spend_ckb: "12".into(),
+    };
+    let mut wrong_account = funding.clone();
+    wrong_account.account_lock_hash = hx([0; 32]);
+    assert!(build(Some(&wrong_account))
+        .unwrap_err()
+        .to_string()
+        .contains("governance account"));
+    assert!(build(Some(&funding))
+        .unwrap_err()
+        .to_string()
+        .contains("above configured maximum"));
+    funding.max_spend_ckb = "14".into();
+    let sk = build(Some(&funding)).unwrap();
+    assert!(tool::signing::check_capacity_funding(&s.d, &sk, None).is_err());
+    let mut signing_limit = funding.clone();
+    signing_limit.max_spend_ckb = "12".into();
+    assert!(tool::signing::check_capacity_funding(&s.d, &sk, Some(&signing_limit)).is_err());
+    tool::signing::check_capacity_funding(&s.d, &sk, Some(&funding)).unwrap();
+    assert_eq!(
+        sk.allocations["capacity_funding"]["actual_top_up_shannons"],
+        (13 * CAP).to_string()
+    );
+    assert_eq!(
+        sk.allocations["capacity_funding"]["actual_top_up_ckb"],
+        "13.00000000"
+    );
+    assert_eq!(
+        sk.allocations["capacity_funding"]["maximum_spend_ckb"],
+        "14"
+    );
+    let change_index = sk.allocations["capacity_funding"]["sponsor_change_output_index"]
+        .as_u64()
+        .unwrap() as usize;
+    assert_eq!(
+        sk.transaction.outputs[change_index].capacity,
+        format!(
+            "0x{:x}",
+            sk.allocations["capacity_funding"]["returned_change_shannons"]
+                .as_str()
+                .unwrap()
+                .parse::<u64>()
+                .unwrap()
+        )
+    );
+    assert_eq!(
+        sk.allocations["recipients"][0]["allocated_capacity_shannons"],
+        (50 * CAP).to_string()
+    );
+    let a = tool::replay::action_for(&sk.transaction, &profile).unwrap();
+    let outcome = profile
+        .verify(
+            &bytes(&s.b.config_data).unwrap(),
+            &withdraw::chain::resolved(&sk.transaction, &sk.input_cells).unwrap(),
+            &a,
+        )
+        .unwrap();
+    assert_eq!(outcome.top_up_shannons, 13 * CAP);
+    assert_eq!(outcome.fee, s.d.fee_shannons);
+    if std::env::var_os("GW_WITHDRAW_E2E_BINARY").is_some() {
+        assert!(s.node.vm(&sign(&sk)).is_ok());
+    }
+
+    let native_claims = ledger.records[sc::CLAIM_PLAN]
+        .values()
+        .map(|raw| decode::<Claim>(raw).unwrap())
+        .filter(|claim| claim.address == eth(1) && ledger.source(claim.source).unwrap().asset == 1)
+        .collect::<Vec<_>>();
+    let total_native = native_claims
+        .iter()
+        .fold(U256::zero(), |sum, claim| sum + claim.cap);
+    let mut to_select = total_native - U256::from(50) * U256::exp10(18);
+    let mut partial = Vec::new();
+    for claim in native_claims {
+        let amount = claim.cap.min(to_select);
+        if !amount.is_zero() {
+            partial.push(tool::PaymentSelection {
+                claim_key: hx(claim_key(profile.deployment, &claim)),
+                amount_raw: amount.to_string(),
+            });
+            to_select -= amount;
+        }
+    }
+    assert!(to_select.is_zero());
+    let (records, requests) =
+        tool::select_payments(&ledger, &profile, tool::adapter::Protocol::V1, &partial).unwrap();
+    let future_tail = tool::build::construct_with_controls_funding(
+        &db,
+        &ledger,
+        records,
+        0,
+        &native,
+        &s.d,
+        &s.b,
+        &requests,
+        sponsors,
+        deps,
+        json!(journal),
+        &[],
+        None,
+    )
+    .unwrap();
+    assert!(future_tail.allocations["future_capacity_warnings"]
+        .as_array()
+        .is_some_and(|warnings| !warnings.is_empty()));
+
+    advance_settlement(&mut s, sign(&sk));
+    let (_, _, confirmed) = tool::replay::reconstruct_for(
+        &db,
+        &s.node,
+        &profile,
+        &plan,
+        &bytes(&s.b.config_data).unwrap(),
+        &s.b.rollup_cell,
+        10,
+    )
+    .unwrap();
+    let last = confirmed.last().unwrap();
+    assert_eq!(last.transaction_hash, sk.transaction.hash().unwrap());
+    assert_eq!(
+        last.capacity_funding.as_ref().unwrap()["actual_top_up_ckb"],
+        "13.00000000"
+    );
+}
 #[test]
 fn settlement_full_signed_vm_and_user_omnilock() {
     assert!(
@@ -979,6 +1186,10 @@ fn settlement_cli_build_sign_verify_and_reconstruct() {
                 "sign-message".into(),
                 "--request".into(),
                 path(&output.join("signing-request.json")),
+                "--deployment".into(),
+                path(&depfile),
+                "--skeleton".into(),
+                path(&output.join("skeleton.json")),
                 "--lock-hash".into(),
                 group.lock_hash.clone(),
                 "--private-key-file".into(),
@@ -1096,6 +1307,108 @@ fn signing_rejects_wrong_duplicate_missing_and_mutated_signatures() {
     let mut changed = sk;
     changed.transaction.outputs[1].capacity = "0x1".into();
     assert!(tool::signing::assemble(&setup.d, &changed, &responses).is_err());
+}
+
+#[test]
+fn sign_message_rejects_request_mismatches_before_reading_key() {
+    let t = tempfile::tempdir().unwrap();
+    let (setup, plan) = fixture(t.path());
+    let db = Database::open(&t.path().join("db")).unwrap();
+    let sk = tool::prepare(&db, &setup.node, &setup.d, &setup.b, &plan, None, 2).unwrap();
+    let req = tool::signing::requests(&setup.d, &sk).unwrap();
+    let group = req.groups.first().unwrap();
+    let deployment = t.path().join("deployment.json");
+    let skeleton = t.path().join("skeleton.json");
+    let request = t.path().join("request.json");
+    let keyfile = t.path().join("fixture-key");
+    std::fs::write(&deployment, serde_json::to_vec(&setup.d).unwrap()).unwrap();
+    std::fs::write(&skeleton, serde_json::to_vec(&sk).unwrap()).unwrap();
+    std::fs::write(
+        &keyfile,
+        hx(key(if group.kind == "ckb_multisig" { 3 } else { 2 }).secret_bytes()),
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&keyfile, std::fs::Permissions::from_mode(0o600)).unwrap();
+    }
+    let invoke = |key: &Path, output: &Path| {
+        Command::new(env!("CARGO_BIN_EXE_gw-withdraw"))
+            .args([
+                "settlement",
+                "--protocol",
+                "v1",
+                "sign-message",
+                "--request",
+                request.to_str().unwrap(),
+                "--deployment",
+                deployment.to_str().unwrap(),
+                "--skeleton",
+                skeleton.to_str().unwrap(),
+                "--lock-hash",
+                &group.lock_hash,
+                "--private-key-file",
+                key.to_str().unwrap(),
+                "--output",
+                output.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap()
+    };
+    std::fs::write(&request, serde_json::to_vec(&req).unwrap()).unwrap();
+    let signed = t.path().join("valid-signature.json");
+    let result = invoke(&keyfile, &signed);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let response: tool::signing::Signatures =
+        serde_json::from_slice(&std::fs::read(&signed).unwrap()).unwrap();
+    assert_eq!(response.transaction_hash, req.transaction_hash);
+
+    for (name, mutate) in [
+        ("message", 0),
+        ("signing_digest", 1),
+        ("kind", 2),
+        ("transaction_hash", 3),
+        ("transaction_with_placeholders_hash", 4),
+    ] {
+        let mut changed = serde_json::to_value(&req).unwrap();
+        let field = match mutate {
+            0 => &mut changed["groups"][0]["message"],
+            1 => &mut changed["groups"][0]["signing_digest"],
+            2 => &mut changed["groups"][0]["kind"],
+            3 => &mut changed["transaction_hash"],
+            _ => &mut changed["transaction_with_placeholders_hash"],
+        };
+        let replacement = if mutate == 2 {
+            if field.as_str() == Some("ckb_multisig") {
+                "ethereum_personal_sign".to_string()
+            } else {
+                "ckb_multisig".to_string()
+            }
+        } else {
+            let mut raw = bytes(field.as_str().unwrap()).unwrap();
+            assert_eq!(raw.len(), 32);
+            raw[0] ^= 1;
+            hx(raw)
+        };
+        *field = serde_json::json!(replacement);
+        std::fs::write(&request, serde_json::to_vec(&changed).unwrap()).unwrap();
+        let output = t.path().join(format!("{name}-signature.json"));
+        let missing_key = t.path().join("missing-key");
+        let result = invoke(&missing_key, &output);
+        assert!(!result.status.success(), "{name} was accepted");
+        assert!(
+            String::from_utf8_lossy(&result.stderr)
+                .contains("Signing request differs from reviewed skeleton and deployment"),
+            "{name}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert!(!output.exists(), "{name} wrote a signature");
+    }
 }
 
 #[test]

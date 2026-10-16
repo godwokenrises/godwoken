@@ -54,6 +54,43 @@ pub struct ControlSpend {
     pub destination: Script,
     pub authorization_cells: Vec<Cell>,
 }
+/// Explicit governance account and maximum total spend, including the transaction fee.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CapacityFunding {
+    pub account_lock_hash: String,
+    pub max_spend_ckb: String,
+}
+impl CapacityFunding {
+    pub fn max_spend_shannons(&self) -> Result<u64> {
+        let mut parts = self.max_spend_ckb.split('.');
+        let whole = parts.next().unwrap_or_default();
+        let fractional = parts.next();
+        ensure!(parts.next().is_none(), "Invalid max_spend_ckb");
+        ensure!(
+            !whole.is_empty() && whole.bytes().all(|b| b.is_ascii_digit()),
+            "Invalid max_spend_ckb"
+        );
+        let whole: u64 = whole.parse()?;
+        let mut amount = whole
+            .checked_mul(100_000_000)
+            .context("CKB limit overflow")?;
+        if let Some(fractional) = fractional {
+            ensure!(
+                !fractional.is_empty()
+                    && fractional.len() <= 8
+                    && fractional.bytes().all(|b| b.is_ascii_digit()),
+                "max_spend_ckb must have at most 8 decimal places"
+            );
+            let padding = 8 - fractional.len();
+            let fraction: u64 = fractional.parse()?;
+            amount = amount
+                .checked_add(fraction * 10u64.pow(padding as u32))
+                .context("CKB limit overflow")?;
+        }
+        Ok(amount)
+    }
+}
 pub fn construct_with_controls(
     db: &dyn NativeDb,
     ledger: &super::state::Ledger,
@@ -68,12 +105,52 @@ pub fn construct_with_controls(
     journal: serde_json::Value,
     controls: &[ControlSpend],
 ) -> Result<Skeleton> {
+    construct_with_controls_funding(
+        db,
+        ledger,
+        records,
+        epoch,
+        state,
+        d,
+        b,
+        requests,
+        sponsors,
+        dependency_cells,
+        journal,
+        controls,
+        None,
+    )
+}
+pub fn construct_with_controls_funding(
+    db: &dyn NativeDb,
+    ledger: &super::state::Ledger,
+    records: Vec<Vec<u8>>,
+    epoch: u64,
+    state: &RecoveryState<'_>,
+    d: &Deployment,
+    b: &Bundle,
+    requests: &[Request],
+    sponsors: Vec<Cell>,
+    dependency_cells: Vec<Cell>,
+    journal: serde_json::Value,
+    controls: &[ControlSpend],
+    funding: Option<&CapacityFunding>,
+) -> Result<Skeleton> {
     let sp = Profile::load(d)?;
     ensure!(
         db.protocol() == sp.protocol(),
         "DB/profile protocol mismatch"
     );
     let p = &sp.base;
+    let funding_limit = funding
+        .map(|policy| -> Result<u64> {
+            ensure!(
+                hash32(&policy.account_lock_hash)? == contract::script_hash(&p.governance),
+                "Capacity funder must be the governance account in this Pay version"
+            );
+            policy.max_spend_shannons()
+        })
+        .transpose()?;
     let (_, cfg) = adapter::validate(b, sp.protocol())?;
     ensure!(
         hx(contract::script_hash(&p.rollup)) == db.protocol().rollup(),
@@ -108,6 +185,7 @@ pub fn construct_with_controls(
     let mut asset_ids = BTreeSet::from([1]);
     let mut payouts = Vec::new();
     let mut manifest = Vec::new();
+    let mut top_up_total = 0u64;
     let mut type_scripts = BTreeMap::new();
     for cell in &b.cells["custodian"] {
         if let Some(t) = &cell.output.type_script {
@@ -174,6 +252,7 @@ pub fn construct_with_controls(
             "Native allocation too large; split request"
         );
         let mut capacity = shannons.low_u64();
+        let mut top_up = 0u64;
         let start = payouts.len();
         for (asset_id, mut n) in chosen {
             let h = p
@@ -201,7 +280,14 @@ pub fn construct_with_controls(
                 c.capacity = c
                     .minimum_capacity()
                     .map_err(|e| anyhow::anyhow!("Capacity: {e:?}"))?;
-                capacity=capacity.checked_sub(c.capacity).context("Recipient CKB cannot fund token cell capacity; request smaller token batch and explicit CKB amount")?;
+                if capacity >= c.capacity {
+                    capacity -= c.capacity;
+                } else {
+                    top_up = top_up
+                        .checked_add(c.capacity - capacity)
+                        .context("Capacity top-up overflow")?;
+                    capacity = 0;
+                }
                 a.payouts.push(contract::Payout {
                     output: (1 + payouts.len()) as u32,
                     recipient: recipient_index as u32,
@@ -222,18 +308,21 @@ pub fn construct_with_controls(
                 .checked_add(capacity)
                 .context("Capacity overflow")?;
         } else {
-            let c = contract::Cell {
+            let mut c = contract::Cell {
                 capacity,
                 lock: destination.clone(),
                 type_: None,
                 data: vec![],
             };
-            ensure!(
-                capacity
-                    >= c.minimum_capacity()
-                        .map_err(|e| anyhow::anyhow!("Capacity: {e:?}"))?,
-                "No withdrawable assets or native amount below occupied capacity"
-            );
+            let minimum = c
+                .minimum_capacity()
+                .map_err(|e| anyhow::anyhow!("Capacity: {e:?}"))?;
+            if capacity < minimum {
+                top_up = top_up
+                    .checked_add(minimum - capacity)
+                    .context("Capacity top-up overflow")?;
+                c.capacity = minimum;
+            }
             a.payouts.push(contract::Payout {
                 output: (1 + payouts.len()) as u32,
                 recipient: recipient_index as u32,
@@ -241,7 +330,26 @@ pub fn construct_with_controls(
             });
             payouts.push(c);
         }
-        manifest.push(json!({"eth_address":hx(address),"account_id":id,"allocated_capacity_shannons":shannons.to_string(),"native_residue_l2_raw":(native-shannons*U256::from(sp.protocol().native().scale())).to_string()}));
+        top_up_total = top_up_total
+            .checked_add(top_up)
+            .context("Capacity top-up overflow")?;
+        manifest.push(json!({"eth_address":hx(address),"account_id":id,"allocated_capacity_shannons":shannons.to_string(),"capacity_top_up_ckb":ckb_amount(top_up),"capacity_top_up_shannons":top_up.to_string(),"payout_capacity_shannons":(shannons + U256::from(top_up)).to_string(),"native_residue_l2_raw":(native-shannons*U256::from(sp.protocol().native().scale())).to_string()}));
+    }
+    if top_up_total != 0 {
+        ensure!(
+            funding.is_some(),
+            "Payout cells need {top_up_total} shannons of external capacity; provide --capacity-funding with the governance account and a maximum total CKB spend"
+        );
+    }
+    let sponsor_spend = d
+        .fee_shannons
+        .checked_add(top_up_total)
+        .context("Sponsor spend overflow")?;
+    if let Some(limit) = funding_limit {
+        ensure!(
+            sponsor_spend <= limit,
+            "Governance account would spend {sponsor_spend} shannons including fee and capacity top-up, above configured maximum {limit} shannons"
+        );
     }
     a.payouts.sort_by_key(|p| (p.recipient, p.asset, p.output));
     for id in asset_ids {
@@ -259,6 +367,12 @@ pub fn construct_with_controls(
             add(&mut required, h, n)?;
         }
     }
+    let required_ckb = required
+        .get_mut(&[0; 32])
+        .context("Missing CKB requirement")?;
+    *required_ckb = required_ckb
+        .checked_sub(U256::from(top_up_total))
+        .context("Capacity top-up exceeds payout capacity")?;
     let mut candidates = Vec::new();
     for c in &b.cells["custodian"] {
         if adapter::finalized(c, b, &cfg, sp.protocol())? {
@@ -342,14 +456,22 @@ pub fn construct_with_controls(
         !sponsors.is_empty(),
         "At least one governance sponsor input required"
     );
+    for cell in &sponsors {
+        ensure!(
+            cell.output.lock.packed()?.as_slice() == p.governance.as_slice()
+                && cell.output.type_script.is_none()
+                && bytes(&cell.output_data)?.is_empty(),
+            "Sponsor input must be a plain CKB cell under the selected governance account"
+        );
+    }
     let total_sponsor = sponsors.iter().try_fold(0u64, |n, c| {
         n.checked_add(quantity(&c.output.capacity)?)
             .context("Sponsor overflow")
     })?;
     let sponsor = contract::Cell {
         capacity: total_sponsor
-            .checked_sub(d.fee_shannons)
-            .context("Insufficient sponsor fees")?,
+            .checked_sub(sponsor_spend)
+            .context("Insufficient governance CKB for fee and capacity top-up")?,
         lock: p.governance.clone(),
         type_: None,
         data: vec![],
@@ -361,6 +483,7 @@ pub fn construct_with_controls(
                 .map_err(|e| anyhow::anyhow!("Capacity: {e:?}"))?,
         "Sponsor change below occupied capacity"
     );
+    let sponsor_change_capacity = sponsor.capacity;
     let mut inputs = vec![b.rollup_cell.clone()];
     inputs.extend(selected);
     inputs.extend(sponsors);
@@ -369,6 +492,7 @@ pub fn construct_with_controls(
     let mut outputs = vec![rollout];
     outputs.extend(payouts);
     outputs.extend(change);
+    let sponsor_change_output_index = outputs.len();
     outputs.push(sponsor);
     let mut control_ids = BTreeSet::new();
     let mut control_points = BTreeSet::new();
@@ -400,6 +524,8 @@ pub fn construct_with_controls(
     )?;
     let evaluation = sp.evaluate(&sa)?;
     let a = &sa.native;
+    let future_warnings =
+        future_capacity_warnings(db, ledger, &sp, a, &sa.records, &outputs, &type_scripts)?;
     let root: contract::Hash = a
         .proof
         .compute_root::<Blake2bHasher>(
@@ -429,7 +555,7 @@ pub fn construct_with_controls(
             .map(|c| outpoint(&c.out_point))
             .collect::<Result<_>>()?,
     };
-    finish(
+    let mut skeleton = finish(
         state,
         d,
         &sp,
@@ -441,7 +567,154 @@ pub fn construct_with_controls(
         &sa,
         root,
         json!(manifest),
-    )
+    )?;
+    skeleton.allocations["capacity_funding"] = json!({
+        "account_lock_hash": hx(contract::script_hash(&p.governance)),
+        "maximum_spend_ckb": funding.map(|policy| policy.max_spend_ckb.clone()),
+        "maximum_spend_shannons": funding_limit.map(|n| n.to_string()),
+        "actual_top_up_ckb": ckb_amount(top_up_total),
+        "actual_top_up_shannons": top_up_total.to_string(),
+        "fee_ckb": ckb_amount(d.fee_shannons),
+        "fee_shannons": d.fee_shannons.to_string(),
+        "actual_total_spend_ckb": ckb_amount(sponsor_spend),
+        "actual_total_spend_shannons": sponsor_spend.to_string(),
+        "returned_change_ckb": ckb_amount(sponsor_change_capacity),
+        "returned_change_shannons": sponsor_change_capacity.to_string(),
+        "sponsor_change_output_index": sponsor_change_output_index,
+        "sponsor_inputs": d.sponsor_inputs,
+    });
+    skeleton.allocations["future_capacity_warnings"] = json!(future_warnings);
+    Ok(skeleton)
+}
+
+fn future_capacity_warnings(
+    db: &dyn NativeDb,
+    ledger: &super::state::Ledger,
+    sp: &Profile,
+    action: &contract::Action,
+    selected: &[Vec<u8>],
+    outputs: &[contract::Cell],
+    type_scripts: &BTreeMap<contract::Hash, packed::Script>,
+) -> Result<Vec<serde_json::Value>> {
+    use settle::records::{claim_key, decode, Claim, Payment};
+
+    let mut selected_amounts = BTreeMap::new();
+    for raw in selected {
+        let payment: Payment = decode(raw).map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        selected_amounts.insert(claim_key(sp.deployment, &payment.claim), payment.amount);
+    }
+    let mut warnings = Vec::new();
+    'recipient: for (index, recipient) in action.recipients.iter().enumerate() {
+        let mut remaining = BTreeMap::<u32, U256>::new();
+        for raw in ledger.records[settle::CLAIM_PLAN].values() {
+            let claim: Claim = decode(raw).map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            if claim.address != recipient.address {
+                continue;
+            }
+            let paid = ledger.paid(sp.deployment, &claim)?;
+            let selected = selected_amounts
+                .get(&claim_key(sp.deployment, &claim))
+                .copied()
+                .unwrap_or_default();
+            let left = claim
+                .cap
+                .checked_sub(paid)
+                .and_then(|n| n.checked_sub(selected))
+                .context("Selected claim exceeds remaining entitlement")?;
+            let asset = ledger.source(claim.source)?.asset;
+            let entry = remaining.entry(asset).or_default();
+            *entry = entry
+                .checked_add(left)
+                .context("Remaining balance overflow")?;
+        }
+        let native = remaining.remove(&1).unwrap_or_default();
+        let native_shannons = native / U256::from(sp.protocol().native().scale());
+        let Some(payout) = action
+            .payouts
+            .iter()
+            .find(|p| p.recipient as usize == index)
+        else {
+            continue;
+        };
+        let destination = outputs
+            .get(payout.output as usize)
+            .context("Missing payout destination")?
+            .lock
+            .clone();
+        let mut required = U256::zero();
+        let mut remaining_token_assets = 0;
+        for (asset, amount) in remaining {
+            if amount.is_zero() {
+                continue;
+            }
+            remaining_token_assets += 1;
+            let type_hash = sp
+                .base
+                .catalogue
+                .iter()
+                .find(|(id, _)| *id == asset)
+                .context("Unknown remaining asset")?
+                .1;
+            let typ = if let Some(script) = type_scripts.get(&type_hash) {
+                script.clone()
+            } else if let Some(script) = db.script(&type_hash, true)? {
+                script.packed()?
+            } else {
+                warnings.push(json!({
+                    "eth_address": hx(recipient.address),
+                    "account_id": recipient.id,
+                    "reason": "remaining_token_type_preimage_unavailable_for_capacity_estimate",
+                    "asset_id": asset
+                }));
+                continue 'recipient;
+            };
+            let minimum = contract::Cell {
+                capacity: 0,
+                lock: destination.clone(),
+                type_: Some(typ),
+                data: vec![0; 16],
+            }
+            .minimum_capacity()
+            .map_err(|e| anyhow::anyhow!("Capacity: {e:?}"))?;
+            let max_per_cell = U256::from(u128::MAX);
+            let count = amount / max_per_cell
+                + if (amount % max_per_cell).is_zero() {
+                    U256::zero()
+                } else {
+                    U256::one()
+                };
+            required = required
+                .checked_add(U256::from(minimum) * count)
+                .context("Future capacity overflow")?;
+        }
+        if remaining_token_assets == 0 {
+            if native_shannons.is_zero() {
+                continue;
+            }
+            required = U256::from(
+                contract::Cell {
+                    capacity: 0,
+                    lock: destination,
+                    type_: None,
+                    data: vec![],
+                }
+                .minimum_capacity()
+                .map_err(|e| anyhow::anyhow!("Capacity: {e:?}"))?,
+            );
+        }
+        if native_shannons < required {
+            warnings.push(json!({
+                "eth_address": hx(recipient.address),
+                "account_id": recipient.id,
+                "remaining_native_shannons": native_shannons.to_string(),
+                "minimum_future_cell_capacity_shannons": required.to_string(),
+                "future_top_up_needed_shannons": (required - native_shannons).to_string(),
+                "remaining_token_assets": remaining_token_assets,
+                "assumption": "All remaining assets paid to the current destination; future capacity funding requires a separate approved transaction"
+            }));
+        }
+    }
+    Ok(warnings)
 }
 
 pub fn finish(
@@ -519,7 +792,7 @@ pub fn finish(
         after_root: hx(root),
         profile_hash: d.profile_hash.clone(),
         fee_shannons: d.fee_shannons,
-        allocations: json!({"operation":format!("{:?}",sa.op),"epoch":sa.epoch,"records":sa.records.iter().map(hx).collect::<Vec<_>>(),"recipients":manifest,"payouts":a.payouts.iter().map(|p|json!({"output_index":p.output,"recipient_index":p.recipient,"asset_id":p.asset})).collect::<Vec<_>>()}),
+        allocations: json!({"operation":format!("{:?}",sa.op),"epoch":sa.epoch,"records":sa.records.iter().map(hx).collect::<Vec<_>>(),"recipients":manifest,"payouts":a.payouts.iter().map(|p|json!({"output_index":p.output,"recipient_index":p.recipient,"asset_id":p.asset})).collect::<Vec<_>>(),"capacity_funding":{"account_lock_hash":hx(contract::script_hash(&sp.base.governance)),"actual_top_up_shannons":outcome.top_up_shannons.to_string(),"fee_shannons":outcome.fee.to_string(),"actual_total_spend_shannons":outcome.top_up_shannons.checked_add(outcome.fee).context("Sponsor spend overflow")?.to_string()}}),
         signing_groups: json!(signing),
         journal,
     })

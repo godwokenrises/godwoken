@@ -24,6 +24,9 @@ pub fn quantity(s: &str) -> Result<u64> {
         16,
     )?)
 }
+pub fn ckb_amount(shannons: u64) -> String {
+    format!("{}.{:08}", shannons / 100_000_000, shannons % 100_000_000)
+}
 pub fn hash(b: &[u8]) -> [u8; 32] {
     gw_hash::blake2b::hash(b)
 }

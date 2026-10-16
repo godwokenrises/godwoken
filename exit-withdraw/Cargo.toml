@@ -50,3 +50,6 @@ tempfile = "3"
 # Keep the audit tool's pinned dependencies separate from the legacy node workspace.
 [workspace]
 exclude = ["tests/reference"]
+
+[patch.crates-io]
+tiny_http = { path = "vendor/tiny_http" }

@@ -8,7 +8,7 @@ use secp256k1::{
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SigningGroup {
     pub lock_hash: String,
@@ -21,7 +21,7 @@ pub struct SigningGroup {
     pub require_first_n: usize,
     pub identities: Vec<String>,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SigningRequest {
     pub transaction_hash: String,
@@ -160,6 +160,56 @@ pub fn requests(d: &Deployment, sk: &Skeleton) -> Result<SigningRequest> {
         transaction_with_placeholders_hash: hx(hash(tx.packed()?.as_slice())),
         groups: out,
     })
+}
+
+/// Recheck an independently supplied funding limit before accessing a signing key.
+pub fn check_capacity_funding(
+    d: &Deployment,
+    sk: &Skeleton,
+    funding: Option<&super::build::CapacityFunding>,
+) -> Result<()> {
+    let p = Profile::load(d)?;
+    let config = sk
+        .dependency_cells
+        .iter()
+        .find(|c| hash(&bytes(&c.output_data).unwrap_or_default()) == p.base.config_hash)
+        .context("Missing config dependency")?;
+    let a = replay::action_for(&sk.transaction, &p)?;
+    let outcome = p.verify(
+        &bytes(&config.output_data)?,
+        &chain::resolved(&sk.transaction, &sk.input_cells)?,
+        &a,
+    )?;
+    if outcome.top_up_shannons == 0 && funding.is_none() {
+        return Ok(());
+    }
+    let policy = funding.context("Funded payout requires --capacity-funding before signing")?;
+    ensure!(
+        hash32(&policy.account_lock_hash)? == c::script_hash(&p.base.governance),
+        "Capacity funder differs from pinned governance account"
+    );
+    let spend = outcome
+        .fee
+        .checked_add(outcome.top_up_shannons)
+        .context("Sponsor spend overflow")?;
+    ensure!(
+        spend <= policy.max_spend_shannons()?,
+        "Signed transaction exceeds reviewed capacity-funding maximum"
+    );
+    Ok(())
+}
+/// Authenticate every request field against the reviewed transaction before reading a key.
+pub fn checked_request(
+    d: &Deployment,
+    sk: &Skeleton,
+    supplied: &SigningRequest,
+) -> Result<SigningRequest> {
+    let expected = requests(d, sk)?;
+    ensure!(
+        supplied == &expected,
+        "Signing request differs from reviewed skeleton and deployment"
+    );
+    Ok(expected)
 }
 pub(crate) fn recovered(group: &SigningGroup, signature: &str) -> Result<(usize, Vec<u8>)> {
     let mut b = bytes(signature)?;

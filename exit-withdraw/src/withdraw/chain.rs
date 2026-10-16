@@ -137,6 +137,8 @@ pub struct Replay {
     pub output_rollup: OutPoint,
     pub before_root: String,
     pub after_root: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capacity_funding: Option<serde_json::Value>,
 }
 pub fn verify_dependencies(
     rpc: &impl Chain,

@@ -142,6 +142,21 @@ pub fn reconstruct_for<'a>(
             output_rollup: next,
             before_root: before,
             after_root: hx(state.root()),
+            capacity_funding: (a.op == settle::Operation::Pay).then(|| {
+                let total = outcome
+                    .fee
+                    .checked_add(outcome.top_up_shannons)
+                    .expect("verified sponsor spend fits u64");
+                serde_json::json!({
+                    "account_lock_hash": hx(contract::script_hash(&p.governance)),
+                    "actual_top_up_ckb": ckb_amount(outcome.top_up_shannons),
+                    "actual_top_up_shannons": outcome.top_up_shannons.to_string(),
+                    "fee_ckb": ckb_amount(outcome.fee),
+                    "fee_shannons": outcome.fee.to_string(),
+                    "actual_total_spend_ckb": ckb_amount(total),
+                    "actual_total_spend_shannons": total.to_string()
+                })
+            }),
         });
     }
     ensure!(

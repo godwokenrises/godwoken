@@ -25,6 +25,7 @@ impl Rpc {
         ensure!(
             [
                 "get_cells",
+                "get_block_hash",
                 "get_live_cell",
                 "get_indexer_tip",
                 "get_header_by_number",

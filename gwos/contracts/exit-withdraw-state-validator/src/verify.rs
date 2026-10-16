@@ -154,6 +154,8 @@ pub struct Outcome {
     pub root: Hash,
     pub debits: BTreeMap<(u32, u32), U256>,
     pub fee: u64,
+    /// Governance CKB added to payout cells beyond the approved native debits.
+    pub top_up_shannons: u64,
 }
 pub fn eth_lock(address: [u8; 20]) -> packed::Script {
     let mut args = alloc::vec![1];
@@ -671,8 +673,8 @@ pub(crate) fn verify_transition_version(
         }
     }
     // Begin does not move pool assets. Pay must consume and recreate custodians.
-    // Fees come from sponsor CKB, while custodian inputs must equal custodian
-    // change PLUS payouts for every asset. No pool asset may disappear as a fee.
+    // Fees and any explicit payout capacity top-up come from governance CKB.
+    // Custodians fund only the approved entitlements, never sponsor gifts.
     require(ns > 0, Error::Authority)?;
     require(
         if admin {
@@ -682,9 +684,69 @@ pub(crate) fn verify_transition_version(
         },
         Error::Cell,
     )?;
-    let fee = sponsor_in.checked_sub(sponsor_out).ok_or(Error::Capacity)?;
+    let sponsor_spent = sponsor_in.checked_sub(sponsor_out).ok_or(Error::Capacity)?;
     for (h, n) in paid {
         insert_sum(&mut outs, h, n)?;
+    }
+    let mut debits = debits;
+    let mut top_up_shannons = 0u64;
+    let s = settlement;
+    if !admin {
+        for ((recipient, asset), actual) in &debits {
+            if *asset != 1 {
+                require(
+                    s.payments.get(&(*recipient, *asset)) == Some(actual),
+                    Error::Balance,
+                )?;
+            }
+        }
+        for ((recipient, asset), expected) in &s.payments {
+            if *asset != 1 {
+                require(
+                    debits.get(&(*recipient, *asset)) == Some(expected),
+                    Error::Balance,
+                )?;
+            }
+        }
+        let scale = U256::from(version.scale());
+        for ((recipient, asset), actual) in &debits {
+            if *asset != 1 {
+                continue;
+            }
+            let expected = s
+                .payments
+                .get(&(*recipient, 1))
+                .copied()
+                .unwrap_or_default();
+            require(*actual >= expected, Error::Balance)?;
+            let extra = *actual - expected;
+            require(extra % scale == U256::zero(), Error::Capacity)?;
+            let extra = extra / scale;
+            require(extra <= U256::from(u64::MAX), Error::Overflow)?;
+            top_up_shannons = top_up_shannons
+                .checked_add(extra.low_u64())
+                .ok_or(Error::Overflow)?;
+        }
+        for ((recipient, asset), expected) in &s.payments {
+            if *asset == 1 {
+                require(
+                    debits
+                        .get(&(*recipient, 1))
+                        .is_some_and(|actual| actual >= expected),
+                    Error::Balance,
+                )?;
+            }
+        }
+        debits = s.payments.clone();
+    }
+    let fee = sponsor_spent
+        .checked_sub(top_up_shannons)
+        .ok_or(Error::Capacity)?;
+    if top_up_shannons != 0 {
+        let ckb = outs.get_mut(&[0; 32]).ok_or(Error::Conservation)?;
+        *ckb = ckb
+            .checked_sub(U256::from(top_up_shannons))
+            .ok_or(Error::Conservation)?;
     }
     // Keep zero-valued type identities: every consumed token type must be returned or paid.
     require(ins == outs, Error::Conservation)?;
@@ -748,5 +810,10 @@ pub(crate) fn verify_transition_version(
         .into();
     require(root == newroot, Error::State)?;
     require(root != oldroot, Error::Noop)?;
-    Ok(Outcome { root, debits, fee })
+    Ok(Outcome {
+        root,
+        debits,
+        fee,
+        top_up_shannons,
+    })
 }

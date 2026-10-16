@@ -186,7 +186,10 @@ These raw transactions are **not** `ckb-cli tx` helper files. Use the installed
 and tested `ckb-cli 1.16.0` raw-digest signing interface:
 
 ```sh
-# Each member independently reviews the skeleton and selects its signing group.
+# Each member independently reviews the upgrade skeleton, deployment and binary.
+# ckb-cli signs only the supplied digest; it does not verify the request or transaction.
+# On the signing station, rebuild the upgrade from those reviewed inputs and compare
+# its skeleton and signing-request with these copies before copying the digest.
 ckb-cli --local-only --output-format json util sign-message \
   --message 0xSIGNING_DIGEST_FROM_REQUEST --recoverable \
   --from-account YOUR_CKB_CLI_ACCOUNT > signer-result.json
@@ -231,7 +234,28 @@ created on first payment and updated thereafter; all unpaid accounts stay off-ch
 The CLI reconstructs confirmed settlement history and verifies the current rollup
 root before every step. Keep the original DB and complete plan unchanged.
 
-For each step, sign its `signing-request.json`, import/assemble signatures and run:
+For each step, review the deployment and complete skeleton. The optional
+`gw-withdraw` offline signer requires both alongside the request and refuses a
+request whose transaction hash, signing group, message or digest differs from
+what the skeleton and deployment produce:
+
+```sh
+"$CLI" settlement --protocol v1 sign-message \
+  --request step-001/signing-request.json --deployment deployment.json \
+  --skeleton step-001/skeleton.json --lock-hash 0xLOCK_HASH \
+  --private-key-file /path/to/offline-key --output response-1.json
+```
+
+For a capacity-funded Pay, the offline signer must also receive its own reviewed
+`--capacity-funding capacity-funding.json`. It rechecks the actual transaction
+against that account and maximum before reading the private key. If using
+`ckb-cli`, make the same comparison outside `ckb-cli` before handing it a digest.
+
+For a `ckb-cli` signer, independently run `settlement signing-requests` on the
+signing station using the reviewed deployment and skeleton, compare the complete
+result to the supplied `signing-request.json`, then copy the locally verified
+digest into `ckb-cli`. `ckb-cli` cannot perform this check itself. Import/assemble
+signatures and run:
 
 ```sh
 "$CLI" settlement --protocol v1 assemble-signatures --deployment deployment.json \
@@ -311,12 +335,46 @@ key. Select up to 64 records in `payments.json`:
 
 Pass `--payments payments.json` to `build-next`, and `--controls controls.json`
 when applicable. Do not combine it with `--addresses`. The builder checks each
-remaining cap and duplicate key; each selected beneficiary needs enough CKB for
-its outputs. Combined V1 CKB must be a whole number of L1 shannons. Keep enough
-unpaid CKB for later token batches. The default address/control selection takes
-all remaining claims and refuses an oversized batch rather than truncating it.
-Capacity-blocked accounts remain unpaid until a separately supported funded
-transaction is available; authorization cells cannot be silently spent as top-up.
+remaining cap and duplicate key. Combined V1 CKB must be a whole number of L1
+shannons. The default address/control selection takes all remaining claims and
+refuses an oversized batch rather than truncating it.
+
+If a payout needs more CKB than the beneficiary's payable native amount provides
+for occupied cell capacity, the builder reports the required top-up and stops.
+For a release built with the reviewed capacity-funding validator, provide a
+`capacity-funding.json` file:
+
+```json
+{"account_lock_hash":"0xGOVERNANCE_LOCK_SCRIPT_HASH", "max_spend_ckb":"20.00000000"}
+```
+
+The lock hash must match the governance lock in the pinned profile. This Pay
+version accepts only that account as an external capacity funder; its live plain
+CKB inputs come from `deployment.json`'s `sponsor_inputs`. The maximum is the
+account's **total** spend for this transaction, including the configured fee.
+Use `--capacity-funding capacity-funding.json` with `build-next`. The builder
+adds only the minimum missing payout capacity, rejects a spend above the maximum,
+and returns the remainder to the governance lock. Review
+`skeleton.json` → `allocations.capacity_funding` and each recipient's
+`capacity_top_up_ckb` / `capacity_top_up_shannons`; the same summary appears in `progress.json` and
+on standard output. `verify-signed` independently lists the actual top-up, fee,
+and total governance spend before broadcast. After confirmation, compare the
+confirmed transaction with that verified hash and use the recorded sponsor
+change output index/outpoint for the next batch. `next-deployment-after-confirmation.json`
+uses this exact output for Pay transactions.
+After the configured confirmation depth, `settlement status` independently
+replays confirmed Pay transactions and lists each funding result under
+`confirmed_capacity_funding` with its transaction hash.
+The builder also prints `future_capacity_warnings` when the selected partial
+payment leaves less native CKB than the remaining claims would need for their
+minimum future payout cells at the current destination. Review this warning
+before requesting signatures and plan another funded batch if needed.
+
+Capacity funding changes validator consensus rules. The fixed audited binary
+cannot accept these transactions: build, review, and bind a new validator binary
+and profile before using this option. Keep enough unpaid CKB for later token
+batches, or plan their own funded payouts. Authorization cells cannot be silently
+spent as top-up.
 
 ## 6. Run the web portal
 
@@ -331,12 +389,19 @@ npm run build --prefix claim-web
   --deployment deployment-v1.json --v0-tables ./portal-v0 --v0-plan ./portal-v0/plan.json \
   --v0-deployment deployment-v0.json --dependencies claim-dependencies.json \
   --web-dir ./claim-web/dist --control-proposals ./control-proposals \
-  --listen 127.0.0.1:8787 --public-origin https://YOUR_REFUND_DOMAIN
+  --listen 127.0.0.1:8787 --public-origin https://YOUR_REFUND_DOMAIN \
+  --body-timeout-secs 15
 ```
 
 Use the same explicit pinned mainnet OmniLock/sUDT/secp-data dependencies as the
 release. Configure your HTTPS reverse proxy and exact public origin. Start
 without `--enable-broadcast` for review; add it when operating the refund service.
+`--body-timeout-secs` limits the time spent reading a JSON body (1–120 seconds;
+default 15). A body read timeout returns HTTP 408 and closes that connection.
+The underlying client socket also has an idle I/O timeout of at most 3 seconds.
+At the reverse proxy, enable request buffering, a request body timeout, and
+connection limits; these controls also cover slow headers and requests that
+stall before the application receives a complete body.
 The service never holds signing keys. Omitting the V0 options disables V0 instead
 of falling back to V1. Personal cells must have unmixed provenance in the selected
 release; arbitrary cells under the same OmniLock are not silently included.

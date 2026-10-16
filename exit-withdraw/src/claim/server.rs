@@ -14,10 +14,11 @@ use serde_json::Value;
 use sha2::Sha256;
 use std::{
     fs,
-    io::{Read, Write},
+    io::{self, Write},
     path::PathBuf,
     process::{Command, Stdio},
     sync::Arc,
+    time::{Duration, Instant},
 };
 use tiny_http::{Header, Method, Request, Response, Server, StatusCode};
 
@@ -25,6 +26,9 @@ use tiny_http::{Header, Method, Request, Response, Server, StatusCode};
 pub struct Options {
     #[arg(long, default_value = "127.0.0.1:8787")]
     pub listen: String,
+    /// Maximum time spent reading one JSON request body. The socket idle timeout is shorter.
+    #[arg(long, default_value_t = 15)]
+    pub body_timeout_secs: u64,
     #[arg(long, default_value = "http://127.0.0.1:8787")]
     pub public_origin: String,
     #[arg(long, default_value = "https://mainnet.ckb.dev/rpc")]
@@ -113,6 +117,10 @@ struct ControlSubmit {
 }
 impl App {
     fn load(options: Options, protocol: Protocol) -> Result<Self> {
+        ensure!(
+            (1..=120).contains(&options.body_timeout_secs),
+            "Body timeout must be between 1 and 120 seconds"
+        );
         ensure!(
             options.confirmations > 0 && options.confirmations <= 10000,
             "Invalid confirmations"
@@ -680,7 +688,9 @@ impl App {
             (&Method::Get, p) if p.starts_with("/api/control-proposal/") => {
                 self.control_proposal(&p[22..])?
             }
-            (&Method::Post, "/api/control-submit") => self.control_submit(read_json(request)?)?,
+            (&Method::Post, "/api/control-submit") => {
+                self.control_submit(read_json(request, self.options.body_timeout_secs)?)?
+            }
             (&Method::Get, p) if p.starts_with("/api/account/") => self.inventory(&p[13..])?,
             (&Method::Get, p) if p.starts_with("/api/transaction/") => {
                 let h = hx(hash32(&p[17..])?);
@@ -688,13 +698,17 @@ impl App {
                 json!({"transaction_hash":h,"status":result["tx_status"]["status"],"block_hash":result["tx_status"]["block_hash"]})
             }
             (&Method::Post, "/api/prepare") => {
-                let mut q =
-                    serde_json::to_value(self.prepare(&read_json::<ScopedRequest>(request)?)?)?;
+                let mut q = serde_json::to_value(self.prepare(&read_json::<ScopedRequest>(
+                    request,
+                    self.options.body_timeout_secs,
+                )?)?)?;
                 q["protocol"] = json!(self.plan.protocol);
                 q["plan_manifest"] = json!(self.plan.manifest);
                 q
             }
-            (&Method::Post, "/api/submit") => self.submit(read_json(request)?)?,
+            (&Method::Post, "/api/submit") => {
+                self.submit(read_json(request, self.options.body_timeout_secs)?)?
+            }
             (&Method::Get, p) if !p.starts_with("/api/") => {
                 let file = if p == "/" {
                     self.web.join("index.html")
@@ -721,15 +735,49 @@ impl App {
         Ok((serde_json::to_vec(&value)?, "application/json"))
     }
 }
-fn read_json<T: serde::de::DeserializeOwned>(r: &mut Request) -> Result<T> {
-    ensure!(
-        r.body_length().is_some_and(|n| n <= 65536),
-        "Request body limit is 64 KiB"
-    );
-    let mut b = Vec::new();
-    r.as_reader().take(65537).read_to_end(&mut b)?;
-    ensure!(b.len() <= 65536, "Body too large");
-    Ok(serde_json::from_slice(&b)?)
+#[derive(Debug)]
+struct BodyReadTimeout;
+impl std::fmt::Display for BodyReadTimeout {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Request body read timed out")
+    }
+}
+impl std::error::Error for BodyReadTimeout {}
+
+fn read_json<T: serde::de::DeserializeOwned>(r: &mut Request, timeout_secs: u64) -> Result<T> {
+    let length = r
+        .body_length()
+        .context("Request body requires Content-Length")?;
+    ensure!(length <= 65536, "Request body limit is 64 KiB");
+    let deadline = Instant::now() + Duration::from_secs(timeout_secs);
+    let mut body = Vec::with_capacity(length);
+    let mut chunk = [0u8; 8192];
+    while body.len() < length {
+        if Instant::now() >= deadline {
+            return Err(BodyReadTimeout.into());
+        }
+        let remaining = (length - body.len()).min(chunk.len());
+        match r.as_reader().read(&mut chunk[..remaining]) {
+            Ok(0) => anyhow::bail!("Request body ended before Content-Length"),
+            Ok(n) => {
+                if Instant::now() >= deadline {
+                    return Err(BodyReadTimeout.into());
+                }
+                body.extend_from_slice(&chunk[..n]);
+            }
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+                ) =>
+            {
+                return Err(BodyReadTimeout.into());
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Ok(serde_json::from_slice(&body)?)
 }
 /// Deliberately separate from `network::Rpc` so audit/replay commands retain their read-only guarantee.
 fn broadcast(endpoint: &str, tx: &Transaction) -> Result<Value> {
@@ -764,6 +812,13 @@ fn broadcast(endpoint: &str, tx: &Transaction) -> Result<Value> {
     );
     Ok(v["result"].clone())
 }
+fn http_server(listen: &str, body_timeout_secs: u64) -> Result<Server> {
+    // Apply this to accepted sockets, not the listener: a listener read timeout
+    // would also time out accept() and stop tiny_http's accept loop.
+    let idle_timeout = Duration::from_secs(body_timeout_secs.min(3));
+    Server::http_with_timeout(listen, idle_timeout).map_err(|e| anyhow::anyhow!("HTTP server: {e}"))
+}
+
 pub fn run(options: Options) -> Result<()> {
     let mut versions = BTreeMap::new();
     if let (Some(plan), Some(tables)) = (&options.v0_plan, &options.v0_tables) {
@@ -775,9 +830,10 @@ pub fn run(options: Options) -> Result<()> {
     }
     let app = Arc::new(App::load(options, Protocol::V1)?);
     let versions = Arc::new(versions);
-    let server = Arc::new(
-        Server::http(&app.options.listen).map_err(|e| anyhow::anyhow!("HTTP server: {e}"))?,
-    );
+    let server = Arc::new(http_server(
+        &app.options.listen,
+        app.options.body_timeout_secs,
+    )?);
     eprintln!(
         "Godwoken selected-protocol withdraw portal: {} (broadcast enabled: {})",
         app.options.public_origin, app.options.enable_broadcast
@@ -793,8 +849,12 @@ pub fn run(options: Options) -> Result<()> {
                     match versions.get("v0") {Some(v)=>v.route(&mut request),None=>Err(anyhow::anyhow!("V0 refund release is not configured"))}
                 } else if request.url().starts_with("/api/") && !request.url().starts_with("/api/v1/") {Err(anyhow::anyhow!("Select an explicit /api/v1/ or /api/v0/ endpoint"))}
                 else {app.route(&mut request)};
-                let (body,mime,status)=match result {Ok((b,m))=>(b,m,200),Err(e)=>(serde_json::to_vec(&json!({"error":e.to_string()})).unwrap(),"application/json",400)};
+                let (body,mime,status)=match result {Ok((b,m))=>(b,m,200),Err(e)=>{
+                    let status=if e.downcast_ref::<BodyReadTimeout>().is_some(){408}else{400};
+                    (serde_json::to_vec(&json!({"error":e.to_string()})).unwrap(),"application/json",status)
+                }};
                 let mut response=Response::from_data(body).with_status_code(StatusCode(status));
+                if status==408 {response.add_header(Header::from_bytes("Connection","close").unwrap());}
                 for (name,value) in [("Content-Type",mime),("Cache-Control","no-store"),("X-Content-Type-Options","nosniff"),("Referrer-Policy","no-referrer"),("Content-Security-Policy","default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")] {response.add_header(Header::from_bytes(name,value).unwrap());}
                 let _=request.respond(response);
             }
@@ -802,4 +862,81 @@ pub fn run(options: Options) -> Result<()> {
         }
     });
     Ok(())
+}
+
+#[cfg(all(test, unix))]
+mod timeout_tests {
+    use super::*;
+    use std::{
+        io::{BufRead, BufReader},
+        net::TcpStream,
+        sync::atomic::{AtomicBool, Ordering},
+    };
+
+    fn status(stream: TcpStream) -> u16 {
+        let mut line = String::new();
+        BufReader::new(stream).read_line(&mut line).unwrap();
+        line.split_whitespace().nth(1).unwrap().parse().unwrap()
+    }
+
+    #[test]
+    fn incomplete_bodies_expire_and_workers_recover() {
+        let server = Arc::new(http_server("127.0.0.1:0", 1).unwrap());
+        let address = server.server_addr().to_ip().unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let workers: Vec<_> = (0..4)
+            .map(|_| {
+                let server = Arc::clone(&server);
+                let stop = Arc::clone(&stop);
+                std::thread::spawn(move || {
+                    while !stop.load(Ordering::Relaxed) {
+                        let Ok(Some(mut request)) = server.recv_timeout(Duration::from_millis(100))
+                        else {
+                            continue;
+                        };
+                        let status = if *request.method() == Method::Post {
+                            match read_json::<Value>(&mut request, 1) {
+                                Ok(_) => 200,
+                                Err(e) if e.downcast_ref::<BodyReadTimeout>().is_some() => 408,
+                                Err(_) => 400,
+                            }
+                        } else {
+                            200
+                        };
+                        let response =
+                            Response::from_string("ok").with_status_code(StatusCode(status));
+                        let _ = request.respond(response);
+                    }
+                })
+            })
+            .collect();
+
+        let mut blocked = Vec::new();
+        for _ in 0..4 {
+            let mut stream = TcpStream::connect(address).unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            stream.write_all(b"POST /api/test HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2048\r\nConnection: close\r\n\r\n{").unwrap();
+            blocked.push(stream);
+        }
+        for stream in blocked {
+            assert_eq!(status(stream), 408);
+        }
+
+        let mut get = TcpStream::connect(address).unwrap();
+        get.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        get.write_all(b"GET /api/test HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            .unwrap();
+        assert_eq!(status(get), 200);
+
+        let mut post = TcpStream::connect(address).unwrap();
+        post.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        post.write_all(b"POST /api/test HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}").unwrap();
+        assert_eq!(status(post), 200);
+        stop.store(true, Ordering::Relaxed);
+        for worker in workers {
+            worker.join().unwrap();
+        }
+    }
 }

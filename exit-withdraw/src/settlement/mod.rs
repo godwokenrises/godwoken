@@ -347,6 +347,22 @@ pub fn prepare_selected(
     controls: &[build::ControlRequest],
     payments: Option<&[PaymentSelection]>,
 ) -> Result<Skeleton> {
+    prepare_selected_funding(
+        db, rpc, d, bundle, plan, addresses, batch, controls, payments, None,
+    )
+}
+pub fn prepare_selected_funding(
+    db: &dyn NativeDb,
+    rpc: &impl Chain,
+    d: &Deployment,
+    bundle: &Bundle,
+    plan: &plan::Plan,
+    addresses: Option<&[String]>,
+    batch: usize,
+    controls: &[build::ControlRequest],
+    payments: Option<&[PaymentSelection]>,
+    funding: Option<&build::CapacityFunding>,
+) -> Result<Skeleton> {
     let p = Profile::load(d)?;
     ensure!(
         db.protocol() == p.protocol(),
@@ -371,7 +387,7 @@ pub fn prepare_selected(
         .collect::<Result<Vec<_>>>()?;
     let out = if let Some((op, records)) = ledger.next_with_profile_hash(p.hash(), batch)? {
         ensure!(
-            addresses.is_none() && payments.is_none() && controls.is_empty(),
+            addresses.is_none() && payments.is_none() && controls.is_empty() && funding.is_none(),
             "Refund roots are not initialized; omit selections and complete the Begin step"
         );
         admin(
@@ -412,7 +428,7 @@ pub fn prepare_selected(
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        build::construct_with_controls(
+        build::construct_with_controls_funding(
             db,
             &ledger,
             records,
@@ -425,6 +441,7 @@ pub fn prepare_selected(
             deps,
             serde_json::to_value(journal)?,
             &controls,
+            funding,
         )?
     };
     withdraw::verify_script_dependencies(
@@ -520,8 +537,12 @@ pub fn verify_signed(
             "Input changed during validation"
         );
     }
+    let sponsor_spend = out
+        .fee
+        .checked_add(out.top_up_shannons)
+        .context("Sponsor spend overflow")?;
     Ok(
-        json!({"status":"verified_not_broadcast","transaction_hash":tx.hash()?,"before_root":hx(native.root()),"after_root":hx(out.root),"cycles":cycles,"operation":format!("{:?}",a.op),"remaining_coverage":backing}),
+        json!({"status":"verified_not_broadcast","transaction_hash":tx.hash()?,"before_root":hx(native.root()),"after_root":hx(out.root),"cycles":cycles,"operation":format!("{:?}",a.op),"remaining_coverage":backing,"capacity_funding":{"account_lock_hash":hx(c::script_hash(&p.base.governance)),"actual_top_up_ckb":ckb_amount(out.top_up_shannons),"actual_top_up_shannons":out.top_up_shannons.to_string(),"fee_ckb":ckb_amount(out.fee),"fee_shannons":out.fee.to_string(),"actual_total_spend_ckb":ckb_amount(sponsor_spend),"actual_total_spend_shannons":sponsor_spend.to_string()}}),
     )
 }
 

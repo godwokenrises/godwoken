@@ -39,8 +39,9 @@ an arbitrary administrator transaction. Such policy changes need a separate revi
   excluded and protected lots cannot fund a payment. V0 protected raw destinations
   remain forbidden even if a malformed release attempted to make them payable.
 - Source aggregate and asset aggregate remain bounded; custodian input assets equal
-  retained custodian output assets plus exact payout assets. External governance
-  inputs fund the operator fee. Minimum occupied CKB still applies to every output.
+  retained custodian output assets plus approved payouts. Governance inputs fund
+  the operator fee and explicitly funded payout capacity. Capacity additions do
+  not debit L2 balances or increase paid counters. Every output meets occupied capacity.
 - EOAs receive standard ETH OmniLock outputs. Controller groups approve the full
   transaction through distinct actual OmniLock inputs returned unchanged.
 
@@ -93,7 +94,7 @@ payouts, repeated payments, malicious proofs and onward OmniLock withdrawal.
 
 ## Exact custody and recipient checks
 
-The shared verifier authenticates custodian code/hash type, rollup binding and finality. V1 retained custody uses the exact pinned change lock; V0 retained custody must pass native validation and match a consumed custodian lock. Inputs equal retained outputs plus payouts per exact asset type, including all CKB capacity. Governance funding pays the fee separately. Every output meets occupied capacity.
+The shared verifier authenticates custodian code/hash type, rollup binding and finality. V1 retained custody uses the exact pinned change lock; V0 retained custody must pass native validation and match a consumed custodian lock. Custodian inputs equal retained outputs plus approved payouts per exact asset type. Governance funding covers the fee and any payout capacity above approved native amounts; the CLI builder and offline signer require an independently supplied account and total-spend limit for funded payouts. See [capacity funding](ops-refund-runbook.md#5-control-account-refunds-and-partial-batches) for the operator procedure.
 
 An EOA identity is authenticated from native state. Its output must be standard mainnet ETH OmniLock, type hash, exactly `0x01 || ETH[20] || 0x00`; extra arguments or another address fail. V0 short addresses are not substituted for ETH owners.
 

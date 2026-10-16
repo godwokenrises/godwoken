@@ -4,34 +4,34 @@ Current code supports settlement V3 on native networks V0 and V1. It uses one se
 
 ## Executed checks — 16 October 2026
 
-- 89 contract tests and 32 host library tests.
-- 13 V0 and 13 V1 regression cases; four opt-in V0 artifact/benchmark cases are excluded from the regular run and exercised separately below.
-- Signed V0/V1 controller transactions, onward OmniLock spends and actual ckb-cli multisig upgrades.
-- 47 frontend tests and a production build. Controller fixtures were regenerated from V3 VM runs.
+- 89 contract tests and 33 host library tests (including stalled HTTP requests and worker recovery on macOS).
+- 14 V0 and 16 V1 regression cases; four opt-in V0 artifact/benchmark cases are excluded from the regular run and exercised separately below.
+- Signed V0/V1 controller transactions, onward OmniLock spends and actual ckb-cli multisig upgrades. Capacity-funded payouts preserve native debits; unfunded excess capacity is rejected. The offline signer rejects altered requests before reading a key.
+- 47 frontend tests with controller fixtures regenerated from the updated V3 VM runs. The production build passed in the preceding V3 validation; frontend source is unchanged here.
 - Signed V0 batch/paging tests: exact cumulative payments, unchanged unrelated state, rejection of static-record mutations and arbitrary output roots. Re-signed corrupt, missing, reordered, duplicated and wrong-count witness chunks are rejected by the type script.
 
 ## Batch size and cycles
 
-Measurements include complete signed V0 transactions and actual CKB-VM execution, including authority/custodian locks and payout cells. Tested budgets: **70,000,000 cycles**, **512,000 transaction bytes**, **32,768 bytes per witness**. Actions are split into 16,000-byte witness chunks. The 70M budget is a CLI/test admission policy, not a consensus-wide per-transaction cap.
+Measurements were rerun after applying the security-review patch to V3. They include complete signed V0 transactions and actual CKB-VM execution, including authority/custodian locks and payout cells. Tested budgets: **70,000,000 cycles**, **512,000 transaction bytes**, **32,768 bytes per witness**. Actions are split into 16,000-byte witness chunks. The 70M budget is a CLI/test admission policy, not a consensus-wide per-transaction cap.
 
 The fixture has 20 target source accounts, 20 recipients, two assets (CKB and one token), 51 claims and 20,000 background accounts. “Mature” means synthetic authenticated paid/reserve/source counters and native balances; it does not mean replaying 20,000 historical transactions.
 
 | State | Selection | Records | Cycles | Transaction bytes |
 | --- | --- | ---: | ---: | ---: |
-| Fresh | 20 recipients, CKB only | 20 | 60,193,973 | 88,299 |
+| Fresh | 20 recipients, CKB only | 20 | 60,217,628 | 88,299 |
 | Fresh | 20 recipients, 40 selected records (two assets) | 40 | > 70M (rejected) | 96,404 |
 | Fresh | 20 recipients, all claims | 51 | > 70M (rejected) | 100,178 |
-| Fresh | First 10 recipients, all assets | 25 | 41,568,489 | 54,110 |
-| Fresh | Second 10 recipients, all assets | 26 | 42,702,427 | 55,922 |
-| Mature | 20 recipients, CKB only | 20 | 58,778,654 | 85,496 |
-| Mature | 20 recipients, 40 selected records (two assets) | 40 | 69,604,607 | 93,665 |
+| Fresh | First 10 recipients, all assets | 25 | 41,623,647 | 54,110 |
+| Fresh | Second 10 recipients, all assets | 26 | 42,765,805 | 55,922 |
+| Mature | 20 recipients, CKB only | 20 | 58,794,520 | 85,496 |
+| Mature | 20 recipients, 40 selected records (two assets) | 40 | 69,668,048 | 93,665 |
 | Mature | 20 recipients, all claims | 51 | > 70M (rejected) | 97,274 |
-| Mature | First 10 recipients, all assets | 25 | 40,781,256 | 52,365 |
-| Mature | Second 10 recipients, all assets | 26 | 42,013,692 | 54,796 |
+| Mature | First 10 recipients, all assets | 25 | 40,781,484 | 52,365 |
+| Mature | Second 10 recipients, all assets | 26 | 42,066,200 | 54,796 |
 
-For this fixture, use two ten-recipient transactions to pay all assets. They execute sequentially and fully drain all 40 target source/asset balances and all 51 claim caps. The mature 40-record transaction has less than 0.6% cycle headroom and does not cover all 51 claims. The failed single-transaction checks leave state unchanged.
+For this fixture, use two ten-recipient transactions to pay all assets. They execute sequentially and fully drain all 40 target source/asset balances and all 51 claim caps. The mature 40-record transaction has less than 0.5% cycle headroom and does not cover all 51 claims. The failed single-transaction checks leave state unchanged.
 
-A separate fixture groups all 51 claims under one source account: seven account pages plus epoch and two asset leaves. It pays 20 recipients in **43,338,880 cycles / 60,968 bytes**, using a 610-byte settlement proof, and fully drains the claims. Begin costs 10,165,560 cycles in the main fixture and 10,184,971 in the paged fixture. Main-fixture settlement proofs are 754 bytes for CKB-only and 901/903 bytes for the two full-asset batches; transaction sizes also include native proofs and account-page preimages.
+A separate fixture groups all 51 claims under one source account: seven account pages plus epoch and two asset leaves. It pays 20 recipients in **43,411,271 cycles / 60,968 bytes**, using a 610-byte settlement proof, and fully drains the claims. Begin costs 10,163,135 cycles in the main fixture and 10,184,136 in the paged fixture. Main-fixture settlement proofs are 754 bytes for CKB-only and 901/903 bytes for the two full-asset batches; transaction sizes also include native proofs and account-page preimages.
 
 The protocol ceilings are 64 payment records and 20 recipients. Actual feasibility depends on assets, page contents, controller locks, custodian fragmentation and proofs. Pre-execute the exact signed transaction under the target node policy.
 

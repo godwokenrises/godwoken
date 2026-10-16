@@ -990,6 +990,53 @@ fn v0_shared_settlement_full_signed_lifecycle() {
     );
 }
 
+#[test]
+fn v0_governance_capacity_top_up_keeps_native_debit_unchanged() {
+    let mut fixture = fixture();
+    fixture.active(false);
+    let action = fixture.payment(300 * CAP, 50).unwrap();
+    let mut tx = fixture.transaction(&action);
+    let verify = |tx: &Transaction| {
+        let cells = tx
+            .input_points()
+            .unwrap()
+            .iter()
+            .map(|point| fixture.node.live[point].clone())
+            .collect::<Vec<_>>();
+        let resolved = withdraw::chain::resolved(tx, &cells).unwrap();
+        v0::verify(
+            &fixture.profile,
+            hash(&v0::encode_profile(&fixture.profile)),
+            &fixture.config,
+            &resolved,
+            &action,
+        )
+    };
+    let baseline = verify(&tx).unwrap();
+    let extra = 10 * CAP;
+    tx.outputs[1].capacity = format!("0x{:x}", quantity(&tx.outputs[1].capacity).unwrap() + extra);
+    assert!(verify(&tx).is_err());
+    if std::env::var_os("GW_V0_SETTLEMENT_BINARY").is_some() {
+        resign(&fixture, &mut tx);
+        let error = fixture.node.vm(&tx).unwrap_err().to_string();
+        assert!(
+            error.contains("Type") && error.contains("ValidationFailure"),
+            "{error}"
+        );
+    }
+    let sponsor = tx.outputs.last_mut().unwrap();
+    sponsor.capacity = format!("0x{:x}", quantity(&sponsor.capacity).unwrap() - extra);
+    let funded = verify(&tx).unwrap();
+    assert_eq!(funded.debits, baseline.debits);
+    assert_eq!(funded.fee, baseline.fee);
+    assert_eq!(funded.top_up_shannons, extra);
+    if std::env::var_os("GW_V0_SETTLEMENT_BINARY").is_some() {
+        resign(&fixture, &mut tx);
+        let cycles = fixture.node.vm(&tx).unwrap();
+        println!("V0 governance-funded payout: {cycles} cycles");
+    }
+}
+
 fn replace_action(tx: &mut Transaction, a: &s::SettlementAction) {
     tx.witnesses.truncate(tx.inputs.len());
     let w = packed::WitnessArgs::from_slice(&bytes(&tx.witnesses[0]).unwrap()).unwrap();
