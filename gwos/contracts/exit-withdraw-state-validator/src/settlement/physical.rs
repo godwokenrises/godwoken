@@ -4,6 +4,7 @@ pub const STATE: usize = 0;
 pub const PAGE_ITEMS: usize = 16;
 pub const MAX_PAGE_BYTES: usize = 8192;
 pub type Page = BTreeMap<(usize, Hash), Vec<u8>>;
+// These are physical SMT keys; logical record keys remain inside account pages.
 pub fn account_key(id: u32, page: u32) -> Hash {
     let mut k = [0; 32];
     k[..4].copy_from_slice(&id.to_le_bytes());
@@ -24,6 +25,7 @@ pub fn epoch_state_key(id: u64) -> Hash {
     k
 }
 pub fn namespace(k: Hash) -> Result<u8> {
+    // Reserved bytes must be zero so each account page, asset and epoch has one encoding.
     match k[31] {
         16 => {
             require(k[8..31].iter().all(|b| *b == 0), Error::Keys)?;
@@ -99,6 +101,7 @@ pub fn unpack_page(raw: &[u8]) -> Result<Page> {
         )?;
         c.0 = &c.0[len..];
     }
+    // Repacking rejects noncanonical order as well as trailing bytes.
     require(
         immutable > 0 && immutable <= PAGE_ITEMS && c.0.is_empty() && pack_page(&map) == raw,
         Error::Encoding,

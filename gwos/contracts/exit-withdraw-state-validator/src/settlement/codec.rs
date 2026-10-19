@@ -205,6 +205,8 @@ pub(crate) fn decode_action_tag(bytes: &[u8], version: NativeVersion) -> Result<
         })
         .collect::<Result<Vec<_>>>()?;
     let records = if op == Operation::Pay {
+        // Wire payments contain only a claim key and amount; recover the Claim from its page.
+        // Decoding is not membership verification: Trees::finish still checks the page proof.
         let claims = physical::record_index(&trees, CLAIM_PLAN)?;
         records
             .iter()

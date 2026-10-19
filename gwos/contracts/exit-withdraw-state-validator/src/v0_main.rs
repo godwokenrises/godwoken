@@ -1,6 +1,8 @@
 #![no_std]
 #![no_main]
 
+//! V0 entry: bounded CKB reads -> witness reconstruction -> decoding -> V0 settlement adapter.
+
 use ckb_std::ckb_types::prelude::Entity as CkbEntity;
 use ckb_std::{
     ckb_constants::{CellField, Source},
@@ -18,6 +20,7 @@ fn syscall<T>(r: core::result::Result<T, SysError>) -> Result<T> {
     r.map_err(|_| Error::Syscall)
 }
 fn bounded_data(index: usize, source: Source, limit: usize) -> Result<alloc::vec::Vec<u8>> {
+    // Probe the size before allocating; cell contents are controlled by the transaction.
     let n = match syscalls::load_cell_data(&mut [], 0, index, source) {
         Ok(n) => n,
         Err(SysError::LengthNotEnough(n)) => n,
@@ -98,6 +101,7 @@ fn run() -> Result<()> {
         return Err(Error::Limit);
     }
     let own = syscall(high_level::load_script())?;
+    // Bind rollup identity using the complete script, including args.
     if own.as_slice() != p.rollup.as_slice() {
         return Err(Error::Rollup);
     }
@@ -112,6 +116,8 @@ fn run() -> Result<()> {
                 .map_err(|_| Error::Encoding)?,
         );
     }
+    // The action is in WitnessArgs.output_type at the rollup output's absolute index.
+    // The verifier below also requires the rollup input/output pair to be unique.
     let index = outputs
         .iter()
         .position(|c| {

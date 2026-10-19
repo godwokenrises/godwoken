@@ -11,6 +11,7 @@ pub fn frame(raw: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>) {
         return (raw.to_vec(), Vec::new());
     }
     let parts: Vec<Vec<u8>> = raw.chunks(CHUNK).map(|v| v.to_vec()).collect();
+    // Header: magic | total bytes | chunk count | hash of the complete action.
     let mut header = MAGIC.to_vec();
     header.extend_from_slice(&(raw.len() as u32).to_le_bytes());
     header.extend_from_slice(&(parts.len() as u32).to_le_bytes());
@@ -30,16 +31,19 @@ pub fn unframe(
     let n = u32::from_le_bytes(header[8..12].try_into().map_err(|_| Error::Encoding)?) as usize;
     let count =
         u32::from_le_bytes(header[12..16].try_into().map_err(|_| Error::Encoding)?) as usize;
+    // Bound the allocation and require exactly the chunks implied by the payload length.
     require(
         n > CHUNK && n <= MAX_ACTION && count == (n + CHUNK - 1) / CHUNK,
         Error::Limit,
     )?;
     let mut raw = Vec::with_capacity(n);
+    // start is the input count: chunks occupy extra witnesses covered by sighash-all.
     for i in 0..count {
         let part = load(start.checked_add(i).ok_or(Error::Overflow)?)?;
         require(part.len() == CHUNK.min(n - i * CHUNK), Error::Encoding)?;
         raw.extend_from_slice(&part);
     }
+    // The full-payload hash binds chunk contents and order before action decoding.
     require(
         gw_hash::blake2b::hash(&raw).as_slice() == &header[16..],
         Error::Proof,

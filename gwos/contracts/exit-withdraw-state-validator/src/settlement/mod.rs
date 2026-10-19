@@ -1,4 +1,5 @@
 //! Settlement-only consensus. All writes are derived from typed, authenticated records.
+//! verify() binds the transaction; evaluate_version() handles Begin/Pay and derives counters.
 use crate::proof_backend::ProofBackend;
 pub mod codec;
 pub mod physical;
@@ -103,6 +104,7 @@ impl<'a> Trees<'a> {
             Error::Proof,
         )?;
         let proof = &proofs[0];
+        // Index supplied page preimages here; finish() authenticates them against state_root.
         require(
             !proof.leaves.is_empty()
                 && proof.leaves.len() <= MAX_TREE_KEYS
@@ -199,10 +201,12 @@ impl<'a> Trees<'a> {
                 require(src.account == account, Error::Keys)?;
             }
         }
+        // An absent counter is proven by its containing page, located through its static parent.
         Ok(page.get(&(kind, key)).unwrap_or(&self.empty))
     }
     fn get<T: Field>(&mut self, t: usize, k: Hash) -> Result<T> {
         self.original(t, k)?;
+        // Claims sharing a lot/source/asset must see updates already staged in this action.
         if let Some(v) = self.writes.get(&t).and_then(|w| w.get(&k)) {
             decode(v)
         } else {
@@ -219,6 +223,7 @@ impl<'a> Trees<'a> {
         require(b.is_empty(), Error::State)
     }
     fn set<T: Field>(&mut self, t: usize, k: Hash, v: &T) -> Result<()> {
+        // Only evaluator-derived counters may change; Begin may also insert the initial epoch.
         require(
             physical::mutable(t) || (self.op == Operation::Begin && t == EPOCHS),
             Error::State,
@@ -228,6 +233,7 @@ impl<'a> Trees<'a> {
         Ok(())
     }
     fn finish(&self, m: &mut Metadata) -> Result<()> {
+        // Authenticate every supplied physical leaf, rejecting unused proof leaves.
         require(self.used.len() == self.proof.leaves.len(), Error::Keys)?;
         let old = self
             .proof
@@ -242,6 +248,7 @@ impl<'a> Trees<'a> {
             .map_err(|_| Error::Proof)?
             .into();
         require(checked == self.root, Error::Proof)?;
+        // Preserve complete pages so static records and unrelated counters remain unchanged.
         let mut pages = self.pages.clone();
         let mut global = BTreeMap::new();
         for (kind, writes) in &self.writes {
@@ -280,6 +287,7 @@ impl<'a> Trees<'a> {
                 Ok(((*k).into(), commitment(&raw).into()))
             })
             .collect::<Result<_>>()?;
+        // Reuse the same multiproof: only derived leaves change; all other branches stay fixed.
         m.state_root = self
             .proof
             .proof
@@ -385,8 +393,10 @@ pub fn evaluate_version(
     )?;
     let mk = metadata_key(p.deployment, script_hash(&p.base.rollup));
     let mut reads = BTreeSet::new();
+    // Native witness values become trusted only when verify_transition checks the native proof.
     let old_native_meta = read_native(&a.native, &mut reads, mk)?;
     let mut m = if a.op == Operation::Begin {
+        // A successful Begin commits metadata, so initialization cannot be repeated.
         require(
             a.before.is_empty()
                 && old_native_meta == [0; 32]
@@ -402,6 +412,7 @@ pub fn evaluate_version(
             state_root: p.state_root,
         }
     } else {
+        // Pay must resume the metadata committed by the current native root.
         require(
             !a.before.is_empty()
                 && commitment(&a.before) == old_native_meta
@@ -445,6 +456,7 @@ pub fn evaluate_version(
     )?;
     match a.op {
         Operation::Begin => {
+            // Activate the frozen plan and initialize asset counters; account counters stay lazy.
             let k = epoch_key(p.deployment, 0);
             trees.absent(EPOCHS, k)?;
             let mut epoch = p.initial_epoch;
@@ -461,6 +473,7 @@ pub fn evaluate_version(
             let e: Epoch = trees.get(EPOCHS, epoch_key(p.deployment, a.epoch))?;
             require(e.status == ACTIVE && e.id == a.epoch, Error::State)?;
 
+            // Per claim: cap -> payable lot -> source balance/budget -> global asset ceiling.
             for b in &a.records {
                 let pay: Payment = decode(b)?;
                 let c = &pay.claim;
@@ -472,6 +485,7 @@ pub fn evaluate_version(
                 require(trees.get::<Claim>(CLAIM_PLAN, ck)? == *c, Error::Proof)?;
                 let r = recipient(&a.native, c, &mut used_recipients)?;
                 let old = trees.original(PAID, ck)?;
+                // No stored Paid means zero; an explicit stored zero is noncanonical.
                 let n = if old.is_empty() {
                     U256::zero()
                 } else {
@@ -526,6 +540,7 @@ pub fn evaluate_version(
                     trees.get::<SourceBudget>(SOURCES, c.source)?
                 };
                 if checked_sources.insert(c.source) {
+                    // Check the pre-transaction balance once; later claims use the staged budget.
                     source_identity(p, &a.native, &src, &mut reads, version)?;
                     require(
                         version.amount(read_native(
@@ -570,6 +585,7 @@ pub fn evaluate_version(
     let metadata_value = commitment(&encode(&m));
     require(metadata_value != [0; 32], Error::State)?;
     let mut native_writes = BTreeMap::new();
+    // Commit the settlement root inside native metadata, alongside source and supply debits.
     native_writes.insert(mk, metadata_value);
     for ((asset, address), n) in &sources {
         let bk = version.balance_key(*asset, *address);
@@ -622,6 +638,7 @@ pub fn verify(
         })
         .ok_or(Error::Rollup)?;
     if a.op == Operation::Begin {
+        // Consume the exact bootstrap cell once; a later rollup output cannot restart Begin.
         require(
             tx.outpoints
                 .get(input.0)
@@ -636,6 +653,7 @@ pub fn verify(
         )?;
     }
     let e = evaluate(p, profile_hash, a)?;
+    // The caller declares after-state bytes but cannot choose the resulting root or counters.
     require(a.after == encode(&e.metadata), Error::State)?;
     let transition = SettlementTransition {
         admin: a.op != Operation::Pay,
@@ -645,5 +663,7 @@ pub fn verify(
         sources: e.sources,
         payments: e.payments,
     };
+    // Complete authorization: native SMT updates, actual payouts, custody and input-lock rules.
+    // CKB executes input locks for signatures; this layer checks their required identities.
     verify_transition(&p.base, cfg, tx, &a.native, &transition)
 }
