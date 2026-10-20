@@ -58,6 +58,10 @@ jobs:
         working-directory: gwos/contracts/exit-withdraw-state-validator
         run: cargo +1.95.0 test --locked --lib --tests
 
+      - name: HTTP, RPC and offline host regressions
+        working-directory: exit-withdraw
+        run: cargo +1.95.0 test --locked
+
       # These scripts export synthetic profiles and build profile-pinned RISC-V
       # binaries before testing. They execute the contracts in CKB-VM, not just
       # the host verifier. Fixture binaries must never be deployed.

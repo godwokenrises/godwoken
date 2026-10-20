@@ -4,7 +4,9 @@ Current code supports settlement V3 on native networks V0 and V1. It uses one se
 
 ## Executed checks — 20 October 2026
 
-- 92 contract tests in debug and release modes, and 33 host library tests (including stalled HTTP requests and worker recovery on macOS).
+- 92 contract tests in debug and release modes from the arithmetic/toolchain validation, and 39 host library tests after the HTTP migration.
+- Axum/Hyper loopback regressions: four continuously dripping connections, 512-byte and 64 KiB bodies, explicit 1-second and default 15-second deadlines, server-side socket closure after 408, available ordinary queries, early rejection, slow headers, and retained business slots after cancellation/timeout. Reqwest checks cover connection reuse, read-only RPC enforcement, HTTP/JSON errors, disabled redirects/retries and a streaming-response deadline.
+- Full default host suite passed (72 tests; three external-artifact cases ignored), plus seven claim/OmniLock VM cases including the actual HTTP build/sign/submit/replay flow. V1 controller HTTP and V0/V1 controller VM regressions passed using the existing profile-pinned contract binaries; no contract source changed in the HTTP migration.
 - 14 V0 and 16 V1 regression cases; four opt-in V0 artifact/benchmark cases are excluded from the regular run and exercised separately below.
 - Signed V0/V1 controller transactions, onward OmniLock spends and actual ckb-cli multisig upgrades. Capacity-funded payouts preserve native debits; unfunded excess capacity is rejected. The offline signer rejects altered requests before reading a key.
 - 47 frontend tests with controller fixtures regenerated from the updated V3 VM runs. The production build passed in the preceding V3 validation; frontend source is unchanged here.
@@ -40,7 +42,7 @@ The protocol ceilings are 64 payment records and 20 recipients. Actual feasibili
 From `exit-withdraw/`, with Rust 1.95.0, the RISC-V target, clang, llvm-ar, llvm-strip, jq and ckb-cli available:
 
 ```sh
-cargo +1.95.0 test --locked --lib
+cargo +1.95.0 test --locked
 cargo +1.95.0 test --manifest-path ../gwos/contracts/exit-withdraw-state-validator/Cargo.toml --locked --lib --tests
 cargo +1.95.0 test --manifest-path ../gwos/contracts/exit-withdraw-state-validator/Cargo.toml --locked --release --lib --tests
 bash scripts/test-v0-settlement-e2e.sh

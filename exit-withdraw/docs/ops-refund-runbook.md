@@ -396,12 +396,19 @@ npm run build --prefix claim-web
 Use the same explicit pinned mainnet OmniLock/sUDT/secp-data dependencies as the
 release. Configure your HTTPS reverse proxy and exact public origin. Start
 without `--enable-broadcast` for review; add it when operating the refund service.
-`--body-timeout-secs` limits the time spent reading a JSON body (1–120 seconds;
-default 15). A body read timeout returns HTTP 408 and closes that connection.
-The underlying client socket also has an idle I/O timeout of at most 3 seconds.
-At the reverse proxy, enable request buffering, a request body timeout, and
-connection limits; these controls also cover slow headers and requests that
-stall before the application receives a complete body.
+The Axum/Hyper server limits JSON bodies to 64 KiB. `--body-timeout-secs`
+sets an absolute body deadline (1–120 seconds; default 15), including slow
+continuous uploads. Timeout returns HTTP 408 and closes the connection without
+draining the remaining body; rejected requests also close their connection.
+Headers have a 3-second deadline, a 32 KiB buffer and a 64-header limit. The
+server admits at most 128 connections, each with a 180-second lifetime.
+Synchronous business work has four slots and a 120-second deadline; excess
+requests receive 503. A slot stays reserved until its work actually finishes.
+RPC uses a pooled reqwest client: 5-second connect timeout, at most 30 seconds
+per RPC within the business deadline, and 64 MiB maximum response. Redirects
+and automatic retries are disabled; a broadcast timeout requires checking the
+original transaction hash. Keep request buffering, body deadlines and connection
+limits enabled at the HTTPS reverse proxy as well.
 The service never holds signing keys. Omitting the V0 options disables V0 instead
 of falling back to V1. Personal cells must have unmixed provenance in the selected
 release; arbitrary cells under the same OmniLock are not silently included.

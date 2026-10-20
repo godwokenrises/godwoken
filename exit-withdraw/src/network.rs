@@ -1,11 +1,83 @@
 use crate::model::*;
+use crate::withdraw::Transaction;
 use anyhow::{ensure, Context, Result};
 use serde_json::{json, Value};
 use std::{
+    cell::Cell as DeadlineCell,
     collections::{BTreeMap, BTreeSet},
-    io::Write,
-    process::{Command, Stdio},
+    io::Read,
+    sync::LazyLock,
+    time::{Duration, Instant},
 };
+
+const RPC_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_RPC_RESPONSE: u64 = 64 * 1024 * 1024;
+static CLIENT: LazyLock<Result<reqwest::blocking::Client>> = LazyLock::new(|| {
+    Ok(reqwest::blocking::Client::builder()
+        .connect_timeout(Duration::from_secs(5))
+        .redirect(reqwest::redirect::Policy::none())
+        // A timed-out broadcast may already be accepted; never replay it automatically.
+        .retry(reqwest::retry::never())
+        .pool_max_idle_per_host(4)
+        .build()?)
+});
+thread_local! {
+    static DEADLINE: DeadlineCell<Option<Instant>> = const { DeadlineCell::new(None) };
+}
+
+/// Bound all sequential RPCs in one synchronous portal operation, including unwinding.
+pub(crate) fn with_deadline<T>(deadline: Instant, run: impl FnOnce() -> T) -> T {
+    struct Reset(Option<Instant>);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            DEADLINE.set(self.0);
+        }
+    }
+    let _reset = Reset(DEADLINE.replace(Some(deadline)));
+    run()
+}
+
+fn request(endpoint: &str, method: &str, params: Value) -> Result<Value> {
+    let timeout = match DEADLINE.get() {
+        Some(deadline) => deadline
+            .checked_duration_since(Instant::now())
+            .context("RPC operation deadline exceeded")?
+            .min(RPC_TIMEOUT),
+        None => RPC_TIMEOUT,
+    };
+    let response = CLIENT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("HTTP client: {e}"))?
+        .post(endpoint)
+        .timeout(timeout)
+        .json(&json!({"jsonrpc":"2.0","id":1,"method":method,"params":params}))
+        .send()
+        .with_context(|| format!("{method}: transport error"))?
+        .error_for_status()?;
+    let mut bytes = Vec::new();
+    response
+        .take(MAX_RPC_RESPONSE + 1)
+        .read_to_end(&mut bytes)?;
+    ensure!(
+        bytes.len() as u64 <= MAX_RPC_RESPONSE,
+        "RPC response exceeds 64 MiB"
+    );
+    let mut response: Value = serde_json::from_slice(&bytes).context("Non-JSON RPC response")?;
+    ensure!(
+        response["jsonrpc"] == "2.0"
+            && response["id"] == 1
+            && response.get("error").is_none()
+            && response.get("result").is_some(),
+        "{method}: RPC error {response}"
+    );
+    Ok(response["result"].take())
+}
+
+/// Kept separate from the read-only audit RPC allowlist.
+pub(crate) fn broadcast(endpoint: &str, tx: &Transaction) -> Result<Value> {
+    request(endpoint, "send_transaction", json!([tx, "passthrough"]))
+        .context("Broadcast response unavailable or rejected; check the reviewed transaction hash before retrying")
+}
 
 #[derive(Clone)]
 pub struct Rpc {
@@ -13,12 +85,13 @@ pub struct Rpc {
 }
 impl Rpc {
     pub fn new(endpoint: &str) -> Result<Self> {
+        let url = reqwest::Url::parse(endpoint)?;
         ensure!(
-            endpoint.starts_with("https://") || endpoint.starts_with("http://"),
+            matches!(url.scheme(), "http" | "https"),
             "RPC URL must be HTTP(S)"
         );
         Ok(Self {
-            endpoint: endpoint.into(),
+            endpoint: url.into(),
         })
     }
     pub fn call(&self, method: &str, params: Value) -> Result<Value> {
@@ -37,47 +110,7 @@ impl Rpc {
             .contains(&method),
             "RPC method is outside the read-only allowlist"
         );
-        let mut child = Command::new("curl")
-            .args([
-                "-q",
-                "--silent",
-                "--show-error",
-                "--fail-with-body",
-                "--max-time",
-                "30",
-                &self.endpoint,
-                "-H",
-                "Content-Type: application/json",
-                "--data-binary",
-                "@-",
-            ])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .context("Start curl (read-only JSON RPC)")?;
-        child
-            .stdin
-            .take()
-            .context("RPC stdin unavailable")?
-            .write_all(&serde_json::to_vec(
-                &json!({"jsonrpc":"2.0","id":1,"method":method,"params":params}),
-            )?)?;
-        let out = child.wait_with_output()?;
-        ensure!(
-            out.status.success(),
-            "{method}: transport error: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        let response: Value =
-            serde_json::from_slice(&out.stdout).context("Non-JSON RPC response")?;
-        ensure!(
-            response.get("id") == Some(&json!(1))
-                && response.get("error").is_none()
-                && response.get("result").is_some(),
-            "{method}: RPC error {response}"
-        );
-        Ok(response["result"].clone())
+        request(&self.endpoint, method, params)
     }
     pub fn cells(&self, script: &Script, kind: &str, mode: &str) -> Result<Vec<Cell>> {
         let search =
@@ -280,3 +313,7 @@ pub fn capture(ckb_url: &str, indexer_url: &str, outpoint: OutPoint) -> Result<B
     bundle.validate()?;
     Ok(bundle)
 }
+
+#[cfg(test)]
+#[path = "network_tests.rs"]
+mod tests;

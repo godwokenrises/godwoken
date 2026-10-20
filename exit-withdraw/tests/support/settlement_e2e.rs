@@ -1875,30 +1875,23 @@ fn control_api_rehearsal(
         }
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
+    let client = reqwest::blocking::Client::builder()
+        .no_proxy()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .unwrap();
     let call = |path: &str, body: Option<Value>| {
-        let mut cmd = std::process::Command::new("curl");
-        cmd.args([
-            "-q",
-            "-sS",
-            "--noproxy",
-            "*",
-            "--max-time",
-            "20",
-            "-H",
-            &format!("Origin: {origin}"),
-            "-H",
-            "Content-Type: application/json",
-        ]);
-        if let Some(body) = body {
-            cmd.args(["--data-binary", &body.to_string()]);
-        }
-        let out = cmd.arg(format!("{origin}{path}")).output().unwrap();
-        assert!(
-            out.status.success(),
-            "{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        serde_json::from_slice::<Value>(&out.stdout).unwrap()
+        let url = format!("{origin}{path}");
+        let request = match body {
+            Some(body) => client.post(url).json(&body),
+            None => client.get(url),
+        };
+        request
+            .header("Origin", &origin)
+            .send()
+            .unwrap()
+            .json::<Value>()
+            .unwrap()
     };
     let controls = call("/api/v1/controls", None);
     assert_eq!(controls["accounts"][0]["threshold"], 2);

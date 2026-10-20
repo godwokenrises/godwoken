@@ -1,32 +1,42 @@
 //! Same-origin, keyless claim API. The audit RPC allowlist stays read-only.
 use super::*;
 use crate::{
-    network::Rpc,
+    network::{broadcast, with_deadline, Rpc},
     settlement::{
         adapter::{Profile, Protocol},
         plan::Plan,
     },
     withdraw::chain::{self, History},
 };
+use axum::{
+    body::{to_bytes, Bytes},
+    extract::{Request, State},
+    http::{header, HeaderMap, Method, StatusCode},
+    response::{IntoResponse, Response},
+    Json, Router,
+};
 use clap::Args;
 use exit_withdraw_state_validator::settlement::records::*;
+use hyper::server::conn::http1;
+use hyper_util::{
+    rt::{TokioIo, TokioTimer},
+    service::TowerToHyperService,
+};
 use serde_json::Value;
 use sha2::Sha256;
 use std::{
     fs,
-    io::{self, Write},
     path::PathBuf,
-    process::{Command, Stdio},
     sync::Arc,
     time::{Duration, Instant},
 };
-use tiny_http::{Header, Method, Request, Response, Server, StatusCode};
+use tokio::{net::TcpListener, sync::Semaphore};
 
 #[derive(Args, Clone)]
 pub struct Options {
     #[arg(long, default_value = "127.0.0.1:8787")]
     pub listen: String,
-    /// Maximum time spent reading one JSON request body. The socket idle timeout is shorter.
+    /// Total time allowed to receive one JSON body, including continuously slow uploads.
     #[arg(long, default_value_t = 15)]
     pub body_timeout_secs: u64,
     #[arg(long, default_value = "http://127.0.0.1:8787")]
@@ -640,76 +650,67 @@ impl App {
         );
         Ok(json!({"transaction_hash":s.transaction_hash,"status":"submitted","cycles":cycles}))
     }
-    fn route(&self, request: &mut Request) -> Result<(Vec<u8>, &'static str)> {
-        let url = request.url();
-        let prefix = format!("/api/{}", self.plan.protocol.name());
-        let path = if let Some(rest) = url.strip_prefix(&prefix) {
-            format!("/api{rest}")
-        } else {
-            url.to_owned()
-        };
+    fn check_headers(&self, method: &Method, headers: &HeaderMap) -> Result<()> {
         let expected_host = self
             .options
             .public_origin
             .split_once("://")
             .context("Invalid origin")?
             .1;
-        let host = request
-            .headers()
-            .iter()
-            .find(|h| h.field.equiv("Host"))
-            .map(|h| h.value.as_str());
-        ensure!(host == Some(expected_host), "Invalid request host");
-        if *request.method() == Method::Post {
-            let origin = request
-                .headers()
-                .iter()
-                .find(|h| h.field.equiv("Origin"))
-                .map(|h| h.value.as_str());
+        ensure!(
+            headers.get(header::HOST).and_then(|h| h.to_str().ok()) == Some(expected_host),
+            "Invalid request host"
+        );
+        if *method == Method::POST {
             ensure!(
-                origin == Some(self.options.public_origin.as_str()),
+                headers.get(header::ORIGIN).and_then(|h| h.to_str().ok())
+                    == Some(self.options.public_origin.as_str()),
                 "Cross-origin requests are not accepted"
             );
-            let content = request
-                .headers()
-                .iter()
-                .find(|h| h.field.equiv("Content-Type"))
-                .map(|h| h.value.as_str());
             ensure!(
-                content.is_some_and(|s| s.starts_with("application/json")),
+                headers
+                    .get(header::CONTENT_TYPE)
+                    .and_then(|h| h.to_str().ok())
+                    .is_some_and(|s| s.starts_with("application/json")),
                 "Use application/json"
             );
         }
-        let value = match (request.method(), path.as_str()) {
-            (&Method::Get, "/api/config") => {
+        Ok(())
+    }
+    fn route(&self, method: &Method, url: &str, body: &[u8]) -> Result<(Vec<u8>, &'static str)> {
+        let prefix = format!("/api/{}", self.plan.protocol.name());
+        let path = if let Some(rest) = url.strip_prefix(&prefix) {
+            format!("/api{rest}")
+        } else {
+            url.to_owned()
+        };
+        let value = match (method, path.as_str()) {
+            (&Method::GET, "/api/config") => {
                 json!({"network":"CKB mainnet","scope":format!("Godwoken {}",self.plan.protocol.name()),"protocol":self.plan.protocol,"assets":self.assets,"dependencies":self.deps,"broadcast_enabled":self.options.enable_broadcast && self.deployment.is_some(),"fee_rate":self.options.fee_rate,"plan_manifest":self.plan.manifest,"snapshot_root":self.plan.snapshot_root})
             }
-            (&Method::Get, "/api/controls") => self.controls()?,
-            (&Method::Get, p) if p.starts_with("/api/control-proposal/") => {
+            (&Method::GET, "/api/controls") => self.controls()?,
+            (&Method::GET, p) if p.starts_with("/api/control-proposal/") => {
                 self.control_proposal(&p[22..])?
             }
-            (&Method::Post, "/api/control-submit") => {
-                self.control_submit(read_json(request, self.options.body_timeout_secs)?)?
+            (&Method::POST, "/api/control-submit") => {
+                self.control_submit(serde_json::from_slice(body)?)?
             }
-            (&Method::Get, p) if p.starts_with("/api/account/") => self.inventory(&p[13..])?,
-            (&Method::Get, p) if p.starts_with("/api/transaction/") => {
+            (&Method::GET, p) if p.starts_with("/api/account/") => self.inventory(&p[13..])?,
+            (&Method::GET, p) if p.starts_with("/api/transaction/") => {
                 let h = hx(hash32(&p[17..])?);
                 let result = self.rpc.call("get_transaction", json!([h]))?;
                 json!({"transaction_hash":h,"status":result["tx_status"]["status"],"block_hash":result["tx_status"]["block_hash"]})
             }
-            (&Method::Post, "/api/prepare") => {
-                let mut q = serde_json::to_value(self.prepare(&read_json::<ScopedRequest>(
-                    request,
-                    self.options.body_timeout_secs,
-                )?)?)?;
+            (&Method::POST, "/api/prepare") => {
+                let mut q = serde_json::to_value(
+                    self.prepare(&serde_json::from_slice::<ScopedRequest>(body)?)?,
+                )?;
                 q["protocol"] = json!(self.plan.protocol);
                 q["plan_manifest"] = json!(self.plan.manifest);
                 q
             }
-            (&Method::Post, "/api/submit") => {
-                self.submit(read_json(request, self.options.body_timeout_secs)?)?
-            }
-            (&Method::Get, p) if !p.starts_with("/api/") => {
+            (&Method::POST, "/api/submit") => self.submit(serde_json::from_slice(body)?)?,
+            (&Method::GET, p) if !p.starts_with("/api/") => {
                 let file = if p == "/" {
                     self.web.join("index.html")
                 } else {
@@ -735,88 +736,172 @@ impl App {
         Ok((serde_json::to_vec(&value)?, "application/json"))
     }
 }
-#[derive(Debug)]
-struct BodyReadTimeout;
-impl std::fmt::Display for BodyReadTimeout {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Request body read timed out")
-    }
-}
-impl std::error::Error for BodyReadTimeout {}
+const MAX_BODY: usize = 65536;
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
+const MAX_CONNECTIONS: usize = 128;
+const MAX_JOBS: usize = 4;
 
-fn read_json<T: serde::de::DeserializeOwned>(r: &mut Request, timeout_secs: u64) -> Result<T> {
-    let length = r
-        .body_length()
-        .context("Request body requires Content-Length")?;
-    ensure!(length <= 65536, "Request body limit is 64 KiB");
-    let deadline = Instant::now() + Duration::from_secs(timeout_secs);
-    let mut body = Vec::with_capacity(length);
-    let mut chunk = [0u8; 8192];
-    while body.len() < length {
-        if Instant::now() >= deadline {
-            return Err(BodyReadTimeout.into());
-        }
-        let remaining = (length - body.len()).min(chunk.len());
-        match r.as_reader().read(&mut chunk[..remaining]) {
-            Ok(0) => anyhow::bail!("Request body ended before Content-Length"),
-            Ok(n) => {
-                if Instant::now() >= deadline {
-                    return Err(BodyReadTimeout.into());
-                }
-                body.extend_from_slice(&chunk[..n]);
-            }
-            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-            Err(e)
-                if matches!(
-                    e.kind(),
-                    io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
-                ) =>
-            {
-                return Err(BodyReadTimeout.into());
-            }
-            Err(e) => return Err(e.into()),
-        }
+fn error(status: StatusCode, message: impl std::fmt::Display) -> Response {
+    (status, Json(json!({"error": message.to_string()}))).into_response()
+}
+
+async fn read_body(request: Request, timeout: Duration) -> std::result::Result<Bytes, Response> {
+    let length = request
+        .headers()
+        .get(header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<usize>().ok());
+    let Some(length) = length else {
+        return Err(error(
+            StatusCode::LENGTH_REQUIRED,
+            "Request body requires Content-Length",
+        ));
+    };
+    if length > MAX_BODY {
+        return Err(error(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "Request body limit is 64 KiB",
+        ));
     }
-    Ok(serde_json::from_slice(&body)?)
+    match tokio::time::timeout(timeout, to_bytes(request.into_body(), MAX_BODY)).await {
+        Err(_) => Err(error(
+            StatusCode::REQUEST_TIMEOUT,
+            "Request body read timed out",
+        )),
+        Ok(Err(e)) => Err(error(StatusCode::BAD_REQUEST, e)),
+        Ok(Ok(body)) => Ok(body),
+    }
 }
-/// Deliberately separate from `network::Rpc` so audit/replay commands retain their read-only guarantee.
-fn broadcast(endpoint: &str, tx: &Transaction) -> Result<Value> {
-    let mut child = Command::new("curl")
-        .args([
-            "-q",
-            "--silent",
-            "--show-error",
-            "--fail-with-body",
-            "--max-time",
-            "30",
-            endpoint,
-            "-H",
-            "Content-Type: application/json",
-            "--data-binary",
-            "@-",
-        ])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-    child.stdin.take().context("RPC stdin unavailable")?.write_all(&serde_json::to_vec(&json!({"jsonrpc":"2.0","id":1,"method":"send_transaction","params":[tx,"passthrough"]}))?)?;
-    let out = child.wait_with_output()?;
-    ensure!(
-        out.status.success(),
-        "Broadcast response unavailable; check the reviewed transaction hash before retrying"
-    );
-    let v: Value = serde_json::from_slice(&out.stdout)?;
-    ensure!(
-        v["id"] == 1 && v.get("error").is_none(),
-        "Node rejected the claim transaction"
-    );
-    Ok(v["result"].clone())
+
+/// A timed-out caller must not release a slot while its blocking job is still running.
+async fn execute<T: Send + 'static>(
+    slots: Arc<Semaphore>,
+    timeout: Duration,
+    work: impl FnOnce() -> Result<T> + Send + 'static,
+) -> std::result::Result<T, Response> {
+    let permit = slots.try_acquire_owned().map_err(|_| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Service busy; try again later",
+        )
+    })?;
+    let deadline = Instant::now() + timeout;
+    let job = tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        with_deadline(deadline, work)
+    });
+    match tokio::time::timeout_at(deadline.into(), job).await {
+        Err(_) => Err(error(
+            StatusCode::GATEWAY_TIMEOUT,
+            "Operation timed out; check the transaction hash before retrying a submission",
+        )),
+        Ok(Err(_)) => Err(error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Request processing failed",
+        )),
+        Ok(Ok(Err(e))) => Err(error(
+            if Instant::now() >= deadline {
+                StatusCode::GATEWAY_TIMEOUT
+            } else {
+                StatusCode::BAD_REQUEST
+            },
+            e,
+        )),
+        Ok(Ok(Ok(result))) => Ok(result),
+    }
 }
-fn http_server(listen: &str, body_timeout_secs: u64) -> Result<Server> {
-    // Apply this to accepted sockets, not the listener: a listener read timeout
-    // would also time out accept() and stop tiny_http's accept loop.
-    let idle_timeout = Duration::from_secs(body_timeout_secs.min(3));
-    Server::http_with_timeout(listen, idle_timeout).map_err(|e| anyhow::anyhow!("HTTP server: {e}"))
+
+struct Portal {
+    app: Arc<App>,
+    versions: BTreeMap<&'static str, Arc<App>>,
+    jobs: Arc<Semaphore>,
+}
+
+async fn handle(State(portal): State<Arc<Portal>>, request: Request) -> Response {
+    let path = request.uri().path().to_owned();
+    let app = if path.starts_with("/api/v0/") {
+        match portal.versions.get("v0") {
+            Some(app) => Arc::clone(app),
+            None => {
+                return error(
+                    StatusCode::BAD_REQUEST,
+                    "V0 refund release is not configured",
+                )
+            }
+        }
+    } else if path.starts_with("/api/") && !path.starts_with("/api/v1/") {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "Select an explicit /api/v1/ or /api/v0/ endpoint",
+        );
+    } else {
+        Arc::clone(&portal.app)
+    };
+    let method = request.method().clone();
+    if let Err(e) = app.check_headers(&method, request.headers()) {
+        return error(StatusCode::BAD_REQUEST, e);
+    }
+    // Receive the body before reserving a business slot. Dropping it cancels the read.
+    let body = if method == Method::POST {
+        match read_body(request, Duration::from_secs(app.options.body_timeout_secs)).await {
+            Ok(body) => body,
+            Err(response) => return response,
+        }
+    } else {
+        Bytes::new()
+    };
+    match execute(Arc::clone(&portal.jobs), REQUEST_TIMEOUT, move || {
+        app.route(&method, &path, &body)
+    })
+    .await
+    {
+        Ok((body, mime)) => ([(header::CONTENT_TYPE, mime)], body).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn secure_response(mut response: Response) -> Response {
+    for (name, value) in [
+        ("cache-control", "no-store"),
+        ("x-content-type-options", "nosniff"),
+        ("referrer-policy", "no-referrer"),
+        ("content-security-policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"),
+    ] {
+        response.headers_mut().insert(name, value.parse().unwrap());
+    }
+    // Hyper honors this and closes the transport after the response, without waiting for the body.
+    if !response.status().is_success() {
+        response
+            .headers_mut()
+            .insert(header::CONNECTION, "close".parse().unwrap());
+    }
+    response
+}
+
+async fn serve(listener: TcpListener, router: Router) -> Result<()> {
+    let connections = Arc::new(Semaphore::new(MAX_CONNECTIONS));
+    loop {
+        let (socket, _) = listener.accept().await?;
+        let Ok(permit) = Arc::clone(&connections).try_acquire_owned() else {
+            continue;
+        };
+        let service = TowerToHyperService::new(router.clone());
+        tokio::spawn(async move {
+            let _permit = permit;
+            // Header parsing has its own absolute deadline, before the handler can run.
+            let mut http = http1::Builder::new();
+            http.timer(TokioTimer::new())
+                .header_read_timeout(Duration::from_secs(3))
+                .max_headers(64)
+                .max_buf_size(32768);
+            // Also bound idle connections and responses to clients that stop reading.
+            let _ = tokio::time::timeout(
+                Duration::from_secs(180),
+                http.serve_connection(TokioIo::new(socket), service),
+            )
+            .await;
+        });
+    }
 }
 
 pub fn run(options: Options) -> Result<()> {
@@ -826,117 +911,34 @@ pub fn run(options: Options) -> Result<()> {
         v0.plan = plan.clone();
         v0.tables = tables.clone();
         v0.deployment = options.v0_deployment.clone();
-        versions.insert("v0", App::load(v0, Protocol::V0)?);
+        versions.insert("v0", Arc::new(App::load(v0, Protocol::V0)?));
     }
     let app = Arc::new(App::load(options, Protocol::V1)?);
-    let versions = Arc::new(versions);
-    let server = Arc::new(http_server(
-        &app.options.listen,
-        app.options.body_timeout_secs,
-    )?);
     eprintln!(
         "Godwoken selected-protocol withdraw portal: {} (broadcast enabled: {})",
         app.options.public_origin, app.options.enable_broadcast
     );
-    std::thread::scope(|scope| {
-        for _ in 0..4 {
-            let app = Arc::clone(&app);
-            let server = Arc::clone(&server);
-            let versions = Arc::clone(&versions);
-            scope.spawn(move|| {
-            for mut request in server.incoming_requests() {
-                let result=if request.url().starts_with("/api/v0/") {
-                    match versions.get("v0") {Some(v)=>v.route(&mut request),None=>Err(anyhow::anyhow!("V0 refund release is not configured"))}
-                } else if request.url().starts_with("/api/") && !request.url().starts_with("/api/v1/") {Err(anyhow::anyhow!("Select an explicit /api/v1/ or /api/v0/ endpoint"))}
-                else {app.route(&mut request)};
-                let (body,mime,status)=match result {Ok((b,m))=>(b,m,200),Err(e)=>{
-                    let status=if e.downcast_ref::<BodyReadTimeout>().is_some(){408}else{400};
-                    (serde_json::to_vec(&json!({"error":e.to_string()})).unwrap(),"application/json",status)
-                }};
-                let mut response=Response::from_data(body).with_status_code(StatusCode(status));
-                if status==408 {response.add_header(Header::from_bytes("Connection","close").unwrap());}
-                for (name,value) in [("Content-Type",mime),("Cache-Control","no-store"),("X-Content-Type-Options","nosniff"),("Referrer-Policy","no-referrer"),("Content-Security-Policy","default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")] {response.add_header(Header::from_bytes(name,value).unwrap());}
-                let _=request.respond(response);
-            }
-        });
-        }
+    let portal = Arc::new(Portal {
+        app,
+        versions,
+        jobs: Arc::new(Semaphore::new(MAX_JOBS)),
     });
-    Ok(())
+    let router = Router::new()
+        .fallback(handle)
+        .with_state(Arc::clone(&portal))
+        .layer(axum::middleware::map_response(secure_response));
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(async move {
+            let listener = TcpListener::bind(&portal.app.options.listen).await?;
+            tokio::select! {
+                result = serve(listener, router) => result,
+                result = tokio::signal::ctrl_c() => { result?; Ok(()) },
+            }
+        })
 }
 
-#[cfg(all(test, unix))]
-mod timeout_tests {
-    use super::*;
-    use std::{
-        io::{BufRead, BufReader},
-        net::TcpStream,
-        sync::atomic::{AtomicBool, Ordering},
-    };
-
-    fn status(stream: TcpStream) -> u16 {
-        let mut line = String::new();
-        BufReader::new(stream).read_line(&mut line).unwrap();
-        line.split_whitespace().nth(1).unwrap().parse().unwrap()
-    }
-
-    #[test]
-    fn incomplete_bodies_expire_and_workers_recover() {
-        let server = Arc::new(http_server("127.0.0.1:0", 1).unwrap());
-        let address = server.server_addr().to_ip().unwrap();
-        let stop = Arc::new(AtomicBool::new(false));
-        let workers: Vec<_> = (0..4)
-            .map(|_| {
-                let server = Arc::clone(&server);
-                let stop = Arc::clone(&stop);
-                std::thread::spawn(move || {
-                    while !stop.load(Ordering::Relaxed) {
-                        let Ok(Some(mut request)) = server.recv_timeout(Duration::from_millis(100))
-                        else {
-                            continue;
-                        };
-                        let status = if *request.method() == Method::Post {
-                            match read_json::<Value>(&mut request, 1) {
-                                Ok(_) => 200,
-                                Err(e) if e.downcast_ref::<BodyReadTimeout>().is_some() => 408,
-                                Err(_) => 400,
-                            }
-                        } else {
-                            200
-                        };
-                        let response =
-                            Response::from_string("ok").with_status_code(StatusCode(status));
-                        let _ = request.respond(response);
-                    }
-                })
-            })
-            .collect();
-
-        let mut blocked = Vec::new();
-        for _ in 0..4 {
-            let mut stream = TcpStream::connect(address).unwrap();
-            stream
-                .set_read_timeout(Some(Duration::from_secs(5)))
-                .unwrap();
-            stream.write_all(b"POST /api/test HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2048\r\nConnection: close\r\n\r\n{").unwrap();
-            blocked.push(stream);
-        }
-        for stream in blocked {
-            assert_eq!(status(stream), 408);
-        }
-
-        let mut get = TcpStream::connect(address).unwrap();
-        get.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-        get.write_all(b"GET /api/test HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
-            .unwrap();
-        assert_eq!(status(get), 200);
-
-        let mut post = TcpStream::connect(address).unwrap();
-        post.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-        post.write_all(b"POST /api/test HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}").unwrap();
-        assert_eq!(status(post), 200);
-        stop.store(true, Ordering::Relaxed);
-        for worker in workers {
-            worker.join().unwrap();
-        }
-    }
-}
+#[cfg(test)]
+#[path = "server_tests.rs"]
+mod tests;

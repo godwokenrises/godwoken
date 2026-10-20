@@ -16,7 +16,11 @@ simulation = ["dep:ckb-testtool", "dep:ckb-system-scripts"]
 
 [dependencies]
 bech32 = "0.9.1"
-tiny_http = "0.12.0"
+axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "tokio"] }
+hyper = { version = "1.12.0", features = ["server", "http1"] }
+hyper-util = { version = "0.1.21", features = ["tokio", "service"] }
+tokio = { version = "1.54.0", features = ["rt-multi-thread", "net", "time", "sync", "macros", "io-util", "signal"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["blocking", "json", "rustls"] }
 ckb-testtool = { version = "0.15.1", optional = true }
 ckb-system-scripts = { version = "0.5.4", optional = true }
 secp256k1 = { version = "0.30", features = ["recovery"] }
@@ -50,9 +54,6 @@ tempfile = "3"
 # Keep the audit tool's pinned dependencies separate from the legacy node workspace.
 [workspace]
 exclude = ["tests/reference"]
-
-[patch.crates-io]
-tiny_http = { path = "vendor/tiny_http" }
 
 # The shared contract verifier must also reject arithmetic overflow in the host CLI.
 [profile.release]

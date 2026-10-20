@@ -348,35 +348,30 @@ fn claim_portal_actual_http_build_sign_submit_and_replay_rejection() {
         }
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
+    let client = reqwest::blocking::Client::builder()
+        .no_proxy()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .unwrap();
     let call = |path: &str, body: Option<Value>, correct_origin: bool| -> Value {
-        let mut cmd = Command::new("curl");
-        cmd.args([
-            "-q",
-            "-sS",
-            "--max-time",
-            "30",
-            "-H",
-            "Content-Type: application/json",
-            "-H",
-            &format!(
-                "Origin: {}",
+        let url = format!("{origin}{path}");
+        let request = match body {
+            Some(body) => client.post(url).json(&body),
+            None => client.get(url),
+        };
+        request
+            .header(
+                "Origin",
                 if correct_origin {
                     &origin
                 } else {
                     "https://untrusted.invalid"
-                }
-            ),
-        ]);
-        if let Some(body) = body {
-            cmd.args(["--data-binary", &body.to_string()]);
-        }
-        let out = cmd.arg(format!("{origin}{path}")).output().unwrap();
-        assert!(
-            out.status.success(),
-            "{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        serde_json::from_slice(&out.stdout).unwrap()
+                },
+            )
+            .send()
+            .unwrap()
+            .json()
+            .unwrap()
     };
     assert_eq!(
         call("/api/v1/config", None, true)["broadcast_enabled"],
