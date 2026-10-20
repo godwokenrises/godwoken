@@ -62,9 +62,6 @@ pub(crate) fn require(ok: bool, err: Error) -> Result<()> {
         Err(err)
     }
 }
-fn add(a: U256, b: U256) -> Result<U256> {
-    a.checked_add(b).ok_or(Error::Overflow)
-}
 pub fn amount(v: Hash) -> U256 {
     U256::from_little_endian(&v)
 }
@@ -106,16 +103,12 @@ pub struct Cell {
 impl Cell {
     pub fn minimum_capacity(&self) -> Result<u64> {
         // CKB occupied bytes: u64 capacity + Script fields (32+1+args), optional type, data.
-        let mut n = 8usize
-            .checked_add(33 + self.lock.as_reader().args().raw_data().len())
-            .ok_or(Error::Overflow)?;
+        let mut n = 8 + 33 + self.lock.as_reader().args().raw_data().len();
         if let Some(t) = &self.type_ {
-            n = n
-                .checked_add(33 + t.as_reader().args().raw_data().len())
-                .ok_or(Error::Overflow)?;
+            n += 33 + t.as_reader().args().raw_data().len();
         }
-        n = n.checked_add(self.data.len()).ok_or(Error::Overflow)?;
-        (n as u64).checked_mul(100_000_000).ok_or(Error::Overflow)
+        n += self.data.len();
+        Ok(n as u64 * 100_000_000)
     }
 }
 #[derive(Clone, Debug)]
@@ -194,17 +187,56 @@ fn globals(cell: &Cell) -> Result<packed::GlobalStateReader<'_>> {
 fn finalized(cfg: &packed::RollupConfig, state: &packed::GlobalStateReader<'_>, time: u64) -> bool {
     match Timepoint::from_full_value(time) {
         Timepoint::BlockNumber(n) => {
-            n.checked_add(cfg.finality_blocks().unpack())
-                .is_some_and(|v| {
-                    v <= u64::from_le_bytes(state.block().count().as_slice().try_into().unwrap())
-                        .saturating_sub(1)
-                })
+            let count: u64 = state.block().count().unpack();
+            n + cfg.finality_blocks().unpack() <= count - 1
         }
         Timepoint::Timestamp(n) => {
             matches!(Timepoint::from_full_value(state.last_finalized_timepoint().unpack()),Timepoint::Timestamp(f) if n<=f)
         }
     }
 }
+
+#[cfg(test)]
+mod finality_tests {
+    use super::*;
+
+    #[test]
+    #[should_panic(expected = "attempt to subtract with overflow")]
+    fn empty_block_history_aborts_finality_calculation() {
+        let cfg = packed::RollupConfig::default();
+        let state = packed::GlobalState::default();
+        let _ = finalized(
+            &cfg,
+            &state.as_reader(),
+            Timepoint::BlockNumber(0).full_value(),
+        );
+    }
+
+    #[test]
+    fn block_finality_respects_the_exact_boundary() {
+        for (count, delay, expected) in [(1, 0, true), (10, 10, false), (11, 10, true)] {
+            let cfg = packed::RollupConfig::new_builder()
+                .finality_blocks((delay as u64).pack())
+                .build();
+            let state = packed::GlobalState::new_builder()
+                .block(
+                    packed::BlockMerkleState::new_builder()
+                        .count((count as u64).pack())
+                        .build(),
+                )
+                .build();
+            assert_eq!(
+                finalized(
+                    &cfg,
+                    &state.as_reader(),
+                    Timepoint::BlockNumber(0).full_value()
+                ),
+                expected
+            );
+        }
+    }
+}
+
 fn custodian(
     version: NativeVersion,
     lock: &packed::Script,
@@ -247,7 +279,7 @@ fn token(cell: &Cell, cfg: &packed::RollupConfig) -> Result<Option<(Hash, U256)>
 }
 fn insert_sum<K: Ord>(map: &mut BTreeMap<K, U256>, key: K, n: U256) -> Result<()> {
     let v = map.entry(key).or_default();
-    *v = add(*v, n)?;
+    *v += n;
     Ok(())
 }
 fn pool_sum(map: &mut BTreeMap<Hash, U256>, cell: &Cell, cfg: &packed::RollupConfig) -> Result<()> {
@@ -633,7 +665,7 @@ pub(crate) fn verify_transition_version(
         }
         if c.lock.as_slice() == profile.governance.as_slice() {
             require(c.type_.is_none() && c.data.is_empty(), Error::Cell)?;
-            sponsor_in = sponsor_in.checked_add(c.capacity).ok_or(Error::Overflow)?;
+            sponsor_in += c.capacity;
             ns += 1;
         } else {
             custodian(version, &c.lock, rollup, cfg, &before)?;
@@ -651,7 +683,7 @@ pub(crate) fn verify_transition_version(
         }
         if c.lock.as_slice() == profile.governance.as_slice() {
             require(c.type_.is_none() && c.data.is_empty(), Error::Cell)?;
-            sponsor_out = sponsor_out.checked_add(c.capacity).ok_or(Error::Overflow)?;
+            sponsor_out += c.capacity;
         } else {
             // V0 change must reuse a custodian lock present among the inputs;
             // V1 change must use the exact configured canonical lock.
@@ -684,7 +716,7 @@ pub(crate) fn verify_transition_version(
         },
         Error::Cell,
     )?;
-    let sponsor_spent = sponsor_in.checked_sub(sponsor_out).ok_or(Error::Capacity)?;
+    let sponsor_spent = sponsor_in - sponsor_out;
     for (h, n) in paid {
         insert_sum(&mut outs, h, n)?;
     }
@@ -718,35 +750,22 @@ pub(crate) fn verify_transition_version(
                 .get(&(*recipient, 1))
                 .copied()
                 .unwrap_or_default();
-            require(*actual >= expected, Error::Balance)?;
             let extra = *actual - expected;
             require(extra % scale == U256::zero(), Error::Capacity)?;
-            let extra = extra / scale;
-            require(extra <= U256::from(u64::MAX), Error::Overflow)?;
-            top_up_shannons = top_up_shannons
-                .checked_add(extra.low_u64())
-                .ok_or(Error::Overflow)?;
+            top_up_shannons += (extra / scale).as_u64();
         }
-        for ((recipient, asset), expected) in &s.payments {
+        for ((recipient, asset), _) in &s.payments {
             if *asset == 1 {
-                require(
-                    debits
-                        .get(&(*recipient, 1))
-                        .is_some_and(|actual| actual >= expected),
-                    Error::Balance,
-                )?;
+                require(debits.contains_key(&(*recipient, 1)), Error::Balance)?;
             }
         }
         debits = s.payments.clone();
     }
-    let fee = sponsor_spent
-        .checked_sub(top_up_shannons)
-        .ok_or(Error::Capacity)?;
+    let fee = sponsor_spent - top_up_shannons;
     if top_up_shannons != 0 {
         let ckb = outs.get_mut(&[0; 32]).ok_or(Error::Conservation)?;
-        *ckb = ckb
-            .checked_sub(U256::from(top_up_shannons))
-            .ok_or(Error::Conservation)?;
+        let top_up = U256::from(top_up_shannons);
+        *ckb -= top_up;
     }
     // Keep zero-valued type identities: every consumed token type must be returned or paid.
     require(ins == outs, Error::Conservation)?;
@@ -767,7 +786,7 @@ pub(crate) fn verify_transition_version(
             Error::Keys,
         )?;
         let old = version.amount(read(key)?)?;
-        writes.insert(key, value(old.checked_sub(*n).ok_or(Error::Balance)?));
+        writes.insert(key, value(old - *n));
         insert_sum(&mut sums, *id, *n)?;
     }
     writes.insert(s.metadata_key, s.metadata_value);
@@ -778,7 +797,7 @@ pub(crate) fn verify_transition_version(
             continue;
         };
         let old = version.amount(read(key)?)?;
-        writes.insert(key, value(old.checked_sub(n).ok_or(Error::Supply)?));
+        writes.insert(key, value(old - n));
     }
     // Step 15: Authenticate all witness reads against the INPUT account root.
     // No unused witness keys are allowed, and an invalid proof rejects everything

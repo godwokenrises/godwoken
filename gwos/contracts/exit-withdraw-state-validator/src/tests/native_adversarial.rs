@@ -42,15 +42,6 @@ pub fn cases() -> Vec<(&'static str, Fixture, Error)> {
         }
     );
     case!(
-        "conserved_payout_exceeds_l2_balance",
-        Error::Balance,
-        |f: &mut Fixture| {
-            // Pool has enough tokens. Only this recipient's authenticated balance is insufficient.
-            f.tx.outputs[3].data = 101u128.to_le_bytes().to_vec();
-            f.tx.outputs[2].data = 79u128.to_le_bytes().to_vec();
-        }
-    );
-    case!(
         "duplicate_withdraw_address",
         Error::Encoding,
         |f: &mut Fixture| {

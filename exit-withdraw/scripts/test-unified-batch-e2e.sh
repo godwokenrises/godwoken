@@ -12,10 +12,10 @@ mkdir -p target
 export GW_V0_SETTLEMENT_PROFILE="$PWD/target/unified-${1:-batch}-profile.bin"
 unset GW_V0_SETTLEMENT_BINARY
 filter=v0_settlement::unified_batches
-cargo +1.94.0 --config 'profile.dev.package.blake2b-ref.opt-level=3' test --locked --features e2e-tests --test withdraw_e2e \
+cargo +1.95.0 --config 'profile.dev.package.blake2b-ref.opt-level=3' test --locked --features e2e-tests --test withdraw_e2e \
   "$filter::$export_test" -- --ignored --nocapture --test-threads=1
 
-contract_target=${GW_CONTRACT_TARGET_DIR:-$(cargo +1.94.0 metadata \
+contract_target=${GW_CONTRACT_TARGET_DIR:-$(cargo +1.95.0 metadata \
   --manifest-path ../gwos/contracts/exit-withdraw-state-validator/Cargo.toml \
   --locked --format-version 1 --no-deps | jq -r '.target_directory')}
 GW_EXIT_PROFILE_HASH=$(cat "$GW_V0_SETTLEMENT_PROFILE.hash") \
@@ -27,5 +27,5 @@ cp "$contract_target/riscv64imac-unknown-none-elf/release/v0-settlement-state-va
 if [ -n "${GW_LLVM_STRIP:-}" ]; then
   "$GW_LLVM_STRIP" "$GW_V0_SETTLEMENT_BINARY"
 fi
-cargo +1.94.0 --config 'profile.dev.package.blake2b-ref.opt-level=3' test --locked --features e2e-tests --test withdraw_e2e \
+cargo +1.95.0 --config 'profile.dev.package.blake2b-ref.opt-level=3' test --locked --features e2e-tests --test withdraw_e2e \
   "$filter::$test_name" -- --ignored --nocapture --test-threads=1

@@ -7,4 +7,4 @@ Only these developer helpers remain:
 - `db_getter_check`: independently executes deployed V1 getters against a read-only DB, optionally checking freshly extracted state facts. It does not create a refund table.
 - `prepare_v0_rehearsal`: prepares a synthetic V0 VM profile and snapshot fixture. Its output is test data, never a production deployment profile.
 
-Run a helper with `cargo +1.94.0 run --locked --example NAME -- ARGUMENTS`. Each helper reports its required arguments if invoked without them. Original research programs remain available in Git history.
+Run a helper with `cargo +1.95.0 run --locked --example NAME -- ARGUMENTS`. Each helper reports its required arguments if invoked without them. Original research programs remain available in Git history.

@@ -265,7 +265,7 @@ impl Fixture {
         .unwrap();
         t
     }
-    pub fn refresh(&mut self) {
+    pub fn refresh_input(&mut self) {
         self.keys.insert(metadata_key(&self.p));
         let mut t = self.tree();
         let root: Hash = (*t.root()).into();
@@ -278,6 +278,10 @@ impl Fixture {
             .collect();
         let keys: Vec<_> = self.keys.iter().map(|k| (*k).into()).collect();
         self.a.proof = t.merkle_proof(keys.clone()).unwrap().compile(keys).unwrap();
+    }
+    pub fn refresh(&mut self) {
+        self.refresh_input();
+        let mut t = self.tree();
         let mut debits: BTreeMap<(usize, u32), U256> = BTreeMap::new();
         for p in &self.a.payouts {
             let c = &self.tx.outputs[p.output as usize];
@@ -292,17 +296,13 @@ impl Fixture {
         for ((r, id), n) in debits {
             let k = balance_key(id, self.a.recipients[r].address);
             let v = amount(*self.leaves.get(&k).unwrap_or(&[0; 32]));
-            if let Some(post) = v.checked_sub(n) {
-                t.update(k.into(), value(post).into()).unwrap();
-            }
+            t.update(k.into(), value(v - n).into()).unwrap();
             *sums.entry(id).or_default() += n;
         }
         for (id, n) in sums {
             let k = supply_key(id);
             let v = amount(*self.leaves.get(&k).unwrap_or(&[0; 32]));
-            if let Some(post) = v.checked_sub(n) {
-                t.update(k.into(), value(post).into()).unwrap();
-            }
+            t.update(k.into(), value(v - n).into()).unwrap();
         }
         set_root(&mut self.tx.outputs[0], (*t.root()).into());
     }
@@ -368,6 +368,12 @@ pub fn code_type() -> packed::Script {
 impl Fixture {
     /// Apply one accepted batch, preserving the deployment profile, then prepare the next.
     pub fn advance(&mut self) {
+        let profile = self.p.clone();
+        self.advance_input();
+        self.refresh();
+        self.p = profile;
+    }
+    pub fn advance_input(&mut self) {
         let outcome = self.verify().unwrap();
         let profile = self.p.clone();
         for ((r, id), n) in outcome.debits {
@@ -388,7 +394,7 @@ impl Fixture {
         self.tx.outputs[2].capacity -= 200 * CKB;
         let token = u128::from_le_bytes(self.tx.outputs[2].data.clone().try_into().unwrap());
         self.tx.outputs[2].data = (token - 30).to_le_bytes().to_vec();
-        self.refresh();
+        self.refresh_input();
         self.p = profile;
     }
 }

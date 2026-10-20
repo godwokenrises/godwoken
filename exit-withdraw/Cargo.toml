@@ -53,3 +53,7 @@ exclude = ["tests/reference"]
 
 [patch.crates-io]
 tiny_http = { path = "vendor/tiny_http" }
+
+# The shared contract verifier must also reject arithmetic overflow in the host CLI.
+[profile.release]
+overflow-checks = true

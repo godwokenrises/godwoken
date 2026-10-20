@@ -28,10 +28,10 @@ serde_json = "1"
 
 [profile.release]
 opt-level = 3
+# Native integer overflow aborts the transaction; U256 operators also reject overflow.
 overflow-checks = true
 panic = "abort"
 codegen-units = 1
-lto = true
 
 [[bin]]
 name = "settlement-state-validator"

@@ -1,3 +1,4 @@
 [toolchain]
-channel = "1.94.0"
+channel = "1.95.0"
 profile = "minimal"
+targets = ["riscv64imac-unknown-none-elf"]

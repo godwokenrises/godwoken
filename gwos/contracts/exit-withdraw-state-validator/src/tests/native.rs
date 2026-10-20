@@ -63,6 +63,15 @@ fn native_payload_invalid_lengths_and_trailing_bytes_rejected() {
     }
 }
 macro_rules! reject {
+    ($name:ident, panic = $message:literal, $body:expr) => {
+        #[test]
+        #[should_panic(expected = $message)]
+        fn $name() {
+            let mut f = Fixture::new();
+            ($body)(&mut f);
+            let _ = f.verify();
+        }
+    };
     ($name:ident,$error:expr,$body:expr) => {
         #[test]
         fn $name() {
@@ -218,9 +227,13 @@ reject!(
         f.tx.outputs[3].capacity += 1;
     }
 );
-reject!(sponsor_overdrawn, Error::Capacity, |f: &mut Fixture| {
-    f.tx.outputs[5].capacity = 101 * CKB;
-});
+reject!(
+    sponsor_overdrawn,
+    panic = "attempt to subtract with overflow",
+    |f: &mut Fixture| {
+        f.tx.outputs[5].capacity = 101 * CKB;
+    }
+);
 reject!(typed_sponsor, Error::Cell, |f: &mut Fixture| {
     f.tx.inputs[3].type_ = f.tx.inputs[2].type_.clone();
     f.tx.inputs[3].capacity = 400 * CKB;
@@ -274,26 +287,30 @@ reject!(finality_metadata_change, Error::State, |f: &mut Fixture| {
 });
 reject!(
     insufficient_ckb_for_token_cell,
-    Error::Balance,
+    panic = "arithmetic operation overflow",
     |f: &mut Fixture| {
         let k = balance_key(1, f.a.recipients[0].address);
         f.leaves.insert(k, value(U256::from(199) * U256::exp10(18)));
-        f.refresh();
+        f.refresh_input();
     }
 );
 reject!(
     insufficient_token_balance,
-    Error::Balance,
+    panic = "arithmetic operation overflow",
     |f: &mut Fixture| {
         let k = balance_key(3, f.a.recipients[0].address);
         f.leaves.insert(k, value(9.into()));
-        f.refresh();
+        f.refresh_input();
     }
 );
-reject!(insufficient_supply, Error::Supply, |f: &mut Fixture| {
-    f.leaves.insert(supply_key(3), value(29.into()));
-    f.refresh();
-});
+reject!(
+    insufficient_supply,
+    panic = "arithmetic operation overflow",
+    |f: &mut Fixture| {
+        f.leaves.insert(supply_key(3), value(29.into()));
+        f.refresh_input();
+    }
+);
 reject!(malformed_custodian, Error::Cell, |f: &mut Fixture| {
     f.tx.inputs[1].lock = script(custodian_hash(), vec![0; 31]);
 });
@@ -384,8 +401,8 @@ fn omitted_absent_balance_is_not_zero_by_default() {
     let mut f = Fixture::new();
     let k = balance_key(3, f.a.recipients[0].address);
     f.leaves.remove(&k);
-    f.refresh();
-    assert_eq!(f.verify().unwrap_err(), Error::Balance);
+    f.refresh_input();
+    assert!(std::panic::catch_unwind(|| f.verify()).is_err());
     f.a.kv.retain(|(key, _)| *key != k);
     assert_eq!(f.verify().unwrap_err(), Error::Keys);
 }
@@ -472,6 +489,7 @@ fn custodian_timestamp_finality_boundary() {
     }
 }
 #[test]
+#[should_panic(expected = "attempt to add with overflow")]
 fn sponsor_capacity_overflow_is_rejected() {
     let mut f = Fixture::new();
     f.tx.inputs[3].capacity = u64::MAX;
@@ -482,7 +500,7 @@ fn sponsor_capacity_overflow_is_rejected() {
             .tx_hash([70; 32].pack())
             .build(),
     );
-    assert_eq!(f.verify().unwrap_err(), Error::Overflow);
+    let _ = f.verify();
 }
 reject!(proof_size_limit, Error::Limit, |f: &mut Fixture| {
     f.a.proof.0 = vec![0; MAX_PROOF + 1];
@@ -535,13 +553,14 @@ fn split_same_asset_payouts() {
     assert_eq!(r.debits[&(0, 1)], U256::from(400) * U256::exp10(18));
 }
 #[test]
+#[should_panic(expected = "arithmetic operation overflow")]
 fn exhausted_token_balance_cannot_pay_again() {
     let mut f = Fixture::new();
     f.leaves
         .insert(balance_key(3, f.a.recipients[0].address), value(10.into()));
     f.refresh();
-    f.advance();
-    assert_eq!(f.verify().unwrap_err(), Error::Balance);
+    f.advance_input();
+    let _ = f.verify();
 }
 
 #[test]
@@ -631,3 +650,12 @@ fn v0_id_reverse_mapping_is_plain_le32_not_v1_exists_flag() {
         );
     }
 }
+
+reject!(
+    conserved_payout_exceeds_l2_balance,
+    panic = "arithmetic operation overflow",
+    |f: &mut Fixture| {
+        f.tx.outputs[3].data = 101u128.to_le_bytes().to_vec();
+        f.tx.outputs[2].data = 79u128.to_le_bytes().to_vec();
+    }
+);

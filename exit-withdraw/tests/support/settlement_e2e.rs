@@ -558,7 +558,7 @@ fn governance_capacity_top_up_preserves_entitlement_and_fee() {
 
     let top_up = 10 * CAP;
     tx.outputs[1].capacity += top_up;
-    assert!(sc::verify(&profile, ph, &cfg.packed, &tx, &a).is_err());
+    assert!(std::panic::catch_unwind(|| sc::verify(&profile, ph, &cfg.packed, &tx, &a)).is_err());
     tx.outputs.last_mut().unwrap().capacity -= top_up;
     let funded = sc::verify(&profile, ph, &cfg.packed, &tx, &a).unwrap();
     assert_eq!(funded.debits, baseline.debits);
@@ -1036,10 +1036,10 @@ fn root_payment_requires_source_and_lot_membership() {
         );
         let mut bad = action.clone();
         tamper_state_record(&mut bad, kind, false);
-        assert!(
-            sc::evaluate(&p, hash32(&setup.d.profile_hash).unwrap(), &bad).is_err(),
-            "forged leaf {kind}"
-        );
+        let result = std::panic::catch_unwind(|| {
+            sc::evaluate(&p, hash32(&setup.d.profile_hash).unwrap(), &bad)
+        });
+        assert!(!matches!(result, Ok(Ok(_))), "forged leaf {kind}");
     }
 }
 

@@ -8,7 +8,7 @@ Rust CLI, refund-only V0/V1 contracts and shared ETH-wallet portal. V1 is the de
 - [Verification and limitations](docs/validation.md)
 - [Web app](claim-web/README.md)
 
-From this directory, build with `cargo +1.94.0 build --locked --release --bin gw-withdraw`. Use the compiled executable's `--help` for exact flags.
+From this directory, build with `cargo +1.95.0 build --locked --release --bin gw-withdraw`. Use the compiled executable's `--help` for exact flags.
 
 ```sh
 gw-withdraw refund generate --protocol v1 --db /path/to/db --output-dir ./new-refunds

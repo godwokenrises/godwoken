@@ -1015,7 +1015,7 @@ fn v0_governance_capacity_top_up_keeps_native_debit_unchanged() {
     let baseline = verify(&tx).unwrap();
     let extra = 10 * CAP;
     tx.outputs[1].capacity = format!("0x{:x}", quantity(&tx.outputs[1].capacity).unwrap() + extra);
-    assert!(verify(&tx).is_err());
+    assert!(std::panic::catch_unwind(|| verify(&tx)).is_err());
     if std::env::var_os("GW_V0_SETTLEMENT_BINARY").is_some() {
         resign(&fixture, &mut tx);
         let error = fixture.node.vm(&tx).unwrap_err().to_string();
@@ -1072,17 +1072,16 @@ fn rejected(f: &Fixture, name: &str, mut tx: Transaction, a: s::SettlementAction
         .map(|p| f.node.live[p].clone())
         .collect();
     let resolved = withdraw::chain::resolved(&tx, &cells).unwrap();
-    assert!(
+    let result = std::panic::catch_unwind(|| {
         v0::verify(
             &f.profile,
             hash(&v0::encode_profile(&f.profile)),
             &f.config,
             &resolved,
-            &a
+            &a,
         )
-        .is_err(),
-        "host accepted {name}"
-    );
+    });
+    assert!(!matches!(result, Ok(Ok(_))), "host accepted {name}");
     if std::env::var_os("GW_V0_SETTLEMENT_BINARY").is_some() {
         replace_action(&mut tx, &a);
         resign(f, &mut tx);

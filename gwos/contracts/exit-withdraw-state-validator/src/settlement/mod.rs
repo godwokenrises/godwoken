@@ -297,15 +297,6 @@ impl<'a> Trees<'a> {
         Ok(())
     }
 }
-fn plus(a: U256, b: U256) -> Result<U256> {
-    a.checked_add(b).ok_or(Error::Overflow)
-}
-fn minus(a: U256, b: U256) -> Result<U256> {
-    a.checked_sub(b).ok_or(Error::Balance)
-}
-fn increment(a: u64) -> Result<u64> {
-    a.checked_add(1).ok_or(Error::Overflow)
-}
 fn read_native(a: &Action, read: &mut BTreeSet<Hash>, key: Hash) -> Result<Hash> {
     read.insert(key);
     a.kv.binary_search_by_key(&key, |v| v.0)
@@ -438,7 +429,7 @@ pub fn evaluate_version(
     let mut unique = BTreeSet::new();
     let add_amount = |map: &mut BTreeMap<_, U256>, key, value| -> Result<()> {
         let v = map.entry(key).or_default();
-        *v = plus(*v, value)?;
+        *v += value;
         Ok(())
     };
     // Begin cannot carry payment references or native asset/recipient identities.
@@ -493,7 +484,7 @@ pub fn evaluate_version(
                     require(!v.amount.is_zero(), Error::State)?;
                     v.amount
                 };
-                let n = plus(n, pay.amount)?;
+                let n = n + pay.amount;
                 require(n <= c.cap, Error::Balance)?;
                 trees.set(PAID, ck, &Paid { amount: n })?;
                 // Authenticate immutable source and payable lot within the published state root.
@@ -527,7 +518,7 @@ pub fn evaluate_version(
                 } else {
                     trees.get::<Reserve>(RESERVES, c.lot)?
                 };
-                reserve.remaining = minus(reserve.remaining, pay.amount)?;
+                reserve.remaining -= pay.amount;
                 trees.set(RESERVES, c.lot, &reserve)?;
                 let mut s = if trees.original(SOURCES, c.source)?.is_empty()
                     && !trees
@@ -547,11 +538,11 @@ pub fn evaluate_version(
                             &a.native,
                             &mut reads,
                             version.balance_key(src.asset, src.address),
-                        )?)? == minus(src.baseline, s.paid)?,
+                        )?)? == src.baseline - s.paid,
                         Error::Balance,
                     )?;
                 }
-                s.paid = plus(s.paid, pay.amount)?;
+                s.paid += pay.amount;
                 require(s.paid <= src.baseline, Error::Balance)?;
                 trees.set(SOURCES, c.source, &s)?;
                 let ak = asset_key(p.deployment, src.asset);
@@ -565,13 +556,13 @@ pub fn evaluate_version(
                     limit.asset == src.asset && limit.type_hash == src.type_hash,
                     Error::Asset,
                 )?;
-                asset.paid = plus(asset.paid, pay.amount)?;
+                asset.paid += pay.amount;
                 require(asset.paid <= limit.ceiling, Error::Balance)?;
                 trees.set(ASSETS, ak, &asset)?;
                 let v = sources
                     .entry((src.asset, src.address))
                     .or_insert(U256::zero());
-                *v = plus(*v, pay.amount)?;
+                *v += pay.amount;
                 add_amount(&mut payments, (r, src.asset), pay.amount)?;
             }
         }
@@ -581,7 +572,7 @@ pub fn evaluate_version(
         Error::Recipient,
     )?;
     trees.finish(&mut m)?;
-    m.sequence = increment(m.sequence)?;
+    m.sequence += 1;
     let metadata_value = commitment(&encode(&m));
     require(metadata_value != [0; 32], Error::State)?;
     let mut native_writes = BTreeMap::new();
@@ -592,10 +583,7 @@ pub fn evaluate_version(
         require(bk != mk, Error::Keys)?;
         native_writes.insert(
             bk,
-            value(minus(
-                version.amount(read_native(&a.native, &mut reads, bk)?)?,
-                *n,
-            )?),
+            value(version.amount(read_native(&a.native, &mut reads, bk)?)? - *n),
         );
         if let Some(sk) = version.supply_key(*asset) {
             require(sk != mk, Error::Keys)?;
@@ -603,7 +591,7 @@ pub fn evaluate_version(
                 Some(v) => *v,
                 None => read_native(&a.native, &mut reads, sk)?,
             };
-            native_writes.insert(sk, value(minus(version.amount(old)?, *n)?));
+            native_writes.insert(sk, value(version.amount(old)? - *n));
         }
     }
     Ok(Evaluation {

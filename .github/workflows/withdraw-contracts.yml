@@ -41,8 +41,8 @@ jobs:
 
       - name: Install refund Rust toolchain
         run: |
-          rustup toolchain install 1.94.0 --profile minimal
-          rustup target add --toolchain 1.94.0 riscv64imac-unknown-none-elf
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup target add --toolchain 1.95.0 riscv64imac-unknown-none-elf
 
       - uses: actions/cache@v4
         with:
@@ -52,11 +52,11 @@ jobs:
             ~/.cargo/git/db/
             exit-withdraw/target/
             gwos/contracts/exit-withdraw-state-validator/target/
-          key: ${{ runner.os }}-${{ runner.arch }}-withdraw-contracts-rust-1.94.0-${{ hashFiles('exit-withdraw/Cargo.lock', 'gwos/contracts/exit-withdraw-state-validator/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-withdraw-contracts-rust-1.95.0-${{ hashFiles('exit-withdraw/Cargo.lock', 'gwos/contracts/exit-withdraw-state-validator/Cargo.lock') }}
 
       - name: Contract unit and adversarial tests
         working-directory: gwos/contracts/exit-withdraw-state-validator
-        run: cargo +1.94.0 test --locked --lib --tests
+        run: cargo +1.95.0 test --locked --lib --tests
 
       # These scripts export synthetic profiles and build profile-pinned RISC-V
       # binaries before testing. They execute the contracts in CKB-VM, not just

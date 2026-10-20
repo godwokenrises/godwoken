@@ -44,10 +44,10 @@ code cells must be resolved live; historical outpoints are not execution inputs.
 
 ## 1. Build and reproduce the table
 
-Use Rust 1.94.0 and the checked-in lockfile. From `exit-withdraw/`:
+Use Rust 1.95.0 and the checked-in lockfile. From `exit-withdraw/`:
 
 ```sh
-cargo +1.94.0 build --locked --release --bin gw-withdraw
+cargo +1.95.0 build --locked --release --bin gw-withdraw
 # Define CLI as the absolute path to the resulting executable.
 CLI=/path/to/gw-withdraw
 "$CLI" refund generate --protocol v1 --db /path/to/v1-db --output-dir ./release-v1/tables

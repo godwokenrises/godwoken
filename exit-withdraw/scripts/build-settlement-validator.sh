@@ -23,7 +23,7 @@ GW_EXIT_PROFILE_HASH=$(jq -r '.profile_hash' <<<"$profile_info")
 GW_EXIT_PROFILE_HASH=${GW_EXIT_PROFILE_HASH#0x}
 cd "$(dirname "$0")/../../gwos/contracts/exit-withdraw-state-validator"
 bash scripts/build.sh "$binary"
-target_dir=$(cargo +1.94.0 metadata --locked --format-version 1 --no-deps | jq -r '.target_directory')
+target_dir=$(cargo +1.95.0 metadata --locked --format-version 1 --no-deps | jq -r '.target_directory')
 # Strip symbols to avoid locking unnecessary CKB in executable data.
 strip_tool=${LLVM_STRIP:-llvm-strip}
 command -v "$strip_tool" >/dev/null

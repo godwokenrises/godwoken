@@ -39,7 +39,7 @@ pub fn unframe(
     let mut raw = Vec::with_capacity(n);
     // start is the input count: chunks occupy extra witnesses covered by sighash-all.
     for i in 0..count {
-        let part = load(start.checked_add(i).ok_or(Error::Overflow)?)?;
+        let part = load(start + i)?;
         require(part.len() == CHUNK.min(n - i * CHUNK), Error::Encoding)?;
         raw.extend_from_slice(&part);
     }
