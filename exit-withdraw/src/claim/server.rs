@@ -741,11 +741,14 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 const MAX_CONNECTIONS: usize = 128;
 const MAX_JOBS: usize = 4;
 
-fn error(status: StatusCode, message: impl std::fmt::Display) -> Response {
+pub(super) fn error(status: StatusCode, message: impl std::fmt::Display) -> Response {
     (status, Json(json!({"error": message.to_string()}))).into_response()
 }
 
-async fn read_body(request: Request, timeout: Duration) -> std::result::Result<Bytes, Response> {
+pub(super) async fn read_body(
+    request: Request,
+    timeout: Duration,
+) -> std::result::Result<Bytes, Response> {
     let length = request
         .headers()
         .get(header::CONTENT_LENGTH)
@@ -774,7 +777,7 @@ async fn read_body(request: Request, timeout: Duration) -> std::result::Result<B
 }
 
 /// A timed-out caller must not release a slot while its blocking job is still running.
-async fn execute<T: Send + 'static>(
+pub(super) async fn execute<T: Send + 'static>(
     slots: Arc<Semaphore>,
     timeout: Duration,
     work: impl FnOnce() -> Result<T> + Send + 'static,
@@ -860,7 +863,7 @@ async fn handle(State(portal): State<Arc<Portal>>, request: Request) -> Response
     }
 }
 
-async fn secure_response(mut response: Response) -> Response {
+pub(super) async fn secure_response(mut response: Response) -> Response {
     for (name, value) in [
         ("cache-control", "no-store"),
         ("x-content-type-options", "nosniff"),
@@ -878,7 +881,7 @@ async fn secure_response(mut response: Response) -> Response {
     response
 }
 
-async fn serve(listener: TcpListener, router: Router) -> Result<()> {
+pub(super) async fn serve(listener: TcpListener, router: Router) -> Result<()> {
     let connections = Arc::new(Semaphore::new(MAX_CONNECTIONS));
     loop {
         let (socket, _) = listener.accept().await?;

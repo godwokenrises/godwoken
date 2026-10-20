@@ -33,6 +33,7 @@ export type Config = {
   fee_rate: number;
   plan_manifest: string;
   snapshot_root: string;
+  max_fee_shannons?: string;
 };
 export type Balance = { asset_id: number; raw: string };
 export type Explanation = {
@@ -56,6 +57,29 @@ export type Inventory = {
   confirming_cells: number;
   confirmations_required: number;
   observed_block: number;
+};
+export type WalletInventory = {
+  address: string;
+  omnilock_address: string;
+  explorer_url: string;
+  assets: Asset[];
+  balances: Balance[];
+  transferable: Balance[];
+  available: Balance[];
+  cells: Cell[];
+  other_cells: Cell[];
+  more_batches: boolean;
+  confirming_cells: number;
+  confirmations_required: number;
+};
+export type WalletHistory = {
+  transactions: {
+    tx_hash: string;
+    block_number: string;
+    cells: ["input" | "output", number][];
+  }[];
+  last_cursor: string;
+  more: boolean;
 };
 export type BuildRequest = {
   address: string;

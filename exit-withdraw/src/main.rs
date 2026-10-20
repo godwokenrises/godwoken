@@ -73,6 +73,8 @@ enum Command {
     },
     /// Serve explicitly selected V1/V0 refunds and the ETH-signed L1 claim API.
     ClaimServe(godwoken_withdraw::claim::server::Options),
+    /// Serve a mainnet ETH OmniLock wallet. No refund table, protocol or deployment required.
+    WalletServe(godwoken_withdraw::claim::wallet::Options),
     /// Approved V3 refunds: commit one state root, pay and verify.
     Settlement {
         #[arg(long, value_enum, default_value = "v1", global = true)]
@@ -327,6 +329,10 @@ fn execute(cli: Cli) -> Result<u8> {
                 protocol.name(),
                 out.display()
             );
+            Ok(0)
+        }
+        Command::WalletServe(o) => {
+            godwoken_withdraw::claim::wallet::run(o)?;
             Ok(0)
         }
         Command::ClaimServe(o) => {

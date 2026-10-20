@@ -851,3 +851,14 @@ nav[aria-label="Refund account mode"] button[aria-pressed="true"] {
 .control-panel details { margin-top:8px; }
 .control-panel [role="alert"] { color:#b42318; }
 @media(max-width:600px) { .control-panel { padding:16px; } }
+
+/* Ordinary OmniLock wallet views. */
+.receive-card, .transactions-card { margin: 24px 0; padding: 28px; }
+.receive-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; }
+.receive-actions a, .transactions-card a { color: #315ee8; text-decoration: underline; }
+.receive-actions button { padding: 8px 14px; border: 1px solid #cbd3df; border-radius: 6px; background: #fff; }
+.transaction-row { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 14px 0; border-bottom: 1px solid #e1e6ec; }
+.holding-address { overflow-wrap: anywhere; user-select: all; }
+.withdraw-amounts input[type="text"] { display: block; width: 100%; padding: 10px; margin: 6px 0; border: 1px solid #cbd3df; border-radius: 6px; }
+.transfer-card > h2, .transfer-card > p { margin: 24px 28px 12px; }
+.transfer-card > .primary { margin: 16px 28px; width: calc(100% - 56px); }

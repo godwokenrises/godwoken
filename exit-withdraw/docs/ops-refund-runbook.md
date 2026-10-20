@@ -378,7 +378,32 @@ spent as top-up.
 
 ## 6. Run the web portal
 
-Export the checksummed table and plan for each version:
+For the standalone wallet Docker image, runtime flags and public HTTPS setup,
+see [wallet deployment](wallet-deployment.md).
+
+The personal wallet no longer depends on a refund release, plan or deployment.
+It reads all cells at the ETH owner's mainnet OmniLock and recent transactions;
+ordinary deposits, manual refunds and V0/V1 payouts are equally spendable.
+CKB and any standard sUDT can be transferred. Other asset types remain visible
+with Explorer links and need their corresponding transfer tools. Start it with:
+
+```sh
+npm ci --prefix claim-web
+npm run build --prefix claim-web
+"$CLI" wallet-serve --web-dir ./claim-web/dist \
+  --listen 127.0.0.1:8787 --public-origin http://127.0.0.1:8787 \
+  --enable-broadcast
+```
+
+Default mainnet dependencies are embedded. The network fee is 1000 shannons/KB
+by default, calculated from serialized transaction size, with no service fee.
+The owner reviews the recipient, assets, fee and change, then signs with their
+ETH wallet; private keys never enter the service. The default confirmation
+depth is one committed block. See [wallet operations](../claim-web/README.md).
+
+The following release-scoped API remains for existing operator integrations and
+controller proposals; the personal wallet UI now uses `wallet-serve` instead.
+To export the checksummed table and plan for each version:
 
 ```sh
 "$CLI" settlement --protocol v1 export-portal --plan plan.json \
@@ -409,9 +434,10 @@ per RPC within the business deadline, and 64 MiB maximum response. Redirects
 and automatic retries are disabled; a broadcast timeout requires checking the
 original transaction hash. Keep request buffering, body deadlines and connection
 limits enabled at the HTTPS reverse proxy as well.
-The service never holds signing keys. Omitting the V0 options disables V0 instead
-of falling back to V1. Personal cells must have unmixed provenance in the selected
-release; arbitrary cells under the same OmniLock are not silently included.
+The legacy service never holds signing keys. Omitting the V0 options disables V0
+instead of falling back to V1. Its release-scoped personal API still checks refund
+provenance for existing integrations. The standalone `wallet-serve` API and UI
+do not use this restriction.
 
 Each web proposal must pay exactly one control recipient. For a control proposal, collect only Ops/governance signatures offline, then:
 
@@ -422,14 +448,13 @@ Each web proposal must pay exactly one control recipient. For a control proposal
   --output ./control-proposals/v1/0xTRANSACTION_HASH.json
 ```
 
-The contract tab displays the reviewed owners/threshold and every reported asset.
-Controllers select the account and load the proposal's transaction hash, review
-the outputs and sign with MetaMask or another ETH wallet. Each signer downloads
-an approval JSON; co-signers exchange/import these files against the **same**
-proposal. Duplicate, outsider and different-transaction approvals are rejected.
-The browser derives the OmniLock signing message from the actual transaction and
-checks that its authorization cell is returned intact. The server rechecks live
-inputs, verifies all signatures, executes all scripts, then submits the exact tx.
+The simplified personal wallet has no contract-account tab. Existing controller
+integrations must review the committed owners/threshold, exact outputs and
+transaction-bound signing request, then exchange approvals for the same proposal.
+Duplicate, outsider and different-transaction approvals are rejected. The release
+API rechecks live inputs, verifies all signatures and executes scripts before
+submitting the exact transaction. Ordinary wallet transfers never consume rollup
+or custodian cells or replace these controller approvals.
 
 After a partial control refund, a new proposal is required for the remaining
 rights. The old rollup input has been consumed. A lost submission response keeps

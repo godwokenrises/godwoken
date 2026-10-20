@@ -5,6 +5,7 @@ Current documentation for **mainnet V0 and V1**, kept separate throughout calcul
 - [V0 assets, refunds and decisions](v0/README.md)
 - [V1 assets, refunds and decisions](v1/README.md)
 - [Operator runbook](ops-refund-runbook.md): reproduce, query, upgrade, initialize and pay applicants; run the wallet portal.
+- [Wallet deployment](wallet-deployment.md): build and run the Godwoken Refund Docker image, including public HTTPS setup.
 - [Contract design](contract-design.md): commitments, authority, conservation and replay protection.
 - [Validation](validation.md): executed tests, reproduction and limitations.
 

@@ -1,6 +1,7 @@
 //! User-authorized L1 OmniLock spends. Independent of rollup governance and L2 mutations.
-pub mod server;
 pub mod provenance;
+pub mod server;
+pub mod wallet;
 use crate::{
     model::*,
     withdraw::{self, Dependency, Transaction},

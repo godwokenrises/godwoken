@@ -1,25 +1,60 @@
-# Godwoken refund withdraw portal
+# Godwoken Refund wallet
 
-Shared React/TypeScript UI and Rust `gw-withdraw claim-serve` API. Users explicitly choose V1 (default) or V0 and Personal or Contract Account. Only the selected protocol is queried and signed. ETH owners are supported; TRON is deferred.
+For a self-contained Docker image and public HTTPS setup, see
+[Docker deployment](../docs/wallet-deployment.md).
 
-Personal mode displays published rights and funded standard ETH OmniLock cells. Users choose asset amounts and a valid CKB mainnet destination, then sign an L1 transaction with their ETH wallet. Partial withdrawals preserve change and allow later withdrawal of the remainder. Unfunded rights cannot be spent as live cells.
+Connect an Ethereum wallet to see its CKB mainnet OmniLock receiving address,
+all live cells and recent transactions. Manual transfers and Godwoken V0/V1
+refunds use the same wallet; no refund table, deployment or protocol selector is
+required. Follow the address and transaction links to Nervos Explorer.
 
-Contract mode reviews an Ops-prepared, immutable proposal, checks its committed owners/threshold and destination, and exchanges/imports distinct controller approvals. The API verifies the signed proposal and can submit the approved settlement transaction when broadcasting is enabled. Unlike personal L1 transfers, this path can consume the rollup/custodians through the refund contract. The service holds no private keys and does not open the L2 DB.
+The service stores no private keys. The user's ETH wallet signs the exact CKB
+transfer with `personal_sign`. The browser independently checks ownership,
+recipient, amounts, change, dependencies, fee and signing digest. The API rebuilds
+the transaction, checks confirmed live inputs and validates scripts before relay.
 
-[Deployment and signing procedures](../docs/ops-refund-runbook.md#6-run-the-web-portal) · [Test coverage and boundaries](../docs/validation.md)
+CKB and any standard sUDT can be transferred. The bundled token catalogue is only
+for display labels and decimal precision, not an eligibility list. Unknown sUDTs
+are shown in raw units. Cells requiring other type scripts or custom data remain
+visible with Explorer links and require their asset-specific transfer tools.
+CKB balances include capacity locked in these cells; the transferable column
+shows capacity in supported cells. Large wallets transfer in batches of 64 cells.
 
 ```sh
+# In claim-web/
 npm ci
 npm test
 npm run build
+
+# In exit-withdraw/; use the project's Rust 1.95 toolchain.
+cargo +1.95.0 build --locked --bin gw-withdraw
+./target/debug/gw-withdraw wallet-serve \
+  --web-dir ./claim-web/dist \
+  --listen 127.0.0.1:8787 \
+  --public-origin http://127.0.0.1:8787 \
+  --enable-broadcast
 ```
 
-Run these in `claim-web/`. Export separate current portal packages with `gw-withdraw settlement --protocol v0|v1 export-portal`, then serve using the runbook. Do not point the service at an obsolete historical table directory. `--enable-broadcast` is opt-in and requires reviewed deployment dependencies and authorization.
+Open http://127.0.0.1:8787 in a browser with an Ethereum wallet extension.
+Connecting reveals the receiving address without requiring a signature or ETH
+gas. The default RPC and dependency configuration is CKB mainnet. Submission is
+opt-in with `--enable-broadcast` and still requires the user's transaction signature.
 
-To smoke-test two exported public packages, from any directory:
+The default fee is **1000 shannons/KB** (0.00001 CKB per KB), rounded up using the
+actual serialized transaction size, including witnesses. There is no service fee.
+Both browser and server enforce a 0.01 CKB absolute fee ceiling. The exact fee and
+recipient amounts appear before signing. Token-cell capacity and change must
+meet CKB consensus requirements; they are not additional fees. Default finality
+is one committed block, configurable with `--confirmations`.
 
-```sh
-node /path/to/claim-web/scripts/smoke-protocols.mjs /path/to/portal-v0 /path/to/portal-v1
-```
+`/api/wallet/config`, `/api/wallet/account/<ETH>`, and
+`/api/wallet/transactions/<ETH>?cursor=<cursor>` provide read-only wallet views.
+`POST /api/wallet/prepare` takes a `BuildRequest`. `POST /api/wallet/submit` takes
+the request, reviewed transaction hash, signing message and owner signature.
+Only same-origin JSON submissions are accepted. Transaction status is available
+at `/api/wallet/transaction/<hash>`. A lost submission response must be checked by
+its already saved transaction hash before retrying.
 
-The smoke test starts a local keyless server with broadcast disabled and verifies version isolation and units. Browser rehearsals use injected wallets/API fixtures; they do not certify the actual MetaMask extension or mainnet submission.
+The older `claim-serve` release-scoped API and operator control proposals are
+retained for existing distribution integrations. The simplified wallet UI uses
+`wallet-serve`; it does not depend on that API or change settlement permissions.

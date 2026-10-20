@@ -127,7 +127,14 @@ export function digest(tx: Transaction) {
   };
 }
 /** Validate the exact recipient, owner, assets, fee and personal_sign digest in the browser too. */
-export function verifyQuote(q: Quote, request: BuildRequest, config: Config) {
+export function verifyQuote(
+  q: Quote,
+  request: BuildRequest,
+  config: Pick<
+    Config,
+    "assets" | "dependencies" | "fee_rate" | "max_fee_shannons"
+  >,
+) {
   const tx = q.transaction;
   const dest = destination(request.destination);
   const owner: Script = {
@@ -199,7 +206,7 @@ export function verifyQuote(q: Quote, request: BuildRequest, config: Config) {
     const key = token(o.type);
     assert(
       config.assets.some((a) => a.asset_id !== 1 && a.type_hash === key),
-      "Unknown refund asset.",
+      "Unknown token in this transfer.",
     );
     map.set(key, (map.get(key) ?? 0n) + uint(data));
   };
@@ -276,6 +283,11 @@ export function verifyQuote(q: Quote, request: BuildRequest, config: Config) {
   const d = digest(tx);
   const expectedFee = (BigInt(d.size) * BigInt(config.fee_rate) + 999n) / 1000n;
   assert(
+    expectedFee <= 1000000n &&
+      expectedFee <= BigInt(config.max_fee_shannons ?? "1000000"),
+    "Network fee exceeds 0.01 CKB.",
+  );
+  assert(
     config.fee_rate >= 1 &&
       config.fee_rate <= 100000 &&
       q.fee_rate === config.fee_rate &&
@@ -310,7 +322,7 @@ export function verifyWalletSignature(
   );
 }
 
-export function transferTokens(q: Quote, config: Config) {
+export function transferTokens(q: Quote, config: Pick<Config, "assets">) {
   const tokens = new Map<number, bigint>();
   for (let i = 0; i < q.transaction.outputs.length; i++) {
     const output = q.transaction.outputs[i];

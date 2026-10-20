@@ -455,6 +455,164 @@ fn claim_portal_actual_http_build_sign_submit_and_replay_rejection() {
     );
 }
 
+#[test]
+fn standalone_wallet_manual_deposit_sign_submit_change_and_fee() {
+    // An ordinary deposit with no refund plan or settlement ancestry.
+    let (mut node, deps, original, _, mut request) = setup_claim();
+    let old_hash = original[0].out_point.tx_hash.clone();
+    let mut funding = node.txs[&old_hash].clone();
+    // This standard sUDT does not appear in any refund metadata catalogue.
+    funding.outputs[1].type_script.as_mut().unwrap().args = hx([0xab; 32]);
+    node.live.retain(|p, _| p.tx_hash != old_hash);
+    request.inputs = (0..funding.outputs.len())
+        .map(|i| point(&funding, i))
+        .collect();
+    node.insert(funding);
+    let rpc = Server::new(node);
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("index.html"), "Wallet test").unwrap();
+    let dep_path = dir.path().join("deps.json");
+    std::fs::write(&dep_path, serde_json::to_vec(&deps).unwrap()).unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let listen = listener.local_addr().unwrap().to_string();
+    drop(listener);
+    let origin = format!("http://{listen}");
+    struct Stop(std::process::Child);
+    impl Drop for Stop {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let mut child = Stop(
+        Command::new(env!("CARGO_BIN_EXE_gw-withdraw"))
+            .args([
+                "wallet-serve",
+                "--listen",
+                &listen,
+                "--public-origin",
+                &origin,
+                "--ckb-rpc",
+                &rpc.url,
+                "--web-dir",
+                dir.path().to_str().unwrap(),
+                "--dependencies",
+                dep_path.to_str().unwrap(),
+                "--enable-broadcast",
+            ])
+            .spawn()
+            .unwrap(),
+    );
+    for _ in 0..300 {
+        assert!(child.0.try_wait().unwrap().is_none());
+        if std::net::TcpStream::connect(&listen).is_ok() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    let call = |path: &str, body: Option<Value>, valid_origin: bool| -> Value {
+        let mut cmd = Command::new("curl");
+        cmd.args([
+            "-sS",
+            "--max-time",
+            "30",
+            "-H",
+            "Content-Type: application/json",
+            "-H",
+            &format!(
+                "Origin: {}",
+                if valid_origin {
+                    &origin
+                } else {
+                    "https://other.example"
+                }
+            ),
+        ]);
+        if let Some(body) = body {
+            cmd.args(["--data", &body.to_string()]);
+        }
+        let output = cmd
+            .arg(format!("{origin}/api/wallet/{path}"))
+            .output()
+            .unwrap();
+        serde_json::from_slice(&output.stdout).unwrap()
+    };
+    let inventory = call(&format!("account/{}", request.address), None, true);
+    assert_eq!(
+        inventory["cells"].as_array().unwrap().len(),
+        3,
+        "{inventory}"
+    );
+    assert_eq!(inventory["balances"][0]["raw"], (1400 * CAP).to_string());
+    assert!(inventory["assets"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|a| a["symbol"].is_null()));
+    assert!(
+        !call(&format!("transactions/{}", request.address), None, true)["transactions"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(call("prepare", Some(json!(request)), false)
+        .get("error")
+        .is_some());
+    let mut foreign = request.clone();
+    foreign.address = hx(eth(2));
+    assert!(call("prepare", Some(json!(foreign)), true)
+        .get("error")
+        .is_some());
+    request.amounts = Some(vec![claim::ClaimAmount {
+        asset_id: 1,
+        raw: (200 * CAP).to_string(),
+    }]);
+    let quote = call("prepare", Some(json!(request)), true);
+    assert!(quote.get("error").is_none(), "{quote}");
+    let q: claim::Quote = serde_json::from_value(quote.clone()).unwrap();
+    let size = q.transaction.packed().unwrap().as_slice().len() as u64 + 4;
+    assert_eq!(q.fee_shannons, size.to_string()); // 1000 shannons/KB, rounded up.
+    assert!(size < 10000); // Below 0.0001 CKB for this real multi-asset transaction.
+    let body = json!({"request":request,"transaction_hash":q.transaction_hash,"signing_message":q.signing_message,"signature":signature(&q.signing_message,1)});
+    let mut wrong = body.clone();
+    wrong["signature"] = json!(signature(&q.signing_message, 2));
+    assert!(call("submit", Some(wrong), true).get("error").is_some());
+    let result = call("submit", Some(body.clone()), true);
+    assert_eq!(result["status"], "submitted", "{result}");
+    assert!(result["cycles"].as_u64().unwrap() < claim::MAX_CYCLES);
+    assert!(call("submit", Some(body), true).get("error").is_some());
+    let remaining = call(&format!("account/{}", request.address), None, true);
+    assert_eq!(
+        remaining["balances"][0]["raw"],
+        (1200 * CAP - size).to_string()
+    );
+    assert_eq!(remaining["assets"].as_array().unwrap().len(), 3);
+    request.inputs = serde_json::from_value::<Vec<Cell>>(remaining["cells"].clone())
+        .unwrap()
+        .iter()
+        .map(|c| c.out_point.clone())
+        .collect();
+    request.amounts = None;
+    let quote2 = call("prepare", Some(json!(request)), true);
+    assert!(quote2.get("error").is_none(), "{quote2}");
+    let q: claim::Quote = serde_json::from_value(quote2).unwrap();
+    let result = call(
+        "submit",
+        Some(
+            json!({"request":request,"transaction_hash":q.transaction_hash,"signing_message":q.signing_message,"signature":signature(&q.signing_message,1)}),
+        ),
+        true,
+    );
+    assert_eq!(result["status"], "submitted", "{result}");
+    assert!(
+        call(&format!("account/{}", request.address), None, true)["cells"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    println!("Manual deposit wallet: exact fee {size} shannons, signed partial and remainder transfers executed by CKB-VM");
+}
+
 fn partial_amounts(assets: &[Asset], inputs: &[Cell]) -> Vec<claim::ClaimAmount> {
     let hash = inputs[1]
         .output

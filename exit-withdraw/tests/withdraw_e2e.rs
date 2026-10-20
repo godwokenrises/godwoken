@@ -160,6 +160,14 @@ impl Chain for Node {
                     None => json!({"status":"dead"}),
                 }
             }
+            "get_transactions" => {
+                let requested: Script = serde_json::from_value(params[0]["script"].clone())?;
+                let objects = self.txs.iter().filter_map(|(hash, tx)| {
+                    let cells = tx.outputs.iter().enumerate().filter(|(_,o)|o.lock==requested).map(|(i,_)|json!(["output",i])).collect::<Vec<_>>();
+                    (!cells.is_empty()).then(||json!({"tx_hash":hash,"block_number":"0x64","tx_index":"0x0","cells":cells}))
+                }).collect::<Vec<_>>();
+                json!({"objects":objects,"last_cursor":"0x00"})
+            }
             "get_cells" => {
                 let requested: Script = serde_json::from_value(params[0]["script"].clone())?;
                 if params.as_array().unwrap().len() > 3 {
